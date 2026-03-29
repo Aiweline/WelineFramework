@@ -529,59 +529,113 @@ CDN,CDN
 SSL,SSL
 已完成,已完成
 失败,失败
-"AI Site Workbench","AI Site Workbench"
-"Website Services","Website Services"
-"AI Site Workspace","AI Site Workspace"
-"Login required or invalid session token","Login required or invalid session token"
-"Session not found or access denied","Session not found or access denied"
-"Invalid parameters","Invalid parameters"
-"Login required","Login required"
+"AI 建站工作台","AI 建站工作台"
+网站服务,网站服务
+"AI 建站工作区","AI 建站工作区"
+需要登录或会话令牌无效,需要登录或会话令牌无效
+会话不存在或无访问权限,会话不存在或无访问权限
+参数无效,参数无效
+需要登录,需要登录
 "Unknown or disabled provider: %{code}","Unknown or disabled provider: %{code}"
 "Failed to create workspace: %{message}","Failed to create workspace: %{message}"
-"Failed to update stage","Failed to update stage"
-"Failed to save message","Failed to save message"
-"Failed to queue domain purchase","Failed to queue domain purchase"
-"Domain purchase queued","Domain purchase queued"
-"Connected to workspace event stream","Connected to workspace event stream"
-"Event stream finished. Reconnect any time to continue listening.","Event stream finished. Reconnect any time to continue listening."
-"Domain purchase stream finished","Domain purchase stream finished"
-"Domain purchase stream failed","Domain purchase stream failed"
-"Starting the guided AI site build flow...","Starting the guided AI site build flow..."
-"Please fill in a target domain first","Please fill in a target domain first"
-"Please choose a registrar account first","Please choose a registrar account first"
-"Please describe the site goal or provide a domain first","Please describe the site goal or provide a domain first"
-"Please provide both the target domain and registrar account, or enable AI mode first.","Please provide both the target domain and registrar account, or enable AI mode first."
-"Site build completed","Site build completed"
-"Execution failed","Execution failed"
-"The guided site build flow failed unexpectedly","The guided site build flow failed unexpectedly"
+检测实时可用性前，请先选择服务商账号。,检测实时可用性前，请先选择服务商账号。
+请先描述建站目标，或先输入偏好域名。,请先描述建站目标，或先输入偏好域名。
+"本地演示模式下，AI 找到可用域名：%{domain}","本地演示模式下，AI 找到可用域名：%{domain}"
+请先输入目标域名。,请先输入目标域名。
+"本地测试域名 %{domain} 已强制通过可用性检查。","本地测试域名 %{domain} 已强制通过可用性检查。"
+"本地演示模式下，域名 %{domain} 视为可用。","本地演示模式下，域名 %{domain} 视为可用。"
+"暂未获取到域名 %{domain} 的可用性结果，请重试。","暂未获取到域名 %{domain} 的可用性结果，请重试。"
+"域名 %{domain} 当前可用。","域名 %{domain} 当前可用。"
+"域名 %{domain} 当前不可用。","域名 %{domain} 当前不可用。"
+"AI 服务未启用，无法执行智能域名推荐。","AI 服务未启用，无法执行智能域名推荐。"
+"AI 正在分轮生成更长域名并实时检测可用性...","AI 正在分轮生成更长域名并实时检测可用性..."
+"第 %{round} 轮：AI 正在生成更长域名候选（最小长度 %{len}）","第 %{round} 轮：AI 正在生成更长域名候选（最小长度 %{len}）"
+"开发环境模拟：已注入保底域名 %{domain}","开发环境模拟：已注入保底域名 %{domain}"
+"第 %{round} 轮 AI 未产出有效候选，继续下一轮。","第 %{round} 轮 AI 未产出有效候选，继续下一轮。"
+"已检测 %{checked} 个候选域名","已检测 %{checked} 个候选域名"
+"AI 找到可用域名：%{domain}","AI 找到可用域名：%{domain}"
+在超时时间内未找到可用域名，请调整简报后重试。,在超时时间内未找到可用域名，请调整简报后重试。
+更新阶段失败,更新阶段失败
+正在根据简报自动生成虚拟主题...,正在根据简报自动生成虚拟主题...
+解析简报与页面类型,解析简报与页面类型
+"AI 已返回主题草案","AI 已返回主题草案"
+"AI 生成失败，使用默认草案：%{message}","AI 生成失败，使用默认草案：%{message}"
+"未启用 AI 模块，使用默认草案","未启用 AI 模块，使用默认草案"
+保存虚拟主题失败,保存虚拟主题失败
+页面布局已入库,页面布局已入库
+"AI 组件已保存到虚拟主题","AI 组件已保存到虚拟主题"
+虚拟主题已自动生成并入库,虚拟主题已自动生成并入库
+保存消息失败,保存消息失败
+加入域名购买队列失败,加入域名购买队列失败
+已加入域名购买队列,已加入域名购买队列
+已连接工作区事件流,已连接工作区事件流
+事件流已结束，可随时重连继续监听。,事件流已结束，可随时重连继续监听。
+域名购买事件流已结束,域名购买事件流已结束
+域名购买事件流失败,域名购买事件流失败
+"正在启动 AI 引导建站流程...","正在启动 AI 引导建站流程..."
+请先填写目标域名,请先填写目标域名
+请先选择服务商账号,请先选择服务商账号
+请先描述建站目标，或先提供一个域名,请先描述建站目标，或先提供一个域名
+"请同时提供目标域名和服务商账号，或先启用 AI 模式。","请同时提供目标域名和服务商账号，或先启用 AI 模式。"
+建站流程已完成,建站流程已完成
+执行失败,执行失败
+引导建站流程发生意外失败,引导建站流程发生意外失败
 "AI is calling tool: %{name}","AI is calling tool: %{name}"
 "Tool completed: %{name}","Tool completed: %{name}"
-"AI planning completed","AI planning completed"
-"AI execution failed","AI execution failed"
-"Local registrar recommendation unavailable","Local registrar recommendation unavailable"
-"Local demo: brief understood","Local demo: brief understood"
+"AI 规划完成","AI 规划完成"
+"AI 执行失败","AI 执行失败"
+本地演示服务商推荐不可用,本地演示服务商推荐不可用
+本地演示：已理解需求简报,本地演示：已理解需求简报
 "Local demo: recommended registrar %{registrar}","Local demo: recommended registrar %{registrar}"
 "Local demo: suggested domain %{domain}","Local demo: suggested domain %{domain}"
-"Local demo: simulated availability check passed for %{domain}","Local demo: simulated availability check passed for %{domain}"
-"Local demo: simulated domain purchase and bootstrap resources","Local demo: simulated domain purchase and bootstrap resources"
-"Local demo: simulated DNS resolution and certificate issuance","Local demo: simulated DNS resolution and certificate issuance"
-"Local demo: generated page structure and starter content","Local demo: generated page structure and starter content"
-"Local demo: generated theme direction and virtual theme","Local demo: generated theme direction and virtual theme"
-"Local demo: prepared visual-edit preview","Local demo: prepared visual-edit preview"
-"Local demo flow completed","Local demo flow completed"
-"Local demo primary account","Local demo primary account"
-"Local demo registrar","Local demo registrar"
-"Local demo backup account","Local demo backup account"
-"Sandbox domains","Sandbox domains"
-"Open PageBuilder flow","Open PageBuilder flow"
-"Open Websites flow","Open Websites flow"
-"Open provider flow","Open provider flow"
-"Styles flow","Styles flow"
-"Shared flow","Shared flow"
-"Provider flow","Provider flow"
-Prepare,Prepare
-Generate,Generate
-Complete,Complete
+"本地演示：模拟可用性检测通过 %{domain}","本地演示：模拟可用性检测通过 %{domain}"
+本地演示：已模拟域名购买并初始化基础资源,本地演示：已模拟域名购买并初始化基础资源
+"本地演示：已模拟 DNS 解析与证书签发","本地演示：已模拟 DNS 解析与证书签发"
+本地演示：已生成页面结构与初始内容,本地演示：已生成页面结构与初始内容
+本地演示：已生成主题方向与虚拟主题,本地演示：已生成主题方向与虚拟主题
+本地演示：已准备可视化编辑预览,本地演示：已准备可视化编辑预览
+本地演示流程已完成,本地演示流程已完成
+本地演示主账号,本地演示主账号
+本地演示服务商,本地演示服务商
+本地演示备用账号,本地演示备用账号
+沙盒域名,沙盒域名
+"打开 PageBuilder 流程","打开 PageBuilder 流程"
+"打开 Websites 流程","打开 Websites 流程"
+打开服务商流程,打开服务商流程
+样式流程,样式流程
+共享流程,共享流程
+服务商流程,服务商流程
+准备,准备
+生成,生成
+完成,完成
+第一阶段,第一阶段
+信息准备,信息准备
+把建站描述、服务商选择、域名推荐与可用性确认一次整理完成。,把建站描述、服务商选择、域名推荐与可用性确认一次整理完成。
+"AI 推荐","AI 推荐"
+"AI 会先推荐可购买域名与服务商，人工确认后进入自动购买/解析/证书流程。","AI 会先推荐可购买域名与服务商，人工确认后进入自动购买/解析/证书流程。"
+确认并进入页面生成,确认并进入页面生成
+先描述你要建设的网站目标,先描述你要建设的网站目标
+"AI 推荐域名并检测可用性","AI 推荐域名并检测可用性"
+人工确认后自动执行购买、解析与证书,人工确认后自动执行购买、解析与证书
+第二阶段,第二阶段
+页面生成,页面生成
+"在虚拟主题阶段直接选页面类型并编辑每类页面内容，Header/Footer 固定。","在虚拟主题阶段直接选页面类型并编辑每类页面内容，Header/Footer 固定。"
+"AI 页面方案","AI 页面方案"
+"可选现有模板替换区域，或让 AI 直接生成数据库虚拟主题与内容组件。","可选现有模板替换区域，或让 AI 直接生成数据库虚拟主题与内容组件。"
+确认页面方案,确认页面方案
+返回信息准备,返回信息准备
+默认全页面类型，可在此阶段按需勾选,默认全页面类型，可在此阶段按需勾选
+"Header/Footer 固定不可编辑","Header/Footer 固定不可编辑"
+"正文区域支持 AI 组件生成并可视化保存","正文区域支持 AI 组件生成并可视化保存"
+第三阶段,第三阶段
+等待域名准备为可建站状态后预览，必要时可回退上一阶段修改。,等待域名准备为可建站状态后预览，必要时可回退上一阶段修改。
+"AI 最终检查","AI 最终检查"
+发布前检查域名入库、解析与证书状态，以及主题与页面配置是否完整。,发布前检查域名入库、解析与证书状态，以及主题与页面配置是否完整。
+保留当前方案,保留当前方案
+返回页面生成,返回页面生成
+等待购买、解析、证书全部就绪,等待购买、解析、证书全部就绪
+预览站点并确认关键页面,预览站点并确认关键页面
+不满足时回退继续编辑,不满足时回退继续编辑
 暂无推荐服务商,暂无推荐服务商
 "AI 建议优先用 %{registrar} 处理 %{domain}，确认后按“购买 -> 解析 -> 证书”的顺序自动推进。","AI 建议优先用 %{registrar} 处理 %{domain}，确认后按“购买 -> 解析 -> 证书”的顺序自动推进。"
 推荐域名：%{domain},推荐域名：%{domain}
@@ -606,18 +660,19 @@ Complete,Complete
 简洁可信的品牌官网风格,简洁可信的品牌官网风格
 "从 Websites 工作区接管，推荐 styles 模板：%{template}","从 Websites 工作区接管，推荐 styles 模板：%{template}"
 "Failed to save %{label}","Failed to save %{label}"
-"Failed to reload workspace session","Failed to reload workspace session"
-"Workspace scope snapshot","Workspace scope snapshot"
-"Provider handoff","Provider handoff"
+重新加载工作区会话失败,重新加载工作区会话失败
+工作区范围快照,工作区范围快照
+服务商交接信息,服务商交接信息
 "Invalid %{label}: %{message}","Invalid %{label}: %{message}"
 "Invalid %{label}: expected a JSON object","Invalid %{label}: expected a JSON object"
 "已创建 %{name}，你可以先确认域名和服务商，再继续页面生成。","已创建 %{name}，你可以先确认域名和服务商，再继续页面生成。"
 "AI 建站工作台 · PageBuilder 扩展","AI 建站工作台 · PageBuilder 扩展"
-"AI 建站工作台","AI 建站工作台"
-"AI 建站工作区","AI 建站工作区"
 "继续到 PageBuilder 工作台","继续到 PageBuilder 工作台"
 "返回 AI 建站工作台","返回 AI 建站工作台"
 "打开 provider 原生入口","打开 provider 原生入口"
+"AI 生成内容区块","AI 生成内容区块"
+根据简报生成的页面主体内容,根据简报生成的页面主体内容
+"简约科技 / 品牌信任感 / 高对比行动按钮","简约科技 / 品牌信任感 / 高对比行动按钮"
 "[DnsCdnAutoSwitch] 域名 %{1} 注册已完成，已加入待切换队列","[DnsCdnAutoSwitch] 域名 %{1} 注册已完成，已加入待切换队列"
 "[DnsCdnAutoSwitch] 检查延迟切换 %{1} 生命周期失败：%{2}","[DnsCdnAutoSwitch] 检查延迟切换 %{1} 生命周期失败：%{2}"
 "[DnsCdnAutoSwitch] 开始执行，待处理域名数=%{1}","[DnsCdnAutoSwitch] 开始执行，待处理域名数=%{1}"
@@ -771,6 +826,8 @@ Complete,Complete
 "正在调用 AI...","正在调用 AI..."
 "AI 调用失败：%{1}","AI 调用失败：%{1}"
 工具不存在：%{1},工具不存在：%{1}
+建站流程已完成，域名：%{1}。接下来可进入虚拟主题编辑并完善页面内容。,建站流程已完成，域名：%{1}。接下来可进入虚拟主题编辑并完善页面内容。
+建站流程已完成，接下来可进入虚拟主题编辑并完善页面内容。,建站流程已完成，接下来可进入虚拟主题编辑并完善页面内容。
 智能体达到最大轮次，未能完成建站,智能体达到最大轮次，未能完成建站
 域名配置编排服务暂不可用：%{1},域名配置编排服务暂不可用：%{1}
 "Websites 查询器不支持的操作：%{1}","Websites 查询器不支持的操作：%{1}"
@@ -875,7 +932,6 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 确认后进入自动准备,确认后进入自动准备
 默认流程会先给出页面类型、主题方向和内容结构，尽量减少人工配置。,默认流程会先给出页面类型、主题方向和内容结构，尽量减少人工配置。
 "AI 会优先推荐：首页、关于我们、产品或服务、FAQ、联系页，并自动保留固定 Header / Footer。","AI 会优先推荐：首页、关于我们、产品或服务、FAQ、联系页，并自动保留固定 Header / Footer。"
-确认页面方案,确认页面方案
 默认所有核心页面类型,默认所有核心页面类型
 "可选 AI 新主题或复用已有模板","可选 AI 新主题或复用已有模板"
 "Header / Footer 固定不可编辑","Header / Footer 固定不可编辑"
@@ -966,6 +1022,130 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 更新证书状态失败：%{1},更新证书状态失败：%{1}
 "货币 %{1} 不被当前网站允许","货币 %{1} 不被当前网站允许"
 "语言 %{1} 不被当前网站允许","语言 %{1} 不被当前网站允许"
+"无效的服务商账号 ID","无效的服务商账号 ID"
+"购买域名 %{domain} 需要人工确认。请明确告知用户购买风险，等待用户回复""确认""后再执行。","购买域名 %{domain} 需要人工确认。请明确告知用户购买风险，等待用户回复""确认""后再执行。"
+"暂不支持 %{tld} 后缀的域名购买","暂不支持 %{tld} 后缀的域名购买"
+"域名 %{domain} 购买成功","域名 %{domain} 购买成功"
+域名购买失败,域名购买失败
+"购买失败: %{error}","购买失败: %{error}"
+"欢迎来到 %{title}","欢迎来到 %{title}"
+我们提供优质的产品与服务,我们提供优质的产品与服务
+"为什么选择 %{title}","为什么选择 %{title}"
+品质保证,品质保证
+我们致力于提供最优质的产品,我们致力于提供最优质的产品
+快速配送,快速配送
+全网快速配送，送货上门,全网快速配送，送货上门
+专业客服,专业客服
+"7x24 小时在线客服支持","7x24 小时在线客服支持"
+立即开始,立即开始
+加入我们，体验最佳服务,加入我们，体验最佳服务
+开始探索,开始探索
+"关于 %{title}","关于 %{title}"
+我们的故事,我们的故事
+"%{title} 致力于为用户提供优质的产品和服务。%{description}我们相信，通过创新和用心，可以为每个人创造更好的体验。","%{title} 致力于为用户提供优质的产品和服务。%{description}我们相信，通过创新和用心，可以为每个人创造更好的体验。"
+用户至上,用户至上
+始终把用户需求放在第一位,始终把用户需求放在第一位
+创新驱动,创新驱动
+不断探索更好的解决方案,不断探索更好的解决方案
+诚信经营,诚信经营
+透明公开，值得信赖,透明公开，值得信赖
+我们的团队,我们的团队
+由一群充满激情的专业人士组成,由一群充满激情的专业人士组成
+联系我们,联系我们
+随时欢迎您的垂询,随时欢迎您的垂询
+如果您有任何问题或建议，请随时与我们联系,如果您有任何问题或建议，请随时与我们联系
+电子邮件,电子邮件
+联系电话,联系电话
+公司地址,公司地址
+"某市某区某路 123 号","某市某区某路 123 号"
+发送消息,发送消息
+姓名,姓名
+邮箱,邮箱
+主题,主题
+留言内容,留言内容
+提交,提交
+隐私政策,隐私政策
+信息收集,信息收集
+我们收集您提供的信息以改善服务质量,我们收集您提供的信息以改善服务质量
+信息使用,信息使用
+您的信息将仅用于提供和改善我们的服务,您的信息将仅用于提供和改善我们的服务
+信息保护,信息保护
+我们采用适当的安全措施保护您的个人信息,我们采用适当的安全措施保护您的个人信息
+第三方分享,第三方分享
+除法律要求外，我们不会与第三方分享您的个人信息,除法律要求外，我们不会与第三方分享您的个人信息
+用户权利,用户权利
+您有权访问、更正或删除您的个人信息,您有权访问、更正或删除您的个人信息
+服务条款,服务条款
+服务接受,服务接受
+使用我们的服务即表示您同意本条款,使用我们的服务即表示您同意本条款
+服务变更,服务变更
+我们保留随时修改服务的权利,我们保留随时修改服务的权利
+用户责任,用户责任
+您同意合法使用我们的服务，不从事违法活动,您同意合法使用我们的服务，不从事违法活动
+知识产权,知识产权
+服务中的所有内容版权归我们所有,服务中的所有内容版权归我们所有
+免责声明,免责声明
+"服务按""原样""提供，不提供任何明示或暗示保证","服务按""原样""提供，不提供任何明示或暗示保证"
+退款政策,退款政策
+退款条件,退款条件
+商品在未拆封、未经使用的情况下可申请退款,商品在未拆封、未经使用的情况下可申请退款
+退款流程,退款流程
+"联系客服后 3-5 个工作日内完成退款","联系客服后 3-5 个工作日内完成退款"
+退款方式,退款方式
+退款将原路返回至您的支付账户,退款将原路返回至您的支付账户
+特殊情况,特殊情况
+质量问题或物流损坏可随时申请退换,质量问题或物流损坏可随时申请退换
+"Cookie 政策","Cookie 政策"
+"Cookie 简介","Cookie 简介"
+"Cookie 是存储在您设备上的小文件，用于改善用户体验","Cookie 是存储在您设备上的小文件，用于改善用户体验"
+"Cookie 用途","Cookie 用途"
+"我们使用 Cookie 来记住您的偏好设置和分析网站流量","我们使用 Cookie 来记住您的偏好设置和分析网站流量"
+"Cookie 管理","Cookie 管理"
+"您可以在浏览器中禁用 Cookie，但这可能影响网站功能","您可以在浏览器中禁用 Cookie，但这可能影响网站功能"
+博客,博客
+阅读我们的最新文章,阅读我们的最新文章
+分享行业资讯与技术见解,分享行业资讯与技术见解
+全部分类,全部分类
+全部时间,全部时间
+最新发布,最新发布
+阅读全文,阅读全文
+博客分类,博客分类
+按分类浏览文章,按分类浏览文章
+技术文章,技术文章
+行业动态,行业动态
+产品更新,产品更新
+文章详情,文章详情
+编辑团队,编辑团队
+"约 5 分钟阅读","约 5 分钟阅读"
+本文将介绍相关内容,本文将介绍相关内容
+目录,目录
+总结,总结
+希望本文对您有所帮助,希望本文对您有所帮助
+分享这篇文章,分享这篇文章
+相关阅读,相关阅读
+在此添加您的自定义内容,在此添加您的自定义内容
+可编辑的文本区域,可编辑的文本区域
+占位图,占位图
+了解更多,了解更多
+页面内容占位,页面内容占位
+建议添加产品展示区域，突出核心卖点,建议添加产品展示区域，突出核心卖点
+添加客户评价区，增强信任感,添加客户评价区，增强信任感
+建议添加团队成员详细介绍,建议添加团队成员详细介绍
+添加公司历程时间线展示,添加公司历程时间线展示
+建议集成在线客服插件,建议集成在线客服插件
+添加地图组件展示公司位置,添加地图组件展示公司位置
+可根据实际业务调整文案和图片,可根据实际业务调整文案和图片
+"Combination of keywords with hyphen for readability","Combination of keywords with hyphen for readability"
+"Short brandable name, easy to type and remember","Short brandable name, easy to type and remember"
+"Direct keyword-based domain, clear and descriptive","Direct keyword-based domain, clear and descriptive"
+准备中,准备中
+"DNS 解析中","DNS 解析中"
+验证中,验证中
+"SSL 证书中","SSL 证书中"
+"CDN 部署中","CDN 部署中"
+等待中,等待中
+排队中,排队中
+进行中,进行中
 域名购买已排队，等待启动,域名购买已排队，等待启动
 域名购买流程进行中,域名购买流程进行中
 域名购买与域名接入已完成,域名购买与域名接入已完成
@@ -978,13 +1158,16 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 当前域名购买流程已完成,当前域名购买流程已完成
 域名购买已排队，正在尝试恢复执行,域名购买已排队，正在尝试恢复执行
 "已排队购买 %{domain}，后台流程即将启动","已排队购买 %{domain}，后台流程即将启动"
+本地模拟已开启：已跳过真实域名商流程并标记为完成,本地模拟已开启：已跳过真实域名商流程并标记为完成
+域名购买长连接已启动,域名购买长连接已启动
+域名完备,域名完备
 域名购买执行令牌已过期，请重新发起购买,域名购买执行令牌已过期，请重新发起购买
 "开始购买域名 %{domain}","开始购买域名 %{domain}"
-域名购买长连接已启动,域名购买长连接已启动
+"Local demo: simulated domain purchase and bootstrap resources","Local demo: simulated domain purchase and bootstrap resources"
 "Local demo: waiting for simulated DNS propagation","Local demo: waiting for simulated DNS propagation"
+"Local demo: simulated DNS resolution and certificate issuance","Local demo: simulated DNS resolution and certificate issuance"
 "Local demo: domain purchase flow completed","Local demo: domain purchase flow completed"
 正在提交域名购买请求,正在提交域名购买请求
-域名购买失败,域名购买失败
 "域名购买成功，正在推进 DNS 与证书流程","域名购买成功，正在推进 DNS 与证书流程"
 生命周期订单创建失败,生命周期订单创建失败
 生命周期订单已建立，正在持续推进域名接入,生命周期订单已建立，正在持续推进域名接入
@@ -992,13 +1175,11 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 域名购买流程等待超时，请稍后在工作台继续查看进度,域名购买流程等待超时，请稍后在工作台继续查看进度
 待启动,待启动
 已排队,已排队
-进行中,进行中
 "切换 DNS","切换 DNS"
 等待解析,等待解析
 访问验证,访问验证
 "切换 CDN","切换 CDN"
 "申请 HTTPS","申请 HTTPS"
-域名完备,域名完备
 流程失败,流程失败
 域名已提交购买，等待同步到本地,域名已提交购买，等待同步到本地
 "域名已购买，正在切换 DNS","域名已购买，正在切换 DNS"
@@ -1016,41 +1197,41 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 兼容模式,兼容模式
 "已为你创建兼容模式工作区。后续可继续补充 scope 并接入更完整的 provider 配置。","已为你创建兼容模式工作区。后续可继续补充 scope 并接入更完整的 provider 配置。"
 "兼容 provider","兼容 provider"
-第一阶段,第一阶段
-信息准备,信息准备
 "先让 AI 理清需求、推荐域名和购买服务商，你只需要做确认。","先让 AI 理清需求、推荐域名和购买服务商，你只需要做确认。"
-"AI 推荐","AI 推荐"
 "AI 会先给你一份建站简报、域名和服务商建议，确认后再进入页面生成。","AI 会先给你一份建站简报、域名和服务商建议，确认后再进入页面生成。"
 确认基础方案，进入页面生成,确认基础方案，进入页面生成
 简单描述你要做什么站,简单描述你要做什么站
 "AI 推荐域名和购买服务商","AI 推荐域名和购买服务商"
-第二阶段,第二阶段
-页面生成,页面生成
 先定页面类型，再定主题方向，再生成内容，尽量做到少点几次就能继续。,先定页面类型，再定主题方向，再生成内容，尽量做到少点几次就能继续。
 "AI 页面建议","AI 页面建议"
 "AI 会先给出默认页面结构、主题方向和关键内容组件，你只需要决定是否采用。","AI 会先给出默认页面结构、主题方向和关键内容组件，你只需要决定是否采用。"
 确认页面方案，进入完成,确认页面方案，进入完成
-返回信息准备,返回信息准备
 "默认页面类型先由 AI 推荐","默认页面类型先由 AI 推荐"
 "可直接用 AI 推荐主题，或换成已有模板","可直接用 AI 推荐主题，或换成已有模板"
 "Header / Footer 固定，主体内容支持 AI 生成","Header / Footer 固定，主体内容支持 AI 生成"
-第三阶段,第三阶段
-完成,完成
 等待域名和证书等准备就绪，然后预览、回退或继续交付。,等待域名和证书等准备就绪，然后预览、回退或继续交付。
 "AI 检查建议","AI 检查建议"
 "AI 建议先预览首页和关键转化页，再决定是否回到上一阶段调整。","AI 建议先预览首页和关键转化页，再决定是否回到上一阶段调整。"
-保留当前方案,保留当前方案
-返回页面生成,返回页面生成
 等待域名购买、解析、证书生成到可用,等待域名购买、解析、证书生成到可用
 可以直接预览,可以直接预览
 不满意时可一键回退,不满意时可一键回退
 "provider_code 不能为空","provider_code 不能为空"
 "admin_user_id 必须大于 0","admin_user_id 必须大于 0"
+当前环境未启用主题模块，无法保存虚拟主题,当前环境未启用主题模块，无法保存虚拟主题
+虚拟主题已保存到数据库,虚拟主题已保存到数据库
+页面类型不能为空,页面类型不能为空
+无法加载虚拟主题,无法加载虚拟主题
+页面类型布局已保存到数据库虚拟主题,页面类型布局已保存到数据库虚拟主题
+请先保存虚拟主题，再保存组件,请先保存虚拟主题，再保存组件
+"主题 AI 草稿服务不可用","主题 AI 草稿服务不可用"
+组件模板内容不能为空,组件模板内容不能为空
+"AI 组件已保存并发布到虚拟主题","AI 组件已保存并发布到虚拟主题"
 "阿里云域名 API HTTP %{code}：%{body}","阿里云域名 API HTTP %{code}：%{body}"
 "阿里云 API 返回异常：%{1}","阿里云 API 返回异常：%{1}"
 "Route53 Domains HTTP %{code}：%{body}","Route53 Domains HTTP %{code}：%{body}"
 "Route53 Domains 返回非 JSON：%{1}","Route53 Domains 返回非 JSON：%{1}"
 "Route53 Domains 请求失败","Route53 Domains 请求失败"
+开发环境模拟证书已签发：%{domain},开发环境模拟证书已签发：%{domain}
 "域名尚在开通或注册流程中。公网仍显示注册商默认解析很常见，不代表注册失败；流程结束后会按配置处理 DNS，无需仅凭当前 NS 判断注册是否成功。","域名尚在开通或注册流程中。公网仍显示注册商默认解析很常见，不代表注册失败；流程结束后会按配置处理 DNS，无需仅凭当前 NS 判断注册是否成功。"
 "当前权威 NS 为 Gname 高防/托管 DNS（如 a/b.share-dns），表示解析仍由注册商侧权威托管（非误判）。若目标为 Cloudflare DNS-01，须将注册局 NS 改为 *.ns.cloudflare.com 并等待全球传播。","当前权威 NS 为 Gname 高防/托管 DNS（如 a/b.share-dns），表示解析仍由注册商侧权威托管（非误判）。若目标为 Cloudflare DNS-01，须将注册局 NS 改为 *.ns.cloudflare.com 并等待全球传播。"
 "当前权威 Nameserver 已指向 Cloudflare，解析由 Cloudflare 接管。","当前权威 Nameserver 已指向 Cloudflare，解析由 Cloudflare 接管。"
@@ -1149,6 +1330,7 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 等待访问验证,等待访问验证
 切换CDN中,切换CDN中
 申请HTTPS中,申请HTTPS中
+本地演示：已生成模拟生命周期状态,本地演示：已生成模拟生命周期状态
 "生命周期订单已完成，联动更新根域状态：%{1} → active","生命周期订单已完成，联动更新根域状态：%{1} → active"
 "生命周期脏数据修复：已同步根域 %{1} 条，已补标完成 %{2} 条","生命周期脏数据修复：已同步根域 %{1} 条，已补标完成 %{2} 条"
 "[NS 与配置 DNS 账户不一致] 域名 %{1}：公网识别为 %{2}，配置的 DNS 账户服务商为 %{3}（account_id=%{4}）。公网 NS：%{5}。请运营核对注册商 NS 或等待切换传播；此检查只做告警，不会在这里直接改 NS。","[NS 与配置 DNS 账户不一致] 域名 %{1}：公网识别为 %{2}，配置的 DNS 账户服务商为 %{3}（account_id=%{4}）。公网 NS：%{5}。请运营核对注册商 NS 或等待切换传播；此检查只做告警，不会在这里直接改 NS。"
@@ -1221,7 +1403,6 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "当前公网 NS 识别为 %{1}，但后台未配置对应账户。请在「域名商账户」中添加可管理该 DNS 的 %{1} 账户。","当前公网 NS 识别为 %{1}，但后台未配置对应账户。请在「域名商账户」中添加可管理该 DNS 的 %{1} 账户。"
 "[DomainResolve] 无法补全 dns_account_id：domain_id=%{1} %{2}","[DomainResolve] 无法补全 dns_account_id：domain_id=%{1} %{2}"
 "目标账户不支持 DNS 记录管理","目标账户不支持 DNS 记录管理"
-参数无效,参数无效
 "注册商 API 显示的委派 NS 为「%{1}」（%{2}），未指向当前 DNS 托管「%{3}」。请先在注册商处将 NS 改为该托管商要求的地址后再申请证书。","注册商 API 显示的委派 NS 为「%{1}」（%{2}），未指向当前 DNS 托管「%{3}」。请先在注册商处将 NS 改为该托管商要求的地址后再申请证书。"
 "DNS 托管 API 未能确认该域名在本账户下可写","DNS 托管 API 未能确认该域名在本账户下可写"
 已就绪,已就绪
@@ -1332,8 +1513,12 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "域名 %{1} 已存在于域名池","域名 %{1} 已存在于域名池"
 "子域名 %{1} 已添加到域名池","子域名 %{1} 已添加到域名池"
 正在检查域名可用性...,正在检查域名可用性...
+"开发环境模拟：域名 %{1} 视为可用","开发环境模拟：域名 %{1} 视为可用"
 "域名 %{1} 不可用，请更换后重试","域名 %{1} 不可用，请更换后重试"
 "域名 %{1} 可用","域名 %{1} 可用"
+"本地域名 %{1} 跳过域名商流程，直接模拟建站成功","本地域名 %{1} 跳过域名商流程，直接模拟建站成功"
+建站完成（本地模拟）,建站完成（本地模拟）
+建站完成（本地模拟）：%{1},建站完成（本地模拟）：%{1}
 正在购买域名...,正在购买域名...
 已根据描述设置站点名称,已根据描述设置站点名称
 "正在检查 DNS 解析状态...","正在检查 DNS 解析状态..."
@@ -1342,6 +1527,8 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 证书申请失败，请稍后在证书管理中手动申请,证书申请失败，请稍后在证书管理中手动申请
 建站完成,建站完成
 建站完成：%{1},建站完成：%{1}
+请先选择服务商账号。,请先选择服务商账号。
+未找到可用域名，请尝试更换简报或偏好域名。,未找到可用域名，请尝试更换简报或偏好域名。
 证书管理：无记录（待申请）,证书管理：无记录（待申请）
 证书管理：异常,证书管理：异常
 证书管理：已过期,证书管理：已过期
@@ -1412,6 +1599,8 @@ id属性不能为空,id属性不能为空
 "SEO 账户","SEO 账户"
 绑定后将自动提交sitemap到该SEO账户的搜索引擎,绑定后将自动提交sitemap到该SEO账户的搜索引擎
 取消,取消
+Other,Other
+"DNS 服务商","DNS 服务商"
 域名列表,域名列表
 刷新服务器IP,刷新服务器IP
 导入域名,导入域名
@@ -1435,7 +1624,6 @@ id属性不能为空,id属性不能为空
 清理DNS域名,清理DNS域名
 删除选中的根域，其子域名与池记录一并删除,删除选中的根域，其子域名与池记录一并删除
 批量删除,批量删除
-所有账号,所有账号
 解析状态,解析状态
 指向本服务器,指向本服务器
 HTTPS状态,HTTPS状态
@@ -1444,7 +1632,6 @@ HTTPS状态,HTTPS状态
 操作,操作
 从域名商导入域名,从域名商导入域名
 选择域名商账户,选择域名商账户
-"-- 请选择 --","-- 请选择 --"
 全选,全选
 隐藏已导入,隐藏已导入
 到期时间,到期时间
@@ -1471,10 +1658,8 @@ DNS服务商,DNS服务商
 选择账户（推荐）,选择账户（推荐）
 手动输入,手动输入
 选择目标账户,选择目标账户
-"-- 加载中... --","-- 加载中... --"
 选择已配置的域名商账户，系统将自动获取该账户的DNS服务器,选择已配置的域名商账户，系统将自动获取该账户的DNS服务器
 暂无可用的域名商账户，请先在「域名注册商账户」中添加并启用账户，或使用下方「手动输入」模式直接填写DNS服务器地址,暂无可用的域名商账户，请先在「域名注册商账户」中添加并启用账户，或使用下方「手动输入」模式直接填写DNS服务器地址
-"DNS 服务商","DNS 服务商"
 选择DNS服务商,选择DNS服务商
 "Nameserver 列表","Nameserver 列表"
 "如：ns1.example.com,ns2.example.com","如：ns1.example.com,ns2.example.com"
@@ -1492,18 +1677,13 @@ DNS服务商,DNS服务商
 "切换 DNS 服务账户","切换 DNS 服务账户"
 "将把当前 DNS 记录同步到本地，把域名的 NS 切换到目标账户；切换成功后定时任务会把记录推送到新 DNS 账户。若已是该账户则跳过。","将把当前 DNS 记录同步到本地，把域名的 NS 切换到目标账户；切换成功后定时任务会把记录推送到新 DNS 账户。若已是该账户则跳过。"
 选择供应商,选择供应商
-"-- 请先选择 --","-- 请先选择 --"
 选择账户,选择账户
-"-- 请先选择供应商 --","-- 请先选择供应商 --"
 正在切换…,正在切换…
 批量设置账户,批量设置账户
 "为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。","为选中域名设置 DNS/CDN 管理账户。留空表示不修改该项。"
 "DNS 管理账户","DNS 管理账户"
-"-- 不修改 --","-- 不修改 --"
-清除（使用注册商账户）,清除（使用注册商账户）
 "用于管理 DNS 解析记录的账户","用于管理 DNS 解析记录的账户"
 "CDN 管理账户","CDN 管理账户"
-清除,清除
 "CDN 服务商账户（如 Cloudflare）","CDN 服务商账户（如 Cloudflare）"
 确认设置,确认设置
 "DNS 账户","DNS 账户"
@@ -1511,12 +1691,12 @@ DNS服务商,DNS服务商
 "HTTPS 处理方式","HTTPS 处理方式"
 "拉取域名：确认 DNS / CDN 管理账户","拉取域名：确认 DNS / CDN 管理账户"
 "请选择本站已配置的、能管理该域名解析的账户。判断是否指向本站时，优先通过服务商 API 读取 A/AAAA 的 content（源站 IP），避免 CDN 边缘 IP 误判。至少选择 DNS 或 CDN 中的一项；Cloudflare 等可同时选同一账户。","请选择本站已配置的、能管理该域名解析的账户。判断是否指向本站时，优先通过服务商 API 读取 A/AAAA 的 content（源站 IP），避免 CDN 边缘 IP 误判。至少选择 DNS 或 CDN 中的一项；Cloudflare 等可同时选同一账户。"
-不指定,不指定
 "请至少选择 DNS 或 CDN 中的一项","请至少选择 DNS 或 CDN 中的一项"
 拉取后的解析策略,拉取后的解析策略
 "尝试在注册商处自动添加 A 记录指向本服务器","尝试在注册商处自动添加 A 记录指向本服务器"
 "保持现有解析，不自动改记录（适合已配好 DNS/CDN）","保持现有解析，不自动改记录（适合已配好 DNS/CDN）"
 确认拉取,确认拉取
+不指定,不指定
 导入失败,导入失败
 部分导入失败,部分导入失败
 导入成功,导入成功
@@ -1614,6 +1794,7 @@ DNS管理,DNS管理
 解析完成,解析完成
 请选择要切换DNS的域名,请选择要切换DNS的域名
 已选择,已选择
+"-- 加载中... --","-- 加载中... --"
 "-- 暂无可用账户 --","-- 暂无可用账户 --"
 "-- 请选择目标账户 --","-- 请选择目标账户 --"
 "-- 加载失败 --","-- 加载失败 --"
@@ -1653,6 +1834,9 @@ DNS管理,DNS管理
 清理完成,清理完成
 已清理的账户,已清理的账户
 清理失败,清理失败
+鍔犺浇璐︽埛鍒楄〃澶辫触,鍔犺浇璐︽埛鍒楄〃澶辫触
+清除（使用注册商账户）,清除（使用注册商账户）
+清除,清除
 域名池,域名池
 "共 %{1} 条","共 %{1} 条"
 清理含非法字符的误同步池记录,清理含非法字符的误同步池记录
@@ -1689,7 +1873,6 @@ Windows,Windows
 流转记录,流转记录
 域名服务,域名服务
 后台,后台
-网站服务,网站服务
 域名商管理,域名商管理
 域名购买,域名购买
 其他,其他
@@ -1715,7 +1898,6 @@ Windows,Windows
 "注册联系人（GoDaddy / AWS Route53 / 阿里云）","注册联系人（GoDaddy / AWS Route53 / 阿里云）"
 名,名
 姓,姓
-邮箱,邮箱
 电话,电话
 或,或
 地址,地址
@@ -1886,6 +2068,7 @@ SEO账户管理请前往：,SEO账户管理请前往：
 "默认先开 AI。你只需要描述建站目标，域名和服务商可以由 AI 先推荐。","默认先开 AI。你只需要描述建站目标，域名和服务商可以由 AI 先推荐。"
 你想做什么网站,你想做什么网站
 "先让 AI 推荐域名、服务商和页面方案","先让 AI 推荐域名、服务商和页面方案"
+"模拟环境域名推荐（仅影响 AI 推荐域名）","模拟环境域名推荐（仅影响 AI 推荐域名）"
 目标域名,目标域名
 "AI 模式下可留空","AI 模式下可留空"
 购买服务商账号,购买服务商账号
@@ -1898,21 +2081,37 @@ SEO账户管理请前往：,SEO账户管理请前往：
 "已接入的 AI 建站流程","已接入的 AI 建站流程"
 "同一个工作台入口，不同 provider 可以扩展自己的专属流程和工具。","同一个工作台入口，不同 provider 可以扩展自己的专属流程和工具。"
 例如：做一个面向海外客户的品牌站，需要首页、产品页、FAQ、联系我们和订阅入口,例如：做一个面向海外客户的品牌站，需要首页、产品页、FAQ、联系我们和订阅入口
-"AI can recommend this for you.","AI can recommend this for you."
-"Please confirm this manually when AI is off.","Please confirm this manually when AI is off."
-"AI will suggest the domain, provider, and page plan first. You only need to confirm the result.","AI will suggest the domain, provider, and page plan first. You only need to confirm the result."
-"Manual mode keeps the same guided flow, but you need to provide the key information yourself.","Manual mode keeps the same guided flow, but you need to provide the key information yourself."
-"Unable to create the workspace right now.","Unable to create the workspace right now."
-"Network request failed. Please try again.","Network request failed. Please try again."
-"Terminal is still loading. Please try again.","Terminal is still loading. Please try again."
-"Please enter a target domain first.","Please enter a target domain first."
-"Please choose a registrar account first.","Please choose a registrar account first."
-"Please describe the site goal or provide a domain first.","Please describe the site goal or provide a domain first."
-"Preparing the guided AI build flow...","Preparing the guided AI build flow..."
-Connecting...,Connecting...
-Connected,Connected
-Disconnected,Disconnected
-"Connection failed. Please try again.","Connection failed. Please try again."
+"AI 可为你推荐。","AI 可为你推荐。"
+可选（用于快速开始）。如需实时可用性检测则必须选择。,可选（用于快速开始）。如需实时可用性检测则必须选择。
+"关闭 AI 后请手动确认。","关闭 AI 后请手动确认。"
+"关闭 AI 后请先选择服务商账号。","关闭 AI 后请先选择服务商账号。"
+"AI 会先推荐域名、服务商和页面方案，你只需确认结果。","AI 会先推荐域名、服务商和页面方案，你只需确认结果。"
+手动模式会保留同样的引导流程，但关键信息需要你自行填写。,手动模式会保留同样的引导流程，但关键信息需要你自行填写。
+当前无法创建工作区。,当前无法创建工作区。
+网络请求失败，请重试。,网络请求失败，请重试。
+终端仍在加载中，请稍后重试。,终端仍在加载中，请稍后重试。
+请先描述建站目标，或先提供一个域名。,请先描述建站目标，或先提供一个域名。
+"AI 进行实时可用性检测前，请先选择服务商账号。","AI 进行实时可用性检测前，请先选择服务商账号。"
+"AI 正在使用所选服务商检测实时可用性...","AI 正在使用所选服务商检测实时可用性..."
+你已手动修改域名；如需最新检测结果，请重新推荐。,你已手动修改域名；如需最新检测结果，请重新推荐。
+服务商已变更，请重新推荐以重新检测可用性。,服务商已变更，请重新推荐以重新检测可用性。
+暂未找到可用域名，请尝试更换简报或偏好域名。,暂未找到可用域名，请尝试更换简报或偏好域名。
+请先选择服务商账号，再检测手填域名可用性。,请先选择服务商账号，再检测手填域名可用性。
+正在检测当前域名可用性...,正在检测当前域名可用性...
+"域名 %{1} 当前可用，可继续建站。","域名 %{1} 当前可用，可继续建站。"
+"域名 %{1} 当前不可用，请更换后重试。","域名 %{1} 当前不可用，请更换后重试。"
+开始建站前需要选择服务商账号，以完成域名可用性检查。,开始建站前需要选择服务商账号，以完成域名可用性检查。
+开始建站前域名可用性检查未通过，请调整后重试。,开始建站前域名可用性检查未通过，请调整后重试。
+"模拟环境已开启，已推荐域名 %{1}","模拟环境已开启，已推荐域名 %{1}"
+已检测,已检测
+"正在准备 AI 引导建站流程...","正在准备 AI 引导建站流程..."
+连接中...,连接中...
+已连接,已连接
+已断开,已断开
+连接失败，请重试。,连接失败，请重试。
+"AI 规划完成，正在进入虚拟主题编辑...","AI 规划完成，正在进入虚拟主题编辑..."
+规划已完成，请手动点击“先保存成工作区”进入下一步。,规划已完成，请手动点击“先保存成工作区”进入下一步。
+将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。,将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。
 返回工作台入口,返回工作台入口
 返回入口,返回入口
 "状态 JSON","状态 JSON"
@@ -1924,6 +2123,25 @@ Provider,Provider
 展开域名阶段日志,展开域名阶段日志
 暂无域名购买日志。,暂无域名购买日志。
 预览站点,预览站点
+虚拟主题可视化编辑,虚拟主题可视化编辑
+在当前阶段可直接调整主题方向，并跳转可视化编辑工作区。,在当前阶段可直接调整主题方向，并跳转可视化编辑工作区。
+"数据库主题 ID","数据库主题 ID"
+虚拟主题名称,虚拟主题名称
+主题风格方向,主题风格方向
+主题色方案,主题色方案
+可视化编辑工作区,可视化编辑工作区
+主题编辑备注,主题编辑备注
+页面类型（虚拟主题阶段可编辑）,页面类型（虚拟主题阶段可编辑）
+当前编辑页面类型,当前编辑页面类型
+"页面布局 JSON（数据库）","页面布局 JSON（数据库）"
+"AI 组件模板（保存到虚拟主题）","AI 组件模板（保存到虚拟主题）"
+保存虚拟主题到数据库,保存虚拟主题到数据库
+保存当前页面布局,保存当前页面布局
+"保存 AI 组件到虚拟主题","保存 AI 组件到虚拟主题"
+"PageBuilder provider 下这里是镜像入口，虚拟主题、布局和组件写入以 PageBuilder 原生工作区为准。","PageBuilder provider 下这里是镜像入口，虚拟主题、布局和组件写入以 PageBuilder 原生工作区为准。"
+打开可视化编辑器,打开可视化编辑器
+新窗口查看预览,新窗口查看预览
+当前还没有可预览地址，先完成前置步骤后会自动可用。,当前还没有可预览地址，先完成前置步骤后会自动可用。
 站点简报,站点简报
 "AI 推荐会根据这里的内容持续更新。","AI 推荐会根据这里的内容持续更新。"
 站点标题,站点标题
@@ -1966,16 +2184,21 @@ Provider,Provider
 工作区会话无效,工作区会话无效
 购买进行中,购买进行中
 重新执行,重新执行
-未创建,未创建
+等待生成,等待生成
 待确认,待确认
 阶段更新,阶段更新
 确认并继续,确认并继续
 返回上一步,返回上一步
+"例如：简约科技 / 品牌信任感 / 高对比行动按钮","例如：简约科技 / 品牌信任感 / 高对比行动按钮"
+自动生成或由你手动粘贴,自动生成或由你手动粘贴
+组件名称,组件名称
+站点可视化预览,站点可视化预览
 "AI 当前推荐：%{label}","AI 当前推荐：%{label}"
 例如：首页要更强调信任感和联系方式,例如：首页要更强调信任感和联系方式
 最近快照更新时间：%{time},最近快照更新时间：%{time}
 "Provider 兼容入口","Provider 兼容入口"
 "Failed to apply recommendation","Failed to apply recommendation"
+"Failed to update stage","Failed to update stage"
 "Summary saved","Summary saved"
 "Failed to save summary","Failed to save summary"
 "AI recommendation applied","AI recommendation applied"
@@ -1995,7 +2218,17 @@ Provider,Provider
 "Failed to apply provider tool","Failed to apply provider tool"
 域名购买已排队,域名购买已排队
 域名购买排队失败,域名购买排队失败
+已自动开始域名购买，进度会持续刷新，你可以继续后续虚拟主题步骤。,已自动开始域名购买，进度会持续刷新，你可以继续后续虚拟主题步骤。
 重新连接事件流,重新连接事件流
 事件流已连接,事件流已连接
 事件流已断开，正在重连...,事件流已断开，正在重连...
 展开域名阶段日志（%{count}）,展开域名阶段日志（%{count}）
+页面布局已保存,页面布局已保存
+保存页面布局失败,保存页面布局失败
+"AI 组件已保存并发布","AI 组件已保存并发布"
+"保存 AI 组件失败","保存 AI 组件失败"
+正在自动生成虚拟主题...,正在自动生成虚拟主题...
+虚拟主题自动生成完成,虚拟主题自动生成完成
+虚拟主题自动生成失败,虚拟主题自动生成失败
+"AI 正在处理，请等待完成后再操作。","AI 正在处理，请等待完成后再操作。"
+事件流已断开，请刷新页面重试。,事件流已断开，请刷新页面重试。

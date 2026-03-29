@@ -294,6 +294,9 @@ class DomainLifecycleOrchestrationService
             }
         }
         if ($order === null) {
+            if ($this->isDevSimulationDomain($domain)) {
+                return $this->buildSimulatedLifecycleStatus($domain);
+            }
             return [
                 'success' => false,
                 'message' => __('未找到该域名的生命周期订单。若通过域名购买功能购买，请确认购买时已勾选「启动全流程状态跟踪」，且 Websites 一站式配置已启用。'),
@@ -355,6 +358,48 @@ class DomainLifecycleOrchestrationService
             return $map[ProvisioningOrder::STATUS_FAILED];
         }
         return ['key' => 'unknown', 'label' => __('处理中')];
+    }
+
+    private function isDevSimulationDomain(string $domain): bool
+    {
+        if (!(\defined('DEV') && DEV)) {
+            return false;
+        }
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '') {
+            return false;
+        }
+
+        return \str_ends_with($domain, '.local')
+            || \str_ends_with($domain, '.local.test')
+            || \str_ends_with($domain, '.test');
+    }
+
+    private function buildSimulatedLifecycleStatus(string $domain): array
+    {
+        $now = \date('Y-m-d H:i:s');
+        return [
+            'success' => true,
+            'data' => [
+                'order' => [
+                    'order_id' => 0,
+                    'domain' => $domain,
+                    'status' => ProvisioningOrder::STATUS_COMPLETED,
+                    'current_step' => ProvisioningOrder::STATUS_COMPLETED,
+                    'lifecycle_stage' => 'completed',
+                    'lifecycle_stage_label' => (string) __('正常'),
+                    'error_message' => '',
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                    'simulated' => true,
+                ],
+                'root_domain' => null,
+                'pool' => [],
+                'steps' => [],
+            ],
+            'message' => (string) __('本地演示：已生成模拟生命周期状态'),
+            'simulated' => true,
+        ];
     }
 
     public function markCertificateIssued(string $domain): void
