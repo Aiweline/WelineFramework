@@ -14,6 +14,7 @@ use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Interface\ToolInterface;
 use Weline\Ai\Model\AiModel;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Ai\Service\Provider\ProviderFactory;
 use Weline\Websites\Service\AI\Tool\CheckDomainAvailabilityTool;
@@ -22,7 +23,9 @@ use Weline\Websites\Service\AI\Tool\PurchaseDomainAndBuildSiteTool;
 
 class WebsiteBuilderAgent implements AgentInterface
 {
-    private const MAX_ITERATIONS = 5;
+    private const DEFAULT_MAX_ITERATIONS = 12;
+    private const MIN_MAX_ITERATIONS = 1;
+    private const HARD_MAX_ITERATIONS = 30;
 
     private ?array $tools = null;
 
@@ -66,9 +69,13 @@ class WebsiteBuilderAgent implements AgentInterface
     public function getSystemPrompt(array $context = []): string
     {
         $accountId = (int) ($context['account_id'] ?? 0);
+        $demoMode = !empty($context['demo_mode']);
         $ctxHint = $accountId > 0
             ? "\n当前上下文：用户已选择账号 ID {$accountId}，可直接使用该 account_id 调用工具。"
             : "\n当前上下文：若用户未指定账号，请先调用 get_registrar_accounts 获取可用账号，选一个 account_id 再执行后续操作。";
+        $demoHint = $demoMode
+            ? "\n当前环境：演示/沙盒环境。请避免反复重试同类工具；当域名检查返回空结果时，最多换一组候选后立即进入建站或给出单次失败建议。"
+            : '';
 
         return <<<PROMPT
 你是 AI 建站工作台中的建站助手，负责根据用户描述理解需求，推荐域名，并执行一站式建站：购买域名 → DNS 解析 → HTTPS → 创建站点。
@@ -91,6 +98,7 @@ class WebsiteBuilderAgent implements AgentInterface
 - 最终用简洁中文回复用户：已完成的域名、站点链接、后续操作建议。
 - 若某步骤失败，说明失败原因并给出可操作建议。
 {$ctxHint}
+{$demoHint}
 PROMPT;
     }
 
@@ -113,6 +121,7 @@ PROMPT;
 
         $context = [
             'account_id' => $params['account_id'] ?? 0,
+            'demo_mode' => !empty($params['demo_mode']),
         ];
         $messages = [
             ['role' => 'system', 'content' => $this->getSystemPrompt($context)],
@@ -125,9 +134,11 @@ PROMPT;
 
         $iteration = 0;
         $finalContent = '';
+        $siteBuildCompleted = false;
         $useStreamFull = method_exists($provider, 'generateStreamFull');
 
-        while ($iteration < self::MAX_ITERATIONS) {
+        $maxIterations = $this->resolveMaxIterations($params);
+        while ($iteration < $maxIterations) {
             if ($streamCallback) {
                 $streamCallback('agent_status', [
                     'status' => 'calling_ai',
@@ -150,9 +161,13 @@ PROMPT;
                     };
                     $genParams['on_heartbeat'] = fn() => $streamCallback && $streamCallback('heartbeat', ['ts' => time()]);
                 }
-                $response = $useStreamFull
-                    ? $provider->generateStreamFull($model, '', $genParams)
-                    : $provider->generate($model, '', $genParams);
+                if ($useStreamFull) {
+                    /** @var callable(AiModel,string,array):array $streamFullCallable */
+                    $streamFullCallable = [$provider, 'generateStreamFull'];
+                    $response = $streamFullCallable($model, '', $genParams);
+                } else {
+                    $response = $provider->generate($model, '', $genParams);
+                }
             } catch (\Throwable $e) {
                 return AgentResult::failure(
                     __('AI 调用失败：%{1}', [$e->getMessage()]),
@@ -203,11 +218,28 @@ PROMPT;
                     $streamCallback('tool_result', ['id' => $id, 'name' => $name, 'result' => mb_strlen($resultStr) > 800 ? mb_substr($resultStr, 0, 800) . '...' : $resultStr]);
                 }
                 $messages[] = ['role' => 'tool', 'tool_call_id' => $id, 'content' => $resultStr];
+
+                // 关键工具成功后直接收敛，避免模型反复补充导致达到最大轮次。
+                if ($name === 'purchase_domain_and_build_site' && !empty($result['success'])) {
+                    $siteBuildCompleted = true;
+                    $domain = \trim((string)($result['domain'] ?? ''));
+                    $message = \trim((string)($result['message'] ?? ''));
+                    $finalContent = $message !== ''
+                        ? $message
+                        : (
+                            $domain !== ''
+                                ? (string)__('建站流程已完成，域名：%{1}。接下来可进入虚拟主题编辑并完善页面内容。', [$domain])
+                                : (string)__('建站流程已完成，接下来可进入虚拟主题编辑并完善页面内容。')
+                        );
+                }
+            }
+            if ($siteBuildCompleted) {
+                break;
             }
             $iteration++;
         }
 
-        if ($iteration >= self::MAX_ITERATIONS && $finalContent === '') {
+        if ($iteration >= $maxIterations && $finalContent === '') {
             return AgentResult::failure(
                 __('智能体达到最大轮次，未能完成建站'),
                 $this->getCode()
@@ -232,6 +264,26 @@ PROMPT;
 
     public function getMaxIterations(): int
     {
-        return self::MAX_ITERATIONS;
+        return $this->resolveMaxIterations();
+    }
+
+    /**
+     * 支持通过 execute 参数覆盖轮次：$params['max_iterations']
+     * 否则回落到全局配置：websites.ai.website_builder.max_iterations
+     */
+    private function resolveMaxIterations(array $params = []): int
+    {
+        $raw = $params['max_iterations'] ?? Env::get(
+            'websites.ai.website_builder.max_iterations',
+            self::DEFAULT_MAX_ITERATIONS
+        );
+        $maxIterations = (int)$raw;
+        if ($maxIterations < self::MIN_MAX_ITERATIONS) {
+            return self::MIN_MAX_ITERATIONS;
+        }
+        if ($maxIterations > self::HARD_MAX_ITERATIONS) {
+            return self::HARD_MAX_ITERATIONS;
+        }
+        return $maxIterations;
     }
 }
