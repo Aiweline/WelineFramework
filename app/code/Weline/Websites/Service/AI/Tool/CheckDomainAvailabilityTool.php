@@ -53,17 +53,59 @@ class CheckDomainAvailabilityTool implements ToolInterface
             $domains = [$domains];
         }
         $domains = array_map('trim', array_filter($domains));
-        if ($accountId <= 0 || $domains === []) {
+        if ($domains === []) {
             return ['error' => 'account_id and domains are required'];
         }
-        return $this->queryService->execute('websites', 'checkAvailability', [
+        if ($accountId <= 0 && $this->allDomainsLocal($domains)) {
+            return \array_map(static fn(string $domain): array => [
+                'domain' => $domain,
+                'available' => true,
+                'simulated' => true,
+            ], $domains);
+        }
+        if ($accountId <= 0) {
+            return ['error' => 'account_id and domains are required'];
+        }
+        $result = $this->queryService->execute('websites', 'checkAvailability', [
             'account_id' => $accountId,
             'domains' => $domains,
         ]);
+
+        if (\is_array($result) && $result === [] && $this->isDemoAccount($accountId)) {
+            return \array_map(static fn(string $domain): array => [
+                'domain' => $domain,
+                'available' => true,
+                'simulated' => true,
+            ], $domains);
+        }
+
+        return $result;
     }
 
     public function isEnabled(): bool
     {
         return true;
+    }
+
+    /**
+     * @param list<string> $domains
+     */
+    private function allDomainsLocal(array $domains): bool
+    {
+        foreach ($domains as $domain) {
+            $normalized = \strtolower(\trim((string)$domain));
+            if ($normalized === 'localhost') {
+                continue;
+            }
+            if (!\str_ends_with($normalized, '.local') && !\str_ends_with($normalized, '.localhost')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private function isDemoAccount(int $accountId): bool
+    {
+        return $accountId >= 900000;
     }
 }
