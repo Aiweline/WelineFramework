@@ -139,8 +139,11 @@ ID,ID
 激活状态,"Status ativo"
 保存,Salvar
 编辑客服,"Editar agente"
+提示,提示
+确认,确认
 保存失败,"Falha ao salvar"
 确定要删除此客服吗？,"Excluir este agente?"
+删除确认,删除确认
 删除失败,"Falha ao excluir"
 获取统计数据失败,"Falha nas estatísticas"
 客服统计详情,"Detalhes das estatísticas do agente"
