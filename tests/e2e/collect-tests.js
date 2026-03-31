@@ -68,11 +68,24 @@ function resolveModuleTestDir(moduleInfo) {
 function collectTestFiles(dir, baseDir = ROOT_DIR) {
     const testFiles = [];
     
-    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+    let directoryStats;
+    try {
+        directoryStats = fs.statSync(dir);
+    } catch (error) {
+        return testFiles;
+    }
+
+    if (!directoryStats.isDirectory()) {
         return testFiles;
     }
     
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    let entries = [];
+    try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch (error) {
+        console.warn(`[collect-tests] skip unreadable directory: ${dir} (${error.message})`);
+        return testFiles;
+    }
     
     for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);

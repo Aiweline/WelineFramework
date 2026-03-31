@@ -1,6 +1,86 @@
 // @weline-e2e-runtime wls
 // @ts-check
-const { test, expect, gotoBackend, loginAsAdmin } = require('../../framework');
+const { test, expect, gotoBackend, loginAsAdmin, getRuntimeInfo } = require('../../framework');
+
+const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught Error|Call to undefined|Undefined variable/i;
+const STYLE_ERROR_PATTERN = /Failed to load resource|Refused to apply style|stylesheet.*404|MIME type .*text\/html/i;
+const STYLE_URL_PATTERN = /\.css($|\?)/i;
+
+function bindDiagnostics(page, targetOrigin = '') {
+  const jsErrors = [];
+  const styleConsoleErrors = [];
+  const failedStyleRequests = [];
+  const invalidStyleResponses = [];
+
+  const isTargetStyleUrl = (url) => {
+    if (!STYLE_URL_PATTERN.test(String(url || ''))) return false;
+    if (!targetOrigin) return true;
+    try {
+      return new URL(url).origin === new URL(targetOrigin).origin;
+    } catch {
+      return false;
+    }
+  };
+
+  page.on('console', (msg) => {
+    if (msg.type() !== 'error') return;
+    const text = msg.text();
+    jsErrors.push(text);
+    if (STYLE_ERROR_PATTERN.test(text)) {
+      styleConsoleErrors.push(text);
+    }
+  });
+
+  page.on('pageerror', (error) => {
+    jsErrors.push(String(error?.message || error || 'Unknown pageerror'));
+  });
+
+  page.on('requestfailed', (request) => {
+    const url = request.url();
+    if (!isTargetStyleUrl(url)) return;
+    failedStyleRequests.push(`${request.method()} ${url}`);
+  });
+
+  page.on('response', async (response) => {
+    const request = response.request();
+    const url = request.url();
+    if (!isTargetStyleUrl(url)) return;
+    const status = response.status();
+    const contentType = (response.headers()['content-type'] || '').toLowerCase();
+    if (status >= 400 || contentType.includes('text/html')) {
+      invalidStyleResponses.push(`${status} ${url} (${contentType || 'unknown'})`);
+    }
+  });
+
+  return { jsErrors, styleConsoleErrors, failedStyleRequests, invalidStyleResponses };
+}
+
+async function getOffcanvasFrame(page) {
+  const iframeHost = page.locator('.offcanvas.show iframe').first();
+  await expect(iframeHost).toBeVisible({ timeout: 15000 });
+  return page.frameLocator('.offcanvas.show iframe');
+}
+
+async function collectFrameStyleHealth(frameLocator) {
+  return frameLocator.locator('body').evaluate(() => {
+    const stylesheets = Array.from(document.querySelectorAll('link[rel="stylesheet"][href]'));
+    const loadedStylesheets = stylesheets.filter((link) => {
+      try {
+        return !!link.sheet && !link.sheet.disabled;
+      } catch {
+        return false;
+      }
+    });
+    const bodyStyles = getComputedStyle(document.body);
+    return {
+      stylesheetCount: stylesheets.length,
+      loadedStylesheetCount: loadedStylesheets.length,
+      bodyDisplay: bodyStyles.display,
+      bodyVisibility: bodyStyles.visibility,
+      bodyTextLength: (document.body?.innerText || '').trim().length,
+    };
+  });
+}
 
 async function openWebsiteIndex(page) {
   await gotoBackend(page, 'websites/admin/website', {
@@ -21,11 +101,13 @@ async function openAddPanel(page) {
   }
 
   await addButton.click({ force: true });
-  await page.waitForTimeout(1500);
+  await expect(page.locator('.offcanvas.show')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('.offcanvas.show iframe').first()).toBeVisible({ timeout: 15000 });
+  await page.waitForTimeout(800);
 }
 
 async function readOffcanvasState(page) {
-  const iframe = page.frameLocator('iframe').first();
+  const iframe = await getOffcanvasFrame(page);
   const bodyLocator = iframe.locator('body').first();
   const bodyText = await bodyLocator.innerText().catch(() => '');
   const resultType = await bodyLocator.getAttribute('data-offcanvas-result').catch(() => null);
@@ -104,21 +186,37 @@ async function selectOrCreateDomain(iframe) {
 }
 
 test.describe('Website add flow', () => {
+  const runtimeInfo = getRuntimeInfo();
+  const targetOrigin = String(runtimeInfo?.runtime?.target_origin || '');
+
   test.beforeEach(async ({ page }) => {
     await loginAsAdmin(page);
   });
 
   test('opens the add website form', async ({ page }) => {
+    const diagnostics = bindDiagnostics(page, targetOrigin);
     await openAddPanel(page);
-    await page.waitForTimeout(2000);
-    await expect(page.locator('body')).toBeVisible();
-    await expect(page.locator('body')).not.toContainText(/WLS Runtime Error|ParseError|syntax error/i);
+    const iframe = await getOffcanvasFrame(page);
+    const body = iframe.locator('body').first();
+    await expect(body).toBeVisible({ timeout: 10000 });
+    await expect(body).not.toContainText(FATAL_PATTERN, { timeout: 10000 });
+
+    const styleHealth = await collectFrameStyleHealth(iframe);
+    expect(styleHealth.stylesheetCount).toBeGreaterThan(0);
+    expect(styleHealth.loadedStylesheetCount).toBeGreaterThan(0);
+    expect(styleHealth.bodyDisplay).not.toBe('none');
+    expect(styleHealth.bodyVisibility).toBe('visible');
+    expect(styleHealth.bodyTextLength).toBeGreaterThan(0);
+    expect(diagnostics.styleConsoleErrors, diagnostics.styleConsoleErrors.join('\n')).toEqual([]);
+    expect(diagnostics.failedStyleRequests, diagnostics.failedStyleRequests.join('\n')).toEqual([]);
+    expect(diagnostics.invalidStyleResponses, diagnostics.invalidStyleResponses.join('\n')).toEqual([]);
   });
 
   test('fills and submits the website form', async ({ page }) => {
+    const diagnostics = bindDiagnostics(page, targetOrigin);
     await openAddPanel(page);
 
-    const iframe = page.frameLocator('iframe').first();
+    const iframe = await getOffcanvasFrame(page);
     await page.waitForTimeout(2000);
 
     const timestamp = Date.now();
@@ -134,26 +232,27 @@ test.describe('Website add flow', () => {
 
     await selectOrCreateDomain(iframe);
 
-    const saveButton = page.locator('button[id*="Save"]').first();
-    if (await saveButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await saveButton.click({ force: true });
-      await page.waitForTimeout(4000);
+    const saveButton = page.locator('.offcanvas.show button[id*="Save"], .offcanvas.show button[type="submit"]').first();
+    await expect(saveButton).toBeVisible({ timeout: 10000 });
+    await saveButton.click({ force: true });
+    await page.waitForTimeout(3000);
 
-      const state = await readOffcanvasState(page);
-      const currentUrl = page.url();
-      const isListPage = currentUrl.includes('/websites/admin/website');
-      const offcanvasStillOpen = await page.locator('.offcanvas.show').isVisible().catch(() => false);
+    const state = await readOffcanvasState(page);
+    const currentUrl = page.url();
+    const isListPage = currentUrl.includes('/websites/admin/website');
+    const offcanvasStillOpen = await page.locator('.offcanvas.show').isVisible().catch(() => false);
 
-      expect(state.hasFatalError).toBeFalsy();
-      expect(state.hasWebsiteIdRegression).toBeFalsy();
-      expect(isListPage || offcanvasStillOpen || Boolean(state.resultType) || state.hasForm).toBeTruthy();
-    }
+    expect(state.hasFatalError).toBeFalsy();
+    expect(state.hasWebsiteIdRegression).toBeFalsy();
+    expect(isListPage || offcanvasStillOpen || Boolean(state.resultType) || state.hasForm).toBeTruthy();
+    expect(diagnostics.jsErrors.filter(msg => FATAL_PATTERN.test(msg)), diagnostics.jsErrors.join('\n')).toEqual([]);
   });
 
   test('shows error handling after an invalid submit', async ({ page }) => {
+    const diagnostics = bindDiagnostics(page, targetOrigin);
     await openAddPanel(page);
 
-    const iframe = page.frameLocator('iframe').first();
+    const iframe = await getOffcanvasFrame(page);
     await page.waitForTimeout(2000);
 
     const codeInput = iframe.locator('input[name="code"], input[id*="code"]').first();
@@ -161,20 +260,20 @@ test.describe('Website add flow', () => {
       await codeInput.fill('default');
     }
 
-    const saveButton = page.locator('button[id*="Save"]').first();
-    if (await saveButton.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await saveButton.click({ force: true });
-      await page.waitForTimeout(4000);
+    const saveButton = page.locator('.offcanvas.show button[id*="Save"], .offcanvas.show button[type="submit"]').first();
+    await expect(saveButton).toBeVisible({ timeout: 10000 });
+    await saveButton.click({ force: true });
+    await page.waitForTimeout(3000);
 
-      const state = await readOffcanvasState(page);
-      expect(state.hasFatalError).toBeFalsy();
-      expect(state.hasWebsiteIdRegression).toBeFalsy();
+    const state = await readOffcanvasState(page);
+    expect(state.hasFatalError).toBeFalsy();
+    expect(state.hasWebsiteIdRegression).toBeFalsy();
 
-      const currentUrl = page.url();
-      const isListPage = currentUrl.includes('/websites/admin/website');
-      const offcanvasStillOpen = await page.locator('.offcanvas.show').isVisible().catch(() => false);
-      expect(isListPage || offcanvasStillOpen || Boolean(state.resultType) || state.hasForm).toBeTruthy();
-    }
+    const currentUrl = page.url();
+    const isListPage = currentUrl.includes('/websites/admin/website');
+    const offcanvasStillOpen = await page.locator('.offcanvas.show').isVisible().catch(() => false);
+    expect(isListPage || offcanvasStillOpen || Boolean(state.resultType) || state.hasForm).toBeTruthy();
+    expect(diagnostics.jsErrors.filter(msg => FATAL_PATTERN.test(msg)), diagnostics.jsErrors.join('\n')).toEqual([]);
   });
 
   test('does not validate website_id during add flow', async ({ page }) => {
@@ -195,26 +294,26 @@ test.describe('Website add flow', () => {
   });
 
   test('renders the add form without undefined template variables', async ({ page }) => {
+    const diagnostics = bindDiagnostics(page, targetOrigin);
     await openAddPanel(page);
 
-    const errors = [];
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        errors.push(msg.text());
-      }
-    });
-    page.on('pageerror', error => {
-      errors.push(error.message);
-    });
-
-    const iframe = page.frameLocator('iframe').first();
-    await page.waitForTimeout(2000);
+    const iframe = await getOffcanvasFrame(page);
     const frameBody = await iframe.locator('body').first().innerText().catch(() => '');
+    const styleHealth = await collectFrameStyleHealth(iframe);
 
     const hasUndefinedWarning = /Undefined variable.*target_button_text|Undefined variable.*title|Undefined variable.*submit_button_text/i.test(frameBody);
     expect(hasUndefinedWarning).toBeFalsy();
 
-    const hasConsoleError = errors.some(error => /Undefined variable|syntax error|Fatal error/i.test(error));
+    expect(styleHealth.stylesheetCount).toBeGreaterThan(0);
+    expect(styleHealth.loadedStylesheetCount).toBeGreaterThan(0);
+    expect(styleHealth.bodyDisplay).not.toBe('none');
+    expect(styleHealth.bodyVisibility).toBe('visible');
+    expect(styleHealth.bodyTextLength).toBeGreaterThan(0);
+
+    const hasConsoleError = diagnostics.jsErrors.some(error => /Undefined variable|syntax error|Fatal error/i.test(error));
     expect(hasConsoleError).toBeFalsy();
+    expect(diagnostics.styleConsoleErrors, diagnostics.styleConsoleErrors.join('\n')).toEqual([]);
+    expect(diagnostics.failedStyleRequests, diagnostics.failedStyleRequests.join('\n')).toEqual([]);
+    expect(diagnostics.invalidStyleResponses, diagnostics.invalidStyleResponses.join('\n')).toEqual([]);
   });
 });

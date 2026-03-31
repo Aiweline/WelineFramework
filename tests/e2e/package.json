@@ -5,10 +5,10 @@
   "description": "Playwright E2E tests for WelineFramework (theme override verification)",
   "scripts": {
     "start": "node start.js",
-    "test": "playwright test",
+    "test": "playwright test --headed",
     "test:collect": "node collect-tests.js",
     "test:module": "playwright test --module",
-    "test:ui": "playwright test --ui",
+    "test:ui": "node run-ui.js",
     "test:headed": "playwright test --headed"
   },
   "devDependencies": {
