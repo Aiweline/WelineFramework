@@ -25,6 +25,12 @@ class DefaultThemeCategoryHookHostTest extends TestCase
         foreach ($expectedHooks as $hook) {
             $this->assertStringContainsString($hook, $template);
         }
+
+        $this->assertStringContainsString('category-products product-list-container', $template);
+        $this->assertStringContainsString('data-weshop-filter-product-host', $template);
+        $this->assertStringContainsString('filter-result-count products-count', $template);
+        $this->assertStringContainsString('id="product-grid"', $template);
+        $this->assertStringContainsString('products-grid', $template);
     }
 
     public function testProductListingLayoutsHostCanonicalCatalogAndFilterHooks(): void
@@ -53,5 +59,14 @@ class DefaultThemeCategoryHookHostTest extends TestCase
             $this->assertStringContainsString("WeShop_Filters::templates/Frontend/filters.phtml", $template);
             $this->assertStringContainsString('$useCanonicalFilterContainer', $template);
         }
+    }
+
+    public function testCanonicalCategoryContentTemplateExposesAjaxRenderableProductsGrid(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../view/templates/Frontend/Category/content.phtml');
+        $this->assertIsString($template);
+        $this->assertStringContainsString('category-products-grid products-grid', $template);
+        $this->assertStringContainsString('data-weshop-filter-products-grid', $template);
+        $this->assertStringContainsString('data-browse-product-ids', $template);
     }
 }
