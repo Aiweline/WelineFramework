@@ -315,6 +315,7 @@ class Module extends FrontendRestController
                 'file_hash' => $versionData->getFileHash(),
                 'file_size' => $versionData->getFileSize(),
                 'module_info' => [
+                    'module_id' => $moduleModel->getId(),
                     'name' => $moduleModel->getName(),
                     'display_name' => $moduleModel->getDisplayName(),
                     'description' => $moduleModel->getDescription(),
