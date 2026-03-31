@@ -68,7 +68,7 @@ class ModuleInstallerService
      * @return array 下载结果
      * @throws Exception
      */
-    public function download(string $licenseKey, ?string $version = null, ?string $downloadIp = null): array
+    public function download(string $licenseKey, ?int $moduleId = null, ?string $version = null, ?string $downloadIp = null): array
     {
         // 创建下载日志
         /** @var AppStoreDownloadLog $log */
@@ -81,36 +81,44 @@ class ModuleInstallerService
 
         try {
             // 调用平台 API 获取下载链接
-            $response = $this->httpClient->post($this->platformApiUrl . '/api/v1/module/download', [
+            $response = $this->httpClient->post($this->platformApiUrl . '/api/v1/platform/module/download', [
                 'json' => [
                     'license_key' => $licenseKey,
+                    'module_id' => $moduleId,
                     'version' => $version,
                     'domain' => $this->getCurrentDomain(),
                 ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
+            $payload = $this->normalizeApiPayload($data);
 
-            if (!$data['success']) {
+            if (!($data['success'] ?? false)) {
                 throw new Exception($data['message'] ?? __('下载失败'));
             }
 
             // 下载模块文件
             $tempDir = $this->getTempDir();
-            $tempFile = $tempDir . DS . $data['module_name'] . '-' . $data['version'] . '.zip';
+            $moduleName = (string)($payload['module_name'] ?? '');
+            $moduleVersion = (string)($payload['version'] ?? '');
+            $downloadUrl = (string)($payload['download_url'] ?? '');
+            if ($moduleName === '' || $moduleVersion === '' || $downloadUrl === '') {
+                throw new Exception(__('下载响应数据不完整'));
+            }
+            $tempFile = $tempDir . DS . $moduleName . '-' . $moduleVersion . '.zip';
 
-            $this->downloadFile($data['download_url'], $tempFile);
+            $this->downloadFile($downloadUrl, $tempFile);
 
             // 验证文件哈希
             $fileHash = hash_file('sha256', $tempFile);
-            if ($data['file_hash'] && $fileHash !== $data['file_hash']) {
+            if (!empty($payload['file_hash']) && $fileHash !== $payload['file_hash']) {
                 unlink($tempFile);
                 throw new Exception(__('文件校验失败'));
             }
 
             // 更新日志
-            $log->setModuleName($data['module_name']);
-            $log->setVersion($data['version']);
+            $log->setModuleName($moduleName);
+            $log->setVersion($moduleVersion);
             $log->setFilePath($tempFile);
             $log->setFileSize(filesize($tempFile));
             $log->setFileHash($fileHash);
@@ -120,14 +128,14 @@ class ModuleInstallerService
             return [
                 'success' => true,
                 'log_id' => $log->getLogId(),
-                'module_name' => $data['module_name'],
-                'version' => $data['version'],
+                'module_name' => $moduleName,
+                'version' => $moduleVersion,
                 'file_path' => $tempFile,
                 'file_size' => filesize($tempFile),
                 'file_hash' => $fileHash,
-                'module_info' => $data['module_info'] ?? [],
+                'module_info' => is_array($payload['module_info'] ?? null) ? $payload['module_info'] : [],
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $log->markAsFailed($e->getMessage());
             $log->save();
             throw new Exception(__('模块下载失败：') . $e->getMessage());
@@ -181,6 +189,9 @@ class ModuleInstallerService
                 // 安装失败，恢复备份
                 if ($backupDir) {
                     $this->restoreBackup($backupDir, $targetDir);
+                } elseif (is_dir($targetDir)) {
+                    // 新装模块无备份时，需要删除已落盘目录，避免半安装状态。
+                    $this->recursiveDelete($targetDir);
                 }
                 throw new Exception(__('模块安装失败：') . $installResult['message']);
             }
@@ -206,7 +217,7 @@ class ModuleInstallerService
                 'target_dir' => $targetDir,
                 'install_output' => $installResult['output'] ?? '',
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             // 清理临时文件
             if (isset($tempDir) && is_dir($tempDir)) {
                 $this->cleanup($tempDir);
@@ -525,11 +536,45 @@ class ModuleInstallerService
     private function isWlsRunning(): bool
     {
         $pidFile = BP . 'var' . DS . 'wls' . DS . 'master.pid';
-        if (file_exists($pidFile)) {
-            $pid = (int)file_get_contents($pidFile);
-            return $pid > 0 && file_exists("/proc/{$pid}");
+        if (!file_exists($pidFile)) {
+            return false;
         }
-        return false;
+
+        $pid = (int)file_get_contents($pidFile);
+        if ($pid <= 0) {
+            return false;
+        }
+
+        if (DIRECTORY_SEPARATOR === '\\') {
+            $output = [];
+            $returnCode = 1;
+            exec('tasklist /FI "PID eq ' . $pid . '" 2>NUL', $output, $returnCode);
+            if ($returnCode === 0) {
+                return str_contains(implode("\n", $output), (string)$pid);
+            }
+            return false;
+        }
+
+        if (function_exists('posix_kill')) {
+            return @posix_kill($pid, 0);
+        }
+
+        return file_exists("/proc/{$pid}");
+    }
+
+    /**
+     * 标准化平台 API 响应负载。
+     *
+     * @param array $response
+     * @return array
+     */
+    private function normalizeApiPayload(array $response): array
+    {
+        $payload = $response['data'] ?? $response;
+        if (!is_array($payload)) {
+            return [];
+        }
+        return $payload;
     }
 
     /**

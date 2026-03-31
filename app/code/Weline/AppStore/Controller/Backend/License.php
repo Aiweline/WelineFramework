@@ -50,6 +50,13 @@ class License extends BackendController
         }
 
         try {
+            /** @var AccountBindService $accountService */
+            $accountService = ObjectManager::getInstance(AccountBindService::class);
+            $token = $accountService->getApiToken();
+            if (!$token) {
+                return $this->jsonResponse(false, __('获取授权令牌失败，请重新绑定账户'));
+            }
+
             $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
             if (!is_string($platformUrl) || $platformUrl === '') {
                 $platformUrl = 'https://app.aiweline.com';
@@ -59,6 +66,7 @@ class License extends BackendController
             $response = $client->post(
                 $platformUrl . '/api/v1/platform/license/activate',
                 [
+                    'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [
                         'license_key' => $licenseKey,
                         'domain' => $domain ?: $_SERVER['HTTP_HOST'],
@@ -87,7 +95,7 @@ class License extends BackendController
             } else {
                 return $this->jsonResponse(false, $data['message'] ?? __('激活失败'));
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->jsonResponse(false, __('激活失败：') . $e->getMessage());
         }
     }
@@ -107,6 +115,13 @@ class License extends BackendController
         }
 
         try {
+            /** @var AccountBindService $accountService */
+            $accountService = ObjectManager::getInstance(AccountBindService::class);
+            $token = $accountService->getApiToken();
+            if (!$token) {
+                return $this->jsonResponse(false, __('获取授权令牌失败，请重新绑定账户'));
+            }
+
             $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
             if (!is_string($platformUrl) || $platformUrl === '') {
                 $platformUrl = 'https://app.aiweline.com';
@@ -116,6 +131,7 @@ class License extends BackendController
             $response = $client->post(
                 $platformUrl . '/api/v1/platform/license/validate',
                 [
+                    'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [
                         'license_key' => $licenseKey,
                         'domain' => $_SERVER['HTTP_HOST'],
@@ -124,7 +140,7 @@ class License extends BackendController
             );
 
             return $response->getBody()->getContents();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->jsonResponse(false, __('验证失败：') . $e->getMessage());
         }
     }
@@ -145,6 +161,13 @@ class License extends BackendController
         }
 
         try {
+            /** @var AccountBindService $accountService */
+            $accountService = ObjectManager::getInstance(AccountBindService::class);
+            $token = $accountService->getApiToken();
+            if (!$token) {
+                return $this->jsonResponse(false, __('获取授权令牌失败，请重新绑定账户'));
+            }
+
             $platformUrl = Env::get('appstore.platform_url', 'https://app.aiweline.com');
             if (!is_string($platformUrl) || $platformUrl === '') {
                 $platformUrl = 'https://app.aiweline.com';
@@ -154,6 +177,7 @@ class License extends BackendController
             $response = $client->post(
                 $platformUrl . '/api/v1/platform/license/renew',
                 [
+                    'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [
                         'license_key' => $licenseKey,
                         'subscription_cycle' => $subscriptionCycle,
@@ -162,7 +186,7 @@ class License extends BackendController
             );
 
             return $response->getBody()->getContents();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->jsonResponse(false, __('续订失败：') . $e->getMessage());
         }
     }
