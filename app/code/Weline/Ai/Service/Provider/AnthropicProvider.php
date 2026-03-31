@@ -95,11 +95,12 @@ class AnthropicProvider implements ProviderInterface
             @set_time_limit(0);
         }
 
-        $requestData = [
+        try {
+            $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 4096),
-        ];
+            ];
 
         // 添加可选参数（确保数值类型正确）
         if (isset($params['temperature']) || isset($config['temperature'])) {
@@ -157,13 +158,16 @@ class AnthropicProvider implements ProviderInterface
             'finish_reason' => $stopReason,
         ];
 
-        if (!empty($toolCalls)) {
-            $result['tool_calls'] = $toolCalls;
-            // 保留原始 content blocks 供 agent 构建后续消息
-            $result['assistant_content'] = $response['content'] ?? [];
-        }
+            if (!empty($toolCalls)) {
+                $result['tool_calls'] = $toolCalls;
+                // 保留原始 content blocks 供 agent 构建后续消息
+                $result['assistant_content'] = $response['content'] ?? [];
+            }
 
-        return $result;
+            return $result;
+        } finally {
+            @set_time_limit(0);
+        }
     }
 
     /**
@@ -213,12 +217,13 @@ class AnthropicProvider implements ProviderInterface
             @set_time_limit(0);
         }
 
-        $requestData = [
+        try {
+            $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'max_tokens' => (int)($params['max_tokens'] ?? $config['max_tokens'] ?? 4096),
             'stream' => true,
-        ];
+            ];
 
         // 添加可选参数（确保数值类型正确）
         if (isset($params['temperature']) || isset($config['temperature'])) {
@@ -293,10 +298,13 @@ class AnthropicProvider implements ProviderInterface
         }
         $totalTokens['total_tokens'] = $totalTokens['prompt_tokens'] + $totalTokens['completion_tokens'];
 
-        return [
-            'content' => $fullContent,
-            'usage' => $totalTokens,
-        ];
+            return [
+                'content' => $fullContent,
+                'usage' => $totalTokens,
+            ];
+        } finally {
+            @set_time_limit(0);
+        }
     }
 
     /**
