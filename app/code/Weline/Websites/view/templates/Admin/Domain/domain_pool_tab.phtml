@@ -397,10 +397,85 @@ function postJson(url, dry) {
     if (formKey) fd.append('form_key', formKey);
     return fetch(url, { method: 'POST', body: fd, headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); });
 }
+function showInlineAlert(message, type) {
+    var el = document.getElementById('weline-pool-alert');
+    if (!el) return;
+    el.textContent = message || '';
+    el.classList.remove('d-none');
+    el.classList.remove('alert-success', 'alert-danger', 'alert-warning', 'alert-info', 'alert-primary');
+    var map = {
+        success: 'alert-success',
+        danger: 'alert-danger',
+        error: 'alert-danger',
+        warning: 'alert-warning',
+        info: 'alert-info',
+        primary: 'alert-primary'
+    };
+    el.classList.add(map[type] || 'alert-primary');
+}
+function toastError(message) {
+    if (typeof BackendToast !== 'undefined' && BackendToast.error) return BackendToast.error(message);
+    showInlineAlert(message, 'danger');
+}
+function toastSuccess(message) {
+    if (typeof BackendToast !== 'undefined' && BackendToast.success) return BackendToast.success(message);
+    showInlineAlert(message, 'success');
+}
+function backendConfirmPromise(title, options) {
+    options = options || {};
+    if (typeof BackendConfirm !== 'undefined' && BackendConfirm.show) {
+        return BackendConfirm.show(title, options);
+    }
+    return new Promise(function(resolve){
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10003;display:flex;align-items:center;justify-content:center;padding:1rem;';
+
+        var dlg = document.createElement('div');
+        dlg.style.cssText = 'background:var(--backend-color-card-bg,#fff);border-radius:.75rem;padding:1.25rem;max-width:90vw;width:680px;box-shadow:0 8px 32px rgba(0,0,0,.2);';
+
+        var type = options.type || 'primary';
+        var btnClass = 'btn-primary';
+        if (type === 'danger') btnClass = 'btn-danger';
+        else if (type === 'warning') btnClass = 'btn-warning';
+        else if (type === 'info') btnClass = 'btn-info';
+        else if (type === 'success') btnClass = 'btn-success';
+
+        var headerTitle = options.title || '';
+        var confirmText = options.confirmText || '<?= __('确认') ?>';
+        var cancelText = options.cancelText || '<?= __('取消') ?>';
+
+        dlg.innerHTML =
+            (headerTitle ? '<div class="text-secondary small mb-2">' + escapeHtml(headerTitle) + '</div>' : '') +
+            '<div style="white-space:pre-wrap;">' + escapeHtml(title) + '</div>' +
+            '<div class="d-flex justify-content-end gap-2 mt-3">' +
+            '<button type="button" class="btn btn-outline-secondary" data-weline-cancel="1">' + escapeHtml(cancelText) + '</button>' +
+            '<button type="button" class="btn ' + btnClass + '" data-weline-confirm="1">' + escapeHtml(confirmText) + '</button>' +
+            '</div>';
+
+        overlay.appendChild(dlg);
+        document.body.appendChild(overlay);
+
+        document.body.style.overflow = 'hidden';
+        function close(ok) {
+            overlay.remove();
+            document.body.style.overflow = '';
+            resolve(ok === true);
+        }
+
+        dlg.querySelector('[data-weline-cancel="1"]').addEventListener('click', function(){ close(false); });
+        dlg.querySelector('[data-weline-confirm="1"]').addEventListener('click', function(){ close(true); });
+        overlay.addEventListener('click', function(e){ if (e.target === overlay) close(false); });
+        document.addEventListener('keydown', function onKey(e){
+            if (e.key === 'Escape') {
+                document.removeEventListener('keydown', onKey);
+                close(false);
+            }
+        });
+    });
+}
 function toastResult(data) {
     if (data.code !== 200) {
-        if (typeof BackendToast !== 'undefined') BackendToast.error(data.msg || 'Error');
-        else alert(data.msg);
+        toastError(data.msg || 'Error');
         return;
     }
     var extra = '';
@@ -413,8 +488,7 @@ function toastResult(data) {
     if (data.data && data.data.errors && data.data.errors.length) {
         extra += ' | ' + data.data.errors.slice(0, 3).join('; ');
     }
-    if (typeof BackendToast !== 'undefined') BackendToast.success((data.msg || '') + extra);
-    else alert((data.msg || '') + extra);
+    toastSuccess((data.msg || '') + extra);
 }
 function runDryThenCommit(url, titleDry) {
     var doCommit = function() {
@@ -422,23 +496,19 @@ function runDryThenCommit(url, titleDry) {
             toastResult(data);
             if (data.code === 200) loadPage(1);
         }).catch(function(){
-            if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('请求失败') ?>');
+            toastError('<?= __('请求失败') ?>');
         });
     };
-    var p = typeof BackendConfirm !== 'undefined'
-        ? BackendConfirm.show(titleDry, { title: '<?= __('试运行') ?>', type: 'info', confirmText: '<?= __('开始试运行') ?>' })
-        : new Promise(function(res){ res(confirm(titleDry)); });
+    var p = backendConfirmPromise(titleDry, { title: '<?= __('试运行') ?>', type: 'info', confirmText: '<?= __('开始试运行') ?>' });
     p.then(function(ok){
         if (!ok) return;
         postJson(url, true).then(function(data){
             toastResult(data);
             if (data.code !== 200) return;
-            var q = typeof BackendConfirm !== 'undefined'
-                ? BackendConfirm.show('<?= __('试运行已完成。是否正式执行删除？此操作不可撤销。') ?>', { title: '<?= __('确认') ?>', type: 'danger' })
-                : new Promise(function(res){ res(confirm('<?= __('正式执行？') ?>')); });
+            var q = backendConfirmPromise('<?= __('试运行已完成。是否正式执行删除？此操作不可撤销。') ?>', { title: '<?= __('确认') ?>', type: 'danger', confirmText: '<?= __('正式执行？') ?>' });
             q.then(function(ok2){ if (ok2) doCommit(); });
         }).catch(function(){
-            if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('请求失败') ?>');
+            toastError('<?= __('请求失败') ?>');
         });
     });
 }
@@ -456,14 +526,14 @@ document.getElementById('weline-pool-tbody').addEventListener('click', function(
     var u = poolFlowLogUrl + (poolFlowLogUrl.indexOf('?') >= 0 ? '&' : '?') + 'pool_id=' + encodeURIComponent(id);
     fetch(u, { headers: { 'X-Requested-With': 'XMLHttpRequest' } }).then(function(r){ return r.json(); }).then(function(data){
         if (data.code !== 200 || !data.data || !data.data.items) {
-            if (typeof BackendToast !== 'undefined') BackendToast.error(data.msg || 'Error');
+            toastError(data.msg || 'Error');
             return;
         }
         var lines = data.data.items.map(function(x){ return (x.at || '') + ' [' + (x.kind || '') + '] ' + (x.message || ''); });
         var body = lines.length ? '<pre class="small mb-0 text-start" style="white-space:pre-wrap;max-height:70vh;overflow:auto;">' +
             lines.map(function(s){ return escapeHtml(s); }).join('\n') + '</pre>' : '<?= __('暂无记录') ?>';
         openWelinePoolFlowLogModal('<?= __('流转记录') ?> #' + id, body);
-    }).catch(function(){ if (typeof BackendToast !== 'undefined') BackendToast.error('<?= __('请求失败') ?>'); });
+    }).catch(function(){ toastError('<?= __('请求失败') ?>'); });
 });
 })();
 </script>

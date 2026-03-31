@@ -40,7 +40,7 @@
         <menu source="Weline_Websites::site_builder_agent"
               name="site_builder_agent"
               title="&#65;&#73;&#32;&#24314;&#31449;&#24037;&#20316;&#21488;"
-              action="*/backend/site-builder-agent/index"
+              action="websites/backend/site-builder-agent/index?provider=pagebuilder&amp;"
               icon="mdi mdi-robot"
               order="50"/>
 
