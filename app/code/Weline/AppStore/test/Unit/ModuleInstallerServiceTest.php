@@ -4,6 +4,8 @@ declare(strict_types=1);
 namespace Weline\AppStore\Test\Unit;
 
 use PHPUnit\Framework\TestCase;
+use ReflectionClass;
+use Weline\AppStore\Service\ModuleInstallerService;
 
 /**
  * 模块安装服务单元测试
@@ -119,5 +121,52 @@ class ModuleInstallerServiceTest extends TestCase
         $this->assertStringContainsString('var', $tempDir);
         $this->assertStringContainsString('appstore', $tempDir);
         $this->assertStringContainsString('temp', $tempDir);
+    }
+
+    /**
+     * 测试下载响应 data 包裹结构能被正确解析
+     */
+    public function testNormalizeApiPayloadWithDataEnvelope(): void
+    {
+        $service = (new ReflectionClass(ModuleInstallerService::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(ModuleInstallerService::class, 'normalizeApiPayload');
+        $method->setAccessible(true);
+
+        $payload = [
+            'success' => true,
+            'data' => [
+                'module_name' => 'Weline_AppStore',
+                'version' => '1.2.3',
+                'download_url' => 'https://example.test/file.zip',
+            ],
+        ];
+
+        $result = $method->invoke($service, $payload);
+
+        $this->assertSame('Weline_AppStore', $result['module_name']);
+        $this->assertSame('1.2.3', $result['version']);
+        $this->assertSame('https://example.test/file.zip', $result['download_url']);
+    }
+
+    /**
+     * 测试下载响应兼容旧结构（无 data 包裹）
+     */
+    public function testNormalizeApiPayloadWithoutDataEnvelope(): void
+    {
+        $service = (new ReflectionClass(ModuleInstallerService::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(ModuleInstallerService::class, 'normalizeApiPayload');
+        $method->setAccessible(true);
+
+        $payload = [
+            'module_name' => 'Weline_AppStore',
+            'version' => '2.0.0',
+            'download_url' => 'https://example.test/v2.zip',
+        ];
+
+        $result = $method->invoke($service, $payload);
+
+        $this->assertSame('Weline_AppStore', $result['module_name']);
+        $this->assertSame('2.0.0', $result['version']);
+        $this->assertSame('https://example.test/v2.zip', $result['download_url']);
     }
 }
