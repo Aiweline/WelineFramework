@@ -109,6 +109,55 @@
     }
 
     /**
+     * 基于当前 URL 安全构建语言切换链接，避免重复注入 backend/currency/lang 段
+     */
+    function buildLanguageUrl(targetLang, pathname, search, fallbackCurrency) {
+        if (!targetLang) {
+            return '';
+        }
+
+        const safePathname = (pathname || window.location.pathname || '/').split('?')[0];
+        const safeSearch = typeof search === 'string' ? search : (window.location.search || '');
+        const pathParts = safePathname.split('/').filter(Boolean);
+        if (pathParts.length === 0) {
+            const currency = (fallbackCurrency || 'CNY').toUpperCase();
+            return '/' + currency + '/' + targetLang + (safeSearch || '');
+        }
+
+        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const currencyPattern = /^[A-Z]{3}$/;
+        let currency = '';
+        for (const part of pathParts) {
+            if (currencyPattern.test(part)) {
+                currency = part.toUpperCase();
+                break;
+            }
+        }
+        if (!currency) {
+            currency = (fallbackCurrency || 'CNY').toUpperCase();
+        }
+
+        // 仅保留非货币/语言段，原有大小写保持不变
+        const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
+
+        // 若首段不是货币/语言，视为租户/后台前缀，保持在最前
+        let prefixSegment = '';
+        if (pathParts.length > 0 && !langPattern.test(pathParts[0]) && !currencyPattern.test(pathParts[0])) {
+            prefixSegment = pathParts[0];
+        }
+
+        if (prefixSegment) {
+            const nonPrefix = filteredParts.filter((p, idx) => !(idx === 0 && p === prefixSegment));
+            return '/' + prefixSegment + '/' + currency + '/' + targetLang +
+                (nonPrefix.length ? '/' + nonPrefix.join('/') : '') +
+                (safeSearch || '');
+        }
+
+        const cleanPath = filteredParts.length ? '/' + filteredParts.join('/') : '';
+        return '/' + currency + '/' + targetLang + cleanPath + (safeSearch || '');
+    }
+
+    /**
      * 更新语言切换器链接
      * 通过 data-i18n-switcher 属性标记来查找语言切换器元素
      */
@@ -135,7 +184,9 @@
             }
 
             // 获取当前 URL 和语言配置
-            const currentPath = window.location.pathname + window.location.search;
+            const pathname = window.location.pathname || '/';
+            const search = window.location.search || '';
+            const currentPath = pathname + search;
             const config = window.__WelineThemeConfig || {};
 
             // 获取当前货币（用于保持货币）
@@ -157,48 +208,7 @@
                     return;
                 }
 
-                let langUrl = '';
-
-                // 使用 window.urlWithLang 生成带语言的 URL（框架推荐的路径格式，会自动保持货币）
-                if (typeof window.urlWithLang === 'function') {
-                    langUrl = window.urlWithLang(currentPath, langCode);
-                } else if (typeof window.inject_path === 'function') {
-                    // 使用 inject_path（会自动保持货币）
-                    const pathOnly = currentPath.split('?')[0];
-                    const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
-                    langUrl = window.inject_path(pathOnly, langCode, 'lang') + (search ? '?' + search : '');
-                } else {
-                    // 降级方案：手动构建路径格式的 URL（需要手动保持货币）
-                    const pathOnly = currentPath.split('?')[0];
-                    const search = currentPath.includes('?') ? currentPath.split('?')[1] : '';
-
-                    // 移除路径中的语言代码和货币代码（如果存在）
-                    const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-                    const currencyPattern = /^[A-Z]{3}$/;
-                    const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-
-                    // 处理带有前缀（如租户/站点编码）的路径，保持其在最前面
-                    let prefixSegment = '';
-                    if (pathParts.length > 0 &&
-                        !langPattern.test(pathParts[0]) &&
-                        !currencyPattern.test(pathParts[0])) {
-                        prefixSegment = pathParts[0];
-                    }
-
-                    let cleanPath = '';
-                    if (prefixSegment) {
-                        const nonPrefix = filteredParts.filter((p, idx) => !(idx === 0 && p === prefixSegment));
-                        cleanPath = '/' + prefixSegment + (nonPrefix.length ? '/' + nonPrefix.join('/') : '');
-                        // 构建新 URL：/[prefix]/[currency]/[lang]/path
-                        langUrl = '/' + prefixSegment + '/' + currentCurrency + '/' + langCode +
-                            (nonPrefix.length ? '/' + nonPrefix.join('/') : '') +
-                            (search ? '?' + search : '');
-                    } else {
-                        cleanPath = '/' + filteredParts.join('/');
-                        // 构建新 URL：/[currency]/[lang]/path（保持货币）
-                        langUrl = '/' + currentCurrency + '/' + langCode + cleanPath + (search ? '?' + search : '');
-                    }
-                }
+                const langUrl = buildLanguageUrl(langCode, pathname, search, currentCurrency);
 
                 if (langUrl) {
                     option.setAttribute('href', langUrl);
@@ -230,81 +240,14 @@
             return;
         }
 
-        // 次优先使用 urlWithLang 函数（来自 url-frontend 模块，会自动保持货币）
-        if (typeof window.urlWithLang === 'function') {
-            const currentPath = window.location.pathname + window.location.search;
-            const langUrl = window.urlWithLang(currentPath, lang);
-
-            // 保存语言偏好到 localStorage
-            localStorage.setItem('weline_user_lang', lang);
-
-            // 保存语言偏好到 Cookie（如果 getCookie/setCookie 函数存在）
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_LANG', lang, 365); // 保存365天
-            }
-
-            // 立即跳转到新 URL
-            window.location.href = langUrl;
-            return;
-        }
-
-        // 降级方案：使用 inject_path（会自动保持货币）
-        if (typeof window.inject_path === 'function') {
-            const langUrl = window.inject_path(window.location.pathname, lang, 'lang') + window.location.search;
-
-            // 保存语言偏好
-            localStorage.setItem('weline_user_lang', lang);
-            if (typeof window.setCookie === 'function') {
-                window.setCookie('WELINE_USER_LANG', lang, 365);
-            }
-
-            // 立即跳转到新 URL
-            window.location.href = langUrl;
-            return;
-        }
-
-        // 最后的降级方案：手动构建路径格式的 URL（需要手动保持货币）
-        let currentPath = window.location.pathname;
-        const pathParts = currentPath.split('/').filter(Boolean);
-
-        // 获取当前货币（从 URL 或配置）
-        let currentCurrency = '';
-        for (const part of pathParts) {
-            if (/^[A-Z]{3}$/.test(part)) {
-                currentCurrency = part;
-                break;
-            }
-        }
-        if (!currentCurrency) {
-            const config = window.__WelineThemeConfig || {};
-            currentCurrency = (config.currentCurrency || 'CNY').toUpperCase();
-        }
-
-        // 移除路径中的语言代码和货币代码（格式：zh_Hans_CN, en_US 等）
-        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
-        const currencyPattern = /^[A-Z]{3}$/;
-        const filteredParts = pathParts.filter(part => !langPattern.test(part) && !currencyPattern.test(part));
-
-        // 处理带有前缀（如租户/站点编码）的路径，保持其在最前面
-        let prefixSegment = '';
-        if (pathParts.length > 0 &&
-            !langPattern.test(pathParts[0]) &&
-            !currencyPattern.test(pathParts[0])) {
-            prefixSegment = pathParts[0];
-        }
-
-        let langUrl = '';
-        if (prefixSegment) {
-            const nonPrefix = filteredParts.filter((p, idx) => !(idx === 0 && p === prefixSegment));
-            // 构建新 URL：/[prefix]/[currency]/[lang]/path（保持租户前缀 + 货币）
-            langUrl = '/' + prefixSegment + '/' + currentCurrency + '/' + lang +
-                (nonPrefix.length ? '/' + nonPrefix.join('/') : '') +
-                window.location.search;
-        } else {
-            const cleanPath = '/' + filteredParts.join('/');
-            // 构建新 URL：/[currency]/[lang]/path（保持货币）
-            langUrl = '/' + currentCurrency + '/' + lang + cleanPath + window.location.search;
-        }
+        // 其余场景统一走本地安全构建，避免复杂路径重复拼接
+        const config = window.__WelineThemeConfig || {};
+        const langUrl = buildLanguageUrl(
+            lang,
+            window.location.pathname || '/',
+            window.location.search || '',
+            (config.currentCurrency || 'CNY').toUpperCase()
+        );
 
         // 保存语言偏好
         localStorage.setItem('weline_user_lang', lang);
