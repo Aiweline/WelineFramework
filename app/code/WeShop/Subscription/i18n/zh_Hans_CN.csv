@@ -47,8 +47,8 @@
 每%{cycle},每%{cycle}
 "Subscription does not exist.",订阅不存在。
 "You do not have permission to view this subscription.",您无权查看该订阅。
-"Every %1 %2","每 %1 %2"
-"Every %1","每 %1"
+"Every %1 %2","Every %1 %2"
+"Every %1","Every %1"
 订阅计划不存在,订阅计划不存在
 订阅计划已停用,订阅计划已停用
 创建订阅：%{plan},创建订阅：%{plan}
