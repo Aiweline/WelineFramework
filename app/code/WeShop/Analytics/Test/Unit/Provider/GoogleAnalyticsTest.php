@@ -55,4 +55,13 @@ class GoogleAnalyticsTest extends TestCase
         self::assertSame('', $snippets['body']);
         self::assertSame('', $snippets['footer']);
     }
+
+    public function testGetPixelCodeSanitizesMeasurementIdInSnippet(): void
+    {
+        $provider = new GoogleAnalytics("G-123');alert(1);//", 'secret', true);
+        $snippet = $provider->getPixelCode();
+
+        self::assertStringContainsString("gtag('config', 'G-123alert1')", $snippet);
+        self::assertStringNotContainsString('alert(', $snippet);
+    }
 }

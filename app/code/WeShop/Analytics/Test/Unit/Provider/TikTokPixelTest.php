@@ -28,6 +28,15 @@ class TikTokPixelTest extends TestCase
         self::assertSame('', $snippets['footer']);
     }
 
+    public function testGetPixelCodeSanitizesPixelIdInSnippet(): void
+    {
+        $provider = new TikTokPixel("TT-1');alert(1);//", 'token', true);
+        $snippet = $provider->getPixelCode();
+
+        self::assertStringContainsString("ttq.load('TT-1alert1')", $snippet);
+        self::assertStringNotContainsString('alert(', $snippet);
+    }
+
     public function testGetPixelCodeReturnsEmptyWhenDisabled(): void
     {
         $provider = new TikTokPixel('TT-PIXEL-1', 'token', false);

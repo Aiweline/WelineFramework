@@ -51,7 +51,12 @@ class BingAds implements PixelProviderInterface
             return '';
         }
 
-        return $this->buildHeadSnippet($this->readUetTagId());
+        $uetTagId = $this->sanitizeSnippetToken($this->readUetTagId());
+        if ($uetTagId === '') {
+            return '';
+        }
+
+        return $this->buildHeadSnippet($uetTagId);
     }
 
     /**
@@ -67,8 +72,17 @@ class BingAds implements PixelProviderInterface
             ];
         }
 
+        $uetTagId = $this->sanitizeSnippetToken($this->readUetTagId());
+        if ($uetTagId === '') {
+            return [
+                'head' => '',
+                'body' => '',
+                'footer' => '',
+            ];
+        }
+
         return [
-            'head' => $this->buildHeadSnippet($this->readUetTagId()),
+            'head' => $this->buildHeadSnippet($uetTagId),
             'body' => '',
             'footer' => '',
         ];
@@ -118,6 +132,12 @@ HTML;
     private function readApiToken(): string
     {
         return trim((string) ($this->apiToken ?? $this->getConfigValue('api_token', '')));
+    }
+
+    private function sanitizeSnippetToken(string $value): string
+    {
+        $sanitized = preg_replace('/[^a-zA-Z0-9._-]/', '', $value);
+        return trim((string) $sanitized);
     }
 
     /**
@@ -240,13 +260,21 @@ HTML;
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge(['Content-Type: application/json'], $headers));
-        curl_exec($ch);
+        $response = curl_exec($ch);
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $hasError = $response === false || curl_errno($ch) !== 0;
         curl_close($ch);
 
-        return $statusCode === 0 || ($statusCode >= 200 && $statusCode < 300);
+        if ($hasError) {
+            return false;
+        }
+
+        return $statusCode >= 200 && $statusCode < 300;
     }
 
     private function getConfigValue(string $field, mixed $default): mixed

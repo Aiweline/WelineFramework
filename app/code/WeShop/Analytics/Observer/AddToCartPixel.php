@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace WeShop\Analytics\Observer;
 
+use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Event\Observer;
 use WeShop\Analytics\Service\PixelDispatcher;
 
 /**
  * 添加到购物车像素观察者
  */
-class AddToCartPixel extends Observer implements ObserverInterface
+class AddToCartPixel implements ObserverInterface
 {
     public function __construct(
         private readonly PixelDispatcher $pixelDispatcher
@@ -21,9 +21,9 @@ class AddToCartPixel extends Observer implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(): void
+    public function execute(Event &$event): void
     {
-        $eventData = $this->getEvent()->getData();
+        $eventData = $event->getData();
 
         $this->pixelDispatcher->dispatch('AddToCart', [
             'product_id' => $eventData['product_id'] ?? 0,

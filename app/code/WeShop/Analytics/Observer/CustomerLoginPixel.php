@@ -21,9 +21,15 @@ class CustomerLoginPixel implements ObserverInterface
     public function execute(Event &$event): void
     {
         $data = $event->getData();
-        $customer = $data->getData('customer');
+        $customer = is_array($data) ? ($data['customer'] ?? null) : (is_object($data) && method_exists($data, 'getData') ? $data->getData('customer') : null);
 
-        if (!$customer) {
+        if (
+            !$customer
+            || !is_object($customer)
+            || !method_exists($customer, 'getId')
+            || !method_exists($customer, 'getCurrency')
+            || !method_exists($customer, 'getLocale')
+        ) {
             return;
         }
 
