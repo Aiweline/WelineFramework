@@ -1,0 +1,43 @@
+﻿"WeShop API Bridge","WeShop API Bridge"
+"API Documentation","API Documentation"
+"Failed to load API documentation: %1","Failed to load API documentation: %1"
+"API endpoints retrieved successfully","API endpoints retrieved successfully"
+"Failed to retrieve API endpoints: %1","Failed to retrieve API endpoints: %1"
+"API endpoint parameter is required","API endpoint parameter is required"
+"API endpoint ""%1"" not found","API endpoint ""%1"" not found"
+"API endpoint info retrieved successfully","API endpoint info retrieved successfully"
+"Failed to retrieve endpoint info: %1","Failed to retrieve endpoint info: %1"
+"Unsupported API endpoint","Unsupported API endpoint"
+"Method ""%1"" not found in endpoint ""%2""","Method ""%1"" not found in endpoint ""%2"""
+"API test executed successfully","API test executed successfully"
+"API test failed: %1","API test failed: %1"
+"Health check passed","Health check passed"
+"Health check failed: %1","Health check failed: %1"
+"API documentation retrieved successfully","API documentation retrieved successfully"
+"Failed to retrieve API documentation: %1","Failed to retrieve API documentation: %1"
+"WeShop REST API 桥接模块","WeShop REST API Bridge Module"
+Test,Test
+"View Docs","View Docs"
+"No API endpoints available","No API endpoints available"
+"API Tester","API Tester"
+Close,Close
+Endpoint,Endpoint
+"Select endpoint","Select endpoint"
+Method,Method
+Parameters,Parameters
+"Send Request","Send Request"
+Response,Response
+"Invalid JSON format in parameters","Invalid JSON format in parameters"
+Loading...,Loading...
+"Endpoint Information","Endpoint Information"
+Name,Name
+Version,Version
+Description,Description
+Class,Class
+"Available Methods","Available Methods"
+"List all items","List all items"
+"Get paginated list","Get paginated list"
+"Get single item","Get single item"
+"Create new item","Create new item"
+"Update existing item","Update existing item"
+"Delete item","Delete item"
