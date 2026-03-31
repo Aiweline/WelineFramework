@@ -26,9 +26,31 @@ class Install implements InstallInterface
 
         if (!$modelSetup->tableExist()) {
             $this->createPageTable($modelSetup);
+        } else {
+            $this->repairPageTableColumns($modelSetup);
         }
 
         $this->createDefaultTestPage($pageModel);
+    }
+
+    private function repairPageTableColumns(ModelSetup $modelSetup): void
+    {
+        $requiredColumns = [
+            [Page::schema_fields_ID, '', TableInterface::column_type_INTEGER, 0, 'primary key auto_increment', '页面ID'],
+            [Page::schema_fields_HANDLE, Page::schema_fields_ID, TableInterface::column_type_VARCHAR, 100, 'not null unique', '页面句柄'],
+            [Page::schema_fields_TYPE, Page::schema_fields_HANDLE, TableInterface::column_type_VARCHAR, 50, 'not null', '页面类型'],
+            [Page::schema_fields_NAME, Page::schema_fields_TYPE, TableInterface::column_type_VARCHAR, 255, 'not null', '页面名称'],
+            [Page::schema_fields_TITLE, Page::schema_fields_NAME, TableInterface::column_type_VARCHAR, 255, 'not null', '页面标题'],
+            [Page::schema_fields_CONTENT, Page::schema_fields_TITLE, TableInterface::column_type_TEXT, 0, '', '页面内容'],
+            [Page::schema_fields_STATUS, Page::schema_fields_CONTENT, TableInterface::column_type_SMALLINT, 1, 'not null default 0', '状态:0草稿,1已发布'],
+        ];
+
+        foreach ($requiredColumns as [$field, $after, $type, $length, $options, $comment]) {
+            if ($modelSetup->hasField($field)) {
+                continue;
+            }
+            $modelSetup->addColumnWithRestore($field, (string) $after, (string) $type, $length, (string) $options, (string) $comment);
+        }
     }
 
     private function createPageTable(ModelSetup $modelSetup): void

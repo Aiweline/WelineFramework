@@ -15,7 +15,7 @@ use Weline\Framework\Setup\Db\ModelSetup;
 
 class Page extends Model
 {
-    public const schema_table = 'weshop_cms_page';
+    public const schema_table = 'weline_cms_page';
     public const schema_primary_key = 'page_id';
     public string $indexer = 'cms_page_indexer';
     
