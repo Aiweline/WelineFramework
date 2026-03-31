@@ -3,9 +3,14 @@ declare(strict_types=1);
 
 namespace WeShop\Product\Extends\Module\Weline_Framework\Query;
 
+use Weline\Eav\Model\EavAttribute;
+use Weline\Eav\Model\EavEntity;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use WeShop\Price\Service\PriceService;
 use WeShop\Product\Model\Product;
+use WeShop\Product\Model\ProductCategory;
+use WeShop\Product\Service\ProductEavCompatibilityService;
 
 /**
  * 产品查询器
@@ -14,9 +19,14 @@ use WeShop\Product\Model\Product;
  */
 class ProductQueryProvider implements QueryProviderInterface
 {
+    private ?int $productEavEntityId = null;
+
     public function __construct(
         private readonly Product $productModel,
-        private readonly PriceService $priceService
+        private readonly PriceService $priceService,
+        private readonly ProductCategory $productCategoryModel = new ProductCategory(),
+        private readonly EavEntity $eavEntityModel = new EavEntity(),
+        private readonly EavAttribute $eavAttributeModel = new EavAttribute()
     ) {
     }
 
@@ -83,25 +93,35 @@ class ProductQueryProvider implements QueryProviderInterface
 
     private function getProductIdsByCategoryId(array $params): array
     {
-        $categoryId = (int)($params['category_id'] ?? 0);
-        if ($categoryId <= 0) {
+        $categoryIds = $params['category_ids'] ?? [];
+        if (!\is_array($categoryIds)) {
+            $categoryIds = [];
+        }
+
+        $singleCategoryId = (int)($params['category_id'] ?? 0);
+        if ($singleCategoryId > 0) {
+            $categoryIds[] = $singleCategoryId;
+        }
+
+        $categoryIds = \array_values(\array_filter(\array_map('intval', $categoryIds)));
+        if ($categoryIds === []) {
             return [];
         }
 
         try {
-            $pdo = $this->productModel->getConnection()->getConnector()->getLink();
-            $stmt = $pdo->prepare('SELECT product_id FROM "weshop_product_category" WHERE category_id = ?');
-            $stmt->execute([$categoryId]);
+            $productCategory = clone $this->productCategoryModel;
+            $rows = $productCategory
+                ->clear()
+                ->where(ProductCategory::schema_fields_category_id, $categoryIds, 'in')
+                ->select()
+                ->fetchArray();
 
-            $ids = [];
-            while ($row = $stmt->fetch(\PDO::FETCH_ASSOC)) {
-                $productId = (int)($row['product_id'] ?? 0);
-                if ($productId > 0) {
-                    $ids[] = $productId;
-                }
-            }
-
-            return array_values(array_unique($ids));
+            return \array_values(\array_unique(\array_filter(
+                \array_map(
+                    static fn (array $row): int => (int)($row[ProductCategory::schema_fields_product_id] ?? 0),
+                    $rows
+                )
+            )));
         } catch (\Throwable) {
             return [];
         }
@@ -235,13 +255,28 @@ class ProductQueryProvider implements QueryProviderInterface
             return null;
         }
         try {
-            $attribute = $this->productModel->getAttribute($code);
+            $entityId = $this->getProductEavEntityId();
+            if ($entityId <= 0) {
+                return ObjectManager::getInstance(ProductEavCompatibilityService::class)->getAttributeInfo($code);
+            }
+
+            $attribute = clone $this->eavAttributeModel;
+            $attribute->reset()->clearData()
+                ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
+                ->where(EavAttribute::schema_fields_code, $code)
+                ->where(EavAttribute::schema_fields_is_enable, 1)
+                ->find()
+                ->fetch();
             if (!$attribute || !$attribute->getId()) {
-                return null;
+                return ObjectManager::getInstance(ProductEavCompatibilityService::class)->getAttributeInfo($code);
             }
             $typeModel = $attribute->getTypeModel();
+            $attributeId = (int)($attribute->getData(EavAttribute::schema_fields_attribute_id) ?? 0);
+            if ($attributeId <= 0) {
+                $attributeId = (int)$attribute->getId();
+            }
             return [
-                'attribute_id' => (int)$attribute->getId(),
+                'attribute_id' => $attributeId,
                 'type_code' => $typeModel ? (string)$typeModel->getCode() : 'input_string',
                 'has_option' => (bool)$attribute->hasOption(),
                 'name' => (string)$attribute->getName(),
@@ -252,8 +287,28 @@ class ProductQueryProvider implements QueryProviderInterface
                 'frontend_is_visible' => (bool)$attribute->isVisibleOnFront(),
             ];
         } catch (\Throwable $e) {
-            return null;
+            return ObjectManager::getInstance(ProductEavCompatibilityService::class)->getAttributeInfo($code);
         }
+    }
+
+    private function getProductEavEntityId(): int
+    {
+        if ($this->productEavEntityId !== null) {
+            return $this->productEavEntityId;
+        }
+
+        try {
+            $entity = clone $this->eavEntityModel;
+            $entity->reset()->clearData()
+                ->where(EavEntity::schema_fields_code, Product::entity_code)
+                ->find()
+                ->fetch();
+            $this->productEavEntityId = (int)$entity->getId();
+        } catch (\Throwable) {
+            $this->productEavEntityId = 0;
+        }
+
+        return $this->productEavEntityId;
     }
 
     /**
@@ -417,8 +472,14 @@ class ProductQueryProvider implements QueryProviderInterface
             );
         }
 
-        if (!empty($filters['category_id'])) {
-            $product->where('category_id', $filters['category_id']);
+        $categoryProductIds = $this->getProductIdsByCategoryId([
+            'category_id' => $filters['category_id'] ?? null,
+            'category_ids' => $filters['category_ids'] ?? [],
+        ]);
+        if ($categoryProductIds !== []) {
+            $product->where(Product::schema_fields_ID, $categoryProductIds, 'in');
+        } elseif (!empty($filters['category_id']) || !empty($filters['category_ids'])) {
+            $product->where(Product::schema_fields_ID, [0], 'in');
         }
 
         $product->where(Product::schema_fields_status, 1);

@@ -44,10 +44,10 @@ EAV属性保存失败：%{1},EAV属性保存失败：%{1}
 "Product ID is required.","Product ID is required."
 "Product is unavailable.","Product is unavailable."
 产品布局定时切换任务,"Product Layout Scheduled Switch Task"
-"产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4","Product #%1 layout schedule #%2 activated"
+"产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4","产品 #%1 的布局计划 #%2 已激活，布局 '%3' 应用到 %4"
 重置为待执行,"Reset to Pending"
 标记为已完成,"Mark as Completed"
-"产品 #%1 的布局计划 #%2 已%3","Product #%1 layout schedule #%2 %3"
+"产品 #%1 的布局计划 #%2 已%3","产品 #%1 的布局计划 #%2 已%3"
 没有需要处理的产品布局计划,"No product layout schedules to process"
 每分钟检查并执行产品布局定时切换任务,"Check and execute product layout scheduled switch task every minute"
 产品保存前,产品保存前
