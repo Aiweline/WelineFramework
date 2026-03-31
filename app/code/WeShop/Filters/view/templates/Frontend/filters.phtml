@@ -169,6 +169,9 @@ if (empty($filters) && empty($appliedFilters)) {
 <script>
 // 初始化筛选控制器
 document.addEventListener('DOMContentLoaded', function() {
+    if (window.weShopFilterController) {
+        return;
+    }
     if (window.WeShopFilters) {
         window.weShopFilterController = WeShopFilters.init({
             categoryId: <?= (int)$categoryId ?>,

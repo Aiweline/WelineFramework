@@ -28,15 +28,22 @@ class FilterCountService
      * @var FilterCacheService
      */
     private FilterCacheService $cacheService;
+
+    /**
+     * @var FilterService
+     */
+    private FilterService $filterService;
     
     public function __construct(
         FilterRegistry $registry,
         EventsManager $eventsManager,
-        FilterCacheService $cacheService
+        FilterCacheService $cacheService,
+        FilterService $filterService
     ) {
         $this->registry = $registry;
         $this->eventsManager = $eventsManager;
         $this->cacheService = $cacheService;
+        $this->filterService = $filterService;
     }
     
     /**
@@ -54,6 +61,7 @@ class FilterCountService
         array $productIds,
         array $appliedFilters = []
     ): array {
+        $this->filterService->collectFilters($categoryId, $productIds);
         $filter = $this->registry->get($filterCode);
         if ($filter === null || !$filter->isEnabled($categoryId)) {
             return [];
@@ -119,6 +127,7 @@ class FilterCountService
         array $productIds,
         array $appliedFilters = []
     ): array {
+        $this->filterService->collectFilters($categoryId, $productIds);
         $collection = $this->registry->getForCategory($categoryId);
         $result = [];
         
