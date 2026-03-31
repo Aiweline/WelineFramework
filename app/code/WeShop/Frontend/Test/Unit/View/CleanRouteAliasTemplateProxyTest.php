@@ -21,4 +21,12 @@ class CleanRouteAliasTemplateProxyTest extends TestCase
         $this->assertIsString($template);
         $this->assertStringContainsString("WeShop_Cart::templates/frontend/cart/index.phtml", $template);
     }
+
+    public function testCustomerLoginProxyTemplateUsesCanonicalCustomerTemplatePath(): void
+    {
+        $template = file_get_contents(__DIR__ . '/../../../view/templates/frontend/customer/account/login.phtml');
+        $this->assertIsString($template);
+        $this->assertStringContainsString("Weline_Customer::templates/frontend/account/login.phtml", $template);
+        $this->assertStringNotContainsString("Weline_Customer::frontend/account/login.phtml", $template);
+    }
 }
