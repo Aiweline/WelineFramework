@@ -16,7 +16,7 @@ class Issue extends BaseController
 
     public function post(): string
     {
-        $backUrl = (string) $this->request->getParam('back_url', $this->getBackendUrl('*/backend/invoice'));
+        $backUrl = (string) $this->request->getParam('back_url', $this->getUrl('*/backend/invoice'));
         $invoiceId = (int) $this->request->getParam('invoice_id', 0);
 
         if ($invoiceId <= 0) {
@@ -28,7 +28,7 @@ class Issue extends BaseController
         try {
             $invoice = $this->invoiceService->issueInvoice($invoiceId);
             $this->getMessageManager()->addSuccess(__('Invoice issued.'));
-            $this->redirect($this->getBackendUrl('*/backend/invoice/view', ['id' => $invoice->getId()]));
+            $this->redirect($this->getUrl('*/backend/invoice/view', ['id' => $invoice->getId()]));
             return '';
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage() ?: __('Invoice issue failed.'));
