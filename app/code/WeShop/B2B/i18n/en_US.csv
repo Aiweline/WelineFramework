@@ -1,21 +1,85 @@
-﻿"B2B Company Management","B2B Company Management"
+﻿"Please log in first","Please log in first"
+Success,Success
+"B2B Trade Accounts","B2B Trade Accounts"
+"Customer ID is required.","Customer ID is required."
+"B2B account settings saved.","B2B account settings saved."
+"Save failed.","Save failed."
+"B2B Enterprise Customers","B2B Enterprise Customers"
+"B2B customer profile saved.","B2B customer profile saved."
+"B2B Credit & AR Summary","B2B Credit & AR Summary"
+"B2B Company Management","B2B Company Management"
 "Company profile saved.","Company profile saved."
 "Company profile save failed.","Company profile save failed."
+"B2B Credit Lines","B2B Credit Lines"
+"Credit limit must not be negative.","Credit limit must not be negative."
+"B2B credit line saved.","B2B credit line saved."
+"B2B Receivables","B2B Receivables"
+"Payment recorded.","Payment recorded."
+"Payment failed.","Payment failed."
 "Please log in to view your corporate programs.","Please log in to view your corporate programs."
 "B2B storefront layout hook","B2B storefront layout hook"
 "Inject content above the B2B storefront summary.","Inject content above the B2B storefront summary."
 "B2B company list hook","B2B company list hook"
 "Attach additional sections after the company table.","Attach additional sections after the company table."
+"Invalid customer for B2B credit payment.","Invalid customer for B2B credit payment."
+"This order is placed on your B2B credit account. Please settle the invoice before the due date.","This order is placed on your B2B credit account. Please settle the invoice before the due date."
+"A customer account is required for B2B credit checkout.","A customer account is required for B2B credit checkout."
+"B2B credit payment is only available for approved enterprise accounts.","B2B credit payment is only available for approved enterprise accounts."
+"customer_id is required.","customer_id is required."
+"Company name is required.","Company name is required."
+"Contact not found.","Contact not found."
+"Contact name is required.","Contact name is required."
+"This order amount exceeds your auto-approval limit. Please contact your account manager.","This order amount exceeds your auto-approval limit. Please contact your account manager."
+"Invalid order for B2B extension.","Invalid order for B2B extension."
+"Payment amount must be positive.","Payment amount must be positive."
+"Receivable not found.","Receivable not found."
 Active,Active
 "Pending Review","Pending Review"
 Approved,Approved
 Rejected,Rejected
 Disabled,Disabled
 "Company record not found.","Company record not found."
-"Company name is required.","Company name is required."
 "Company contact email is required.","Company contact email is required."
 "Company contact email is invalid.","Company contact email is invalid."
 "Unsupported company status.","Unsupported company status."
+"Credit amount must be positive.","Credit amount must be positive."
+"No B2B credit line is configured for this account.","No B2B credit line is configured for this account."
+"The B2B credit line is frozen. Please contact support.","The B2B credit line is frozen. Please contact support."
+"Insufficient B2B credit. Available: %{1}","Insufficient B2B credit. Available: %{1}"
+"Credit record missing after validation.","Credit record missing after validation."
+Prepaid,Prepaid
+"Net 30","Net 30"
+"Net 60","Net 60"
+"Net 90","Net 90"
+"Receivable amount must be positive.","Receivable amount must be positive."
+"Due date format must be YYYY-MM-DD.","Due date format must be YYYY-MM-DD."
+"Order ID is required.","Order ID is required."
+"B2B credit usage is at or above %{1}%.","B2B credit usage is at or above %{1}%."
+"Create / update account","Create / update account"
+"Customer ID","Customer ID"
+"Payment term","Payment term"
+—,—
+"Period days override","Period days override"
+"Auto approve under","Auto approve under"
+Save,Save
+Term,Term
+Balance,Balance
+"Auto approve","Auto approve"
+"Company name","Company name"
+Filter,Filter
+"Create / edit profile","Create / edit profile"
+"Tax ID","Tax ID"
+"Credit limit","Credit limit"
+"Not set","Not set"
+Yes,Yes
+No,No
+"Save profile","Save profile"
+ID,ID
+Customer,Customer
+Company,Company
+"Credit lines","Credit lines"
+"Open receivables","Open receivables"
+Overdue,Overdue
 "Manage corporate account records, contact emails, and approval statuses from one operational workspace.","Manage corporate account records, contact emails, and approval statuses from one operational workspace."
 "Page %d of %d, %d companies found","Page %d of %d, %d companies found"
 Total,Total
@@ -23,7 +87,6 @@ Total,Total
 "Create B2B Company","Create B2B Company"
 "Company Name","Company Name"
 "Contact Email","Contact Email"
-"Tax ID","Tax ID"
 Phone,Phone
 Address,Address
 Status,Status
@@ -38,6 +101,19 @@ Actions,Actions
 Edit,Edit
 "No B2B companies found.","No B2B companies found."
 "Create the first linked company profile or adjust the filters to find an existing account.","Create the first linked company profile or adjust the filters to find an existing account."
+"Set credit limit","Set credit limit"
+"Credit level","Credit level"
+Limit,Limit
+Used,Used
+Available,Available
+Frozen,Frozen
+Order,Order
+Invoice,Invoice
+Amount,Amount
+Paid,Paid
+Due,Due
+"Record payment","Record payment"
+Pay,Pay
 "Awaiting link","Awaiting link"
 "B2B account access","B2B account access"
 "Linked companies","Linked companies"

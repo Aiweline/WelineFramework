@@ -29,8 +29,8 @@ class Index extends BaseController
         $this->assign(array_merge(
             [
                 'title' => (string) __('B2B Company Management'),
-                'companyIndexUrl' => $this->getBackendUrl('*/backend/company'),
-                'companySaveUrl' => $this->getBackendUrl('*/backend/company/save'),
+                'companyIndexUrl' => $this->request->getUrlBuilder()->getBackendUrl('*/backend/company'),
+                'companySaveUrl' => $this->request->getUrlBuilder()->getBackendUrl('*/backend/company/save'),
             ],
             $this->companyAdminPageDataService->getPageData($page, $pageSize, $filters, $editingId)
         ));
