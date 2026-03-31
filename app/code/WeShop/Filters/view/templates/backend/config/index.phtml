@@ -1,0 +1,125 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$globalConfigs = $this->getData('global_configs') ?? [];
+$availableFilters = $this->getData('available_filters') ?? [];
+$eavAttributes = $this->getData('eav_attributes') ?? [];
+$saveUrl = (string)$this->getBackendUrl('*/backend/config/save');
+$priceRangesUrl = (string)$this->getBackendUrl('*/backend/config/price-ranges');
+$clearCacheUrl = (string)$this->getBackendUrl('*/backend/config/clear-cache');
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= __('Filter Configuration') ?></h1>
+            <p class="text-muted mb-0"><?= __('Manage global storefront filters and decide which options are shown first.') ?></p>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-primary" href="<?= $priceRangesUrl ?>"><?= __('Price Ranges') ?></a>
+            <a class="btn btn-outline-danger w-delete" href="<?= $clearCacheUrl ?>"><?= __('Clear Filter Cache') ?></a>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><?= __('Global Filter Switches') ?></h2>
+                    <form method="post" action="<?= $saveUrl ?>" class="d-grid gap-3">
+                        <input type="hidden" name="category_id" value="0">
+                        <?php if ($availableFilters): ?>
+                            <?php foreach ($availableFilters as $filterCode => $provider): ?>
+                                <?php
+                                $config = $globalConfigs[$filterCode] ?? [];
+                                $enabled = (int)($config['is_enabled'] ?? 0) === 1;
+                                $displayType = (string)($config['display_type'] ?? 'list');
+                                $sortOrder = (int)($config['sort_order'] ?? 100);
+                                ?>
+                                <div class="border rounded p-3">
+                                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                                        <div>
+                                            <div class="fw-semibold"><?= htmlspecialchars((string)$filterCode, ENT_QUOTES) ?></div>
+                                            <div class="text-muted small"><?= htmlspecialchars((string)get_class($provider), ENT_QUOTES) ?></div>
+                                        </div>
+                                        <div class="form-check form-switch mb-0">
+                                            <input class="form-check-input"
+                                                   type="checkbox"
+                                                   name="filters[<?= htmlspecialchars((string)$filterCode, ENT_QUOTES) ?>][enabled]"
+                                                   value="1"
+                                                <?= $enabled ? 'checked' : '' ?>>
+                                            <label class="form-check-label"><?= __('Enabled') ?></label>
+                                        </div>
+                                    </div>
+                                    <div class="row g-3">
+                                        <div class="col-md-4">
+                                            <label class="form-label"><?= __('Sort Order') ?></label>
+                                            <input class="form-control"
+                                                   type="number"
+                                                   name="filters[<?= htmlspecialchars((string)$filterCode, ENT_QUOTES) ?>][sort_order]"
+                                                   value="<?= $sortOrder ?>">
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label"><?= __('Display Type') ?></label>
+                                            <select class="form-select" name="filters[<?= htmlspecialchars((string)$filterCode, ENT_QUOTES) ?>][display_type]">
+                                                <option value="list" <?= $displayType === 'list' ? 'selected' : '' ?>><?= __('List') ?></option>
+                                                <option value="chips" <?= $displayType === 'chips' ? 'selected' : '' ?>><?= __('Chips') ?></option>
+                                                <option value="dropdown" <?= $displayType === 'dropdown' ? 'selected' : '' ?>><?= __('Dropdown') ?></option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label class="form-label"><?= __('Collapsed By Default') ?></label>
+                                            <select class="form-select" name="filters[<?= htmlspecialchars((string)$filterCode, ENT_QUOTES) ?>][collapsed]">
+                                                <option value="0"><?= __('No') ?></option>
+                                                <option value="1" <?= (int)($config['is_collapsed'] ?? 0) === 1 ? 'selected' : '' ?>><?= __('Yes') ?></option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php else: ?>
+                            <div class="text-muted"><?= __('No filter providers are currently available.') ?></div>
+                        <?php endif; ?>
+
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary"><?= __('Save Global Filter Config') ?></button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><?= __('Filter Summary') ?></h2>
+                    <div class="d-flex justify-content-between small mb-2">
+                        <span class="text-muted"><?= __('Registered Providers') ?></span>
+                        <span class="fw-semibold"><?= count($availableFilters) ?></span>
+                    </div>
+                    <div class="d-flex justify-content-between small">
+                        <span class="text-muted"><?= __('EAV Attributes') ?></span>
+                        <span class="fw-semibold"><?= count($eavAttributes) ?></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><?= __('Filterable Attributes') ?></h2>
+                    <?php if ($eavAttributes): ?>
+                        <div class="small d-grid gap-2" style="max-height: 360px; overflow-y: auto;">
+                            <?php foreach ($eavAttributes as $attribute): ?>
+                                <div class="border rounded p-2">
+                                    <div class="fw-semibold"><?= htmlspecialchars((string)($attribute['attribute_code'] ?? ''), ENT_QUOTES) ?></div>
+                                    <div class="text-muted"><?= htmlspecialchars((string)($attribute['frontend_label'] ?? ''), ENT_QUOTES) ?></div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php else: ?>
+                        <div class="text-muted small"><?= __('No filterable product attributes found.') ?></div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
