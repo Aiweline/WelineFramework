@@ -74,8 +74,11 @@ class IndexTest extends TestCase
         while (!$reflection->hasProperty($property) && ($reflection = $reflection->getParentClass())) {
         }
 
+        if (!$reflection) {
+            throw new \RuntimeException("Property {$property} not found.");
+        }
+
         $reflectionProperty = $reflection->getProperty($property);
-        $reflectionProperty->setAccessible(true);
         $reflectionProperty->setValue($target, $value);
     }
 }
