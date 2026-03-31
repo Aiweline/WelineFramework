@@ -285,6 +285,25 @@ class ThemeContextService
         return $previewTheme->getId() ? $previewTheme : null;
     }
 
+    /**
+     * 获取预览区域的标识符
+     * 用于当无法从模板路径确定区域时使用
+     */
+    public function getPreviewArea(): ?string
+    {
+        try {
+            $context = $this->getPreviewContextService()->getCurrentContext();
+            $editorArea = $context['editor_area'] ?? null;
+            if ($editorArea === PreviewContextService::AREA_BACKEND) {
+                return 'backend';
+            }
+            // 默认返回 frontend
+            return $editorArea ?: 'frontend';
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     private function newThemeModel(): WelineTheme
     {
         /** @var WelineTheme $theme */

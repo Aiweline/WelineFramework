@@ -208,6 +208,8 @@ var eventSource = null;
 var postAbortController = null;
 var isRunning = false;
 var currentUrl = initialUrl;
+var suppressTransportErrorUntil = 0;
+var eventSourceSeq = 0;
 
 // 公共 API 暴露到 window
 window.WelineSseTerminal = window.WelineSseTerminal || {};
@@ -368,7 +370,7 @@ function dispatchSseEvent(eventName, data) {
             setProgress(data.progress);
         }
         if (eventName === 'done' || eventName === 'failed' || eventName === 'error') {
-            stop();
+            stop({ suppressTransportError: true });
         }
     } catch (err) {
         log(typeof data === 'string' ? data : eventName, eventName);
@@ -378,15 +380,15 @@ function dispatchSseEvent(eventName, data) {
 
 function start(url, options) {
     if (isRunning) return;
-    
-    if (!url) {
+
+    var resolvedUrl = url || currentUrl;
+    if (!resolvedUrl) {
         log('$t_error' + ': ' + urlNotConfiguredText, 'error');
         return;
     }
-    
+
     options = options || {};
-    */ options = options || {};
-    currentUrl = url;
+    currentUrl = resolvedUrl;
     isRunning = true;
     
     if (btnToggle) {
@@ -400,7 +402,7 @@ function start(url, options) {
     
     if (options.method === 'POST' && options.body) {
         postAbortController = new AbortController();
-        fetch(url, {
+        fetch(resolvedUrl, {
             method: 'POST',
             body: options.body,
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -491,19 +493,31 @@ function start(url, options) {
         return;
     }
     
-    eventSource = new EventSource(url);
+    var source = new EventSource(resolvedUrl);
+    var sourceSeq = ++eventSourceSeq;
+    eventSource = source;
     
-    eventSource.onopen = function() {
+    source.onopen = function() {
+        if (eventSource !== source || sourceSeq !== eventSourceSeq) {
+            return;
+        }
         setStatus('connected', '$t_connected');
         log('$t_connected', 'success');
         if (eventCallbacks.open) eventCallbacks.open();
     };
     
-    eventSource.onerror = function(e) {
-        if (eventSource.readyState === EventSource.CLOSED) {
+    source.onerror = function(e) {
+        if (eventSource !== source || sourceSeq !== eventSourceSeq) {
+            return;
+        }
+        if (Date.now() < suppressTransportErrorUntil) {
+            suppressTransportErrorUntil = 0;
+            return;
+        }
+        if (source.readyState === EventSource.CLOSED) {
             setStatus('disconnected', '$t_disconnected');
-            stop();
-        } else if (eventSource.readyState === EventSource.CONNECTING) {
+            stop({ suppressTransportError: true });
+        } else if (source.readyState === EventSource.CONNECTING) {
             setStatus('connecting', '$t_connecting');
         } else {
             setStatus('error', '$t_error');
@@ -513,7 +527,10 @@ function start(url, options) {
         if (eventCallbacks.error) eventCallbacks.error(e);
     };
     
-    eventSource.onmessage = function(e) {
+    source.onmessage = function(e) {
+        if (eventSource !== source || sourceSeq !== eventSourceSeq) {
+            return;
+        }
         try {
             var data = JSON.parse(e.data);
             if (data.message) {
@@ -529,7 +546,10 @@ function start(url, options) {
     };
     
     commonEvents.forEach(function(eventName) {
-        eventSource.addEventListener(eventName, function(e) {
+        source.addEventListener(eventName, function(e) {
+            if (eventSource !== source || sourceSeq !== eventSourceSeq) {
+                return;
+            }
             try {
                 var data = JSON.parse(e.data || '{}');
                 if (eventCallbacks[eventName]) {
@@ -544,14 +564,19 @@ function start(url, options) {
     });
 }
 
-function stop() {
+function stop(options) {
+    var settings = options || {};
+    if (settings.suppressTransportError) {
+        suppressTransportErrorUntil = Date.now() + 1500;
+    }
     if (postAbortController) {
         postAbortController.abort();
         postAbortController = null;
     }
     if (eventSource) {
-        eventSource.close();
+        var closingSource = eventSource;
         eventSource = null;
+        closingSource.close();
     }
     isRunning = false;
     
@@ -578,7 +603,7 @@ function clear() {
 if (btnToggle) {
     btnToggle.addEventListener('click', function() {
         if (isRunning) {
-            stop();
+            stop({ suppressTransportError: true });
         } else {
             start();
         }
@@ -591,13 +616,41 @@ if (btnCopy) {
         content.querySelectorAll('.weline-sse-terminal-line').forEach(function(line) {
             text.push(line.textContent);
         });
-        navigator.clipboard.writeText(text.join('\\n')).then(function() {
+        var copyText = text.join('\\n');
+        var notifyCopied = function() {
             if (typeof BackendToast !== 'undefined') {
                 BackendToast.success('$t_copied');
-            } else {
-                alert('$t_copied');
             }
-        });
+        };
+        var fallbackCopy = function(value) {
+            var textarea = document.createElement('textarea');
+            textarea.value = value;
+            textarea.setAttribute('readonly', 'readonly');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            textarea.style.pointerEvents = 'none';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                var copied = document.execCommand('copy');
+                if (copied) {
+                    notifyCopied();
+                }
+            } catch (e) {
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        };
+        if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(copyText).then(function() {
+                notifyCopied();
+            }).catch(function() {
+                fallbackCopy(copyText);
+            });
+            return;
+        }
+        fallbackCopy(copyText);
     });
 }
 

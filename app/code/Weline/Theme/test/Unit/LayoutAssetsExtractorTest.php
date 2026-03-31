@@ -117,6 +117,28 @@ HTML;
         // 验证内联script标签被移除
         $this->assertStringNotContainsString('<script>', $result['content']);
     }
+
+    /**
+     * 非 theme.js 的外部 script（仅 src、标签体为空）不得被误删，否则依赖顺序的资源（如 jQuery）会丢失。
+     */
+    public function testPreserveExternalScriptWithEmptyBody(): void
+    {
+        $content = <<<'HTML'
+<html>
+<head>
+    <script src="/static/Weline/Frontend/view/statics/libs/jquery/3.6.0/jquery.js"></script>
+    <script>
+        jQuery.noop();
+    </script>
+</head>
+</html>
+HTML;
+
+        $result = $this->extractor->extract($content);
+
+        $this->assertStringContainsString('jquery.js', $result['content']);
+        $this->assertStringContainsString('jQuery.noop', $result['js']);
+    }
     
     /**
      * 测试安全验证：生产环境发现内联标签应抛出异常
