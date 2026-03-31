@@ -223,7 +223,7 @@ class SessionStoreTest extends TestCase
         $store->set('session1', 'key', 'value', 1);
         $store->set('session2', 'key', 'value', 3600);
         
-        \sleep(2);
+        \Weline\Framework\Runtime\SchedulerSystem::sleep(2);
         
         $cleaned = $store->gc(0);
         $this->assertGreaterThanOrEqual(1, $cleaned);

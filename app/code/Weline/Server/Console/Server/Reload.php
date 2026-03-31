@@ -94,6 +94,7 @@ class Reload extends CommandAbstract
             return;
         }
 
+        $this->printer->note(__('当前操作实例：%{1}', [$instanceName]));
         $totalWorkers = $targetRunningWorkers;
         
         if ($forceMode) {
@@ -148,7 +149,7 @@ class Reload extends CommandAbstract
         
         echo "\n";
         $this->printer->success(__('✓ 热重载命令已发送'));
-        $this->printer->note(__('等待 Orchestrator 完成滚动重启...'));
+        $this->printer->note(__('等待实例 [%{1}] 的 Orchestrator 完成滚动重启...', [$instanceName]));
         
         // 等待 Master 推送完成/失败事件
         $this->waitForCompletion($conn, $totalWorkers, $waitTimeout);

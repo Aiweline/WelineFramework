@@ -159,6 +159,7 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
 
         $this->invokePrivate($orchestrator, 'handleCommand', [[
             'action' => ControlMessage::ACTION_STOP,
+            'stop_intent' => 'explicit',
         ], 11]);
 
         self::assertSame([], $this->readPrivate($orchestrator, 'pendingControlOperations'));
@@ -169,6 +170,34 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertFalse((bool)$server->sent[0]['message']['success']);
         self::assertSame('cancelled', $server->sent[0]['message']['data']['state'] ?? null);
         self::assertTrue((bool)$server->sent[1]['message']['success']);
+    }
+
+    public function testStopWithoutExplicitIntentIsRejected(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_STOP,
+        ], 19]);
+
+        self::assertNull($this->readPrivate($orchestrator, 'pendingStopReason'));
+        self::assertCount(1, $server->sent);
+        self::assertFalse((bool)$server->sent[0]['message']['success']);
+        self::assertSame('STOP rejected: missing explicit stop intent', $server->sent[0]['message']['message'] ?? '');
     }
 
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed

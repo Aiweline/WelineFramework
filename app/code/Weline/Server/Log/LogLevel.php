@@ -63,6 +63,9 @@ final class LogLevel
         'redirect'    => "\033[34m",    // 蓝色 — HTTP 跳转
     ];
 
+    /** 共享服务消息颜色（橙色） */
+    private const SHARED_SERVICE_COLOR = "\033[38;5;208m"; // Orange (256-color)
+
     /**
      * 根据进程标签获取颜色
      */
@@ -109,6 +112,10 @@ final class LogLevel
             $msg  = $m[4];
             $tagColor = self::getProcessColor($tag);
             $lvlColor = self::getColor($lvl !== '' ? $lvl : $level);
+            // 共享服务消息：消息内容含"共享服务"时整条消息用橙色
+            if (self::isSharedServiceMessage($msg)) {
+                return "{$dim}[{$ts}]{$reset} {$tagColor}[{$tag}]{$reset} {$lvlColor}[{$lvl}]{$reset} " . self::SHARED_SERVICE_COLOR . "{$msg}{$reset}";
+            }
             return "{$dim}[{$ts}]{$reset} {$tagColor}[{$tag}]{$reset} {$lvlColor}[{$lvl}]{$reset} {$msg}";
         }
 
@@ -117,12 +124,24 @@ final class LogLevel
             $tag = $m[1];
             $msg = $m[2];
             $tagColor = self::getProcessColor($processTag !== '' ? $processTag : $tag);
+            // 共享服务消息：消息内容含"共享服务"时整条消息用橙色
+            if (self::isSharedServiceMessage($msg)) {
+                return "{$tagColor}[{$tag}]{$reset} " . self::SHARED_SERVICE_COLOR . "{$msg}{$reset}";
+            }
             return "{$tagColor}[{$tag}]{$reset} {$msg}";
         }
 
         // 再退路：按级别整行着色
         $lvlColor = self::getColor($level);
         return $lvlColor !== '' ? ($lvlColor . $line . $reset) : $line;
+    }
+
+    /**
+     * 判断消息是否为共享服务相关消息
+     */
+    private static function isSharedServiceMessage(string $msg): bool
+    {
+        return \str_contains($msg, '共享服务') || \str_contains($msg, 'SharedState');
     }
 
     /**
