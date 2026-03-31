@@ -101,8 +101,9 @@ class FilterService
         ];
         $this->eventsManager->dispatch('WeShop_Filters::filters_apply_after', $afterEventData);
         
-        // 构建筛选组数据（使用筛选后的产品ID更新计数）
-        $filtersData = $this->buildFiltersData($categoryId, $filteredProductIds, $filterParams, $filterCollection);
+        // 构建筛选组数据时，当前筛选器的选项应基于“其他已应用筛选”作用后的范围，
+        // 而不是当前已完全筛选后的结果，否则会把当前筛选器自己的可选项一并裁掉。
+        $filtersData = $this->buildFiltersData($categoryId, $productIds, $filterParams, $filterCollection);
 
         // 构建已应用筛选数据
         $appliedFilters = $this->buildAppliedFilters($filterParams, $filterCollection);
@@ -267,15 +268,22 @@ class FilterService
             // 获取不包含当前筛选器的已应用筛选
             $otherFilters = $appliedFilters;
             unset($otherFilters[$filterCode]);
+
+            $optionProductIds = $this->resolveFilterOptionProductIds($productIds, $otherFilters, $collection);
             
             // 获取筛选选项
-            $options = $filter->getOptions($categoryId, $productIds, $appliedFilters);
+            $options = $filter->getOptions($categoryId, $optionProductIds, $otherFilters);
+            $options = $this->restoreCurrentFilterSelectionState(
+                $filterCode,
+                $options,
+                $appliedFilters[$filterCode] ?? []
+            );
             
             // 触发选项收集事件（dispatch 需要变量传递）
             $optionsEventData = [
                 'filter_code' => $filterCode,
                 'category_id' => $categoryId,
-                'product_ids' => $productIds,
+                'product_ids' => $optionProductIds,
                 'options' => &$options,
             ];
             $this->eventsManager->dispatch('WeShop_Filters::filter_options_collect', $optionsEventData);
@@ -296,6 +304,90 @@ class FilterService
         }
         
         return $filtersData;
+    }
+
+    /**
+     * @param array<int, mixed> $options
+     * @param mixed $currentSelection
+     * @return array<int, mixed>
+     */
+    private function restoreCurrentFilterSelectionState(string $filterCode, array $options, mixed $currentSelection): array
+    {
+        $selectedValues = $this->normalizeSelectedFilterValues($currentSelection);
+        if ($selectedValues === []) {
+            return $options;
+        }
+
+        foreach ($options as $index => $option) {
+            if (!\is_array($option)) {
+                continue;
+            }
+
+            if (($option['type'] ?? null) === 'slider' && \is_array($option['slider'] ?? null)) {
+                $options[$index]['selected'] = true;
+                $options[$index]['value'] = $selectedValues[0];
+
+                $parsedRange = $this->parseSelectedRangeValue($selectedValues[0]);
+                if ($parsedRange !== null) {
+                    $options[$index]['slider']['current_min'] = $parsedRange['min'];
+                    $options[$index]['slider']['current_max'] = $parsedRange['max']
+                        ?? (float) ($options[$index]['slider']['max'] ?? $parsedRange['min']);
+                }
+                continue;
+            }
+
+            $optionValue = (string) ($option['value'] ?? '');
+            if ($optionValue === '') {
+                continue;
+            }
+
+            $options[$index]['selected'] = \in_array($optionValue, $selectedValues, true);
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param mixed $selection
+     * @return array<int, string>
+     */
+    private function normalizeSelectedFilterValues(mixed $selection): array
+    {
+        if (!\is_array($selection)) {
+            $selection = $selection === null || $selection === '' ? [] : [$selection];
+        }
+
+        return array_values(array_filter(
+            array_map(static fn(mixed $value): string => trim((string) $value), $selection),
+            static fn(string $value): bool => $value !== ''
+        ));
+    }
+
+    /**
+     * @return array{min: float, max: ?float}|null
+     */
+    private function parseSelectedRangeValue(string $value): ?array
+    {
+        if (preg_match('/^([\d.]+)-([\d.]*)$/', $value, $matches) !== 1) {
+            return null;
+        }
+
+        return [
+            'min' => (float) $matches[1],
+            'max' => $matches[2] !== '' ? (float) $matches[2] : null,
+        ];
+    }
+
+    private function resolveFilterOptionProductIds(
+        array $productIds,
+        array $appliedFilters,
+        FilterCollectionInterface $collection
+    ): array {
+        if ($appliedFilters === []) {
+            return $productIds;
+        }
+
+        return $this->applyFilters($productIds, $appliedFilters, $collection);
     }
     
     /**
@@ -364,6 +456,11 @@ class FilterService
         array $appliedFilters = []
     ): array {
         $filter = $this->registry->get($filterCode);
+        if ($filter === null) {
+            $this->collectFilters($categoryId, $productIds);
+            $filter = $this->registry->get($filterCode);
+        }
+
         if ($filter === null || !$filter->isEnabled($categoryId)) {
             return [];
         }
@@ -387,6 +484,11 @@ class FilterService
         array $appliedFilters = []
     ): array {
         $filter = $this->registry->get($filterCode);
+        if ($filter === null) {
+            $this->collectFilters($categoryId, $productIds);
+            $filter = $this->registry->get($filterCode);
+        }
+
         if ($filter === null || !$filter->isEnabled($categoryId)) {
             return [];
         }
