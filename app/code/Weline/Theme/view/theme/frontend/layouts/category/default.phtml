@@ -1,17 +1,22 @@
 <?php
 /**
- * 布局：分类页 - 网格布局
+ * 布局：分类页 - 默认网格布局
  *
- * 分类网格布局，适合展示分类卡片
- * 字段
- * @meta.name {default="分类网格布局",name="分类网格布局",description="分类网格布局，用于描述布局的名称"}
- * @meta.description {default="分类网格布局，适合展示分类卡片",name="分类网格布局，适合展示分类卡片",description="分类网格布局，适合展示分类卡片，用于描述布局的用途"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
+ * 电商分类页面布局，包含筛选侧边栏、子分类网格、产品列表区域
+ * 支持移动端筛选抽屉、响应式网格布局
+ *
+ * @meta.name {default="分类页面布局",name="分类页面布局",description="电商分类页面主布局，包含筛选侧边栏和产品网格展示区域"}
+ * @meta.description {default="电商分类页面布局，包含筛选侧边栏、子分类卡片网格和产品列表区域，支持移动端筛选抽屉和响应式设计",name="电商分类页面布局",description="电商分类页面布局，包含筛选侧边栏、子分类卡片网格和产品列表区域，支持移动端筛选抽屉和响应式设计"}
+ * @meta.category {default="catalog",name="分类",description="布局所属分类"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
  * @param title {default="分类",name="页面标题",description="页面标题，用于设置页面标题"}
  * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
+ * @param showFilters {default=true,name="是否显示筛选器",description="是否显示左侧筛选器区域"}
+ * @param filterDrawerTitle {default="筛选条件",name="筛选抽屉标题",description="移动端筛选抽屉的标题文字"}
+ * @param gridColumns {default=4,type=number,name="网格列数",description="桌面端每行显示的分类卡片数量"}
  * @param layout.leftsider {default=1,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
  * @param layout.rightsider {default=0,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
  */
@@ -28,10 +33,16 @@ $filter_sidebar = $meta['filter_sidebar'] ?? $this->getData('filter_sidebar') ??
 // 设置 showHeader 和 showFooter 的默认值
 $showHeader = $meta['showHeader'] ?? $this->getData('showHeader') ?? true;
 $showFooter = $meta['showFooter'] ?? $this->getData('showFooter') ?? true;
+$showFilters = $meta['showFilters'] ?? $this->getData('showFilters') ?? true;
+$filterDrawerTitle = $meta['filterDrawerTitle'] ?? $this->getData('filterDrawerTitle') ?? __('筛选条件');
+$gridColumns = $meta['gridColumns'] ?? $this->getData('gridColumns') ?? 4;
 
 // 将默认值赋值到 meta 数组，以便模板条件可以正确读取
 $meta['showHeader'] = $showHeader;
 $meta['showFooter'] = $showFooter;
+$meta['showFilters'] = $showFilters;
+$meta['filterDrawerTitle'] = $filterDrawerTitle;
+$meta['gridColumns'] = $gridColumns;
 $this->assign('meta', $meta);
 
 // 设置页面标题
@@ -70,57 +81,70 @@ $this->assign('title', $title);
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::category::content-before</w:hook>
 
-            <main class="category-grid-main <?= htmlspecialchars($class ?? '') ?>" id="category-grid-main" data-layout="category_grid">
+            <main class="category-layout__main <?= htmlspecialchars($class ?? '') ?>" id="category-layout-main" data-layout="category" data-columns="<?= (int)$gridColumns ?>">
                 <w:hook>Weline_Theme::frontend::layouts::category::main-before</w:hook>
 
-                <div class="category-grid-layout">
-                    <!-- 移动端筛选按钮（图标） -->
-                    <button type="button" class="category-filter-toggle" aria-label="@lang{筛选条件}" aria-expanded="false">
-                        <svg class="filter-toggle-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M2 5h16M5 10h10M8 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-                        </svg>
-                        <span class="filter-toggle-badge" id="filter-count-badge" style="display: none;">0</span>
-                    </button>
-                    
-                    <aside class="category-filter-sidebar" id="category-filter-sidebar">
-                        <div class="category-filter-sidebar-header">
-                            <h3 class="category-filter-sidebar-title"><lang>筛选条件</lang></h3>
-                            <button type="button" class="category-filter-close" aria-label="@lang{关闭筛选}">×</button>
-                        </div>
-                        <div class="category-filter-sidebar-content">
-                            <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
-                            <!-- 子分类筛选 -->
-                            <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
-                            <!-- 不要修改，兼容配置和部件两种方式 -->
-                            <if condition="meta.filter_sidebar">
-                                {{meta.filter_sidebar}}
-                                <elseif condition="filter_sidebar"/>
-                                {{filter_sidebar}}
-                            </if>
-                            <w:widget type="sidebar" name="category-filters"/>
-                            <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
-                        </div>
-                    </aside>
-                    
-                    <!-- 移动端遮罩层 -->
-                    <div class="category-filter-overlay" id="category-filter-overlay"></div>
+                <div class="category-layout__container">
+                    <!-- 移动端筛选切换按钮 -->
+                    <if condition="meta.showFilters">
+                        <button type="button" class="category-layout__filter-toggle" aria-label="@lang{筛选条件}" aria-expanded="false" data-filter-toggle>
+                            <svg class="category-layout__filter-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                <path d="M2 5h16M5 10h10M8 15h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                            <span class="category-layout__filter-label"><lang>筛选</lang></span>
+                            <span class="category-layout__filter-badge" id="filter-count-badge" hidden>@lang{0}</span>
+                        </button>
+                    </if>
 
-                    <section class="category-grid-content">
+                    <!-- 筛选侧边栏 -->
+                    <if condition="meta.showFilters">
+                        <aside class="category-layout__sidebar" id="category-filter-sidebar" data-sidebar>
+                            <div class="category-layout__sidebar-header">
+                                <h3 class="category-layout__sidebar-title">{{meta.filterDrawerTitle}}</h3>
+                                <button type="button" class="category-layout__sidebar-close" aria-label="@lang{关闭筛选}" data-sidebar-close>
+                                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                        <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="category-layout__sidebar-content">
+                                <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
+                                <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
+                                <if condition="meta.filter_sidebar">
+                                    {{meta.filter_sidebar}}
+                                <elseif condition="filter_sidebar"/>
+                                    {{filter_sidebar}}
+                                </if>
+                                <w:widget type="sidebar" name="category-filters"/>
+                                <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
+                            </div>
+                        </aside>
+                    </if>
+
+                    <!-- 移动端遮罩层 -->
+                    <div class="category-layout__overlay" id="category-filter-overlay" data-overlay hidden></div>
+
+                    <!-- 分类内容区域 -->
+                    <section class="category-layout__content">
                         <w:slot id="category-products"
                                 name="分类产品区域"
-                                accept="product-grid,product-list-view"
+                                accept="product-grid,product-list-view,category-children"
                                 multiple="true"
                                 position="content"
-                                class="category-grid-container">
+                                class="category-layout__products">
                             <w:hook>WeShop_Catalog::frontend::layouts::category::products-content<else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
-                                    <elseif condition="content"/>
+                                <elseif condition="content"/>
                                     {{content}}
                                 <else/>
-                                    <div class="slot-placeholder" data-placeholder="category-products">
-                                        <span class="placeholder-icon">📦</span>
-                                        <span class="placeholder-text">分类产品区域 - 展示该分类下的产品</span>
+                                    <div class="category-layout__placeholder" data-placeholder="category-products">
+                                        <div class="category-layout__placeholder-icon">
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M3 7V5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V7M3 7V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V7M3 7H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                            </svg>
+                                        </div>
+                                        <span class="category-layout__placeholder-text"><lang>分类产品区域 - 展示该分类下的产品</lang></span>
                                     </div>
                                 </if>
                             </w:hook>
@@ -151,538 +175,475 @@ $this->assign('title', $title);
 
     <style>
     /* ========================================
-       分类页 - 默认网格布局样式
-       使用主题 CSS 变量，适配明暗/换肤
+       分类页布局样式
+       使用主题 CSS 变量，支持明暗主题
+       BEM 命名规范
        ======================================== */
 
-    .category-grid-main {
+    /* ---- 页面主体 ---- */
+    .category-layout__main {
         width: 100%;
-        padding: 2rem 0 3rem;
+        padding: var(--spacing-4, 2rem) 0 var(--spacing-6, 3rem);
     }
 
-    .category-grid-layout {
+    .category-layout__container {
         width: 100%;
-        /* 与 header-container 版心保持一致，支持主题变量 */
         max-width: var(--layout-max-width, 1600px);
         margin: 0 auto;
         display: grid;
-        grid-template-columns: 260px minmax(0, 1fr);
-        gap: 1.5rem;
+        grid-template-columns: var(--sidebar-width, 280px) minmax(0, 1fr);
+        gap: var(--spacing-6, 1.5rem);
         align-items: flex-start;
+        padding: 0 var(--spacing-4, 1.5rem);
     }
 
-    .category-filter-sidebar {
-        background-color: var(--color-bg-primary, #fff);
-        border: 1px solid var(--color-border-light, #e5e7eb);
-        border-radius: 8px;
-        padding: 1rem 1.25rem;
-        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06);
+    /* ---- 筛选侧边栏 ---- */
+    .category-layout__sidebar {
+        background-color: var(--color-bg-primary);
+        border: 1px solid var(--color-border-light);
+        border-radius: var(--radius-lg, 12px);
+        box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+        position: sticky;
+        top: calc(var(--header-height, 70px) + var(--spacing-4, 1rem));
+        max-height: calc(100vh - var(--header-height, 70px) - var(--spacing-8, 4rem));
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
 
-    /* 筛选栏头部（移动端） */
-    .category-filter-sidebar-header {
-        display: none; /* 桌面端隐藏 */
+    .category-layout__sidebar-header {
+        display: none;
+        align-items: center;
+        justify-content: space-between;
+        padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
+        border-bottom: 1px solid var(--color-border-light);
+        background-color: var(--color-bg-primary);
+        position: sticky;
+        top: 0;
+        z-index: 10;
     }
 
-    .category-filter-sidebar-title {
-        font-size: 1.1rem;
-        font-weight: 600;
+    .category-layout__sidebar-title {
+        font-size: var(--font-size-lg, 1.125rem);
+        font-weight: var(--font-weight-semibold, 600);
         margin: 0;
-        color: var(--color-text-primary, #111827);
+        color: var(--color-text-primary);
     }
 
-    .category-filter-close {
+    .category-layout__sidebar-close {
+        width: 36px;
+        height: 36px;
+        padding: 0;
         background: none;
         border: none;
-        font-size: 1.5rem;
-        line-height: 1;
-        padding: 0;
-        width: 32px;
-        height: 32px;
+        border-radius: var(--radius-md, 8px);
+        cursor: pointer;
+        color: var(--color-text-secondary);
         display: flex;
         align-items: center;
         justify-content: center;
+        transition: background-color 0.2s ease, color 0.2s ease;
+    }
+
+    .category-layout__sidebar-close:hover {
+        background-color: var(--color-bg-secondary);
+        color: var(--color-text-primary);
+    }
+
+    .category-layout__sidebar-content {
+        padding: var(--spacing-4, 1rem) var(--spacing-5, 1.25rem);
+    }
+
+    /* ---- 筛选切换按钮（移动端） ---- */
+    .category-layout__filter-toggle {
+        display: none;
+        align-items: center;
+        gap: var(--spacing-2, 0.5rem);
+        padding: var(--spacing-2, 0.5rem) var(--spacing-4, 1rem);
+        background-color: var(--color-bg-primary);
+        border: 1px solid var(--color-border-light);
+        border-radius: var(--radius-full, 9999px);
         cursor: pointer;
-        color: var(--color-text-secondary, #6b7280);
-        border-radius: 4px;
-        transition: background-color 0.2s ease;
+        color: var(--color-text-primary);
+        font-size: var(--font-size-sm, 0.875rem);
+        font-weight: var(--font-weight-medium, 500);
+        box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+        transition: all 0.2s ease;
     }
 
-    .category-filter-close:hover {
-        background-color: var(--color-bg-secondary, #f3f4f6);
+    .category-layout__filter-toggle:hover {
+        background-color: var(--color-bg-secondary);
+        box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
     }
 
-    /* 筛选按钮（移动端） */
-    .category-filter-toggle {
-        display: none; /* 桌面端隐藏 */
+    .category-layout__filter-toggle[aria-expanded="true"] {
+        background-color: var(--color-accent);
+        border-color: var(--color-accent);
+        color: var(--color-text-light);
     }
 
-    /* 遮罩层（移动端） */
-    .category-filter-overlay {
-        display: none; /* 桌面端隐藏 */
+    .category-layout__filter-icon {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
     }
 
+    .category-layout__filter-badge {
+        min-width: 18px;
+        height: 18px;
+        padding: 0 4px;
+        background-color: var(--color-error);
+        color: var(--color-text-light);
+        border-radius: var(--radius-full, 9999px);
+        font-size: 0.7rem;
+        font-weight: var(--font-weight-semibold, 600);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* ---- 遮罩层 ---- */
+    .category-layout__overlay {
+        position: fixed;
+        inset: 0;
+        background-color: rgba(0, 0, 0, 0.5);
+        z-index: var(--z-index-overlay, 998);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .category-layout__overlay.is-visible {
+        opacity: 1;
+        visibility: visible;
+    }
+
+    /* ---- 内容区域 ---- */
+    .category-layout__content {
+        min-width: 0;
+    }
+
+    .category-layout__products {
+        width: 100%;
+    }
+
+    /* ---- 占位符 ---- */
+    .category-layout__placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-4, 1rem);
+        padding: var(--spacing-8, 4rem) var(--spacing-4, 1.5rem);
+        text-align: center;
+        color: var(--color-text-tertiary);
+    }
+
+    .category-layout__placeholder-icon {
+        color: var(--color-text-disabled);
+    }
+
+    .category-layout__placeholder-text {
+        font-size: var(--font-size-sm, 0.875rem);
+    }
+
+    /* ---- 筛选栏内部样式（通用） ---- */
     .category-filter-mock {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
-        font-size: 0.85rem;
-        color: var(--color-text-secondary, #4b5563);
+        gap: var(--spacing-3, 0.75rem);
+        font-size: var(--font-size-sm, 0.875rem);
+        color: var(--color-text-secondary);
     }
 
     .category-filter-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 0.25rem;
+        margin-bottom: var(--spacing-1, 0.25rem);
     }
 
     .category-filter-title {
-        font-size: 0.9rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111827);
+        font-size: var(--font-size-sm, 0.875rem);
+        font-weight: var(--font-weight-semibold, 600);
+        color: var(--color-text-primary);
     }
 
     .category-filter-clear {
-        font-size: 0.8rem;
-        color: var(--color-link, #0066c0);
+        font-size: var(--font-size-xs, 0.8rem);
+        color: var(--color-link);
         text-decoration: none;
+        transition: color 0.2s ease;
     }
 
     .category-filter-clear:hover {
+        color: var(--color-link-hover);
         text-decoration: underline;
     }
 
     .category-filter-applied {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.25rem;
-        margin-bottom: 0.25rem;
+        gap: var(--spacing-1, 0.25rem);
+        margin-bottom: var(--spacing-1, 0.25rem);
     }
 
     .filter-chip {
         display: inline-flex;
         align-items: center;
-        gap: 0.25rem;
-        padding: 0.1rem 0.5rem;
-        border-radius: 999px;
-        background-color: var(--color-accent-light, rgba(59,130,246,0.08));
-        color: var(--color-accent, #2563eb);
-        border: 1px solid rgba(59, 130, 246, 0.2);
-        font-size: 0.8rem;
+        gap: var(--spacing-1, 0.25rem);
+        padding: 2px var(--spacing-2, 0.5rem);
+        border-radius: var(--radius-full, 9999px);
+        background-color: var(--color-accent-light);
+        color: var(--color-accent);
+        border: 1px solid var(--color-accent-medium);
+        font-size: var(--font-size-xs, 0.75rem);
+        font-weight: var(--font-weight-medium, 500);
+        transition: all 0.2s ease;
     }
 
-    .filter-chip .chip-remove {
+    .filter-chip:hover {
+        background-color: var(--color-accent-medium);
+    }
+
+    .filter-chip__remove {
         background: none;
         border: none;
         padding: 0;
         margin: 0;
         cursor: pointer;
         color: inherit;
-        font-size: 0.8rem;
+        font-size: inherit;
         line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
     }
 
     .category-filter-group {
-        padding-top: 0.5rem;
-        margin-top: 0.5rem;
-        border-top: 1px solid rgba(148, 163, 184, 0.2);
-    }
-
-    .category-grid-content {
-        min-width: 0;
+        padding-top: var(--spacing-3, 0.75rem);
+        margin-top: var(--spacing-3, 0.75rem);
+        border-top: 1px solid var(--color-border-light);
     }
 
     .category-filter-group-title {
-        font-size: 0.85rem;
-        font-weight: 600;
-        margin-bottom: 0.25rem;
-        color: var(--color-text-primary, #111827);
+        font-size: var(--font-size-sm, 0.875rem);
+        font-weight: var(--font-weight-semibold, 600);
+        margin-bottom: var(--spacing-1, 0.25rem);
+        color: var(--color-text-primary);
     }
 
     .category-filter-list {
         list-style: none;
         padding: 0;
-        margin: 0.1rem 0 0;
+        margin: var(--spacing-1, 0.25rem) 0 0;
     }
 
     .category-filter-item {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding: 0.15rem 0;
-        color: var(--color-text-primary, #111827);
+        padding: var(--spacing-1, 0.25rem) 0;
+        color: var(--color-text-primary);
         text-decoration: none;
         cursor: pointer;
+        border-radius: var(--radius-sm, 4px);
+        transition: background-color 0.2s ease;
     }
 
-    .category-filter-item .label {
+    .category-filter-item:hover {
+        background-color: var(--color-bg-secondary);
+    }
+
+    .category-filter-item__label {
         display: inline-flex;
         align-items: center;
-        gap: 0.25rem;
-        font-size: 0.85rem;
+        gap: var(--spacing-2, 0.5rem);
+        font-size: var(--font-size-sm, 0.875rem);
     }
 
-    .category-filter-item .stars {
-        color: #f59e0b; /* 评分星星颜色，保持亚马逊风格 */
-        font-size: 0.8rem;
+    .category-filter-item__stars {
+        color: var(--color-warning);
+        font-size: var(--font-size-xs, 0.8rem);
     }
 
-    .category-filter-item .count {
-        font-size: 0.75rem;
-        color: var(--color-text-secondary, #6b7280);
+    .category-filter-item__count {
+        font-size: var(--font-size-xs, 0.75rem);
+        color: var(--color-text-secondary);
     }
 
-    .category-filter-item:hover .label {
-        color: var(--color-link, #0066c0);
-    }
-
-    .category-grid-container {
-        width: 100%;
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-        gap: 1.25rem;
-    }
-
-    .category-grid-item {
-        background-color: var(--color-bg-primary, #fff);
-        border: 1px solid var(--color-border-light, #e5e7eb);
-        border-radius: 8px;
-        padding: 1.25rem 1.5rem;
-        text-decoration: none;
-        color: var(--color-text-primary, #111);
-        display: flex;
-        flex-direction: column;
-        gap: 0.5rem;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-        transition: box-shadow 0.2s ease, transform 0.15s ease, border-color 0.2s ease, background-color 0.2s ease;
-    }
-
-    .category-grid-item:hover {
-        border-color: var(--color-border-focus, #e77600);
-        box-shadow: 0 6px 16px rgba(15, 23, 42, 0.12);
-        transform: translateY(-2px);
-        background-color: var(--color-bg-secondary, #f8f9fa);
-    }
-
-    .category-grid-item__title {
-        font-size: 1.05rem;
-        font-weight: 600;
-        color: var(--color-text-primary, #111);
-        margin: 0;
-    }
-
-    .category-grid-item__desc {
-        font-size: 0.9rem;
-        color: var(--color-text-muted, #475569);
-        margin: 0;
-        line-height: 1.6;
-    }
-
-    .category-grid-item__meta {
-        margin-top: 0.5rem;
-        font-size: 0.85rem;
-        color: var(--color-text-secondary, #767676);
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-    }
-
-    .category-grid-item__badge {
-        display: inline-flex;
-        align-items: center;
-        padding: 0.15rem 0.5rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        background-color: var(--color-accent-light, rgba(59,130,246,0.05));
-        color: var(--color-accent, #3b82f6);
-    }
-
-    /* 移动端响应式适配 */
-    @media screen and (max-width: 768px) {
-        .category-grid-main {
-            padding: 1rem 0 1.5rem;
-            width: 100%;
-            max-width: 100%;
-            overflow-x: hidden; /* 防止横向滚动 */
+    /* ---- 响应式设计 ---- */
+    @media screen and (max-width: 992px) {
+        .category-layout__container {
+            grid-template-columns: 1fr;
+            padding: 0 var(--spacing-4, 1rem);
         }
 
-        .category-grid-layout {
-            padding: 0 1rem;
-            padding-bottom: 5rem; /* 为底部浮动按钮留出空间 */
-            grid-template-columns: 1fr; /* 单列布局 */
-            gap: 1rem;
-            width: 100%;
-            max-width: 100%;
-            position: relative;
-        }
-
-        /* 移动端筛选按钮（图标样式） */
-        .category-filter-toggle {
-            display: flex;
-            align-items: center;
-            justify-content: center;
+        .category-layout__filter-toggle {
+            display: inline-flex;
             position: fixed;
-            bottom: 2rem;
-            right: 1rem;
-            width: 56px;
-            height: 56px;
-            background-color: var(--color-bg-primary, #fff);
-            border: 2px solid var(--color-border-light, #e5e7eb);
-            border-radius: 50%;
-            cursor: pointer;
-            color: var(--color-text-primary, #111827);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            transition: all 0.3s ease;
-            z-index: 998;
-            padding: 0;
-            margin: 0;
+            bottom: var(--spacing-6, 1.5rem);
+            right: var(--spacing-4, 1rem);
+            z-index: var(--z-index-sticky, 997);
         }
 
-        .category-filter-toggle:hover,
-        .category-filter-toggle:active {
-            background-color: var(--color-bg-secondary, #f9fafb);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-            transform: scale(1.05);
-        }
-
-        .category-filter-toggle[aria-expanded="true"] {
-            background-color: var(--color-accent, #2563eb);
-            color: #fff;
-            border-color: var(--color-accent, #2563eb);
-        }
-
-        .category-filter-toggle[aria-expanded="true"] .filter-toggle-icon {
-            stroke: #fff;
-        }
-
-        .filter-toggle-icon {
-            width: 20px;
-            height: 20px;
-            flex-shrink: 0;
-        }
-
-        .filter-toggle-badge {
-            position: absolute;
-            top: -4px;
-            right: -4px;
-            min-width: 18px;
-            height: 18px;
-            padding: 0 4px;
-            background-color: #ef4444;
-            color: #fff;
-            border-radius: 9px;
-            font-size: 0.7rem;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            line-height: 1;
-            border: 2px solid var(--color-bg-primary, #fff);
-        }
-
-        /* 移动端筛选栏：默认隐藏，点击后显示 */
-        .category-filter-sidebar {
-            display: none; /* 默认隐藏 */
+        .category-layout__sidebar {
             position: fixed;
             top: 0;
             left: 0;
-            width: 85%;
-            max-width: 320px;
+            width: min(85%, 360px);
             height: 100vh;
-            z-index: 1000;
+            max-height: 100vh;
             border-radius: 0;
             border: none;
-            border-right: 1px solid var(--color-border-light, #e5e7eb);
-            padding: 0;
-            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.2);
-            overflow-y: auto;
-            -webkit-overflow-scrolling: touch;
+            border-right: 1px solid var(--color-border-light);
+            z-index: var(--z-index-drawer, 999);
             transform: translateX(-100%);
             transition: transform 0.3s ease;
-        }
-
-        .category-filter-sidebar.active {
-            transform: translateX(0);
-        }
-
-
-        .category-filter-sidebar.active {
             display: flex;
             flex-direction: column;
         }
 
-        .category-filter-sidebar-header {
+        .category-layout__sidebar.is-open {
+            transform: translateX(0);
+        }
+
+        .category-layout__sidebar-header {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem 1.25rem;
-            border-bottom: 1px solid var(--color-border-light, #e5e7eb);
-            background-color: var(--color-bg-primary, #fff);
-            position: sticky;
-            top: 0;
-            z-index: 10;
         }
 
-        .category-filter-sidebar-content {
+        .category-layout__sidebar-content {
             flex: 1;
-            padding: 1rem 1.25rem;
             overflow-y: auto;
+            overscroll-behavior: contain;
         }
 
-        /* 遮罩层 */
-        .category-filter-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100vh;
-            background-color: rgba(0, 0, 0, 0.5);
-            z-index: 999;
-        }
-
-        .category-filter-overlay.active {
+        .category-layout__overlay {
             display: block;
-        }
-
-        .category-grid-content {
-            width: 100%;
-            max-width: 100%;
-        }
-
-        .category-grid-container {
-            width: 100%;
-            grid-template-columns: 1fr; /* 移动端单列 */
-            gap: 1rem;
-        }
-
-        .category-grid-item {
-            padding: 1rem;
-            width: 100%;
-            max-width: 100%;
         }
     }
 
-    /* 超小屏幕优化 */
+    @media screen and (max-width: 768px) {
+        .category-layout__main {
+            padding: var(--spacing-3, 1rem) 0 var(--spacing-8, 4rem);
+        }
+
+        .category-layout__container {
+            padding: 0 var(--spacing-3, 0.75rem);
+            gap: var(--spacing-3, 0.75rem);
+        }
+
+        .category-layout__filter-toggle {
+            bottom: var(--spacing-5, 1.25rem);
+            right: var(--spacing-3, 0.75rem);
+        }
+    }
+
     @media screen and (max-width: 480px) {
-        .category-grid-main {
-            padding: 0.75rem 0 1rem;
+        .category-layout__main {
+            padding: var(--spacing-2, 0.5rem) 0 var(--spacing-7, 3.5rem);
         }
 
-        .category-grid-layout {
-            padding: 0 0.75rem;
-            gap: 0.75rem;
+        .category-layout__container {
+            padding: 0 var(--spacing-2, 0.5rem);
+            gap: var(--spacing-2, 0.5rem);
         }
 
-        .category-filter-sidebar {
-            padding: 0.75rem;
+        .category-layout__filter-toggle {
+            bottom: var(--spacing-4, 1rem);
+            right: var(--spacing-2, 0.5rem);
+            padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
         }
 
-        .category-grid-item {
-            padding: 0.875rem;
+        .category-layout__filter-label {
+            display: none;
         }
     }
     </style>
     <script>
     (function() {
-        // 移动端筛选栏展开/收起功能
-        const filterToggle = document.querySelector('.category-filter-toggle');
-        const filterSidebar = document.getElementById('category-filter-sidebar');
-        const filterOverlay = document.getElementById('category-filter-overlay');
-        const filterClose = document.querySelector('.category-filter-close');
+        'use strict';
+
+        // 移动端筛选抽屉功能
+        const filterToggle = document.querySelector('[data-filter-toggle]');
+        const filterSidebar = document.querySelector('[data-sidebar]');
+        const filterOverlay = document.querySelector('[data-overlay]');
+        const filterClose = document.querySelector('[data-sidebar-close]');
         const filterBadge = document.getElementById('filter-count-badge');
 
-        if (filterToggle && filterSidebar && filterOverlay) {
-            // 更新筛选数量徽章
-            function updateFilterBadge() {
-                if (!filterBadge) return;
-                const activeFilters = document.querySelectorAll('.filter-chip.is-active');
-                const count = activeFilters.length;
-                if (count > 0) {
-                    filterBadge.textContent = count;
-                    filterBadge.style.display = 'flex';
-                } else {
-                    filterBadge.style.display = 'none';
-                }
+        function updateFilterBadge() {
+            if (!filterBadge) return;
+            const activeFilters = document.querySelectorAll('.filter-chip.is-active');
+            const count = activeFilters.length;
+            if (count > 0) {
+                filterBadge.textContent = count;
+                filterBadge.removeAttribute('hidden');
+            } else {
+                filterBadge.setAttribute('hidden', '');
             }
-
-            // 打开筛选栏
-            function openFilterSidebar() {
-                filterSidebar.classList.add('active');
-                filterOverlay.classList.add('active');
-                filterToggle.setAttribute('aria-expanded', 'true');
-                document.body.style.overflow = 'hidden'; // 防止背景滚动
-            }
-
-            // 关闭筛选栏
-            function closeFilterSidebar() {
-                filterSidebar.classList.remove('active');
-                filterOverlay.classList.remove('active');
-                filterToggle.setAttribute('aria-expanded', 'false');
-                document.body.style.overflow = ''; // 恢复滚动
-            }
-
-            // 点击筛选按钮
-            filterToggle.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (filterSidebar.classList.contains('active')) {
-                    closeFilterSidebar();
-                } else {
-                    openFilterSidebar();
-                }
-            });
-
-            // 点击关闭按钮
-            if (filterClose) {
-                filterClose.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    closeFilterSidebar();
-                });
-            }
-
-            // 点击遮罩层关闭
-            filterOverlay.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                closeFilterSidebar();
-            });
-
-            // 点击筛选栏内部不关闭（阻止事件冒泡）
-            filterSidebar.addEventListener('click', function(e) {
-                e.stopPropagation();
-            });
-
-            // ESC 键关闭
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape' && filterSidebar.classList.contains('active')) {
-                    closeFilterSidebar();
-                }
-            });
-
-            // 监听筛选变化，更新徽章
-            document.addEventListener('DOMContentLoaded', function() {
-                updateFilterBadge();
-                // 使用 MutationObserver 监听筛选状态变化
-                const observer = new MutationObserver(function(mutations) {
-                    updateFilterBadge();
-                });
-                const filterContainer = document.querySelector('.category-filter-applied');
-                if (filterContainer) {
-                    observer.observe(filterContainer, {
-                        childList: true,
-                        subtree: true,
-                        attributes: true,
-                        attributeFilter: ['class']
-                    });
-                }
-            });
-
-            // 延迟执行，确保 DOM 已加载
-            setTimeout(updateFilterBadge, 100);
         }
+
+        function openSidebar() {
+            if (!filterSidebar || !filterOverlay) return;
+            filterSidebar.classList.add('is-open');
+            filterOverlay.classList.add('is-visible');
+            filterToggle?.setAttribute('aria-expanded', 'true');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeSidebar() {
+            if (!filterSidebar || !filterOverlay) return;
+            filterSidebar.classList.remove('is-open');
+            filterOverlay.classList.remove('is-visible');
+            filterToggle?.setAttribute('aria-expanded', 'false');
+            document.body.style.overflow = '';
+        }
+
+        filterToggle?.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            if (filterSidebar?.classList.contains('is-open')) {
+                closeSidebar();
+            } else {
+                openSidebar();
+            }
+        });
+
+        filterClose?.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            closeSidebar();
+        });
+
+        filterOverlay?.addEventListener('click', function(e) {
+            e.preventDefault();
+            closeSidebar();
+        });
+
+        filterSidebar?.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && filterSidebar?.classList.contains('is-open')) {
+                closeSidebar();
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            updateFilterBadge();
+            const observer = new MutationObserver(updateFilterBadge);
+            const filterContainer = document.querySelector('.category-filter-applied');
+            if (filterContainer) {
+                observer.observe(filterContainer, {
+                    childList: true,
+                    subtree: true,
+                    attributes: true,
+                    attributeFilter: ['class']
+                });
+            }
+        });
+
+        setTimeout(updateFilterBadge, 100);
     })();
     </script>
 </body>
