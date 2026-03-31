@@ -37,10 +37,61 @@ Invoices,发票
 "Total invoices",发票总数
 "Pending issue",待开具
 "Manage Billing Documents",管理账单文件
+WeShop,WeShop
+Invoice,Invoice
+"Invoice List","Invoice List"
+"Total Amount","Total Amount"
+"Filter Invoices","Filter Invoices"
+"Enter invoice number","Enter invoice number"
+"Enter order number","Enter order number"
+"All Statuses","All Statuses"
+"Issue New Invoice","Issue New Invoice"
+Export,Export
+"No invoices found","No invoices found"
+"Invoice ID","Invoice ID"
+Customer,Customer
+"Tax Amount","Tax Amount"
+Type,Type
+"Issue Date","Issue Date"
+Download,Download
+Previous,Previous
+Next,Next
+"Page %{1} of %{2}","Page %{1} of %{2}"
+"Standard Invoice","Standard Invoice"
+"VAT Invoice","VAT Invoice"
+Receipt,Receipt
+Detail,Detail
+"Back to List","Back to List"
+"Download PDF","Download PDF"
+"Invoice Information","Invoice Information"
+"Invoice Type","Invoice Type"
+"Billing Period","Billing Period"
+"Due Date","Due Date"
+Notes,Notes
+"Invoice Items","Invoice Items"
+"No invoice items available","No invoice items available"
+Description,Description
+Quantity,Quantity
+"Unit Price","Unit Price"
+"Tax Rate","Tax Rate"
+Total,Total
+Subtotal,Subtotal
+Tax,Tax
+"Customer Information","Customer Information"
+"Customer Name","Customer Name"
+Email,Email
+"Tax ID / VAT Number","Tax ID / VAT Number"
+"Billing Address","Billing Address"
+"Payment Summary","Payment Summary"
+"Paid Amount","Paid Amount"
+Outstanding,Outstanding
+"Audit Trail","Audit Trail"
+"Invoice Created","Invoice Created"
+"Invoice Issued","Invoice Issued"
+"Payment Received","Payment Received"
 "Billing Documents","Billing Documents"
 "My Invoices","My Invoices"
 "Review issued invoices, pending requests, and billing references for your recent orders.","Review issued invoices, pending requests, and billing references for your recent orders."
-Invoice,Invoice
 Order,Order
 "No invoices yet","No invoices yet"
 "Your issued billing documents will appear here once order invoicing is complete.","Your issued billing documents will appear here once order invoicing is complete."

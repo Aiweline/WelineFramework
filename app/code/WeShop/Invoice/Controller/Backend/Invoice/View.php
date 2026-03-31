@@ -34,8 +34,8 @@ class View extends BaseController
         $this->assign(array_merge(
             [
                 'title' => (string) __('Invoice Detail'),
-                'invoiceIndexUrl' => $this->getBackendUrl('*/backend/invoice'),
-                'invoiceIssueUrl' => $this->getBackendUrl('*/backend/invoice/issue'),
+                'invoiceIndexUrl' => $this->getUrl('*/backend/invoice'),
+                'invoiceIssueUrl' => $this->getUrl('*/backend/invoice/issue'),
             ],
             $detailData
         ));
