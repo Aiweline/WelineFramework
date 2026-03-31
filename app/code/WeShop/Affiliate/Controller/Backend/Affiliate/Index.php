@@ -28,8 +28,9 @@ class Index extends BaseController
         $this->assign(array_merge(
             [
                 'title' => (string) __('Affiliate Management'),
-                'affiliateIndexUrl' => $this->getBackendUrl('*/backend/affiliate'),
-                'affiliateSaveUrl' => $this->getBackendUrl('*/backend/affiliate/save'),
+                // Controllers should use the internal URL builder ($this->_url), not a non-existent $this->getBackendUrl().
+                'affiliateIndexUrl' => $this->_url->getBackendUrl('*/backend/affiliate'),
+                'affiliateSaveUrl' => $this->_url->getBackendUrl('*/backend/affiliate/save'),
             ],
             $this->affiliateAdminPageDataService->getPageData($page, $pageSize, $filters, $editingId)
         ));
