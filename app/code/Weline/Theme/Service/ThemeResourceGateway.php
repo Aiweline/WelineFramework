@@ -44,9 +44,6 @@ final class ThemeResourceGateway
             . 'theme' . DIRECTORY_SEPARATOR
             . $resource['area'] . DIRECTORY_SEPARATOR
             . $relativePath;
-        if (is_file($moduleThemeFile)) {
-            return null;
-        }
 
         $resolvedTheme = $this->resolveTheme($resource['area'], $theme);
         if (!$resolvedTheme || !$resolvedTheme->getId()) {

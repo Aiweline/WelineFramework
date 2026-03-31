@@ -89,6 +89,10 @@ class LayoutAssetsGenerator implements ObserverInterface
             $jsPath = $assetsManager->getGeneratedJsPath($area, $layoutType, $layoutOption, $theme);
             $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme);
             $jsUrl = $assetsManager->getJsUrl($area, $layoutType, $layoutOption, $theme);
+
+            $logFile = defined('BP') ? BP : dirname(__DIR__, 3);
+            $logFile = rtrim($logFile, '\\/') . '/debug-theme.log';
+            @file_put_contents($logFile, date('Y-m-d H:i:s') . ' LayoutAssetsGenerator: theme=' . ($theme ? $theme->getName() . '(id=' . $theme->getId() . ', path=' . $theme->getPath() . ', originPath=' . $theme->getOriginPath() . ')' : 'null') . ' cssUrl=' . $cssUrl . "\n", FILE_APPEND);
             
             w_log_debug(__('LayoutAssetsGenerator: 开始处理布局资源 - area: %{1}, layoutType: %{2}, layoutOption: %{3}, CSS URL: %{4}, JS URL: %{5}', [
                 $area,

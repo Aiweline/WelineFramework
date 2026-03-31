@@ -1,0 +1,50 @@
+/**
+ * 变量：账户认证相关变量定义
+ *
+ * 定义账户登录、注册、仪表盘等认证相关页面的CSS变量
+ * 字段
+ * @meta.name {default="账户认证变量",name="账户认证变量",description="账户认证变量，用于描述变量的名称"}
+ * @meta.description {default="定义账户登录、注册、仪表盘等认证相关页面的CSS变量，包括容器宽度、间距、圆角等",name="定义账户认证相关CSS变量",description="定义账户登录、注册、仪表盘等认证相关页面的CSS变量，包括容器宽度、间距、圆角等，用于描述变量的用途"}
+ * @meta.category {default="variables",name="分类",description="分类，用于标识该文件所属的分类"}
+ */
+
+:root {
+    /* ========== 认证容器 ========== */
+    --auth-container-width: 480px;
+    --auth-container-padding: 2rem;
+    --auth-container-radius: 12px;
+
+    /* ========== 侧边栏（仪表盘） ========== */
+    --sidebar-width: 280px;
+    --sidebar-collapsed-width: 80px;
+    --sidebar-padding: 1.5rem;
+    --sidebar-radius: 12px;
+
+    /* ========== 表单元素 ========== */
+    --auth-input-height: 44px;
+    --auth-input-padding-x: 1rem;
+    --auth-input-padding-y: 0.75rem;
+    --auth-input-radius: 8px;
+    --auth-input-border-width: 2px;
+
+    /* ========== 按钮 ========== */
+    --auth-btn-height: 48px;
+    --auth-btn-radius: 8px;
+    --auth-btn-font-size: 1rem;
+    --auth-btn-padding-x: 1.5rem;
+    --auth-btn-padding-y: 0.75rem;
+
+    /* ========== 图标 ========== */
+    --auth-icon-size: 64px;
+    --auth-icon-radius: 12px;
+    --auth-icon-font-size: 2rem;
+
+    /* ========== 间距 ========== */
+    --auth-section-gap: 1.5rem;
+    --auth-field-gap: 1rem;
+    --auth-label-gap: 0.5rem;
+
+    /* ========== 动画 ========== */
+    --auth-transition-duration: 0.3s;
+    --auth-animation-duration: 0.6s;
+}

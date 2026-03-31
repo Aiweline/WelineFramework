@@ -90,6 +90,11 @@ class TemplateFetchFile implements ObserverInterface
 
         # 开始分析主题路径（预览 / Session / 激活主题由 ThemeContextService 统一解析）
         $area = $this->resolveAreaFromPath($module_file_path);
+        // 如果无法从路径检测到区域，使用预览上下文来确定区域
+        // 这样即使模板路径不包含 theme/frontend 等标识，也能正确使用预览主题
+        if ($area === null) {
+            $area = $this->themeContext->getPreviewArea() ?? 'frontend';
+        }
         $theme = $this->themeContext->resolveTheme($area);
         if ($theme === null || !$theme->getId()) {
             try {
