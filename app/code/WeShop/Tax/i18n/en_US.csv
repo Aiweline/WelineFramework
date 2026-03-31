@@ -1,5 +1,71 @@
-﻿"Tax query provider does not support operation: %{1}","Tax query provider does not support operation: %{1}"
+﻿"Tax Configuration","Tax Configuration"
+"Default tax rate must be between 0 and 1 (0%% to 100%%).","Default tax rate must be between 0 and 1 (0%% to 100%%)."
+"Tax configuration saved successfully.","Tax configuration saved successfully."
+"Tax Information","Tax Information"
+"Subtotal cannot be negative.","Subtotal cannot be negative."
+"Tax calculated successfully.","Tax calculated successfully."
+"Tax query provider does not support operation: %{1}","Tax query provider does not support operation: %{1}"
 "Tax Query","Tax Query"
 "Provides checkout tax-rate lookup and tax calculation access.","Provides checkout tax-rate lookup and tax calculation access."
 "Calculate tax for a checkout/order subtotal.","Calculate tax for a checkout/order subtotal."
+"Return total tax plus included and chargeable tax breakdown data.","Return total tax plus included and chargeable tax breakdown data."
 "Resolve the tax rate for a country/region context.","Resolve the tax rate for a country/region context."
+WeShop,WeShop
+Tax,Tax
+Configuration,Configuration
+"General Tax Settings","General Tax Settings"
+"Default Tax Rate","Default Tax Rate"
+"e.g. 0.08 for 8%","e.g. 0.08 for 8%"
+"Enter as decimal (0.08 = 8%%) or percentage (8%%). Applied when no country/region rate matches.","Enter as decimal (0.08 = 8%%) or percentage (8%%). Applied when no country/region rate matches."
+"Prices Include Tax","Prices Include Tax"
+No,No
+Yes,Yes
+"Whether product prices in the store include tax.","Whether product prices in the store include tax."
+"Apply Tax to Shipping","Apply Tax to Shipping"
+"Whether shipping charges are subject to tax.","Whether shipping charges are subject to tax."
+"Country Tax Rates","Country Tax Rates"
+"Country Code","Country Code"
+"Tax Rate","Tax Rate"
+Actions,Actions
+"e.g. US","e.g. US"
+"e.g. 0.08","e.g. 0.08"
+"Add Country Rate","Add Country Rate"
+"Region Tax Rates","Region Tax Rates"
+"Configure tax rates for specific regions. Use format Country-Region (e.g., US-CA for California, US-TX for Texas) or just region code for fallback matching.","Configure tax rates for specific regions. Use format Country-Region (e.g., US-CA for California, US-TX for Texas) or just region code for fallback matching."
+"Region Code","Region Code"
+"e.g. US-CA","e.g. US-CA"
+"e.g. 0.0825","e.g. 0.0825"
+"Add Region Rate","Add Region Rate"
+"Test Calculation","Test Calculation"
+"Test your tax configuration with sample values before saving.","Test your tax configuration with sample values before saving."
+Subtotal,Subtotal
+Country,Country
+Region,Region
+"e.g. CA","e.g. CA"
+"Test Calculate","Test Calculate"
+"Test Result","Test Result"
+"Save Configuration","Save Configuration"
+Reset,Reset
+"Tax Amount","Tax Amount"
+"Test calculation failed","Test calculation failed"
+"Configuration saved successfully!","Configuration saved successfully!"
+"Failed to save configuration","Failed to save configuration"
+"Are you sure you want to reset the form?","Are you sure you want to reset the form?"
+"Learn about our tax rates and calculation methods","Learn about our tax rates and calculation methods"
+"Current Tax Rate","Current Tax Rate"
+"Tax rate for %{1}","Tax rate for %{1}"
+"Default tax rate","Default tax rate"
+"Taxable Amount","Taxable Amount"
+"Included Tax","Included Tax"
+"Chargeable Tax","Chargeable Tax"
+"Calculate Tax","Calculate Tax"
+"Enter subtotal","Enter subtotal"
+"Shipping Amount","Shipping Amount"
+"Enter shipping amount","Enter shipping amount"
+"Region / State","Region / State"
+Discount,Discount
+"Enter discount","Enter discount"
+Action,Action
+Calculate,Calculate
+"Calculation Result","Calculation Result"
+"Failed to calculate tax","Failed to calculate tax"
