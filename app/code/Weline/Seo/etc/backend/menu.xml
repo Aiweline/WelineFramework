@@ -31,7 +31,7 @@
     <menu source="Weline_Seo::website_account"
           name="website_account"
           title="站点账户绑定"
-          action="seo/backend/websiteAccount"
+          action="seo/backend/website-account"
           parent="Weline_Backend::seo_group"
           icon="mdi mdi-link-variant"
           order="40"/>
