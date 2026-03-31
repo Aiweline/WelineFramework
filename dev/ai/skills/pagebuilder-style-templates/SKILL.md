@@ -108,6 +108,7 @@ style/
 
 ## 6. layout.phtml 与公共片段
 
+- **块注释铁律（.phtml）**：`/* … */` / `/** … */` 内**禁止**出现字面量 `*/`（例如不要写「`<?php /* hash */ ?>`」这类示例）。`*/` 会**提前结束**注释，后面整段会变成可执行 PHP 或裸 HTML，直接泄露到页面。说明哈希头、引入方式时用**纯文字**或拆成多行且避免星号+斜杠连续出现。
 - **有 layout 的主题**：
   - 在 `</head>` **前**插入：`<?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>`
   - 在 `</body>` **前**插入：`<?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml'); ?>`
@@ -184,3 +185,4 @@ $primaryRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($prima
 - [ ] layout 在 `</head>` / `</body>` 前正确引入 head-common / footer-common；default 主题在 header/footer 中引入。
 - [ ] 未在 header.phtml 中重复输出 `<pixel>` 或 WELINE_WEBSITE_* Cookie。
 - [ ] fetchTemplate 路径使用 `GuoLaiRen_PageBuilder::templates/...` 或 `GuoLaiRen_PageBuilder::style/...`。
+- [ ] **`.phtml` 文件内未写 `declare(strict_types=1)`**（hash 注释或空白会使其不是第一行语句，触发 `E_COMPILE_ERROR` 崩溃 WLS Worker）。

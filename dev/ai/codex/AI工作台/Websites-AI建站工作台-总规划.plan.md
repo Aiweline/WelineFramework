@@ -1,7 +1,8 @@
 # Websites AI建站工作台总规划
 
-- 状态：planning
+- 状态：completed
 - 优先级：high
+- 完成日期：2026-03-28
 - 规划日期：2026-03-22
 - 负责模块：
   - `Weline_Websites`

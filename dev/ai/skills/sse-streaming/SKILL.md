@@ -44,3 +44,77 @@ alwaysApply: false
 
 - 在 SSE 接口里用 `return json_encode(...)` 或非流式一次性输出
 - 前端用 EventSource 请求 POST 流式接口（必须用 fetch + body + getReader）
+- **在 SSE 长连接循环中使用 `\usleep()` 或 `\sleep()`** — 必须用 `SchedulerSystem::yieldDelay()` 替代
+
+## SSE 长连接循环必须使用 SchedulerSystem
+
+在 WLS 环境下，SSE 长连接必须使用协作式调度避免阻塞 Worker：
+
+```php
+use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Runtime\SchedulerSystem;
+
+// ❌ 禁止：会阻塞整个 Worker
+while (\time() < $deadline && $sse->isAlive()) {
+    $sse->sendEvent('log', $event);
+    \usleep(2000000);  // 阻塞 2 秒！
+}
+
+// ✅ 正确：挂起当前 Fiber，Worker 可处理其他请求
+while (\time() < $deadline && $sse->isAlive()) {
+    $sse->sendEvent('log', $event);
+    SchedulerSystem::yieldDelay(2000);  // 让出控制权 2 毫秒
+}
+```
+
+## SSE 控制器必须正确关闭流
+
+SSE 控制器**必须**在流结束时调用 `$sse->complete()` 或 `$sse->close()`：
+
+```php
+// ✅ 正确：调用 complete() 关闭 SSE 流
+public function getStreamSse(): void
+{
+    $sse = new SseWriter();
+    $sse->start();
+    // ... 处理逻辑 ...
+    $sse->complete(['success' => true]);  // 发送完成事件并关闭连接
+}
+
+// ❌ 错误：不调用 complete() 或 close()，导致 WLS 误判响应体
+public function getStreamSse(): void
+{
+    $sse = new SseWriter();
+    $sse->start();
+    // ... 处理逻辑 ...
+    // 缺少 $sse->complete() 或 $sse->close()
+    // WLS 可能误以为这是一个普通 HTTP 请求，响应体被忽略
+}
+```
+
+**注意**：`complete()` 会发送 `done` 事件并关闭连接，客户端应该监听 `done` 事件来确认流结束。
+
+## SSE 控制器禁止 return 响应体
+
+SSE 控制器的返回值会被 WLS 作为普通 HTTP 响应处理。如果控制器返回了非空字符串，WLS 会尝试将其作为 HTTP 响应发送，导致协议混乱。
+
+```php
+// ❌ 错误：SSE 控制器返回非空值
+public function getStreamSse(): void
+{
+    $sse = new SseWriter();
+    $sse->start();
+    // ...
+    return json_encode(['result' => 'done']);  // 会导致协议混乱！
+}
+
+// ✅ 正确：SSE 控制器不返回值
+public function getStreamSse(): void
+{
+    $sse = new SseWriter();
+    $sse->start();
+    // ...
+    $sse->complete(['success' => true]);  // 显式关闭流
+    // 不 return 任何内容
+}
+```
