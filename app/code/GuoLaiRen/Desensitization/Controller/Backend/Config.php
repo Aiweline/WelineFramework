@@ -8,7 +8,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\Desensitization\Controller\Backend;
 
-use GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter;
+use GuoLaiRen\Desensitization\extends\Weline_Ai\Adapter\DesensitizationAdapter;
 use GuoLaiRen\Desensitization\Service\DesensitizationService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
