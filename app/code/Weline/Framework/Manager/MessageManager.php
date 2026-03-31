@@ -97,6 +97,19 @@ class MessageManager
     }
 
     /**
+     * 获取并消费错误消息内容
+     */
+    public static function get_error_message(): ?string
+    {
+        $flash = self::flashRead();
+        if ($flash !== null && $flash['f'] === 'has-error') {
+            self::flashDelete();
+            return strip_tags($flash['c'], '<strong><a><button>');
+        }
+        return null;
+    }
+
+    /**
      * @param \Exception $exception
      * @param string $title
      * @param string $class
@@ -168,6 +181,19 @@ class MessageManager
             return $flash['f'] === 'has-success';
         }
         return (bool)self::session()->get('has-success');
+    }
+
+    /**
+     * 获取并消费成功消息内容
+     */
+    public static function get_success_message(): ?string
+    {
+        $flash = self::flashRead();
+        if ($flash !== null && $flash['f'] === 'has-success') {
+            self::flashDelete();
+            return strip_tags($flash['c'], '<strong><a><button>');
+        }
+        return null;
     }
 
 

@@ -468,6 +468,12 @@ COMMAND_LIST;
                 $this->out = '[34m'; //Blue
 
                 break;
+            case self::DEEP_ORANGE:
+            case 'DeepOrange':
+            case 'Orange':
+                $this->out = '[38;5;208m'; //Deep Orange (256-color)
+
+                break;
             default:
                 $this->out = '[31m'; //默认错误信息
 

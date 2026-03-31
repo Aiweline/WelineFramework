@@ -122,8 +122,16 @@ class ResponseTerminateException extends \Error
             $response .= "{$name}: {$value}\r\n";
         }
         
-        // 如果没有 Content-Length，自动添加
-        if (!isset($this->headers['Content-Length']) && $this->body !== '') {
+        // 如果没有 Content-Length，自动补齐。
+        // 之前仅在 body 非空时补齐，导致某些 404/错误场景：
+        // - 客户端既没有 Content-Length
+        // - 又拿到 Connection: keep-alive
+        // curl/浏览器会一直等待直到超时。
+        //
+        // SSE 由运行时流式发送，不应强行补 Content-Length。
+        $contentType = (string)($this->headers['Content-Type'] ?? $this->headers['content-type'] ?? '');
+        $isSse = \stripos($contentType, 'text/event-stream') !== false;
+        if (!$isSse && !isset($this->headers['Content-Length'])) {
             $response .= "Content-Length: " . \strlen($this->body) . "\r\n";
         }
         

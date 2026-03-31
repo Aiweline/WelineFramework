@@ -44,6 +44,11 @@ class HeaderCollector implements HeaderCollectorInterface
      * HTTP 状态码
      */
     private int $statusCode = 200;
+
+    /**
+     * Whether the HTTP status code was explicitly overridden during this request.
+     */
+    private bool $statusCodeExplicitlySet = false;
     
     /**
      * 私有构造函数，强制使用 getInstance()
@@ -78,6 +83,7 @@ class HeaderCollector implements HeaderCollectorInterface
             self::$instance->headers = [];
             self::$instance->cookies = [];
             self::$instance->statusCode = 200;
+            self::$instance->statusCodeExplicitlySet = false;
         }
     }
     
@@ -161,6 +167,7 @@ class HeaderCollector implements HeaderCollectorInterface
     public function setStatusCode(int $code): static
     {
         $this->statusCode = $code;
+        $this->statusCodeExplicitlySet = true;
         return $this;
     }
     
@@ -170,6 +177,14 @@ class HeaderCollector implements HeaderCollectorInterface
     public function getStatusCode(): int
     {
         return $this->statusCode;
+    }
+
+    /**
+     * Whether the current request explicitly set an HTTP status override.
+     */
+    public function hasExplicitStatusCode(): bool
+    {
+        return $this->statusCodeExplicitlySet;
     }
     
     /**

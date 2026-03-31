@@ -68,6 +68,16 @@ class WlsRuntime implements RuntimeInterface
      */
     private array $pendingHeaders = [];
 
+    /**
+     * Pending HTTP status captured before request state is reset.
+     */
+    private ?int $pendingStatusCode = null;
+
+    /**
+     * Whether the pending HTTP status was explicitly overridden by application code.
+     */
+    private bool $pendingStatusCodeExplicit = false;
+
     /** WLS 运行时性能配置缓存 */
     private ?array $performanceConfig = null;
     
@@ -169,6 +179,28 @@ class WlsRuntime implements RuntimeInterface
                 }
                 $this->globalsEmulator->emulate($request);
             }
+            // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
+            // 观察者调用 getUrlPath 导致 static $url_paths / Acl 路由判定沿用旧路径，误判无权限跳 admin。
+            Request::clearStaticUrlPathCache();
+            if ($request !== null) {
+                $request->invalidateUriCache();
+            }
+            if (\class_exists(\Weline\Acl\Service\AclService::class, false)) {
+                \Weline\Acl\Service\AclService::resetRequestCache();
+            }
+            if (\class_exists(\Weline\Acl\Observer\RouteBefore::class, false)) {
+                \Weline\Acl\Observer\RouteBefore::resetRequestCache();
+            }
+            try {
+                $ref = new \ReflectionClass(\Weline\Framework\Router\Cache\ProcessUrlCache::class);
+                if ($ref->hasProperty('staticCache')) {
+                    $prop = $ref->getProperty('staticCache');
+                    $prop->setAccessible(true);
+                    $prop->setValue(null, null);
+                }
+            } catch (\Throwable) {
+                // 忽略：模块未加载或非 WLS 路由缓存
+            }
             $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
             // 早期从 URL 提取语言/货币，供 RequestContext::syncFromServer() 使用
             $this->parseUrlLangCurrency($timing['uri']);
@@ -242,8 +274,10 @@ class WlsRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('router_init', $timing['router_init_ms'], 'framework');
             }
-            // 请求早期统一启动 Session（与 App::run 一致）
-            \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
+            // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie 与无意义 IO
+            if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
+                \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
+            }
             // 路由处理（含控制器、视图，通常为主要耗时）；push 使控制器链路与事件挂到 router_start 下
             $routerStartStart = \microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {
@@ -466,8 +500,7 @@ class WlsRuntime implements RuntimeInterface
             // 在重置前保存 HeaderCollector 的 Cookie/Header（Worker 构建响应时需要）
             // StateManager::reset() 会清空 HeaderCollector，必须在此之前提取
             $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
-            $this->pendingCookies = $hc->getCookies();
-            $this->pendingHeaders = $hc->getHeaders();
+            $this->snapshotPendingResponseState($hc);
             // 确保总是重置状态
             $this->reset();
             $t7 = \microtime(true);
@@ -1092,6 +1125,29 @@ class WlsRuntime implements RuntimeInterface
         $headers = $this->pendingHeaders;
         $this->pendingHeaders = [];
         return $headers;
+    }
+
+    /**
+     * @return array{status_code:?int, explicit:bool}
+     */
+    public function consumePendingResponseStatus(): array
+    {
+        $status = [
+            'status_code' => $this->pendingStatusCode,
+            'explicit' => $this->pendingStatusCodeExplicit,
+        ];
+        $this->pendingStatusCode = null;
+        $this->pendingStatusCodeExplicit = false;
+
+        return $status;
+    }
+
+    protected function snapshotPendingResponseState(\Weline\Framework\Http\HeaderCollector $headerCollector): void
+    {
+        $this->pendingCookies = $headerCollector->getCookies();
+        $this->pendingHeaders = $headerCollector->getHeaders();
+        $this->pendingStatusCode = $headerCollector->getStatusCode();
+        $this->pendingStatusCodeExplicit = $headerCollector->hasExplicitStatusCode();
     }
     
     /**

@@ -201,6 +201,7 @@ class Url implements UrlInterface
 
     public function getFrontendApiUrl(string $path = '', array $params = [], bool $merge_url_params = true): string
     {
+        $prefix = self::getLocalePrefix();
         if ($path) {
             if (!$this->isLink($path)) {
                 # URL自带星号处理
@@ -209,31 +210,24 @@ class Url implements UrlInterface
                     $path = str_replace('*', $router, $path);
                     $path = str_replace('//', '/', $path);
                 }
-                
-                // 获取货币和语言
-                $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
-                $language = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
-                
+
                 // 获取 REST 前端 API 前缀
                 $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend') ?: 'api';
                 $apiAreaPrefix = '/' . strtolower($restFrontendPrefix) . '/';
-                
-                // 构建URL: /{area_prefix}/{currency}/{language}/{path}
-                $url = $this->getRequest()->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/' . ltrim($path, '/');
+
+                // 默认货币/语言不输出路径段，仅在显式非默认值时输出。
+                $prefixPath = '' === $prefix ? '' : ltrim($prefix, '/') . '/';
+                $url = $this->getRequest()->getBaseHost() . $apiAreaPrefix . $prefixPath . ltrim($path, '/');
             } else {
                 $url = $path;
             }
         } else {
-            // 获取货币和语言
-            $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
-            $language = $_SERVER['WELINE_USER_LANG'] ?? $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
-            
             // 获取 REST 前端 API 前缀
             $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend') ?: 'api';
             $apiAreaPrefix = '/' . strtolower($restFrontendPrefix) . '/';
-            
-            // 构建URL: /{area_prefix}/{currency}/{language}/
-            $url = $this->getRequest()->getBaseHost() . $apiAreaPrefix . $currency . '/' . $language . '/';
+
+            // 构建URL: /{area_prefix}/{currency?}/{language?}
+            $url = $this->getRequest()->getBaseHost() . $apiAreaPrefix . ltrim($prefix . '/', '/');
         }
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
@@ -307,18 +301,52 @@ class Url implements UrlInterface
     static function getPrefix()
     {
         $prefix = '';
-        
-        // 安全地获取货币前缀
-        if (!empty($_SERVER['WELINE_USER_CURRENCY'])) {
-            $prefix .= '/' . $_SERVER['WELINE_USER_CURRENCY'];
+
+        $currency = self::normalizeCurrency($_SERVER['WELINE_USER_CURRENCY'] ?? null);
+        $language = self::normalizeLanguage($_SERVER['WELINE_USER_LANG'] ?? null);
+        $websiteCurrency = self::normalizeCurrency($_SERVER['WELINE_WEBSITE_CURRENCY'] ?? null) ?: self::getFrameworkDefaultCurrency();
+        $websiteLanguage = self::normalizeLanguage($_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? null) ?: self::getFrameworkDefaultLanguage();
+        $frameworkCurrency = self::getFrameworkDefaultCurrency();
+        $frameworkLanguage = self::getFrameworkDefaultLanguage();
+
+        // 默认值（网站默认或框架默认）不拼接到 URL 段中。
+        if ('' !== $currency && $currency !== $websiteCurrency && $currency !== $frameworkCurrency) {
+            $prefix .= '/' . $currency;
         }
-        
-        // 安全地获取语言前缀
-        if (!empty($_SERVER['WELINE_USER_LANG'])) {
-            $prefix .= '/' . $_SERVER['WELINE_USER_LANG'];
+
+        if ('' !== $language && $language !== $websiteLanguage && $language !== $frameworkLanguage) {
+            $prefix .= '/' . $language;
         }
-        
+
         return $prefix;
+    }
+
+    private static function getLocalePrefix(): string
+    {
+        return self::getPrefix();
+    }
+
+    private static function getFrameworkDefaultCurrency(): string
+    {
+        $currency = self::normalizeCurrency(Env::get('currency', 'CNY'));
+        return '' !== $currency ? $currency : 'CNY';
+    }
+
+    private static function getFrameworkDefaultLanguage(): string
+    {
+        $language = self::normalizeLanguage(Env::get('locale', Env::get('lang', 'zh_Hans_CN')));
+        return '' !== $language ? $language : 'zh_Hans_CN';
+    }
+
+    private static function normalizeCurrency(mixed $currency): string
+    {
+        $value = strtoupper(trim((string)$currency));
+        return $value;
+    }
+
+    private static function normalizeLanguage(mixed $language): string
+    {
+        return trim((string)$language);
     }
 
     public static function removeExtraDoubleSlashes(null|string $url = ''): string
