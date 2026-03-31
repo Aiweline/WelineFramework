@@ -1009,9 +1009,21 @@ class ElasticsearchEngine implements SearchEngineInterface, SearchWritableEngine
 
     private function fallbackBrowse(array $request): array
     {
+        $filters = is_array($request['filters'] ?? null) ? $request['filters'] : [];
+        $categoryIds = is_array($request['category_ids'] ?? null)
+            ? array_values(array_unique(array_filter(array_map('intval', $request['category_ids']))))
+            : [];
+
+        if ($categoryIds !== []) {
+            $filters['category_ids'] = $categoryIds;
+            if (!array_key_exists('category_id', $filters) && count($categoryIds) === 1) {
+                $filters['category_id'] = $categoryIds[0];
+            }
+        }
+
         $result = w_query('product', 'searchProducts', [
             'keyword' => (string) ($request['keyword'] ?? ''),
-            'filters' => is_array($request['filters'] ?? null) ? $request['filters'] : [],
+            'filters' => $filters,
             'page' => (int) ($request['page'] ?? 1),
             'page_size' => (int) ($request['page_size'] ?? 20),
         ]);
