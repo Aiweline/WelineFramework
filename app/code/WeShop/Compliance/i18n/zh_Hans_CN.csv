@@ -1,4 +1,18 @@
-﻿"Consent type is required.","Consent type is required."
+﻿"Compliance Management","Compliance Management"
+"Invalid policy type.",无效的政策类型。
+"Privacy Policy",隐私政策
+"Terms of Service",服务条款
+"Cookie Policy","Cookie 政策"
+"Marketing Policy",营销政策
+"Edit %{1}","Edit %{1}"
+"Invalid request method.",无效的请求方法。
+"Policy content cannot be empty.",政策内容不能为空。
+"Policy ""%{1}"" saved successfully.","Policy ""%{1}"" saved successfully."
+"Failed to save policy: %{1}",保存政策失败：%{1}
+"Unsupported export format.",不支持的导出格式。
+"Consent data exported successfully in %{1} format.","同意数据已成功导出为 %{1} 格式。"
+"Export failed: %{1}",导出失败：%{1}
+"Consent type is required.","Consent type is required."
 "Please log in to update this consent.",请先登录后再更新该同意项。
 "Consent preference updated.",同意偏好已更新。
 "Compliance page before content",合规页面前置扩展位
@@ -26,6 +40,63 @@ Compliance,合规
 "Open Compliance",进入合规中心
 "Accepted Preferences",已接受偏好
 "Review privacy, terms, and communication consent settings from one secure workspace.",在一个安全工作区内统一查看隐私、条款与沟通同意设置。
+"Data collection, usage, and user privacy controls","Data collection, usage, and user privacy controls"
+"Platform terms and transaction rules","Platform terms and transaction rules"
+"Cookie usage and tracking preferences","Cookie usage and tracking preferences"
+"Marketing communications consent","Marketing communications consent"
+WeShop,WeShop
+Dashboard,Dashboard
+"Active Consent Types",活跃同意类型
+"Required Policies",必需政策
+"Optional Policies",可选政策
+"Last Audit",最近审计
+"System default",系统默认
+"Compliance Policies",合规政策
+"Manage privacy policies, terms of service, and consent configurations",管理隐私政策、服务条款和同意配置
+"Policy Type",政策类型
+"Policy Name",政策名称
+Description,描述
+Required,必需
+"Last Updated",最近更新
+Actions,操作
+"Quick Actions",快捷操作
+"Common compliance management tasks",常用合规管理任务
+"Edit Privacy Policy",编辑隐私政策
+"Edit Terms of Service",编辑服务条款
+"Edit Cookie Policy","编辑 Cookie 政策"
+"Export Consent Data",导出同意数据
+"Export customer consent records for regulatory compliance",导出客户同意记录以满足合规要求
+"Date From",开始日期
+"Date To",结束日期
+Format,格式
+CSV,CSV
+"Excel (XLSX)","Excel (XLSX)"
+JSON,JSON
+Export,导出
+Optional,可选
+Edit,编辑
+"No compliance policies found",未找到合规政策
+Loading...,加载中...
+Processing...,处理中...
+"Edit Policy","Edit Policy"
+Policy,Policy
+"Section %{1} Title","第 %{1} 节标题"
+"Section %{1} Content","第 %{1} 节内容"
+"Policy Content",政策内容
+"Policy Sections","Policy Sections"
+"Configure the sections displayed on the storefront compliance page.",配置前台合规页面显示的章节。
+"No policy content configured yet. Please add sections below.",尚未配置政策内容，请添加章节。
+"Section 1 Title","第 1 节标题"
+"Section 1 Content","第 1 节内容"
+"Add Section",添加章节
+"Policy Settings",政策设置
+"Policy type cannot be changed after creation.",政策类型创建后无法更改。
+"Display Name",显示名称
+"Required Consent",必需同意
+"Users must acknowledge this policy",用户必须确认此政策
+"Last Modified",最近修改
+"Save Policy",保存政策
+"Back to Dashboard",返回仪表盘
 "Consent Workspace","Consent Workspace"
 "Update Consent Preferences","Update Consent Preferences"
 "Use this page to update optional communications and acknowledge required policy items for your account.","Use this page to update optional communications and acknowledge required policy items for your account."
@@ -42,11 +113,10 @@ Enable,Enable
 "Preferences Accepted","Preferences Accepted"
 "Keep this score current to avoid compliance interruptions during account operations.","Keep this score current to avoid compliance interruptions during account operations."
 "Consent Preferences","Consent Preferences"
-Required,Required
 Revoke,Revoke
 Accept,Accept
 Privacy,Privacy
 "Privacy Policy Summary","Privacy Policy Summary"
 "This summary highlights how storefront data is collected, processed, retained, and controlled. It complements the full legal policy text.","This summary highlights how storefront data is collected, processed, retained, and controlled. It complements the full legal policy text."
-"Manage Consent","Manage Consent"
-"Back to Compliance Center","Back to Compliance Center"
+"Manage Consent",管理同意项
+"Back to Compliance Center",返回合规中心
