@@ -14,6 +14,8 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend\Visual\Api;
 
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
 use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
@@ -307,6 +309,10 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
+
+            if ($this->isVirtualRequest($body)) {
+                return $this->postAddVirtual($body);
+            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -963,6 +969,10 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
+
+            if ($this->isVirtualRequest($body)) {
+                return $this->postRemoveVirtual($body);
+            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -1119,6 +1129,10 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
+
+            if ($this->isVirtualRequest($body)) {
+                return $this->postUpdateConfigVirtual($body);
+            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $componentCode = $body['component_code'] ?? '';
@@ -1294,6 +1308,10 @@ class Component extends BackendController
         try {
             $bodyParams = $this->request->getBodyParams();
             $body = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? (json_decode($bodyParams, true) ?: []) : []);
+
+            if ($this->isVirtualRequest($body)) {
+                return $this->postReorderVirtual($body);
+            }
             
             $pageId = (int)($body['page_id'] ?? 0);
             $region = $body['region'] ?? '';
@@ -1450,6 +1468,15 @@ class Component extends BackendController
     public function layoutFields()
     {
         try {
+            $params = [
+                'public_id' => (string)$this->request->getParam('public_id', ''),
+                'page_type' => (string)$this->request->getParam('page_type', ''),
+                'style_code' => (string)$this->request->getParam('style_code', ''),
+            ];
+            if ($this->isVirtualRequest($params)) {
+                return $this->layoutFieldsVirtual($params);
+            }
+
             $pageId = (int)$this->request->getParam('page_id', 0);
             
             if (!$pageId) {
@@ -1622,5 +1649,574 @@ class Component extends BackendController
                 'message' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function isVirtualRequest(array $payload): bool
+    {
+        return \trim((string)($payload['public_id'] ?? '')) !== ''
+            && \trim((string)($payload['page_type'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array{
+     *   session:mixed,
+     *   scope:array<string,mixed>,
+     *   page:Page,
+     *   public_id:string,
+     *   page_type:string,
+     *   virtual_theme_id:int,
+     *   virtual_page:array<string,mixed>,
+     *   virtual_pages_by_type:array<string,array<string,mixed>>,
+     *   layout:array<string,mixed>,
+     *   style_code:string
+     * }|null
+     */
+    private function resolveVirtualContext(array $payload): ?array
+    {
+        $publicId = \trim((string)($payload['public_id'] ?? ''));
+        $requestedPageType = \trim((string)($payload['page_type'] ?? ''));
+        $adminId = (int)$this->getLoginUserId();
+        if ($publicId === '' || $requestedPageType === '' || $adminId <= 0) {
+            return null;
+        }
+
+        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $requestedPageType);
+        if ($context === null) {
+            return null;
+        }
+
+        $scopeService = $this->getScopeCompatibilityService();
+        $scope = $scopeService->normalizeScope($context['scope']);
+        $virtualPages = $scopeService->buildVirtualPagesByType(
+            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
+            $scope
+        );
+        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
+        if ($pageType === '' || !isset($virtualPages[$pageType])) {
+            return null;
+        }
+
+        $virtualThemeId = (int)$context['virtual_theme_id'];
+        $virtualPage = $virtualPages[$pageType];
+        $styleCode = \trim((string)($payload['style_code'] ?? ($virtualPage['style_code'] ?? 'default')));
+        $styleCode = $styleCode !== '' ? $styleCode : 'default';
+        $layout = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
+
+        return [
+            'session' => $context['session'],
+            'scope' => $scope,
+            'page' => $this->buildVirtualPage($publicId, $scope, $pageType, $virtualThemeId, $virtualPages, $virtualPage, $layout, $styleCode),
+            'public_id' => $publicId,
+            'page_type' => $pageType,
+            'virtual_theme_id' => $virtualThemeId,
+            'virtual_page' => $virtualPage,
+            'virtual_pages_by_type' => $virtualPages,
+            'layout' => $layout,
+            'style_code' => $styleCode,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,array<string,mixed>> $virtualPagesByType
+     * @param array<string,mixed> $virtualPage
+     * @param array<string,mixed> $layout
+     */
+    private function buildVirtualPage(
+        string $publicId,
+        array $scope,
+        string $pageType,
+        int $virtualThemeId,
+        array $virtualPagesByType,
+        array $virtualPage,
+        array $layout,
+        string $styleCode
+    ): Page {
+        /** @var Page $page */
+        $page = ObjectManager::make(Page::class);
+        $locale = \trim((string)($virtualPage['locale'] ?? ''));
+        $locale = $locale !== '' ? $locale : 'en_US';
+        $page->setData([
+            Page::schema_fields_ID => 0,
+            Page::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
+            Page::schema_fields_PARENT_ID => $pageType === Page::TYPE_HOME ? 0 : 1,
+            Page::schema_fields_STATUS => Page::STATUS_DRAFT,
+            Page::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
+            Page::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
+            Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
+            Page::schema_fields_STYLE => $styleCode,
+            Page::schema_fields_TYPE => $pageType,
+            Page::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
+            Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
+            Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
+            Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
+            Page::schema_fields_LOCALES => \json_encode([$locale], JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_DEFAULT_LOCALE => $locale,
+            Page::schema_fields_STYLE_SETTING => \json_encode([
+                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
+            ], JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, JSON_UNESCAPED_UNICODE),
+        ]);
+        $page->setData('virtual_public_id', $publicId);
+        $page->setData('virtual_page_type', $pageType);
+        $page->setData('virtual_theme_id', $virtualThemeId);
+        $page->setData('virtual_pages_by_type', $virtualPagesByType);
+        return $page;
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function postAddVirtual(array $body)
+    {
+        $context = $this->resolveVirtualContext($body);
+        if ($context === null) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('会话不存在或无访问权限'),
+            ]);
+        }
+
+        try {
+            $componentCode = \trim((string)($body['component_code'] ?? ''));
+            $region = \trim((string)($body['region'] ?? ''));
+            $position = $body['position'] ?? null;
+            $parentComponentId = $body['parent_component_id'] ?? null;
+            $targetSlot = $body['slot'] ?? null;
+            $returnHtml = $body['return_html'] ?? true;
+            $welineThemeId = (int)($body['weline_theme_id'] ?? 0);
+            $themeComponentArea = (string)($body['theme_component_area'] ?? 'frontend');
+
+            if ($componentCode === '' || $region === '') {
+                throw new \Exception('缺少组件编码或区域');
+            }
+
+            $layout = $context['layout'];
+            if ($parentComponentId && $targetSlot) {
+                $parentComponentCode = $this->getVirtualComponentCodeByInstanceId(
+                    \is_array($layout['content'] ?? null) ? $layout['content'] : [],
+                    (string)$parentComponentId
+                );
+                if (!$parentComponentCode) {
+                    throw new \Exception('父组件不存在');
+                }
+                $validation = $this->slotValidator->canPlaceInSlot(
+                    $componentCode,
+                    $parentComponentCode,
+                    (string)$targetSlot,
+                    $context['style_code'],
+                    (string)$parentComponentId,
+                    $welineThemeId,
+                    $themeComponentArea
+                );
+            } else {
+                $validation = $this->slotValidator->canPlaceInRegion(
+                    $componentCode,
+                    $region,
+                    $context['style_code'],
+                    $welineThemeId,
+                    $themeComponentArea
+                );
+            }
+
+            if (!$validation->isValid()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => $validation->getMessage(),
+                    'error_code' => $validation->getErrorCode(),
+                    'validation_failed' => true,
+                ]);
+            }
+
+            $instanceId = 'comp-' . \uniqid();
+            $newComponent = [
+                'code' => $componentCode,
+                'instance_id' => $instanceId,
+                'enabled' => true,
+                'config' => [],
+                'children' => [],
+            ];
+            $actualPosition = 0;
+
+            if ($region === 'header' || $region === 'footer') {
+                $layout[$region] = [
+                    'component' => $componentCode,
+                    'config' => [],
+                    'instance_id' => $instanceId,
+                ];
+            } else {
+                $contentComponents = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+                if ($parentComponentId && $targetSlot) {
+                    $contentComponents = $this->addToParentSlot(
+                        $contentComponents,
+                        (string)$parentComponentId,
+                        (string)$targetSlot,
+                        $newComponent
+                    );
+                } elseif ($position !== null && (int)$position >= 0 && (int)$position < \count($contentComponents)) {
+                    \array_splice($contentComponents, (int)$position, 0, [$newComponent]);
+                    $actualPosition = (int)$position;
+                } else {
+                    $contentComponents[] = $newComponent;
+                    $actualPosition = \count($contentComponents) - 1;
+                }
+                $layout['content'] = \array_values($contentComponents);
+            }
+
+            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
+                (int)$context['virtual_theme_id'],
+                (string)$context['page_type'],
+                $layout,
+                $region
+            );
+
+            $componentHtml = '';
+            if ($returnHtml) {
+                $styleSettings = \is_array($context['virtual_page']['style_settings'] ?? null)
+                    ? $context['virtual_page']['style_settings']
+                    : [];
+                $renderOptions = [
+                    'region' => $region,
+                    'index' => $actualPosition,
+                    'visual_mode' => true,
+                    'page' => $context['page'],
+                    'style_settings' => $styleSettings,
+                ];
+                if ($welineThemeId > 0) {
+                    $renderOptions['weline_theme_id'] = $welineThemeId;
+                    $renderOptions['theme_component_area'] = $themeComponentArea;
+                }
+                $renderResult = $this->componentRenderer->renderSingle(
+                    $componentCode,
+                    $instanceId,
+                    $context['style_code'],
+                    [],
+                    $renderOptions
+                );
+                if ($renderResult->isSuccess()) {
+                    $componentHtml = $renderResult->getHtml();
+                }
+            }
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('组件已添加'),
+                'instance_id' => $instanceId,
+                'component_html' => $componentHtml,
+                'position' => $actualPosition,
+                'partial' => true,
+                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
+                'target_page_id' => 0,
+                'is_global' => \in_array($region, ['header', 'footer'], true),
+                'public_id' => $context['public_id'],
+                'page_type' => $context['page_type'],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function postRemoveVirtual(array $body)
+    {
+        $context = $this->resolveVirtualContext($body);
+        if ($context === null) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('会话不存在或无访问权限'),
+            ]);
+        }
+
+        try {
+            $componentCode = \trim((string)($body['component_code'] ?? ''));
+            $region = \trim((string)($body['region'] ?? ''));
+            $index = $body['index'] ?? null;
+            if ($region === '') {
+                throw new \Exception('缺少区域');
+            }
+
+            $layout = $context['layout'];
+            $removedCount = 0;
+            if ($region === 'header' || $region === 'footer') {
+                if (!empty($layout[$region]['component'])) {
+                    $layout[$region] = ['component' => '', 'config' => []];
+                    $removedCount = 1;
+                }
+            } else {
+                $contentComponents = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+                if ($index !== null && isset($contentComponents[(int)$index])) {
+                    \array_splice($contentComponents, (int)$index, 1);
+                    $removedCount = 1;
+                } elseif ($componentCode !== '') {
+                    $originalCount = \count($contentComponents);
+                    $contentComponents = \array_values(\array_filter(
+                        $contentComponents,
+                        static fn(array $comp): bool => (string)($comp['code'] ?? $comp['component'] ?? '') !== $componentCode
+                    ));
+                    $removedCount = $originalCount - \count($contentComponents);
+                }
+                $layout['content'] = $contentComponents;
+            }
+
+            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
+                (int)$context['virtual_theme_id'],
+                (string)$context['page_type'],
+                $layout,
+                $region
+            );
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('组件已删除'),
+                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
+                'target_page_id' => 0,
+                'is_global' => \in_array($region, ['header', 'footer'], true),
+                'removed_count' => $removedCount,
+                'public_id' => $context['public_id'],
+                'page_type' => $context['page_type'],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function postUpdateConfigVirtual(array $body)
+    {
+        $context = $this->resolveVirtualContext($body);
+        if ($context === null) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('会话不存在或无访问权限'),
+            ]);
+        }
+
+        try {
+            $componentCode = \trim((string)($body['component_code'] ?? ''));
+            $region = \trim((string)($body['region'] ?? ''));
+            $index = (int)($body['index'] ?? 0);
+            $config = \is_array($body['config'] ?? null) ? $body['config'] : [];
+            if ($componentCode === '' || $region === '') {
+                throw new \Exception('缺少组件编码或区域');
+            }
+
+            $layout = $context['layout'];
+            if ($region === 'header' || $region === 'footer') {
+                $currentComponent = (string)($layout[$region]['component'] ?? '');
+                if (
+                    $currentComponent !== ''
+                    && $this->normalizeHeaderFooterComponentCode($currentComponent, $region, $context['style_code'])
+                        !== $this->normalizeHeaderFooterComponentCode($componentCode, $region, $context['style_code'])
+                ) {
+                    throw new \Exception('当前区域组件与请求组件不匹配');
+                }
+                $layout[$region] = [
+                    'component' => $componentCode,
+                    'config' => $config,
+                    'instance_id' => (string)($layout[$region]['instance_id'] ?? ('virtual-' . $region)),
+                ];
+            } else {
+                $contentComponents = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+                if (!isset($contentComponents[$index])) {
+                    throw new \Exception('组件不存在');
+                }
+                $storedCode = (string)($contentComponents[$index]['code'] ?? $contentComponents[$index]['component'] ?? '');
+                if ($storedCode !== $componentCode) {
+                    throw new \Exception('当前组件与请求组件不匹配');
+                }
+                $contentComponents[$index]['config'] = $config;
+                $layout['content'] = $contentComponents;
+            }
+
+            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
+                (int)$context['virtual_theme_id'],
+                (string)$context['page_type'],
+                $layout,
+                $region
+            );
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('组件配置已保存'),
+                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
+                'target_page_id' => 0,
+                'public_id' => $context['public_id'],
+                'page_type' => $context['page_type'],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function postReorderVirtual(array $body)
+    {
+        $context = $this->resolveVirtualContext($body);
+        if ($context === null) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('会话不存在或无访问权限'),
+            ]);
+        }
+
+        try {
+            $region = \trim((string)($body['region'] ?? ''));
+            $newOrder = \is_array($body['order'] ?? null) ? $body['order'] : [];
+            if ($region !== 'content') {
+                throw new \Exception('只支持对内容区域排序');
+            }
+
+            $layout = $context['layout'];
+            $currentComponents = \array_values(\is_array($layout['content'] ?? null) ? $layout['content'] : []);
+            $componentCount = \count($currentComponents);
+            if (\count($newOrder) !== $componentCount) {
+                throw new \Exception('排序数量与当前组件数量不一致');
+            }
+
+            $ordered = [];
+            foreach ($newOrder as $oldIndex) {
+                $oldIndex = (int)$oldIndex;
+                if (!isset($currentComponents[$oldIndex])) {
+                    throw new \Exception('无效的原始索引: ' . $oldIndex);
+                }
+                $ordered[] = $currentComponents[$oldIndex];
+            }
+            $layout['content'] = $ordered;
+
+            $resolvedLayout = $this->getVirtualLayoutService()->saveResolvedLayout(
+                (int)$context['virtual_theme_id'],
+                (string)$context['page_type'],
+                $layout,
+                'content'
+            );
+
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('排序已保存'),
+                'layout_config' => $this->buildEditorLayoutConfig($resolvedLayout),
+                'public_id' => $context['public_id'],
+                'page_type' => $context['page_type'],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function layoutFieldsVirtual(array $params)
+    {
+        $context = $this->resolveVirtualContext($params);
+        if ($context === null) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('会话不存在或无访问权限'),
+            ]);
+        }
+
+        return $this->fetchJson([
+            'success' => true,
+            'layout_config' => $this->buildEditorLayoutConfig($context['layout']),
+            'component_fields' => [],
+            'style_code' => $context['style_code'],
+            'public_id' => $context['public_id'],
+            'page_type' => $context['page_type'],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @return array<string, array<int, array<string, mixed>>>
+     */
+    private function buildEditorLayoutConfig(array $layout): array
+    {
+        $normalized = [
+            'header' => [],
+            'content' => [],
+            'footer' => [],
+        ];
+
+        if (!empty($layout['header']['component'])) {
+            $normalized['header'][] = [
+                'code' => (string)$layout['header']['component'],
+                'enabled' => true,
+                'config' => \is_array($layout['header']['config'] ?? null) ? $layout['header']['config'] : [],
+                'instance_id' => (string)($layout['header']['instance_id'] ?? 'virtual-header'),
+            ];
+        }
+
+        foreach ((array)($layout['content'] ?? []) as $component) {
+            if (!\is_array($component)) {
+                continue;
+            }
+            $normalized['content'][] = [
+                'code' => (string)($component['code'] ?? $component['component'] ?? ''),
+                'enabled' => (bool)($component['enabled'] ?? true),
+                'config' => \is_array($component['config'] ?? null) ? $component['config'] : [],
+                'instance_id' => (string)($component['instance_id'] ?? $component['id'] ?? ('comp-' . \uniqid())),
+                'children' => \is_array($component['children'] ?? null) ? $component['children'] : [],
+            ];
+        }
+
+        if (!empty($layout['footer']['component'])) {
+            $normalized['footer'][] = [
+                'code' => (string)$layout['footer']['component'],
+                'enabled' => true,
+                'config' => \is_array($layout['footer']['config'] ?? null) ? $layout['footer']['config'] : [],
+                'instance_id' => (string)($layout['footer']['instance_id'] ?? 'virtual-footer'),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $components
+     */
+    private function getVirtualComponentCodeByInstanceId(array $components, string $instanceId): ?string
+    {
+        foreach ($components as $comp) {
+            if ((string)($comp['instance_id'] ?? $comp['id'] ?? '') === $instanceId) {
+                return (string)($comp['code'] ?? $comp['component'] ?? '');
+            }
+            if (!empty($comp['children']) && \is_array($comp['children'])) {
+                $found = $this->findComponentCodeInChildren($comp['children'], $instanceId);
+                if ($found) {
+                    return $found;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function getVirtualLayoutService(): AiSiteVirtualLayoutService
+    {
+        return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
+    }
+
+    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
+    {
+        return ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
     }
 }
