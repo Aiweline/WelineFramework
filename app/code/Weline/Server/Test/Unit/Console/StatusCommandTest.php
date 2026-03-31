@@ -59,7 +59,7 @@ final class StatusCommandTest extends TestCase
         self::assertSame(['default'], \array_keys($active));
     }
 
-    public function testGetServiceStatsCanExcludeSharedExternalServicesForActivityChecks(): void
+    public function testGetServiceStatsAlwaysExcludesSharedStateDependenciesFromInstanceCounts(): void
     {
         $status = new class extends Status {
             /**
@@ -98,7 +98,7 @@ final class StatusCommandTest extends TestCase
         ];
 
         self::assertSame(
-            ['total' => 2, 'running' => 2, 'stopped' => 0],
+            ['total' => 1, 'running' => 1, 'stopped' => 0],
             $status->stats($info, $processInfoMap)
         );
         self::assertSame(
