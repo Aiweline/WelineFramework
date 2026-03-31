@@ -1,0 +1,228 @@
+<?php
+/**
+ * 价格配置 - 后台管理页面
+ * @var \Weline\Framework\View\Template $this
+ */
+$products = $this->getData('products') ?? [];
+$pagination = $this->getData('pagination') ?? [];
+$searchQuery = (string) ($this->getData('search_query') ?? '');
+?>
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>价格管理</lang>
+            </h4>
+
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                            <lang>系统配置</lang>
+                        </a></li>
+                    <li class='breadcrumb-item'>
+                        <a href="@backend-url('*/backend/price')">
+                            <lang>价格配置</lang>
+                        </a>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <h4 class='card-title'>
+                    <lang>价格配置</lang>
+                </h4>
+                <p class='card-title-desc'>
+                    <lang>管理系统产品价格，包括基础价格、促销价格、阶梯价格和客户专属价格</lang>
+                </p>
+
+                <!-- search form -->
+                <div class='row align-items-center mb-4'>
+                    <div class='col-4'>
+                        <form method='get' action='<?= $this->getBackendUrl('*/backend/price') ?>'>
+                            <div class='input-group'>
+                                <input type='text' class='form-control' name='q'
+                                       placeholder='<?= __('Search products...') ?>'
+                                       value='<?= htmlspecialchars($searchQuery) ?>'>
+                                <button class='btn btn-primary' type='submit'>
+                                    <i class='bx bx-search'></i>
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                <!-- end search form -->
+
+                <div class='table-rep-plugin'>
+                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
+                        <table id='tech-companies-1' class='table table-striped table-bordered'>
+                            <thead>
+                            <tr>
+                                <th data-priority='3'>
+                                    <?= __('ID') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('Product Name') ?>
+                                </th>
+                                <th data-priority='1'>
+                                    <?= __('SKU') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('Base Price') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('Special Price') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('Tier Prices') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('Customer Prices') ?>
+                                </th>
+                                <th data-priority='3'>
+                                    <?= __('Actions') ?>
+                                </th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php if (empty($products)): ?>
+                                <tr>
+                                    <td colspan='8' class='text-center'>
+                                        <lang>No products found.</lang>
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($products as $product): ?>
+                                    <tr>
+                                        <td><?= (int) ($product['product_id'] ?? 0) ?></td>
+                                        <td class='co-name'>
+                                            <?= htmlspecialchars((string) ($product['name'] ?? '')) ?>
+                                        </td>
+                                        <td>
+                                            <code><?= htmlspecialchars((string) ($product['sku'] ?? '')) ?></code>
+                                        </td>
+                                        <td>
+                                            <?= $this->formatPrice((float) ($product['price'] ?? 0)) ?>
+                                        </td>
+                                        <td>
+                                            <?php if (isset($product['special_price']) && $product['special_price'] !== null): ?>
+                                                <span
+                                                    class='text-danger'><?= $this->formatPrice((float) $product['special_price']) ?></span>
+                                            <?php else: ?>
+                                                <span class='text-muted'>-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php
+                                            $tierPrices = $product['tier_prices'] ?? [];
+                                            if (!empty($tierPrices) && is_array($tierPrices)):
+                                                ?>
+                                                <span class='badge bg-info'><?= count($tierPrices) ?>
+                                                    <?= __('tiers') ?></span>
+                                            <?php else: ?>
+                                                <span class='text-muted'>-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php
+                                            $customerPrices = $product['customer_prices'] ?? [];
+                                            if (!empty($customerPrices) && is_array($customerPrices)):
+                                                ?>
+                                                <span class='badge bg-warning'><?= count($customerPrices) ?>
+                                                    <?= __('customers') ?></span>
+                                            <?php else: ?>
+                                                <span class='text-muted'>-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <a href='<?= $this->getBackendUrl('*/backend/price/config', ['product_id' => $product['product_id'] ?? 0]) ?>'
+                                               class='btn btn-sm btn-primary'>
+                                                <i class='bx bx-cog'></i>
+                                                <?= __('Configure') ?>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <?php if (!empty($pagination) && (int) ($pagination['total'] ?? 0) > 0): ?>
+                        <div class='row mt-3'>
+                            <div class='col-12'>
+                                <nav>
+                                    <ul class='pagination justify-content-center'>
+                                        <?php if (!empty($pagination['has_prev'])): ?>
+                                            <li class='page-item'>
+                                                <a class='page-link'
+                                                   href='<?= $this->getBackendUrl('*/backend/price') ?>?page=<?= (int) ($pagination['current_page'] - 1) ?>&q=<?= urlencode($searchQuery) ?>'>
+                                                    <?= __('Previous') ?>
+                                                </a>
+                                            </li>
+                                        <?php else: ?>
+                                            <li class='page-item disabled'>
+                                                <span class='page-link'><?= __('Previous') ?></span>
+                                            </li>
+                                        <?php endif; ?>
+
+                                        <?php
+                                        $currentPage = (int) ($pagination['current_page'] ?? 1);
+                                        $totalPages = (int) ($pagination['total_pages'] ?? 1);
+                                        $start = max(1, $currentPage - 2);
+                                        $end = min($totalPages, $currentPage + 2);
+
+                                        for ($i = $start; $i <= $end; $i++):
+                                            ?>
+                                            <li class='page-item <?= $i === $currentPage ? 'active' : '' ?>'>
+                                                <a class='page-link'
+                                                   href='<?= $this->getBackendUrl('*/backend/price') ?>?page=<?= $i ?>&q=<?= urlencode($searchQuery) ?>'>
+                                                    <?= $i ?>
+                                                </a>
+                                            </li>
+                                        <?php endfor; ?>
+
+                                        <?php if (!empty($pagination['has_next'])): ?>
+                                            <li class='page-item'>
+                                                <a class='page-link'
+                                                   href='<?= $this->getBackendUrl('*/backend/price') ?>?page=<?= (int) ($pagination['current_page'] + 1) ?>&q=<?= urlencode($searchQuery) ?>'>
+                                                    <?= __('Next') ?>
+                                                </a>
+                                            </li>
+                                        <?php else: ?>
+                                            <li class='page-item disabled'>
+                                                <span class='page-link'><?= __('Next') ?></span>
+                                            </li>
+                                        <?php endif; ?>
+                                    </ul>
+                                </nav>
+                                <div class='text-center text-muted mt-2'>
+                                    <?= __('Showing %1 to %2 of %3 products',
+                                        [
+                                            (($pagination['current_page'] - 1) * $pagination['page_size']) + 1,
+                                            min($pagination['current_page'] * $pagination['page_size'], $pagination['total']),
+                                            $pagination['total']
+                                        ]
+                                    ) ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
