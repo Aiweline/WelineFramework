@@ -66,7 +66,7 @@ $bindingCounts = $binding_counts ?? [];
                                                 $websiteName = $website['name'] ?? __('站点') . ' ' . $websiteId;
                                                 $websiteDomain = $website['domain'] ?? $website['url'] ?? '-';
                                                 $boundCount = $bindingCounts[$websiteId] ?? 0;
-                                                $manageUrl = $this->getBackendUrl('seo/backend/websiteAccount/manage', ['website_id' => $websiteId]);
+                                                $manageUrl = $this->getBackendUrl('seo/backend/website-account/manage', ['website_id' => $websiteId]);
                                             ?>
                                             <tr>
                                                 <td>
