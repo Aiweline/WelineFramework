@@ -1059,11 +1059,16 @@ class Request extends CommandAbstract
         string $url,
         string $method = 'GET',
         array $headers = [],
-        string $body = '',
+        string|array $body = '',
         bool $verifyTls = false,
         string $cookieFile = '',
         bool $saveCookie = true
     ): array|false {
+        // 处理数组类型的 body，转换为 JSON 字符串
+        if (is_array($body)) {
+            $body = json_encode($body, JSON_UNESCAPED_UNICODE);
+        }
+
         try {
             $options = [
                 'timeout' => 60,

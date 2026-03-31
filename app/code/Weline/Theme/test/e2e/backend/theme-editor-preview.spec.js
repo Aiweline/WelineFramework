@@ -1,5 +1,4 @@
 // @weline-e2e-runtime wls
-// @weline-e2e-transport direct
 // @ts-check
 const {
   test,
@@ -62,5 +61,38 @@ test.describe('Theme editor iframe preview integration', () => {
       || url.includes('weline_preview_token=')
     ))).toBeTruthy();
     expect(failedThemeResponses).toEqual([]);
+  });
+
+  test('editor iframe homepage preview keeps selected theme layout and no orphan warnings (regression)', async ({ page }) => {
+    const activeTheme = getActiveTheme('frontend');
+    test.skip(!activeTheme, 'No active frontend theme found in runtime info.');
+
+    await loginAsAdmin(page, {
+      timeout: 60000,
+      settleMs: 1000,
+    });
+
+    await gotoBackend(page, `theme/backend/theme-editor/index?theme_id=${activeTheme.id}&page_type=homepage`, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+      settleMs: 2000,
+    });
+
+    const frame = page.frameLocator('#previewFrame');
+    await frame.locator('html').first().waitFor({
+      state: 'attached',
+      timeout: 60000,
+    });
+
+    await expect(frame.locator('[data-wslot="homepage-hero"]')).toHaveCount(1);
+    await expect(frame.locator('#motor-welcome-modal')).toHaveCount(1);
+    await expect(frame.locator('#orphan-widgets-warning')).toHaveCount(0);
+
+    const themeAssets = await frame.locator('link[href], script[src]').evaluateAll((nodes) => nodes
+      .map((node) => node.getAttribute('href') || node.getAttribute('src') || '')
+      .filter((url) => url.includes('/view/theme/') || url.includes('/layouts/')));
+
+    expect(themeAssets.length).toBeGreaterThan(0);
+    expect(themeAssets.some((url) => url.includes(`frontend_theme_id=${activeTheme.id}`))).toBeTruthy();
   });
 });

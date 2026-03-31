@@ -18,12 +18,11 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service\Component;
 
 use GuoLaiRen\PageBuilder\Model\Component;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Service\Theme\PageBuilderThemeComponentBridge;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Dto\ThemeComponentDefinition;
-use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\ThemeComponentCatalog;
 
 class SlotValidator
 {
@@ -664,24 +663,67 @@ class SlotValidator
             return [];
         }
         $area = strtolower($themeComponentArea) === 'backend' ? 'backend' : 'frontend';
-        $themeModel = ObjectManager::getInstance(WelineTheme::class);
-        $theme = clone $themeModel;
-        $theme->clearData()->clearQuery()->load($welineThemeId);
-        if (!$theme->getId()) {
-            return [];
-        }
 
-        $catalog = ObjectManager::getInstance(ThemeComponentCatalog::class);
-        $definitions = $catalog->getDefinitions($area, $theme);
+        /** @var VirtualThemeComponent $componentModel */
+        $componentModel = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+        $componentModel->clearData()->clearQuery();
+        $components = $componentModel
+            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $welineThemeId)
+            ->where(VirtualThemeComponent::schema_fields_AREA, $area)
+            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetch()
+            ->getItems();
         $rows = [];
-        foreach ($definitions as $def) {
-            if (!$def instanceof ThemeComponentDefinition) {
+        foreach ($components as $component) {
+            if (!$component instanceof VirtualThemeComponent) {
                 continue;
             }
-            if (strtolower($def->sourceType) !== 'virtual') {
-                continue;
+            $meta = $component->getMeta();
+            $positions = \is_array($meta['position'] ?? null) ? $meta['position'] : ['content'];
+            $position = [];
+            foreach ($positions as $p) {
+                if (\is_string($p) && \trim($p) !== '') {
+                    $position[] = $p;
+                }
             }
-            $rows[] = $this->themeDefinitionToSlotInfo($def);
+            if ($position === []) {
+                $position = ['content'];
+            }
+            $rows[] = $this->themeDefinitionToSlotInfo(new ThemeComponentDefinition(
+                module: 'GuoLaiRen_PageBuilder',
+                type: 'virtual_theme_component',
+                code: (string)$component->getComponentCode(),
+                name: (string)$component->getName(),
+                description: '',
+                area: $area,
+                sourceType: 'virtual',
+                category: (string)$component->getCategory(),
+                renderMode: \Weline\Theme\Dto\ThemeRenderable::MODE_TEMPLATE_CONTENT,
+                configSchema: [],
+                defaultConfig: $component->getDefaultConfig(),
+                meta: $meta,
+                params: [],
+                position: $position,
+                pageLayouts: \is_array($meta['page_layouts'] ?? null) ? $meta['page_layouts'] : ['*'],
+                slots: [],
+                slot: null,
+                exclusive: false,
+                compatible: true,
+                isContainer: false,
+                isAiGenerated: $component->isAiGenerated(),
+                icon: null,
+                templatePath: null,
+                templateContent: (string)$component->getTemplateContent(),
+                blockClass: null,
+                themeId: $welineThemeId,
+                themePath: null,
+                logicalKey: null,
+                layerKey: null,
+                componentId: (int)$component->getId(),
+                versionId: $component->getPublishedVersionId() ?: null,
+                sortOrder: (int)($meta['sort_order'] ?? 0),
+            ));
         }
         return $rows;
     }
