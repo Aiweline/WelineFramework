@@ -52,7 +52,14 @@ class View extends BaseController
         
         // 准备模板数据
         $this->assign('page', $pageData);
-        
+
+        // 准备 meta 数据（供 cms_page 布局的 {{meta.content}} 使用）
+        $this->assign('meta', [
+            'title' => $pageData['title'],
+            'content' => $pageData['content'],
+            'class' => '',
+        ]);
+
         // SEO数据
         $this->assign('title', $pageData['title']);
         $this->assign('meta_title', $pageData['title']);

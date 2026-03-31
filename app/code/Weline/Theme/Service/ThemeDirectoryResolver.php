@@ -14,6 +14,7 @@ class ThemeDirectoryResolver
 
     public function __construct(
         private readonly WelineTheme $welineTheme,
+        private readonly ?ThemeContextService $themeContextService = null,
     ) {
     }
 
@@ -287,6 +288,18 @@ class ThemeDirectoryResolver
         }
 
         $area = strtolower(trim((string)$area)) === 'backend' ? 'backend' : 'frontend';
+
+        if ($this->themeContextService) {
+            try {
+                $resolvedTheme = $this->themeContextService->resolveTheme($area);
+                if ($resolvedTheme && $resolvedTheme->getId()) {
+                    return $resolvedTheme;
+                }
+            } catch (\Throwable) {
+                // Ignore and fallback to active theme lookup.
+            }
+        }
+
         $activeTheme = clone $this->welineTheme;
         $activeTheme->clearData()->clearQuery();
         $activeTheme->getActiveTheme($area);

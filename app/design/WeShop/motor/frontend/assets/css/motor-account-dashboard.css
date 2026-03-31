@@ -905,6 +905,258 @@
     color: rgba(255, 255, 255, 0.6);
 }
 
+.motor-weshop-dashboard {
+    gap: 1.15rem;
+}
+
+.motor-weshop-hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    margin-top: 1rem;
+}
+
+.motor-weshop-hero-actions .motor-account-button {
+    min-height: 2.75rem;
+    padding: 0.7rem 1rem;
+    text-decoration: none;
+}
+
+.motor-weshop-quick-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+.motor-weshop-quick-link {
+    text-decoration: none;
+}
+
+.motor-weshop-discovery-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+.motor-weshop-product-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.motor-weshop-product-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(17, 17, 17, 0.07);
+    background: rgba(17, 17, 17, 0.02);
+    text-decoration: none;
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.dark .motor-weshop-product-item,
+[data-theme="motor"].dark .motor-weshop-product-item {
+    border-color: rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.motor-weshop-product-item:hover {
+    transform: translateY(-1px);
+    border-color: rgba(227, 24, 55, 0.28);
+    background: rgba(227, 24, 55, 0.04);
+}
+
+.motor-weshop-product-item__media {
+    width: 3.4rem;
+    height: 3.4rem;
+    border-radius: 0.95rem;
+    overflow: hidden;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(227, 24, 55, 0.15), rgba(227, 24, 55, 0.06));
+    color: var(--color-primary, #e31837);
+}
+
+.motor-weshop-product-item__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.motor-weshop-product-item__content {
+    min-width: 0;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.motor-weshop-product-item__content strong {
+    color: var(--color-text-primary, #1a1a1a);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.92rem;
+    font-weight: 700;
+    line-height: 1.4;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dark .motor-weshop-product-item__content strong,
+[data-theme="motor"].dark .motor-weshop-product-item__content strong {
+    color: var(--color-text-light, #f5f5f5);
+}
+
+.motor-weshop-product-item__content span {
+    color: var(--color-primary, #e31837);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.motor-weshop-empty {
+    padding: 1rem 1.1rem;
+    border-radius: 1rem;
+    border: 1px dashed rgba(17, 17, 17, 0.14);
+    background: rgba(17, 17, 17, 0.02);
+    color: var(--color-text-secondary, #3d3d3d);
+    font-size: 0.86rem;
+    line-height: 1.65;
+}
+
+.dark .motor-weshop-empty,
+[data-theme="motor"].dark .motor-weshop-empty {
+    border-color: rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.motor-weshop-recommend-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+.motor-weshop-recommend-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    padding: 0.65rem;
+    border-radius: 1rem;
+    border: 1px solid rgba(17, 17, 17, 0.07);
+    background: rgba(17, 17, 17, 0.02);
+    text-decoration: none;
+    transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.dark .motor-weshop-recommend-card,
+[data-theme="motor"].dark .motor-weshop-recommend-card {
+    border-color: rgba(255, 255, 255, 0.09);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.motor-weshop-recommend-card:hover {
+    transform: translateY(-1px);
+    border-color: rgba(227, 24, 55, 0.28);
+    background: rgba(227, 24, 55, 0.04);
+}
+
+.motor-weshop-recommend-card__media {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    border-radius: 0.9rem;
+    overflow: hidden;
+    background: linear-gradient(135deg, rgba(227, 24, 55, 0.15), rgba(227, 24, 55, 0.05));
+    color: var(--color-primary, #e31837);
+}
+
+.motor-weshop-recommend-card__media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.motor-weshop-recommend-card__name {
+    color: var(--color-text-primary, #1a1a1a);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.86rem;
+    font-weight: 700;
+    line-height: 1.5;
+    min-height: 2.6rem;
+}
+
+.dark .motor-weshop-recommend-card__name,
+[data-theme="motor"].dark .motor-weshop-recommend-card__name {
+    color: var(--color-text-light, #f5f5f5);
+}
+
+.motor-weshop-recommend-card__price {
+    color: var(--color-primary, #e31837);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 700;
+}
+
+.motor-weshop-order-table {
+    border: 1px solid rgba(17, 17, 17, 0.08);
+    border-radius: 1rem;
+    overflow: auto;
+}
+
+.dark .motor-weshop-order-table,
+[data-theme="motor"].dark .motor-weshop-order-table {
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.motor-weshop-order-table__head,
+.motor-weshop-order-table__row {
+    min-width: 640px;
+    display: grid;
+    grid-template-columns: 1.2fr 0.9fr 0.8fr 1fr;
+    gap: 0.7rem;
+    align-items: center;
+    padding: 0.8rem 0.95rem;
+}
+
+.motor-weshop-order-table__head {
+    background: rgba(17, 17, 17, 0.04);
+    color: var(--color-text-secondary, #3d3d3d);
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.dark .motor-weshop-order-table__head,
+[data-theme="motor"].dark .motor-weshop-order-table__head {
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(255, 255, 255, 0.65);
+}
+
+.motor-weshop-order-table__row {
+    border-top: 1px solid rgba(17, 17, 17, 0.08);
+    color: var(--color-text-primary, #1a1a1a);
+    font-size: 0.87rem;
+}
+
+.dark .motor-weshop-order-table__row,
+[data-theme="motor"].dark .motor-weshop-order-table__row {
+    border-top-color: rgba(255, 255, 255, 0.1);
+    color: var(--color-text-light, #f5f5f5);
+}
+
+.motor-weshop-order-table__order-id {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 0.94rem;
+    font-weight: 700;
+}
+
 @keyframes motorAccountSpin {
     to {
         transform: rotate(360deg);
@@ -922,6 +1174,10 @@
 
     .motor-account-hero {
         grid-template-columns: 1fr;
+    }
+
+    .motor-weshop-discovery-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -952,5 +1208,11 @@
 
     .motor-account-form__inline {
         flex-direction: column;
+    }
+
+    .motor-weshop-quick-grid,
+    .motor-weshop-discovery-grid,
+    .motor-weshop-recommend-grid {
+        grid-template-columns: 1fr;
     }
 }
