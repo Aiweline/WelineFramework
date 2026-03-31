@@ -44,7 +44,10 @@ class CheckoutServiceTest extends TestCase
                         'discount' => 5.0,
                     ],
                     'shipping:calculateShipping' => 12.5,
-                    'tax:calculateTax' => 5.63,
+                    'tax:calculateTaxBreakdown' => [
+                        'tax_amount' => 5.63,
+                        'chargeable_tax' => 5.63,
+                    ],
                     default => null,
                 };
             }
@@ -157,7 +160,10 @@ class CheckoutServiceTest extends TestCase
                         'discount' => 5.0,
                     ],
                     'shipping:calculateShipping' => 12.5,
-                    'tax:calculateTax' => 5.63,
+                    'tax:calculateTaxBreakdown' => [
+                        'tax_amount' => 5.63,
+                        'chargeable_tax' => 5.63,
+                    ],
                     'order:createOrder' => [
                         'order_id' => 321,
                     ],
@@ -195,7 +201,7 @@ class CheckoutServiceTest extends TestCase
 
         $taxCall = $queries[3];
         $this->assertSame('tax', $taxCall[0]);
-        $this->assertSame('calculateTax', $taxCall[1]);
+        $this->assertSame('calculateTaxBreakdown', $taxCall[1]);
         $this->assertSame(12.5, $taxCall[2]['shipping_amount']);
         $this->assertSame(5.0, $taxCall[2]['discount']);
 
@@ -389,7 +395,10 @@ class CheckoutServiceTest extends TestCase
                         'discount' => 0.0,
                     ],
                     'shipping:calculateShipping' => 15.0,
-                    'tax:calculateTax' => 7.6,
+                    'tax:calculateTaxBreakdown' => [
+                        'tax_amount' => 7.6,
+                        'chargeable_tax' => 7.6,
+                    ],
                     'order:createOrder' => [
                         'order_id' => 654,
                     ],
@@ -422,7 +431,7 @@ class CheckoutServiceTest extends TestCase
 
         $taxCall = $queries[3];
         $this->assertSame('tax', $taxCall[0]);
-        $this->assertSame('calculateTax', $taxCall[1]);
+        $this->assertSame('calculateTaxBreakdown', $taxCall[1]);
         $this->assertSame('GB', $taxCall[2]['country']);
         $this->assertSame('LDN', $taxCall[2]['region']);
 
@@ -460,5 +469,64 @@ class CheckoutServiceTest extends TestCase
         $this->assertSame('getCheckoutShippingMethods', $result['operation']);
         $this->assertSame(9, $result['params']['customer_id']);
         $this->assertSame('US', $result['params']['country']);
+    }
+
+    public function testPreviewCheckoutSummaryDoesNotDoubleAddIncludedTax(): void
+    {
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->never())->method('getRetryPaymentContext');
+
+        $queries = [];
+        $service = new class($orderService, $queries) extends CheckoutService {
+            public function __construct(
+                OrderService $orderService,
+                private array &$queries
+            ) {
+                parent::__construct($orderService);
+            }
+
+            protected function query(string $provider, string $operation, array $params = []): mixed
+            {
+                $this->queries[] = [$provider, $operation, $params];
+
+                return match ($provider . ':' . $operation) {
+                    'cart:getCartItems' => [
+                        [
+                            'product_id' => 10,
+                            'quantity' => 1,
+                            'price' => 110.0,
+                            'product' => ['sku' => 'SKU-10', 'name' => 'Travel Bag', 'weight' => 1.2],
+                        ],
+                    ],
+                    'cart:calculateTotals' => [
+                        'subtotal' => 110.0,
+                        'discount' => 0.0,
+                    ],
+                    'shipping:calculateShipping' => 11.0,
+                    'tax:calculateTaxBreakdown' => [
+                        'tax_amount' => 11.0,
+                        'chargeable_tax' => 0.0,
+                        'included_tax' => 11.0,
+                    ],
+                    default => null,
+                };
+            }
+        };
+
+        $summary = $service->previewCheckoutSummary(8, [
+            'shipping_address' => ['country_id' => 'DE', 'region' => 'BE'],
+            'shipping_method' => 'flat_rate',
+            'currency' => 'EUR',
+            'prices_include_tax' => true,
+            'shipping_includes_tax' => true,
+        ]);
+
+        $this->assertSame(110.0, $summary['subtotal']);
+        $this->assertSame(11.0, $summary['shipping']);
+        $this->assertSame(11.0, $summary['tax']);
+        $this->assertSame(121.0, $summary['grand_total']);
+        $this->assertSame('calculateTaxBreakdown', $queries[3][1]);
+        $this->assertTrue($queries[3][2]['context']['prices_include_tax']);
+        $this->assertTrue($queries[3][2]['context']['shipping_includes_tax']);
     }
 }
