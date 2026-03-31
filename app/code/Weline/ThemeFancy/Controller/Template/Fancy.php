@@ -15,14 +15,32 @@ use Weline\Framework\App\Controller\FrontendController;
 
 class Fancy extends FrontendController
 {
-    public function __construct()
+    private const TEMPLATE_DIR = 'templates/Template/Fancy/';
+
+    public function index(): string
     {
-        $this->getTemplate()->setFileExt('html');
+        $method = (string)$this->request->getParam('method', 'index.html');
+        $templateFile = $this->resolveTemplateFile($method);
+
+        if ($templateFile === '') {
+            $this->request->getResponse()->noRouter();
+            return '';
+        }
+
+        return (string)$this->fetchTemplateWithEvents($templateFile);
     }
 
-    public function index()
+    private function resolveTemplateFile(string $method): string
     {
-        $method = $this->request->getParam('method');
-        return $this->fetch($method);
+        $method = trim($method, '/');
+        if ($method === '') {
+            $method = 'index.html';
+        }
+
+        if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9-]*\.html$/', $method)) {
+            return '';
+        }
+
+        return self::TEMPLATE_DIR . $method;
     }
 }
