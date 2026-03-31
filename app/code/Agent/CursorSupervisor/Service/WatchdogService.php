@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Agent\CursorSupervisor\Service;
 
+use Agent\CursorBase\Service\TaskPoolService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * Watchdog 服务（监工/守护进程）
@@ -38,8 +40,16 @@ class WatchdogService
      */
     public function setCheckInterval(int $seconds): self
     {
-        $this->checkInterval = $seconds;
+        $this->checkInterval = max(1, $seconds);
         return $this;
+    }
+
+    /**
+     * 获取主循环等待毫秒数
+     */
+    public function getLoopDelayMilliseconds(): int
+    {
+        return $this->checkInterval * 1000;
     }
     
     /**
@@ -167,7 +177,7 @@ class WatchdogService
                 if (!$this->hasRunningPlans()) {
                     $this->log("⏸️ 无进行中的计划，等待计划启动...");
                     $this->log("   提示: 将 plan.md 中的状态改为 'running' 或执行 cursor:plan:start");
-                    sleep($this->checkInterval);
+                    SchedulerSystem::yieldDelay($this->getLoopDelayMilliseconds());
                     continue;
                 }
                 
@@ -187,7 +197,7 @@ class WatchdogService
                 $this->log("❌ 错误: " . $e->getMessage());
             }
             
-            sleep($this->checkInterval);
+            SchedulerSystem::yieldDelay($this->getLoopDelayMilliseconds());
         }
     }
     
