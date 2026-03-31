@@ -312,6 +312,16 @@
         </div>
     </div>
 
+    <!-- Frontend Toast: 替代原生 alert/confirm/prompt 弹窗 -->
+    <div class="toast-container position-fixed top-0 end-0 p-3" id="fontSubLetterToastContainer" style="z-index: 1080;">
+        <div id="fontSubLetterToast" class="toast align-items-center text-bg-primary border-0" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="d-flex">
+                <div class="toast-body" id="fontSubLetterToastBody"></div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="<?= __('关闭') ?>"></button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <!-- SweetAlert2 CSS -->
     <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
@@ -320,6 +330,30 @@
     <script>
         let currentRecordId = null;
         let selectedCharacters = new Set();
+
+        // DOM Toast（前端提示）
+        const toastEl = document.getElementById('fontSubLetterToast');
+        const toastBodyEl = document.getElementById('fontSubLetterToastBody');
+        function showToast(type, message, timeoutMs = 2500) {
+            if (!toastEl || !toastBodyEl || typeof bootstrap === 'undefined' || typeof bootstrap.Toast === 'undefined') {
+                console.log(message);
+                return;
+            }
+
+            const typeMap = {
+                success: 'success',
+                error: 'danger',
+                warning: 'warning',
+                info: 'info'
+            };
+            const theme = typeMap[type] || 'primary';
+
+            toastEl.className = 'toast align-items-center text-bg-' + theme + ' border-0';
+            toastBodyEl.textContent = message;
+
+            const toastInstance = new bootstrap.Toast(toastEl, { delay: timeoutMs });
+            toastInstance.show();
+        }
 
         // 上传区域事件
         document.getElementById('uploadArea').addEventListener('click', () => {
@@ -726,38 +760,58 @@
         clearBtn.innerHTML = '<i class="bi bi-trash"></i> 清理记住的字符';
         document.querySelector('.mb-4').appendChild(clearBtn);
 
+        const originalClearBtnHtml = clearBtn.innerHTML;
+        let clearConfirmPending = false;
+        let clearConfirmTimer = null;
+
         clearBtn.addEventListener('click', () => {
-            if (confirm('确定要清理记住的字符信息吗？')) {
-                fetch('<?= $this->getUrl("*/frontend/clear-selected") ?>', { method: 'POST' })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.code === 200) {
-                            if (typeof Swal !== 'undefined') {
-                                Swal.fire({
-                                    icon: 'success',
-                                    title: '<?= __('成功') ?>',
-                                    text: '<?= __('已清理') ?>',
-                                    timer: 2000,
-                                    showConfirmButton: false
-                                });
-                            } else {
-                                console.log('已清理');
-                            }
-                            location.reload();
-                        } else {
-                            if (typeof Swal !== 'undefined') {
-                                Swal.fire({
-                                    icon: 'error',
-                                    title: '<?= __('清理失败') ?>',
-                                    text: data.msg,
-                                    confirmButtonText: '<?= __('确定') ?>'
-                                });
-                            } else {
-                                console.error('清理失败: ' + data.msg);
-                            }
-                        }
-                    });
+            const confirmText = '<?= __('确定要清理记住的字符信息吗？') ?>';
+            const confirmAgainText = '<?= __('（再次点击确认）') ?>';
+            const clearBtnConfirmText = '<?= __('再次点击确认清理') ?>';
+            const clearBtnRestoreText = originalClearBtnHtml;
+
+            // 第一次点击：进入“待确认”状态（避免误触）
+            if (!clearConfirmPending) {
+                clearConfirmPending = true;
+
+                if (clearConfirmTimer) {
+                    clearTimeout(clearConfirmTimer);
+                    clearConfirmTimer = null;
+                }
+
+                clearBtn.innerHTML = '<i class="bi bi-trash"></i> ' + clearBtnConfirmText;
+                showToast('warning', confirmText + confirmAgainText, 5000);
+
+                clearConfirmTimer = setTimeout(() => {
+                    clearConfirmPending = false;
+                    clearConfirmTimer = null;
+                    clearBtn.innerHTML = clearBtnRestoreText;
+                }, 5000);
+                return;
             }
+
+            // 第二次点击：执行清理
+            clearConfirmPending = false;
+            if (clearConfirmTimer) {
+                clearTimeout(clearConfirmTimer);
+                clearConfirmTimer = null;
+            }
+            clearBtn.innerHTML = clearBtnRestoreText;
+
+            fetch('<?= $this->getUrl("*/frontend/clear-selected") ?>', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.code === 200) {
+                        showToast('success', '<?= __('已清理') ?>', 2000);
+                        location.reload();
+                        return;
+                    }
+
+                    showToast('error', data.msg || '<?= __('清理失败') ?>', 3000);
+                })
+                .catch(error => {
+                    showToast('error', '<?= __('清理失败') ?>: ' + error.message, 3000);
+                });
         });
 
         // 新增：加载记住的字符
