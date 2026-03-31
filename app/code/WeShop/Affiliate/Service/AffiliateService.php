@@ -138,7 +138,7 @@ class AffiliateService
         ];
     }
 
-    protected function getReferralBasePath(): string
+    public function getReferralBasePath(): string
     {
         return '/register';
     }
