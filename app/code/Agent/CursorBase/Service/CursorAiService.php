@@ -6,6 +6,7 @@ namespace Agent\CursorBase\Service;
 
 use Agent\CursorBase\Api\CursorAiInterface;
 use Agent\CursorBase\Helper\PlatformHelper;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * Cursor AI CLI 服务
@@ -342,7 +343,7 @@ class CursorAiService implements CursorAiInterface
                 return ['success' => false, 'response' => $response, 'error' => "超时 ({$timeout}s)"];
             }
 
-            usleep(30000); // 30ms
+            SchedulerSystem::yieldDelay(30); // 30ms
         }
 
         // 读取剩余

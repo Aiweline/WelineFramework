@@ -12,6 +12,7 @@ use Agent\CursorBase\Api\KeyboardSimulatorInterface;
 use Agent\CursorBase\Helper\PlatformHelper;
 use Agent\CursorBase\Helper\FileTemplateHelper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * 智能体调度器实现
@@ -29,9 +30,19 @@ class AgentDispatcher implements AgentDispatcherInterface
     private ?AgentLockInterface $lockManager = null;
     private ?KeyboardSimulatorInterface $keyboard = null;
 
-    public function __construct()
+    public function __construct(
+        ?CursorCliInterface $cursorCli = null,
+        ?SignalFlareInterface $signalFlare = null,
+        ?AgentLockInterface $lockManager = null,
+        ?KeyboardSimulatorInterface $keyboard = null,
+        ?string $agentBaseDir = null
+    )
     {
-        $this->agentBaseDir = BP . 'dev' . DIRECTORY_SEPARATOR . 'ai' . DIRECTORY_SEPARATOR . 'agents' . DIRECTORY_SEPARATOR;
+        $this->cursorCli = $cursorCli;
+        $this->signalFlare = $signalFlare;
+        $this->lockManager = $lockManager;
+        $this->keyboard = $keyboard;
+        $this->agentBaseDir = $agentBaseDir ?? (BP . 'dev' . DIRECTORY_SEPARATOR . 'ai' . DIRECTORY_SEPARATOR . 'agents' . DIRECTORY_SEPARATOR);
         PlatformHelper::ensureDirectoryExists($this->agentBaseDir);
     }
 
@@ -111,29 +122,38 @@ class AgentDispatcher implements AgentDispatcherInterface
         }
 
         // 1. 锁定 Agent
-        $this->getLockManager()->lock($agentId, $targetFile);
-
-        // 2. 准备 Agent 决策包 (mission.json)
-        $this->prepareMissionPackage($agentId, $task, $matchResult);
-
-        // 3. 确保文件存在
-        $this->ensureFileExists($targetFile, $task);
-
-        // 4. 注入 [SUPERVISOR_TASK] 信号弹
-        $injected = $this->getSignalFlare()->inject($targetFile, $agentId, $task);
-
-        if (!$injected) {
-            $this->getLockManager()->unlock($agentId);
+        if (!$this->getLockManager()->lock($agentId, $targetFile)) {
+            $this->log("Agent {$agentId} 锁定失败，跳过派发");
             return false;
         }
 
-        // 5. CLI 唤醒 Cursor 并定位
-        $this->getCursorCli()->wake($targetFile, 1);
+        try {
+            // 2. 准备 Agent 决策包 (mission.json)
+            $this->prepareMissionPackage($agentId, $task, $matchResult);
 
-        // 6. 自动触发 Cursor 执行
-        if ($this->autoTrigger) {
-            sleep(2);
-            $this->getKeyboard()->triggerCursorExecution();
+            // 3. 确保文件存在
+            $this->ensureFileExists($targetFile, $task);
+
+            // 4. 注入 [SUPERVISOR_TASK] 信号弹
+            $injected = $this->getSignalFlare()->inject($targetFile, $agentId, $task);
+
+            if (!$injected) {
+                $this->getLockManager()->unlock($agentId);
+                return false;
+            }
+
+            // 5. CLI 唤醒 Cursor 并定位
+            $this->getCursorCli()->wake($targetFile, 1);
+
+            // 6. 自动触发 Cursor 执行
+            if ($this->autoTrigger) {
+                SchedulerSystem::yieldDelay(2000);
+                $this->getKeyboard()->triggerCursorExecution();
+            }
+        } catch (\Throwable $throwable) {
+            $this->getLockManager()->unlock($agentId);
+            $this->log("派发异常: {$throwable->getMessage()}");
+            return false;
         }
 
         $this->log("已派发任务给 {$agentId}");
@@ -224,7 +244,7 @@ class AgentDispatcher implements AgentDispatcherInterface
         ];
 
         if ($status['has_mission']) {
-            $status['mission'] = json_decode(file_get_contents($missionFile), true);
+            $status['mission'] = $this->readJsonFile($missionFile);
         }
 
         if ($status['has_status']) {
@@ -274,7 +294,10 @@ class AgentDispatcher implements AgentDispatcherInterface
 
         $missionFile = $agentDir . 'mission.json';
         if (file_exists($missionFile)) {
-            $mission = json_decode(file_get_contents($missionFile), true);
+            $mission = $this->readJsonFile($missionFile);
+            if (!is_array($mission)) {
+                $mission = [];
+            }
             $mission['status'] = $status;
             $mission['last_update'] = $timestamp;
             file_put_contents($missionFile, json_encode($mission, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
@@ -299,6 +322,17 @@ class AgentDispatcher implements AgentDispatcherInterface
     private function getAgentDir(string $agentId): string
     {
         return $this->agentBaseDir . $agentId . DIRECTORY_SEPARATOR;
+    }
+
+    private function readJsonFile(string $filePath): ?array
+    {
+        $content = @file_get_contents($filePath);
+        if ($content === false || $content === '') {
+            return null;
+        }
+
+        $decoded = json_decode($content, true);
+        return is_array($decoded) ? $decoded : null;
     }
 
     /**
