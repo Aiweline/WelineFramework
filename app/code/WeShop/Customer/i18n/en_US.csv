@@ -1,4 +1,12 @@
 ﻿客户管理,客户管理
+客户不存在或已被删除,"Customer does not exist or has been deleted"
+客户不存在,"Customer not found"
+错误,错误
+客户信息已更新,"Customer information has been updated"
+成功,Success
+客户已禁用,客户已禁用
+客户已启用,客户已启用
+客户已删除,客户已删除
 "The login challenge token is missing.","The login challenge token is missing."
 "The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
 "Two-Factor Verification","Two-Factor Verification"
@@ -9,7 +17,8 @@
 忘记密码,忘记密码
 "Email is required.","Email is required."
 "Please enter a valid email address.","Please enter a valid email address."
-"If the email is registered, a reset link has been sent.","If the email is registered, a reset link has been sent."
+"The email is not registered.","The email is not registered."
+"A reset link has been sent to your email.","A reset link has been sent to your email."
 "Unable to create a password reset request right now.","Unable to create a password reset request right now."
 "The reset token is required.","The reset token is required."
 "Please enter a new password.","Please enter a new password."
@@ -38,6 +47,10 @@
 北京市朝阳区xxx街道xxx号,北京市朝阳区xxx街道xxx号
 "周一至周五 9:00-18:00","周一至周五 9:00-18:00"
 客户服务,客户服务
+"Customer 查询器不支持的操作：%{1}","Customer 查询器不支持的操作：%{1}"
+客户查询,客户查询
+提供客户基础信息查询能力,提供客户基础信息查询能力
+批量获取客户基础信息,批量获取客户基础信息
 "Storefront account security cards","Storefront account security cards"
 "Inject sign-in security modules into the storefront customer account center.","Inject sign-in security modules into the storefront customer account center."
 "Storefront account discovery cards","Storefront account discovery cards"
@@ -87,9 +100,67 @@
 账户,账户
 账户及心愿单,账户及心愿单
 "您好, 登录","您好, 登录"
+"店铺 > 客户管理","Store > Customer Management"
+系统配置,"System Configuration"
+店铺,Store
+客户,Customer
 总客户数,总客户数
 活跃客户,活跃客户
 非活跃客户,非活跃客户
 今日新增,今日新增
 客户列表,客户列表
-客户管理功能开发中...,客户管理功能开发中...
+管理店铺客户信息,"Manage store customer information"
+保存,Save
+新增客户,"Add Customer"
+关闭,Close
+ID,ID
+头像,Avatar
+姓名,Name
+邮箱,Email
+电话,Phone
+状态,Status
+注册时间,"Registered Time"
+操作,Actions
+活跃,Active
+禁用,Disable
+查看详情,"View Details"
+编辑客户,"Edit Customer"
+你确定要禁用该客户么？,"Are you sure you want to disable this customer?"
+你确定要启用该客户么？,"Are you sure you want to enable this customer?"
+启用,Enable
+你确定要删除该客户么？此操作不可恢复！,"Are you sure you want to delete this customer? This action cannot be undone!"
+删除,Delete
+请输入客户名称或邮箱回车搜索,"Enter customer name or email to search"
+"店铺 > 客户管理 > 客户详情","Store > Customer Management > Customer Details"
+客户详情,"Customer Details"
+该客户可能已被删除或不存在,"This customer may have been deleted or does not exist"
+返回客户列表,"Return to Customer List"
+账户状态,"Account Status"
+已禁用,Disabled
+客户ID,"Customer ID"
+更新时间,更新时间
+编辑资料,"Edit Profile"
+编辑客户资料,"Edit Customer Profile"
+禁用账户,禁用账户
+启用账户,启用账户
+删除账户,删除账户
+账户统计,"Account Statistics"
+订单总数,"Total Orders"
+消费金额,"Total Spending"
+收藏商品,"Wishlist Items"
+购物车商品,"Cart Items"
+订单历史,"Order History"
+地址管理,"Address Management"
+操作日志,"Activity Log"
+暂无订单记录,"No order records yet"
+该客户还没有完成任何订单,"This customer has not completed any orders yet"
+收货地址,"Shipping Addresses"
+新增地址,"Add Address"
+新增收货地址,"Add Shipping Address"
+暂无收货地址,"No shipping addresses yet"
+该客户还没有添加收货地址,"This customer has not added any shipping addresses yet"
+暂无操作记录,暂无操作记录
+该客户的操作日志将在此处显示,该客户的操作日志将在此处显示
+最近活动,"Recent Activity"
+暂无活动记录,"No activity records yet"
+该客户的最近活动将在此处显示,"This customer's recent activity will be displayed here"
