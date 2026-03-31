@@ -513,7 +513,8 @@ SQL;
                 in_array($baseType, ['decimal', 'numeric', 'float', 'double'], true) => 'DEFAULT 0',
                 $baseType === 'bool' || $baseType === 'boolean' => 'DEFAULT false',
                 $baseType === 'date' => "DEFAULT '1970-01-01'",
-                in_array($baseType, ['datetime', 'timestamp', 'timestamptz'], true) => "DEFAULT '1970-01-01 00:00:00'",
+                // 避免部分 PostgreSQL 环境对文本时间字面量触发时区解析异常（如 p00:p00）。
+                in_array($baseType, ['datetime', 'timestamp', 'timestamptz'], true) => 'DEFAULT CURRENT_TIMESTAMP',
                 default => "DEFAULT ''",
             };
         }
@@ -579,7 +580,7 @@ SQL;
                 return 'CURRENT_TIMESTAMP';
             }
             if (!is_string($d) || stripos($d, 'nextval') === false) {
-                $val = is_string($d) ? $d : (string) $d;
+                $val = is_string($d) ? $this->normalizePgStringDefaultLiteral($d) : (string) $d;
                 $maxLen = isset($col['length']) ? (int) $col['length'] : null;
                 if ($maxLen !== null && $maxLen > 0 && strlen($val) > $maxLen) {
                     $val = substr($val, 0, $maxLen);
@@ -599,6 +600,32 @@ SQL;
             $isDateLike => "'1970-01-01 00:00:00'",
             default => "''",
         };
+    }
+
+    /**
+     * PostgreSQL 字符串默认值可能是 `'v'::character varying(20)` 形式，
+     * 这里统一归一化为纯字符串内容，避免再次拼接时把类型注解当成值写回。
+     */
+    private function normalizePgStringDefaultLiteral(string $raw): string
+    {
+        $value = trim($raw);
+        if ($value === '') {
+            return '';
+        }
+        // 移除外层括号：('abc'::varchar)
+        while (str_starts_with($value, '(') && str_ends_with($value, ')') && strlen($value) >= 2) {
+            $value = trim(substr($value, 1, -1));
+        }
+        // 去掉 PostgreSQL 类型 cast 后缀：'abc'::character varying(20)
+        if (preg_match('/^\'((?:\'\'|[^\'])*)\'\s*::/i', $value, $m)) {
+            return str_replace("''", "'", $m[1]);
+        }
+        // 纯字符串：'abc'
+        if (preg_match('/^\'((?:\'\'|[^\'])*)\'$/', $value, $m)) {
+            return str_replace("''", "'", $m[1]);
+        }
+
+        return $value;
     }
 
     /**
