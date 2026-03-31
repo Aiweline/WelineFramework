@@ -1,0 +1,330 @@
+<?php
+/**
+ * 价格配置编辑页面
+ * @var \Weline\Framework\View\Template $this
+ */
+$product = $this->getData('product') ?? [];
+$priceConfig = $this->getData('price_config') ?? [];
+$productId = (int) ($this->getData('product_id') ?? 0);
+$priceConfigSaveUrl = $this->getData('priceConfigSaveUrl') ?? '';
+$priceConfigResetUrl = $this->getData('priceConfigResetUrl') ?? '';
+?>
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>价格配置编辑</lang>
+            </h4>
+
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                            <lang>系统配置</lang>
+                        </a></li>
+                    <li class='breadcrumb-item'>
+                        <a href="@backend-url('*/backend/price')">
+                            <lang>价格配置</lang>
+                        </a>
+                    </li>
+                    <li class='breadcrumb-item active'>
+                        <lang>编辑</lang>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<div class='row'>
+    <div class='col-12'>
+        <div class='card'>
+            <div class='card-body'>
+                <h4 class='card-title'>
+                    <lang>产品价格配置</lang>
+                </h4>
+                <p class='card-title-desc'>
+                    <lang>配置产品ID: %1</lang>
+                </p>
+
+                <form method='post' action='<?= $priceConfigSaveUrl ?>' id='price-config-form'>
+                    <input type='hidden' name='product_id' value='<?= $productId ?>'>
+
+                    <!-- 基础价格 -->
+                    <div class='row mb-3'>
+                        <div class='col-12'>
+                            <h5 class='border-bottom pb-2 mb-3'>
+                                <lang>基础价格</lang>
+                            </h5>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label for='price' class='form-label'>
+                                    <lang>原价 (Base Price)</lang>
+                                </label>
+                                <input type='number' step='0.01' min='0' class='form-control'
+                                       id='price' name='price'
+                                       value='<?= isset($priceConfig['price']) ? (float) $priceConfig['price'] : '' ?>'
+                                       placeholder='0.00'>
+                                <div class='form-text'>
+                                    <lang>产品的基础销售价格</lang>
+                                </div>
+                            </div>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label for='special_price' class='form-label'>
+                                    <lang>促销价格 (Special Price)</lang>
+                                </label>
+                                <input type='number' step='0.01' min='0' class='form-control'
+                                       id='special_price' name='special_price'
+                                       value='<?= isset($priceConfig['special_price']) && $priceConfig['special_price'] !== null ? (float) $priceConfig['special_price'] : '' ?>'
+                                       placeholder='0.00'>
+                                <div class='form-text'>
+                                    <lang>如果设置，将显示为促销价格</lang>
+                                </div>
+                            </div>
+                        </div>
+                        <div class='col-md-6'>
+                            <div class='mb-3'>
+                                <label for='sale_price' class='form-label'>
+                                    <lang>销售价格 (Sale Price)</lang>
+                                </label>
+                                <input type='number' step='0.01' min='0' class='form-control'
+                                       id='sale_price' name='sale_price'
+                                       value='<?= isset($priceConfig['sale_price']) && $priceConfig['sale_price'] !== null ? (float) $priceConfig['sale_price'] : '' ?>'
+                                       placeholder='0.00'>
+                                <div class='form-text'>
+                                    <lang>产品的实际销售价格</lang>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 阶梯价格 -->
+                    <div class='row mb-3'>
+                        <div class='col-12'>
+                            <h5 class='border-bottom pb-2 mb-3'>
+                                <lang>阶梯价格 (Tier Prices)</lang>
+                            </h5>
+                        </div>
+                        <div class='col-12'>
+                            <div class='alert alert-info'>
+                                <lang>根据购买数量设置不同价格，购买数量达到阈值时自动应用对应价格</lang>
+                            </div>
+                        </div>
+                        <div class='col-12'>
+                            <div id='tier-prices-container'>
+                                <?php
+                                $tierPrices = $priceConfig['tier_prices'] ?? [];
+                                if (!empty($tierPrices) && is_array($tierPrices)):
+                                    foreach ($tierPrices as $index => $tier):
+                                        ?>
+                                        <div class='row mb-2 tier-price-row' data-index='<?= $index ?>'>
+                                            <div class='col-md-4'>
+                                                <label class='form-label'>
+                                                    <lang>最小数量</lang>
+                                                </label>
+                                                <input type='number' min='1' class='form-control'
+                                                       name='tier_price_qty[]'
+                                                       value='<?= (int) ($tier['qty'] ?? 0) ?>'
+                                                       placeholder='<?= __('Min Qty') ?>'>
+                                            </div>
+                                            <div class='col-md-4'>
+                                                <label class='form-label'>
+                                                    <lang>价格</lang>
+                                                </label>
+                                                <input type='number' step='0.01' min='0' class='form-control'
+                                                       name='tier_price_value[]'
+                                                       value='<?= (float) ($tier['price'] ?? 0) ?>'
+                                                       placeholder='0.00'>
+                                            </div>
+                                            <div class='col-md-4 d-flex align-items-end'>
+                                                <button type='button'
+                                                        class='btn btn-danger btn-remove-tier'>
+                                                    <i class='bx bx-trash'></i>
+                                                    <lang>删除</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    <?php
+                                    endforeach;
+                                endif;
+                                ?>
+                            </div>
+                            <button type='button' class='btn btn-secondary mt-2' id='btn-add-tier'>
+                                <i class='bx bx-plus'></i>
+                                <lang>添加阶梯价格</lang>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 客户专属价格 -->
+                    <div class='row mb-3'>
+                        <div class='col-12'>
+                            <h5 class='border-bottom pb-2 mb-3'>
+                                <lang>客户专属价格 (Customer Prices)</lang>
+                            </h5>
+                        </div>
+                        <div class='col-12'>
+                            <div class='alert alert-info'>
+                                <lang>为特定客户设置专属价格，该客户登录后将看到专属价格</lang>
+                            </div>
+                        </div>
+                        <div class='col-12'>
+                            <div id='customer-prices-container'>
+                                <?php
+                                $customerPrices = $priceConfig['customer_prices'] ?? [];
+                                if (!empty($customerPrices) && is_array($customerPrices)):
+                                    foreach ($customerPrices as $index => $customerPrice):
+                                        ?>
+                                        <div class='row mb-2 customer-price-row' data-index='<?= $index ?>'>
+                                            <div class='col-md-4'>
+                                                <label class='form-label'>
+                                                    <lang>客户ID</lang>
+                                                </label>
+                                                <input type='number' min='1' class='form-control'
+                                                       name='customer_id[]'
+                                                       value='<?= (int) ($customerPrice['customer_id'] ?? 0) ?>'
+                                                       placeholder='<?= __('Customer ID') ?>'>
+                                            </div>
+                                            <div class='col-md-4'>
+                                                <label class='form-label'>
+                                                    <lang>价格</lang>
+                                                </label>
+                                                <input type='number' step='0.01' min='0' class='form-control'
+                                                       name='customer_price_value[]'
+                                                       value='<?= (float) ($customerPrice['price'] ?? 0) ?>'
+                                                       placeholder='0.00'>
+                                            </div>
+                                            <div class='col-md-4 d-flex align-items-end'>
+                                                <button type='button'
+                                                        class='btn btn-danger btn-remove-customer'>
+                                                    <i class='bx bx-trash'></i>
+                                                    <lang>删除</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    <?php
+                                    endforeach;
+                                endif;
+                                ?>
+                            </div>
+                            <button type='button' class='btn btn-secondary mt-2' id='btn-add-customer'>
+                                <i class='bx bx-plus'></i>
+                                <lang>添加客户价格</lang>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 提交按钮 -->
+                    <div class='row'>
+                        <div class='col-12'>
+                            <hr>
+                            <div class='d-flex gap-2'>
+                                <button type='submit' class='btn btn-primary'>
+                                    <i class='bx bx-save'></i>
+                                    <lang>保存配置</lang>
+                                </button>
+                                <a href='<?= $priceConfigResetUrl ?>?product_id=<?= $productId ?>'
+                                   id='price-config-reset-link'
+                                   class='btn btn-warning'>
+                                    <i class='bx bx-reset'></i>
+                                    <lang>重置为默认</lang>
+                                </a>
+                                <a href='<?= $this->getBackendUrl('*/backend/price') ?>'
+                                   class='btn btn-secondary'>
+                                    <i class='bx bx-arrow-back'></i>
+                                    <lang>返回列表</lang>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        'use strict';
+
+        var tierContainer = document.getElementById('tier-prices-container');
+        var customerContainer = document.getElementById('customer-prices-container');
+        var tierIndex = <?= isset($tierPrices) && is_array($tierPrices) ? count($tierPrices) : 0 ?>;
+        var customerIndex = <?= isset($customerPrices) && is_array($customerPrices) ? count($customerPrices) : 0 ?>;
+
+        // 重置配置：使用后端确认弹窗
+        var resetLink = document.getElementById('price-config-reset-link');
+        if (resetLink) {
+            resetLink.addEventListener('click', function (e) {
+                e.preventDefault();
+                var msg = <?= json_encode(__('Are you sure you want to reset price configuration?')) ?>;
+                if (typeof BackendConfirm === 'undefined') {
+                    window.location.href = resetLink.href;
+                    return;
+                }
+                BackendConfirm.show(msg, { type: 'warning' }).then(function (confirmed) {
+                    if (!confirmed) return;
+                    window.location.href = resetLink.href;
+                });
+            });
+        }
+
+        document.getElementById('btn-add-tier').addEventListener('click', function () {
+            var row = document.createElement('div');
+            row.className = 'row mb-2 tier-price-row';
+            row.dataset.index = tierIndex++;
+            row.innerHTML = '<div class="col-md-4">' +
+                '<label class="form-label"><?= __('Min Qty') ?></label>' +
+                '<input type="number" min="1" class="form-control" name="tier_price_qty[]" placeholder="<?= __('Min Qty') ?>">' +
+                '</div>' +
+                '<div class="col-md-4">' +
+                '<label class="form-label"><?= __('Price') ?></label>' +
+                '<input type="number" step="0.01" min="0" class="form-control" name="tier_price_value[]" placeholder="0.00">' +
+                '</div>' +
+                '<div class="col-md-4 d-flex align-items-end">' +
+                '<button type="button" class="btn btn-danger btn-remove-tier"><i class="bx bx-trash"></i> <?= __('Remove') ?></button>' +
+                '</div>';
+            tierContainer.appendChild(row);
+        });
+
+        tierContainer.addEventListener('click', function (e) {
+            if (e.target.closest('.btn-remove-tier')) {
+                e.target.closest('.tier-price-row').remove();
+            }
+        });
+
+        document.getElementById('btn-add-customer').addEventListener('click', function () {
+            var row = document.createElement('div');
+            row.className = 'row mb-2 customer-price-row';
+            row.dataset.index = customerIndex++;
+            row.innerHTML = '<div class="col-md-4">' +
+                '<label class="form-label"><?= __('Customer ID') ?></label>' +
+                '<input type="number" min="1" class="form-control" name="customer_id[]" placeholder="<?= __('Customer ID') ?>">' +
+                '</div>' +
+                '<div class="col-md-4">' +
+                '<label class="form-label"><?= __('Price') ?></label>' +
+                '<input type="number" step="0.01" min="0" class="form-control" name="customer_price_value[]" placeholder="0.00">' +
+                '</div>' +
+                '<div class="col-md-4 d-flex align-items-end">' +
+                '<button type="button" class="btn btn-danger btn-remove-customer"><i class="bx bx-trash"></i> <?= __('Remove') ?></button>' +
+                '</div>';
+            customerContainer.appendChild(row);
+        });
+
+        customerContainer.addEventListener('click', function (e) {
+            if (e.target.closest('.btn-remove-customer')) {
+                e.target.closest('.customer-price-row').remove();
+            }
+        });
+    })();
+</script>
