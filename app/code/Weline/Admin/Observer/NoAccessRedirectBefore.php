@@ -14,6 +14,7 @@ namespace Weline\Admin\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 
 class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterface
 {
@@ -34,6 +35,9 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
      */
     public function execute(Event &$event): void
     {
+        // WLS 下 Observer 可能复用旧实例，这里强制切到当前请求上下文。
+        $this->request = ObjectManager::getInstance(Request::class);
+
         $isBackend = false;
         try {
             $isBackend = $this->request->isBackend();
