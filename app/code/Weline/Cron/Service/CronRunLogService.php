@@ -215,7 +215,7 @@ final class CronRunLogService
             } else {
                 $idleWhenNotRunning = 0;
             }
-            \usleep(400000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(400000);
             $sse->maybeHeartbeat();
         }
         $sse->complete([

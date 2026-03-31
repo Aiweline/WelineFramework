@@ -147,7 +147,7 @@ class Process
                 if (@\unlink($path)) {
                     break;
                 }
-                \usleep(100000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(100000);
             }
 
             return;
@@ -158,7 +158,7 @@ class Process
                 if (@\unlink($path)) {
                     break;
                 }
-                \usleep(100000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(100000);
             }
 
             return;
