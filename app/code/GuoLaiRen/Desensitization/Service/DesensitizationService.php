@@ -22,6 +22,13 @@ class DesensitizationService
     private const CONFIG_MODULE = 'GuoLaiRen_Desensitization';
     private const CONFIG_AREA = 'backend';
 
+    /** WLS 下单 worker 内复用模型列表，避免 Rewrite 等页每次全表扫描放大慢请求与 e2e 抖动 */
+    private const AVAILABLE_MODELS_CACHE_TTL_SEC = 60.0;
+
+    private static ?array $availableModelsCache = null;
+
+    private static float $availableModelsCacheTime = 0.0;
+
     private DesensitizationRule $ruleModel;
     private DesensitizationLog $logModel;
     private array $config;
@@ -105,29 +112,21 @@ class DesensitizationService
         // 如果指定了规则类型，使用该类型的规则
         if (!empty($options['rule_type'])) {
             $rules = $this->ruleModel->reset()->getByType($options['rule_type'])->select()->fetch();
-            
+            if (!is_iterable($rules)) {
+                return $result;
+            }
             foreach ($rules as $rule) {
-                $result = preg_replace(
-                    $rule->getData('pattern'),
-                    $rule->getData('replacement'),
-                    $result
-                );
+                $result = $this->applyRuleRegex($result, $rule);
             }
         } else {
             // 使用所有激活的规则
             $rules = $this->ruleModel->reset()->getActiveRules()->select()->fetch();
-            
+            if (!is_iterable($rules)) {
+                return $result;
+            }
             foreach ($rules as $rule) {
                 try {
-                    $pattern = $rule->getData('pattern');
-                    $replacement = $rule->getData('replacement');
-                    
-                    // 检查是否是回调函数
-                    if (is_string($replacement) && preg_match('/^function\s*\(/', $replacement)) {
-                        $result = preg_replace_callback($pattern, eval('return ' . $replacement . ';'), $result);
-                    } else {
-                        $result = preg_replace($pattern, $replacement, $result);
-                    }
+                    $result = $this->applyRuleRegex($result, $rule);
                 } catch (\Exception $e) {
                     // 跳过无效的规则
                     Env::log('desensitization.log', "规则执行失败 - Rule ID: {$rule->getRuleId()}, Error: " . $e->getMessage(), 'ERROR');
@@ -247,15 +246,13 @@ class DesensitizationService
         }
 
         $results = [];
-        $delay = $this->config['batch']['delay'] ?? 0;
+        $delay = (float)($this->config['batch']['delay'] ?? 0);
+        if ($delay > 0) {
+            Env::log('desensitization.log', 'WLS上下文已禁用阻塞延迟批处理，忽略batch.delay配置。', 'WARNING');
+        }
 
         foreach ($contents as $key => $content) {
             $results[$key] = $this->desensitize($content, $method, $options);
-            
-            // 添加延迟
-            if ($delay > 0) {
-                usleep((int)($delay * 1000000));
-            }
         }
 
         return $results;
@@ -507,7 +504,7 @@ class DesensitizationService
             $modelCode = $options['model_code'] ?? $this->config['ai']['model_code'] ?? '';
             
             // 使用本模块的场景适配器
-            $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
+            $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\extends\Weline_Ai\Adapter\DesensitizationAdapter::class)->getCode();
             
             // 获取适配器参数配置
             $adapterParams = $this->getAdapterParams($adapterCode, 'desensitization');
@@ -667,6 +664,14 @@ class DesensitizationService
      */
     public function getAvailableModels(): array
     {
+        $now = microtime(true);
+        if (
+            self::$availableModelsCache !== null
+            && ($now - self::$availableModelsCacheTime) < self::AVAILABLE_MODELS_CACHE_TTL_SEC
+        ) {
+            return self::$availableModelsCache;
+        }
+
         try {
             /** @var AiModel $aiModel */
             $aiModel = ObjectManager::getInstance(AiModel::class);
@@ -740,7 +745,10 @@ class DesensitizationService
             
             // 调试日志
             Env::log('desensitization.log', "获取到 " . count($result) . " 个AI模型", 'INFO');
-            
+
+            self::$availableModelsCache = $result;
+            self::$availableModelsCacheTime = $now;
+
             return $result;
         } catch (\Exception $e) {
             Env::log('desensitization.log', "获取AI模型列表失败: " . $e->getMessage(), 'ERROR');
@@ -925,7 +933,7 @@ class DesensitizationService
             // 获取AI服务
             /** @var AiService $aiService */
             $aiService = ObjectManager::getInstance(AiService::class);
-            $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\Ai\Adapter\DesensitizationAdapter::class)->getCode();
+            $adapterCode = ObjectManager::getInstance(\GuoLaiRen\Desensitization\extends\Weline_Ai\Adapter\DesensitizationAdapter::class)->getCode();
             
             // 调用AI重写敏感词组
             Env::log('desensitization.log', "开始AI重写敏感词组，共 " . count($sensitivePhrases) . " 个词组", 'INFO');
@@ -1027,7 +1035,7 @@ class DesensitizationService
             $start = $pos['start'] ?? 0;
             $end = $pos['end'] ?? 0;
             
-            if (empty($originalPhrase) || $start >= $end || $start < 0 || $end > mb_strlen($result)) {
+            if (empty($originalPhrase) || $start >= $end || $start < 0 || $end > strlen($result)) {
                 continue;
             }
             
@@ -1035,8 +1043,9 @@ class DesensitizationService
             if (isset($rewrittenPhrases[$originalIndex])) {
                 $rewrittenPhrase = $rewrittenPhrases[$originalIndex];
                 // 替换敏感词组
-                $before = mb_substr($result, 0, $start);
-                $after = mb_substr($result, $end);
+                // preg_match(PREG_OFFSET_CAPTURE) 的偏移是字节偏移，必须使用字节级 substr
+                $before = substr($result, 0, $start);
+                $after = substr($result, $end);
                 $result = $before . $rewrittenPhrase . $after;
                 
                 Env::log('desensitization.log', "替换词组 [{$originalIndex}]: '{$originalPhrase}' => '{$rewrittenPhrase}'", 'DEBUG');
@@ -1047,6 +1056,55 @@ class DesensitizationService
         }
         
         return $result;
+    }
+
+    /**
+     * 规则替换（安全版，不执行动态PHP代码）
+     */
+    private function applyRuleRegex(string $content, mixed $rule): string
+    {
+        $pattern = (string)($rule->getData('pattern') ?? '');
+        $replacement = $rule->getData('replacement') ?? '';
+        if ($pattern === '') {
+            return $content;
+        }
+
+        // 历史兼容：保留命名策略，不允许执行函数字符串
+        if ($replacement === 'mask_chinese_name') {
+            $replaced = preg_replace_callback($pattern, [$this, 'maskChineseNameCallback'], $content);
+        } else {
+            if (is_string($replacement) && preg_match('/^function\s*\(/', trim($replacement))) {
+                $ruleId = method_exists($rule, 'getRuleId') ? (string)$rule->getRuleId() : 'unknown';
+                Env::log('desensitization.log', "检测到危险函数替换规则，已跳过 - Rule ID: {$ruleId}", 'WARNING');
+                return $content;
+            }
+            $replaced = preg_replace($pattern, (string)$replacement, $content);
+        }
+
+        if ($replaced === null) {
+            $ruleId = method_exists($rule, 'getRuleId') ? (string)$rule->getRuleId() : 'unknown';
+            Env::log('desensitization.log', "规则正则执行失败，已跳过 - Rule ID: {$ruleId}", 'ERROR');
+            return $content;
+        }
+
+        return $replaced;
+    }
+
+    /**
+     * 中文姓名脱敏：2字显示首字+*，3字及以上显示首字+若干*+尾字
+     */
+    private function maskChineseNameCallback(array $matches): string
+    {
+        $name = (string)($matches[0] ?? '');
+        $length = mb_strlen($name);
+        if ($length <= 1) {
+            return '*';
+        }
+        if ($length === 2) {
+            return mb_substr($name, 0, 1) . '*';
+        }
+
+        return mb_substr($name, 0, 1) . str_repeat('*', $length - 2) . mb_substr($name, -1, 1);
     }
 }
 
