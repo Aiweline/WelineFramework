@@ -25,6 +25,10 @@ class AttributeFilterService
      * @var array<string, mixed>
      */
     private array $optionCache = [];
+    /**
+     * @var array<string, string>
+     */
+    private array $entityColumnCache = [];
 
     public function __construct(
         private readonly EventsManager $eventsManager
@@ -255,7 +259,7 @@ class AttributeFilterService
     {
         try {
             /** @var EavEntity $entityModel */
-            $entityModel = ObjectManager::getInstance(EavEntity::class);
+            $entityModel = $this->freshModel(EavEntity::class);
             $entityModel->load('code', $entityCode);
 
             return $entityModel->getId() ? $entityModel : null;
@@ -287,44 +291,18 @@ class AttributeFilterService
             return $this->attributeCache[$cacheKey];
         }
 
-        /** @var EavAttribute $attributeModel */
-        $attributeModel = ObjectManager::getInstance(EavAttribute::class);
-        $attributeModel->reset()
-            ->where(EavAttribute::schema_fields_eav_entity_id, $entity->getId())
-            ->where(EavAttribute::schema_fields_is_enable, 1);
-
-        if ($setId !== null) {
-            $attributeModel->where(EavAttribute::schema_fields_set_id, $setId);
-        }
-
-        if ($filterableOnly) {
-            $attributeModel->where(EavAttribute::schema_fields_is_filterable, 1);
-        }
-
-        if ($searchableOnly) {
-            $attributeModel->where(EavAttribute::schema_fields_is_searchable, 1);
-        }
-
-        if ($attributeCodes !== []) {
-            $attributeModel->where(EavAttribute::schema_fields_code, $attributeCodes, 'in');
-        }
-
-        $attributeModel->order(EavAttribute::schema_fields_group_id)
-            ->order(EavAttribute::schema_fields_attribute_id);
-
-        $results = $attributeModel->select()->fetch();
+        $results = $this->queryEntityAttributes(
+            $entity,
+            $attributeCodes,
+            $filterableOnly,
+            $searchableOnly,
+            $setId
+        );
         $attributes = [];
 
         foreach ($results as $item) {
-            if ($item instanceof EavAttribute) {
-                $attributes[] = $item;
-                continue;
-            }
-
             if (is_array($item)) {
-                /** @var EavAttribute $attribute */
-                $attribute = ObjectManager::getInstance(EavAttribute::class);
-                $attribute->setData($item);
+                $attribute = $this->hydrateAttribute($item);
                 $attributes[] = $attribute;
             }
         }
@@ -343,21 +321,144 @@ class AttributeFilterService
             return $cached instanceof EavAttribute ? $cached : null;
         }
 
-        /** @var EavAttribute $attributeModel */
-        $attributeModel = ObjectManager::getInstance(EavAttribute::class);
-        $attributeModel->reset()
-            ->where(EavAttribute::schema_fields_eav_entity_id, $entity->getId())
-            ->where(EavAttribute::schema_fields_code, $attributeCode)
-            ->where(EavAttribute::schema_fields_is_enable, 1);
+        $row = $this->querySingleAttribute($entity, $attributeCode);
 
-        $attribute = $attributeModel->find()->fetch();
-
-        if ($attribute instanceof EavAttribute && $attribute->getId()) {
+        if (is_array($row) && $row !== []) {
+            $attribute = $this->hydrateAttribute($row);
             $this->attributeCache[$cacheKey] = $attribute;
             return $attribute;
         }
 
         return null;
+    }
+
+    /**
+     * Some legacy databases still use entity_id instead of eav_entity_id.
+     * Retry with legacy column when first query fails.
+     *
+     * @param array<int, string> $attributeCodes
+     * @return array<int, array<string, mixed>>
+     */
+    private function queryEntityAttributes(
+        EavEntity $entity,
+        array $attributeCodes,
+        bool $filterableOnly,
+        bool $searchableOnly,
+        ?int $setId
+    ): array {
+        $entityColumn = $this->resolveEntityColumn('list');
+
+        try {
+            return $this->buildEntityAttributesQuery(
+                $entity,
+                $attributeCodes,
+                $filterableOnly,
+                $searchableOnly,
+                $setId,
+                $entityColumn
+            )->select()->fetchArray();
+        } catch (\Throwable $throwable) {
+            $fallbackColumn = $entityColumn === 'entity_id'
+                ? EavAttribute::schema_fields_eav_entity_id
+                : 'entity_id';
+            try {
+                $result = $this->buildEntityAttributesQuery(
+                    $entity,
+                    $attributeCodes,
+                    $filterableOnly,
+                    $searchableOnly,
+                    $setId,
+                    $fallbackColumn
+                )->select()->fetchArray();
+                $this->entityColumnCache['list'] = $fallbackColumn;
+                return $result;
+            } catch (\Throwable) {
+                throw $throwable;
+            }
+        }
+    }
+
+    private function querySingleAttribute(EavEntity $entity, string $attributeCode): array
+    {
+        $entityColumn = $this->resolveEntityColumn('single');
+
+        try {
+            return $this->buildSingleAttributeQuery($entity, $attributeCode, $entityColumn)
+                ->find()
+                ->fetchArray();
+        } catch (\Throwable $throwable) {
+            $fallbackColumn = $entityColumn === 'entity_id'
+                ? EavAttribute::schema_fields_eav_entity_id
+                : 'entity_id';
+            try {
+                $result = $this->buildSingleAttributeQuery($entity, $attributeCode, $fallbackColumn)
+                    ->find()
+                    ->fetchArray();
+                $this->entityColumnCache['single'] = $fallbackColumn;
+                return $result;
+            } catch (\Throwable) {
+                throw $throwable;
+            }
+        }
+    }
+
+    /**
+     * @param array<int, string> $attributeCodes
+     */
+    private function buildEntityAttributesQuery(
+        EavEntity $entity,
+        array $attributeCodes,
+        bool $filterableOnly,
+        bool $searchableOnly,
+        ?int $setId,
+        string $entityColumn
+    ): EavAttribute {
+        /** @var EavAttribute $attributeModel */
+        $attributeModel = $this->freshModel(EavAttribute::class);
+        $attributeModel->fields('main_table.*')
+            ->where('main_table.' . $entityColumn, $entity->getId())
+            ->where('main_table.' . EavAttribute::schema_fields_is_enable, 1);
+
+        if ($setId !== null) {
+            $attributeModel->where('main_table.' . EavAttribute::schema_fields_set_id, $setId);
+        }
+
+        if ($filterableOnly) {
+            $attributeModel->where('main_table.' . EavAttribute::schema_fields_is_filterable, 1);
+        }
+
+        if ($searchableOnly) {
+            $attributeModel->where('main_table.' . EavAttribute::schema_fields_is_searchable, 1);
+        }
+
+        if ($attributeCodes !== []) {
+            $attributeModel->where('main_table.' . EavAttribute::schema_fields_code, $attributeCodes, 'in');
+        }
+
+        $attributeModel->order('main_table.' . EavAttribute::schema_fields_group_id)
+            ->order('main_table.' . EavAttribute::schema_fields_attribute_id);
+
+        return $attributeModel;
+    }
+
+    private function buildSingleAttributeQuery(
+        EavEntity $entity,
+        string $attributeCode,
+        string $entityColumn
+    ): EavAttribute {
+        /** @var EavAttribute $attributeModel */
+        $attributeModel = $this->freshModel(EavAttribute::class);
+        $attributeModel->fields('main_table.*')
+            ->where('main_table.' . $entityColumn, $entity->getId())
+            ->where('main_table.' . EavAttribute::schema_fields_code, $attributeCode)
+            ->where('main_table.' . EavAttribute::schema_fields_is_enable, 1);
+
+        return $attributeModel;
+    }
+
+    private function resolveEntityColumn(string $scope): string
+    {
+        return $this->entityColumnCache[$scope] ?? EavAttribute::schema_fields_eav_entity_id;
     }
 
     /**
@@ -369,7 +470,7 @@ class AttributeFilterService
         $result = [];
 
         foreach ($attributes as $attribute) {
-            if (!$attribute instanceof EavAttribute || !$attribute->getId()) {
+            if (!$attribute instanceof EavAttribute || $this->resolveAttributeId($attribute) <= 0) {
                 continue;
             }
 
@@ -395,7 +496,7 @@ class AttributeFilterService
         $result = [];
 
         foreach ($attributes as $attribute) {
-            if (!$attribute instanceof EavAttribute || !$attribute->getId()) {
+            if (!$attribute instanceof EavAttribute || $this->resolveAttributeId($attribute) <= 0) {
                 continue;
             }
 
@@ -421,6 +522,7 @@ class AttributeFilterService
      */
     private function mapAttribute(EavAttribute $attribute): array
     {
+        $attributeId = $this->resolveAttributeId($attribute);
         $typeCode = '';
         $typeElement = '';
         $isSwatch = false;
@@ -440,7 +542,7 @@ class AttributeFilterService
         }
 
         return [
-            'attribute_id' => (int) $attribute->getId(),
+            'attribute_id' => $attributeId,
             'code' => $attribute->getCode(),
             'name' => $attribute->getName(),
             'type_id' => $attribute->getTypeId(),
@@ -468,14 +570,15 @@ class AttributeFilterService
      */
     private function getAttributeValuesWithCounts(EavAttribute $attribute, array $entityIds): array
     {
-        if (!$attribute->getId() || $entityIds === []) {
+        $attributeId = $this->resolveAttributeId($attribute);
+        if ($attributeId <= 0 || $entityIds === []) {
             return ['values' => [], 'counts' => []];
         }
 
         $valueModel = $attribute->w_getValueModel();
         $valueModel->reset()
             ->fields(['value', 'COUNT(DISTINCT entity_id) as count'])
-            ->where('attribute_id', $attribute->getId())
+            ->where('attribute_id', $attributeId)
             ->where('entity_id', array_values(array_map('intval', $entityIds)), 'in')
             ->where('value', null, 'IS NOT NULL')
             ->where('value', '', '!=')
@@ -503,21 +606,22 @@ class AttributeFilterService
      */
     private function getAttributeOptions(EavAttribute $attribute): array
     {
-        if (!$attribute->getId()) {
+        $attributeId = $this->resolveAttributeId($attribute);
+        if ($attributeId <= 0) {
             return [];
         }
 
-        $cacheKey = 'options_' . $attribute->getId();
+        $cacheKey = 'options_' . $attributeId;
 
         if (isset($this->optionCache[$cacheKey])) {
             return $this->optionCache[$cacheKey];
         }
 
         /** @var Option $optionModel */
-        $optionModel = ObjectManager::getInstance(Option::class);
-        $optionModel->reset()
-            ->where(Option::schema_fields_attribute_id, $attribute->getId())
-            ->order(Option::schema_fields_option_id);
+        $optionModel = $this->freshModel(Option::class);
+        $optionModel->fields('main_table.*')
+            ->where('main_table.' . Option::schema_fields_attribute_id, $attributeId)
+            ->order('main_table.' . Option::schema_fields_option_id);
 
         $results = $optionModel->select()->fetchArray();
         $options = [];
@@ -553,14 +657,15 @@ class AttributeFilterService
         array $entityIds,
         array $values
     ): array {
-        if ($entityIds === [] || $values === []) {
+        $attributeId = $this->resolveAttributeId($attribute);
+        if ($attributeId <= 0 || $entityIds === [] || $values === []) {
             return [];
         }
 
         $valueModel = $attribute->w_getValueModel();
         $valueModel->reset()
             ->fields('DISTINCT entity_id')
-            ->where('attribute_id', $attribute->getId())
+            ->where('attribute_id', $attributeId)
             ->where('entity_id', array_values(array_map('intval', $entityIds)), 'in')
             ->where('value', array_values(array_map('strval', $values)), 'in');
 
@@ -577,7 +682,7 @@ class AttributeFilterService
 
         try {
             /** @var Group $groupModel */
-            $groupModel = ObjectManager::getInstance(Group::class);
+            $groupModel = $this->freshModel(Group::class);
             $groupModel->load($groupId);
 
             return $groupModel->getId() ? $groupModel : null;
@@ -586,9 +691,49 @@ class AttributeFilterService
         }
     }
 
+    /**
+     * WLS keeps ObjectManager singletons alive across requests, so queryable models
+     * must be cloned and reset before reuse to avoid leaking prior query state.
+     */
+    private function freshModel(string $class): object
+    {
+        $model = clone ObjectManager::getInstance($class);
+        if (method_exists($model, 'reset')) {
+            $model->reset();
+        }
+        if (method_exists($model, 'clearData')) {
+            $model->clearData();
+        }
+
+        return $model;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function hydrateAttribute(array $row): EavAttribute
+    {
+        /** @var EavAttribute $attribute */
+        $attribute = $this->freshModel(EavAttribute::class);
+        $attribute->setData($row);
+
+        return $attribute;
+    }
+
+    private function resolveAttributeId(EavAttribute $attribute): int
+    {
+        $attributeId = (int) ($attribute->getData(EavAttribute::schema_fields_attribute_id) ?? 0);
+        if ($attributeId > 0) {
+            return $attributeId;
+        }
+
+        return (int) $attribute->getId();
+    }
+
     public function clearCache(): void
     {
         $this->attributeCache = [];
         $this->optionCache = [];
+        $this->entityColumnCache = [];
     }
 }
