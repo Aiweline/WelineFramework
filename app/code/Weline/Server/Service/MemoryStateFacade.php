@@ -37,10 +37,8 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
     ) {
         $this->manager = $manager ?? new SharedStateServiceManager();
         $this->consumerCode = $this->resolveConsumerCode($config);
-        $this->runtime = $this->manager->acquire(ControlMessage::ROLE_MEMORY_SERVER, $this->consumerCode, [
-            'config' => $config,
-            'consumer_code' => $this->consumerCode,
-        ]);
+        $this->runtime = $this->manager->ensure(ControlMessage::ROLE_MEMORY_SERVER, $config, [], $this->consumerCode);
+        $this->runtime['consumer_code'] = $this->consumerCode;
         try {
             $serviceOptions = $this->buildServiceOptions($config);
             $host = (string) ($this->runtime['host'] ?? '127.0.0.1');
@@ -50,7 +48,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
             $this->cacheMemoryService = $cacheMemoryService ?? $this->createCacheMemoryService($this->sharedMemoryService);
             $this->stateClient = $stateClient ?? $this->createStateClient($host, $port, $serviceOptions);
         } catch (\Throwable $throwable) {
-            $this->rollbackAcquireOnInitializationFailure();
+            $this->cleanupInitializationFailure();
 
             throw $throwable;
         }
@@ -232,10 +230,6 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         if (isset($this->stateClient)) {
             $this->stateClient->disconnect();
         }
-        $this->manager->release(ControlMessage::ROLE_MEMORY_SERVER, $this->consumerCode, [
-            'runtime' => $this->runtime,
-            'consumer_code' => $this->consumerCode,
-        ]);
         $this->released = true;
     }
 
@@ -251,7 +245,7 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
             'pool_size' => (int) ($config['pool_size'] ?? 8),
             'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 1),
             'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.2),
-            'token_file_name' => (string) ($this->runtime['token_file_name'] ?? 'memory_server.token'),
+            'token_file_name' => (string) ($this->runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
         ];
     }
 
@@ -276,20 +270,12 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         return new SharedStateClient($host, $port, $options);
     }
 
-    private function rollbackAcquireOnInitializationFailure(): void
+    private function cleanupInitializationFailure(): void
     {
         try {
             if (isset($this->stateClient)) {
                 $this->stateClient->disconnect();
             }
-        } catch (\Throwable) {
-        }
-
-        try {
-            $this->manager->release(ControlMessage::ROLE_MEMORY_SERVER, $this->consumerCode, [
-                'runtime' => $this->runtime,
-                'consumer_code' => $this->consumerCode,
-            ]);
         } catch (\Throwable) {
         }
 
@@ -322,5 +308,16 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         $pid = \getmypid();
 
         return 'cli:' . ($pid !== false ? (string) $pid : 'unknown');
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array{host:string, port:int, token_file_name:string}
+     */
+    private function resolveConfiguredRuntime(array $config): array
+    {
+        $runtime = (new SharedStateRuntimeResolver())->resolve($config);
+
+        return $runtime['memory'];
     }
 }
