@@ -131,9 +131,12 @@ class Installed extends BackendController
 
             $moduleList = [];
             foreach ($modules as $module) {
+                if (is_object($module) && method_exists($module, 'getData')) {
+                    $module = $module->getData();
+                }
                 $moduleList[] = [
-                    'name' => $module['module_name'],
-                    'version' => $module['version'],
+                    'name' => $module['module_name'] ?? '',
+                    'version' => $module['version'] ?? '0.0.0',
                 ];
             }
 
@@ -152,7 +155,7 @@ class Installed extends BackendController
             );
 
             return $response->getBody()->getContents();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->jsonResponse(false, __('检查更新失败：') . $e->getMessage());
         }
     }
