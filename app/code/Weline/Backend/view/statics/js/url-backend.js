@@ -250,18 +250,79 @@
         return url;
     }
 
+    function splitPathAndSearch(inputPath) {
+        const raw = inputPath || '';
+        const qIndex = raw.indexOf('?');
+        if (qIndex >= 0) {
+            return {
+                pathname: raw.slice(0, qIndex) || '/',
+                search: raw.slice(qIndex)
+            };
+        }
+        return {
+            pathname: raw || '/',
+            search: ''
+        };
+    }
+
+    // 按当前路径结构重建 lang/currency，避免 inject_path 在后台路径中重复拼接 admin 段
+    function rebuildLocalizedPath(pathname, options = {}) {
+        const config = getConfig();
+        const langPattern = /^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i;
+        const currencyPattern = /^[A-Z]{3}$/;
+        const parts = (pathname || '/').split('/').filter(Boolean);
+
+        let cursor = 0;
+        let prefix = '';
+        if (parts[cursor] && !currencyPattern.test(parts[cursor]) && !langPattern.test(parts[cursor])) {
+            prefix = parts[cursor];
+            cursor += 1;
+        }
+
+        let currentCurrency = '';
+        if (parts[cursor] && currencyPattern.test(parts[cursor])) {
+            currentCurrency = parts[cursor].toUpperCase();
+            cursor += 1;
+        }
+
+        let currentLang = '';
+        if (parts[cursor] && langPattern.test(parts[cursor])) {
+            currentLang = parts[cursor];
+            cursor += 1;
+        }
+
+        const remain = parts.slice(cursor);
+        const targetCurrency = (options.currency || currentCurrency || getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || 'CNY').toUpperCase();
+        const targetLang = options.lang || currentLang || getCookie('WELINE_USER_LANG') || config.currentLang || 'zh_Hans_CN';
+
+        const out = [];
+        if (prefix) {
+            out.push(prefix);
+        }
+        if (targetCurrency) {
+            out.push(targetCurrency);
+        }
+        if (targetLang) {
+            out.push(targetLang);
+        }
+        if (remain.length) {
+            out.push(...remain);
+        }
+        return '/' + out.join('/');
+    }
+
     function buildUrlWithLang(path, lang) {
         const currentUrl = path || window.location.pathname + window.location.search;
-        const injectedPath = inject_path(currentUrl.split('?')[0], lang, 'lang');
-        const search = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
-        return injectedPath + (search ? '?' + search : '');
+        const parsed = splitPathAndSearch(currentUrl);
+        const localizedPath = rebuildLocalizedPath(parsed.pathname, { lang: lang });
+        return localizedPath + parsed.search;
     }
 
     function buildUrlWithCurrency(path, currency) {
         const currentUrl = path || window.location.pathname + window.location.search;
-        const injectedPath = inject_path(currentUrl.split('?')[0], currency, 'currency');
-        const search = currentUrl.includes('?') ? currentUrl.split('?')[1] : '';
-        return injectedPath + (search ? '?' + search : '');
+        const parsed = splitPathAndSearch(currentUrl);
+        const localizedPath = rebuildLocalizedPath(parsed.pathname, { currency: currency });
+        return localizedPath + parsed.search;
     }
 
     const config = getConfig();
@@ -309,12 +370,12 @@
 
     window.select_language = function (lang) {
         setCookie('WELINE_USER_LANG', lang, 7, { path: '/' + config.adminArea, domain: window.location.host });
-        window.location.href = inject_path(window.location.pathname, lang, 'lang') + window.location.search;
+        window.location.href = buildUrlWithLang(window.location.pathname + window.location.search, lang);
     };
 
     window.select_currency = function (currencyCode) {
         setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/', domain: window.location.host });
-        window.location.href = inject_path(window.location.pathname, currencyCode, 'currency') + window.location.search;
+        window.location.href = buildUrlWithCurrency(window.location.pathname + window.location.search, currencyCode);
     };
 
     window.app_path = app_path;
