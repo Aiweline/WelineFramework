@@ -31,32 +31,8 @@ class GiftCardService
 
     public function createGiftCard(array $giftCardData): GiftCard
     {
-        $customerId = (int) ($giftCardData['customer_id'] ?? 0);
-        if ($customerId <= 0) {
-            throw new \InvalidArgumentException((string) __('Customer ID is required.'));
-        }
-
-        $amount = (float) ($giftCardData['amount'] ?? 0);
-        if ($amount <= 0) {
-            throw new \InvalidArgumentException((string) __('Gift card amount must be greater than zero.'));
-        }
-
-        $now = date('Y-m-d H:i:s');
-
-        /** @var GiftCard $giftCard */
-        $giftCard = ObjectManager::getInstance(GiftCard::class);
-        $giftCard->clearData()
-            ->setData(GiftCard::schema_fields_CUSTOMER_ID, $customerId)
-            ->setData(GiftCard::schema_fields_CARD_NUMBER, $this->generateCardNumber())
-            ->setData(GiftCard::schema_fields_AMOUNT, $amount)
-            ->setData(GiftCard::schema_fields_BALANCE, (float) ($giftCardData['balance'] ?? $amount))
-            ->setData(GiftCard::schema_fields_STATUS, (string) ($giftCardData['status'] ?? self::STATUS_ACTIVE))
-            ->setData(GiftCard::schema_fields_EXPIRES_AT, (string) ($giftCardData['expires_at'] ?? '') ?: null)
-            ->setData(GiftCard::schema_fields_CREATED_AT, $now)
-            ->setData(GiftCard::schema_fields_UPDATED_AT, $now)
-            ->save();
-
-        return $giftCard;
+        // Keep create/save validation rules consistent to avoid invalid records.
+        return $this->saveGiftCard($giftCardData);
     }
 
     public function useGiftCard(string $cardNumber, float $amount, int $customerId = 0): bool
@@ -160,6 +136,21 @@ class GiftCardService
         $giftCard->load($giftCardId);
 
         return $giftCard->getId() ? $giftCard : null;
+    }
+
+    public function deleteGiftCard(int $giftCardId): bool
+    {
+        if ($giftCardId <= 0) {
+            throw new \InvalidArgumentException((string) __('Invalid gift card ID.'));
+        }
+
+        $giftCard = $this->getGiftCardRecord($giftCardId);
+        if (!$giftCard) {
+            throw new \InvalidArgumentException((string) __('Gift card does not exist.'));
+        }
+
+        $giftCard->delete();
+        return true;
     }
 
     /**
@@ -267,9 +258,8 @@ class GiftCardService
         $giftCard = ObjectManager::getInstance(GiftCard::class);
         if ($cardId > 0) {
             $giftCard->load($cardId);
-        }
-
-        if (!$giftCard->getId()) {
+        } else {
+            // 创建：必须清空单例残留。WLS 下 Model 常被复用，仅靠 getId() 判断会跳过 clear，导致误更新旧卡或保存异常。
             $giftCard->clearData();
         }
 
@@ -323,7 +313,7 @@ class GiftCardService
     protected function assertUniqueCardNumber(string $cardNumber, int $currentId = 0): void
     {
         /** @var GiftCard $existing */
-        $existing = ObjectManager::getInstance(GiftCard::class);
+        $existing = ObjectManager::make(GiftCard::class);
         $existing->load($cardNumber, GiftCard::schema_fields_CARD_NUMBER);
 
         if ($existing->getId() && (int) $existing->getId() !== $currentId) {
