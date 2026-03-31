@@ -104,8 +104,10 @@ class FpmRuntime implements RuntimeInterface
                 if (RequestLifecycleTrace::isEnabled()) {
                     RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
                 }
-                // 请求早期统一启动 Session（与 App::run 一致）
-                \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
+                // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie
+                if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
+                    \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
+                }
                 $routerStartBegin = microtime(true);
                 if (RequestLifecycleTrace::isEnabled()) {
                     RequestLifecycleTrace::pushCurrentParent('router_start');
