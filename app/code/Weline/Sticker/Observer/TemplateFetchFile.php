@@ -108,39 +108,25 @@ class TemplateFetchFile implements ObserverInterface
         }
 
         // 开发环境：检查源文件和Sticker源文件是否更新
+        // 优化：使用内容哈希代替 mtime，跨平台更可靠
         if (defined('DEV') && DEV) {
             $sourcePath = $this->getSourcePath($filename, $targetModule, $targetFile);
-            $needsRecompile = false;
-            
-            // 检查目标源文件是否更新
-            if ($sourcePath && file_exists($sourcePath)) {
-                $sourceMtime = filemtime($sourcePath);
-                $compiledMtime = file_exists($compiledPath) ? filemtime($compiledPath) : 0;
-                
-                if ($sourceMtime > $compiledMtime) {
-                    $needsRecompile = true;
-                }
-            }
-            
-            // 检查Sticker源文件是否更新
-            if (!$needsRecompile && !empty($fileStickers)) {
-                foreach ($fileStickers as $stickerInfo) {
-                    $stickerFile = $stickerInfo['sticker_file'] ?? '';
-                    if (!empty($stickerFile) && file_exists($stickerFile)) {
-                        $stickerMtime = filemtime($stickerFile);
-                        $compiledMtime = file_exists($compiledPath) ? filemtime($compiledPath) : 0;
-                        
-                        if ($stickerMtime > $compiledMtime) {
-                            $needsRecompile = true;
-                            break;
-                        }
+
+            // 优先使用 TemplateCacheManager 进行标准化检查
+            try {
+                $cacheManager = \Weline\Framework\View\TemplateCacheManager::getInstance();
+                $cachedFile = $cacheManager->getCachedFile($sourcePath, true);
+                if ($cachedFile !== null && is_file($cachedFile)) {
+                    // Cache hit - compiled file is up to date
+                } else {
+                    // Needs recompile via cache manager
+                    if ($sourcePath && file_exists($sourcePath)) {
+                        $this->compiler->compile($targetModule, $targetFile, $sourcePath, $type, $themeName);
                     }
                 }
-            }
-            
-            // 如果需要重新编译
-            if ($needsRecompile && $sourcePath && file_exists($sourcePath)) {
-                $this->compiler->compile($targetModule, $targetFile, $sourcePath, $type, $themeName);
+            } catch (\Throwable) {
+                // Fallback to content hash + mtime check
+                $this->checkAndRecompileInDev($sourcePath, $compiledPath, $fileStickers);
             }
         }
 
@@ -312,7 +298,7 @@ class TemplateFetchFile implements ObserverInterface
         $now = time();
 
         // 检查缓存（1秒有效期）
-        if (isset(self::$fileExistenceCache[$cacheKey]) && 
+        if (isset(self::$fileExistenceCache[$cacheKey]) &&
             isset(self::$fileExistenceCacheTime[$cacheKey]) &&
             ($now - self::$fileExistenceCacheTime[$cacheKey]) < 1) {
             return self::$fileExistenceCache[$cacheKey];
@@ -320,12 +306,62 @@ class TemplateFetchFile implements ObserverInterface
 
         // 检查文件
         $exists = file_exists($filePath);
-        
+
         // 更新缓存
         self::$fileExistenceCache[$cacheKey] = $exists;
         self::$fileExistenceCacheTime[$cacheKey] = $now;
 
         return $exists;
+    }
+
+    /**
+     * 开发环境检查并重新编译（mtime 回退方案）
+     *
+     * 当 TemplateCacheManager 不可用时使用。
+     * 比较源文件和 Sticker 文件的 mtime 与编译文件。
+     *
+     * @param string|null $sourcePath 源文件路径
+     * @param string $compiledPath 编译文件路径
+     * @param array $fileStickers Sticker 信息数组
+     */
+    private function checkAndRecompileInDev(?string $sourcePath, string $compiledPath, array $fileStickers): void
+    {
+        $needsRecompile = false;
+
+        // 检查目标源文件是否更新
+        if ($sourcePath && file_exists($sourcePath)) {
+            $sourceMtime = filemtime($sourcePath);
+            $compiledMtime = file_exists($compiledPath) ? filemtime($compiledPath) : 0;
+
+            if ($sourceMtime > $compiledMtime) {
+                $needsRecompile = true;
+            }
+        }
+
+        // 检查Sticker源文件是否更新
+        if (!$needsRecompile && !empty($fileStickers)) {
+            foreach ($fileStickers as $stickerInfo) {
+                $stickerFile = $stickerInfo['sticker_file'] ?? '';
+                if (!empty($stickerFile) && file_exists($stickerFile)) {
+                    $stickerMtime = filemtime($stickerFile);
+                    $compiledMtime = file_exists($compiledPath) ? filemtime($compiledPath) : 0;
+
+                    if ($stickerMtime > $compiledMtime) {
+                        $needsRecompile = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 如果需要重新编译
+        if ($needsRecompile && $sourcePath && file_exists($sourcePath)) {
+            $targetModule = $this->extractModuleFromPath($sourcePath);
+            $targetFile = $this->extractTargetFile($sourcePath, $targetModule ?? '');
+            if ($targetModule && $targetFile) {
+                $this->compiler->compile($targetModule, $targetFile, $sourcePath, 'module', null);
+            }
+        }
     }
 }
 
