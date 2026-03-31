@@ -21,6 +21,13 @@ $customerId = $isLoggedIn ? $session->getLoginID() : null;
 $urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
 $chatUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/chat');
 $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
+$requestPath = strtolower((string) ($this->request->getPathInfo() ?? ($_SERVER['REQUEST_URI'] ?? '')));
+$showGuestBindPrompt = !$isLoggedIn
+    && !str_contains($requestPath, 'customer/account/login')
+    && !str_contains($requestPath, 'customer/account/register')
+    && !str_contains($requestPath, 'customer/account/forgot-password')
+    && !str_contains($requestPath, 'customer/account/challenge')
+    && !str_contains($requestPath, 'customer/account/logout');
 ?>
 <!-- 客服服务组件 -->
 <link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)">
@@ -160,7 +167,8 @@ var customerServiceConfig = {
     chatUrl: '<?= htmlspecialchars($chatUrl) ?>',
     bindUrl: '<?= htmlspecialchars($bindUrl) ?>',
     customerId: <?= $customerId ? (int)$customerId : 'null' ?>,
-    isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>
+    isLoggedIn: <?= $isLoggedIn ? 'true' : 'false' ?>,
+    showGuestBindPrompt: <?= $showGuestBindPrompt ? 'true' : 'false' ?>
 };
 
 // 初始化客服组件（等待脚本加载完成）
@@ -177,9 +185,13 @@ function initCustomerServiceWidget() {
         CustomerServiceWidget.init(customerServiceConfig);
         
         // 检查是否需要显示绑定提示
-        <?php if (!$isLoggedIn): ?>
+        <?php if ($showGuestBindPrompt): ?>
         setTimeout(function() {
-            if (typeof CustomerServiceWidget !== 'undefined' && typeof CustomerServiceWidget.showBindPrompt === 'function') {
+            if (
+                typeof CustomerServiceWidget !== 'undefined'
+                && typeof CustomerServiceWidget.showBindPrompt === 'function'
+                && customerServiceConfig.showGuestBindPrompt
+            ) {
                 CustomerServiceWidget.showBindPrompt();
             }
         }, 5000); // 5秒后提示
