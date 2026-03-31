@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace WeShop\Catalog\Controller\Frontend\Category;
 
 use WeShop\Catalog\Service\CategoryService;
+use WeShop\Filters\Service\FilterService;
+use WeShop\Filters\Service\FilterUrlService;
 use WeShop\Frontend\Controller\BaseController;
+use WeShop\Product\Model\Product;
+use WeShop\Product\Model\ProductCategory;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -16,6 +20,7 @@ class View extends BaseController
 
     public function index(): string
     {
+        $this->request->addModule('WeShop_Catalog');
         $this->request->addModule('WeShop_Filters');
 
         /** @var CategoryService $categoryService */
@@ -54,10 +59,9 @@ class View extends BaseController
             $this->hydrateCategoryContext($categoryData);
         }
 
-        $categoryIds = $this->getAllDescendantCategoryIds($categoryService, (int) $category->getId());
-        if (!in_array((int) $category->getId(), $categoryIds, true)) {
-            $categoryIds[] = (int) $category->getId();
-        }
+        // Must match WeShop\Filters\Controller\Frontend\Ajax::getBrowseCategoryIds():
+        // browse + /filters/filter use descendant category tree, not current node only.
+        $categoryIds = $this->getBrowseCategoryIds((int) $category->getId());
 
         $filters = method_exists($this->request, 'getQuery') && is_array($this->request->getQuery())
             ? $this->collectBrowseFilters($this->request->getQuery())
@@ -76,6 +80,12 @@ class View extends BaseController
         $products = is_array($browse['items'] ?? null) ? $browse['items'] : [];
         $appliedFilters = is_array($browse['applied_filters'] ?? null) ? $browse['applied_filters'] : [];
         $facetFilters = is_array($browse['facets'] ?? null) ? $browse['facets'] : [];
+        if ($facetFilters === [] && $products !== []) {
+            $facetFilters = $this->loadFacetFiltersViaFilterService(
+                (int) $category->getId(),
+                $categoryIds
+            );
+        }
         $clearAllUrl = (string) ($browse['clear_all_url'] ?? $this->getUrl('catalog/category/view', ['id' => $category->getId()]));
         $filteredProductIds = array_values(array_filter(array_map(
             static fn (array $item): int => (int) ($item['product_id'] ?? $item['entity_id'] ?? 0),
@@ -119,28 +129,44 @@ class View extends BaseController
 
     private function buildBreadcrumbs(CategoryService $categoryService, array $categoryData): array
     {
-        $breadcrumbs = [];
+        $ancestors = [];
         $parentId = (int) ($categoryData['parent_id'] ?? 0);
-        $pathSegments = [];
+        $visited = [];
 
         while ($parentId > 0) {
+            if (isset($visited[$parentId])) {
+                break;
+            }
+            $visited[$parentId] = true;
+
             $parentCategory = $categoryService->getCategory($parentId);
             if (!$parentCategory || !$parentCategory->getId()) {
                 break;
             }
 
-            $handleValue = trim((string) ($parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_HANDLE) ?? ''), '/');
-            if ($handleValue !== '') {
-                $pathSegments[] = $handleValue;
-            }
-
-            array_unshift($breadcrumbs, [
+            $ancestors[] = [
                 'category_id' => $parentCategory->getId(),
                 'name' => $parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_NAME) ?? '',
-                'handle' => $handleValue,
-                'path' => implode('/', $pathSegments),
-            ]);
+                'handle' => trim((string) ($parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_HANDLE) ?? ''), '/'),
+                'parent_id' => (int) ($parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_PARENT_ID) ?? 0),
+            ];
             $parentId = (int) ($parentCategory->getData(\WeShop\Catalog\Model\Category::schema_fields_PARENT_ID) ?? 0);
+        }
+
+        $breadcrumbs = [];
+        $pathSegments = [];
+        foreach (array_reverse($ancestors) as $ancestor) {
+            $handle = (string) ($ancestor['handle'] ?? '');
+            if ($handle !== '') {
+                $pathSegments[] = $handle;
+            }
+
+            $breadcrumbs[] = [
+                'category_id' => (int) ($ancestor['category_id'] ?? 0),
+                'name' => (string) ($ancestor['name'] ?? ''),
+                'handle' => $handle,
+                'path' => implode('/', $pathSegments),
+            ];
         }
 
         return $breadcrumbs;
@@ -186,11 +212,29 @@ class View extends BaseController
     {
         $filters = [];
         foreach ($query as $key => $value) {
-            if (in_array($key, ['id', 'handle', 'page', 'page_size'], true)) {
+            if (in_array($key, ['id', 'handle', 'page', 'page_size', 'limit', 'sort', 'order', 'q'], true)) {
                 continue;
             }
 
             if ($value === null || $value === '') {
+                continue;
+            }
+
+            if (is_string($value) && str_contains($value, ',')) {
+                $parsed = array_values(array_filter(array_map('trim', explode(',', $value)), static fn (string $item): bool => $item !== ''));
+                if ($parsed === []) {
+                    continue;
+                }
+                $filters[$key] = $parsed;
+                continue;
+            }
+
+            if (is_array($value)) {
+                $parsed = array_values(array_filter(array_map(static fn (mixed $item): string => trim((string) $item), $value), static fn (string $item): bool => $item !== ''));
+                if ($parsed === []) {
+                    continue;
+                }
+                $filters[$key] = $parsed;
                 continue;
             }
 
@@ -200,18 +244,64 @@ class View extends BaseController
         return $filters;
     }
 
-    private function getAllDescendantCategoryIds(CategoryService $categoryService, int $parentId): array
+    /**
+     * @return array<int, int>
+     */
+    private function getBrowseCategoryIds(int $categoryId): array
     {
-        $ids = [$parentId];
-        foreach ($categoryService->getChildCategories($parentId) as $child) {
-            $childId = (int) ($child['category_id'] ?? 0);
-            if ($childId <= 0) {
-                continue;
-            }
-
-            $ids = array_merge($ids, $this->getAllDescendantCategoryIds($categoryService, $childId));
+        $categoryIds = w_query('catalog', 'getAllDescendantCategoryIds', ['category_id' => $categoryId]);
+        $categoryIds = is_array($categoryIds)
+            ? array_values(array_unique(array_filter(array_map('intval', $categoryIds))))
+            : [];
+        if (!in_array($categoryId, $categoryIds, true)) {
+            $categoryIds[] = $categoryId;
         }
 
-        return array_values(array_unique($ids));
+        return $categoryIds;
+    }
+
+    /**
+     * When search browse returns no facets but the category has visible products, build the same
+     * filter dimensions as the Filters sidebar (Motor / canonical filters.phtml rely on this shape).
+     *
+     * @param array<int, int> $categoryIds
+     * @return array<int, mixed>
+     */
+    private function loadFacetFiltersViaFilterService(int $categoryId, array $categoryIds): array
+    {
+        if ($categoryId <= 0 || $categoryIds === []) {
+            return [];
+        }
+
+        try {
+            /** @var ProductCategory $productCategory */
+            $productCategory = ObjectManager::getInstance(ProductCategory::class);
+            $productCategory->reset()
+                ->fields('main_table.' . ProductCategory::schema_fields_product_id)
+                ->where('main_table.' . ProductCategory::schema_fields_category_id, $categoryIds, 'in')
+                ->joinProduct()
+                ->where('product.' . Product::schema_fields_status, 1)
+                ->groupBy('main_table.' . ProductCategory::schema_fields_product_id);
+
+            $results = $productCategory->select()->fetchArray();
+            $productIds = array_values(array_filter(array_map(
+                static fn (array $row): int => (int) ($row[ProductCategory::schema_fields_product_id] ?? 0),
+                is_array($results) ? $results : []
+            )));
+
+            if ($productIds === []) {
+                return [];
+            }
+
+            /** @var FilterUrlService $urlService */
+            $urlService = ObjectManager::getInstance(FilterUrlService::class);
+            /** @var FilterService $filterService */
+            $filterService = ObjectManager::getInstance(FilterService::class);
+            $filterResult = $filterService->getFilterResult($categoryId, $productIds, $urlService->getFilterParams());
+
+            return $filterResult->getFilters();
+        } catch (\Throwable) {
+            return [];
+        }
     }
 }
