@@ -142,50 +142,35 @@
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 function deleteRecord(id) {
-    if (confirm('<?= __('确定要删除这条记录吗？') ?>')) {
+    if (typeof BackendConfirm === 'undefined' || typeof BackendConfirm.show !== 'function') {
+        BackendToast.error('<?= __('缺少确认组件，无法执行删除操作。') ?>');
+        return;
+    }
+
+    BackendConfirm.show('<?= __('确定要删除这条记录吗？') ?>', {
+        title: '<?= __('删除确认') ?>',
+        type: 'danger'
+    }).then(function(confirmed) {
+        if (!confirmed) {
+            return;
+        }
+
         var url = '<?= $this->getUrl("fontsubletter/backend/record/delete") ?>?id=' + id;
         var opts = { method: 'POST' };
+
         window.Weline.Api.request(url, opts)
         .then(function(res) {
             var data = (res && res.data) !== undefined ? res.data : res;
             if (data.code === 200) {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'success',
-                        title: '<?= __('成功') ?>',
-                        text: data.msg,
-                        timer: 2000,
-                        showConfirmButton: false
-                    }).then(() => location.reload());
-                } else {
-                    console.log(data.msg);
-                    location.reload();
-                }
+                BackendToast.success('<?= __('成功') ?>' + (data.msg ? (': ' + data.msg) : ''));
+                setTimeout(function() { location.reload(); }, 1000);
             } else {
-                if (typeof Swal !== 'undefined') {
-                    Swal.fire({
-                        icon: 'error',
-                        title: '<?= __('删除失败') ?>',
-                        text: data.msg,
-                        confirmButtonText: '<?= __('确定') ?>'
-                    });
-                } else {
-                    console.error('<?= __('删除失败') ?>: ' + data.msg);
-                }
+                BackendToast.error('<?= __('删除失败') ?>: ' + (data.msg || '<?= __('未知错误') ?>'));
             }
         })
-        .catch(error => {
-            if (typeof Swal !== 'undefined') {
-                Swal.fire({
-                    icon: 'error',
-                    title: '<?= __('删除失败') ?>',
-                    text: error.message,
-                    confirmButtonText: '<?= __('确定') ?>'
-                });
-            } else {
-                console.error('<?= __('删除失败') ?>: ' + error.message);
-            }
+        .catch(function(error) {
+            BackendToast.error('<?= __('删除失败') ?>: ' + (error && error.message ? error.message : ''));
         });
-    }
+    });
 }
 </script>
