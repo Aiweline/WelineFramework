@@ -1,4 +1,24 @@
 <?php
+$themeTemplate = null;
+try {
+    $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+    $theme = $themeContext->resolveTheme('frontend');
+    if ($theme && $theme->getId()) {
+        $candidate = rtrim((string)$theme->getPath(), '\\/') . DIRECTORY_SEPARATOR
+            . 'Weline' . DIRECTORY_SEPARATOR . 'Customer' . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR
+            . 'templates' . DIRECTORY_SEPARATOR . 'frontend' . DIRECTORY_SEPARATOR . 'account' . DIRECTORY_SEPARATOR
+            . 'sidebar' . DIRECTORY_SEPARATOR . 'side.phtml';
+        if (is_file($candidate) && realpath($candidate) !== __FILE__) {
+            $themeTemplate = $candidate;
+        }
+    }
+} catch (\Throwable) {
+}
+
+if ($themeTemplate) {
+    include $themeTemplate;
+    return;
+}
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Customer\Model\Customer $user */
 $avatar = $user->getAvatar();
@@ -7,31 +27,171 @@ $email = $user->getEmail();
 $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 ?>
 <!-- 侧边栏导航 -->
-<div class="sidebar-header">
-        <div class="sidebar-avatar">
+<div class="account-sidebar">
+    <header class="account-sidebar__header">
+        <div class="account-sidebar__avatar">
             <?php if ($avatar): ?>
-                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                <div class="avatar-fallback"><?= $avatarInitial ?></div>
+                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" class="account-sidebar__avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="account-sidebar__avatar-fallback"><?= $avatarInitial ?></div>
             <?php else: ?>
-                <div class="avatar-fallback"><?= $avatarInitial ?></div>
+                <div class="account-sidebar__avatar-fallback"><?= $avatarInitial ?></div>
             <?php endif; ?>
         </div>
-        <div class="sidebar-user-info">
-            <h4><?= htmlspecialchars($username) ?></h4>
+        <div class="account-sidebar__user-info">
+            <h4 class="account-sidebar__username"><?= htmlspecialchars($username) ?></h4>
             <?php if ($email): ?>
-                <p class="text-muted"><?= htmlspecialchars($email) ?></p>
+                <p class="account-sidebar__email"><?= htmlspecialchars($email) ?></p>
             <?php endif; ?>
         </div>
-    </div>
-    <nav class="nav flex-column">
-        <a class="nav-link active" href="#profile" data-section="profile">
-            <i class="ri-user-line"></i> <span><lang>个人资料</lang></span>
+    </header>
+    <nav class="account-sidebar__nav">
+        <a class="account-sidebar__nav-link account-sidebar__nav-link--active" href="#profile" data-section="profile">
+            <i class="ri-user-line"></i>
+            <span><lang>个人资料</lang></span>
         </a>
-        <a class="nav-link" href="#security" data-section="security">
-            <i class="ri-lock-line"></i> <span><lang>安全设置</lang></span>
+        <a class="account-sidebar__nav-link" href="#security" data-section="security">
+            <i class="ri-lock-line"></i>
+            <span><lang>安全设置</lang></span>
         </a>
         <hook>account.sidebar</hook>
-        <a class="nav-link logout-link" href="/customer/account/logout">
-            <i class="ri-logout-box-line"></i> <span><lang>退出登录</lang></span>
+        <a class="account-sidebar__nav-link account-sidebar__nav-link--logout" href="/customer/account/logout">
+            <i class="ri-logout-box-line"></i>
+            <span><lang>退出登录</lang></span>
         </a>
     </nav>
+</div>
+
+<style>
+.account-sidebar {
+    --as-border-radius: var(--border-radius-lg, 0.75rem);
+    --as-transition: var(--transition-base, 0.2s ease);
+}
+
+.account-sidebar__header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 1.5rem;
+    margin-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.account-sidebar__avatar {
+    position: relative;
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+}
+
+.account-sidebar__avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-primary);
+}
+
+.account-sidebar__avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    color: var(--color-text-dark);
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.account-sidebar__user-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.account-sidebar__username {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-sidebar__email {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+    margin: 0.25rem 0 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.account-sidebar__nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.account-sidebar__nav-link {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1rem;
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    text-decoration: none;
+    border-radius: var(--as-border-radius);
+    transition: var(--as-transition);
+}
+
+.account-sidebar__nav-link i {
+    font-size: 1.125rem;
+    color: var(--color-text-secondary);
+    transition: var(--as-transition);
+}
+
+.account-sidebar__nav-link:hover {
+    background: var(--color-bg-secondary);
+    color: var(--color-primary-dark);
+}
+
+.account-sidebar__nav-link:hover i {
+    color: var(--color-primary);
+}
+
+.account-sidebar__nav-link--active {
+    background: var(--color-primary);
+    color: var(--color-text-dark);
+    font-weight: 600;
+}
+
+.account-sidebar__nav-link--active i {
+    color: var(--color-text-dark);
+}
+
+.account-sidebar__nav-link--active:hover {
+    background: var(--color-primary-dark);
+    color: var(--color-text-dark);
+}
+
+.account-sidebar__nav-link--logout {
+    margin-top: 0.5rem;
+    color: var(--color-error);
+}
+
+.account-sidebar__nav-link--logout i {
+    color: var(--color-error);
+}
+
+.account-sidebar__nav-link--logout:hover {
+    background: var(--color-error-light);
+    color: var(--color-error);
+}
+
+.account-sidebar__nav-link--logout:hover i {
+    color: var(--color-error);
+}
+</style>
