@@ -4844,7 +4844,16 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (err) {
             console.error('<?= __("复制失败") ?>:', err);
             // 最后降级方案：提示用户手动复制
-            prompt(<?= json_encode(__("请手动复制以下内容"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>, text);
+            if (typeof BackendConfirm !== 'undefined' && typeof BackendConfirm.showInput === 'function') {
+                BackendConfirm.showInput(
+                    <?= json_encode(__("请手动复制以下内容"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+                    {defaultValue: text}
+                );
+            } else if (typeof BackendToast !== 'undefined') {
+                BackendToast.warning(
+                    <?= json_encode(__("请手动复制以下内容"), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?> + ': ' + text
+                );
+            }
         } finally {
             document.body.removeChild(textArea);
         }

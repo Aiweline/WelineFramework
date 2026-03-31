@@ -119,6 +119,10 @@ class LayoutOwnerResolver
         
         // 虚拟页面（id=0）处理：直接使用默认布局配置，不访问数据库
         if ($layoutOwnerPageId === 0) {
+            $virtualLayout = $page->getData('virtual_layout_config');
+            if (\is_array($virtualLayout) && $virtualLayout !== []) {
+                return $virtualLayout;
+            }
             $layoutConfig = [];
             if ($pageType) {
                 $defaultConfig = $this->getDefaultLayoutConfigForPageType($styleCode, $pageType);

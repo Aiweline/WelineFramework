@@ -14,6 +14,9 @@ use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Page\LocalDescription;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Model\WebsiteUser;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\LayoutService;
 use GuoLaiRen\PageBuilder\Service\LayoutAssembler;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
@@ -826,6 +829,51 @@ class Page extends BackendController
         }
     }
 
+    #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit', '虚拟编辑页面', 'mdi mdi-pencil', '虚拟编辑页面', 'GuoLaiRen_PageBuilder::page_builder')]
+    public function getVirtualEdit()
+    {
+        Style::forceScan();
+
+        $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
+        if ($publicId === '' || $requestedPageType === '') {
+            MessageManager::error(__('参数无效'));
+            $this->redirect('*/backend/ai-site-agent/index');
+            return;
+        }
+
+        $context = $this->resolveVirtualEditorContext($publicId, $requestedPageType);
+        if ($context === null) {
+            MessageManager::error(__('会话不存在或无访问权限'));
+            $this->redirect('*/backend/ai-site-agent/index');
+            return;
+        }
+
+        $urls = $this->getAiSiteVisualUrlService()->resolveVirtualUrls(
+            $publicId,
+            $context['page_type'],
+            (int)$context['virtual_theme_id']
+        );
+
+        $this->assign('page_title', __('虚拟可视化编辑'));
+        $this->assign('breadcrumb_parent', __('AI建站工作区'));
+        $this->assign('breadcrumb_current', (string)($context['virtual_page']['title'] ?? __('虚拟可视化编辑')));
+        $this->assign('page', $context['page']);
+        $this->assign('visual_config_page_id', 0);
+        $this->assign('visual_config_handle', (string)($context['virtual_page']['handle'] ?? ''));
+        $this->assign('visual_config_weline_theme_id', (int)$context['virtual_theme_id']);
+        $this->assign('visual_is_virtual_mode', true);
+        $this->assign('visual_public_id', $publicId);
+        $this->assign('visual_page_type', $context['page_type']);
+        $this->assign('virtual_pages_by_type', $context['virtual_pages_by_type']);
+        $this->assign('visual_style_code', (string)($context['virtual_page']['style_code'] ?? 'default'));
+        $this->assign('visual_preview_url', $urls['visual_preview_url']);
+        $this->assign('visual_edit_url', $urls['visual_edit_url']);
+        $this->assign('style_code', (string)($context['virtual_page']['style_code'] ?? 'default'));
+
+        return $this->fetch('virtual_edit');
+    }
+
     #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_edit', '编辑页面', 'mdi mdi-pencil', '编辑页面', 'GuoLaiRen_PageBuilder::page_builder')]
     public function getEdit()
     {
@@ -1092,6 +1140,10 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             }
 
             $pageId = (int)($data['page_id'] ?? 0);
+            if ($pageId <= 0 && !empty($data['public_id']) && !empty($data['page_type'])) {
+                return $this->autoSaveVirtualSeo($data);
+            }
+
             if ($pageId <= 0) {
                 return $this->fetchJson([
                     'success' => false,
@@ -2351,6 +2403,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             $styleCode = $this->request->getGet('style_code');
             $pageId = (int)$this->request->getGet('page_id');
             $locale = $this->request->getGet('locale');
+            $publicId = \trim((string)$this->request->getGet('public_id', ''));
+            $pageType = \trim((string)$this->request->getGet('page_type', ''));
             
             if (empty($styleCode)) {
                 return $this->fetchJson([
@@ -4964,5 +5018,291 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
         }
         
         return $slug;
+    }
+
+    /**
+     * @return array{
+     *   session:mixed,
+     *   scope:array<string,mixed>,
+     *   page:PageModel,
+     *   page_type:string,
+     *   virtual_theme_id:int,
+     *   virtual_page:array<string,mixed>,
+     *   virtual_pages_by_type:array<string,array<string,mixed>>,
+     *   layout:array<string,mixed>,
+     *   locale:string,
+     *   style_code:string
+     * }|null
+     */
+    private function resolveVirtualEditorContext(string $publicId, string $requestedPageType): ?array
+    {
+        $publicId = \trim($publicId);
+        $requestedPageType = \trim($requestedPageType);
+        $adminId = (int)$this->getLoginUserId();
+        if ($publicId === '' || $requestedPageType === '' || $adminId <= 0) {
+            return null;
+        }
+
+        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $requestedPageType);
+        if ($context === null) {
+            return null;
+        }
+
+        $scopeService = $this->getScopeCompatibilityService();
+        $scope = $scopeService->normalizeScope($context['scope']);
+        $virtualPages = $scopeService->buildVirtualPagesByType(
+            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
+            $scope
+        );
+        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
+        if ($pageType === '' || !isset($virtualPages[$pageType])) {
+            return null;
+        }
+
+        $virtualThemeId = (int)$context['virtual_theme_id'];
+        $virtualPage = $virtualPages[$pageType];
+        $styleCode = \trim((string)($virtualPage['style_code'] ?? 'default'));
+        $styleCode = $styleCode !== '' ? $styleCode : 'default';
+        $locale = \trim((string)($virtualPage['locale'] ?? ''));
+        $locale = $locale !== '' ? $locale : 'en_US';
+        $layout = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
+
+        return [
+            'session' => $context['session'],
+            'scope' => $scope,
+            'page' => $this->buildVirtualEditorPage(
+                $publicId,
+                $scope,
+                $pageType,
+                $virtualThemeId,
+                $virtualPages,
+                $virtualPage,
+                $layout,
+                $styleCode,
+                $locale
+            ),
+            'page_type' => $pageType,
+            'virtual_theme_id' => $virtualThemeId,
+            'virtual_page' => $virtualPage,
+            'virtual_pages_by_type' => $virtualPages,
+            'layout' => $layout,
+            'locale' => $locale,
+            'style_code' => $styleCode,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $scope
+     * @param array<string,array<string,mixed>> $virtualPagesByType
+     * @param array<string,mixed> $virtualPage
+     * @param array<string,mixed> $layout
+     */
+    private function buildVirtualEditorPage(
+        string $publicId,
+        array $scope,
+        string $pageType,
+        int $virtualThemeId,
+        array $virtualPagesByType,
+        array $virtualPage,
+        array $layout,
+        string $styleCode,
+        string $locale
+    ): PageModel {
+        /** @var PageModel $page */
+        $page = ObjectManager::make(PageModel::class);
+        $page->setData([
+            PageModel::schema_fields_ID => 0,
+            PageModel::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
+            PageModel::schema_fields_PARENT_ID => $pageType === PageModel::TYPE_HOME ? 0 : 1,
+            PageModel::schema_fields_LAYOUT_PAGE_ID => 0,
+            PageModel::schema_fields_STATUS => PageModel::STATUS_DRAFT,
+            PageModel::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
+            PageModel::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
+            PageModel::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
+            PageModel::schema_fields_STYLE => $styleCode,
+            PageModel::schema_fields_TYPE => $pageType,
+            PageModel::schema_fields_CONTENT => '',
+            PageModel::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
+            PageModel::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
+            PageModel::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
+            PageModel::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
+            PageModel::schema_fields_LOCALES => \json_encode([$locale], JSON_UNESCAPED_UNICODE),
+            PageModel::schema_fields_DEFAULT_LOCALE => $locale,
+            PageModel::schema_fields_STYLE_SETTING => \json_encode([
+                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
+            ], JSON_UNESCAPED_UNICODE),
+            PageModel::schema_fields_LAYOUT_CONFIG => \json_encode($layout, JSON_UNESCAPED_UNICODE),
+        ]);
+        $page->setData('virtual_public_id', $publicId);
+        $page->setData('virtual_page_type', $pageType);
+        $page->setData('virtual_theme_id', $virtualThemeId);
+        $page->setData('virtual_layout_config', $layout);
+        $page->setData('virtual_pages_by_type', $virtualPagesByType);
+
+        return $page;
+    }
+
+        #[\Weline\Framework\Acl\Acl('GuoLaiRen_PageBuilder::page_builder_get_style_config', '虚拟样式配置', '', '获取虚拟样式配置', 'GuoLaiRen_PageBuilder::page_builder')]
+    public function getVirtualStyleConfig()
+    {
+        try {
+            $styleCode = (string)$this->request->getGet('style_code', '');
+            $publicId = \trim((string)$this->request->getGet('public_id', ''));
+            $pageType = \trim((string)$this->request->getGet('page_type', ''));
+            $locale = (string)$this->request->getGet('locale', '');
+
+            if ($styleCode === '') {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('缺少样式代码'),
+                ]);
+            }
+
+            $context = $this->resolveVirtualEditorContext($publicId, $pageType);
+            if ($context === null) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('会话不存在或无访问权限'),
+                ]);
+            }
+
+            Style::forceScan();
+            $styleModel = clone $this->styleModel;
+            $styleModel->clear()->where(Style::schema_fields_CODE, $styleCode)->find()->fetch();
+            if (!$styleModel->getId()) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('样式不存在'),
+                ]);
+            }
+
+            $configGroups = $styleModel->getConfigGroups();
+            $virtualPage = $context['virtual_page'];
+            $pageSettings = [];
+            $styleSettings = \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [];
+            foreach ($styleSettings as $key => $value) {
+                if (!\is_array($value)) {
+                    $pageSettings[$key] = $value;
+                }
+            }
+
+            if ($pageSettings !== []) {
+                foreach ($configGroups as &$fileGroup) {
+                    if (!isset($fileGroup['groups']) || !\is_array($fileGroup['groups'])) {
+                        continue;
+                    }
+                    foreach ($fileGroup['groups'] as &$group) {
+                        if (!isset($group['configs']) || !\is_array($group['configs'])) {
+                            continue;
+                        }
+                        foreach ($group['configs'] as $configKey => &$config) {
+                            if (!\array_key_exists($configKey, $pageSettings)) {
+                                continue;
+                            }
+                            $savedValue = $pageSettings[$configKey];
+                            if (($config['type'] ?? '') === 'select' && !empty($config['options']) && !isset($config['options'][$savedValue])) {
+                                $config['value'] = $config['default'] ?? '';
+                            } else {
+                                $config['value'] = $savedValue;
+                            }
+                        }
+                        unset($config);
+                    }
+                    unset($group);
+                }
+                unset($fileGroup);
+            }
+
+            $resolvedLocale = \trim($locale) !== '' ? \trim($locale) : (string)$context['locale'];
+
+            return $this->fetchJson([
+                'success' => true,
+                'data' => $configGroups,
+                'style_info' => [
+                    'code' => (string)$styleModel->getData(Style::schema_fields_CODE),
+                    'name' => (string)$styleModel->getData(Style::schema_fields_NAME),
+                ],
+                'debug' => [
+                    'page_id' => 0,
+                    'public_id' => $publicId,
+                    'page_type' => $context['page_type'],
+                    'style_code' => $styleCode,
+                    'locale' => $resolvedLocale,
+                    'default_locale' => (string)$context['locale'],
+                    'is_default_locale' => $resolvedLocale === (string)$context['locale'],
+                    'page_settings' => $pageSettings,
+                    'main_settings' => $pageSettings,
+                    'has_locale_override' => false,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
+        }
+    }
+    /**
+     * @param array<string,mixed> $data
+     */
+    private function autoSaveVirtualSeo(array $data)
+    {
+        $context = $this->resolveVirtualEditorContext(
+            (string)($data['public_id'] ?? ''),
+            (string)($data['page_type'] ?? '')
+        );
+        if ($context === null) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('会话不存在或无访问权限'),
+            ]);
+        }
+
+        $resolvedLocale = \trim((string)($data['locale'] ?? ''));
+        if ($resolvedLocale === '') {
+            $resolvedLocale = (string)$context['locale'];
+        }
+
+        $updatedPage = $this->getVirtualLayoutService()->saveVirtualPagePatch(
+            (int)$context['session']->getId(),
+            (int)$this->getLoginUserId(),
+            $context['scope'],
+            $context['page_type'],
+            [
+                'locale' => $resolvedLocale,
+                'meta_title' => (string)($data['meta_title'] ?? ''),
+                'meta_description' => (string)($data['meta_description'] ?? ''),
+                'meta_keywords' => (string)($data['meta_keywords'] ?? ''),
+            ]
+        );
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('SEO 已保存'),
+            'data' => [
+                'page_id' => 0,
+                'public_id' => (string)($data['public_id'] ?? ''),
+                'page_type' => $context['page_type'],
+                'locale' => $resolvedLocale,
+                'scope' => 'virtual_page',
+                'meta_title' => (string)($updatedPage['meta_title'] ?? ''),
+                'meta_description' => (string)($updatedPage['meta_description'] ?? ''),
+                'meta_keywords' => (string)($updatedPage['meta_keywords'] ?? ''),
+            ],
+        ]);
+    }
+    private function getVirtualLayoutService(): AiSiteVirtualLayoutService
+    {
+        return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
+    }
+
+    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
+    {
+        return ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
+    }
+
+    private function getAiSiteVisualUrlService(): AiSiteVisualUrlService
+    {
+        return ObjectManager::getInstance(AiSiteVisualUrlService::class);
     }
 }

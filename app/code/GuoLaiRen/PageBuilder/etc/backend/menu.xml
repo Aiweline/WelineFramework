@@ -42,21 +42,21 @@
         <menu source="GuoLaiRen_PageBuilder::quick_build_wizard"
              name="quick_build_wizard"
              title="新建站点"
-             action="pagebuilder/backend/quickBuild/wizard"
+             action="pagebuilder/backend/quick-build/wizard"
              icon="mdi mdi-creation"
              order="10"/>
         
         <menu source="GuoLaiRen_PageBuilder::quick_build_orders"
              name="quick_build_orders"
              title="配置订单"
-             action="pagebuilder/backend/quickBuild/orders"
+             action="pagebuilder/backend/quick-build/orders"
              icon="mdi mdi-clipboard-list-outline"
              order="20"/>
 
         <menu source="GuoLaiRen_PageBuilder::ai_site_agent"
              name="ai_site_agent"
              title="AI 建站工作台"
-             action="websites/backend/site-builder-agent/index?provider=pagebuilder"
+             action="websites/backend/site-builder-agent/index?provider=pagebuilder&"
              icon="mdi mdi-robot-outline"
              order="15"/>
     </menu>
@@ -73,7 +73,7 @@
         <menu source="GuoLaiRen_PageBuilder::website_listing"
              name="website_listing"
              title="网站列表"
-             action="pagebuilder/backend/websiteManagement/index"
+             action="pagebuilder/backend/website-management/index"
              icon="mdi mdi-format-list-bulleted"
              order="10"/>
         
@@ -87,7 +87,7 @@
         <menu source="GuoLaiRen_PageBuilder::domain_management"
              name="domain_management"
              title="域名管理"
-             action="pagebuilder/backend/domainManagement/index"
+             action="pagebuilder/backend/domain-management/index"
              icon="mdi mdi-dns-outline"
              order="30"/>
     </menu>

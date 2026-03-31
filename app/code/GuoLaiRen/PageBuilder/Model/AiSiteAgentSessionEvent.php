@@ -20,6 +20,9 @@ class AiSiteAgentSessionEvent extends Model
 {
     public const schema_table = 'guolairen_page_builder_ai_site_agent_event';
     public const schema_primary_key = 'ai_site_agent_event_id';
+    public const LEVEL_INFO = 'info';
+    public const LEVEL_WARNING = 'warning';
+    public const LEVEL_ERROR = 'error';
 
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '事件主键')]
     public const schema_fields_ID = 'ai_site_agent_event_id';
@@ -27,8 +30,14 @@ class AiSiteAgentSessionEvent extends Model
     #[Col(type: 'int', nullable: false, comment: '会话主键 ai_site_agent_session_id')]
     public const schema_fields_AGENT_SESSION_ID = 'agent_session_id';
 
+    #[Col(type: 'varchar', length: 64, nullable: false, default: '', comment: '阶段编码')]
+    public const schema_fields_STAGE_CODE = 'stage_code';
+
     #[Col(type: 'varchar', length: 64, nullable: false, comment: '事件类型(progress|error|stage|tool_call 等)')]
     public const schema_fields_EVENT_TYPE = 'event_type';
+
+    #[Col(type: 'varchar', length: 16, nullable: false, default: self::LEVEL_INFO, comment: '级别')]
+    public const schema_fields_LEVEL = 'level';
 
     #[Col(type: 'longtext', nullable: true, comment: '事件载荷 JSON')]
     public const schema_fields_PAYLOAD_JSON = 'payload_json';
@@ -49,6 +58,16 @@ class AiSiteAgentSessionEvent extends Model
     public function getEventType(): string
     {
         return (string) ($this->getData(self::schema_fields_EVENT_TYPE) ?: '');
+    }
+
+    public function getStageCode(): string
+    {
+        return (string) ($this->getData(self::schema_fields_STAGE_CODE) ?: '');
+    }
+
+    public function getLevel(): string
+    {
+        return (string) ($this->getData(self::schema_fields_LEVEL) ?: self::LEVEL_INFO);
     }
 
     /**
