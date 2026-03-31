@@ -102,8 +102,13 @@ class SearchEngineConfig extends Model
     public function getAllScopes(): array
     {
         $this->clear();
-        $this->fields('DISTINCT ' . self::schema_fields_SCOPE)->order(self::schema_fields_SCOPE, 'ASC');
+        // PostgreSQL 下框架的 fields('DISTINCT xxx') 会把整段表达式当成字段名引用，导致
+        // SQLSTATE[42703]: column "DISTINCT scope" does not exist。
+        // 这里改用 GROUP BY scope 获取唯一作用域。
+        $this->fields(self::schema_fields_SCOPE)
+            ->group(self::schema_fields_SCOPE)
+            ->order(self::schema_fields_SCOPE, 'ASC');
         $scopes = $this->select()->fetchArray();
-        return array_column($scopes, self::schema_fields_SCOPE);
+        return array_values(array_unique(array_column($scopes, self::schema_fields_SCOPE)));
     }
 }
