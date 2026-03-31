@@ -37,7 +37,7 @@
 "Added","已添加"
 "Error","错误"
 "Products","商品"
-"Showing %1 products","显示 %1 件商品"
+"Showing %{1} products","显示 %{1} 件商品"
 "Sort","排序"
 "Filters","筛选"
 "Apply","应用"
