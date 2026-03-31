@@ -3,17 +3,18 @@
 "Two-Factor Verification","Two-Factor Verification"
 "Please enter the verification code.","Please enter the verification code."
 "Two-factor verification succeeded.","Two-factor verification succeeded."
-"The reset link is invalid or has expired.","The reset link is invalid or has expired."
+"The reset link is invalid or has expired.",重设链接无效或已过期。
 "Reset Password","Reset Password"
 "Forgot Password","Forgot Password"
-"Email is required.","Email is required."
-"Please enter a valid email address.","Please enter a valid email address."
-"If the email is registered, a reset link has been sent.","If the email is registered, a reset link has been sent."
-"Unable to create a password reset request right now.","Unable to create a password reset request right now."
-"The reset token is required.","The reset token is required."
-"Please enter a new password.","Please enter a new password."
-"The password confirmation does not match.","The password confirmation does not match."
-"Your password has been reset. Please sign in with the new password.","Your password has been reset. Please sign in with the new password."
+"Email is required.",邮箱不能为空。
+"Please enter a valid email address.",请输入有效的邮箱地址。
+"The email is not registered.",该邮箱未注册。
+"A reset link has been sent to your email.",重设链接已发送到你的邮箱。
+"Unable to create a password reset request right now.",当前无法创建密码重设请求，请稍后再试。
+"The reset token is required.",重设令牌不能为空。
+"Please enter a new password.",请输入新密码。
+"The password confirmation does not match.",两次输入的密码不一致。
+"Your password has been reset. Please sign in with the new password.",密码已重设，请使用新密码登录。
 请先登录,请先登录
 请输入原密码,请输入原密码
 原密码错误,原密码错误
@@ -21,26 +22,25 @@
 两次输入的新密码不一致,两次输入的新密码不一致
 更新成功,更新成功
 更新失败：%{1},更新失败：%{1}
-鐢ㄦ埛鐧诲綍,鐢ㄦ埛鐧诲綍
-您已登录,您已登录
-用户名和密码不能为空,用户名和密码不能为空
-用户不存在,用户不存在
-登录尝试次数过多，请稍后再试,登录尝试次数过多，请稍后再试
-密码错误,密码错误
-登录成功,登录成功
-登录失败：%{1},登录失败：%{1}
-"WeShop login bridge is unavailable: %{1}","WeShop login bridge is unavailable: %{1}"
-"Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
+"Sign In","Sign In"
+"You are already signed in.","You are already signed in."
+"Username/email and password are required.","Username/email and password are required."
+"The user does not exist.","The user does not exist."
+"Too many login attempts. Please try again later.","Too many login attempts. Please try again later."
+"The password is incorrect.","The password is incorrect."
 "Login succeeded.","Login succeeded."
+"Login failed: %{1}","Login failed: %{1}"
+"Please complete two-factor verification to finish sign in.","Please complete two-factor verification to finish sign in."
+"WeShop login bridge is unavailable: %{1}","WeShop login bridge is unavailable: %{1}"
 退出成功,退出成功
 "Create Account","Create Account"
-"You are already signed in.","You are already signed in."
 "First name and last name are required.","First name and last name are required."
 "Please accept the terms and privacy policy.","Please accept the terms and privacy policy."
 "Registration succeeded. Welcome to WeShop.","Registration succeeded. Welcome to WeShop."
 无法统计令牌数量：%{1},无法统计令牌数量：%{1}
 加载前端客户失败：%{1},加载前端客户失败：%{1}
 无效的用户ID,无效的用户ID
+用户不存在,用户不存在
 获取成功,获取成功
 无效的请求方法,无效的请求方法
 用户名不能为空,用户名不能为空
@@ -105,25 +105,36 @@ Session标识,Session标识
 操作成功,操作成功
 确定要重置该客户的令牌吗？此操作会强制该客户重新登录。,确定要重置该客户的令牌吗？此操作会强制该客户重新登录。
 确定要删除该客户吗？此操作不可撤销。,确定要删除该客户吗？此操作不可撤销。
-"Enter the code from your authenticator app or one of your backup codes.","Enter the code from your authenticator app or one of your backup codes."
-"Verification Code","Verification Code"
-123456,123456
-"Verify and Continue","Verify and Continue"
-"Back to sign in","Back to sign in"
-"Enter your new password to finish resetting your account access.","Enter your new password to finish resetting your account access."
-"Enter the email address for your account and we will send you a reset link.","Enter the email address for your account and we will send you a reset link."
-"New Password","New Password"
-"At least 8 characters with letters and numbers","At least 8 characters with letters and numbers"
-"Confirm Password","Confirm Password"
-"Re-enter your password","Re-enter your password"
-"Email Address","Email Address"
-you@example.com,you@example.com
-"Send Reset Link","Send Reset Link"
+双因素验证,双因素验证
+输入您的身份验证器应用生成的代码或备用恢复码,输入您的身份验证器应用生成的代码或备用恢复码
+身份验证器应用,身份验证器应用
+打开您的身份验证器应用，获取6位数字验证码,打开您的身份验证器应用，获取6位数字验证码
+验证码,验证码
+"6位验证码或备用码（如 ####-####）","6位验证码或备用码（如 ####-####）"
+验证并继续,验证并继续
+返回登录,返回登录
+请输入6位身份验证器验证码，或8位数字备用恢复码,请输入6位身份验证器验证码，或8位数字备用恢复码
+验证中...,验证中...
+验证成功！,验证成功！
+验证码错误，请重试,验证码错误，请重试
+请求失败，请稍后重试,请求失败，请稍后重试
+至少8位，包含字母和数字,至少8位，包含字母和数字
+确认密码,确认密码
+请再次输入密码,请再次输入密码
+请输入您注册时使用的邮箱地址，我们将向您发送密码重置链接。,请输入您注册时使用的邮箱地址，我们将向您发送密码重置链接。
+电子邮箱,电子邮箱
+请输入邮箱地址,请输入邮箱地址
+发送重置链接,发送重置链接
+密码长度至少为8位,密码长度至少为8位
+两次输入的密码不一致,两次输入的密码不一致
+处理中...,处理中...
+操作成功！,操作成功！
+操作失败，请稍后重试,操作失败，请稍后重试
+忘记密码,忘记密码
+输入您的新密码以完成账户访问重置,输入您的新密码以完成账户访问重置
+输入您的账户邮箱，我们将发送重置链接,输入您的账户邮箱，我们将发送重置链接
 欢迎回来！您可以在这里管理您的账户信息,欢迎回来！您可以在这里管理您的账户信息
 未知,未知
-更新失败，请稍后重试,更新失败，请稍后重试
-请填写所有字段,请填写所有字段
-修改失败，请稍后重试,修改失败，请稍后重试
 用户名不可修改,用户名不可修改
 用户ID,用户ID
 头像URL,头像URL
@@ -142,7 +153,10 @@ you@example.com,you@example.com
 登录信息,登录信息
 最后登录IP,最后登录IP
 保存中...,保存中...
+更新失败，请稍后重试,更新失败，请稍后重试
+请填写所有字段,请填写所有字段
 修改中...,修改中...
+修改失败，请稍后重试,修改失败，请稍后重试
 欢迎回来,欢迎回来
 请登录您的账户以继续,请登录您的账户以继续
 用户名或邮箱,用户名或邮箱
@@ -154,20 +168,25 @@ you@example.com,you@example.com
 1天,1天
 1周,1周
 1个月,1个月
+忘记密码？,忘记密码？
 登录中...,登录中...
+或,或
 还没有账户？,还没有账户？
 立即注册,立即注册
 登录成功！,登录成功！
 登录失败，请检查用户名和密码,登录失败，请检查用户名和密码
 登录请求失败，请稍后重试,登录请求失败，请稍后重试
 用户登录,用户登录
-"Create your WeShop account with your email address.","Create your WeShop account with your email address."
-"First Name","First Name"
-Ada,Ada
-"Last Name","Last Name"
-Lovelace,Lovelace
-Password,Password
-"I agree to the terms of service and privacy policy.","I agree to the terms of service and privacy policy."
-"Already have an account?","Already have an account?"
-"Sign in","Sign in"
+创建账户,创建账户
+使用邮箱注册您的账户,使用邮箱注册您的账户
+名,名
+请输入名,请输入名
+姓,姓
+请输入姓,请输入姓
+我已阅读并同意,我已阅读并同意
+服务条款,服务条款
+和,和
+隐私政策,隐私政策
+已有账户？,已有账户？
+立即登录,立即登录
 安全设置,安全设置
