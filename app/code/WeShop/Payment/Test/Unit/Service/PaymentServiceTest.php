@@ -23,7 +23,7 @@ class PaymentServiceTest extends TestCase
 
         $codes = array_column($methods, 'code');
 
-        $this->assertSame(['manual_transfer', 'cash_on_delivery', 'paypal'], $codes);
+        $this->assertSame(['manual_transfer', 'b2b_credit_account', 'cash_on_delivery', 'paypal'], $codes);
         $this->assertSame('manual_transfer', $methods[0]['code']);
         $this->assertTrue((bool) ($methods[0]['is_default'] ?? false));
         $this->assertArrayHasKey('title', $methods[0]);
