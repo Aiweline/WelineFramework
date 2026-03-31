@@ -22,6 +22,7 @@ use Weline\Server\Console\Console\Server\Stop as CliStop;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
+use Weline\Server\Service\Contract\ServiceInstance;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\SharedStateServiceManager;
@@ -57,15 +58,18 @@ class Stop extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
+        // 欢迎语
+        $this->printWelcome();
+
         $instanceName = $this->parseInstanceName($args);
         $stopAll = isset($args['all']) || isset($args['a']);
         $force = isset($args['force']) || isset($args['f']);
-        
+
         if ($stopAll) {
             $this->stopAllInstances($force);
             return;
         }
-        
+
         $this->stopInstance($instanceName, $force);
     }
     
@@ -197,6 +201,7 @@ class Stop extends CommandAbstract
         
         $masterPid = $instanceInfo->masterPid;
         $controlPort = $instanceInfo->controlPort;
+        $startupPhase = $this->resolveInstanceStartupPhase($manager->getRawInstanceData($name) ?? []);
         
         $this->printer->setup(__('停止 Weline Server'));
         echo "\n";
@@ -219,6 +224,29 @@ class Stop extends CommandAbstract
         // 显示实例信息
         $this->showInstanceInfo($instanceInfo);
         echo "\n";
+
+        if (
+            $this->shouldBypassGracefulStopDuringBootstrap($startupPhase)
+            || $this->hasPendingStartupServices($instanceInfo)
+        ) {
+            $phaseLabel = $startupPhase !== '' ? $startupPhase : 'bootstrapping';
+            $this->printer->note(\sprintf(
+                'Instance startup_phase=%s, skip IPC graceful stop and use local cleanup.',
+                $phaseLabel
+            ));
+            if ($masterPid > 0) {
+                Processer::killProcessTreeByPid($masterPid, true);
+                SchedulerSystem::usleep(500000);
+            }
+            $this->releaseSharedStateConsumersForInstance($name);
+            $manager->deleteInstance($name);
+            $this->cleanupPidFiles($name, $instanceInfo);
+            $this->releaseStartLock($name);
+            $this->cleanupAllWlsProcesses($name);
+            echo "\n";
+            $this->printer->success(\sprintf('Instance [%s] stopped (bootstrap cleanup).', $name));
+            return;
+        }
 
         // 通过 IPC 发送 STOP 命令并等待完整停止
         $this->printer->note(__('发送 STOP 命令给 Master (通过 IPC)...'));
@@ -249,9 +277,12 @@ class Stop extends CommandAbstract
         
         // 最后按名前缀再扫一遍，确保该实例下所有 weline-wls 进程已退出（含未登记或逃逸进程）
         $this->cleanupAllWlsProcesses($name);
-        
+
         echo "\n";
         $this->printer->success(__('实例 [%{1}] 已停止 ✓', [$name]));
+
+        // 打印成功结束语
+        $this->printGoodbye(true);
     }
     
     /**
@@ -260,6 +291,38 @@ class Stop extends CommandAbstract
     protected function getInstanceManager(): ServerInstanceManager
     {
         return ObjectManager::getInstance(ServerInstanceManager::class);
+    }
+
+    /**
+     * @param array<string, mixed> $instanceData
+     */
+    protected function resolveInstanceStartupPhase(array $instanceData): string
+    {
+        return \trim((string) ($instanceData['startup_phase'] ?? ''));
+    }
+
+    protected function shouldBypassGracefulStopDuringBootstrap(string $startupPhase): bool
+    {
+        return $startupPhase !== '' && $startupPhase !== 'running';
+    }
+
+    protected function hasPendingStartupServices(ServerInstanceInfo $info): bool
+    {
+        foreach ($info->services as $service) {
+            if (!\in_array($service->role, ['worker', 'dispatcher', 'redirect', 'maintenance'], true)) {
+                continue;
+            }
+
+            if ($service->state !== ServiceInstance::STATE_READY) {
+                return true;
+            }
+
+            if ($service->ipcClientId === null) {
+                return true;
+            }
+        }
+
+        return false;
     }
     
     /**
@@ -273,13 +336,11 @@ class Stop extends CommandAbstract
             return false;
         }
 
-        $processInfoMap = Processer::batchGetProcessInfo([$info->masterPid]);
+        if ($this->hasMasterExitedFast($info->masterPid)) {
+            return false;
+        }
 
-        return $this->isMasterProcessAvailableForStopFromRuntime(
-            $info,
-            $processInfoMap,
-            Processer::hasExitedFast($info->masterPid)
-        );
+        return $this->masterProcessExists($info->masterPid);
     }
 
     /**
@@ -299,6 +360,16 @@ class Stop extends CommandAbstract
         }
 
         return !$hasExitedFast;
+    }
+
+    protected function hasMasterExitedFast(int $masterPid): bool
+    {
+        return Processer::hasExitedFast($masterPid);
+    }
+
+    protected function masterProcessExists(int $masterPid): bool
+    {
+        return Processer::processExists($masterPid);
     }
 
     protected function showInstanceInfo(ServerInstanceInfo $info): void
@@ -481,7 +552,15 @@ class Stop extends CommandAbstract
         $this->ipcMsg("发送 STOP 命令...", 'stop');
         
         // 发送 STOP 命令
-        $stopMsg = \Weline\Server\IPC\ControlMessage::command(\Weline\Server\IPC\ControlMessage::ACTION_STOP);
+        $stopMsg = \Weline\Server\IPC\ControlMessage::command(
+            \Weline\Server\IPC\ControlMessage::ACTION_STOP,
+            '',
+            [
+                'stop_intent' => 'explicit',
+                'stop_source' => 'cli:server:stop',
+                'stop_trace_id' => 'cli-stop-' . \getmypid() . '-' . \time(),
+            ]
+        );
         $written = @\fwrite($conn, $stopMsg);
         
         if ($written === false || $written === 0) {
@@ -585,6 +664,19 @@ class Stop extends CommandAbstract
                     @\fclose($conn);
                     return true;
                 }
+                if ($this->shouldAbortToLocalCleanupAfterIdle(
+                    $observedStopStage,
+                    $childrenFullyExited,
+                    $masterAboutToExit
+                )) {
+                    $elapsed = (int)\round($now - $startedAt);
+                    $this->ipcMsg(
+                        "Stage 5 idle {$timeout}s (elapsed {$elapsed}s), switch to local cleanup.",
+                        'error'
+                    );
+                    @\fclose($conn);
+                    return false;
+                }
                 if (($now - $lastIdleNoticeAt) >= $timeout) {
                     $elapsed = (int)\round($now - $startedAt);
                     $this->ipcMsg("Idle {$timeout}s (elapsed {$elapsed}s), Master still running, continue waiting...", 'info');
@@ -624,6 +716,19 @@ class Stop extends CommandAbstract
         }
 
         return $childrenFullyExited && $observedStopStage >= 5;
+    }
+
+    protected function shouldAbortToLocalCleanupAfterIdle(
+        int $observedStopStage,
+        bool $childrenFullyExited,
+        bool $masterAboutToExit
+    ): bool
+    {
+        if ($masterAboutToExit) {
+            return false;
+        }
+
+        return $childrenFullyExited || $observedStopStage >= 5;
     }
 
     /**
@@ -1032,8 +1137,7 @@ class Stop extends CommandAbstract
         Processer::removePidFile('--name=weline-wls-session-' . $name);
         Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name);
         
-        // 清理残留 PID 文件
-        Processer::cleanupStalePidFiles();
+        // Global stale pid pruning is intentionally excluded from the stop hot path.
     }
     
     /**
@@ -1221,5 +1325,89 @@ class Stop extends CommandAbstract
                 __('强制停止') => 'php bin/w server:stop -f',
             ]
         );
+    }
+
+    /**
+     * 打印欢迎语
+     */
+    protected function printWelcome(): void
+    {
+        $width = 60;
+        $title = 'Weline Framework Server';
+        $action = __('正在停止服务器...');
+        $padding = ($width - \mb_strlen($title) - \mb_strlen($action) - 3) / 2;
+
+        $this->printer->note('');
+        $this->printer->note($this->colorize(str_repeat('═', $width), 'Yellow'));
+        $this->printer->note(
+            $this->colorize('║', 'Yellow') .
+            \str_repeat(' ', $width - 2) .
+            $this->colorize('║', 'Yellow')
+        );
+        $this->printer->note(
+            $this->colorize('║', 'Yellow') .
+            \str_repeat(' ', (int)\floor($padding)) .
+            $this->colorize($title, 'Yellow') .
+            ' ' .
+            $this->colorize($action, 'Red') .
+            \str_repeat(' ', (int)\ceil($padding)) .
+            $this->colorize('║', 'Yellow')
+        );
+        $this->printer->note(
+            $this->colorize('║', 'Yellow') .
+            \str_repeat(' ', $width - 2) .
+            $this->colorize('║', 'Yellow')
+        );
+        $this->printer->note($this->colorize(str_repeat('═', $width), 'Yellow'));
+        $this->printer->note('');
+    }
+
+    /**
+     * 打印结束语
+     *
+     * @param bool $success 是否成功
+     * @param string $message 附加消息
+     */
+    protected function printGoodbye(bool $success = true, string $message = ''): void
+    {
+        $this->printer->note('');
+
+        if ($success) {
+            $this->printer->successIcon(__('Weline Server 已停止！'));
+        } else {
+            $this->printer->errorIcon(__('Weline Server 停止失败'));
+        }
+
+        if ($message) {
+            $this->printer->note('  ' . $message);
+        }
+
+        $this->printer->note('');
+        $this->printer->note($this->colorize(str_repeat('─', 60), 'Yellow'));
+        $this->printer->note('');
+    }
+
+    /**
+     * 彩色化输出（内部使用 ANSI 颜色）
+     *
+     * @param string $text 文本
+     * @param string $color 颜色
+     * @return string
+     */
+    private function colorize(string $text, string $color): string
+    {
+        $colors = [
+            'Black' => '30',
+            'Red' => '31',
+            'Green' => '32',
+            'Yellow' => '33',
+            'Blue' => '34',
+            'Magenta' => '35',
+            'Cyan' => '36',
+            'White' => '37',
+        ];
+
+        $code = $colors[$color] ?? '33';
+        return "\033[{$code}m{$text}\033[0m";
     }
 }

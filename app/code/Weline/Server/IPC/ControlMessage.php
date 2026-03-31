@@ -99,6 +99,47 @@ class ControlMessage
     /** Master → CLI：滚动重启进度更新 */
     public const TYPE_RELOAD_PROGRESS = 'reload_progress';
 
+    // ========== 批量协调消息类型（SOLID: 单一职责，扩展开放）============
+
+    /**
+     * Master → 子进程（批量）：批量广播消息
+     * - targets: 目标列表（role/instanceIds/launchIds）
+     * - message: 要执行的批量消息类型
+     * - payload: 消息参数
+     * - batch_id: 本次批量操作的唯一 ID（用于聚合响应）
+     * - expires_at: 超时截止时间戳
+     */
+    public const TYPE_BATCH_BROADCAST = 'batch_broadcast';
+
+    /**
+     * 子进程 → Master（批量）：批量响应（聚合多个子进程的响应）
+     * - batch_id: 对应的批量操作 ID
+     * - results: 各子进程的响应结果
+     */
+    public const TYPE_BATCH_RESPONSE = 'batch_response';
+
+    /**
+     * Master → 子进程：批量操作超时，强制取消
+     */
+    public const TYPE_BATCH_CANCEL = 'batch_cancel';
+
+    /**
+     * 子进程 → Master：批量操作已接收确认（子进程告知已收到但不保证执行完成）
+     */
+    public const TYPE_BATCH_ACK = 'batch_ack';
+
+    /**
+     * Master → 子进程（批量）：批量停止（不等排水，直接 SIGTERM）
+     * - 优化：批量发送 SIGTERM，不逐个等待
+     */
+    public const TYPE_BATCH_STOP = 'batch_stop';
+
+    /**
+     * Master → 子进程（批量）：批量重载（不等排水，强制重启）
+     * - 优化：批量发送重载信号，不逐个等待
+     */
+    public const TYPE_BATCH_RELOAD = 'batch_reload';
+
     // ========== 角色常量 ==========
 
     public const ROLE_WORKER = 'worker';
@@ -164,6 +205,12 @@ class ControlMessage
 
     /** Worker → Master：Fiber 池统计上报 */
     public const TYPE_FIBER_POOL_STATS = 'fiber_pool_stats';
+
+    /** Worker → Master：长连接饱和上报（主动） */
+    public const TYPE_WORKER_SATURATION = 'worker_saturation';
+
+    /** Worker → Master：长连接饱和解除上报 */
+    public const TYPE_WORKER_SATURATION_CLEARED = 'worker_saturation_cleared';
 
     /** Master → Worker：进程内维护页开关（与维护 Worker 池配合，靠 IPC ACK 确认） */
     public const TYPE_SET_MAINTENANCE_MODE = 'set_maintenance_mode';
@@ -243,7 +290,8 @@ class ControlMessage
         int $epoch = 0,
         string $launchId = '',
         string $processKind = self::PROCESS_KIND_FRAMEWORK,
-        string $moduleCode = ''
+        string $moduleCode = '',
+        string $instanceCode = ''
     ): string
     {
         $data = [
@@ -264,6 +312,9 @@ class ControlMessage
         }
         if ($moduleCode !== '') {
             $data['module_code'] = $moduleCode;
+        }
+        if ($instanceCode !== '') {
+            $data['instance_code'] = $instanceCode;
         }
         return self::encode($data);
     }
@@ -748,6 +799,165 @@ class ControlMessage
             'idle_ttl_sec'   => $idleTtlSec,
             'max_active'     => $maxActive,
             'released_count' => $releasedCount,
+        ]);
+    }
+
+    /**
+     * 构建长连接饱和上报消息（Worker → Master/Dispatcher）
+     *
+     * 当长连接（ SSE / 长轮询）占用过多 Fiber 槽位时，Worker 主动上报饱和状态，
+     * Dispatcher 据此暂缓向该 Worker 分配新请求，同时短请求仍可路由到其他 Worker。
+     *
+     * @param int $workerId Worker ID
+     * @param int $port Worker 监听端口
+     * @param int $longLivedCount 当前长连接数
+     * @param int $longLivedMax 长连接上限
+     * @param int $totalFiberCount 总 Fiber 数（含短请求）
+     * @param int $maxActive Fiber 池上限（0=不限制）
+     */
+    public static function workerSaturation(
+        int $workerId,
+        int $port,
+        int $longLivedCount,
+        int $longLivedMax,
+        int $totalFiberCount,
+        int $maxActive = 0
+    ): string {
+        return self::encode([
+            'type'              => self::TYPE_WORKER_SATURATION,
+            'worker_id'         => $workerId,
+            'port'              => $port,
+            'long_lived_count'  => $longLivedCount,
+            'long_lived_max'   => $longLivedMax,
+            'total_fiber_count' => $totalFiberCount,
+            'max_active'       => $maxActive,
+        ]);
+    }
+
+    /**
+     * 构建长连接饱和解除消息（Worker → Master/Dispatcher）
+     */
+    public static function workerSaturationCleared(
+        int $workerId,
+        int $port,
+        int $longLivedCount,
+        int $longLivedMax
+    ): string {
+        return self::encode([
+            'type'             => self::TYPE_WORKER_SATURATION_CLEARED,
+            'worker_id'        => $workerId,
+            'port'             => $port,
+            'long_lived_count' => $longLivedCount,
+            'long_lived_max'   => $longLivedMax,
+        ]);
+    }
+
+    // ========== 批量协调消息工厂方法（SOLID: 工厂方法模式）============
+
+    /**
+     * 构建批量广播消息（Master → 子进程）
+     *
+     * @param string $batchId 批量操作唯一 ID
+     * @param string $messageType 要执行的消息类型（如 TYPE_RELOAD、TYPE_SHUTDOWN）
+     * @param array $payload 消息参数
+     * @param array $targets 目标描述：['roles' => ['worker', 'session_server'], 'instance_ids' => [1, 2]]
+     * @param int $expiresAt 超时截止时间戳
+     */
+    public static function batchBroadcast(
+        string $batchId,
+        string $messageType,
+        array $payload = [],
+        array $targets = [],
+        int $expiresAt = 0
+    ): string {
+        return self::encode([
+            'type'       => self::TYPE_BATCH_BROADCAST,
+            'batch_id'   => $batchId,
+            'message'    => $messageType,
+            'payload'    => $payload,
+            'targets'    => $targets,
+            'expires_at' => $expiresAt,
+        ]);
+    }
+
+    /**
+     * 构建批量响应消息（子进程 → Master）
+     *
+     * @param string $batchId 对应的批量操作 ID
+     * @param array $results 各子进程的响应结果
+     */
+    public static function batchResponse(string $batchId, array $results = []): string
+    {
+        return self::encode([
+            'type'    => self::TYPE_BATCH_RESPONSE,
+            'batch_id' => $batchId,
+            'results' => $results,
+        ]);
+    }
+
+    /**
+     * 构建批量操作 ACK 消息（子进程 → Master）
+     *
+     * @param string $batchId 对应的批量操作 ID
+     */
+    public static function batchAck(string $batchId): string
+    {
+        return self::encode([
+            'type'    => self::TYPE_BATCH_ACK,
+            'batch_id' => $batchId,
+        ]);
+    }
+
+    /**
+     * 构建批量操作超时取消消息（Master → 子进程）
+     *
+     * @param string $batchId 批量操作 ID
+     */
+    public static function batchCancel(string $batchId): string
+    {
+        return self::encode([
+            'type'    => self::TYPE_BATCH_CANCEL,
+            'batch_id' => $batchId,
+        ]);
+    }
+
+    /**
+     * 构建批量停止消息（Master → 子进程，不等排水直接 SIGTERM）
+     *
+     * @param string $batchId 批量操作 ID
+     * @param array $targets 目标：['roles' => ['worker'], 'instance_ids' => [1, 2, 3]]
+     * @param int $expiresAt 超时截止时间戳
+     */
+    public static function batchStop(string $batchId, array $targets = [], int $expiresAt = 0): string
+    {
+        return self::encode([
+            'type'       => self::TYPE_BATCH_STOP,
+            'batch_id'   => $batchId,
+            'targets'    => $targets,
+            'expires_at' => $expiresAt,
+        ]);
+    }
+
+    /**
+     * 构建批量重载消息（Master → 子进程，强制重载）
+     *
+     * @param string $batchId 批量操作 ID
+     * @param string $reloadType 重载类型：RELOAD_TYPE_CODE | RELOAD_TYPE_FORCE
+     * @param array $targets 目标
+     * @param int $expiresAt 超时截止时间戳
+     */
+    public static function batchReload(
+        string $batchId,
+        string $reloadType = self::RELOAD_TYPE_CODE,
+        array $targets = [],
+        int $expiresAt = 0
+    ): string {
+        return self::encode([
+            'type'        => self::TYPE_BATCH_RELOAD,
+            'batch_id'    => $batchId,
+            'reload_type' => $reloadType,
+            'targets'     => $targets,
+            'expires_at'  => $expiresAt,
         ]);
     }
 }

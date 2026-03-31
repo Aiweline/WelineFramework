@@ -178,6 +178,11 @@ class RoutingCacheService
      */
     public function getRouteByIp(string $ip): ?array
     {
+        if ($this->isLoopbackIp($ip)) {
+            $this->stats['ip_misses']++;
+            return null;
+        }
+
         $now = \time();
         
         if (isset($this->ipCache[$ip])) {
@@ -254,6 +259,10 @@ class RoutingCacheService
      */
     public function cacheIpRoute(string $ip, int $workerPort, string $sni = '', ?int $ttl = null): void
     {
+        if ($this->isLoopbackIp($ip)) {
+            return;
+        }
+
         $ttl = $ttl ?? $this->defaultTtl;
         
         // 检查容量限制
@@ -431,6 +440,18 @@ class RoutingCacheService
     {
         $total = $hits + $misses;
         return $total > 0 ? \round($hits / $total * 100, 2) : 0.0;
+    }
+
+    /**
+     * 本机开发场景下（127.0.0.1 / ::1）禁用 IP 粘连路由，
+     * 避免所有流量长期固定到单个 Worker。
+     */
+    private function isLoopbackIp(string $ip): bool
+    {
+        $normalized = \strtolower(\trim($ip));
+        return $normalized === '127.0.0.1'
+            || $normalized === '::1'
+            || \str_starts_with($normalized, '::ffff:127.');
     }
     
     /**
