@@ -18,13 +18,13 @@ class Index extends BaseController
     {
         $page = max(1, (int) $this->request->getParam('page', 1));
         $pageSize = max(1, (int) $this->request->getParam('page_size', 20));
-        $invoiceIndexUrl = $this->getBackendUrl('*/backend/invoice');
+        $invoiceIndexUrl = $this->getUrl('*/backend/invoice');
 
         $this->assign(array_merge(
             [
                 'title' => (string) __('Invoice Management'),
                 'invoiceIndexUrl' => $invoiceIndexUrl,
-                'invoiceIssueUrl' => $this->getBackendUrl('*/backend/invoice/issue'),
+                'invoiceIssueUrl' => $this->getUrl('*/backend/invoice/issue'),
             ],
             $this->invoiceAdminPageDataService->getListData($page, $pageSize, [
                 'invoice_number' => $this->request->getParam('invoice_number', ''),

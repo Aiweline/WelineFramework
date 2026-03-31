@@ -31,7 +31,9 @@ $invoiceIssueUrl = (string) ($this->getData('invoiceIssueUrl') ?? $this->getBack
                 </div>
                 <div class="col-md-4">
                     <dt class="text-muted small"><?= __('Status') ?></dt>
-                    <dd class="fw-semibold"><?= htmlspecialchars((string) ($invoice['status_label'] ?? $invoice['status'] ?? ''), ENT_QUOTES) ?></dd>
+                    <dd class="fw-semibold" data-status-code="<?= htmlspecialchars((string) ($invoice['status'] ?? ''), ENT_QUOTES) ?>">
+                        <?= htmlspecialchars((string) ($invoice['status_label'] ?? $invoice['status'] ?? ''), ENT_QUOTES) ?>
+                    </dd>
                 </div>
                 <div class="col-md-4">
                     <dt class="text-muted small"><?= __('Created At') ?></dt>
@@ -43,7 +45,7 @@ $invoiceIssueUrl = (string) ($this->getData('invoiceIssueUrl') ?? $this->getBack
                 <form method="post" action="<?= $invoiceIssueUrl ?>" class="mt-4">
                     <input type="hidden" name="invoice_id" value="<?= (int) ($invoice['invoice_id'] ?? 0) ?>">
                     <input type="hidden" name="back_url" value="<?= htmlspecialchars($invoiceIndexUrl, ENT_QUOTES) ?>">
-                    <button type="submit" class="btn btn-success"><?= __('Issue Invoice') ?></button>
+                    <button type="submit" class="btn btn-success" data-action="issue-invoice"><?= __('Issue Invoice') ?></button>
                 </form>
             <?php endif; ?>
         </div>
