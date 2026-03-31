@@ -71,7 +71,12 @@ class GoogleAnalytics implements PixelProviderInterface
             return '';
         }
 
-        return $this->buildHeadSnippet($this->readMeasurementId());
+        $measurementId = $this->sanitizeSnippetToken($this->readMeasurementId());
+        if ($measurementId === '') {
+            return '';
+        }
+
+        return $this->buildHeadSnippet($measurementId);
     }
 
     /**
@@ -87,8 +92,17 @@ class GoogleAnalytics implements PixelProviderInterface
             ];
         }
 
+        $measurementId = $this->sanitizeSnippetToken($this->readMeasurementId());
+        if ($measurementId === '') {
+            return [
+                'head' => '',
+                'body' => '',
+                'footer' => '',
+            ];
+        }
+
         return [
-            'head' => $this->buildHeadSnippet($this->readMeasurementId()),
+            'head' => $this->buildHeadSnippet($measurementId),
             'body' => '',
             'footer' => '',
         ];
@@ -204,13 +218,21 @@ HTML;
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-        curl_exec($ch);
+        $response = curl_exec($ch);
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $hasError = $response === false || curl_errno($ch) !== 0;
         curl_close($ch);
 
-        return $statusCode === 0 || ($statusCode >= 200 && $statusCode < 300);
+        if ($hasError) {
+            return false;
+        }
+
+        return $statusCode >= 200 && $statusCode < 300;
     }
 
     protected function readMeasurementId(): string
@@ -226,6 +248,12 @@ HTML;
     protected function readEnabled(): bool
     {
         return $this->enabled ?? (bool) $this->getConfigValue('enabled', false);
+    }
+
+    private function sanitizeSnippetToken(string $value): string
+    {
+        $sanitized = preg_replace('/[^a-zA-Z0-9._-]/', '', $value);
+        return trim((string) $sanitized);
     }
 
     private function getConfigValue(string $field, mixed $default): mixed
