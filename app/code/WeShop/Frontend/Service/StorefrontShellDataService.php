@@ -8,11 +8,12 @@ use WeShop\Cart\Model\Cart;
 use WeShop\Cart\Service\CartService;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Store\Model\Store;
+use WeShop\Store\Service\StoreContextService;
 
 class StorefrontShellDataService
 {
     public function __construct(
-        private readonly Store $storeModel,
+        private readonly StoreContextService $storeContextService,
         private readonly CustomerContextInterface $customerContext,
         private readonly CartService $cartService
     ) {
@@ -39,13 +40,7 @@ class StorefrontShellDataService
      */
     private function resolvePrimaryStore(): ?array
     {
-        $stores = $this->storeModel->getEnabledStores();
-        if (!\is_array($stores) || $stores === []) {
-            return null;
-        }
-
-        $store = $stores[0] ?? null;
-        return \is_array($store) ? $store : null;
+        return $this->storeContextService->getCurrentStore();
     }
 
     private function resolveStoreName(?array $store): string
