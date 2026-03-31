@@ -4,18 +4,20 @@
  * 
  * 用于 AJAX 加载迷你购物车商品列表
  * 
- * @var array $items 商品列表
+ * @meta.name {default="Mini购物车商品列表",name="Mini购物车商品列表",description="迷你购物车AJAX加载的商品列表组件"}
+ * @meta.description {default="迷你购物车AJAX加载的商品列表组件，显示商品图片、名称、价格、数量和操作按钮",name="迷你购物车商品列表组件",description="用于AJAX加载迷你购物车商品列表，显示商品图片、名称、价格、数量和操作按钮"}
+ * @param items {default=[],name="商品列表",description="商品列表数据"}
  */
 $items = $this->getData('items') ?? [];
 ?>
 
 <?php if (empty($items)): ?>
-    <div class="mini-cart-empty" id="mini-cart-empty">
-        <div class="empty-state">
-            <span class="material-symbols-outlined empty-icon">shopping_cart</span>
-            <p class="empty-message"><lang>Your cart is empty</lang></p>
-            <a href="<?= $this->getUrl('/') ?>" class="start-shopping-link" data-action="close-mini-cart">
-                <lang>Start Shopping</lang>
+    <div class="mini-cart-items__empty" id="mini-cart-empty">
+        <div class="mini-cart-empty">
+            <span class="mini-cart-empty__icon material-symbols-outlined">shopping_cart</span>
+            <p class="mini-cart-empty__message"><?= __('Your cart is empty') ?></p>
+            <a href="<?= $this->getUrl('/') ?>" class="mini-cart-empty__link" data-action="close-mini-cart">
+                <?= __('Start Shopping') ?>
             </a>
         </div>
     </div>
@@ -57,18 +59,18 @@ $items = $this->getData('items') ?? [];
                 <!-- 数量控制 -->
                 <div class="mini-cart-item__qty">
                     <button type="button" 
-                            class="qty-btn" 
+                            class="mini-cart-item__qty-btn" 
                             data-action="decrease-qty" 
                             data-item-id="<?= htmlspecialchars((string)($item['cart_id'] ?? '')) ?>"
-                            aria-label="<lang>Decrease quantity</lang>">
+                            aria-label="<?= __('Decrease quantity') ?>">
                         <span class="material-symbols-outlined">remove</span>
                     </button>
-                    <span class="qty-value"><?= (int)($item['quantity'] ?? 1) ?></span>
+                    <span class="mini-cart-item__qty-value"><?= (int)($item['quantity'] ?? 1) ?></span>
                     <button type="button" 
-                            class="qty-btn" 
+                            class="mini-cart-item__qty-btn" 
                             data-action="increase-qty" 
                             data-item-id="<?= htmlspecialchars((string)($item['cart_id'] ?? '')) ?>"
-                            aria-label="<lang>Increase quantity</lang>">
+                            aria-label="<?= __('Increase quantity') ?>">
                         <span class="material-symbols-outlined">add</span>
                     </button>
                 </div>
@@ -79,7 +81,7 @@ $items = $this->getData('items') ?? [];
                     class="mini-cart-item__remove" 
                     data-action="remove-item" 
                     data-item-id="<?= htmlspecialchars((string)($item['cart_id'] ?? '')) ?>"
-                    aria-label="<lang>Remove item</lang>">
+                    aria-label="<?= __('Remove item') ?>">
                 <span class="material-symbols-outlined">delete_outline</span>
             </button>
         </div>
