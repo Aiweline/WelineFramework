@@ -196,9 +196,8 @@ return [
     'wls' => [
         'host' => '0.0.0.0',
         'port' => 443,
-        // HTTPS=443 时默认在 80 启 HTTP→HTTPS 独立进程；HTTPS 为非 443（如 9981）时默认不启（无人访问 port-1）。
-        // 需要额外明文端口时显式设置，或 CLI：--http-redirect-port 9080。0=关闭。
-        // 'http_redirect_port' => 9080,
+        // HTTP→HTTPS 重定向固定规则：仅当 HTTPS 主端口=443 时，自动启动 HTTP:80 的独立重定向进程。
+        // 若 HTTPS 使用非 443（如 9981），则不启动独立重定向进程。
         'https' => true,
         'performance' => [
             // 慢请求阈值（毫秒）
@@ -223,6 +222,8 @@ return [
         'worker_count' => 'auto',
         'mode' => 'io',
         'max_connections' => 10000,
+        // Worker Keep-Alive 空闲连接超时（秒），<=0 则使用内置默认 60。
+        'keep_alive_timeout' => 60,
         'max_request' => 100000,
         'hot_reload' => false,
         'watch_dirs' => ['app/code', 'app/etc'],
