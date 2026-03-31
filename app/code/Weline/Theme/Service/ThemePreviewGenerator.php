@@ -12,13 +12,13 @@ use Weline\Theme\Model\WelineTheme;
 class ThemePreviewGenerator
 {
     public const PREVIEW_DIR = 'theme_previews';
-    private const SCREENSHOT_TIMEOUT_SECONDS = 30;
+    private const SCREENSHOT_TIMEOUT_SECONDS = 60;
     private const PROCESS_POLL_INTERVAL_US = 100000;
 
     /**
      * 默认并发数量（建议 2-4，Windows 上不要太高）
      */
-    public const DEFAULT_CONCURRENCY = 4;
+    public const DEFAULT_CONCURRENCY = 2;
 
     public static function generatePreviewImage(WelineTheme $theme, string $area = 'frontend', bool $force = false): string|false
     {

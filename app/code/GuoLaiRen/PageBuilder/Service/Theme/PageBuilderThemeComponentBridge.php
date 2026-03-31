@@ -4,33 +4,20 @@ declare(strict_types=1);
 
 /*
  * GuoLaiRen PageBuilder Module
- * 将 PageBuilder 布局中的组件 code 解析为 Weline 主题目录中的部件定义（含 DB 虚拟部件）
- * 优先从 PageBuilder 自有的 pb_virtual_theme_component 表查询虚拟部件
+ * 将 PageBuilder 布局中的组件 code 解析为 PageBuilder 自有虚拟主题部件定义
+ * 仅从 PageBuilder 自有的 pb_virtual_theme_component 表查询，不回退到 Weline_Theme
  */
 
 namespace GuoLaiRen\PageBuilder\Service\Theme;
 
-use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
-use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Dto\ThemeComponentDefinition;
-use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\ThemeComponentCatalog;
 
 class PageBuilderThemeComponentBridge
 {
-    public function __construct(
-        private readonly ThemeComponentCatalog $themeComponentCatalog,
-        private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
-        private readonly WelineTheme $welineTheme,
-    ) {
-    }
-
     /**
-     * 在指定主题层上解析部件定义
-     * 优先从 PageBuilder 自有的 pb_virtual_theme_component 表查询（virtual_theme_id）
-     * 若无则回退到 WelineTheme 的 theme_component 表
+     * 在指定主题层上解析部件定义（仅 PageBuilder 虚拟主题数据）
      */
     public function resolveDefinition(string $componentCode, int $themeId, string $area = 'frontend'): ?ThemeComponentDefinition
     {
@@ -40,13 +27,7 @@ class PageBuilderThemeComponentBridge
         $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
 
         // 优先尝试 PageBuilder 自有的虚拟主题表
-        $pbDef = $this->resolveFromPageBuilderVirtualTheme($componentCode, $themeId, $area);
-        if ($pbDef !== null) {
-            return $pbDef;
-        }
-
-        // 回退到 WelineTheme
-        return $this->resolveFromWelineTheme($componentCode, $themeId, $area);
+        return $this->resolveFromPageBuilderVirtualTheme($componentCode, $themeId, $area);
     }
 
     /**
@@ -107,53 +88,4 @@ class PageBuilderThemeComponentBridge
         );
     }
 
-    /**
-     * 从 WelineTheme 的 theme_component 表解析
-     * @return ThemeComponentDefinition|null
-     */
-    private function resolveFromWelineTheme(string $componentCode, int $themeId, string $area): ?ThemeComponentDefinition
-    {
-        $theme = clone $this->welineTheme;
-        $theme->clearData()->clearQuery()->load($themeId);
-        if (!$theme->getId()) {
-            return null;
-        }
-
-        $norm = $this->layoutConfigNormalizer->normalizeComponentCode($componentCode);
-        if ($norm === '') {
-            return null;
-        }
-
-        foreach ([$componentCode, $norm] as $tryCode) {
-            $tryCode = \trim($tryCode);
-            if ($tryCode === '') {
-                continue;
-            }
-            $found = $this->themeComponentCatalog->find('Weline_Theme', 'theme_component', $tryCode, $area, $theme);
-            if ($found !== null) {
-                return $found;
-            }
-        }
-
-        $definitions = $this->themeComponentCatalog->getDefinitions($area, $theme);
-        foreach ($definitions as $def) {
-            if (!$def instanceof ThemeComponentDefinition) {
-                continue;
-            }
-            if ($def->module !== 'Weline_Theme' || $def->type !== 'theme_component') {
-                continue;
-            }
-            if ($def->code === $norm || $def->code === $componentCode) {
-                return $def;
-            }
-            if (\str_contains($def->code, '/')) {
-                $base = \basename(\str_replace('\\', '/', $def->code));
-                if ($base === $norm || $base === $componentCode) {
-                    return $def;
-                }
-            }
-        }
-
-        return null;
-    }
 }
