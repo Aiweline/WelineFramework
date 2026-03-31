@@ -229,10 +229,30 @@ class MasterProcess
             // 注册 Master PID 到索引（用于快速检测 Master 是否退出）
             $this->registerMasterPid();
 
-            // 初始化控制端口
-            $this->controlPort = Processer::findAvailablePort(19980);
-            if ($this->controlPort <= 0) {
-                throw new \RuntimeException('No available control port found in range 19980-20029');
+            // 初始化控制端口：
+            // 1) 优先使用 server.control_port
+            // 2) 未配置时采用 main_port + 10000（例如 443 -> 10443）
+            // 3) 不进行范围扫描，避免主动占用其他端口
+            $configuredControlPort = (int) (Env::get('server.control_port', 0) ?? 0);
+            $preferredControlPort = $configuredControlPort > 0 ? $configuredControlPort : ($this->mainPort + 10000);
+            $this->controlPort = $preferredControlPort;
+            if ($this->controlPort <= 0 || $this->controlPort > 65535) {
+                throw new \RuntimeException(
+                    "Invalid control port: {$this->controlPort}. Please set env server.control_port to a valid TCP port."
+                );
+            }
+            $conflictInstance = $this->findRunningInstanceByControlPort($this->controlPort);
+            if ($conflictInstance !== null) {
+                throw new \RuntimeException(
+                    "IPC control port {$this->controlPort} is already used by instance '{$conflictInstance}'. " .
+                    "Please set a unique server.control_port per instance."
+                );
+            }
+            if (Processer::isPortInUse($this->controlPort)) {
+                throw new \RuntimeException(
+                    "IPC control port {$this->controlPort} is unavailable. " .
+                    'Please free it or set a fixed server.control_port.'
+                );
             }
             $this->log(__('  控制端口: %{1}', [$this->controlPort]));
 
@@ -771,7 +791,15 @@ class MasterProcess
             return false;
         }
 
-        $written = @\fwrite($conn, ControlMessage::command(ControlMessage::ACTION_STOP));
+        $written = @\fwrite($conn, ControlMessage::command(
+            ControlMessage::ACTION_STOP,
+            '',
+            [
+                'stop_intent' => 'explicit',
+                'stop_source' => 'master:signal-bridge',
+                'stop_trace_id' => 'sig-stop-' . \getmypid() . '-' . \time(),
+            ]
+        ));
         if ($written === false || $written === 0) {
             @\fclose($conn);
             return false;
@@ -866,7 +894,15 @@ class MasterProcess
             self::ipcMsg("发送 STOP 命令...", 'stop');
         }
 
-        $stopMsg = ControlMessage::command(ControlMessage::ACTION_STOP);
+        $stopMsg = ControlMessage::command(
+            ControlMessage::ACTION_STOP,
+            '',
+            [
+                'stop_intent' => 'explicit',
+                'stop_source' => 'master:send-stop-command',
+                'stop_trace_id' => 'send-stop-' . \getmypid() . '-' . \time(),
+            ]
+        );
         $written = @\fwrite($conn, $stopMsg);
         
         if ($written === false || $written === 0) {
@@ -1151,5 +1187,43 @@ class MasterProcess
             @\unlink($lockFile);
             $this->log(__('启动锁已释放'));
         }
+    }
+
+    private function findRunningInstanceByControlPort(int $controlPort): ?string
+    {
+        if ($controlPort <= 0) {
+            return null;
+        }
+
+        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        if (!\is_dir($instanceDir)) {
+            return null;
+        }
+
+        $files = @\glob($instanceDir . '*.json') ?: [];
+        foreach ($files as $instanceFile) {
+            $instanceName = (string)\pathinfo($instanceFile, \PATHINFO_FILENAME);
+            if ($instanceName === '' || $instanceName === $this->instanceName) {
+                continue;
+            }
+
+            $data = @\json_decode((string)@\file_get_contents($instanceFile), true);
+            if (!\is_array($data)) {
+                continue;
+            }
+
+            $candidatePort = (int)($data['control_port'] ?? 0);
+            if ($candidatePort !== $controlPort) {
+                continue;
+            }
+
+            if (!self::isMasterRunning($instanceName)) {
+                continue;
+            }
+
+            return $instanceName;
+        }
+
+        return null;
     }
 }

@@ -47,6 +47,13 @@ class SharedStateClient
 
     public function disconnect(): void
     {
+        // Keep the process-level shared-service pool alive for WLS worker reuse.
+        // Real socket shutdown can still happen through explicit shutdownPool()
+        // or naturally when the worker process exits.
+    }
+
+    public function shutdownPool(): void
+    {
         $this->pool->shutdown();
     }
 

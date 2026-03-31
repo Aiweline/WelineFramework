@@ -22,7 +22,6 @@ class SessionStateFacade implements SessionStateFacadeInterface
 
     private string $consumerCode;
     private bool $released = false;
-    private bool $acquired = false;
 
     /**
      * @param array<string, mixed> $config
@@ -40,11 +39,9 @@ class SessionStateFacade implements SessionStateFacadeInterface
             return;
         }
 
-        $this->runtime = $this->manager->acquire(ControlMessage::ROLE_SESSION_SERVER, $this->consumerCode, [
-            'config' => $config,
-            'consumer_code' => $this->consumerCode,
-        ]);
-        $this->acquired = true;
+        $this->runtime = $this->manager->ensure(ControlMessage::ROLE_SESSION_SERVER, $config, [], $this->consumerCode);
+        $this->runtime['consumer_code'] = $this->consumerCode;
+
         try {
             $serviceOptions = $this->buildServiceOptions($config, $this->runtime);
             $host = (string) ($this->runtime['host'] ?? '127.0.0.1');
@@ -61,7 +58,7 @@ class SessionStateFacade implements SessionStateFacadeInterface
             $client->connect();
             $this->sessionClient = $client;
         } catch (\Throwable $throwable) {
-            $this->rollbackAcquireOnInitializationFailure();
+            $this->cleanupInitializationFailure();
 
             throw $throwable;
         }
@@ -139,17 +136,13 @@ class SessionStateFacade implements SessionStateFacadeInterface
         if (isset($this->sessionClient)) {
             $this->sessionClient->disconnect();
         }
-        if ($this->acquired) {
-            $this->manager->release(ControlMessage::ROLE_SESSION_SERVER, $this->consumerCode, [
-                'runtime' => $this->runtime,
-                'consumer_code' => $this->consumerCode,
-            ]);
-        }
+
         $this->released = true;
     }
 
     /**
      * @param array<string, mixed> $config
+     * @param array<string, mixed> $runtime
      * @return array<string, mixed>
      */
     private function buildServiceOptions(array $config, array $runtime = []): array
@@ -190,7 +183,7 @@ class SessionStateFacade implements SessionStateFacadeInterface
         return $client->connect();
     }
 
-    private function rollbackAcquireOnInitializationFailure(): void
+    private function cleanupInitializationFailure(): void
     {
         try {
             if (isset($this->sessionClient)) {
@@ -199,15 +192,6 @@ class SessionStateFacade implements SessionStateFacadeInterface
         } catch (\Throwable) {
         }
 
-        try {
-            $this->manager->release(ControlMessage::ROLE_SESSION_SERVER, $this->consumerCode, [
-                'runtime' => $this->runtime,
-                'consumer_code' => $this->consumerCode,
-            ]);
-        } catch (\Throwable) {
-        }
-
-        $this->acquired = false;
         $this->released = true;
     }
 
@@ -321,31 +305,8 @@ class SessionStateFacade implements SessionStateFacadeInterface
      */
     private function resolveConfiguredRuntime(array $config): array
     {
-        $wlsServer = \is_array($config['wls_server'] ?? null) ? $config['wls_server'] : [];
-        $host = \trim((string) ($config['host'] ?? $config['server_host'] ?? $wlsServer['host'] ?? '127.0.0.1'));
-        if ($host === '') {
-            $host = '127.0.0.1';
-        }
+        $runtime = (new SharedStateRuntimeResolver())->resolve($config);
 
-        $port = (int) ($config['port'] ?? $config['server_port'] ?? $wlsServer['port'] ?? 19970);
-        if ($port <= 0) {
-            $port = 19970;
-        }
-
-        $tokenFileName = \trim((string) (
-            $config['token_file_name']
-            ?? $config['session_server_token_file_name']
-            ?? $wlsServer['token_file_name']
-            ?? 'session_server.token'
-        ));
-        if ($tokenFileName === '') {
-            $tokenFileName = 'session_server.token';
-        }
-
-        return [
-            'host' => $host,
-            'port' => $port,
-            'token_file_name' => $tokenFileName,
-        ];
+        return $runtime['session'];
     }
 }

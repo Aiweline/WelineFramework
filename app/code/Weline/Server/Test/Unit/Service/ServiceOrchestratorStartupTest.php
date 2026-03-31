@@ -83,6 +83,115 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($this->readPrivateBool($orchestrator, 'serverReadyNotificationArmed'));
     }
 
+    public function testWaitForStartupAcceptanceConsumesPendingStopRequestImmediately(): void
+    {
+        $server = new class extends MasterControlServer {
+            public ?\Closure $pollHook = null;
+            public int $pollCalls = 0;
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                $this->pollCalls++;
+                if ($this->pollHook !== null) {
+                    $hook = $this->pollHook;
+                    $this->pollHook = null;
+                    $hook();
+                }
+
+                return 0;
+            }
+        };
+
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var array<int, array{reason:string,progressClientId:?int}> */
+            public array $stopAllCalls = [];
+
+            public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
+            {
+                $this->stopAllCalls[] = [
+                    'reason' => $reason,
+                    'progressClientId' => $progressClientId,
+                ];
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $server->pollHook = function () use ($orchestrator): void {
+            $this->writePrivate($orchestrator, 'pendingStopReason', 'startup-stop');
+            $this->writePrivate($orchestrator, 'pendingStopProgressClientId', 66);
+        };
+
+        $this->invokePrivateWithArgs($orchestrator, 'waitForStartupAcceptance', [[
+            ControlMessage::ROLE_WORKER => [
+                'displayName' => 'HTTP Worker',
+                'expected' => 2,
+                'minReady' => 2,
+            ],
+        ], $this->createWorkerInfraContext()]);
+
+        self::assertSame([[
+            'reason' => 'startup-stop',
+            'progressClientId' => 66,
+        ]], $orchestrator->stopAllCalls);
+        self::assertSame(1, $server->pollCalls);
+    }
+
+    public function testWaitForInstanceReadyReturnsFalseWhenPendingStopRequestIsConsumed(): void
+    {
+        $server = new class extends MasterControlServer {
+            public ?\Closure $pollHook = null;
+            public int $pollCalls = 0;
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                $this->pollCalls++;
+                if ($this->pollHook !== null) {
+                    $hook = $this->pollHook;
+                    $this->pollHook = null;
+                    $hook();
+                }
+
+                return 0;
+            }
+        };
+
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var array<int, array{reason:string,progressClientId:?int}> */
+            public array $stopAllCalls = [];
+
+            public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
+            {
+                $this->stopAllCalls[] = [
+                    'reason' => $reason,
+                    'progressClientId' => $progressClientId,
+                ];
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $server->pollHook = function () use ($orchestrator): void {
+            $this->writePrivate($orchestrator, 'pendingStopReason', 'reload-stop');
+        };
+
+        $ready = $this->invokePrivateWithArgs($orchestrator, 'waitForInstanceReady', [
+            ControlMessage::ROLE_WORKER,
+            1,
+            0.5,
+            null,
+        ]);
+
+        self::assertFalse($ready);
+        self::assertSame([[
+            'reason' => 'reload-stop',
+            'progressClientId' => null,
+        ]], $orchestrator->stopAllCalls);
+        self::assertSame(1, $server->pollCalls);
+    }
+
     public function testStartProvidersBatchAdoptsExistingSharedSidecar(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
@@ -231,17 +340,42 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     public function testWaitForWorkerCriticalInfraReadyFailsWhenSessionServerStaysDegraded(): void
     {
-        $orchestrator = new ServiceOrchestrator();
+        $sharedManager = new class extends \Weline\Server\Service\SharedStateServiceManager {
+            public function probe(string $role, array $config = [], array $envConfig = []): array
+            {
+                return [
+                    'healthy' => $role === ControlMessage::ROLE_MEMORY_SERVER,
+                    'runtime' => ['host' => '127.0.0.1', 'port' => $role === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970],
+                ];
+            }
+
+            public function ensure(string $role, array $config = [], array $envConfig = [], string $requesterInstanceName = 'system'): array
+            {
+                if ($role === ControlMessage::ROLE_SESSION_SERVER) {
+                    throw new \RuntimeException('session unavailable');
+                }
+
+                return ['host' => '127.0.0.1', 'port' => 19971, 'token_file_name' => 'memory_server.token'];
+            }
+        };
+
+        $orchestrator = new class($sharedManager) extends ServiceOrchestrator {
+            public function __construct(private readonly \Weline\Server\Service\SharedStateServiceManager $sharedManager)
+            {
+                parent::__construct();
+            }
+
+            protected function createSharedStateServiceManager(): \Weline\Server\Service\SharedStateServiceManager
+            {
+                return $this->sharedManager;
+            }
+        };
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new WorkerProvider());
-        $registry->registerProvider(new SessionServerProvider());
-        $registry->registerProvider(new MemoryServerProvider());
 
         $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
         $this->writePrivate($orchestrator, 'desiredState', [
             ControlMessage::ROLE_WORKER => 2,
-            ControlMessage::ROLE_SESSION_SERVER => 1,
-            ControlMessage::ROLE_MEMORY_SERVER => 1,
         ]);
         $this->writePrivate($orchestrator, 'infraDegraded', [
             ControlMessage::ROLE_SESSION_SERVER => true,
@@ -282,18 +416,50 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
         };
 
-        $orchestrator = new ServiceOrchestrator();
+        $sharedManager = new class extends \Weline\Server\Service\SharedStateServiceManager {
+            /** @var array<string, bool> */
+            public array $health = [
+                ControlMessage::ROLE_SESSION_SERVER => false,
+                ControlMessage::ROLE_MEMORY_SERVER => true,
+            ];
+
+            public function probe(string $role, array $config = [], array $envConfig = []): array
+            {
+                $port = $role === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970;
+
+                return [
+                    'healthy' => (bool) ($this->health[$role] ?? false),
+                    'runtime' => ['host' => '127.0.0.1', 'port' => $port, 'token_file_name' => $role === ControlMessage::ROLE_MEMORY_SERVER ? 'memory_server.token' : 'session_server.token'],
+                ];
+            }
+
+            public function ensure(string $role, array $config = [], array $envConfig = [], string $requesterInstanceName = 'system'): array
+            {
+                $port = $role === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970;
+                $this->health[$role] = true;
+
+                return ['host' => '127.0.0.1', 'port' => $port, 'token_file_name' => $role === ControlMessage::ROLE_MEMORY_SERVER ? 'memory_server.token' : 'session_server.token'];
+            }
+        };
+
+        $orchestrator = new class($sharedManager) extends ServiceOrchestrator {
+            public function __construct(private readonly \Weline\Server\Service\SharedStateServiceManager $sharedManager)
+            {
+                parent::__construct();
+            }
+
+            protected function createSharedStateServiceManager(): \Weline\Server\Service\SharedStateServiceManager
+            {
+                return $this->sharedManager;
+            }
+        };
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new WorkerProvider());
-        $registry->registerProvider(new SessionServerProvider());
-        $registry->registerProvider(new MemoryServerProvider());
 
         $this->writePrivate($orchestrator, 'controlServer', $server);
         $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
         $this->writePrivate($orchestrator, 'desiredState', [
             ControlMessage::ROLE_WORKER => 2,
-            ControlMessage::ROLE_SESSION_SERVER => 1,
-            ControlMessage::ROLE_MEMORY_SERVER => 1,
         ]);
         $this->writePrivate($orchestrator, 'infraDegraded', [
             ControlMessage::ROLE_SESSION_SERVER => true,
@@ -314,13 +480,14 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: 19971,
         ));
 
-        $server->pollHook = function () use ($registry, $orchestrator): void {
+        $server->pollHook = function () use ($registry, $orchestrator, $sharedManager): void {
             $session = $registry->getInstance(ControlMessage::ROLE_SESSION_SERVER, 1);
             self::assertInstanceOf(ServiceInstance::class, $session);
             $session->state = ServiceInstance::STATE_READY;
             $session->ipcClientId = 77;
             $registry->updateInstance($session);
 
+            $sharedManager->health[ControlMessage::ROLE_SESSION_SERVER] = true;
             $this->writePrivate($orchestrator, 'infraDegraded', [
                 ControlMessage::ROLE_SESSION_SERVER => false,
                 ControlMessage::ROLE_MEMORY_SERVER => false,
@@ -330,6 +497,17 @@ class ServiceOrchestratorStartupTest extends TestCase
         $ready = $this->invokePrivateWithArgs($orchestrator, 'waitForWorkerCriticalInfraReady', ['reload worker', 0.5]);
 
         self::assertTrue($ready);
+    }
+
+    public function testGetWorkerRestartBatchesUsesSingleBatchInForceMode(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $normalBatches = $this->invokePrivateWithArgs($orchestrator, 'getWorkerRestartBatches', [[1, 2, 3, 4], false]);
+        self::assertSame([[1], [2], [3], [4]], $normalBatches);
+
+        $forceBatches = $this->invokePrivateWithArgs($orchestrator, 'getWorkerRestartBatches', [[1, 2, 3, 4], true]);
+        self::assertSame([[1, 2, 3, 4]], $forceBatches);
     }
 
     public function testPerformHealthChecksKeepsAdoptedSharedSidecarAliveWithoutIpc(): void
@@ -496,15 +674,12 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     private function readPrivateBool(object $object, string $property): bool
     {
-        $reflection = new \ReflectionProperty($object, $property);
-        $reflection->setAccessible(true);
-
-        return (bool) $reflection->getValue($object);
+        return (bool) $this->readPrivate($object, $property);
     }
 
     private function readPrivate(object $object, string $property): mixed
     {
-        $reflection = new \ReflectionProperty($object, $property);
+        $reflection = $this->findProperty($object, $property);
         $reflection->setAccessible(true);
 
         return $reflection->getValue($object);
@@ -512,8 +687,21 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     private function writePrivate(object $object, string $property, mixed $value): void
     {
-        $reflection = new \ReflectionProperty($object, $property);
+        $reflection = $this->findProperty($object, $property);
         $reflection->setAccessible(true);
         $reflection->setValue($object, $value);
+    }
+
+    private function findProperty(object $object, string $property): \ReflectionProperty
+    {
+        $reflection = new \ReflectionClass($object);
+        while ($reflection !== false) {
+            if ($reflection->hasProperty($property)) {
+                return $reflection->getProperty($property);
+            }
+            $reflection = $reflection->getParentClass();
+        }
+
+        throw new \ReflectionException(\sprintf('Property %s::%s does not exist', $object::class, $property));
     }
 }

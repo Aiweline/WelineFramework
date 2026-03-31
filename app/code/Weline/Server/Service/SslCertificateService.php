@@ -165,11 +165,7 @@ class SslCertificateService
         if ($seconds <= 0) {
             return;
         }
-        if (\class_exists(\Weline\Framework\Runtime\SchedulerSystem::class, false)) {
-            \Weline\Framework\Runtime\SchedulerSystem::sleep($seconds);
-        } else {
-            \sleep($seconds);
-        }
+        \Weline\Framework\Runtime\SchedulerSystem::sleep($seconds);
     }
     
     /**
