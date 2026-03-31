@@ -1076,7 +1076,7 @@ class CloudflareRegistrar implements DomainRegistrarInterface
 
         for ($attempt = 0; $attempt < self::ZONE_NAME_QUERY_ATTEMPTS; $attempt++) {
             if ($attempt > 0) {
-                \sleep(self::ZONE_NAME_QUERY_RETRY_SLEEP_SECONDS);
+                \Weline\Framework\Runtime\SchedulerSystem::sleep(self::ZONE_NAME_QUERY_RETRY_SLEEP_SECONDS);
             }
             $response = $this->makeRequest('/zones', 'GET', ['name' => $domain], $credentials);
             if (!($response['success'] ?? false)) {
