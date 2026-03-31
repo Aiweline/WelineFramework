@@ -37,7 +37,7 @@
 "Added","Added"
 "Error","Error"
 "Products","Products"
-"Showing %1 products","Showing %1 products"
+"Showing %{1} products","Showing %{1} products"
 "Sort","Sort"
 "Filters","Filters"
 "Apply","Apply"
