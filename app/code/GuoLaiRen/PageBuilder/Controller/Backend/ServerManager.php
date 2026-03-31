@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 #[Acl('GuoLaiRen_PageBuilder::server_manager', '服务器实例', 'mdi mdi-server', 'PageBuilder 服务器管理', 'GuoLaiRen_PageBuilder::server_management')]
 class ServerManager extends BaseController
@@ -409,7 +410,7 @@ class ServerManager extends BaseController
                 ]);
                 return;
             }
-            \usleep(500000);
+            SchedulerSystem::yieldDelay(500);
         }
 
         $sse->complete([

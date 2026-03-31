@@ -23,6 +23,7 @@ class AIComponentGenerator
     private ComponentTemplateBuilder $templateBuilder;
     private EntityFileManager $entityFileManager;
     private ComponentValidator $componentValidator;
+    private CodeValidator $codeValidator;
     
     // AI 版本号
     public const AI_VERSION = '1.0.0';
@@ -32,6 +33,7 @@ class AIComponentGenerator
         $this->templateBuilder = ObjectManager::getInstance(ComponentTemplateBuilder::class);
         $this->entityFileManager = ObjectManager::getInstance(EntityFileManager::class);
         $this->componentValidator = ObjectManager::getInstance(ComponentValidator::class);
+        $this->codeValidator = ObjectManager::getInstance(CodeValidator::class);
     }
     
     /**
@@ -135,6 +137,14 @@ class AIComponentGenerator
     {
         if (!$result->isSuccess()) {
             throw new \Exception('无法保存失败的生成结果: ' . $result->getError());
+        }
+
+        // 安全/质量门控：禁止将危险 PHP 写入并最终落盘执行
+        $templateContent = (string) $result->getTemplateContent();
+        $validation = $this->codeValidator->validate($templateContent);
+        if (!$validation['valid']) {
+            $errors = \array_slice($validation['errors'] ?? [], 0, 5);
+            throw new \Exception('AI 组件代码未通过质量检测：' . \implode('；', $errors));
         }
         
         $componentModel = ObjectManager::getInstance(Component::class);
@@ -339,6 +349,19 @@ class AIComponentGenerator
         $templateContent = $this->fixCommonAiTyposInTemplate($templateContent);
         // 移除「仅含 continue/break」的 PHP 块，避免 Fatal: 'continue' not in the 'loop' or 'switch' context（预览用模板可能未经过 FrameworkBuilder 清洗）
         $templateContent = $this->stripInvalidContinueBreakInTemplate($templateContent);
+
+        // 质量门控（安全优先）：禁止危险函数/语法结构在预览阶段被执行
+        $validation = $this->codeValidator->validate($templateContent);
+        if (!$validation['valid']) {
+            $errors = \array_slice($validation['errors'] ?? [], 0, 3);
+            $errorMsg = '代码质量检测未通过：' . \implode('；', $errors);
+            return [
+                'success' => false,
+                'html' => $this->generatePreviewPlaceholder($templateContent, $errorMsg),
+                'error' => $errorMsg,
+            ];
+        }
+
         // 先进行基本的语法检查
         $syntaxCheck = $this->checkPHPSyntax($templateContent);
         // 若仍报 continue/break 不在 loop 内，按错误行号替换该行为注释后重试一次
