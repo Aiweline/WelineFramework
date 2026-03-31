@@ -28,6 +28,12 @@ class TaxQueryProvider implements QueryProviderInterface
                 $this->stringOrNull($params['region'] ?? null),
                 $this->extractContext($params)
             ),
+            'calculateTaxBreakdown' => $this->taxService->calculateTaxBreakdown(
+                (float) ($params['subtotal'] ?? 0.0),
+                $this->stringOrNull($params['country'] ?? null),
+                $this->stringOrNull($params['region'] ?? null),
+                $this->extractContext($params)
+            ),
             'getTaxRate' => $this->taxService->getTaxRate(
                 $this->stringOrNull($params['country'] ?? null),
                 $this->stringOrNull($params['region'] ?? null),
@@ -48,6 +54,7 @@ class TaxQueryProvider implements QueryProviderInterface
             'module' => 'WeShop_Tax',
             'operations' => [
                 ['name' => 'calculateTax', 'description' => __('Calculate tax for a checkout/order subtotal.')],
+                ['name' => 'calculateTaxBreakdown', 'description' => __('Return total tax plus included and chargeable tax breakdown data.')],
                 ['name' => 'getTaxRate', 'description' => __('Resolve the tax rate for a country/region context.')],
             ],
         ];
@@ -60,7 +67,17 @@ class TaxQueryProvider implements QueryProviderInterface
     private function extractContext(array $params): array
     {
         $context = is_array($params['context'] ?? null) ? $params['context'] : [];
-        foreach (['discount', 'shipping_amount', 'apply_to_shipping', 'default_rate', 'country_rates', 'region_rates'] as $key) {
+        foreach ([
+            'discount',
+            'shipping_amount',
+            'apply_to_shipping',
+            'default_rate',
+            'country_rates',
+            'region_rates',
+            'prices_include_tax',
+            'price_includes_tax',
+            'shipping_includes_tax',
+        ] as $key) {
             if (array_key_exists($key, $params) && !array_key_exists($key, $context)) {
                 $context[$key] = $params[$key];
             }
