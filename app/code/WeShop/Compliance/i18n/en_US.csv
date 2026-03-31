@@ -1,4 +1,18 @@
-﻿"Consent type is required.","Consent type is required."
+﻿"Compliance Management","Compliance Management"
+"Invalid policy type.","Invalid policy type."
+"Privacy Policy","Privacy Policy"
+"Terms of Service","Terms of Service"
+"Cookie Policy","Cookie Policy"
+"Marketing Policy","Marketing Policy"
+"Edit %{1}","Edit %{1}"
+"Invalid request method.","Invalid request method."
+"Policy content cannot be empty.","Policy content cannot be empty."
+"Policy ""%{1}"" saved successfully.","Policy ""%{1}"" saved successfully."
+"Failed to save policy: %{1}","Failed to save policy: %{1}"
+"Unsupported export format.","Unsupported export format."
+"Consent data exported successfully in %{1} format.","Consent data exported successfully in %{1} format."
+"Export failed: %{1}","Export failed: %{1}"
+"Consent type is required.","Consent type is required."
 "Please log in to update this consent.","Please log in to update this consent."
 "Consent preference updated.","Consent preference updated."
 "Compliance page before content","Compliance page before content"
@@ -26,6 +40,63 @@ Compliance,Compliance
 "Open Compliance","Open Compliance"
 "Accepted Preferences","Accepted Preferences"
 "Review privacy, terms, and communication consent settings from one secure workspace.","Review privacy, terms, and communication consent settings from one secure workspace."
+"Data collection, usage, and user privacy controls","Data collection, usage, and user privacy controls"
+"Platform terms and transaction rules","Platform terms and transaction rules"
+"Cookie usage and tracking preferences","Cookie usage and tracking preferences"
+"Marketing communications consent","Marketing communications consent"
+WeShop,WeShop
+Dashboard,Dashboard
+"Active Consent Types","Active Consent Types"
+"Required Policies","Required Policies"
+"Optional Policies","Optional Policies"
+"Last Audit","Last Audit"
+"System default","System default"
+"Compliance Policies","Compliance Policies"
+"Manage privacy policies, terms of service, and consent configurations","Manage privacy policies, terms of service, and consent configurations"
+"Policy Type","Policy Type"
+"Policy Name","Policy Name"
+Description,Description
+Required,Required
+"Last Updated","Last Updated"
+Actions,Actions
+"Quick Actions","Quick Actions"
+"Common compliance management tasks","Common compliance management tasks"
+"Edit Privacy Policy","Edit Privacy Policy"
+"Edit Terms of Service","Edit Terms of Service"
+"Edit Cookie Policy","Edit Cookie Policy"
+"Export Consent Data","Export Consent Data"
+"Export customer consent records for regulatory compliance","Export customer consent records for regulatory compliance"
+"Date From","Date From"
+"Date To","Date To"
+Format,Format
+CSV,CSV
+"Excel (XLSX)","Excel (XLSX)"
+JSON,JSON
+Export,Export
+Optional,Optional
+Edit,Edit
+"No compliance policies found","No compliance policies found"
+Loading...,Loading...
+Processing...,Processing...
+"Edit Policy","Edit Policy"
+Policy,Policy
+"Section %{1} Title","Section %{1} Title"
+"Section %{1} Content","Section %{1} Content"
+"Policy Content","Policy Content"
+"Policy Sections","Policy Sections"
+"Configure the sections displayed on the storefront compliance page.","Configure the sections displayed on the storefront compliance page."
+"No policy content configured yet. Please add sections below.","No policy content configured yet. Please add sections below."
+"Section 1 Title","Section 1 Title"
+"Section 1 Content","Section 1 Content"
+"Add Section","Add Section"
+"Policy Settings","Policy Settings"
+"Policy type cannot be changed after creation.","Policy type cannot be changed after creation."
+"Display Name","Display Name"
+"Required Consent","Required Consent"
+"Users must acknowledge this policy","Users must acknowledge this policy"
+"Last Modified","Last Modified"
+"Save Policy","Save Policy"
+"Back to Dashboard","Back to Dashboard"
 "Consent Workspace","Consent Workspace"
 "Update Consent Preferences","Update Consent Preferences"
 "Use this page to update optional communications and acknowledge required policy items for your account.","Use this page to update optional communications and acknowledge required policy items for your account."
@@ -42,7 +113,6 @@ Enable,Enable
 "Preferences Accepted","Preferences Accepted"
 "Keep this score current to avoid compliance interruptions during account operations.","Keep this score current to avoid compliance interruptions during account operations."
 "Consent Preferences","Consent Preferences"
-Required,Required
 Revoke,Revoke
 Accept,Accept
 Privacy,Privacy
