@@ -1,0 +1,94 @@
+<?php
+$items = $this->getData('items') ?? [];
+$filters = $this->getData('filters') ?? [];
+$profileSaveUrl = (string) ($this->getData('profileSaveUrl') ?? '');
+$profileIndexUrl = (string) ($this->getData('profileIndexUrl') ?? '');
+$paymentTerms = $this->getData('paymentTerms') ?? [];
+?>
+<div class="container-fluid py-3">
+    <h1 class="h3 mb-3"><?= __('B2B Enterprise Customers') ?></h1>
+    <form method="get" action="<?= htmlspecialchars($profileIndexUrl, ENT_QUOTES) ?>" class="row g-2 mb-3">
+        <div class="col-md-3">
+            <input type="text" name="company_name" class="form-control" placeholder="<?= __('Company name') ?>"
+                   value="<?= htmlspecialchars((string) ($filters['company_name'] ?? ''), ENT_QUOTES) ?>">
+        </div>
+        <div class="col-md-2">
+            <input type="number" name="customer_id" class="form-control" placeholder="<?= __('Customer ID') ?>"
+                   value="<?= (int) ($filters['customer_id'] ?? 0) > 0 ? (int) $filters['customer_id'] : '' ?>">
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-outline-primary"><?= __('Filter') ?></button>
+        </div>
+    </form>
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="h5"><?= __('Create / edit profile') ?></h2>
+            <form method="post" action="<?= htmlspecialchars($profileSaveUrl, ENT_QUOTES) ?>" class="row g-2">
+                <input type="hidden" name="back_url" value="<?= htmlspecialchars($profileIndexUrl, ENT_QUOTES) ?>">
+                <div class="col-md-2">
+                    <label class="form-label"><?= __('Customer ID') ?></label>
+                    <input type="number" name="customer_id" class="form-control" required min="1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Company name') ?></label>
+                    <input type="text" name="company_name" class="form-control" required>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label"><?= __('Tax ID') ?></label>
+                    <input type="text" name="tax_id" class="form-control">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label"><?= __('Credit limit') ?></label>
+                    <input type="number" step="0.01" name="credit_limit" class="form-control" value="0">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label"><?= __('Term') ?></label>
+                    <select name="payment_term_id" class="form-select">
+                        <option value="0"><?= __('Not set') ?></option>
+                        <?php foreach ($paymentTerms as $t): ?>
+                            <?php if (!is_array($t)) {
+                                continue;
+                            } ?>
+                            <option value="<?= (int) ($t['term_id'] ?? 0) ?>"><?= htmlspecialchars((string) ($t['term_name'] ?? ''), ENT_QUOTES) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="col-md-1">
+                    <label class="form-label"><?= __('Active') ?></label>
+                    <select name="status" class="form-select">
+                        <option value="1"><?= __('Yes') ?></option>
+                        <option value="0"><?= __('No') ?></option>
+                    </select>
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary"><?= __('Save profile') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th><?= __('ID') ?></th>
+                <th><?= __('Customer') ?></th>
+                <th><?= __('Company') ?></th>
+                <th><?= __('Credit limit') ?></th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($items as $row): ?>
+                <?php if (!is_array($row)) {
+                    continue;
+                } ?>
+                <tr>
+                    <td><?= (int) ($row['b2b_customer_id'] ?? 0) ?></td>
+                    <td><?= (int) ($row['customer_id'] ?? 0) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['company_name'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['credit_limit'] ?? ''), ENT_QUOTES) ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
