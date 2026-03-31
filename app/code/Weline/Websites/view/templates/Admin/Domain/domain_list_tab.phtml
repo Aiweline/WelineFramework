@@ -2472,7 +2472,7 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
                 if (result.isConfirmed) doDeleteDomain(domainId);
             });
         } else {
-            if (confirm(msg)) doDeleteDomain(domainId);
+            toast('<?= __('未找到确认弹窗组件，操作已取消') ?>', 'error');
         }
     }
 
@@ -2503,8 +2503,20 @@ $manualNsProviderOptionsJson = \json_encode($manualNsProviderOptions, JSON_UNESC
             BackendConfirm.show(msg).then(function(confirmed) {
                 if (confirmed) doBatchDeleteDomains(ids);
             });
-        } else if (confirm(msg)) {
-            doBatchDeleteDomains(ids);
+        } else if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: '<?= __('确认删除') ?>',
+                html: msg,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#f46a6a',
+                cancelButtonText: '<?= __('取消') ?>',
+                confirmButtonText: '<?= __('删除') ?>'
+            }).then(function(result) {
+                if (result.isConfirmed) doBatchDeleteDomains(ids);
+            });
+        } else {
+            toast('<?= __('未找到确认弹窗组件，操作已取消') ?>', 'error');
         }
     }
 

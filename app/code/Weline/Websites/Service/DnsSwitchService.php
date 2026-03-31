@@ -657,7 +657,7 @@ class DnsSwitchService
             if ($sleep <= 0) {
                 break;
             }
-            \sleep($sleep);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep((int) $sleep);
             $elapsed += $sleep;
         }
         return ['verified' => false, 'aborted' => false, 'verified_by' => ''];
@@ -698,7 +698,7 @@ class DnsSwitchService
         $lastErr = '';
         for ($i = 0; $i < $attempts; $i++) {
             if ($i > 0 && $sleepSeconds > 0) {
-                \sleep($sleepSeconds);
+                \Weline\Framework\Runtime\SchedulerSystem::sleep((int) $sleepSeconds);
             }
             $check = $this->getRegistrarNameserversWithDetail($sourceAdapter, $domainName, $credentials);
             if (($check['error'] ?? '') !== '') {
@@ -757,7 +757,7 @@ class DnsSwitchService
         $left = $totalSeconds;
         while ($left > 0) {
             $step = \min($chunk, $left);
-            \sleep($step);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep((int) $step);
             $left -= $step;
             if ($isAlive !== null && !$isAlive()) {
                 return;
