@@ -6,6 +6,7 @@ namespace Weline\Customer\Controller\Account;
 
 use WeShop\Auth\Model\PendingAuthChallenge;
 use WeShop\Customer\Service\CustomerWebAuthService;
+use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\View\Template;
 
 class Challenge extends \Weline\Framework\App\Controller\FrontendController
@@ -35,6 +36,9 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
         $this->assign('challenge_token', $challengeToken);
         $this->assign('expires_at', (int) $challenge->getData(PendingAuthChallenge::schema_fields_EXPIRES_AT));
         $this->assign('title', __('Two-Factor Verification'));
+
+        $this->assign('error_message', MessageManager::get_error_message());
+        $this->assign('success_message', MessageManager::get_success_message());
 
         return $this->fetch('Weline_Customer::templates/frontend/account/challenge.phtml');
     }
