@@ -6,6 +6,9 @@ namespace WeShop\Order\Test\Unit\Controller\Backend\Order;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\Order\Controller\Backend\Order\UpdateStatus;
+use WeShop\Order\Service\OrderService;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\MessageManager;
 
 class UpdateStatusTest extends TestCase
 {
@@ -19,5 +22,56 @@ class UpdateStatusTest extends TestCase
         $reflection = new \ReflectionClass(UpdateStatus::class);
         $this->assertTrue($reflection->hasMethod('post'));
         $this->assertTrue($reflection->hasMethod('index'));
+    }
+
+    public function testPostFallsBackToSafeBackUrlWhenInjectedExternalUrl(): void
+    {
+        $orderService = $this->createMock(OrderService::class);
+        $orderService->expects($this->once())
+            ->method('updateOrderStatus')
+            ->with(77, 'processing');
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')
+            ->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+                return match ($key) {
+                    'id' => 77,
+                    'status' => 'processing',
+                    'back_url' => 'https://evil.example/phishing',
+                    default => $default,
+                };
+            });
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())->method('addSuccess');
+
+        $controller = $this->getMockBuilder(UpdateStatus::class)
+            ->setConstructorArgs([$orderService])
+            ->onlyMethods(['redirect', 'getMessageManager', 'getUrl'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('getUrl')
+            ->with('*/backend/order')
+            ->willReturn('/admin/order/index');
+        $controller->expects($this->once())
+            ->method('getMessageManager')
+            ->willReturn($messageManager);
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('/admin/order/index');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+        $this->assertSame('', $controller->post());
+    }
+
+    private function setProtectedProperty(object $target, string $property, mixed $value): void
+    {
+        $reflection = new \ReflectionObject($target);
+        while (!$reflection->hasProperty($property) && ($reflection = $reflection->getParentClass())) {
+        }
+
+        $reflectionProperty = $reflection->getProperty($property);
+        $reflectionProperty->setAccessible(true);
+        $reflectionProperty->setValue($target, $value);
     }
 }

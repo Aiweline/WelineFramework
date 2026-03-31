@@ -29,10 +29,21 @@ class View extends BaseController
             return '';
         }
 
-        $pageData = $this->getOrderDetailPageDataService()->build(
-            (int) $customerId,
-            (int) ($this->request->getParam('id') ?? 0)
-        );
+        try {
+            $pageData = $this->getOrderDetailPageDataService()->build(
+                (int) $customerId,
+                (int) ($this->request->getParam('id') ?? 0)
+            );
+        } catch (\RuntimeException $runtimeException) {
+            $this->getMessageManager()->addError($runtimeException->getMessage());
+            $this->redirect('weshop/order/list');
+            return '';
+        } catch (\Throwable) {
+            $this->getMessageManager()->addError((string) __('Failed to load order details.'));
+            $this->redirect('weshop/order/list');
+            return '';
+        }
+
         foreach ($pageData as $key => $value) {
             $this->assign($key, $value);
         }
