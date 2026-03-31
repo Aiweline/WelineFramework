@@ -460,19 +460,62 @@ function saveConfig() {
     .then(function(res) {
         var result = (res && res.data) !== undefined ? res.data : res;
         if (result.success) {
-            alert('配置保存成功');
+            notifySuccess('配置保存成功');
             location.reload();
         } else {
-            alert('保存失败: ' + result.message);
+            notifyError('保存失败: ' + result.message);
         }
     })
     .catch(error => {
-        alert('保存失败: ' + error.message);
+        notifyError('保存失败: ' + error.message);
     });
 }
 
-function resetAdapter(adapterType) {
-    if (!confirm('确定要重置' + (adapterType === 'desensitization' ? '脱敏适配器' : '重写适配器') + '的配置为默认值吗？')) {
+function notifySuccess(message) {
+    if (window.BackendToast && typeof window.BackendToast.success === 'function') {
+        window.BackendToast.success(message);
+        return;
+    }
+    console.log(message);
+}
+
+function notifyError(message) {
+    if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+        window.BackendToast.error(message);
+        return;
+    }
+    console.error(message);
+}
+
+function notifyWarning(message) {
+    if (window.BackendToast && typeof window.BackendToast.warning === 'function') {
+        window.BackendToast.warning(message);
+        return;
+    }
+    console.warn(message);
+}
+
+function confirmAction(message) {
+    return new Promise(resolve => {
+        if (window.BackendConfirm && typeof window.BackendConfirm.confirm === 'function') {
+            window.BackendConfirm.confirm({
+                title: '操作确认',
+                message: message,
+                confirmText: '确定',
+                cancelText: '取消',
+                onConfirm: function() { resolve(true); },
+                onCancel: function() { resolve(false); }
+            });
+            return;
+        }
+        notifyWarning('确认组件不可用，已取消本次操作。');
+        resolve(false);
+    });
+}
+
+async function resetAdapter(adapterType) {
+    const confirmed = await confirmAction('确定要重置' + (adapterType === 'desensitization' ? '脱敏适配器' : '重写适配器') + '的配置为默认值吗？');
+    if (!confirmed) {
         return;
     }
     
@@ -482,14 +525,14 @@ function resetAdapter(adapterType) {
     .then(function(res) {
         var result = (res && res.data) !== undefined ? res.data : res;
         if (result.success) {
-            alert('配置已重置');
+            notifySuccess('配置已重置');
             location.reload();
         } else {
-            alert('重置失败: ' + result.message);
+            notifyError('重置失败: ' + result.message);
         }
     })
     .catch(error => {
-        alert('重置失败: ' + error.message);
+        notifyError('重置失败: ' + error.message);
     });
 }
 
@@ -517,7 +560,7 @@ function hideUpdateRulesModal() {
     }
 }
 
-function updateRules(platform) {
+async function updateRules(platform) {
     console.log('updateRules called with platform:', platform);
     const platformName = platform === 'meta' ? 'Meta' : 'Google';
 
@@ -525,11 +568,12 @@ function updateRules(platform) {
     const defaultModel = (document.getElementById('default_model')?.value || '').trim();
     console.log('defaultModel value:', defaultModel);
     if (!defaultModel) {
-        alert('请先在"默认AI模型"中选择一个模型后再更新规则');
+        notifyWarning('请先在"默认AI模型"中选择一个模型后再更新规则');
         return;
     }
 
-    if (!confirm(`确定要从${platformName}更新敏感词规则吗？这可能需要一些时间。`)) {
+    const confirmed = await confirmAction(`确定要从${platformName}更新敏感词规则吗？这可能需要一些时间。`);
+    if (!confirmed) {
         return;
     }
 
