@@ -5,16 +5,16 @@
     
     <!-- 货币列表 - 归入业务运营 > 货币管理 -->
     <menu source="Weline_Currency::currency_list" name="currency_list" title="货币列表" 
-          action="currency/backend/currency/index" parent="Weline_Backend::currency_group" 
+          action="weline_currency/backend/currency/index" parent="Weline_Backend::currency_group" 
           icon="mdi mdi-format-list-bulleted" order="10"/>
     
     <!-- 添加货币 -->
     <menu source="Weline_Currency::currency_add" name="currency_add" title="添加货币" 
-          action="currency/backend/currency/getAdd" parent="Weline_Backend::currency_group" 
+          action="weline_currency/backend/currency/getAdd" parent="Weline_Backend::currency_group" 
           icon="mdi mdi-plus-circle-outline" order="20"/>
     
     <!-- 货币配置 -->
     <menu source="Weline_Currency::currency_config" name="currency_config" title="货币配置" 
-          action="currency/backend/config/index" parent="Weline_Backend::currency_group" 
+          action="weline_currency/backend/config/index" parent="Weline_Backend::currency_group" 
           icon="mdi mdi-cog-outline" order="30"/>
 </menus>
