@@ -37,6 +37,7 @@ class CustomerProfileService
     public function getOrCreateByAuthUser(AuthCustomer $authUser, array $profileData = []): CustomerProfile
     {
         $email = (string) ($profileData['email'] ?? $authUser->getEmail() ?: $authUser->getUsername());
+        $authPasswordHash = trim((string) $authUser->getPassword());
         $profile = $this->getByUserId((int) $authUser->getId())
             ?? ($email !== '' ? $this->getByEmail($email) : null)
             ?? $this->customerProfile->reset()->clearData();
@@ -54,6 +55,10 @@ class CustomerProfileService
             ->setData(CustomerProfile::schema_fields_PHONE, $profileData['phone'] ?? $profile->getData(CustomerProfile::schema_fields_PHONE))
             ->setData(CustomerProfile::schema_fields_AVATAR, $profileData['avatar'] ?? $profile->getData(CustomerProfile::schema_fields_AVATAR))
             ->setData(CustomerProfile::schema_fields_UPDATED_AT, $now);
+
+        if ($authPasswordHash !== '') {
+            $profile->setData(CustomerProfile::schema_fields_PASSWORD, $authPasswordHash);
+        }
 
         if (!$profile->getId()) {
             $profile->setData(CustomerProfile::schema_fields_CREATED_AT, $now);
