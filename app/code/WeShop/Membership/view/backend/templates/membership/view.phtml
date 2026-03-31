@@ -1,0 +1,215 @@
+<?php
+/** @var array $membership */
+$membership = $this->getData('membership') ?? [];
+$levelOptionsRaw = $this->getData('levelOptions') ?? [];
+if (!is_array($levelOptionsRaw)) {
+    $levelOptionsRaw = [];
+}
+// 固定等级键顺序与 value，避免 escapeHtmlAttr($code) 等路径在部分环境下把 option value 渲成空串导致无法提交 level
+$membershipLevelCodes = ['bronze', 'silver', 'gold', 'platinum'];
+$levelOptions = [];
+foreach ($membershipLevelCodes as $code) {
+    $label = '';
+    if (array_key_exists($code, $levelOptionsRaw) && $levelOptionsRaw[$code] !== null && $levelOptionsRaw[$code] !== '') {
+        $label = (string) $levelOptionsRaw[$code];
+    }
+    if ($label === '') {
+        $label = match ($code) {
+            'bronze' => (string) __('Bronze'),
+            'silver' => (string) __('Silver'),
+            'gold' => (string) __('Gold'),
+            'platinum' => (string) __('Platinum'),
+            default => $code,
+        };
+    }
+    $levelOptions[$code] = $label;
+}
+$membershipIndexUrl = (string) ($this->getData('membershipIndexUrl') ?? $this->getBackendUrl('*/backend/membership'));
+$membershipSaveUrl = (string) ($this->getData('membershipSaveUrl') ?? $this->getBackendUrl('*/backend/membership/save'));
+$isNew = empty($membership['membership_id']);
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <a href="<?= $membershipIndexUrl ?>" class="text-decoration-none small text-muted">
+                <i class="mdi mdi-arrow-left me-1"></i><?= __('Back to Memberships')
+                ?>
+            </a>
+            <h1 class="h3 mb-1">
+                <?= $isNew ? __('Create Membership') : __('Membership Detail') ?>
+                <?php if (!$isNew): ?>
+                    #<?= (int) $membership['membership_id'] ?>
+                <?php endif; ?>
+            </h1>
+            <p class="text-muted mb-0">
+                <?= $isNew
+                    ? __('Create a new membership record for a customer.')
+                    : __('Review and update membership information.')
+                ?>
+            </p>
+        </div>
+        <?php if (!$isNew): ?>
+            <div class="badge bg-<?= $this->escapeHtmlAttr($membership['level'] ?? 'secondary') ?>">
+                <?= $this->escapeHtml($membership['level_label'] ?? ($membership['level'] ?? '')) ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h2 class="h5 mb-3"><?= __('Membership Information') ?></h2>
+                    <form method="post" action="<?= $membershipSaveUrl ?>" class="d-grid gap-3">
+                        <input type="hidden" name="membership_id" value="<?= (int) ($membership['membership_id'] ?? 0) ?>">
+                        <input type="hidden" name="back_url" value="<?= $this->escapeHtmlAttr($membershipIndexUrl) ?>">
+
+                        <div>
+                            <label class="form-label"><?= __('Customer ID') ?></label>
+                            <input
+                                type="number"
+                                name="customer_id"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) (int) ($membership['customer_id'] ?? 0), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+                                required
+                                min="1"
+                                <?= !$isNew ? 'readonly' : '' ?>
+                            >
+                            <?php if (!$isNew): ?>
+                                <div class="form-text"><?= __('Customer ID cannot be changed after creation.') ?></div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div>
+                            <label class="form-label"><?= __('Membership Level') ?></label>
+                            <select name="level" class="form-select">
+                                <?php foreach ($membershipLevelCodes as $code): ?>
+                                    <option value="<?= htmlspecialchars($code, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" <?= ($membership['level'] ?? 'bronze') === $code ? 'selected' : '' ?>>
+                                        <?= $this->escapeHtml($levelOptions[$code]) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label class="form-label"><?= __('Points') ?></label>
+                            <input
+                                type="number"
+                                name="points"
+                                class="form-control"
+                                value="<?= htmlspecialchars((string) (int) ($membership['points'] ?? 0), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>"
+                                required
+                                min="0"
+                            >
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">
+                            <i class="mdi mdi-content-save me-1"></i><?= __('Save Membership') ?>
+                        </button>
+
+                        <?php if (!$isNew): ?>
+                            <a href="<?= $this->getBackendUrl('*/backend/membership') ?>" class="btn btn-outline-secondary">
+                                <?= __('Cancel') ?>
+                            </a>
+                        <?php endif; ?>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <?php if (!$isNew): ?>
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3"><?= __('Membership Statistics') ?></h2>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 text-center">
+                                    <div class="text-muted small mb-1"><?= __('Current Level') ?></div>
+                                    <div class="h4 mb-0">
+                                        <span class="badge bg-<?= $this->escapeHtmlAttr($membership['level'] ?? 'secondary') ?>">
+                                            <?= $this->escapeHtml($membership['level_label'] ?? ($membership['level'] ?? '')) ?>
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 text-center">
+                                    <div class="text-muted small mb-1"><?= __('Total Points') ?></div>
+                                    <div class="h4 mb-0"><?= number_format((int) ($membership['points'] ?? 0)) ?></div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="border rounded p-3 text-center">
+                                    <div class="text-muted small mb-1"><?= __('Member Since') ?></div>
+                                    <div class="h6 mb-0"><?= $this->escapeHtml($membership['created_at'] ?? '-') ?></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3"><?= __('Level Benefits') ?></h2>
+                        <div class="row g-3">
+                            <?php foreach ($membershipLevelCodes as $code): ?>
+                                <?php $label = $levelOptions[$code]; ?>
+                                <div class="col-md-6">
+                                    <div class="border rounded p-3 <?= ($membership['level'] ?? '') === $code ? 'border-primary' : '' ?>">
+                                        <div class="d-flex align-items-center gap-2 mb-2">
+                                            <span class="badge bg-<?= $this->escapeHtmlAttr($code) ?>"><?= $this->escapeHtml($label) ?></span>
+                                            <?php if (($membership['level'] ?? '') === $code): ?>
+                                                <span class="text-primary small"><?= __('Current') ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <p class="text-muted small mb-0">
+                                            <?= $this->escapeHtml($this->getData('levelBenefits')[$code] ?? __('Standard membership benefits.')) ?>
+                                        </p>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php else: ?>
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h2 class="h5 mb-3"><?= __('Getting Started') ?></h2>
+                        <p class="text-muted"><?= __('Create a membership record by filling in the customer ID and selecting a membership level.') ?></p>
+                        <div class="list-group list-group-flush">
+                            <div class="list-group-item px-0">
+                                <div class="d-flex align-items-start gap-3">
+                                    <i class="mdi mdi-account-circle text-primary mt-1"></i>
+                                    <div>
+                                        <strong><?= __('Customer ID') ?></strong>
+                                        <p class="text-muted small mb-0"><?= __('Enter the unique customer identifier.') ?></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="list-group-item px-0">
+                                <div class="d-flex align-items-start gap-3">
+                                    <i class="mdi mdi-star-circle text-warning mt-1"></i>
+                                    <div>
+                                        <strong><?= __('Membership Level') ?></strong>
+                                        <p class="text-muted small mb-0"><?= __('Choose from Bronze, Silver, Gold, or Platinum.') ?></p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="list-group-item px-0">
+                                <div class="d-flex align-items-start gap-3">
+                                    <i class="mdi mdi-trophy text-success mt-1"></i>
+                                    <div>
+                                        <strong><?= __('Points') ?></strong>
+                                        <p class="text-muted small mb-0"><?= __('Assign initial points for the membership.') ?></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

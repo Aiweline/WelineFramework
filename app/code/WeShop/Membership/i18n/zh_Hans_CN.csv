@@ -1,45 +1,71 @@
 ﻿"Membership Management","Membership Management"
-"Membership saved.","Membership saved."
-"Membership save failed.","Membership save failed."
-"Membership page before content","Membership page before content"
-"Inject content before storefront membership overview sections.","Inject content before storefront membership overview sections."
-"Membership tier benefits extension","Membership tier benefits extension"
-"Inject additional benefit content under membership tier benefits.","Inject additional benefit content under membership tier benefits."
+"Membership saved.",会员已保存。
+"Membership save failed.",会员保存失败。
+"Membership not found.",未找到该会员。
+"Membership Detail",会员详情
 Bronze,青铜
+"Membership page before content",会员页面前置内容
+"Inject content before storefront membership overview sections.",在店铺会员概览部分前注入内容。
+"Membership tier benefits extension",会员等级权益扩展
+"Inject additional benefit content under membership tier benefits.",在会员等级权益下方注入额外的权益内容。
 "Member pricing entry tier",会员价格入门权益
+"Priority customer support and early campaign access","Priority customer support and early campaign access"
+"Faster shipping promotions",更快配送优惠
+"Dedicated account assistance and VIP campaign previews","Dedicated account assistance and VIP campaign previews"
 "Order tracking and standard support",订单跟踪与标准客服支持
 Silver,白银
 "Priority customer support",优先客服支持
 "Early campaign access",营销活动提前访问
 Gold,黄金
-"Faster shipping promotions",更快配送优惠
 Platinum,铂金
 "Dedicated account assistance",专属账号协助
 "VIP campaign previews","VIP 活动预览"
-"Unsupported membership level.","Unsupported membership level."
-"Customer ID is required.","Customer ID is required."
-"Operate customer tiers, points, and upgrade visibility without leaving the backend.","Operate customer tiers, points, and upgrade visibility without leaving the backend."
-"Total Members","Total Members"
-"Gold Members","Gold Members"
-"Platinum Members","Platinum Members"
-"Total Points","Total Points"
-"Edit Membership","Edit Membership"
-"Create Membership","Create Membership"
-"Customer ID","Customer ID"
-Level,Level
-Points,Points
-"Save Membership","Save Membership"
-"All levels","All levels"
-"Apply Filters","Apply Filters"
-Reset,Reset
-"Updated At","Updated At"
-"Created At","Created At"
-Actions,Actions
-Edit,Edit
-"No memberships found.","No memberships found."
-"Create the first membership record to begin customer tier operations.","Create the first membership record to begin customer tier operations."
+"Unsupported membership level.",不支持的会员等级。
+"Customer ID is required.",客户ID为必填项。
+"Back to Memberships",返回会员列表
+"Edit Membership",编辑会员
+"Operate customer tiers, points, and upgrade visibility without leaving the backend.",在后台内管理客户等级、积分和升级可见性。
+"Create Membership",创建会员
+"Total Members",会员总数
+"Gold Members",黄金会员
+"Platinum Members",铂金会员
+"Total Points",累计积分
+"Customer ID",客户ID
+"Customer ID cannot be changed after creation.",客户ID创建后不可更改。
+Level,等级
+Points,积分
+"Save Membership",保存会员
+Cancel,取消
+"All levels",全部等级
+"Apply Filters",应用筛选
+Reset,重置
+"Membership ID",会员ID
+"Updated At",更新时间
+"Created At",创建时间
+Actions,操作
+Edit,编辑
+"Membership pagination",会员分页
+Previous,上一页
+Next,下一页
+"No memberships found.",未找到会员记录。
+"Create the first membership record to begin customer tier operations.",创建第一条会员记录以开始客户等级管理。
+"Create a new membership record for a customer.",为客户创建新的会员记录。
+"Review and update membership information.",查看和更新会员信息。
+"Membership Information",会员信息
+"Membership Level","Membership Level"
+"Membership Statistics",会员统计
+"Current Level","Current Level"
+"Member Since",会员开始于
+"Level Benefits",等级权益
+Current,当前
+"Standard membership benefits.",标准会员权益。
+"Getting Started",入门指南
+"Create a membership record by filling in the customer ID and selecting a membership level.",填写客户ID并选择会员等级来创建会员记录。
+"Enter the unique customer identifier.",输入唯一的客户标识符。
+"Choose from Bronze, Silver, Gold, or Platinum.",从青铜、白银、黄金或铂金中选择。
+"Assign initial points for the membership.",为会员分配初始积分。
 "Member Perks",会员权益
 Membership,会员等级
 "Open Membership",进入会员中心
 "Current Tier",当前等级
-"Points: %1",积分：%1
+"Points: %{1}",积分：%{1}
