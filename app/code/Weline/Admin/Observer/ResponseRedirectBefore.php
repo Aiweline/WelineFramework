@@ -28,6 +28,9 @@ class ResponseRedirectBefore implements ObserverInterface
     public function execute(Event &$event): void
     {
         try {
+            // WLS 下 Observer 可能复用旧实例，这里强制切到当前请求上下文。
+            $this->request = ObjectManager::getInstance(Request::class);
+
             $data = $event->getData('data');
             $url = $data->getUrl();
             $code = $data->getCode();
