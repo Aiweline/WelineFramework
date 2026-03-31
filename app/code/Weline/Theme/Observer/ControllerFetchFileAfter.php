@@ -231,6 +231,17 @@ class ControllerFetchFileAfter implements ObserverInterface
         return $this->detectAreaFromTemplatePath($layoutTemplate) === 'backend';
     }
 
+    /**
+     * 布局链内下一层必须使用 Weline_Theme::theme/{area}/... 模块路径。
+     * 裸路径 theme/... 会被 Template::convertFetchFileName 解析到「当前请求模块/view/」，导致 Customer 等控制器下错解析、外层 base 等与主题不一致。
+     */
+    private function toWelineThemeLayoutModulePath(string $area, string $pathUnderArea): string
+    {
+        $pathUnderArea = str_replace('\\', '/', trim($pathUnderArea, '/'));
+
+        return 'Weline_Theme::theme/' . $area . '/' . $pathUnderArea;
+    }
+
     private function resolveNextLayoutTemplate(string $currentLayoutTemplate, string $layoutSpec): string
     {
         $layoutSpec = trim($layoutSpec);
@@ -244,7 +255,9 @@ class ControllerFetchFileAfter implements ObserverInterface
 
         $layoutSpec = str_replace('\\', '/', $layoutSpec);
         if (str_starts_with($layoutSpec, 'theme/')) {
-            return str_ends_with($layoutSpec, '.phtml') ? $layoutSpec : ($layoutSpec . '.phtml');
+            $relative = str_ends_with($layoutSpec, '.phtml') ? $layoutSpec : ($layoutSpec . '.phtml');
+
+            return 'Weline_Theme::' . $relative;
         }
 
         $area = $this->detectAreaFromTemplatePath($currentLayoutTemplate);
@@ -252,21 +265,21 @@ class ControllerFetchFileAfter implements ObserverInterface
 
         if (str_ends_with($layoutSpec, '.phtml')) {
             if (str_starts_with($layoutSpec, 'layouts/')) {
-                return "theme/{$area}/{$layoutSpec}";
+                return $this->toWelineThemeLayoutModulePath($area, $layoutSpec);
             }
 
-            return "theme/{$area}/layouts/{$layoutSpec}";
+            return $this->toWelineThemeLayoutModulePath($area, 'layouts/' . $layoutSpec);
         }
 
         if (!str_contains($layoutSpec, '.')) {
             if ($layoutSpec === 'base') {
-                return "theme/{$area}/layouts/base.phtml";
+                return $this->toWelineThemeLayoutModulePath($area, 'layouts/base.phtml');
             }
 
-            return "theme/{$area}/layouts/{$layoutSpec}/default.phtml";
+            return $this->toWelineThemeLayoutModulePath($area, 'layouts/' . $layoutSpec . '/default.phtml');
         }
 
-        return 'theme/' . $area . '/layouts/' . str_replace('.', '/', $layoutSpec) . '.phtml';
+        return $this->toWelineThemeLayoutModulePath($area, 'layouts/' . str_replace('.', '/', $layoutSpec) . '.phtml');
     }
 
     private function detectAreaFromTemplatePath(string $templatePath): string

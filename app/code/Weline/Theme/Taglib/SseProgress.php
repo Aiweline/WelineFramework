@@ -442,10 +442,41 @@ if (btnCopy) {
         content.querySelectorAll('.weline-sse-progress-line').forEach(function(line) {
             text.push(line.textContent);
         });
-        navigator.clipboard.writeText(text.join('\\n')).then(function() {
-            if (typeof BackendToast !== 'undefined') BackendToast.success('$t_copied');
-            else if (typeof BackendToast !== 'undefined') BackendToast.success('$t_copied');
-        });
+        var copyText = text.join('\\n');
+        var notifyCopied = function() {
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.success('$t_copied');
+            }
+        };
+        var fallbackCopy = function(value) {
+            var textarea = document.createElement('textarea');
+            textarea.value = value;
+            textarea.setAttribute('readonly', 'readonly');
+            textarea.style.position = 'fixed';
+            textarea.style.opacity = '0';
+            textarea.style.pointerEvents = 'none';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            try {
+                var copied = document.execCommand('copy');
+                if (copied) {
+                    notifyCopied();
+                }
+            } catch (e) {
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        };
+        if (navigator.clipboard && window.isSecureContext && typeof navigator.clipboard.writeText === 'function') {
+            navigator.clipboard.writeText(copyText).then(function() {
+                notifyCopied();
+            }).catch(function() {
+                fallbackCopy(copyText);
+            });
+            return;
+        }
+        fallbackCopy(copyText);
     });
 }
 

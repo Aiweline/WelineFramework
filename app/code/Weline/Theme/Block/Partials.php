@@ -18,6 +18,7 @@ use Weline\Theme\Helper\LayoutPathResolver;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeDirectoryResolver;
 
 /**
  * Partials Block
@@ -86,10 +87,21 @@ class Partials extends Block
     }
     /**
      * 获取 partials 模板路径
+     *
+     * 支持主题继承链查找：
+     * 1. 当前主题的 partials
+     * 2. 父主题的 partials
+     * 3. Weline_Theme 默认 partials
+     *
+     * 路径结构优先级：
+     * - {themePath}/{area}/partials/{type}/{option}.phtml (现代结构)
+     * - {themePath}/theme/{area}/partials/{type}/{option}.phtml (兼容结构)
+     * - {themePath}/view/partials/{area}/{type}/{option}.phtml (旧结构)
+     *
      * @param string $area 区域（frontend 或 backend）
      * @param string $type partials 类型（header, footer, sidebar 等）
      * @param string $defaultOption 默认选项（如果配置中没有指定）
-     * @return string|null
+     * @return string|null 模板路径（模块格式或绝对路径）
      */
     public function getPartialsPath(string $area, string $type, string $defaultOption = 'default'): ?string
     {
@@ -100,7 +112,6 @@ class Partials extends Block
 
         // 如果没有活动主题，直接跳到默认主题回退逻辑
         if (!$theme || !$theme->getId()) {
-            // 直接尝试默认主题（Weline_Theme）
             $defaultPartialsPath = 'Weline_Theme::theme/' . $normalizedArea . '/partials/' . $type . '/' . $defaultOption . '.phtml';
             $defaultAbsolutePath = $this->resolveModulePath($defaultPartialsPath);
             if ($defaultAbsolutePath && is_file($defaultAbsolutePath)) {
@@ -108,7 +119,7 @@ class Partials extends Block
             }
             return null;
         }
-        
+
         $scope = $ctx->resolveCurrentScope($normalizedArea);
 
         // 获取配置的选项（优先 ThemeData 元配置，回退主题 config）
@@ -121,42 +132,37 @@ class Partials extends Block
             $config = (array)($partialsByArea[$normalizedArea] ?? []);
         }
         $option = $config[$type] ?? $defaultOption;
-        
-        // 构建部件文件路径
-        $themePath = $theme->getPath();
-        if (empty($themePath)) {
-            return null;
-        }
-        
-        // 构建模块路径格式：Module_Name::theme/{area}/partials/{type}/{option}.phtml
-        // 首先尝试当前主题
-        $themeModuleName = $theme->getModuleName();
-        $partialsPath = $themeModuleName . '::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
-        
-        // 检查文件是否存在（通过尝试获取绝对路径）
-        $absolutePath = $this->resolveModulePath($partialsPath);
-        if ($absolutePath && is_file($absolutePath)) {
-            return $partialsPath; // 返回模块路径格式
-        }
-        
-        // 如果当前主题没有，尝试父主题
-        $parentTheme = $theme->getParentTheme();
-        if ($parentTheme) {
-            $parentModuleName = $parentTheme->getModuleName();
-            $parentPartialsPath = $parentModuleName . '::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
-            $parentAbsolutePath = $this->resolveModulePath($parentPartialsPath);
-            if ($parentAbsolutePath && is_file($parentAbsolutePath)) {
-                return $parentPartialsPath;
+
+        // 使用 ThemeDirectoryResolver 解析主题 partials 路径（支持继承链）
+        /** @var ThemeDirectoryResolver $dirResolver */
+        $dirResolver = ObjectManager::getInstance(ThemeDirectoryResolver::class);
+        $partialPath = 'theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
+        $resolvedPath = $dirResolver->resolveThemeTemplatePath($partialPath, $theme);
+
+        // resolveThemeTemplatePath 返回：
+        // - 找到文件时返回绝对路径
+        // - 未找到时返回原始路径
+        if ($resolvedPath !== $partialPath) {
+            // 如果找到了文件（返回绝对路径），转换为 Weline_Theme 模块路径
+            // 绝对路径判断：Windows (E:\) 或 Unix (/ 开头的绝对路径)
+            $isAbsolutePath = strpos($resolvedPath, '://') === false
+                && (preg_match('/^[A-Z]:/i', $resolvedPath) || strpos($resolvedPath, '/') === 0);
+            if ($isAbsolutePath) {
+                return 'Weline_Theme::' . $partialPath;
             }
+            // 否则直接返回
+            return $resolvedPath;
         }
-        
-        // 如果还是没有，尝试默认主题（Weline_Theme）
-        $defaultPartialsPath = 'Weline_Theme::theme/' . $area . '/partials/' . $type . '/' . $option . '.phtml';
+
+        // 未找到文件，尝试回退
+
+        // 最终回退：尝试 Weline_Theme 默认 partials
+        $defaultPartialsPath = 'Weline_Theme::theme/' . $normalizedArea . '/partials/' . $type . '/' . $option . '.phtml';
         $defaultAbsolutePath = $this->resolveModulePath($defaultPartialsPath);
         if ($defaultAbsolutePath && is_file($defaultAbsolutePath)) {
             return $defaultPartialsPath;
         }
-        
+
         return null;
     }
     

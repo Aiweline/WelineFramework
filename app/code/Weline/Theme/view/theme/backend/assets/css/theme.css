@@ -41,33 +41,33 @@
 
 /* 表格使用主题变量 */
 .table {
-    --bs-table-color: var(--backend-color-text-primary, #212529);
-    --bs-table-bg: var(--backend-color-table-bg, #fff);
-    --bs-table-border-color: var(--backend-color-table-border, #dee2e6);
-    --bs-table-striped-bg: var(--backend-color-table-bg-striped, #f8f9fa);
-    --bs-table-striped-color: var(--backend-color-text-primary, #212529);
-    --bs-table-hover-bg: var(--backend-color-table-bg-hover, #e9ecef);
-    --bs-table-hover-color: var(--backend-color-text-primary, #212529);
-    color: var(--backend-color-text-primary, #212529);
+    --bs-table-color: var(--backend-color-text-primary);
+    --bs-table-bg: var(--backend-color-table-bg);
+    --bs-table-border-color: var(--backend-color-table-border);
+    --bs-table-striped-bg: var(--backend-color-table-bg-striped);
+    --bs-table-striped-color: var(--backend-color-text-primary);
+    --bs-table-hover-bg: var(--backend-color-table-bg-hover);
+    --bs-table-hover-color: var(--backend-color-text-primary);
+    color: var(--backend-color-text-primary);
 }
 
 .table > thead {
-    color: var(--backend-color-text-primary, #212529);
+    color: var(--backend-color-text-primary);
 }
 
 .table > thead > tr > th {
-    background-color: var(--backend-color-bg-secondary, #f8f9fa);
-    color: var(--backend-color-text-primary, #212529);
-    border-bottom-color: var(--backend-color-border-default, #dee2e6);
+    background-color: var(--backend-color-bg-secondary);
+    color: var(--backend-color-text-primary);
+    border-bottom-color: var(--backend-color-border-default);
 }
 
 .table > tbody > tr > td {
-    color: var(--backend-color-text-primary, #212529);
-    border-bottom-color: var(--backend-color-border-light, #e9ecef);
+    color: var(--backend-color-text-primary);
+    border-bottom-color: var(--backend-color-border-light);
 }
 
 .table > tbody > tr:hover > td {
-    background-color: var(--backend-color-table-bg-hover, #e9ecef);
+    background-color: var(--backend-color-table-bg-hover);
 }
 
 /* 卡片内表格 */
@@ -76,7 +76,7 @@
 }
 
 .card .table > thead > tr > th {
-    background-color: var(--backend-color-bg-tertiary, #e9ecef);
+    background-color: var(--backend-color-bg-tertiary);
 }
 
 /* 响应式设计 */
@@ -97,18 +97,18 @@
 }
 
 ::-webkit-scrollbar-track {
-    background: var(--backend-scrollbar-track, transparent);
+    background: var(--backend-scrollbar-track);
     border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--backend-scrollbar-thumb, #c1c1c1);
+    background: var(--backend-scrollbar-thumb);
     border-radius: 4px;
     transition: background 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--backend-scrollbar-thumb-hover, #a8a8a8);
+    background: var(--backend-scrollbar-thumb-hover);
 }
 
 ::-webkit-scrollbar-corner {
@@ -118,7 +118,7 @@
 /* Firefox 浏览器 */
 * {
     scrollbar-width: thin;
-    scrollbar-color: var(--backend-scrollbar-thumb, #c1c1c1) var(--backend-scrollbar-track, transparent);
+    scrollbar-color: var(--backend-scrollbar-thumb) var(--backend-scrollbar-track);
 }
 
 /* =============================================
@@ -183,7 +183,7 @@
 body {
     background:
         radial-gradient(circle at top left, var(--backend-color-primary-bg-light) 0, transparent 28%),
-        linear-gradient(180deg, rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.02) 0%, transparent 22%),
+        linear-gradient(180deg, rgba(var(--backend-color-primary-rgb), 0.02) 0%, transparent 22%),
         var(--backend-color-bg-body);
     color: var(--backend-color-text-primary);
 }
@@ -200,10 +200,20 @@ body {
     padding-bottom: 1.5rem;
 }
 
+/* 必须高于 .rightbar-overlay，否则右侧设置打开时遮罩会挡住顶栏全部交互（语言/用户下拉等） */
 #page-topbar {
     position: sticky;
     top: 0;
-    z-index: 1002;
+    z-index: 10050;
+}
+
+/* 与 Admin app.css 对齐；在仅加载 app*.min.css 时也由本文件覆盖，避免顶栏 z-index 提级后压在右侧抽屉之下 */
+.rightbar-overlay {
+    z-index: 10040 !important;
+}
+
+.right-bar {
+    z-index: 10060 !important;
 }
 
 #page-topbar .navbar-header {
@@ -402,13 +412,13 @@ textarea.form-control {
 .btn-primary {
     border-color: transparent;
     background: linear-gradient(135deg, var(--backend-color-primary) 0%, var(--backend-color-primary-dark) 100%);
-    box-shadow: 0 10px 24px rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.18);
+    box-shadow: 0 10px 24px rgba(var(--backend-color-primary-rgb), 0.18);
 }
 
 .btn-primary:hover,
 .btn-primary:focus {
     border-color: transparent;
-    box-shadow: 0 14px 30px rgba(var(--backend-color-primary-rgb, 37, 99, 235), 0.24);
+    box-shadow: 0 14px 30px rgba(var(--backend-color-primary-rgb), 0.24);
 }
 
 .btn-light,
