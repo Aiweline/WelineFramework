@@ -22,8 +22,21 @@ class Remove extends FrontendController
 
     public function index(): string
     {
+        if (!$this->isPostRequest()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('Invalid request method.'),
+            ]);
+        }
+
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
         if ($customerId <= 0) {
+            if (!$this->shouldReturnJson()) {
+                $this->getMessageManager()->addError(__('Please log in to continue.'));
+                $this->redirect(self::LOGIN_ROUTE);
+                return '';
+            }
+
             return $this->fetchJson([
                 'success' => false,
                 'message' => __('Please log in to continue.'),
@@ -61,6 +74,16 @@ class Remove extends FrontendController
     public function post(): string
     {
         return $this->index();
+    }
+
+    protected function shouldReturnJson(): bool
+    {
+        return $this->request->isAjax();
+    }
+
+    protected function isPostRequest(): bool
+    {
+        return strtoupper((string) $this->request->getMethod()) === 'POST';
     }
 
     protected function readCompareId(): int
