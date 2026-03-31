@@ -40,6 +40,10 @@ class MenuAccessLogObserver implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // WLS 下 Observer 可能复用旧实例，这里强制切到当前请求和会话上下文。
+        $this->request = ObjectManager::getInstance(Request::class);
+        $this->backendSession = SessionFactory::getInstance()->createBackendSession();
+
         // 只处理后台请求
         if (!$this->request->isBackend()) {
             return;

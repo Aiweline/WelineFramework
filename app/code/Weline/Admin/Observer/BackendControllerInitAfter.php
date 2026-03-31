@@ -35,6 +35,9 @@ class BackendControllerInitAfter implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // WLS 下 Observer 可能复用旧实例，这里强制切到当前请求上下文。
+        $this->request = ObjectManager::getInstance(Request::class);
+
         $currentRoutePath = trim($this->request->getRouteUrlPath(), '/');
         # 检测记住我
         // 真实登录提交阶段不执行记住我自动登录，避免干扰本次账号密码登录流程。
