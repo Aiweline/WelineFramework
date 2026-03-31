@@ -132,6 +132,9 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         if (($request->isApiFrontend() || $request->isApiBackend()) && $this->publicApiAuthRouteMatcher->matches($request)) {
             return;
         }
+        if ($request->isApiFrontend() && $this->publicApiAuthRouteMatcher->matchesGuestFrontendRoute($request)) {
+            return;
+        }
         
         // HEAD 请求跳过权限检查和重定向逻辑
         // HEAD 请求只是为了获取响应头信息（如 Content-Length），不应该触发业务逻辑重定向
