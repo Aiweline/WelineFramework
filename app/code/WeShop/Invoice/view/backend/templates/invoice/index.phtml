@@ -90,7 +90,7 @@ $invoiceIssueUrl = (string) ($this->getData('invoiceIssueUrl') ?? $this->getBack
                         <tbody>
                         <?php foreach ($invoices as $invoice): ?>
                             <?php $canIssue = ($invoice['status'] ?? '') !== \WeShop\Invoice\Service\InvoiceService::STATUS_ISSUED; ?>
-                            <tr>
+                            <tr data-invoice-number="<?= htmlspecialchars((string) $invoice['invoice_number'], ENT_QUOTES) ?>">
                                 <td>
                                     <a href="<?= $this->getBackendUrl('*/backend/invoice/view', ['id' => $invoice['invoice_id']]) ?>" class="fw-semibold">
                                         <?= htmlspecialchars((string) $invoice['invoice_number'], ENT_QUOTES) ?>
@@ -98,7 +98,9 @@ $invoiceIssueUrl = (string) ($this->getData('invoiceIssueUrl') ?? $this->getBack
                                 </td>
                                 <td><?= htmlspecialchars((string) ($invoice['order_increment_id'] ?? ''), ENT_QUOTES) ?></td>
                                 <td><?= number_format((float) ($invoice['amount'] ?? 0), 2) ?></td>
-                                <td><?= htmlspecialchars((string) ($invoice['status_label'] ?? $invoice['status'] ?? ''), ENT_QUOTES) ?></td>
+                                <td data-status-code="<?= htmlspecialchars((string) ($invoice['status'] ?? ''), ENT_QUOTES) ?>">
+                                    <?= htmlspecialchars((string) ($invoice['status_label'] ?? $invoice['status'] ?? ''), ENT_QUOTES) ?>
+                                </td>
                                 <td><?= htmlspecialchars((string) ($invoice['created_at'] ?? ''), ENT_QUOTES) ?></td>
                                 <td class="text-end">
                                     <div class="d-inline-flex gap-2">
@@ -109,7 +111,7 @@ $invoiceIssueUrl = (string) ($this->getData('invoiceIssueUrl') ?? $this->getBack
                                             <form method="post" action="<?= $invoiceIssueUrl ?>" class="d-inline">
                                                 <input type="hidden" name="invoice_id" value="<?= (int) $invoice['invoice_id'] ?>">
                                                 <input type="hidden" name="back_url" value="<?= htmlspecialchars($invoiceIndexUrl, ENT_QUOTES) ?>">
-                                                <button type="submit" class="btn btn-sm btn-outline-success"><?= __('Issue') ?></button>
+                                                <button type="submit" class="btn btn-sm btn-outline-success" data-action="issue-invoice"><?= __('Issue') ?></button>
                                             </form>
                                         <?php endif; ?>
                                     </div>

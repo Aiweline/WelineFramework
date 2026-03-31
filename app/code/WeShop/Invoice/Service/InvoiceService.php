@@ -119,7 +119,7 @@ class InvoiceService
         $invoice = $this->newInvoiceModel();
         $rows = $invoice->clear()
             ->where(Invoice::schema_fields_ORDER_ID, array_keys($orderMap), 'IN')
-            ->select([Invoice::schema_fields_STATUS])
+            ->select(Invoice::schema_fields_STATUS)
             ->fetchArray();
 
         return $this->collectSummary($rows);
@@ -182,7 +182,7 @@ class InvoiceService
     {
         $invoice = $this->newInvoiceModel();
         $rows = $invoice->clear()
-            ->select([Invoice::schema_fields_STATUS])
+            ->select(Invoice::schema_fields_STATUS)
             ->fetchArray();
 
         return $this->collectSummary($rows);
@@ -277,10 +277,8 @@ class InvoiceService
             $order->where(Order::schema_fields_ID, $orderIds, 'IN');
         }
 
-        $rows = $order->select([
-            Order::schema_fields_ID,
-            Order::schema_fields_increment_id,
-        ])->fetchArray();
+        $rows = $order->select(Order::schema_fields_ID . ',' . Order::schema_fields_increment_id)
+            ->fetchArray();
 
         $map = [];
         foreach ($rows as $row) {
