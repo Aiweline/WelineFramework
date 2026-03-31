@@ -27,6 +27,12 @@ $frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
 ?>
 <!-- Base URL 设置：所有相对链接将基于此路径 -->
 <base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
+<!-- Favicon Hook: 允许其他模块通过 hook 提供自定义 favicon -->
+<w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
+<link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+</w:hook>
 <!-- 
     Theme Head Partial - 只负责加载 Theme 资源
     注意：

@@ -1,0 +1,485 @@
+<?php
+/**
+ * 片段：产品网格
+ *
+ * 电商产品网格展示组件，支持网格/列表视图切换
+ *
+ * @meta.name {default="产品网格",name="产品网格",description="电商产品网格展示组件"}
+ * @meta.description {default="电商产品网格展示组件，支持网格视图和列表视图，可配置每行列数"}
+ * @param products {default=[],name="产品列表",description="产品数据数组，每个产品包含 id、name、url、image、price、original_price、rating、review_count、is_new、is_sale、stock 等字段"}
+ * @param columns {default=4,name="每行列数",description="桌面端每行显示的产品数量"}
+ * @param columnsTablet {default=3,name="平板每行列数",description="平板端每行显示的产品数量"}
+ * @param columnsMobile {default=2,name="移动端每行列数",description="移动端每行显示的产品数量"}
+ * @param viewMode {default="grid",name="默认视图",description="默认视图模式：grid 或 list"}
+ * @param showPrice {default=true,type=bool,name="显示价格",description="是否显示产品价格"}
+ * @param showRating {default=true,type=bool,name="显示评分",description="是否显示产品评分"}
+ * @param showAddToCart {default=true,type=bool,name="显示加购按钮",description="是否显示加购按钮"}
+ * @param showWishlist {default=true,type=bool,name="显示收藏按钮",description="是否显示收藏按钮"}
+ * @param class {default="",name="额外CSS类",description="额外的CSS类名"}
+ */
+
+$metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.product.grid');
+foreach ($metaParams as $key => $value) {
+    $this->setData("meta.{$key}", $value);
+}
+
+$products = $this->getData('meta.products') ?? [];
+$columns = (int)($this->getData('meta.columns') ?? 4);
+$columnsTablet = (int)($this->getData('meta.columnsTablet') ?? 3);
+$columnsMobile = (int)($this->getData('meta.columnsMobile') ?? 2);
+$viewMode = $this->getData('meta.viewMode') ?? 'grid';
+$showPrice = (bool)($this->getData('meta.showPrice') ?? true);
+$showRating = (bool)($this->getData('meta.showRating') ?? true);
+$showAddToCart = (bool)($this->getData('meta.showAddToCart') ?? true);
+$showWishlist = (bool)($this->getData('meta.showWishlist') ?? true);
+$class = $this->getData('meta.class') ?? '';
+
+$uniqueId = 'product-grid-' . uniqid();
+?>
+<?php if (!empty($products)): ?>
+<div class="product-grid-partial<?= $class ? ' ' . htmlspecialchars($class) : '' ?>"
+     id="<?= $uniqueId ?>"
+     data-view-mode="<?= htmlspecialchars($viewMode) ?>"
+     data-columns="<?= $columns ?>"
+     data-columns-tablet="<?= $columnsTablet ?>"
+     data-columns-mobile="<?= $columnsMobile ?>">
+    <div class="product-grid-partial__grid">
+        <?php foreach ($products as $product): ?>
+            <?php
+            $productId = (int)($product['id'] ?? $product['product_id'] ?? 0);
+            $productName = htmlspecialchars((string)($product['name'] ?? ''));
+            $productUrl = htmlspecialchars((string)($product['url'] ?? '#'));
+            $productImage = htmlspecialchars((string)($product['image'] ?? ''));
+            $productPrice = (float)($product['price'] ?? 0);
+            $productOriginalPrice = (float)($product['original_price'] ?? $product['price'] ?? 0);
+            $productRating = (float)($product['rating'] ?? 0);
+            $productReviewCount = (int)($product['review_count'] ?? 0);
+            $isNew = (bool)($product['is_new'] ?? false);
+            $isSale = (bool)($product['is_sale'] ?? false);
+            $isInStock = (bool)($product['in_stock'] ?? ((int)($product['stock'] ?? 0) > 0));
+            $productSku = htmlspecialchars((string)($product['sku'] ?? ''));
+            $shortDescription = htmlspecialchars((string)($product['short_description'] ?? ''));
+            ?>
+            <article class="product-grid-partial__item">
+                <div class="product-grid-partial__card">
+                    <a href="<?= $productUrl ?>" class="product-grid-partial__image-link">
+                        <div class="product-grid-partial__image-wrapper">
+                            <?php if ($productImage): ?>
+                                <img src="<?= $productImage ?>"
+                                     alt="<?= $productName ?>"
+                                     class="product-grid-partial__image"
+                                     loading="lazy">
+                            <?php else: ?>
+                                <div class="product-grid-partial__image-placeholder">
+                                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M3 7V5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V7M3 7V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V7M3 7H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if ($isNew || $isSale): ?>
+                                <div class="product-grid-partial__badges">
+                                    <?php if ($isNew): ?>
+                                        <span class="product-grid-partial__badge product-grid-partial__badge--new">@lang{NEW}</span>
+                                    <?php endif; ?>
+                                    <?php if ($isSale): ?>
+                                        <span class="product-grid-partial__badge product-grid-partial__badge--sale">@lang{SALE}</span>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+
+                            <?php if (!$isInStock): ?>
+                                <div class="product-grid-partial__out-of-stock">@lang{缺货}</div>
+                            <?php endif; ?>
+                        </div>
+                    </a>
+
+                    <?php if ($showWishlist): ?>
+                        <button type="button" class="product-grid-partial__wishlist" aria-label="@lang{加入收藏}" data-product-id="<?= $productId ?>">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    <?php endif; ?>
+
+                    <div class="product-grid-partial__content">
+                        <h3 class="product-grid-partial__title">
+                            <a href="<?= $productUrl ?>"><?= $productName ?></a>
+                        </h3>
+
+                        <?php if ($showRating && $productRating > 0): ?>
+                            <div class="product-grid-partial__rating">
+                                <div class="product-grid-partial__stars" style="--rating: <?= $productRating ?>;">
+                                    <svg class="product-grid-partial__star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1l2.39 5.64L18 7.27l-4.12 3.72L15 17 10 13.77 5 17l1.12-6L2 7.27l5.61-.63L10 1z"/></svg>
+                                    <svg class="product-grid-partial__star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1l2.39 5.64L18 7.27l-4.12 3.72L15 17 10 13.77 5 17l1.12-6L2 7.27l5.61-.63L10 1z"/></svg>
+                                    <svg class="product-grid-partial__star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1l2.39 5.64L18 7.27l-4.12 3.72L15 17 10 13.77 5 17l1.12-6L2 7.27l5.61-.63L10 1z"/></svg>
+                                    <svg class="product-grid-partial__star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1l2.39 5.64L18 7.27l-4.12 3.72L15 17 10 13.77 5 17l1.12-6L2 7.27l5.61-.63L10 1z"/></svg>
+                                    <svg class="product-grid-partial__star" viewBox="0 0 20 20" fill="currentColor"><path d="M10 1l2.39 5.64L18 7.27l-4.12 3.72L15 17 10 13.77 5 17l1.12-6L2 7.27l5.61-.63L10 1z"/></svg>
+                                </div>
+                                <?php if ($productReviewCount > 0): ?>
+                                    <span class="product-grid-partial__review-count">(<?= $productReviewCount ?>)</span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($showPrice): ?>
+                            <div class="product-grid-partial__price">
+                                <?php if ($productOriginalPrice > $productPrice): ?>
+                                    <span class="product-grid-partial__price-original">¥<?= number_format($productOriginalPrice, 2) ?></span>
+                                <?php endif; ?>
+                                <span class="product-grid-partial__price-current">¥<?= number_format($productPrice, 2) ?></span>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($showAddToCart): ?>
+                            <div class="product-grid-partial__actions">
+                                <?php if ($isInStock): ?>
+                                    <button type="button" class="product-grid-partial__add-to-cart" data-product-id="<?= $productId ?>">
+                                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                        <span>@lang{加入购物车}</span>
+                                    </button>
+                                <?php else: ?>
+                                    <button type="button" class="product-grid-partial__out-of-stock-btn" disabled>@lang{暂时缺货}</button>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </article>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+<style>
+.product-grid-partial__grid {
+    display: grid;
+    grid-template-columns: repeat(<?= $columns ?>, 1fr);
+    gap: var(--spacing-5, 1.25rem);
+}
+
+.product-grid-partial__item {
+    display: flex;
+}
+
+.product-grid-partial__card {
+    width: 100%;
+    background-color: var(--color-bg-primary);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-lg, 12px);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.04));
+    transition: box-shadow 0.3s ease, transform 0.2s ease, border-color 0.2s ease;
+}
+
+.product-grid-partial__card:hover {
+    border-color: var(--color-border-focus);
+    box-shadow: var(--shadow-lg, 0 10px 15px -3px rgba(0, 0, 0, 0.1));
+    transform: translateY(-2px);
+}
+
+.product-grid-partial__image-link {
+    display: block;
+    text-decoration: none;
+}
+
+.product-grid-partial__image-wrapper {
+    position: relative;
+    padding-top: 100%;
+    background-color: var(--color-bg-secondary);
+    overflow: hidden;
+}
+
+.product-grid-partial__image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.product-grid-partial__card:hover .product-grid-partial__image {
+    transform: scale(1.05);
+}
+
+.product-grid-partial__image-placeholder {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-disabled);
+}
+
+.product-grid-partial__badges {
+    position: absolute;
+    top: var(--spacing-3, 0.75rem);
+    left: var(--spacing-3, 0.75rem);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-1, 0.25rem);
+    z-index: 1;
+}
+
+.product-grid-partial__badge {
+    padding: 2px var(--spacing-2, 0.5rem);
+    font-size: var(--font-size-xs, 0.7rem);
+    font-weight: var(--font-weight-semibold, 600);
+    text-transform: uppercase;
+    border-radius: var(--radius-sm, 4px);
+    letter-spacing: 0.5px;
+}
+
+.product-grid-partial__badge--new {
+    background-color: var(--color-success);
+    color: var(--color-text-light);
+}
+
+.product-grid-partial__badge--sale {
+    background-color: var(--color-error);
+    color: var(--color-text-light);
+}
+
+.product-grid-partial__out-of-stock {
+    position: absolute;
+    top: var(--spacing-3, 0.75rem);
+    right: var(--spacing-3, 0.75rem);
+    padding: 4px var(--spacing-2, 0.5rem);
+    background-color: var(--color-text-secondary);
+    color: var(--color-text-light);
+    font-size: var(--font-size-xs, 0.7rem);
+    font-weight: var(--font-weight-semibold, 600);
+    border-radius: var(--radius-sm, 4px);
+    z-index: 1;
+}
+
+.product-grid-partial__wishlist {
+    position: absolute;
+    top: var(--spacing-3, 0.75rem);
+    right: var(--spacing-3, 0.75rem);
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg-primary);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--color-text-secondary);
+    box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+    opacity: 0;
+    transform: translateX(8px);
+    transition: all 0.3s ease;
+    z-index: 2;
+}
+
+.product-grid-partial__card:hover .product-grid-partial__wishlist {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.product-grid-partial__wishlist:hover {
+    background-color: var(--color-error);
+    color: var(--color-text-light);
+}
+
+.product-grid-partial__content {
+    padding: var(--spacing-4, 1rem);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-2, 0.5rem);
+}
+
+.product-grid-partial__title {
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-medium, 500);
+    line-height: 1.4;
+    margin: 0;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.product-grid-partial__title a {
+    color: var(--color-text-primary);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.product-grid-partial__title a:hover {
+    color: var(--color-link);
+}
+
+.product-grid-partial__rating {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-2, 0.5rem);
+}
+
+.product-grid-partial__stars {
+    display: inline-flex;
+    position: relative;
+    color: var(--color-text-disabled);
+}
+
+.product-grid-partial__stars::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: calc(var(--rating, 0) / 5 * 100%);
+    background: linear-gradient(90deg, var(--color-warning), var(--color-warning));
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+.product-grid-partial__star {
+    width: 14px;
+    height: 14px;
+}
+
+.product-grid-partial__review-count {
+    font-size: var(--font-size-xs, 0.75rem);
+    color: var(--color-text-tertiary);
+}
+
+.product-grid-partial__price {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-2, 0.5rem);
+    margin-top: var(--spacing-1, 0.25rem);
+}
+
+.product-grid-partial__price-original {
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-text-tertiary);
+    text-decoration: line-through;
+}
+
+.product-grid-partial__price-current {
+    font-size: var(--font-size-lg, 1.125rem);
+    font-weight: var(--font-weight-bold, 700);
+    color: var(--color-error);
+}
+
+.product-grid-partial__actions {
+    margin-top: var(--spacing-2, 0.5rem);
+}
+
+.product-grid-partial__add-to-cart {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-2, 0.5rem);
+    padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+    background-color: var(--color-accent);
+    color: var(--color-text-light);
+    border: none;
+    border-radius: var(--radius-md, 8px);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-medium, 500);
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.product-grid-partial__add-to-cart:hover {
+    background-color: var(--color-accent-hover);
+}
+
+.product-grid-partial__out-of-stock-btn {
+    width: 100%;
+    padding: var(--spacing-2, 0.5rem) var(--spacing-3, 0.75rem);
+    background-color: var(--color-bg-tertiary);
+    color: var(--color-text-secondary);
+    border: none;
+    border-radius: var(--radius-md, 8px);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-medium, 500);
+    cursor: not-allowed;
+}
+
+/* ---- 响应式 ---- */
+@media (max-width: 1200px) {
+    .product-grid-partial__grid {
+        grid-template-columns: repeat(<?= min($columns, 4) ?>, 1fr);
+    }
+}
+
+@media (max-width: 992px) {
+    .product-grid-partial__grid {
+        grid-template-columns: repeat(<?= $columnsTablet ?>, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .product-grid-partial__grid {
+        grid-template-columns: repeat(<?= $columnsMobile ?>, 1fr);
+        gap: var(--spacing-3, 0.75rem);
+    }
+
+    .product-grid-partial__content {
+        padding: var(--spacing-3, 0.75rem);
+    }
+
+    .product-grid-partial__wishlist {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@media (max-width: 480px) {
+    .product-grid-partial__grid {
+        grid-template-columns: repeat(<?= min($columnsMobile, 2) ?>, 1fr);
+        gap: var(--spacing-2, 0.5rem);
+    }
+}
+</style>
+
+<script>
+(function() {
+    'use strict';
+    var grid = document.getElementById('<?= $uniqueId ?>');
+    if (!grid) return;
+
+    grid.querySelectorAll('.product-grid-partial__add-to-cart').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var productId = this.dataset.productId;
+            var originalHtml = this.innerHTML;
+            this.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>@lang{已添加}</span>';
+            this.style.backgroundColor = 'var(--color-success)';
+            setTimeout(function() {
+                btn.innerHTML = originalHtml;
+                btn.style.backgroundColor = '';
+            }, 2000);
+        });
+    });
+
+    grid.querySelectorAll('.product-grid-partial__wishlist').forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            var svg = btn.querySelector('svg');
+            if (svg.getAttribute('fill') === 'none') {
+                svg.setAttribute('fill', 'currentColor');
+                btn.style.color = 'var(--color-error)';
+            } else {
+                svg.setAttribute('fill', 'none');
+                btn.style.color = '';
+            }
+        });
+    });
+})();
+</script>
+<?php endif; ?>
