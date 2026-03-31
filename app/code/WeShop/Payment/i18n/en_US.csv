@@ -22,10 +22,13 @@
 "%{1} is missing required configuration: %{2}","%{1} is missing required configuration: %{2}"
 "Order %{1}","Order %{1}"
 "Unable to initialize the WeChat Pay order.","Unable to initialize the WeChat Pay order."
+"B2B Credit Account","B2B Credit Account"
+"Charge the order to your enterprise credit line and pay by invoice before the due date.","Charge the order to your enterprise credit line and pay by invoice before the due date."
+"Available only for approved B2B customers with an active credit line.","Available only for approved B2B customers with an active credit line."
+Instructions,Instructions
 "Manual Transfer","Manual Transfer"
 "Pay by bank transfer after the order is created.","Pay by bank transfer after the order is created."
 "Use the order number as the payment reference.","Use the order number as the payment reference."
-Instructions,Instructions
 "Shown to the customer after the order is created.","Shown to the customer after the order is created."
 "Account Name","Account Name"
 "Bank Name","Bank Name"
