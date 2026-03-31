@@ -140,11 +140,13 @@ final class ThemeStaticNamespaceService
     private function resolveThemePath(WelineTheme $theme): string
     {
         $themePath = \trim(\str_replace('\\', '/', (string)$theme->getOriginPath()), '/');
+        error_log('DEBUG resolveThemePath: themePath=' . $themePath . ' themeId=' . $theme->getId() . ' themeName=' . $theme->getName() . ' getPath=' . $theme->getPath());
         if ($themePath !== '') {
             return $themePath;
         }
 
         $configuredTheme = Env::get('theme')['path'] ?? Env::default_theme_DATA['path'] ?? '';
+        error_log('DEBUG resolveThemePath fallback: configuredTheme=' . $configuredTheme);
         return \trim(\str_replace('\\', '/', (string)$configuredTheme), '/');
     }
 

@@ -123,7 +123,7 @@ foreach ($themes as $themeItem) {
                     $previewImageSrc = $previewImage ? '/' . ltrim($previewImage, '/') : '';
             ?>
                 <div class="col-xl-3 col-lg-4 col-md-6 mb-4">
-                    <div class="theme-card <?= $isActive ? 'active' : '' ?>">
+                    <div class="theme-card <?= $isActive ? 'active' : '' ?>" data-theme-id="<?= $themeId ?>">
                         <div class="theme-preview">
                             <?php if ($previewImageSrc): ?>
                                 <img src="<?= $previewImageSrc ?>" alt="<?= __('主题预览') ?>" class="theme-preview-image" onerror="this.src=''">
@@ -167,7 +167,7 @@ foreach ($themes as $themeItem) {
             };
             ?>
             <div class="tab-pane fade show active" id="weline-theme-tab-frontend" role="tabpanel">
-                <div class="row">
+                <div class="row themes-grid" data-theme-list="frontend">
                     <div class="col-12 mb-2">
                         <p class="text-muted small mb-0"><?= __('选择用于网站前台的主题，访客将看到该主题的样式。') ?></p>
                     </div>
@@ -175,7 +175,7 @@ foreach ($themes as $themeItem) {
                 </div>
             </div>
             <div class="tab-pane fade" id="weline-theme-tab-backend" role="tabpanel">
-                <div class="row">
+                <div class="row themes-grid" data-theme-list="backend">
                     <div class="col-12 mb-2">
                         <p class="text-muted small mb-0"><?= __('选择用于管理后台的主题，仅影响后台界面样式。') ?></p>
                     </div>
@@ -280,19 +280,115 @@ foreach ($themes as $themeItem) {
     function startBatchPreviewsSse(modal) {
         const streamUrl = '<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviewsSse') ?>';
         const term = window.WelineSseTerminal && window.WelineSseTerminal['theme-batch-preview-terminal'];
-        if (!term) return;
+        if (!term) {
+            console.error('SSE Terminal not found');
+            return;
+        }
 
         // 清理旧输出
         if (typeof term.clear === 'function') term.clear();
 
+        // 辅助函数：解析 SSE 事件数据
+        function parseSseData(e) {
+            if (!e) return null;
+            // 如果是字符串，直接解析
+            if (typeof e === 'string') {
+                try {
+                    return JSON.parse(e);
+                } catch (err) {
+                    return e;
+                }
+            }
+            // SSE Event 对象有 data 属性（字符串）
+            if (typeof e.data === 'string') {
+                try {
+                    return JSON.parse(e.data);
+                } catch (err) {
+                    return e.data;
+                }
+            }
+            // 如果 data 已经是对象，直接返回
+            if (typeof e.data === 'object' && e.data !== null) {
+                return e.data;
+            }
+            // 尝试直接解析整个 e
+            if (typeof e === 'object') {
+                return e;
+            }
+            return null;
+        }
+
+        // 监听 start 事件获取总任务数
+        term.on('start', function(e) {
+            console.log('SSE start event:', e);
+            const data = parseSseData(e);
+            console.log('SSE start parsed data:', data);
+            if (data) {
+                batchTotal = data.total || 0;
+                const statusEl = document.getElementById('batchStatus');
+                const countEl = document.getElementById('batchCount');
+                const msg = data.message || ('开始生成 ' + batchTotal + ' 个预览图');
+                if (statusEl) statusEl.innerText = msg + '（并发数：' + (data.concurrency || 4) + '）';
+                if (countEl) countEl.innerText = '0 / ' + batchTotal;
+
+                // 在终端内容区域显示开始消息
+                if (typeof term.log === 'function') {
+                    term.log(msg);
+                }
+            }
+        });
+
+        // 监听 progress 事件更新进度
+        term.on('progress', function(e) {
+            console.log('SSE progress event:', e);
+            const data = parseSseData(e);
+            console.log('SSE progress parsed data:', data);
+            if (data) {
+                batchProcessed = data.current || 0;
+                batchTotal = data.total || batchTotal;
+
+                // 更新进度条
+                const progressBar = document.querySelector('#batchProgress .progress-bar');
+                if (progressBar) {
+                    progressBar.style.width = (data.progress || 0) + '%';
+                }
+
+                // 更新计数
+                const countEl = document.getElementById('batchCount');
+                if (countEl) countEl.innerText = batchProcessed + ' / ' + batchTotal;
+
+                // 更新状态消息
+                const statusEl = document.getElementById('batchStatus');
+                if (statusEl && data.message) {
+                    statusEl.innerText = data.message;
+                }
+
+                // 在终端内容区域显示详细消息
+                if (data.message && typeof term.log === 'function') {
+                    term.log(data.message);
+                }
+            }
+        });
+
         // 事件结束后关闭弹窗并刷新页面
-        term.on('done', function() {
+        term.on('done', function(e) {
+            // 在终端内容区域显示完成消息
+            const data = parseSseData(e);
+            if (data && data.message && typeof term.log === 'function') {
+                term.log(data.message);
+            } else if (typeof term.log === 'function') {
+                term.log('全部预览图生成完成！');
+            }
             modal.hide();
             location.reload();
         });
-        term.on('error', function() {
+        term.on('error', function(e) {
+            // 在终端内容区域显示错误消息
+            const data = parseSseData(e);
+            if (data && data.message && typeof term.log === 'function') {
+                term.log('错误: ' + data.message);
+            }
             modal.hide();
-            // SSE 已在终端中输出错误原因
         });
 
         const fd = new FormData();
@@ -369,16 +465,24 @@ foreach ($themes as $themeItem) {
                 if (result.status === 'success') {
                     if (typeof BackendToast !== 'undefined') {
                         BackendToast.success('<?= __('主题已设为%{1}主题') ?>'.replace('%{1}', areaLabel));
+                        location.reload();
+                    } else if (typeof BackendConfirm !== 'undefined') {
+                        BackendConfirm.show('<?= __('主题激活成功') ?>', { type: 'success' }).then(function () {
+                            location.reload();
+                        });
                     } else {
-                        alert('<?= __('主题激活成功') ?>');
+                        location.reload();
                     }
-                    location.reload();
                 } else {
                     const msg = result.message || '<?= __('激活失败') ?>';
                     if (typeof BackendToast !== 'undefined') {
                         BackendToast.error(msg);
                     } else {
-                        alert(msg);
+                        if (typeof BackendConfirm !== 'undefined') {
+                            BackendConfirm.show(msg, { type: 'danger' });
+                        } else {
+                            console.error(msg);
+                        }
                     }
                 }
             }).catch(function(err) {
@@ -386,7 +490,11 @@ foreach ($themes as $themeItem) {
                 if (typeof BackendToast !== 'undefined') {
                     BackendToast.error(msg);
                 } else {
-                    alert(msg);
+                    if (typeof BackendConfirm !== 'undefined') {
+                        BackendConfirm.show(msg, { type: 'danger' });
+                    } else {
+                        console.error(msg);
+                    }
                 }
             });
         });
@@ -504,6 +612,9 @@ foreach ($themes as $themeItem) {
 
 /* 主题卡片样式 */
 .weline-theme-manage .theme-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     transition: transform 0.2s, box-shadow 0.2s;
     overflow: hidden;
     border: 1px solid var(--backend-color-border-default, #dee2e6);
@@ -581,6 +692,7 @@ foreach ($themes as $themeItem) {
 
 /* 主题信息 */
 .weline-theme-manage .theme-info {
+    flex: 1 1 auto;
     padding: 15px;
 }
 
@@ -613,11 +725,17 @@ foreach ($themes as $themeItem) {
     background: var(--backend-color-bg-secondary, #f8f9fa);
     border-top: 1px solid var(--backend-color-border-light, #e9ecef);
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
 }
 
 .weline-theme-manage .theme-actions .btn {
-    flex: 1;
+    flex: 1 1 calc(50% - 8px);
+    min-width: 110px;
+}
+
+.weline-theme-manage .theme-actions .activate-btn {
+    flex: 1 1 100%;
 }
 
 /* 挂起主题样式 */
