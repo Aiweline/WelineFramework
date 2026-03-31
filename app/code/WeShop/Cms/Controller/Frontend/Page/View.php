@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Cms\Controller\Frontend\Page;
 
 use WeShop\Frontend\Controller\BaseController;
+use WeShop\Cms\Model\Page as PageModel;
 use WeShop\Cms\Service\PageService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -35,7 +36,7 @@ class View extends BaseController
         
         if (empty($identifier)) {
             $this->getMessageManager()->addError(__('页面标识符不能为空'));
-            return $this->redirect('weshop');
+            return $this->redirect('weshop') ?? '';
         }
         
         /** @var PageService $pageService */
@@ -44,19 +45,10 @@ class View extends BaseController
         
         if (!$page) {
             $this->getMessageManager()->addError(__('页面不存在'));
-            return $this->redirect('weshop');
+            return $this->redirect('weshop') ?? '';
         }
         
-        // 格式化页面数据
-        $pageData = [
-            'page_id' => $page->getId(),
-            'title' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_TITLE) ?? '',
-            'identifier' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_IDENTIFIER) ?? '',
-            'content' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_CONTENT) ?? '',
-            'is_active' => (bool)($page->getData(\WeShop\Cms\Model\Page::schema_fields_IS_ACTIVE) ?? true),
-            'created_at' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_CREATED_AT) ?? '',
-            'updated_at' => $page->getData(\WeShop\Cms\Model\Page::schema_fields_UPDATED_AT) ?? '',
-        ];
+        $pageData = self::buildPageData($page);
         
         // 准备模板数据
         $this->assign('page', $pageData);
@@ -69,5 +61,22 @@ class View extends BaseController
         // Theme模块会自动根据 layoutType 和主题配置加载对应的布局
         // 布局文件路径：app/design/WeShop/default/frontend/layouts/cms/cms_page_{variant}.phtml
         return $this->fetch();
+    }
+
+    /**
+     * @return array{page_id:int|string,title:string,identifier:string,content:string,is_active:bool,created_at:string,updated_at:string}
+     */
+    private static function buildPageData(PageModel $page): array
+    {
+        $status = (int) ($page->getData(PageModel::schema_fields_STATUS) ?? PageModel::STATUS_DRAFT);
+        return [
+            'page_id' => $page->getId(),
+            'title' => (string) ($page->getData(PageModel::schema_fields_TITLE) ?? ''),
+            'identifier' => (string) ($page->getData(PageModel::schema_fields_HANDLE) ?? ''),
+            'content' => (string) ($page->getData(PageModel::schema_fields_CONTENT) ?? ''),
+            'is_active' => $status === PageModel::STATUS_PUBLISHED,
+            'created_at' => (string) ($page->getData(PageModel::schema_fields_CREATE_TIME) ?? ''),
+            'updated_at' => (string) ($page->getData(PageModel::schema_fields_UPDATE_TIME) ?? ''),
+        ];
     }
 }
