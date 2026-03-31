@@ -55,16 +55,54 @@ class ThemeStaticAssetPublisherTest extends TestCore
         $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));
     }
 
-    public function testSkipsAssetsThatAlreadyExistInModuleThemeDirectory(): void
+    public function testPublishesSamePathThemeOverrideEvenWhenModuleDefaultExists(): void
     {
-        $theme = $this->buildTheme(990002, 'motor', 'WeShop/motor');
-
-        $this->assertNull(
-            $this->publisher->publishForRequestPath(
-                '/Weline/Theme/view/theme/frontend/assets/css/theme.css',
-                $theme
-            )
+        $theme = $this->buildTheme(990002, 'default', 'WeShop/default');
+        $publishedPath = $this->publisher->publishForRequestPath(
+            '/Weline/Theme/view/theme/frontend/variables/_colors.css',
+            $theme
         );
+
+        $this->assertSame(
+            '/pub/static/WeShop/default/Weline/Theme/view/theme/frontend/variables/_colors.css',
+            $publishedPath
+        );
+
+        $basePath = rtrim(BP, '\\/') . DS;
+        $sourceFile = $basePath . 'app' . DS . 'design' . DS . 'WeShop' . DS . 'default' . DS . 'frontend' . DS . 'variables' . DS . '_colors.css';
+        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'WeShop' . DS . 'default' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'variables' . DS . '_colors.css';
+
+        $this->assertFileExists($publishedFile);
+        $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));
+    }
+
+    public function testFallsBackToParentThemeOverrideBeforeModuleDefault(): void
+    {
+        $theme = $this->buildMockThemeChain(
+            990004,
+            'motor',
+            'WeShop/motor',
+            990005,
+            'default',
+            'WeShop/default'
+        );
+
+        $publishedPath = $this->publisher->publishForRequestPath(
+            '/Weline/Theme/view/theme/frontend/variables/_colors.css',
+            $theme
+        );
+
+        $this->assertSame(
+            '/pub/static/WeShop/motor/Weline/Theme/view/theme/frontend/variables/_colors.css',
+            $publishedPath
+        );
+
+        $basePath = rtrim(BP, '\\/') . DS;
+        $sourceFile = $basePath . 'app' . DS . 'design' . DS . 'WeShop' . DS . 'default' . DS . 'frontend' . DS . 'variables' . DS . '_colors.css';
+        $publishedFile = $basePath . 'pub' . DS . 'static' . DS . 'WeShop' . DS . 'motor' . DS . 'Weline' . DS . 'Theme' . DS . 'view' . DS . 'theme' . DS . 'frontend' . DS . 'variables' . DS . '_colors.css';
+
+        $this->assertFileExists($publishedFile);
+        $this->assertSame(file_get_contents($sourceFile), file_get_contents($publishedFile));
     }
 
     public function testPublishesPreviewThemeOverrideAssetIntoPreviewNamespace(): void
@@ -119,5 +157,39 @@ class ThemeStaticAssetPublisherTest extends TestCore
         $theme->setData(WelineTheme::schema_fields_PATH, $path);
 
         return $theme;
+    }
+
+    private function buildMockThemeChain(
+        int $childId,
+        string $childName,
+        string $childPath,
+        int $parentId,
+        string $parentName,
+        string $parentPath,
+    ): WelineTheme {
+        $parent = $this->createMock(WelineTheme::class);
+        $parent->method('getId')->willReturn($parentId);
+        $parent->method('getName')->willReturn($parentName);
+        $parent->method('getOriginPath')->willReturn($parentPath);
+        $parent->method('getPath')->willReturn($this->buildDesignPath($parentPath));
+        $parent->method('getThemeChain')->willReturn([$parent]);
+
+        $child = $this->createMock(WelineTheme::class);
+        $child->method('getId')->willReturn($childId);
+        $child->method('getName')->willReturn($childName);
+        $child->method('getOriginPath')->willReturn($childPath);
+        $child->method('getPath')->willReturn($this->buildDesignPath($childPath));
+        $child->method('getThemeChain')->willReturn([$parent, $child]);
+
+        return $child;
+    }
+
+    private function buildDesignPath(string $originPath): string
+    {
+        return rtrim(BP, '\\/')
+            . DS . 'app'
+            . DS . 'design'
+            . DS . str_replace(['/', '\\'], DS, $originPath)
+            . DS;
     }
 }

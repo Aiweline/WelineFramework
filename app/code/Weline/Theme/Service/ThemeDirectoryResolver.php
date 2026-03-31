@@ -121,6 +121,42 @@ class ThemeDirectoryResolver
     public function extractAreaRelativePath(string $path): ?array
     {
         $normalized = str_replace(['/', '\\'], DS, $path);
+
+        // 处理模块路径格式：Weline_Customer::templates/frontend/account/login.phtml
+        if (preg_match('/^(.+?)::(.+)$/', $normalized, $moduleMatches)) {
+            $relativePath = $moduleMatches[2];
+            // 提取 area 和相对路径：templates/frontend/account/login.phtml -> frontend/account/login.phtml
+            if (preg_match('/templates[\\\\\/](frontend|backend)[\\\\\/](.+)$/i', $relativePath, $matches)) {
+                return [
+                    'area' => strtolower((string)$matches[1]),
+                    'relative_path' => str_replace(['/', '\\'], DS, (string)$matches[2]),
+                ];
+            }
+        }
+
+        // 优先处理相对路径格式：theme/frontend/... 或 view/theme/frontend/...
+        // 这种格式没有前导分隔符，直接匹配
+        if (preg_match('/^theme[\\\\\/](frontend|backend)[\\\\\/](.+)$/i', $normalized, $matches)) {
+            return [
+                'area' => strtolower((string)$matches[1]),
+                'relative_path' => str_replace(['/', '\\'], DS, (string)$matches[2]),
+            ];
+        }
+        if (preg_match('/^view[\\\\\/]theme[\\\\\/](frontend|backend)[\\\\\/](.+)$/i', $normalized, $matches)) {
+            return [
+                'area' => strtolower((string)$matches[1]),
+                'relative_path' => str_replace(['/', '\\'], DS, (string)$matches[2]),
+            ];
+        }
+
+        // 处理 app/design/... 格式（无前导分隔符）
+        if (preg_match('/^app[\\\\\/]design[\\\\\/](.+?)[\\\\\/](frontend|backend)[\\\\\/](.+)$/i', $normalized, $matches)) {
+            return [
+                'area' => strtolower((string)$matches[2]),
+                'relative_path' => str_replace(['/', '\\'], DS, (string)$matches[3]),
+            ];
+        }
+
         $patterns = [
             '/[\\\\\/]view[\\\\\/]theme[\\\\\/](frontend|backend)[\\\\\/](.+)$/i',
             '/[\\\\\/]theme[\\\\\/](frontend|backend)[\\\\\/](.+)$/i',
@@ -141,7 +177,52 @@ class ThemeDirectoryResolver
 
     public function resolveThemeTemplatePath(string $modulePath, WelineTheme $theme): string
     {
-        $pathInfo = $this->extractAreaRelativePath($modulePath);
+        // 标准化路径分隔符
+        $normalizedModulePath = str_replace(['/', '\\'], DS, $modulePath);
+
+        // 尝试从绝对路径提取模块路径格式
+        // 例如：E:\...\app\code\Weline\Customer\view\templates\frontend\account\login.phtml
+        // 转换为：Weline_Customer::templates/frontend/account/login.phtml
+        $modulePathForMatch = $this->convertAbsolutePathToModulePath($normalizedModulePath);
+
+        // 检查是否是模块路径格式（如 Weline_Customer::templates/frontend/account/login.phtml）
+        if (preg_match('/^(.+?)::(.+)$/', $modulePathForMatch, $matches)) {
+            $moduleName = $matches[1];
+            $relativePath = $matches[2];
+
+            // 构建主题模块覆盖路径
+            // app/design/WeShop/motor/Weline_Customer/templates/frontend/account/login.phtml
+            $themePath = rtrim($theme->getPath(), '\\/');
+
+            if ($themePath !== '') {
+                // 模块名中的下划线对应目录中的反斜杠或正斜杠
+                // Weline_Customer -> Weline\Customer 或 Weline/Customer
+                $modulePath1 = str_replace('_', DS, $moduleName);
+                $modulePath2 = str_replace('_', '/', $moduleName);
+
+                // 尝试两种路径格式（优先不带 view 的格式）
+                // 格式1: .../Weline_Customer/templates/frontend/... （标准模块路径，下划线格式）
+                $overridePath1 = $themePath . DS . $moduleName . DS . str_replace('/', DS, $relativePath);
+                // 格式2: .../Weline\Customer/templates/frontend/... （反斜杠格式）
+                $overridePath2 = $themePath . DS . $modulePath1 . DS . str_replace('/', DS, $relativePath);
+                // 格式3: .../Weline/Customer/templates/frontend/... （正斜杠格式）
+                $overridePath3 = $themePath . DS . $modulePath2 . DS . str_replace('/', DS, $relativePath);
+
+                // 格式4-6: 带 view 前缀的变体
+                $overridePath4 = $themePath . DS . $moduleName . DS . 'view' . DS . str_replace('/', DS, $relativePath);
+                $overridePath5 = $themePath . DS . $modulePath1 . DS . 'view' . DS . str_replace('/', DS, $relativePath);
+                $overridePath6 = $themePath . DS . $modulePath2 . DS . 'view' . DS . str_replace('/', DS, $relativePath);
+
+                foreach ([$overridePath1, $overridePath2, $overridePath3, $overridePath4, $overridePath5, $overridePath6] as $overridePath) {
+                    if (is_file($overridePath)) {
+                        return $overridePath;
+                    }
+                }
+            }
+        }
+
+        // 如果是 app/design 路径（主题布局/partials 等），直接使用 area directories 解析
+        $pathInfo = $this->extractAreaRelativePath($normalizedModulePath);
         if ($pathInfo === null) {
             return $modulePath;
         }
@@ -161,6 +242,36 @@ class ThemeDirectoryResolver
         }
 
         return $modulePath;
+    }
+
+    /**
+     * 将绝对路径转换为模块路径格式
+     *
+     * 例如：
+     * E:\...\app\code\Weline\Customer\view\templates\frontend\account\login.phtml
+     * -> Weline_Customer::templates/frontend/account/login.phtml
+     *
+     * @param string $absolutePath 绝对路径
+     * @return string 模块路径格式
+     */
+    private function convertAbsolutePathToModulePath(string $absolutePath): string
+    {
+        // 处理 app\code\Vendor\Module\view\templates\... 格式
+        // 提取 Vendor_Module::templates/... 部分
+        if (preg_match('/app[\\\\\/]code[\\\\\/]([A-Za-z0-9_]+[\\\\\/][A-Za-z0-9_]+)[\\\\\/]view[\\\\\/](templates[\\\\\/].+)$/i', $absolutePath, $matches)) {
+            $moduleName = str_replace(DS, '_', $matches[1]);
+            $templatePath = str_replace(DS, '/', $matches[2]);
+            return $moduleName . '::' . $templatePath;
+        }
+
+        // 处理 app\code\Vendor\Module\templates\... 格式（无 view 目录）
+        if (preg_match('/app[\\\\\/]code[\\\\\/]([A-Za-z0-9_]+[\\\\\/][A-Za-z0-9_]+)[\\\\\/](templates[\\\\\/].+)$/i', $absolutePath, $matches)) {
+            $moduleName = str_replace(DS, '_', $matches[1]);
+            $templatePath = str_replace(DS, '/', $matches[2]);
+            return $moduleName . '::' . $templatePath;
+        }
+
+        return $absolutePath;
     }
 
     public function clearCache(): void
