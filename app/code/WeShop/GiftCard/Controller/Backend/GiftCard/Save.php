@@ -16,7 +16,7 @@ class Save extends BaseController
 
     public function post(): string
     {
-        $backUrl = (string) $this->request->getParam('back_url', $this->getBackendUrl('*/backend/gift-card'));
+        $backUrl = (string) $this->request->getParam('back_url', $this->_url->getBackendUrlPath('*/backend/gift-card'));
 
         try {
             $giftCard = $this->giftCardService->saveGiftCard([
@@ -30,11 +30,13 @@ class Save extends BaseController
             ]);
 
             $this->getMessageManager()->addSuccess(__('Gift card saved.'));
-            $this->redirect($this->getBackendUrl('*/backend/gift-card', ['id' => $giftCard->getId()]));
+            $this->request->getResponse()->redirect(
+                $this->_url->getBackendUrlPath('*/backend/gift-card', ['id' => $giftCard->getId()])
+            );
             return '';
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage() ?: __('Gift card save failed.'));
-            $this->redirect($backUrl);
+            $this->request->getResponse()->redirect($backUrl);
             return '';
         }
     }

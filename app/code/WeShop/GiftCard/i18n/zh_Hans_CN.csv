@@ -1,6 +1,11 @@
-﻿"Gift Card Management","Gift Card Management"
+﻿"Gift card deleted successfully.","Gift card deleted successfully."
+"Failed to delete gift card.",删除礼品卡失败。
+"Gift Card Management","Gift Card Management"
 "Gift card saved.","Gift card saved."
 "Gift card save failed.","Gift card save failed."
+"Invalid gift card ID.",无效的礼品卡ID。
+"Gift card not found.",礼品卡未找到。
+"Gift Card Details",礼品卡详情
 "Please log in to continue.","Please log in to continue."
 "Gift card page hooks","Gift card page hooks"
 "Inject storefront content above the gift card list page.","Inject storefront content above the gift card list page."
@@ -10,12 +15,12 @@ Active,Active
 Redeemed,Redeemed
 Expired,Expired
 Disabled,Disabled
-"Customer ID is required.",必须提供客户ID
-"Gift card amount must be greater than zero.",礼品卡金额必须大于0
 "Gift card does not exist.",礼品卡不存在
 "Gift card is not active.",礼品卡当前不可用
 "Gift card has expired.",礼品卡已过期
 "Gift card balance is insufficient.",礼品卡余额不足
+"Customer ID is required.",必须提供客户ID
+"Gift card amount must be greater than zero.",礼品卡金额必须大于0
 "Gift card balance cannot be negative.","Gift card balance cannot be negative."
 "Gift card balance cannot exceed the face amount.","Gift card balance cannot exceed the face amount."
 "Unsupported gift card status.","Unsupported gift card status."
@@ -42,9 +47,24 @@ Reset,Reset
 "Created At","Created At"
 Actions,Actions
 Never,Never
+View,查看
 Edit,Edit
+Delete,删除
+Pagination,分页
+Previous,上一页
+Next,下一页
 "No gift cards found.","No gift cards found."
 "Create the first gift card to enable stored-value and promotion workflows.","Create the first gift card to enable stored-value and promotion workflows."
+"View and manage gift card information.",查看和管理礼品卡信息。
+"Back to List",返回列表
+"Card Information",卡片信息
+"Save Changes",保存更改
+"Card Status",卡片状态
+"Updated At","Updated At"
+"Balance Summary",余额摘要
+"Face Amount",面值
+"Current Balance",当前余额
+Used,已使用
 "Wallet Value","Wallet Value"
 "Gift Cards","Gift Cards"
 "Open Wallet","Open Wallet"
