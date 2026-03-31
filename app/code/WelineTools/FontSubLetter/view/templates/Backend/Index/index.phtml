@@ -561,10 +561,23 @@
 
     // 清空自定义字符
     document.getElementById('clearCustomBtn').addEventListener('click', function() {
-        if (confirm('<?= __('确定要清空自定义字符吗？') ?>')) {
+        if (typeof BackendConfirm === 'undefined') {
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __('确认对话框不可用') ?>');
+            }
+            return;
+        }
+        
+        BackendConfirm.show('<?= __('确定要清空自定义字符吗？') ?>', {
+            title: '<?= __('提示') ?>',
+            confirmText: '<?= __('确认') ?>',
+            cancelText: '<?= __('取消') ?>',
+            type: 'warning'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
             document.getElementById('customChars').value = '';
             storageManager.showStorageInfo('<?= __('自定义字符已清空') ?>');
-        }
+        });
     });
 
     // 加载本地存储数据
@@ -606,7 +619,20 @@
 
     // 清理本地存储
     document.getElementById('clearStorageBtn').addEventListener('click', function() {
-        if (confirm('<?= __('确定要清理本地存储数据吗？此操作不可恢复。') ?>')) {
+        if (typeof BackendConfirm === 'undefined') {
+            if (typeof BackendToast !== 'undefined') {
+                BackendToast.error('<?= __('确认对话框不可用') ?>');
+            }
+            return;
+        }
+        
+        BackendConfirm.show('<?= __('确定要清理本地存储数据吗？此操作不可恢复。') ?>', {
+            title: '<?= __('提示') ?>',
+            confirmText: '<?= __('确认') ?>',
+            cancelText: '<?= __('取消') ?>',
+            type: 'danger'
+        }).then(function(confirmed) {
+            if (!confirmed) return;
             if (storageManager.clear()) {
                 document.getElementById('customChars').value = '';
                 selectedCharacters.clear();
@@ -616,7 +642,7 @@
                 updateSelectedCount();
                 document.getElementById('storageInfo').style.display = 'none';
             }
-        }
+        });
     });
 
     // 生成字体
