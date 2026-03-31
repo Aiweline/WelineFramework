@@ -43,7 +43,7 @@ class ForgotPasswordTest extends TestCase
         $controller->method('getRequest')->willReturn($request);
         $controller->method('getUrl')->willReturnCallback(static fn (string $route): string => $route);
         $controller->expects($this->never())->method('redirect');
-        $controller->expects($this->exactly(5))->method('assign')->willReturnSelf();
+        $controller->expects($this->exactly(7))->method('assign')->willReturnSelf();
         $controller->expects($this->once())->method('fetch')->willReturn('page');
 
         $this->assertSame('page', $controller->index());
@@ -121,5 +121,33 @@ class ForgotPasswordTest extends TestCase
         $controller->expects($this->once())->method('redirect')->with('weshop/customer/account/login')->willReturn('login');
 
         $this->assertSame('login', $controller->postResetPassword());
+    }
+
+    public function testPostIndexReturnsErrorWhenEmailIsNotRegistered(): void
+    {
+        $service = $this->createMock(PasswordResetService::class);
+        $service->expects($this->once())
+            ->method('requestReset')
+            ->with('missing@example.com', 'weshop/customer/account/forgot-password')
+            ->willReturn(false);
+
+        $controller = $this->getMockBuilder(ForgotPassword::class)
+            ->setConstructorArgs([$this->createMock(CustomerSession::class), $service])
+            ->onlyMethods(['getRequest', 'redirect', 'getMessageManager', 'getUrl'])
+            ->getMock();
+
+        $request = $this->createMock(Request::class);
+        $request->method('getPost')->with('email')->willReturn('missing@example.com');
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())->method('addError');
+
+        $controller->expects($this->once())->method('getRequest')->willReturn($request);
+        $controller->expects($this->once())->method('getUrl')->with('weshop/customer/account/forgot-password')
+            ->willReturn('weshop/customer/account/forgot-password');
+        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('weshop/customer/account/forgot-password')->willReturn('redirected');
+
+        $this->assertSame('redirected', $controller->postIndex());
     }
 }

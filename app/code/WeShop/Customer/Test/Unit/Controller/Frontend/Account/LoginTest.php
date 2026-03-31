@@ -185,4 +185,43 @@ class LoginTest extends TestCase
 
         $this->assertSame('target', $controller->postIndex());
     }
+
+    public function testPostIndexFallsBackToUsernameFieldWhenEmailIsEmpty(): void
+    {
+        $service = $this->createMock(CustomerWebAuthService::class);
+        $service->expects($this->once())
+            ->method('beginPasswordLogin')
+            ->with('ada@example.com', 'abc12345', false, 'weshop/cart')
+            ->willReturn([
+                'status' => 'authenticated',
+                'redirect_url' => 'weshop/cart',
+            ]);
+
+        $controller = $this->getMockBuilder(Login::class)
+            ->setConstructorArgs([$this->createMock(CustomerSession::class), $service])
+            ->onlyMethods(['getRequest', 'redirect', 'getMessageManager'])
+            ->getMock();
+
+        $request = $this->createMock(Request::class);
+        $request->method('getPost')->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+            return match ($key) {
+                'email' => '',
+                'username' => 'ada@example.com',
+                'password' => 'abc12345',
+                'remember_me' => false,
+                'remember' => false,
+                'redirect_url' => 'weshop/cart',
+                default => $default,
+            };
+        });
+        $request->method('getParam')->with('redirect')->willReturn('');
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())->method('addSuccess');
+        $controller->expects($this->once())->method('getRequest')->willReturn($request);
+        $controller->expects($this->once())->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('weshop/cart')->willReturn('target');
+
+        $this->assertSame('target', $controller->postIndex());
+    }
 }
