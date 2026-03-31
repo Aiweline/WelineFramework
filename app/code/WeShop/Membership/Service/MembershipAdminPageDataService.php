@@ -86,4 +86,29 @@ class MembershipAdminPageDataService
             'updated_at' => '',
         ];
     }
+
+    public function getMembershipRecord(int $membershipId): ?array
+    {
+        $membership = $this->membershipService->getMembershipRecord($membershipId);
+        if (!$membership) {
+            return null;
+        }
+
+        return $this->normalizeModel($membership);
+    }
+
+    public function getLevelOptions(): array
+    {
+        return $this->membershipService->getLevelOptions();
+    }
+
+    public function getLevelBenefits(): array
+    {
+        return [
+            'bronze' => (string) __('Member pricing entry tier'),
+            'silver' => (string) __('Priority customer support and early campaign access'),
+            'gold' => (string) __('Faster shipping promotions'),
+            'platinum' => (string) __('Dedicated account assistance and VIP campaign previews'),
+        ];
+    }
 }
