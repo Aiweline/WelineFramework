@@ -42,7 +42,7 @@ class ApplyTest extends TestCase
             ->method('fetchJson')
             ->with($this->callback(static function (array $payload): bool {
                 return ($payload['success'] ?? true) === false
-                    && ($payload['message'] ?? '') === 'Coupon code is required.';
+                    && ($payload['message'] ?? '') === '优惠券代码不能为空。';
             }))
             ->willReturn('json');
 
