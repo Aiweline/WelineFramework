@@ -24,7 +24,7 @@ class SourceItem extends BaseController
             'source_id' => $this->request->getParam('source_id', 0),
             'search' => $this->request->getParam('search', ''),
         ];
-        $sourceItemIndexUrl = $this->getBackendUrl('*/backend/inventory/source-item');
+        $sourceItemIndexUrl = (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source-item');
 
         $this->assign(array_merge(
             [
@@ -40,7 +40,7 @@ class SourceItem extends BaseController
     public function edit(): string
     {
         $sourceItemId = (int) $this->request->getParam('id', 0);
-        $sourceItemIndexUrl = $this->getBackendUrl('*/backend/inventory/source-item');
+        $sourceItemIndexUrl = (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source-item');
         if ($sourceItemId <= 0) {
             $this->getMessageManager()->addError(__('Invalid source item id.'));
             $this->redirect($sourceItemIndexUrl);
@@ -50,7 +50,8 @@ class SourceItem extends BaseController
         if ($this->request->isPost()) {
             try {
                 $this->sourceItemManagementService->updateSourceItem($sourceItemId, [
-                    'quantity' => $this->request->getParam('quantity', 0),
+                    // 必须用 double 过滤：默认 0 时 gettype 为 integer，会把 "25.25" 截断成 25
+                    'quantity' => $this->request->getParam('quantity', 0.0, 'double'),
                     'low_stock_threshold' => $this->request->getParam('low_stock_threshold', 0),
                 ]);
                 $this->getMessageManager()->addSuccess(__('Inventory stock updated.'));
