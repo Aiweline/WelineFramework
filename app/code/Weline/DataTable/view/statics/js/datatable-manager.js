@@ -2666,11 +2666,20 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     /**
      * 保存过滤?
      */
-    saveFilter: function (scope) {
+    saveFilter: async function (scope) {
         const instance = this.getInstanceByScope(scope);
         if (!instance) return;
 
-        const filterName = prompt(__('请输入过滤器名称'));
+        if (typeof BackendConfirm === 'undefined') {
+            console.warn('BackendConfirm is missing');
+            return;
+        }
+
+        const filterName = await BackendConfirm.showInput({
+            title: __('输入'),
+            message: __('请输入过滤器名称'),
+            type: 'info'
+        });
         if (!filterName) return;
 
         const $form = instance.container.find('#filter-form-' + scope);
@@ -4446,11 +4455,17 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
     /**
      * 重置为默认字段配?
      */
-    resetToDefault: function (tableId) {
+    resetToDefault: async function (tableId) {
         const instance = this.instances[tableId];
         if (!instance) return;
 
-        if (confirm(__('确定要重置为默认字段配置吗？这将显示所有可用字段？'))) {
+        if (typeof BackendConfirm === 'undefined') {
+            console.warn('BackendConfirm is missing');
+            return;
+        }
+
+        const confirmed = await BackendConfirm.show(__('确定要重置为默认字段配置吗？这将显示所有可用字段？'), { type: 'warning' });
+        if (confirmed) {
             // 清除缓存
             const cacheKey = `datatable_fields_${tableId}_${instance.options.model}_${instance.options.scope}`;
             localStorage.removeItem(cacheKey);
@@ -5622,14 +5637,20 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * 清理表头字段配置
      * @param {string} tableId 表格ID
      */
-    clearHeaderConfig: function (tableId) {
+    clearHeaderConfig: async function (tableId) {
         const instance = this.getInstance(tableId);
         if (!instance) {
             console.error('Table instance not found:', tableId);
             return;
         }
 
-        if (confirm(__('确定要重置表头字段配置吗？这将清除所有自定义的显示字段设置'))) {
+        if (typeof BackendConfirm === 'undefined') {
+            console.warn('BackendConfirm is missing');
+            return;
+        }
+
+        const confirmed = await BackendConfirm.show(__('确定要重置表头字段配置吗？这将清除所有自定义的显示字段设置'), { type: 'warning' });
+        if (confirmed) {
             this.clearConfig(tableId, 'header');
         }
     },
@@ -5638,14 +5659,20 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * 清理筛选字段配?
      * @param {string} tableId 表格ID
      */
-    clearFilterConfig: function (tableId) {
+    clearFilterConfig: async function (tableId) {
         const instance = this.getInstance(tableId);
         if (!instance) {
             console.error('Table instance not found:', tableId);
             return;
         }
 
-        if (confirm(__('确定要重置筛选字段配置吗？这将清除所有自定义的筛选字段设置'))) {
+        if (typeof BackendConfirm === 'undefined') {
+            console.warn('BackendConfirm is missing');
+            return;
+        }
+
+        const confirmed = await BackendConfirm.show(__('确定要重置筛选字段配置吗？这将清除所有自定义的筛选字段设置'), { type: 'warning' });
+        if (confirmed) {
             this.clearConfig(tableId, 'filter');
         }
     },
@@ -5654,14 +5681,20 @@ if (typeof window === 'undefined' || !window.DataTableManager || typeof window.D
      * 清理全部配置
      * @param {string} tableId 表格ID
      */
-    clearAllConfig: function (tableId) {
+    clearAllConfig: async function (tableId) {
         const instance = this.getInstance(tableId);
         if (!instance) {
             console.error('Table instance not found:', tableId);
             return;
         }
 
-        if (confirm(__('确定要重置全部配置吗？这将清除所有自定义的表头字段和筛选字段设置'))) {
+        if (typeof BackendConfirm === 'undefined') {
+            console.warn('BackendConfirm is missing');
+            return;
+        }
+
+        const confirmed = await BackendConfirm.show(__('确定要重置全部配置吗？这将清除所有自定义的表头字段和筛选字段设置'), { type: 'warning' });
+        if (confirmed) {
             this.clearConfig(tableId, 'all');
         }
     },
