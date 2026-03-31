@@ -1,21 +1,85 @@
-﻿"B2B Company Management","B2B Company Management"
+﻿"Please log in first","Please log in first"
+Success,成功
+"B2B Trade Accounts","B2B 赊账账户"
+"Customer ID is required.","必须填写客户 ID。"
+"B2B account settings saved.","B2B 账户设置已保存。"
+"Save failed.",保存失败。
+"B2B Enterprise Customers","B2B 企业客户"
+"B2B customer profile saved.","B2B 客户档案已保存。"
+"B2B Credit & AR Summary","B2B 授信与应收概览"
+"B2B Company Management","B2B Company Management"
 "Company profile saved.","Company profile saved."
 "Company profile save failed.","Company profile save failed."
+"B2B Credit Lines","B2B 授信额度"
+"Credit limit must not be negative.",授信额度不能为负数。
+"B2B credit line saved.",授信额度已保存。
+"B2B Receivables","B2B 应收账款"
+"Payment recorded.",已记录付款。
+"Payment failed.",付款失败。
 "Please log in to view your corporate programs.","Please log in to view your corporate programs."
 "B2B storefront layout hook","B2B storefront layout hook"
 "Inject content above the B2B storefront summary.",在B2B店铺概览上方注入内容。
 "B2B company list hook",B2B公司列表挂钩
 "Attach additional sections after the company table.",在企业表格后附加附加区块。
+"Invalid customer for B2B credit payment.","Invalid customer for B2B credit payment."
+"This order is placed on your B2B credit account. Please settle the invoice before the due date.","订单已记入 B2B 授信，请在到期日前结清账单。"
+"A customer account is required for B2B credit checkout.","使用 B2B 授信结账需要登录客户账户。"
+"B2B credit payment is only available for approved enterprise accounts.","B2B 授信支付仅对已审核企业客户开放。"
+"customer_id is required.","必须提供 customer_id。"
+"Company name is required.","Company name is required."
+"Contact not found.","Contact not found."
+"Contact name is required.","Contact name is required."
+"This order amount exceeds your auto-approval limit. Please contact your account manager.",订单金额超过自动审批上限，请联系客户经理。
+"Invalid order for B2B extension.","Invalid order for B2B extension."
+"Payment amount must be positive.","付款金额必须大于 0。"
+"Receivable not found.",未找到应收记录。
 Active,Active
 "Pending Review","Pending Review"
 Approved,Approved
 Rejected,Rejected
 Disabled,Disabled
 "Company record not found.","Company record not found."
-"Company name is required.","Company name is required."
 "Company contact email is required.","Company contact email is required."
 "Company contact email is invalid.","Company contact email is invalid."
 "Unsupported company status.","Unsupported company status."
+"Credit amount must be positive.","Credit amount must be positive."
+"No B2B credit line is configured for this account.","该账户未配置 B2B 授信。"
+"The B2B credit line is frozen. Please contact support.",授信已冻结，请联系支持。
+"Insufficient B2B credit. Available: %{1}","B2B 授信不足。可用：%{1}"
+"Credit record missing after validation.","Credit record missing after validation."
+Prepaid,预付
+"Net 30",月结30天
+"Net 60",月结60天
+"Net 90",月结90天
+"Receivable amount must be positive.","Receivable amount must be positive."
+"Due date format must be YYYY-MM-DD.","Due date format must be YYYY-MM-DD."
+"Order ID is required.","Order ID is required."
+"B2B credit usage is at or above %{1}%.","B2B 授信使用率已达到或超过 %{1}%。"
+"Create / update account",新建/更新账户
+"Customer ID","Customer ID"
+"Payment term",账期
+—,—
+"Period days override",账期天数覆盖
+"Auto approve under",自动审批上限
+Save,Save
+Term,Term
+Balance,余额
+"Auto approve",自动审批
+"Company name","Company name"
+Filter,筛选
+"Create / edit profile",新建/编辑档案
+"Tax ID","Tax ID"
+"Credit limit",授信额度
+"Not set",未设置
+Yes,是
+No,否
+"Save profile",保存档案
+ID,ID
+Customer,Customer
+Company,Company
+"Credit lines",授信户数
+"Open receivables",在途应收
+Overdue,逾期
 "Manage corporate account records, contact emails, and approval statuses from one operational workspace.","Manage corporate account records, contact emails, and approval statuses from one operational workspace."
 "Page %d of %d, %d companies found","Page %d of %d, %d companies found"
 Total,Total
@@ -23,7 +87,6 @@ Total,Total
 "Create B2B Company","Create B2B Company"
 "Company Name","Company Name"
 "Contact Email","Contact Email"
-"Tax ID","Tax ID"
 Phone,Phone
 Address,Address
 Status,Status
@@ -38,11 +101,24 @@ Actions,Actions
 Edit,Edit
 "No B2B companies found.","No B2B companies found."
 "Create the first linked company profile or adjust the filters to find an existing account.","Create the first linked company profile or adjust the filters to find an existing account."
+"Set credit limit",设置授信额度
+"Credit level",信用等级
+Limit,Limit
+Used,Used
+Available,Available
+Frozen,冻结
+Order,Order
+Invoice,发票号
+Amount,Amount
+Paid,Paid
+Due,到期日
+"Record payment",登记付款
+Pay,付款
 "Awaiting link",待关联
 "B2B account access","B2B 账户访问"
 "Linked companies",已关联企业
 "Open B2B center",打开B2B中心
 "Review company records matched to your current account email and jump into the B2B hub.","查看与当前账户邮箱匹配的公司记录，并进入 B2B 中心。"
-"Linked companies: %1 (%2)",已关联企业：%1（%2）
+"Linked companies: %1 (%2)","Linked companies: %1 (%2)"
 "B2B Center","B2B Center"
-"Review linked company programs and business account status.","Review linked company programs and business account status."
+"Review linked company programs and business account status.",查看已关联企业的项目与账户状态。

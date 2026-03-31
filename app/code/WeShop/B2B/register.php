@@ -12,5 +12,6 @@ Register::register(
         'Weline_Framework',
         'WeShop_Customer',
         'WeShop_Order',
+        'WeShop_Payment',
     ]
 );
