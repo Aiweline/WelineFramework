@@ -8,6 +8,7 @@ use Agent\CursorSupervisor\Service\CursorSupervisorService;
 use Agent\CursorSupervisor\Service\InteractiveShellService;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 
 /**
@@ -179,7 +180,7 @@ class Start extends CommandAbstract
             $input = @fgets(STDIN);
             
             if ($input === false) {
-                usleep(100000);
+                SchedulerSystem::yieldDelay(100);
                 continue;
             }
             

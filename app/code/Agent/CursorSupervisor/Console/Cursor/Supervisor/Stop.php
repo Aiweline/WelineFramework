@@ -7,6 +7,7 @@ namespace Agent\CursorSupervisor\Console\Cursor\Supervisor;
 use Agent\CursorSupervisor\Service\CursorSupervisorService;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 
 /**
@@ -45,14 +46,14 @@ class Stop extends CommandAbstract
         Processer::destroy($processName);
         
         // 验证是否停止成功
-        usleep(500000); // 等待 0.5 秒
+        SchedulerSystem::yieldDelay(500); // 等待 0.5 秒
         
         if (Processer::isRunningByPid($pid)) {
             $this->printer->warning('进程仍在运行，尝试强制终止...');
             Processer::killByPid($pid);
             Processer::removePidFile($processName);
             
-            usleep(500000);
+            SchedulerSystem::yieldDelay(500);
             if (Processer::isRunningByPid($pid)) {
                 $this->printer->error('无法停止进程，请手动终止 PID: ' . $pid);
                 return;
