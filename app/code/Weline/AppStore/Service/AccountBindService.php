@@ -42,15 +42,13 @@ class AccountBindService
         // Env::get 如果配置项存在但显式为 null，会直接返回 null（不会走 default），因此这里做非空兜底。
         $this->platformUrl = (is_string($platformUrl) && $platformUrl !== '') ? $platformUrl : self::DEFAULT_PLATFORM_URL;
         
-        // 加密密钥必须配置，否则抛出警告
+        // 加密密钥必须稳定；未配置时使用确定性后备值，避免重启后无法解密历史 token。
         $encryptionKey = Env::get('appstore.encryption_key');
         if (empty($encryptionKey) || $encryptionKey === 'default_encryption_key_change_me') {
-            // 使用安装时生成的随机密钥作为后备
             $encryptionKey = Env::get('appstore.generated_key');
             if (empty($encryptionKey)) {
-                $encryptionKey = bin2hex(random_bytes(32));
-                // 记录警告日志
-                Env::log_warning('appstore', 'AppStore: 使用自动生成的加密密钥，建议在配置中设置 appstore.encryption_key');
+                $encryptionKey = hash('sha256', BP . '|appstore|fallback-key');
+                Env::log_warning('appstore', 'AppStore: 使用后备加密密钥，建议尽快配置 appstore.encryption_key');
             }
         }
         $this->encryptionKey = $encryptionKey;
@@ -286,7 +284,14 @@ class AccountBindService
             ];
         }
 
-        $token = $this->decryptToken($account->getPlatformToken());
+        try {
+            $token = $this->decryptToken((string)$account->getPlatformToken());
+        } catch (\Exception) {
+            return [
+                'success' => false,
+                'message' => __('令牌无效，请重新绑定账户'),
+            ];
+        }
 
         try {
             $response = $this->httpClient->post($this->platformUrl . '/api/v1/auth/refresh', [
@@ -337,7 +342,15 @@ class AccountBindService
             ];
         }
 
-        $token = $this->decryptToken($account->getPlatformToken());
+        try {
+            $token = $this->decryptToken((string)$account->getPlatformToken());
+        } catch (\Exception) {
+            return [
+                'success' => false,
+                'message' => __('账户令牌无效，请重新绑定'),
+                'licenses' => [],
+            ];
+        }
 
         try {
             $response = $this->httpClient->get($this->platformUrl . '/api/v1/user/licenses', [
@@ -384,7 +397,12 @@ class AccountBindService
             $account = $this->getCurrentAccount();
         }
 
-        return $this->decryptToken($account->getPlatformToken());
+        try {
+            return $this->decryptToken((string)$account->getPlatformToken());
+        } catch (\Exception) {
+            Env::log_warning('appstore', 'AppStore: 令牌解密失败，请重新绑定账户');
+            return null;
+        }
     }
 
     /**
@@ -515,11 +533,24 @@ class AccountBindService
      */
     private function decryptToken(string $encryptedToken): string
     {
-        $data = base64_decode($encryptedToken);
+        if ($encryptedToken === '') {
+            throw new Exception(__('令牌为空'));
+        }
+        $data = base64_decode($encryptedToken, true);
+        if (!is_string($data) || $data === '') {
+            throw new Exception(__('令牌格式无效'));
+        }
         $ivLength = openssl_cipher_iv_length('aes-256-cbc');
+        if (strlen($data) <= $ivLength) {
+            throw new Exception(__('令牌数据损坏'));
+        }
         $iv = substr($data, 0, $ivLength);
         $encrypted = substr($data, $ivLength);
-        return openssl_decrypt($encrypted, 'aes-256-cbc', $this->encryptionKey, OPENSSL_RAW_DATA, $iv);
+        $decrypted = openssl_decrypt($encrypted, 'aes-256-cbc', $this->encryptionKey, OPENSSL_RAW_DATA, $iv);
+        if (!is_string($decrypted) || $decrypted === '') {
+            throw new Exception(__('令牌解密失败'));
+        }
+        return $decrypted;
     }
 
     /**
