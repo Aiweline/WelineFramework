@@ -1222,7 +1222,7 @@ class DomainResolveService
             if ($sleep <= 0) {
                 break;
             }
-            \sleep($sleep);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep((int) $sleep);
             $elapsed += $sleep;
         }
 

@@ -64,7 +64,7 @@ $handoff_artifact = $this->getData('handoff_artifact');
 $handoff_artifact = \is_array($handoff_artifact) ? $handoff_artifact : null;
 $error_message = (string)($this->getData('error_message') ?? '');
 $last_event_id = (int)($this->getData('last_event_id') ?? 0);
-$site_builder_sse_path = (string)($this->getData('stream_sse_path') ?? 'websites/backend/site-builder-agent/stream-sse');
+$site_builder_sse_url = (string)($this->getData('stream_sse_url') ?? '');
 
 if (!$session instanceof \Weline\Websites\Model\AiSiteBuilderSession) {
     ?>
@@ -608,7 +608,7 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
             <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0"><h5 class="card-title mb-1"><lang>实时事件流</lang></h5></div>
             <div class="card-body p-0">
                 <div class="px-4 pt-3"><button type="button" class="btn btn-primary btn-sm mb-3" id="site-builder-start-sse"><lang>连接事件流</lang></button></div>
-                <w:theme:sse-terminal id="site-builder-workspace-terminal" path="site_builder_sse_path" title="site_builder_sse_title" height="260px" events="start,snapshot,log,done,error,warning,info" />
+                <w:theme:sse-terminal id="site-builder-workspace-terminal" height="260px" events="start,snapshot,log,done,error,warning,info" show-start-toggle="false" />
             </div>
         </div>
 
@@ -969,7 +969,16 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     var saveVirtualThemeUrl = <?= json_encode($save_virtual_theme_url, JSON_THROW_ON_ERROR) ?>;
     var savePageTypeLayoutUrl = <?= json_encode($save_page_type_layout_url, JSON_THROW_ON_ERROR) ?>;
     var saveVirtualComponentUrl = <?= json_encode($save_virtual_component_url, JSON_THROW_ON_ERROR) ?>;
-    var streamBaseUrl = <?= json_encode((string)$this->getBackendUrl($site_builder_sse_path), JSON_THROW_ON_ERROR) ?>;
+    var streamBaseUrlRaw = <?= json_encode($site_builder_sse_url, JSON_THROW_ON_ERROR) ?>;
+    var streamBaseUrl = streamBaseUrlRaw;
+    try {
+        if (streamBaseUrlRaw && String(streamBaseUrlRaw).indexOf('://') >= 0) {
+            var streamBaseParsed = new URL(String(streamBaseUrlRaw), window.location.origin);
+            streamBaseUrl = streamBaseParsed.pathname + (streamBaseParsed.search || '');
+        }
+    } catch (streamBaseUrlNormErr) {
+        streamBaseUrl = streamBaseUrlRaw;
+    }
     var workspaceRegistrarOptions = <?= $registrarSelectOptionsJson ?>;
     var lastEventId = <?= (int)$last_event_id ?>;
     var domainPurchaseState = <?= json_encode($domain_purchase_state, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;
@@ -1289,13 +1298,28 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         }
     }
 
+    function toSameOriginRequestPath(rawUrl) {
+        if (!rawUrl) {
+            return rawUrl;
+        }
+        try {
+            if (String(rawUrl).indexOf('://') >= 0) {
+                var pu = new URL(String(rawUrl), window.location.origin);
+                return pu.pathname + (pu.search || '');
+            }
+        } catch (toOriginPathErr) {
+            return rawUrl;
+        }
+        return rawUrl;
+    }
+
     function postForm(url, fields) {
         var fd = new FormData();
         Object.keys(fields || {}).forEach(function (key) {
             fd.append(key, fields[key]);
         });
 
-        return fetch(url, {
+        return fetch(toSameOriginRequestPath(url), {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             body: fd,
@@ -1317,8 +1341,9 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         if (!generateVirtualThemeSseBaseUrl) {
             return Promise.resolve();
         }
-        var requestUrl = generateVirtualThemeSseBaseUrl
-            + (generateVirtualThemeSseBaseUrl.indexOf('?') >= 0 ? '&' : '?')
+        var vtBase = toSameOriginRequestPath(generateVirtualThemeSseBaseUrl);
+        var requestUrl = vtBase
+            + (vtBase.indexOf('?') >= 0 ? '&' : '?')
             + 'public_id=' + encodeURIComponent(publicId);
         setWorkspaceBusy(true);
         if (window.BackendToast && typeof window.BackendToast.info === 'function') {
@@ -1327,7 +1352,8 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
         return fetch(requestUrl, {
             method: 'GET',
-            headers: { 'Accept': 'text/event-stream' }
+            headers: { 'Accept': 'text/event-stream' },
+            credentials: 'same-origin'
         }).then(function (response) {
             if (!response.ok || !response.body) {
                 throw new Error(messages.virtualThemeAiFailed);
@@ -1867,7 +1893,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         }
 
         domainPurchaseStreamController = new AbortController();
-        fetch(streamUrl, {
+        fetch(toSameOriginRequestPath(streamUrl), {
             method: 'GET',
             headers: {
                 'Accept': 'text/event-stream',
@@ -2394,6 +2420,11 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     var sseBtn = document.getElementById('site-builder-start-sse');
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['site-builder-workspace-terminal'] : null;
     if (sseBtn && terminal) {
+        var terminalTitleEl = document.querySelector('#site-builder-workspace-terminal .weline-sse-terminal-title-text');
+        var terminalCardTitleEl = sseBtn.closest('.card') ? sseBtn.closest('.card').querySelector('.card-title') : null;
+        if (terminalTitleEl && terminalCardTitleEl && terminalCardTitleEl.textContent) {
+            terminalTitleEl.textContent = terminalCardTitleEl.textContent.trim();
+        }
         sseBtn.textContent = messages.streamReconnect;
 
         function resolveWorkspacePublicId() {
@@ -2408,12 +2439,20 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
         function buildWorkspaceStreamUrl() {
             var resolvedPublicId = resolveWorkspacePublicId();
-            if (!resolvedPublicId) {
+            if (!resolvedPublicId || !streamBaseUrl) {
                 return '';
             }
-            var separator = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
-            return streamBaseUrl + separator + 'public_id=' + encodeURIComponent(resolvedPublicId)
-                + '&last_event_id=' + encodeURIComponent(String(lastEventId));
+            try {
+                var requestUrl = new URL(streamBaseUrl, window.location.origin);
+                requestUrl.searchParams.set('public_id', resolvedPublicId);
+                requestUrl.searchParams.set('last_event_id', String(lastEventId));
+                // 使用 path+query，与当前页同源，避免 E2E 代理下绝对 URL 偶发导致 EventSource 不带 Cookie（adminId=0）
+                return requestUrl.pathname + (requestUrl.search || '');
+            } catch (error) {
+                var separator = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
+                return streamBaseUrl + separator + 'public_id=' + encodeURIComponent(resolvedPublicId)
+                    + '&last_event_id=' + encodeURIComponent(String(lastEventId));
+            }
         }
 
         function formatWorkspaceTerminalLog(entry) {
@@ -2504,15 +2543,18 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
         terminal.on('error', function (event) {
             var data = parseSsePayload(event);
-            terminal.log((data.message || messages.streamDisconnected), 'error');
-            sseBtn.disabled = false;
-            // 会话不存在时停止重连，避免无限循环
-            var errMsg = data && (data.message || '');
-            if (typeof errMsg === 'string' && (errMsg.indexOf('会话不存在') >= 0 || errMsg.indexOf('session') >= 0 || errMsg.indexOf('无效') >= 0)) {
-                // 重置计数，避免残留状态影响后续操作
-                workspaceReconnectAttempts = 0;
-                return;
+            var hasPayload = !!(event && typeof event.data === 'string' && event.data !== '');
+            if (hasPayload) {
+                terminal.log((data.message || messages.streamDisconnected), 'error');
+                sseBtn.disabled = false;
+                // 会话不存在或参数无效属于业务错误，不应继续自动重连
+                var errMsg = data && (data.message || '');
+                if (typeof errMsg === 'string' && (errMsg.indexOf('会话不存在') >= 0 || errMsg.indexOf('session') >= 0 || errMsg.indexOf('无效') >= 0)) {
+                    workspaceReconnectAttempts = 0;
+                    return;
+                }
             }
+            sseBtn.disabled = false;
             scheduleWorkspaceReconnect();
         });
 
