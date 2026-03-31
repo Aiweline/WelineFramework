@@ -1,92 +1,77 @@
 <?php
 /**
- * Catalog 分类内容渲染模板
- *
- * 作用：
- * - 在分类页主内容区域渲染分类内容
- * - 如果有子分类，显示子分类网格
- * - 如果没有子分类，显示提示信息或产品列表
+ * Catalog category content fallback template.
  */
-
-/** @var \Weline\Framework\View\Template $this */
 
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Catalog\Service\CategoryService;
 
-// 优先从模板数据中获取分类信息
-$category = $this->getData('category') ?? null;
+/** @var \Weline\Framework\View\Template $this */
 
-// 如果模板数据中没有，从 Request 中获取
-if (!is_array($category) || empty($category['category_id'])) {
-    $categoriesCtx = $this->request->getData('categories') ?? null;
-    if (is_array($categoriesCtx) && isset($categoriesCtx['current']) && is_array($categoriesCtx['current'])) {
-        $category = $categoriesCtx['current'];
-    }
+// WLS workers can reuse template instances across requests, so prefer current request data.
+$categoriesCtx = $this->request->getData('categories') ?? null;
+$requestCategory = $this->request->getData('category') ?? null;
+$category = is_array($requestCategory) && !empty($requestCategory['category_id'])
+    ? $requestCategory
+    : ($this->getData('category') ?? null);
+
+if ((!is_array($category) || empty($category['category_id']))
+    && is_array($categoriesCtx)
+    && isset($categoriesCtx['current'])
+    && is_array($categoriesCtx['current'])) {
+    $category = $categoriesCtx['current'];
 }
 
-// 如果没有分类数据，直接返回
 if (!is_array($category) || empty($category['category_id'])) {
     return;
 }
 
-// 获取子分类
 $childCategories = $category['children'] ?? [];
-
-// 如果子分类为空，尝试从服务中获取
-if (empty($childCategories) || !is_array($childCategories) || count($childCategories) === 0) {
+if (!is_array($childCategories) || $childCategories === []) {
     try {
         /** @var CategoryService $categoryService */
         $categoryService = ObjectManager::getInstance(CategoryService::class);
-        $childCategories = $categoryService->getChildCategories($category['category_id']);
-    } catch (\Exception $e) {
+        $childCategories = $categoryService->getChildCategories((int) $category['category_id']);
+    } catch (\Throwable) {
         $childCategories = [];
     }
 }
 
-// 确保 childCategories 是数组，并过滤掉无效的分类
-if (is_array($childCategories)) {
-    $childCategories = array_filter($childCategories, function($child) {
-        return is_array($child) && !empty($child['category_id']) && !empty($child['handle']);
-    });
-    $childCategories = array_values($childCategories); // 重新索引数组
-} else {
-    $childCategories = [];
-}
+$childCategories = is_array($childCategories)
+    ? array_values(array_filter($childCategories, static fn (mixed $child): bool => is_array($child) && !empty($child['category_id']) && !empty($child['handle'])))
+    : [];
 
-// 获取当前分类的路径
-$currentPath = $category['path'] ?? '';
+$currentPath = trim((string) ($category['path'] ?? ''), '/');
 if ($currentPath === '') {
-    $currentHandle = trim((string)($category['handle'] ?? ''), '/');
+    $currentHandle = trim((string) ($category['handle'] ?? ''), '/');
     if ($currentHandle !== '') {
         $currentPath = $currentHandle;
     }
 }
 
-// 判断是否有有效的子分类
-$hasValidChildren = !empty($childCategories) && is_array($childCategories) && count($childCategories) > 0;
+$hasValidChildren = $childCategories !== [];
+$products = $this->request->getData('products') ?? $this->getData('products') ?? [];
 ?>
 
 <?php if ($hasValidChildren): ?>
-    <!-- 子分类网格 -->
     <div class="category-children-grid">
         <?php foreach ($childCategories as $child): ?>
             <?php
-            $childHandle = trim((string)($child['handle'] ?? ''), '/');
+            $childHandle = trim((string) ($child['handle'] ?? ''), '/');
             if ($childHandle === '') {
                 continue;
             }
-            
-            // 构建子分类的完整路径
+
             $childPath = $currentPath !== '' ? $currentPath . '/' . rawurlencode($childHandle) : rawurlencode($childHandle);
             $childUrl = $this->getUrl('catalog/category/' . $childPath);
-            $childName = htmlspecialchars($child['name'] ?? '');
-            $childDescription = htmlspecialchars($child['description'] ?? '');
-            $childImage = $child['image'] ?? '';
-            $hasGrandChildren = !empty($child['children']) && is_array($child['children']) && count($child['children']) > 0;
-            $grandChildrenCount = $hasGrandChildren ? count($child['children']) : 0;
+            $childName = htmlspecialchars((string) ($child['name'] ?? ''));
+            $childDescription = htmlspecialchars((string) ($child['description'] ?? ''));
+            $childImage = (string) ($child['image'] ?? '');
+            $grandChildren = $child['children'] ?? [];
+            $grandChildrenCount = is_array($grandChildren) ? count($grandChildren) : 0;
             ?>
             <a href="<?= htmlspecialchars($childUrl) ?>" class="category-grid-item">
-                <?php if ($childImage): ?>
+                <?php if ($childImage !== ''): ?>
                     <div class="category-grid-item__image" style="background-image: url('<?= htmlspecialchars($childImage) ?>');"></div>
                 <?php else: ?>
                     <div class="category-grid-item__image category-grid-item__image-placeholder">
@@ -95,58 +80,67 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
                         </svg>
                     </div>
                 <?php endif; ?>
-                
+
                 <div class="category-grid-item__content">
                     <h3 class="category-grid-item__title"><?= $childName ?></h3>
-                    <?php if ($childDescription): ?>
+                    <?php if ($childDescription !== ''): ?>
                         <p class="category-grid-item__desc"><?= $childDescription ?></p>
                     <?php endif; ?>
-                    
-                    <div class="category-grid-item__meta">
-                        <?php if ($hasGrandChildren && $grandChildrenCount > 0): ?>
+
+                    <?php if ($grandChildrenCount > 0): ?>
+                        <div class="category-grid-item__meta">
                             <span class="category-grid-item__badge">
                                 <?= __('%{count} 个子分类', ['count' => $grandChildrenCount]) ?>
                             </span>
-                        <?php endif; ?>
-                    </div>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </a>
         <?php endforeach; ?>
     </div>
 <?php else: ?>
-    <!-- 没有子分类时显示产品列表 -->
-    <?php
-    // 从模板数据中获取产品列表
-    $products = $this->getData('products') ?? [];
-    
-    if (empty($products) || !is_array($products) || count($products) === 0): ?>
+    <?php if (!is_array($products) || $products === []): ?>
         <div class="category-empty">
-            <p><?= __('该分类下暂无产品') ?></p>
+            <p><?= __('该分类下暂无商品') ?></p>
         </div>
     <?php else: ?>
-        <div class="category-products-grid">
+        <?php
+        $browseProductIdsForDom = array_values(array_filter(array_map(
+            static fn (mixed $p): int => (int) (is_array($p) ? ($p['product_id'] ?? $p['entity_id'] ?? 0) : 0),
+            is_array($products) ? $products : []
+        )));
+        ?>
+        <div
+            class="category-products-grid products-grid"
+            data-weshop-filter-products-grid="canonical-category-products"
+            data-browse-product-ids="<?= htmlspecialchars(json_encode($browseProductIdsForDom), ENT_QUOTES, 'UTF-8') ?>"
+        >
             <?php foreach ($products as $product): ?>
                 <?php
-                $productId = (int)($product['product_id'] ?? 0);
-                $productName = htmlspecialchars($product['name'] ?? '');
-                $productDescription = htmlspecialchars($product['short_description'] ?? '');
-                $productPrice = (float)($product['price'] ?? 0);
-                $productImage = $product['image'] ?? '';
-                $productHandle = $product['handle'] ?? '';
-                $productSku = htmlspecialchars($product['sku'] ?? '');
-                $inStock = (bool)($product['in_stock'] ?? false);
-                
-                // 构建产品URL
-                $productUrl = $productHandle ? $this->getUrl('product/' . $productHandle) : $this->getUrl('product/view', ['id' => $productId]);
+                if (!is_array($product)) {
+                    continue;
+                }
+
+                $productId = (int) ($product['product_id'] ?? $product['entity_id'] ?? 0);
+                $productName = htmlspecialchars((string) ($product['name'] ?? ''));
+                $productDescription = htmlspecialchars((string) ($product['short_description'] ?? ''));
+                $productPrice = (float) ($product['price'] ?? 0);
+                $productImage = (string) ($product['image'] ?? '');
+                $productHandle = (string) ($product['handle'] ?? '');
+                $productSku = htmlspecialchars((string) ($product['sku'] ?? ''));
+                $inStock = (bool) ($product['in_stock'] ?? ((int) ($product['stock'] ?? 0) > 0));
+                $productUrl = $productHandle !== '' ? $this->getUrl('product/' . $productHandle) : $this->getUrl('product/view', ['id' => $productId]);
                 ?>
-                <div class="product-card">
+                <div class="product-card" data-product-id="<?= $productId ?>">
                     <a href="<?= htmlspecialchars($productUrl) ?>" class="product-card__link">
                         <div class="product-card__image-wrapper">
-                            <?php if ($productImage): ?>
-                                <img src="<?= htmlspecialchars($productImage) ?>" 
-                                     alt="<?= $productName ?>" 
-                                     class="product-card__image"
-                                     loading="lazy">
+                            <?php if ($productImage !== ''): ?>
+                                <img
+                                    src="<?= htmlspecialchars($productImage) ?>"
+                                    alt="<?= $productName ?>"
+                                    class="product-card__image"
+                                    loading="lazy"
+                                >
                             <?php else: ?>
                                 <div class="product-card__image-placeholder">
                                     <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -160,15 +154,15 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
                         </div>
                         <div class="product-card__content">
                             <h3 class="product-card__title"><?= $productName ?></h3>
-                            <?php if ($productDescription): ?>
+                            <?php if ($productDescription !== ''): ?>
                                 <p class="product-card__description"><?= $productDescription ?></p>
                             <?php endif; ?>
-                            
+
                             <div class="product-card__price">
                                 <span class="product-card__price-current">¥<?= number_format($productPrice, 2) ?></span>
                             </div>
-                            
-                            <?php if ($productSku): ?>
+
+                            <?php if ($productSku !== ''): ?>
                                 <div class="product-card__sku">
                                     <small><?= __('SKU: %{sku}', ['sku' => $productSku]) ?></small>
                                 </div>
@@ -182,7 +176,6 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
 <?php endif; ?>
 
 <style>
-/* 子分类网格样式 */
 .category-children-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -278,7 +271,6 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
     color: var(--color-accent, #3b82f6);
 }
 
-/* 产品网格样式 */
 .category-products-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -310,7 +302,7 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
 .product-card__image-wrapper {
     position: relative;
     width: 100%;
-    padding-top: 100%; /* 1:1 宽高比 */
+    padding-top: 100%;
     background-color: var(--color-bg-secondary, #f3f4f6);
     overflow: hidden;
 }
@@ -327,19 +319,6 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
 
 .product-card:hover .product-card__image {
     transform: scale(1.05);
-}
-
-.product-card__discount {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.5rem;
-    background-color: #ef4444;
-    color: #fff;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    z-index: 1;
 }
 
 .product-card__content {
@@ -374,28 +353,6 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
     overflow: hidden;
 }
 
-.product-card__rating {
-    display: flex;
-    align-items: center;
-    gap: 0.25rem;
-    margin-top: 0.25rem;
-}
-
-.star {
-    color: var(--color-text-tertiary, #d1d5db);
-    font-size: 0.875rem;
-}
-
-.star-filled {
-    color: #fbbf24;
-}
-
-.product-card__reviews {
-    font-size: 0.75rem;
-    color: var(--color-text-secondary, #6b7280);
-    margin-left: 0.25rem;
-}
-
 .product-card__price {
     display: flex;
     align-items: baseline;
@@ -407,12 +364,6 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
     font-size: 1.25rem;
     font-weight: 700;
     color: #ef4444;
-}
-
-.product-card__price-original {
-    font-size: 0.875rem;
-    color: var(--color-text-secondary, #9ca3af);
-    text-decoration: line-through;
 }
 
 .product-card__image-placeholder {
@@ -453,67 +404,65 @@ $hasValidChildren = !empty($childCategories) && is_array($childCategories) && co
     color: var(--color-text-secondary, #6b7280);
 }
 
-/* 移动端适配 */
 @media screen and (max-width: 768px) {
     .category-children-grid {
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
         gap: 1rem;
     }
-    
+
     .category-grid-item__image {
         height: 140px;
     }
-    
+
     .category-grid-item__content {
         padding: 1rem;
     }
-    
+
     .category-grid-item__title {
         font-size: 1rem;
     }
-    
+
     .category-grid-item__desc {
         font-size: 0.85rem;
     }
-    
+
     .category-products-grid {
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
         gap: 1rem;
     }
-    
+
     .product-card__content {
         padding: 0.875rem;
     }
-    
+
     .product-card__title {
         font-size: 0.95rem;
     }
-    
+
     .product-card__description {
         font-size: 0.8rem;
     }
 }
 
-/* 超小屏幕优化 */
 @media screen and (max-width: 480px) {
     .category-children-grid {
         grid-template-columns: 1fr;
         gap: 0.875rem;
     }
-    
+
     .category-grid-item__image {
         height: 160px;
     }
-    
+
     .category-grid-item__content {
         padding: 0.875rem;
     }
-    
+
     .category-products-grid {
         grid-template-columns: 1fr;
         gap: 0.875rem;
     }
-    
+
     .product-card__content {
         padding: 0.75rem;
     }
