@@ -1,8 +1,43 @@
-﻿"Please log in to continue.","Please log in to continue."
-"Product ID is required.","Product ID is required."
-"Added to wishlist.","Added to wishlist."
-"Wishlist item ID is required.","Wishlist item ID is required."
-"Removed from wishlist.","Removed from wishlist."
+﻿"Wishlist Management","Wishlist Management"
+"Customer Wishlist",客户收藏
+"Wishlist item ID is required.",收藏项ID不能为空。
+"Removed from wishlist.",已从收藏中移除。
+"Failed to remove from wishlist.",移除收藏失败。
+"Please log in to continue.",请先登录。
+"Product ID is required.",产品ID不能为空。
+"Added to wishlist.",已添加到收藏。
 "You are not allowed to remove this wishlist item.",无权移除此愿望清单项。
 Wishlist,收藏夹
-"Resume with %1 saved item(s).","继续处理你已保存的 %1 个商品。"
+"Resume with %1 saved item(s).","Resume with %1 saved item(s)."
+"店铺 > 收藏管理","店铺 > 收藏管理"
+系统配置,系统配置
+店铺,店铺
+收藏,收藏
+总收藏数,总收藏数
+收藏客户数,收藏客户数
+当前筛选,当前筛选
+客户ID:,客户ID:
+搜索:,搜索:
+全部,全部
+收藏列表,收藏列表
+管理店铺客户收藏商品,管理店铺客户收藏商品
+重置筛选,重置筛选
+ID,ID
+客户ID,客户ID
+客户名称,客户名称
+产品ID,产品ID
+收藏时间,收藏时间
+操作,操作
+未知客户,未知客户
+查看客户收藏,查看客户收藏
+你确定要删除该收藏记录么？,你确定要删除该收藏记录么？
+删除,删除
+请输入客户ID或产品ID回车搜索,请输入客户ID或产品ID回车搜索
+"My Wishlist","My Wishlist"
+"Your wishlist is empty","Your wishlist is empty"
+"Browse our products and add items you love to your wishlist.","Browse our products and add items you love to your wishlist."
+"Start Shopping","Start Shopping"
+"In Stock","In Stock"
+"Out of Stock","Out of Stock"
+"Add to Cart","Add to Cart"
+Remove,Remove
