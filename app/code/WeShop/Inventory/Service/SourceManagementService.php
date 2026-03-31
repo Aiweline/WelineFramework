@@ -106,8 +106,16 @@ class SourceManagementService
             throw new \InvalidArgumentException((string) __('Source code only supports lowercase letters, numbers, underscore, and dash.'));
         }
 
+        if (mb_strlen($code) > 60) {
+            throw new \InvalidArgumentException((string) __('Source code cannot exceed %{1} characters.', 60));
+        }
+
         if ($name === '') {
             throw new \InvalidArgumentException((string) __('Source name is required.'));
+        }
+
+        if (mb_strlen($name) > 255) {
+            throw new \InvalidArgumentException((string) __('Source name cannot exceed %{1} characters.', 255));
         }
 
         return [

@@ -20,13 +20,13 @@ class Source extends BaseController
     {
         $page = max(1, (int) $this->request->getParam('page', 1));
         $pageSize = max(1, (int) $this->request->getParam('page_size', 20));
-        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
+        $sourceIndexUrl = (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source');
 
         $this->assign(array_merge(
             [
                 'title' => (string) __('Inventory Sources'),
                 'sourceIndexUrl' => $sourceIndexUrl,
-                'sourceAddUrl' => $this->getBackendUrl('*/backend/inventory/source/add'),
+                'sourceAddUrl' => (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source/add'),
             ],
             $this->sourceAdminPageDataService->getListData($page, $pageSize)
         ));
@@ -36,7 +36,7 @@ class Source extends BaseController
 
     public function add(): string
     {
-        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
+        $sourceIndexUrl = (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source');
 
         if ($this->request->isPost()) {
             try {
@@ -64,7 +64,7 @@ class Source extends BaseController
     public function edit(): string
     {
         $sourceId = (int) $this->request->getParam('id', 0);
-        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
+        $sourceIndexUrl = (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source');
         if ($sourceId <= 0) {
             $this->getMessageManager()->addError(__('Invalid source id.'));
             $this->redirect($sourceIndexUrl);
@@ -114,7 +114,7 @@ class Source extends BaseController
     private function deleteAction(): string
     {
         $sourceId = (int) $this->request->getParam('id', 0);
-        $sourceIndexUrl = $this->getBackendUrl('*/backend/inventory/source');
+        $sourceIndexUrl = (string) $this->request->getUrlBuilder()->getBackendUrl('*/backend/inventory/source');
 
         try {
             $this->sourceManagementService->deleteSource($sourceId);
