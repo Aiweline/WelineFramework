@@ -91,33 +91,55 @@ class ShutdownHandler
     }
 
     /**
-     * 写入崩溃日志
+     * 写入崩溃日志（OOM 安全）
      */
     private static function writeCrashLog(array $error): void
     {
-        $crashData = [
-            'timestamp' => date('Y-m-d H:i:s'),
-            'type' => self::getErrorTypeName($error['type']),
-            'message' => $error['message'],
-            'file' => $error['file'],
-            'line' => $error['line'],
-            'process' => ExceptionBootstrap::getProcessTag(),
-            'context' => ExceptionBootstrap::getContext(),
-            'memory_peak' => memory_get_peak_usage(true),
-        ];
-
-        $logPath = (defined('BP') ? BP : '') . 'var/log/crash.log';
-        $dir = dirname($logPath);
-        
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0755, true);
+        $memoryInfo = 'N/A';
+        try {
+            $memPeak = \memory_get_peak_usage(true);
+            $memCurrent = \memory_get_usage(true);
+            $memoryInfo = "current={$memCurrent}, peak={$memPeak}";
+        } catch (\Throwable) {
+            // OOM 时忽略内存查询
         }
 
-        @file_put_contents(
-            $logPath,
-            json_encode($crashData, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n",
-            FILE_APPEND
-        );
+        // 简化格式，避免 json_encode 在 OOM 时失败
+        $timestamp = \date('Y-m-d H:i:s');
+        $type = self::getErrorTypeName($error['type']);
+        $message = self::truncateString((string)($error['message'] ?? ''), 500);
+        $file = self::truncateString((string)($error['file'] ?? ''), 255);
+        $line = (int)($error['line'] ?? 0);
+
+        $logLine = "[{$timestamp}] [FATAL] {$type}: {$message} in {$file} on line {$line} (memory: {$memoryInfo})\n";
+
+        $logPath = (defined('BP') ? BP : '') . 'var/log/crash.log';
+        $dir = \dirname($logPath);
+
+        try {
+            if (!@\is_dir($dir)) {
+                @\mkdir($dir, 0755, true);
+            }
+
+            @\file_put_contents(
+                $logPath,
+                $logLine,
+                FILE_APPEND
+            );
+        } catch (\Throwable) {
+            // 完全忽略 OOM 时的日志写入失败
+        }
+    }
+
+    /**
+     * 安全截断字符串
+     */
+    private static function truncateString(string $str, int $maxLen): string
+    {
+        if (\strlen($str) <= $maxLen) {
+            return $str;
+        }
+        return \substr($str, 0, $maxLen - 3) . '...';
     }
 
     /**
