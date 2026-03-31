@@ -10,6 +10,58 @@ use Weline\Server\Service\Contract\ServerInstanceInfo;
 
 final class StopCommandMasterLivenessFastTest extends TestCase
 {
+    public function testMasterAvailabilityFastPathReturnsTrueWhenProcessExistsAndNotExited(): void
+    {
+        $stop = new class extends Stop {
+            public bool $hasExitedFast = false;
+            public bool $processExists = true;
+
+            protected function hasMasterExitedFast(int $masterPid): bool
+            {
+                unset($masterPid);
+                return $this->hasExitedFast;
+            }
+
+            protected function masterProcessExists(int $masterPid): bool
+            {
+                unset($masterPid);
+                return $this->processExists;
+            }
+        };
+
+        self::assertTrue($this->invokeProtected(
+            $stop,
+            'isMasterProcessAvailableForStop',
+            $this->createInstanceInfo(12345)
+        ));
+    }
+
+    public function testMasterAvailabilityFastPathReturnsFalseWhenPidAlreadyExited(): void
+    {
+        $stop = new class extends Stop {
+            public bool $hasExitedFast = true;
+            public bool $processExists = true;
+
+            protected function hasMasterExitedFast(int $masterPid): bool
+            {
+                unset($masterPid);
+                return $this->hasExitedFast;
+            }
+
+            protected function masterProcessExists(int $masterPid): bool
+            {
+                unset($masterPid);
+                return $this->processExists;
+            }
+        };
+
+        self::assertFalse($this->invokeProtected(
+            $stop,
+            'isMasterProcessAvailableForStop',
+            $this->createInstanceInfo(12345)
+        ));
+    }
+
     public function testMasterIsAvailableWhenProcessExistsAndIndexStillOwnsPid(): void
     {
         $stop = new Stop();

@@ -110,11 +110,7 @@ final class ServerConfig
         $this->frontend = (bool) ($config['frontend'] ?? false);
         $portVal = (int) ($config['port'] ?? 443);
         if ($this->sslEnabled) {
-            if (\array_key_exists('http_redirect_port', $config)) {
-                $this->httpRedirectPort = (int) $config['http_redirect_port'];
-            } else {
-                $this->httpRedirectPort = ($portVal === 443) ? 80 : 0;
-            }
+            $this->httpRedirectPort = ($portVal === 443) ? 80 : 0;
         } else {
             $this->httpRedirectPort = 0;
         }
@@ -169,7 +165,7 @@ final class ServerConfig
     {
         return \dirname(__DIR__) . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR;
     }
-    
+
     /**
      * 获取 Worker 端口列表
      * 

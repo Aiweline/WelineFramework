@@ -20,6 +20,9 @@ use Weline\Server\Log\WlsLogger;
 
 class MasterControlServer
 {
+    /** 当前 Master 允许接入的实例编码 */
+    private string $expectedInstanceCode = '';
+
     // ========== Worker 状态常量 ==========
 
     /** 控制面一次性连接（CLI/status/reload/stop 等） */
@@ -53,6 +56,9 @@ class MasterControlServer
      *   'worker_id'=> int,          // Worker ID（仅 worker 角色）
      *   'state'    => string|null,  // Worker 状态
      *   'resurrection_priority' => int, // 复活优先级
+     *   'peer_name' => string,      // 对端地址
+     *   'message_count' => int,     // 已接收消息数
+     *   'last_message_type' => string, // 最近一条消息类型
      * ]
      */
     private array $clients = [];
@@ -74,6 +80,14 @@ class MasterControlServer
     public function setLogToConsole(bool $enable): void
     {
         $this->logToConsole = $enable;
+    }
+
+    /**
+     * 设置当前控制面的实例编码（用于 register 反串线校验）
+     */
+    public function setExpectedInstanceCode(string $instanceCode): void
+    {
+        $this->expectedInstanceCode = \trim($instanceCode);
     }
 
     /**
@@ -468,6 +482,18 @@ class MasterControlServer
         $launchId    = (string) ($msg['launch_id'] ?? '');
         $processKind = (string) ($msg['process_kind'] ?? ControlMessage::PROCESS_KIND_FRAMEWORK);
         $moduleCode  = (string) ($msg['module_code'] ?? '');
+        $instanceCode = \trim((string) ($msg['instance_code'] ?? ''));
+
+        if ($this->expectedInstanceCode !== '' && $instanceCode !== $this->expectedInstanceCode) {
+            $peerName = isset($this->clients[$clientId]['socket'])
+                ? (@\stream_socket_get_name($this->clients[$clientId]['socket'], true) ?: 'unknown')
+                : 'unknown';
+            $this->ipcLog(
+                "[IPC-Master] REJECT register from {$peerName}: instance_code={$instanceCode}, expected={$this->expectedInstanceCode}"
+            );
+            $this->removeClient($clientId);
+            return;
+        }
 
         $this->clients[$clientId]['role']         = $role;
         $this->clients[$clientId]['pid']          = $pid;
@@ -477,6 +503,7 @@ class MasterControlServer
         $this->clients[$clientId]['launch_id']    = $launchId;
         $this->clients[$clientId]['process_kind'] = $processKind;
         $this->clients[$clientId]['module_code']  = $moduleCode;
+        $this->clients[$clientId]['instance_code'] = $instanceCode;
         $this->clients[$clientId]['state']        = self::STATE_REGISTERED;
 
         // 计算复活优先级
