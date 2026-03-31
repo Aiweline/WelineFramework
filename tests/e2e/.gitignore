@@ -21,3 +21,4 @@ Thumbs.db
 
 # Test artifacts
 collected-tests.json
+.weline-e2e-target-origin

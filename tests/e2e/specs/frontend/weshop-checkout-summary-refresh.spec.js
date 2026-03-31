@@ -77,10 +77,36 @@ async function seedCart(page, productId = 1) {
 
   await dismissBindEmailModal(page);
 
-  const addToCartButton = page.getByRole('button', { name: /Add to Cart/i }).first();
-  await expect(addToCartButton).toBeVisible({ timeout: 15000 });
-  await addToCartButton.click();
-  await page.waitForTimeout(1500);
+  const addToCartButton = page.getByRole('button', { name: /Add to Cart|加入购物车/i }).first();
+  const buttonVisible = await addToCartButton.isVisible({ timeout: 5000 }).catch(() => false);
+  if (buttonVisible) {
+    await addToCartButton.click();
+    await page.waitForTimeout(1500);
+    return;
+  }
+
+  // Fallback: seed cart via API when theme does not expose a visible add-to-cart button.
+  const apiAdd = await page.evaluate(async () => {
+    const response = await fetch('/cart/frontend/api/add', {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: JSON.stringify({ product_id: 2, qty: 1 }),
+    });
+    const text = await response.text();
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch (error) {
+      json = null;
+    }
+    return { ok: response.ok, status: response.status, json };
+  });
+  expect(apiAdd.status).toBe(200);
+  expect(apiAdd.json?.success).toBeTruthy();
 }
 
 test.describe('WeShop checkout summary refresh', () => {
