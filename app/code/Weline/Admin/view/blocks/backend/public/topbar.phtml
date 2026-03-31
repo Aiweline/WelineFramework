@@ -217,3 +217,32 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
         </div>
     </div>
 </header>
+<style>
+    #page-topbar .dropdown-menu {
+        z-index: 10055;
+    }
+</style>
+<script>
+    (function () {
+        var topbar = document.getElementById('page-topbar');
+        if (!topbar || typeof window.bootstrap === 'undefined' || !window.bootstrap.Dropdown) {
+            return;
+        }
+
+        var triggers = topbar.querySelectorAll('[data-bs-toggle="dropdown"]');
+        triggers.forEach(function (trigger) {
+            if (trigger.dataset.welineDropdownBound === '1') {
+                return;
+            }
+            trigger.dataset.welineDropdownBound = '1';
+            trigger.addEventListener('click', function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                var instance = window.bootstrap.Dropdown.getOrCreateInstance(trigger, {
+                    autoClose: true
+                });
+                instance.toggle();
+            });
+        });
+    })();
+</script>
