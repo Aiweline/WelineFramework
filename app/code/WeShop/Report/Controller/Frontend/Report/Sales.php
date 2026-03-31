@@ -2,34 +2,50 @@
 
 declare(strict_types=1);
 
-namespace WeShop\Report\Controller\Backend\Report;
+namespace WeShop\Report\Controller\Frontend\Report;
 
 use DateTime;
-use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
+use WeShop\Customer\Api\CustomerContextInterface;
+use WeShop\Frontend\Controller\BaseController;
 use WeShop\Report\Repository\ReportOrderRepository;
 use WeShop\Report\Repository\ReportOrderRepositoryInterface;
 use WeShop\Report\Service\ReportService;
 
-class Sales extends BackendController
+/**
+ * 前台报表控制器
+ */
+class Sales extends BaseController
 {
     private const DEFAULT_WINDOW_DAYS = 30;
 
+    protected ?string $layoutType = 'account';
+
+    public function __construct(
+        private ?CustomerContextInterface $customerContext = null
+    ) {
+    }
+
     public function index(): string
     {
+        $customerId = $this->getCustomerContext()->getUserId();
+        if (!$customerId) {
+            $this->redirect($this->getStorefrontLoginRoute());
+            return '';
+        }
+
         $endDate = $this->resolveEndDate();
         $startDate = $this->resolveStartDate($endDate);
 
         $service = $this->createReportService();
         $reportData = $service->getSalesReport($startDate, $endDate);
 
-        $this->assign('title', __('Sales Report'));
+        $this->assign('title', (string) __('My Sales Report'));
+        $this->assign('page_title', (string) __('Sales Report'));
         $this->assign('report', $reportData);
         $this->assign('start_date', $startDate);
         $this->assign('end_date', $endDate);
 
-        // 显式指定真实模板路径：view/templates/Backend/Report/Sales/index.phtml
-        return (string) $this->fetch('WeShop_Report::templates/Backend/Report/Sales/index.phtml');
+        return $this->fetch('WeShop_Report::templates/Frontend/Report/Sales/index.phtml');
     }
 
     protected function createReportService(): ReportService
@@ -39,12 +55,17 @@ class Sales extends BackendController
 
     protected function createReportOrderRepository(): ReportOrderRepositoryInterface
     {
-        return ObjectManager::getInstance(ReportOrderRepository::class);
+        return \Weline\Framework\Manager\ObjectManager::getInstance(ReportOrderRepository::class);
+    }
+
+    private function getCustomerContext(): CustomerContextInterface
+    {
+        return $this->customerContext ??= \Weline\Framework\Manager\ObjectManager::getInstance(CustomerContextInterface::class);
     }
 
     private function resolveStartDate(string $defaultEndDate): string
     {
-        $start = (string)$this->request->getParam('start', '');
+        $start = (string) $this->request->getParam('start', '');
 
         if ($start !== '' && $this->isValidDate($start)) {
             return $start;
@@ -58,7 +79,7 @@ class Sales extends BackendController
 
     private function resolveEndDate(): string
     {
-        $end = (string)$this->request->getParam('end', '');
+        $end = (string) $this->request->getParam('end', '');
 
         if ($end !== '' && $this->isValidDate($end)) {
             return $end;
