@@ -139,8 +139,11 @@ ID,ID
 激活状态,"Trạng thái kích hoạt"
 保存,Lưu
 编辑客服,"Chỉnh sửa đại lý"
+提示,提示
+确认,确认
 保存失败,"Lưu thất bại"
 确定要删除此客服吗？,"Bạn có chắc chắn muốn xóa đại lý này không?"
+删除确认,删除确认
 删除失败,"Xóa thất bại"
 获取统计数据失败,"Không thể lấy thống kê"
 客服统计详情,"Chi tiết thống kê đại lý"
