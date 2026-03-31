@@ -19,9 +19,30 @@ class PromotionCouponManagementService
 
     public function getDashboardData(int $recentLimit = 5): array
     {
+        $summary = [];
+        $recent = [];
+
+        try {
+            $summary = $this->repository->getCouponSummary();
+        } catch (\Throwable) {
+            // 降级：保证页面渲染不中断
+            $summary = [
+                'total_count' => 0,
+                'active_count' => 0,
+                'expired_count' => 0,
+                'total_used' => 0.0,
+            ];
+        }
+
+        try {
+            $recent = $this->repository->listRecentCoupons($recentLimit);
+        } catch (\Throwable) {
+            $recent = [];
+        }
+
         return [
-            'summary' => $this->repository->getCouponSummary(),
-            'recent' => $this->repository->listRecentCoupons($recentLimit),
+            'summary' => $summary,
+            'recent' => $recent,
         ];
     }
 
