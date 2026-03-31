@@ -20,4 +20,18 @@ class SaveTest extends TestCase
         $this->assertTrue($reflection->hasMethod('post'));
         $this->assertTrue($reflection->hasMethod('index'));
     }
+
+    public function testIndexCallsPost(): void
+    {
+        $controller = $this->getMockBuilder(Save::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['post'])
+            ->getMock();
+
+        $controller->expects($this->once())
+            ->method('post')
+            ->willReturn('');
+
+        $this->assertSame('', $controller->index());
+    }
 }

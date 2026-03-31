@@ -19,13 +19,13 @@ class Index extends BaseController
         $page = max(1, (int) $this->request->getParam('page', 1));
         $pageSize = max(1, (int) $this->request->getParam('page_size', 20));
         $editingId = (int) $this->request->getParam('id', 0);
-        $giftCardIndexUrl = $this->getBackendUrl('*/backend/gift-card');
+        $giftCardIndexUrl = $this->_url->getBackendUrlPath('*/backend/gift-card');
 
         $this->assign(array_merge(
             [
                 'title' => (string) __('Gift Card Management'),
                 'giftCardIndexUrl' => $giftCardIndexUrl,
-                'giftCardSaveUrl' => $this->getBackendUrl('*/backend/gift-card/save'),
+                'giftCardSaveUrl' => $this->_url->getBackendUrlPath('*/backend/gift-card/save'),
             ],
             $this->giftCardAdminPageDataService->getPageData($page, $pageSize, [
                 'customer_id' => $this->request->getParam('customer_id', ''),
