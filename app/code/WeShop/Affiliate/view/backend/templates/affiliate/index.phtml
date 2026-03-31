@@ -1,5 +1,7 @@
 <?php
+/** @var \Weline\Framework\View\Template $this */
 $affiliateRecords = $this->getData('affiliateRecords') ?? [];
+$summary = $this->getData('summary') ?? [];
 $filters = $this->getData('filters') ?? [];
 $statusOptions = $this->getData('statusOptions') ?? [];
 $editingRecord = $this->getData('editingRecord') ?? [];
@@ -12,6 +14,10 @@ $totalAffiliates = max(0, (int) ($pagination['total'] ?? 0));
 $editingId = max(0, (int) ($editingRecord['affiliate_id'] ?? 0));
 $customerIdReadonly = $editingId ? 'readonly' : '';
 $customerIdRequired = $editingId ? '' : 'required';
+$isEditMode = $editingId > 0;
+$editBackUrl = $isEditMode
+    ? (string) $this->getBackendUrl('*/backend/affiliate/view') . '?id={id}'
+    : $affiliateIndexUrl;
 ?>
 
 <div class="container-fluid py-3">
@@ -21,7 +27,47 @@ $customerIdRequired = $editingId ? '' : 'required';
             <p class="text-muted mb-0"><?= __('Review, filter, and adjust affiliate accounts created by marketing partners.') ?></p>
         </div>
         <div class="text-muted small">
-            <?= htmlspecialchars(sprintf(__('Page %d of %d, %d affiliates found'), $currentPage, $pageCount, $totalAffiliates), ENT_QUOTES) ?>
+            <?= htmlspecialchars(sprintf(
+                __('Page %d of %d, %d affiliates found'),
+                $currentPage,
+                $pageCount,
+                $totalAffiliates
+            ), ENT_QUOTES) ?>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Total Affiliates') ?></div>
+                    <div class="display-6"><?= (int) ($summary['total'] ?? $totalAffiliates) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Active') ?></div>
+                    <div class="display-6 text-success"><?= (int) ($summary['active'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Disabled') ?></div>
+                    <div class="display-6 text-secondary"><?= (int) ($summary['disabled'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Total Commission') ?></div>
+                    <div class="display-6"><?= number_format((float) ($summary['total_commission'] ?? 0), 2) ?></div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -29,10 +75,10 @@ $customerIdRequired = $editingId ? '' : 'required';
         <div class="col-lg-4">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h2 class="h5 mb-3"><?= $editingId ? __('Edit Affiliate Account') : __('Create Affiliate Account') ?></h2>
+                    <h2 class="h5 mb-3"><?= $isEditMode ? __('Edit Affiliate Account') : __('Create Affiliate Account') ?></h2>
                     <form method="post" action="<?= $affiliateSaveUrl ?>" class="d-grid gap-3">
                         <input type="hidden" name="affiliate_id" value="<?= $editingId ?>">
-                        <input type="hidden" name="back_url" value="<?= htmlspecialchars((string) $affiliateIndexUrl, ENT_QUOTES) ?>">
+                        <input type="hidden" name="back_url" value="<?= htmlspecialchars($editBackUrl, ENT_QUOTES) ?>">
                         <div>
                             <label class="form-label"><?= __('Customer ID') ?></label>
                             <input type="number"
@@ -40,7 +86,10 @@ $customerIdRequired = $editingId ? '' : 'required';
                                    class="form-control"
                                    min="1"
                                    value="<?= htmlspecialchars((string) ($editingRecord['customer_id'] ?? ''), ENT_QUOTES) ?>"
-                                   <?= $customerIdRequired ?> <?= $customerIdReadonly ?>>
+                                <?= $customerIdRequired ?> <?= $customerIdReadonly ?>>
+                            <?php if ($isEditMode): ?>
+                                <small class="text-muted"><?= __('Customer ID cannot be changed after creation.') ?></small>
+                            <?php endif; ?>
                         </div>
                         <div>
                             <label class="form-label"><?= __('Referral Code') ?></label>
@@ -48,6 +97,7 @@ $customerIdRequired = $editingId ? '' : 'required';
                                    class="form-control"
                                    value="<?= htmlspecialchars((string) ($editingRecord['referral_code'] ?? ''), ENT_QUOTES) ?>"
                                    readonly>
+                            <small class="text-muted"><?= __('Auto-generated referral code.') ?></small>
                         </div>
                         <div>
                             <label class="form-label"><?= __('Commission Rate') ?></label>
@@ -58,7 +108,7 @@ $customerIdRequired = $editingId ? '' : 'required';
                                        step="0.01"
                                        min="0"
                                        max="1"
-                                       value="<?= htmlspecialchars(number_format((float) ($editingRecord['commission_rate'] ?? 0.0), 2), ENT_QUOTES) ?>"
+                                       value="<?= htmlspecialchars(number_format((float) ($editingRecord['commission_rate'] ?? 0.10), 2), ENT_QUOTES) ?>"
                                        required>
                                 <span class="input-group-text">%</span>
                             </div>
@@ -74,12 +124,24 @@ $customerIdRequired = $editingId ? '' : 'required';
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div class="d-flex justify-content-between text-muted small">
-                            <span><?= __('Total Commission') ?>: <?= htmlspecialchars(number_format((float) ($editingRecord['total_commission'] ?? 0.0), 2), ENT_QUOTES) ?></span>
-                            <span><?= __('Paid Commission') ?>: <?= htmlspecialchars(number_format((float) ($editingRecord['paid_commission'] ?? 0.0), 2), ENT_QUOTES) ?></span>
-                            <span><?= __('Pending') ?>: <?= htmlspecialchars(number_format((float) ($editingRecord['pending_commission'] ?? 0.0), 2), ENT_QUOTES) ?></span>
+                        <div class="border rounded p-3 bg-light">
+                            <div class="d-flex justify-content-between text-muted small mb-2">
+                                <span><?= __('Total Commission') ?>:</span>
+                                <span class="fw-semibold"><?= htmlspecialchars(number_format((float) ($editingRecord['total_commission'] ?? 0.0), 2), ENT_QUOTES) ?></span>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted small mb-2">
+                                <span><?= __('Paid Commission') ?>:</span>
+                                <span class="fw-semibold"><?= htmlspecialchars(number_format((float) ($editingRecord['paid_commission'] ?? 0.0), 2), ENT_QUOTES) ?></span>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted small">
+                                <span><?= __('Pending') ?>:</span>
+                                <span class="fw-semibold text-primary"><?= htmlspecialchars(number_format((float) ($editingRecord['pending_commission'] ?? 0.0), 2), ENT_QUOTES) ?></span>
+                            </div>
                         </div>
-                        <button type="submit" class="btn btn-primary"><?= __('Save Affiliate') ?></button>
+                        <button type="submit" class="btn btn-primary"><?= $isEditMode ? __('Update Affiliate') : __('Create Affiliate') ?></button>
+                        <?php if ($isEditMode): ?>
+                            <a href="<?= $affiliateIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Cancel Edit') ?></a>
+                        <?php endif; ?>
                     </form>
                 </div>
             </div>
@@ -137,17 +199,26 @@ $customerIdRequired = $editingId ? '' : 'required';
                                 </thead>
                                 <tbody>
                                 <?php foreach ($affiliateRecords as $record): ?>
-                                    <tr>
+                                    <tr class="<?= $record['affiliate_id'] === $editingId ? 'table-primary' : '' ?>">
                                         <td><?= (int) $record['affiliate_id'] ?></td>
                                         <td><?= (int) $record['customer_id'] ?></td>
-                                        <td><?= htmlspecialchars((string) $record['referral_code'], ENT_QUOTES) ?></td>
+                                        <td>
+                                            <code class="small"><?= htmlspecialchars((string) $record['referral_code'], ENT_QUOTES) ?></code>
+                                        </td>
                                         <td><?= htmlspecialchars(number_format((float) ($record['commission_rate'] ?? 0.0) * 100, 2), ENT_QUOTES) ?>%</td>
-                                        <td><?= htmlspecialchars((string) $record['status_label'], ENT_QUOTES) ?></td>
+                                        <td>
+                                            <span class="badge bg-<?= ($record['status'] ?? '') === 'active' ? 'success' : 'secondary' ?>">
+                                                <?= htmlspecialchars((string) ($record['status_label'] ?? ''), ENT_QUOTES) ?>
+                                            </span>
+                                        </td>
                                         <td><?= htmlspecialchars(number_format((float) ($record['total_commission'] ?? 0.0), 2), ENT_QUOTES) ?></td>
                                         <td><?= htmlspecialchars(number_format((float) ($record['paid_commission'] ?? 0.0), 2), ENT_QUOTES) ?></td>
                                         <td><?= htmlspecialchars(number_format((float) ($record['pending_commission'] ?? 0.0), 2), ENT_QUOTES) ?></td>
                                         <td><?= htmlspecialchars((string) $record['created_at'], ENT_QUOTES) ?></td>
                                         <td class="text-end">
+                                            <a href="<?= $this->getBackendUrl('*/backend/affiliate/view', ['id' => $record['affiliate_id']]) ?>" class="btn btn-sm btn-outline-info">
+                                                <?= __('View') ?>
+                                            </a>
                                             <a href="<?= $this->getBackendUrl('*/backend/affiliate', ['id' => $record['affiliate_id']]) ?>" class="btn btn-sm btn-outline-primary">
                                                 <?= __('Edit') ?>
                                             </a>
@@ -157,6 +228,31 @@ $customerIdRequired = $editingId ? '' : 'required';
                                 </tbody>
                             </table>
                         </div>
+
+                        <?php if ($pageCount > 1): ?>
+                            <nav aria-label="<?= __('Affiliate pagination') ?>" class="mt-4">
+                                <ul class="pagination justify-content-center mb-0">
+                                    <li class="page-item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
+                                        <a class="page-link" href="<?= $affiliateIndexUrl ?>?page=<?= $currentPage - 1 ?><?= !empty($filters['customer_id']) ? '&customer_id=' . urlencode((string) $filters['customer_id']) : '' ?><?= !empty($filters['referral_code']) ? '&referral_code=' . urlencode((string) $filters['referral_code']) : '' ?><?= !empty($filters['status']) ? '&status=' . urlencode((string) $filters['status']) : '' ?>">
+                                            <?= __('Previous') ?>
+                                        </a>
+                                    </li>
+                                    <?php for ($i = max(1, $currentPage - 2); $i <= min($pageCount, $currentPage + 2); $i++): ?>
+                                        <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                                            <a class="page-link" href="<?= $affiliateIndexUrl ?>?page=<?= $i ?><?= !empty($filters['customer_id']) ? '&customer_id=' . urlencode((string) $filters['customer_id']) : '' ?><?= !empty($filters['referral_code']) ? '&referral_code=' . urlencode((string) $filters['referral_code']) : '' ?><?= !empty($filters['status']) ? '&status=' . urlencode((string) $filters['status']) : '' ?>">
+                                                <?= $i ?>
+                                            </a>
+                                        </li>
+                                    <?php endfor; ?>
+                                    <li class="page-item <?= $currentPage >= $pageCount ? 'disabled' : '' ?>">
+                                        <a class="page-link" href="<?= $affiliateIndexUrl ?>?page=<?= $currentPage + 1 ?><?= !empty($filters['customer_id']) ? '&customer_id=' . urlencode((string) $filters['customer_id']) : '' ?><?= !empty($filters['referral_code']) ? '&referral_code=' . urlencode((string) $filters['referral_code']) : '' ?><?= !empty($filters['status']) ? '&status=' . urlencode((string) $filters['status']) : '' ?>">
+                                            <?= __('Next') ?>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        <?php endif; ?>
+
                     <?php else: ?>
                         <div class="text-center py-5">
                             <h2 class="h5 mb-2"><?= __('No affiliate accounts found.') ?></h2>

@@ -25,7 +25,7 @@ class AffiliateServiceTest extends TestCase
                 ];
             }
 
-            protected function getReferralBasePath(): string
+            public function getReferralBasePath(): string
             {
                 return '/register';
             }
