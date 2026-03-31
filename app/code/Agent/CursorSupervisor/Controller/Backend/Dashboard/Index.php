@@ -2,16 +2,15 @@
 
 declare(strict_types=1);
 
-namespace Agent\CursorSupervisor\Controller\Backend;
+namespace Agent\CursorSupervisor\Controller\Backend\Dashboard;
 
 use Weline\Admin\Controller\BaseController;
 
-class Dashboard extends BaseController
+class Index extends BaseController
 {
     public function index(): string
     {
         return (string) $this->fetchBase('Agent_CursorSupervisor::backend/templates/dashboard/index.phtml');
     }
 }
-
 
