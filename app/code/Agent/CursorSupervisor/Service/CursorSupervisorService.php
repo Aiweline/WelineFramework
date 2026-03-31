@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Agent\CursorSupervisor\Service;
 
+use Agent\CursorBase\Service\AgentDispatcher;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 
 /**
@@ -182,7 +184,7 @@ class CursorSupervisorService
                 $this->checkDocumentTasks();
             }
             
-            usleep($this->checkInterval);
+            SchedulerSystem::yieldDelay($this->checkInterval);
         }
     }
     
