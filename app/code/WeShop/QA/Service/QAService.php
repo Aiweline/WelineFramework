@@ -69,4 +69,121 @@ class QAService
 
         return (bool) $question->delete()->fetch();
     }
+
+    /**
+     * 获取所有待审核问题列表
+     *
+     * @param string|null $status 状态筛选
+     * @param int $page 页码
+     * @param int $size 每页数量
+     * @return array
+     */
+    public function getPendingQuestions(?string $status = null, int $page = 1, int $size = 20): array
+    {
+        /** @var Question $question */
+        $question = ObjectManager::getInstance(Question::class);
+
+        $question->clear();
+
+        if ($status !== null) {
+            $question->where(Question::schema_fields_STATUS, $status);
+        }
+
+        return $question
+            ->pagination($page, $size)
+            ->order(Question::schema_fields_CREATED_AT, 'DESC')
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
+     * 获取问题详情
+     *
+     * @param int $questionId 问题ID
+     * @return Question|null
+     */
+    public function getQuestion(int $questionId): ?Question
+    {
+        /** @var Question $question */
+        $question = ObjectManager::getInstance(Question::class);
+        $question->load($questionId);
+
+        if (!$question->getId()) {
+            return null;
+        }
+
+        return $question;
+    }
+
+    /**
+     * 审核通过问题
+     *
+     * @param int $questionId 问题ID
+     * @param string|null $answer 回复内容
+     * @return bool
+     */
+    public function approveQuestion(int $questionId, ?string $answer = null): bool
+    {
+        /** @var Question $question */
+        $question = ObjectManager::getInstance(Question::class);
+        $question->load($questionId);
+
+        if (!$question->getId()) {
+            return false;
+        }
+
+        $question->setData(Question::schema_fields_STATUS, 'approved');
+
+        if ($answer !== null) {
+            $question->setData(Question::schema_fields_ANSWER, $answer);
+        }
+
+        $question->setData(Question::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+
+        return (bool) $question->save()->fetch();
+    }
+
+    /**
+     * 拒绝问题
+     *
+     * @param int $questionId 问题ID
+     * @return bool
+     */
+    public function rejectQuestion(int $questionId): bool
+    {
+        /** @var Question $question */
+        $question = ObjectManager::getInstance(Question::class);
+        $question->load($questionId);
+
+        if (!$question->getId()) {
+            return false;
+        }
+
+        $question->setData(Question::schema_fields_STATUS, 'rejected');
+        $question->setData(Question::schema_fields_UPDATED_AT, date('Y-m-d H:i:s'));
+
+        return (bool) $question->save()->fetch();
+    }
+
+    /**
+     * 获取待审核问题数量
+     *
+     * @param string|null $status 状态筛选
+     * @return int
+     */
+    public function getPendingQuestionsCount(?string $status = null): int
+    {
+        /** @var Question $question */
+        $question = ObjectManager::getInstance(Question::class);
+
+        $question->clear();
+
+        if ($status !== null) {
+            $question->where(Question::schema_fields_STATUS, $status);
+        }
+
+        $result = $question->select()->fetch();
+
+        return is_array($result) ? count($result) : 0;
+    }
 }
