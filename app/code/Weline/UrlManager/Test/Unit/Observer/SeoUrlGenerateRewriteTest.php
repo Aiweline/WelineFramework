@@ -12,6 +12,83 @@ use Weline\UrlManager\Observer\SeoUrlGenerateRewrite;
 
 class SeoUrlGenerateRewriteTest extends TestCase
 {
+    public function testFindRewriteOrdersByLatestRewriteIdDesc(): void
+    {
+        $urlRewrite = new class extends UrlRewrite {
+            /** @var array<int, array<int, mixed>> */
+            public array $calls = [];
+
+            public function __construct()
+            {
+            }
+
+            public function reset(): static
+            {
+                $this->calls[] = ['reset'];
+                return $this;
+            }
+
+            public function clearQuery(): static
+            {
+                $this->calls[] = ['clearQuery'];
+                return $this;
+            }
+
+            public function where(string $field, mixed $value, string $condition = '='): static
+            {
+                $this->calls[] = ['where', $field, $value, $condition];
+                return $this;
+            }
+
+            public function order(string $field, string $order = 'ASC'): static
+            {
+                $this->calls[] = ['order', $field, strtoupper($order)];
+                return $this;
+            }
+
+            public function find(string $field = ''): static
+            {
+                $this->calls[] = ['find', $field];
+                return $this;
+            }
+
+            public function fetch(bool $fetchONE = true): static
+            {
+                $this->calls[] = ['fetch', $fetchONE];
+                return $this;
+            }
+
+            public function getId(mixed $default = 0)
+            {
+                return 99;
+            }
+
+            public function getData(string $key = '', $index = null): mixed
+            {
+                return match ($key) {
+                    'rewrite' => 'newest-target',
+                    default => null,
+                };
+            }
+        };
+
+        $observer = new SeoUrlGenerateRewrite($urlRewrite);
+        $method = new \ReflectionMethod(SeoUrlGenerateRewrite::class, 'findRewrite');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($observer, 7, 'sample/path');
+
+        self::assertSame([
+            'rewrite' => 'newest-target',
+            'matched_uri' => 'sample/path',
+        ], $result);
+
+        self::assertContains(
+            ['order', UrlRewrite::schema_fields_ID, 'DESC'],
+            $urlRewrite->calls
+        );
+    }
+
     public function testExecuteSkipsStaticAssetsWithoutTouchingRewriteStorage(): void
     {
         $urlRewrite = new class extends UrlRewrite {

@@ -14,7 +14,8 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'URL重写表')]
 #[Index(name: 'idx_website_id', columns: ['website_id'])]
 #[Index(name: 'UNQ_WEBSITE_URL_IDENTIFY', columns: ['website_id', 'url_identify'], type: 'UNIQUE')]
-#[Index(name: 'UNQ_WEBSITE_REWRITE', columns: ['website_id', 'rewrite'], type: 'UNIQUE')]
+#[Index(name: 'idx_website_rewrite_latest', columns: ['website_id', 'rewrite', 'rewrite_id'])]
+#[Index(name: 'idx_website_path_latest', columns: ['website_id', 'path', 'rewrite_id'])]
 class UrlRewrite extends Model
 {
     public const schema_table = 'url_rewrite';
