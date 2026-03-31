@@ -1,22 +1,27 @@
-﻿请求方法不允许,请求方法不允许
-无效的产品ID,无效的产品ID
+﻿"Decrease quantity","Decrease quantity"
+"Increase quantity","Increase quantity"
+"Remove item","Remove item"
+"Your cart is empty","Your cart is empty"
+"Start Shopping","Start Shopping"
+请求方法不允许,请求方法不允许
 请先登录,请先登录
+无效的产品ID,无效的产品ID
 产品不存在,产品不存在
 产品已下架,产品已下架
 请选择产品规格,请选择产品规格
 所选规格组合不可用,所选规格组合不可用
-"库存不足，当前库存: %1","库存不足，当前库存: %1"
+"库存不足，当前库存: %{1}","库存不足，当前库存: %{1}"
 已成功加入购物车,已成功加入购物车
-"添加购物车失败: %1","添加购物车失败: %1"
-"获取产品选项失败: %1","获取产品选项失败: %1"
+"添加购物车失败: %{1}","添加购物车失败: %{1}"
+"获取产品选项失败: %{1}","获取产品选项失败: %{1}"
 Product,Product
-"Your cart is empty","Your cart is empty"
-"Start Shopping","Start Shopping"
 "Please login first","Please login first"
 "Invalid cart item","Invalid cart item"
 "Item removed from cart","Item removed from cart"
 "Invalid quantity","Invalid quantity"
 "Cart updated","Cart updated"
+"库存不足，当前库存: %1","库存不足，当前库存: %1"
+"添加购物车失败: %1","添加购物车失败: %1"
 购物车ID不能为空,购物车ID不能为空
 已从购物车移除,已从购物车移除
 数量必须大于0,数量必须大于0
@@ -124,9 +129,23 @@ Product,Product
 购物车侧边栏（兼容）,购物车侧边栏（兼容）
 迷你购物车商品列表前（兼容）,迷你购物车商品列表前（兼容）
 迷你购物车商品列表后（兼容）,迷你购物车商品列表后（兼容）
+"Invalid product ID.","Invalid product ID."
+"Product does not exist.","Product does not exist."
+"Product is unavailable.","Product is unavailable."
+"Please select product options.","Please select product options."
+"The selected product configuration is unavailable.","The selected product configuration is unavailable."
+"Insufficient stock. Available quantity: %1","Insufficient stock. Available quantity: %1"
+"Added to cart successfully.","Added to cart successfully."
+"Product options loaded successfully.","Product options loaded successfully."
+"Invalid cart item.","Invalid cart item."
+"Invalid quantity.","Invalid quantity."
+"Cart updated successfully.","Cart updated successfully."
+"Item removed from cart successfully.","Item removed from cart successfully."
+"Mini cart loaded successfully.","Mini cart loaded successfully."
+"Please log in first","Please log in first"
 Option,Option
-无权更新此购物车项,无权更新此购物车项
 购物车项不存在,购物车项不存在
+无权更新此购物车项,无权更新此购物车项
 无权移除此购物车项,无权移除此购物车项
 Cart,Cart
 "Open Cart","Open Cart"
@@ -140,9 +159,6 @@ Cart,Cart
 已加入购物车,"Added to cart"
 添加购物车失败,"Failed to add to cart"
 已添加,Added
-"Decrease quantity","Decrease quantity"
-"Increase quantity","Increase quantity"
-"Remove item","Remove item"
 "Shopping Cart","Shopping Cart"
 "%1 items in your cart","%1 items in your cart"
 Price,Price

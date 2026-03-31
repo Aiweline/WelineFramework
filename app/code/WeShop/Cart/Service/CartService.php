@@ -13,6 +13,11 @@ use WeShop\Cart\Model\Cart;
  */
 class CartService
 {
+    public function __construct(
+        private readonly ?EventsManager $eventsManager = null
+    ) {
+    }
+
     /**
      * 获取购物车商品列表
      *
@@ -93,21 +98,23 @@ class CartService
             'total' => $subtotal,
         ];
 
-        EventsManager::getInstance()->dispatch('WeShop_Cart::totals_collect', [
+        $eventData = [
             'customer_id' => $customerId,
             'items' => $items,
             'totals' => &$totals,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::totals_collect', $eventData);
 
         $totals['total'] = $totals['subtotal']
             + $totals['tax']
             + $totals['shipping']
             - $totals['discount'];
 
-        EventsManager::getInstance()->dispatch('WeShop_Cart::totals_collected', [
+        $eventData = [
             'customer_id' => $customerId,
             'totals' => $totals,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::totals_collected', $eventData);
 
         return $totals;
     }
@@ -123,11 +130,12 @@ class CartService
      */
     public function addToCart(int $customerId, int $productId, int $quantity = 1, ?float $price = null): Cart
     {
-        EventsManager::getInstance()->dispatch('WeShop_Cart::add_to_cart_before', [
+        $eventData = [
             'customer_id' => $customerId,
             'product_id' => $productId,
             'quantity' => $quantity,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::add_to_cart_before', $eventData);
 
         /** @var Cart $cart */
         $cart = ObjectManager::getInstance(Cart::class);
@@ -151,20 +159,36 @@ class CartService
                 $price = \is_array($product) ? (float) ($product['price'] ?? 0) : 0.0;
             }
 
-            $cart->clearData()
+            $saveResult = $cart->clearData()
                 ->setData(Cart::schema_fields_CUSTOMER_ID, $customerId)
                 ->setData(Cart::schema_fields_PRODUCT_ID, $productId)
                 ->setData(Cart::schema_fields_QUANTITY, $quantity)
                 ->setData(Cart::schema_fields_PRICE, $price)
                 ->save();
+
+            if (!$cart->getId() && \is_numeric($saveResult) && (int) $saveResult > 0) {
+                $cart->setId((int) $saveResult);
+            }
+
+            if (!$cart->getId()) {
+                $persistedRow = $this->findCartItemRow($customerId, $productId);
+                $persistedId = \is_array($persistedRow) ? (int) ($persistedRow[Cart::schema_fields_ID] ?? 0) : 0;
+                if ($persistedId > 0) {
+                    $cart->setId($persistedId);
+                    foreach ($persistedRow as $field => $value) {
+                        $cart->setData($field, $value);
+                    }
+                }
+            }
         }
 
-        EventsManager::getInstance()->dispatch('WeShop_Cart::add_to_cart_after', [
+        $eventData = [
             'cart' => $cart,
             'customer_id' => $customerId,
             'product_id' => $productId,
             'quantity' => $quantity,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::add_to_cart_after', $eventData);
 
         return $cart;
     }
@@ -183,32 +207,34 @@ class CartService
             return $this->removeFromCart($cartId, $customerId);
         }
 
-        EventsManager::getInstance()->dispatch('WeShop_Cart::update_cart_before', [
+        $eventData = [
             'cart_id' => $cartId,
             'quantity' => $quantity,
             'customer_id' => $customerId,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::update_cart_before', $eventData);
 
         /** @var Cart $cart */
         $cart = ObjectManager::getInstance(Cart::class);
         $cart->load($cartId);
 
-        if ($customerId > 0 && (int) $cart->getData(Cart::schema_fields_CUSTOMER_ID) !== $customerId) {
-            throw new \Exception(__('无权更新此购物车项'));
-        }
-
         if (!$cart->getId()) {
             throw new \Exception(__('购物车项不存在'));
+        }
+
+        if ($customerId > 0 && (int) $cart->getData(Cart::schema_fields_CUSTOMER_ID) !== $customerId) {
+            throw new \Exception(__('无权更新此购物车项'));
         }
 
         $cart->setData(Cart::schema_fields_QUANTITY, $quantity);
         $cart->save();
 
-        EventsManager::getInstance()->dispatch('WeShop_Cart::update_cart_after', [
+        $eventData = [
             'cart' => $cart,
             'cart_id' => $cartId,
             'quantity' => $quantity,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::update_cart_after', $eventData);
 
         return true;
     }
@@ -218,31 +244,33 @@ class CartService
      */
     public function removeFromCart(int $cartId, int $customerId = 0): bool
     {
-        EventsManager::getInstance()->dispatch('WeShop_Cart::remove_from_cart_before', [
+        $eventData = [
             'cart_id' => $cartId,
             'customer_id' => $customerId,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::remove_from_cart_before', $eventData);
 
         /** @var Cart $cart */
         $cart = ObjectManager::getInstance(Cart::class);
         $cart->load($cartId);
 
-        if ($customerId > 0 && (int) $cart->getData(Cart::schema_fields_CUSTOMER_ID) !== $customerId) {
-            throw new \Exception(__('无权移除此购物车项'));
-        }
-
         if (!$cart->getId()) {
             throw new \Exception(__('购物车项不存在'));
         }
 
-        $result = $cart->delete();
+        if ($customerId > 0 && (int) $cart->getData(Cart::schema_fields_CUSTOMER_ID) !== $customerId) {
+            throw new \Exception(__('无权移除此购物车项'));
+        }
 
-        EventsManager::getInstance()->dispatch('WeShop_Cart::remove_from_cart_after', [
+        $cart->delete();
+
+        $eventData = [
             'cart_id' => $cartId,
             'customer_id' => $customerId,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::remove_from_cart_after', $eventData);
 
-        return $result;
+        return true;
     }
 
     /**
@@ -250,22 +278,24 @@ class CartService
      */
     public function clearCart(int $customerId): bool
     {
-        EventsManager::getInstance()->dispatch('WeShop_Cart::clear_before', [
+        $eventData = [
             'customer_id' => $customerId,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::clear_before', $eventData);
 
         /** @var Cart $cart */
         $cart = ObjectManager::getInstance(Cart::class);
 
-        $result = $cart->clear()
+        $cart->clear()
             ->where(Cart::schema_fields_CUSTOMER_ID, $customerId)
             ->delete();
 
-        EventsManager::getInstance()->dispatch('WeShop_Cart::clear_after', [
+        $eventData = [
             'customer_id' => $customerId,
-        ]);
+        ];
+        $this->getEventsManager()->dispatch('WeShop_Cart::clear_after', $eventData);
 
-        return $result;
+        return true;
     }
 
     /**
@@ -287,5 +317,34 @@ class CartService
         }
 
         return $count;
+    }
+
+    public function findCartItemId(int $customerId, int $productId): int
+    {
+        $row = $this->findCartItemRow($customerId, $productId);
+
+        return \is_array($row) ? (int) ($row[Cart::schema_fields_ID] ?? 0) : 0;
+    }
+
+    protected function getEventsManager(): EventsManager
+    {
+        return $this->eventsManager ?? ObjectManager::getInstance(EventsManager::class);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function findCartItemRow(int $customerId, int $productId): array
+    {
+        /** @var Cart $cart */
+        $cart = ObjectManager::getInstance(Cart::class);
+
+        $row = $cart->clear()
+            ->where(Cart::schema_fields_CUSTOMER_ID, $customerId)
+            ->where(Cart::schema_fields_PRODUCT_ID, $productId)
+            ->find()
+            ->fetchArray();
+
+        return \is_array($row) ? $row : [];
     }
 }

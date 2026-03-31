@@ -18,45 +18,44 @@ class Remove extends BaseController
 {
     /**
      * 从购物车移除商品
-     * 
-     * @return array JSON 响应
+     *
+     * 使用 fetchJson，确保 Content-Type 与响应体一致。
      */
-    public function index(): array
+    public function index(): string
     {
         try {
             // 验证登录
             /** @var CustomerSession $session */
             $session = ObjectManager::getInstance(CustomerSession::class);
-            $customer = $session->getCustomer();
-            
-            if (!$customer) {
-                return [
+            $customerId = (int)($session->getUserId() ?? 0);
+            if ($customerId <= 0) {
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('Please login first'),
-                ];
+                ]);
             }
-            
+
             // 获取请求参数
             $itemId = (int)$this->request->getParam('item_id', 0);
-            
+
             if ($itemId <= 0) {
-                return [
+                return $this->fetchJson([
                     'success' => false,
                     'message' => __('Invalid cart item'),
-                ];
+                ]);
             }
-            
+
             /** @var CartService $cartService */
             $cartService = ObjectManager::getInstance(CartService::class);
-            
+
             // 移除商品
-            $cartService->removeFromCart($itemId, $customer->getId());
-            
+            $cartService->removeFromCart($itemId, $customerId);
+
             // 获取更新后的总额
-            $totals = $cartService->calculateTotals($customer->getId());
-            $cartCount = $cartService->getCartItemCount($customer->getId());
-            
-            return [
+            $totals = $cartService->calculateTotals($customerId);
+            $cartCount = $cartService->getCartItemCount($customerId);
+
+            return $this->fetchJson([
                 'success' => true,
                 'message' => __('Item removed from cart'),
                 'totals' => [
@@ -66,13 +65,12 @@ class Remove extends BaseController
                     'total_formatted' => $this->formatPrice($totals['total'] ?? 0),
                     'count' => $cartCount,
                 ],
-            ];
-            
+            ]);
         } catch (\Exception $e) {
-            return [
+            return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
-            ];
+            ]);
         }
     }
 }
