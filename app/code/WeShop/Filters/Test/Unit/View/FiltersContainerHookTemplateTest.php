@@ -26,5 +26,6 @@ class FiltersContainerHookTemplateTest extends TestCase
         $this->assertIsString($template);
         $this->assertStringContainsString("getUrl('filters/filter')", $template);
         $this->assertStringContainsString('data-filter-api-url', $template);
+        $this->assertStringContainsString("productContainer: '.category-products'", $template);
     }
 }

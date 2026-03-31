@@ -93,8 +93,7 @@ if (empty($filters) && empty($appliedFilters)) {
         <?php endif; ?>
     </div>
 
-    <?php if (!empty($appliedFilters)): ?>
-    <div class="category-filter-applied">
+    <div class="category-filter-applied"<?= empty($appliedFilters) ? ' style="display:none"' : '' ?>>
         <?php foreach ($appliedFilters as $filter): ?>
         <?php 
             $chipFilterCode = $filter['filter_code'] ?? '';
@@ -107,7 +106,6 @@ if (empty($filters) && empty($appliedFilters)) {
         </span>
         <?php endforeach; ?>
     </div>
-    <?php endif; ?>
 
     <?php 
     // 定义默认展开的筛选器数量
