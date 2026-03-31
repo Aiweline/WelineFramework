@@ -121,6 +121,9 @@ class Role extends BackendController
         }
 
         $role = $id > 0 ? $this->roleModel->load($id) : clone $this->roleModel;
+        if ($id <= 0) {
+            $role->setData(BotRole::schema_fields_IS_DEFAULT, 0);
+        }
         $role->setData(BotRole::schema_fields_CODE, $code);
         $role->setData(BotRole::schema_fields_NAME, $name);
         $role->setData(BotRole::schema_fields_SYSTEM_PROMPT, $systemPrompt);

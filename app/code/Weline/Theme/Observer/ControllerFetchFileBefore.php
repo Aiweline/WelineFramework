@@ -9,6 +9,7 @@
 
 namespace Weline\Theme\Observer;
 
+use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -98,7 +99,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $eventData->setData('layoutType', $layoutType);
             }
         }
-        // 关键检查：只有当控制器设置了 layoutType 时才处理
+        // 如果没有设置 layoutType，使用默认布局
         if (empty($layoutType)) {
             return;
         }
@@ -128,8 +129,6 @@ class ControllerFetchFileBefore implements ObserverInterface
         
         // 获取当前主题：预览 / 激活由 ThemeContextService 统一解析
         $theme = $this->resolveThemeForLayout($area);
-
-        error_log('DEBUG ControllerFetchFileBefore: area=' . $area . ' layoutType=' . $layoutType . ' resolved theme=' . ($theme ? $theme->getName() . '(id=' . $theme->getId() . ', path=' . $theme->getPath() . ', originPath=' . $theme->getOriginPath() . ')' : 'null'));
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -177,21 +176,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $layoutOption = $layoutConfig[$layoutType];
             }
 
-            // 如果代码中没有指定布局选项，则从配置中获取
+            // 如果代码中没有指定布局选项，则从配置中获取；
+            // 当配置缺少该布局键时，保留请求的 layoutType，仅回退 option=default。
             if ($layoutOption === null || $layoutOption === '') {
-                // 检查 layoutType 是否在配置中存在
-                if (!isset($layoutConfig[$layoutType])) {
-                    // 如果不存在，尝试使用 default 布局类型
-                    if (isset($layoutConfig['default'])) {
-                        $layoutType = 'default';
-                        $layoutOption = $layoutConfig['default'];
-                    } else {
-                        // 如果连 default 都没有，使用默认值
-                        $layoutOption = 'default';
-                    }
-                } else {
+                if (isset($layoutConfig[$layoutType])) {
                     // 从配置中获取布局选项
                     $layoutOption = $layoutConfig[$layoutType] ?? 'default';
+                } else {
+                    // 配置里没有当前布局键时，不应篡改 layoutType（避免 homepage 被错误降级为 default）
+                    $layoutOption = 'default';
                 }
             }
             
@@ -226,7 +219,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
                 // 优化：编译文件存在且源文件未修改则不再做重负载（不重复 performanceLoad/colors/meta）
                 $sourcePath = LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
-                $lang = class_exists(Cookie::class) ? Cookie::getLang() : 'zh_Hans_CN';
+                $lang = class_exists(Cookie::class) ? State::getLang() : 'zh_Hans_CN';
                 $compiledPath = LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang);
                 if ($sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
                     && filemtime($sourcePath) <= filemtime($compiledPath)
@@ -391,8 +384,9 @@ class ControllerFetchFileBefore implements ObserverInterface
     private function resolveThemeForLayout(string $area): WelineTheme
     {
         self::registerStateManager();
-        if (isset(self::$themeByAreaCache[$area])) {
-            return self::$themeByAreaCache[$area];
+        $cacheKey = $this->buildThemeCacheKey($area);
+        if (isset(self::$themeByAreaCache[$cacheKey])) {
+            return self::$themeByAreaCache[$cacheKey];
         }
         $theme = $this->themeContext->resolveTheme($area);
         if ($theme === null || !$theme->getId()) {
@@ -400,8 +394,39 @@ class ControllerFetchFileBefore implements ObserverInterface
             $theme->clearData()->clearQuery();
             $theme->getActiveTheme($area);
         }
-        self::$themeByAreaCache[$area] = $theme;
+        self::$themeByAreaCache[$cacheKey] = $theme;
         return $theme;
+    }
+
+    /**
+     * 生成请求级主题缓存键，避免预览请求误复用普通请求（或其它主题）的缓存。
+     */
+    private function buildThemeCacheKey(string $area): string
+    {
+        $request = null;
+        try {
+            $request = ObjectManager::getInstance(Request::class);
+        } catch (\Throwable) {
+        }
+
+        if (!$request) {
+            return $area . '|default';
+        }
+
+        $frontendThemeId = (int)$request->getParam('frontend_theme_id', 0);
+        $backendThemeId = (int)$request->getParam('backend_theme_id', 0);
+        $legacyThemeId = (int)$request->getParam('preview_theme', 0);
+        $previewThemeId = $area === 'backend'
+            ? ($backendThemeId > 0 ? $backendThemeId : $legacyThemeId)
+            : ($frontendThemeId > 0 ? $frontendThemeId : $legacyThemeId);
+        $previewToken = (string)$request->getParam('weline_preview_token', '');
+
+        return implode('|', [
+            $area,
+            'editor_area:' . strtolower((string)$request->getParam('editor_area', '')),
+            'preview_theme:' . $previewThemeId,
+            'preview_token:' . substr($previewToken, 0, 24),
+        ]);
     }
 
     /**

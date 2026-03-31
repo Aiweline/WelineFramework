@@ -1,0 +1,161 @@
+﻿[playwright] explicit file mode using 1 files
+[playwright] rootDir: E:\WelineFramework\DEV-workspace
+[playwright] testDir: E:\WelineFramework\DEV-workspace\tests\e2e
+[playwright] testMatch: [ 'specs/backend/Aiweline_Bbs-smoke-backend.spec.js' ]
+[playwright] proxy baseURL: https://127.0.0.1:3999
+[playwright] target origin: http://127.0.0.1:9993
+
+Running 1 test using 1 worker
+
+node.exe : (node:74872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:74872) Wa... env being set.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:74872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[playwright] explicit file mode using 1 files
+[playwright] rootDir: E:\WelineFramework\DEV-workspace
+[playwright] testDir: E:\WelineFramework\DEV-workspace\tests\e2e
+[playwright] testMatch: [ [32m'specs/backend/Aiweline_Bbs-smoke-backend.spec.js'[39m ]
+[playwright] proxy baseURL: https://127.0.0.1:3999
+[playwright] target origin: http://127.0.0.1:9993
+  x  1 [chromium] › specs\backend\Aiweline_Bbs-smoke-backend.spec.js:26:5 › Aiweline_Bbs backend smoke › renders aiweline_bbs/admin/dashboard without PHP fatal errors (32.4s)
+(node:61000) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:61000) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[playwright] explicit file mode using 1 files
+[playwright] rootDir: E:\WelineFramework\DEV-workspace
+[playwright] testDir: E:\WelineFramework\DEV-workspace\tests\e2e
+[playwright] testMatch: [ [32m'specs/backend/Aiweline_Bbs-smoke-backend.spec.js'[39m ]
+[playwright] proxy baseURL: https://127.0.0.1:3999
+[playwright] target origin: http://127.0.0.1:9993
+  x  2 [chromium] › specs\backend\Aiweline_Bbs-smoke-backend.spec.js:26:5 › Aiweline_Bbs backend smoke › renders aiweline_bbs/admin/dashboard without PHP fatal errors (retry #1) (1.5m)
+
+
+  1) [chromium] › specs\backend\Aiweline_Bbs-smoke-backend.spec.js:26:5 › Aiweline_Bbs backend smoke › renders aiweline_bbs/admin/dashboard without PHP fatal errors 
+
+    Error: 样式资源加载失败: GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/libs/loading/loading.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/css/font-awesome.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/bootstrap-dark.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/icons.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/app-dark.min.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_colors.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_typography.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_spacing.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_borders.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_shadows.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_default.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_dark.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/assets/css/theme.css
+    GET http://127.0.0.1:3999/static/WeShop/motor/Weline/Theme/view/theme/backend/layouts/default/default.css
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    [32m- Expected  -  1[39m
+    [31m+ Received  + 17[39m
+
+    [32m- Array [][39m
+    [31m+ Array [[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/libs/loading/loading.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/css/font-awesome.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/bootstrap-dark.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/icons.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/app-dark.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_colors.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_typography.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_spacing.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_borders.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_shadows.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_default.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_dark.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/assets/css/theme.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/static/WeShop/motor/Weline/Theme/view/theme/backend/layouts/default/default.css",[39m
+    [31m+ ][39m
+
+      63 |       await expect(body).not.toContainText(FATAL_PATTERN, { timeout: 15000 });
+      64 |       await expect(page.locator('.container-fluid').first()).toBeVisible();
+    > 65 |       expect(failedStyleRequests, `样式资源加载失败: ${failedStyleRequests.join('\n')}`).toEqual([]);
+         |                                                                                  ^
+      66 |
+      67 |       const safeRoute = route.replace(/[^a-z0-9-_/]/gi, '_').replace(/\//g, '__');
+      68 |       await page.screenshot({
+        at E:\WelineFramework\DEV-workspace\tests\e2e\specs\backend\Aiweline_Bbs-smoke-backend.spec.js:65:82
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\specs-backend-Aiweline_Bbs-43904-rd-without-PHP-fatal-errors-chromium\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\specs-backend-Aiweline_Bbs-43904-rd-without-PHP-fatal-errors-chromium\error-context.md
+
+    Retry #1 ───────────────────────────────────────────────────────────────────────────────────────
+
+    Error: 样式资源加载失败: GET http://127.0.0.1:3999/Weline/Admin/view/statics/libs/loading/loading.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/css/font-awesome.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/bootstrap-dark.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/icons.min.css
+    GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/app-dark.min.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_colors.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_typography.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_spacing.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_borders.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_shadows.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_default.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_dark.css
+    GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/assets/css/theme.css
+    GET http://127.0.0.1:3999/static/WeShop/motor/Weline/Theme/view/theme/backend/layouts/default/default.css
+
+    [2mexpect([22m[31mreceived[39m[2m).[22mtoEqual[2m([22m[32mexpected[39m[2m) // deep equality[22m
+
+    [32m- Expected  -  1[39m
+    [31m+ Received  + 17[39m
+
+    [32m- Array [][39m
+    [31m+ Array [[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/libs/loading/loading.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/bootstrap-5.1.3-dist/css/bootstrap.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/backend/lib/font-awesome-4.7.0/css/font-awesome.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/bootstrap-dark.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/icons.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Admin/view/statics/assets/css/app-dark.min.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_colors.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_typography.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_spacing.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_borders.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/variables/_shadows.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_default.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/colors/_dark.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/Weline/Theme/view/theme/backend/assets/css/theme.css",[39m
+    [31m+   "GET http://127.0.0.1:3999/static/WeShop/motor/Weline/Theme/view/theme/backend/layouts/default/default.css",[39m
+    [31m+ ][39m
+
+      63 |       await expect(body).not.toContainText(FATAL_PATTERN, { timeout: 15000 });
+      64 |       await expect(page.locator('.container-fluid').first()).toBeVisible();
+    > 65 |       expect(failedStyleRequests, `样式资源加载失败: ${failedStyleRequests.join('\n')}`).toEqual([]);
+         |                                                                                  ^
+      66 |
+      67 |       const safeRoute = route.replace(/[^a-z0-9-_/]/gi, '_').replace(/\//g, '__');
+      68 |       await page.screenshot({
+        at E:\WelineFramework\DEV-workspace\tests\e2e\specs\backend\Aiweline_Bbs-smoke-backend.spec.js:65:82
+
+    Error: apiRequestContext._wrapApiCall: ENOENT: no such file or directory, open 'E:\WelineFramework\DEV-workspace\tests\e2e\test-results\.playwright-artifacts-1\traces\8ae552ce89e3dbb297c1-ad24ae84ce5ee1d66266-retry1.trace'
+
+    Error: ENOENT: no such file or directory, open 'E:\WelineFramework\DEV-workspace\tests\e2e\test-results\.playwright-artifacts-1\6a8a8e6c429ef335b3a526d55ef7c70c.zip'
+
+    [31mTest timeout of 120000ms exceeded.[39m
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results\specs-backend-Aiweline_Bbs-43904-rd-without-PHP-fatal-errors-chromium-retry1\test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results\specs-backend-Aiweline_Bbs-43904-rd-without-PHP-fatal-errors-chromium-retry1\error-context.md
+
+  1 failed
+    [chromium] › specs\backend\Aiweline_Bbs-smoke-backend.spec.js:26:5 › Aiweline_Bbs backend smoke › renders aiweline_bbs/admin/dashboard without PHP fatal errors 

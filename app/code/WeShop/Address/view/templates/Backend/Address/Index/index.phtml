@@ -83,10 +83,10 @@ document.addEventListener('DOMContentLoaded', function() {
         processing: true,
         serverSide: true,
         ajax: {
-            url: '@backend-url("*/api/address/list")',
+            url: '@backend-url("*/backend/address/address-list")',
             type: 'GET',
             data: function(d) {
-                d.customer_id = '{{customer_id}}';
+                d.customer_id = '<?= $customer_id ?? 1 ?>';
             }
         },
         columns: [
