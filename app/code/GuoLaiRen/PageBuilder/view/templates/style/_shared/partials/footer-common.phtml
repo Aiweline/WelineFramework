@@ -1,16 +1,23 @@
 <?php
-declare(strict_types=1);
 /**
+ * 注意：勿在此文件使用 declare(strict_types=1)。运行时会在本文件内容前追加一行「带内容哈希的 PHP 开闭标签」，
+ * strict_types 将不再是脚本首条语句，会触发 E_COMPILE_ERROR，WLS Worker 随之崩溃。
+ *
  * PageBuilder 全 style 公用尾部区：统一下载按钮委托 + 条件性 WelinePixel.send
  *
- * 在主题 layout.phtml 的 </body> 前引入一次：
- *   <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml'); ?>
+ * 在主题 layout.phtml 的 </body> 前通过 fetchTemplate 引入本文件（路径：
+ * GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml）。
+ *
+ * 勿在块注释内写「星号斜杠」闭合示例或完整 PHP 标签示例，否则会提前结束注释并把后续内容输出到 HTML。
  *
  * 推荐：
  *   PHP：register(解析后的真实下载 URL, slot) 得 code（URL 的 SHA-256 → glr_+64hex）；模板 href 写 codeHref($code)（#+code），data-glr-ref 写同一段 code。点击按 code 查表跳转。
  *   亦可保留占位 href（如 /#register）；有有效注册目标时脚本可移除占位，避免误跳锚点。#glr_ 形式不会被剥。
  *
  * 调试：window.__GLR_PB_DOWNLOAD_DEBUG = true 或 ?glr_pb_debug=1 或 localStorage glr_pb_download_debug=1
+ *
+ * @meta.name {default="PageBuilder 公用尾部片段",name="PageBuilder 公用尾部片段",description="PageBuilder 公用尾部片段，用于描述片段的名称"}
+ * @meta.description {default="PageBuilder 全 style 公用尾部区：统一下载按钮委托 + 条件性 WelinePixel.send",name="PageBuilder 公用尾部片段",description="PageBuilder 全 style 公用尾部区：统一下载按钮委托 + 条件性 WelinePixel.send，用于描述片段的用途"}
  *
  * @var \Weline\Framework\View\Template $this
  */

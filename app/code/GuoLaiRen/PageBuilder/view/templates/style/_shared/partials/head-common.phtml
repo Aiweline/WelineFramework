@@ -1,14 +1,20 @@
 <?php
-declare(strict_types=1);
 /**
+ * 注意：勿在此文件使用 declare(strict_types=1)。运行时会在本文件内容前追加一行「带内容哈希的 PHP 开闭标签」，
+ * strict_types 将不再是脚本首条语句，会触发 E_COMPILE_ERROR，WLS Worker 随之崩溃。
+ *
  * PageBuilder 全 style 公用头部区：统一统计与 Weline Visitor 像素
  *
- * 在主题 layout.phtml 的 </head> 前引入一次：
- *   <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
+ * 在主题 layout.phtml 的 </head> 前通过 fetchTemplate 引入本文件（路径：
+ * GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml）。
  *
- * 包含：GTM / GA4 / Meta Pixel / Visitor <pixel> / trackEvent 与 data-track-event 委托
- * 请勿在各主题 header.phtml 中重复输出 <pixel> 或重复设置网站 Cookie。
+ * 包含：GTM、GA4、Meta Pixel、Visitor 像素、trackEvent 与 data-track-event 委托
+ * 请勿在各主题 header.phtml 中重复输出像素标签或重复设置网站 Cookie。
  *
+ * 勿在块注释内写「星号斜杠」闭合示例或完整 PHP 标签示例，否则会提前结束注释并把后续内容输出到 HTML。
+ *
+ * @meta.name {default="PageBuilder 公用 Head 片段",name="PageBuilder 公用 Head 片段"}
+ * @meta.description {default="PageBuilder style 公用头部区：用于基础统计与 Visitor 像素注入的共享片段",name="PageBuilder 公用 Head 片段描述"}
  * @var \Weline\Framework\View\Template $this
  */
 $styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];

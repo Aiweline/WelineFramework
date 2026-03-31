@@ -56,6 +56,10 @@ class Router implements RouterInterface
             // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
             $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
             $queryHandle = isset($_GET['handle']) && is_string($_GET['handle']) ? trim(rawurldecode($_GET['handle'])) : '';
+            $homePageHandle = self::getHomePageHandle($websiteId);
+            if (!self::shouldRewriteRootPath($isPreview, $queryHandle, $homePageHandle)) {
+                return;
+            }
             if ($isPreview && $queryHandle !== '') {
                 $websiteIdParam = isset($_GET['website_id']) ? (int)$_GET['website_id'] : 0;
                 if ($websiteIdParam > 0) {
@@ -70,6 +74,16 @@ class Router implements RouterInterface
                 $_GET['handle'] = $queryHandle;
                 return;
             }
+            $path = '/pagebuilder/frontend/page/view';
+            $rule['module'] = 'GuoLaiRen_PageBuilder';
+            if ($isPreview) {
+                $rule['handle'] = $homePageHandle ?? '';
+                $_GET['handle'] = $rule['handle'];
+            } else {
+                $rule['handle'] = '';
+                $_GET['handle'] = '';
+            }
+            return;
             if ($websiteId > 0) {
                 $homePageHandle = self::getHomePageHandle($websiteId);
                 // 有首页即重写。live 模式：根路径直接以域名为首页，不传 handle；预览模式仍传 handle
@@ -204,7 +218,16 @@ class Router implements RouterInterface
         
         return $handle;
     }
-    
+
+    private static function shouldRewriteRootPath(bool $isPreview, string $queryHandle, ?string $homePageHandle): bool
+    {
+        if ($isPreview && $queryHandle !== '') {
+            return true;
+        }
+
+        return $homePageHandle !== null;
+    }
+
     /**
      * 检查当前站点下 handle 是否存在于数据库（同一站点内 handle 唯一，无站点时 website_id=0）
      *
