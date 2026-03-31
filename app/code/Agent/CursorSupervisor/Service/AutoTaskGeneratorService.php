@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Agent\CursorSupervisor\Service;
 
+use Agent\CursorBase\Service\TaskPoolService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * 自动任务生成器服务
@@ -160,7 +162,7 @@ class AutoTaskGeneratorService
         foreach ($byType as $type => $typeViolations) {
             $task = $this->createTaskFromViolationType($filePath, $type, $typeViolations);
             if ($task) {
-                $this->getTaskPool()->addTask($task);
+                $this->getTaskPool()->addTasks([$task]);
                 $tasks[] = $task;
                 $this->log("📋 生成任务: {$task['id']} - {$task['description']}");
             }
@@ -304,7 +306,7 @@ class AutoTaskGeneratorService
                 }
             }
             
-            sleep(1);
+            SchedulerSystem::yieldDelay(1000);
         }
     }
     
