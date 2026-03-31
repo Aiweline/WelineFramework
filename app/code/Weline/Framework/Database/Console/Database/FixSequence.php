@@ -51,6 +51,24 @@ class FixSequence extends CommandAbstract
     public function execute(array $arguments = [], array $options = []): bool
     {
         $tableName = $arguments['table'] ?? null;
+        if (!is_string($tableName) || trim($tableName) === '') {
+            foreach ($arguments as $arg) {
+                if (!is_string($arg)) {
+                    continue;
+                }
+                $candidate = trim($arg);
+                if ($candidate === '' || str_contains($candidate, ':')) {
+                    continue;
+                }
+                $tableName = $candidate;
+                break;
+            }
+        }
+        if (!is_string($tableName) || trim($tableName) === '') {
+            $tableName = null;
+        } else {
+            $tableName = trim($tableName);
+        }
         $connectionName = $options['c'] ?? $options['connection'] ?? 'default';
 
         try {
@@ -121,12 +139,15 @@ class FixSequence extends CommandAbstract
         $maxResult = $maxStmt->fetch(\PDO::FETCH_ASSOC);
         $maxId = (int)$maxResult['max_id'];
 
-        // 重置序列
-        $newValue = $maxId + 1;
-        $resetSql = "SELECT setval('\"{$sequenceName}\"', {$maxId}, true)";
+        // 重置序列：
+        // - 有数据时，设为 max_id 且 is_called=true，下一次 nextval 返回 max_id+1
+        // - 空表时，设为 1 且 is_called=false，下一次 nextval 返回 1，避免 setval(0, true) 越界
+        $setValue = $maxId > 0 ? $maxId : 1;
+        $isCalled = $maxId > 0 ? 'true' : 'false';
+        $resetSql = "SELECT setval('\"{$sequenceName}\"', {$setValue}, {$isCalled})";
         $pdo->exec($resetSql);
 
-        $this->printer->success(__('✓ 表 %{1}: 序列 %{2} 重置为 %{3}', [$tableName, $sequenceName, $maxId]));
+        $this->printer->success(__('✓ 表 %{1}: 序列 %{2} 重置为 %{3}', [$tableName, $sequenceName, $setValue]));
     }
 
     private function fixAllSequences(\PDO $pdo): void

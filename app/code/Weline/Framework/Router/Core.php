@@ -240,6 +240,45 @@ class Core
         return $this->urlProcessor;
     }
 
+    private function clearCurrentRequestRouteCaches(): void
+    {
+        $this->getRouterCache()->deleteMultiple([
+            $this->url_cache_key,
+            $this->rule_cache_key,
+            $this->_router_cache_key,
+            $this->unified_cache_key,
+        ]);
+        $this->unifiedCacheData = null;
+        $this->router = [];
+    }
+
+    private static function isStaleEmptyRootRouterCache(
+        string $requestArea,
+        string $url,
+        array|string|null $rule,
+        mixed $router
+    ): bool {
+        if ($requestArea !== \Weline\Framework\Controller\Data\DataInterface::type_pc_FRONTEND) {
+            return false;
+        }
+
+        if (trim($url, '/') !== '') {
+            return false;
+        }
+
+        if (!is_array($rule) || !empty($rule['module'])) {
+            return false;
+        }
+
+        if (!is_array($router)) {
+            return false;
+        }
+
+        return ($router['module'] ?? '') === 'GuoLaiRen_PageBuilder'
+            && (($router['class']['name'] ?? '') === 'GuoLaiRen\\PageBuilder\\Controller\\Frontend\\Page')
+            && strtolower((string)($router['class']['method'] ?? '')) === 'view';
+    }
+
 
     /**
      * @DESC         |路由处理
@@ -281,15 +320,24 @@ class Core
         
         // 优先从统一缓存中读取 router
         if (!$hasPreviewTheme && is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY]) && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])) {
-            $this->router = $this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY];
-            return $this->route();
+            $cachedRouter = $this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY];
+            if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $cachedRouter)) {
+                $this->clearCurrentRequestRouteCaches();
+            } else {
+                $this->router = $cachedRouter;
+                return $this->route();
+            }
         }
         
         // 回退到旧的缓存方式（兼容性）
         $router = $hasPreviewTheme ? null : $this->cache->get($this->_router_cache_key);
         if ($router) {
-            $this->router = $router;
-            return $this->route();
+            if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $router)) {
+                $this->clearCurrentRequestRouteCaches();
+            } else {
+                $this->router = $router;
+                return $this->route();
+            }
         }
         # 后台接口请求
         

@@ -28,9 +28,8 @@ use Weline\Framework\App\Debug;
  * 具有数组访问实现的通用数据容器
  * 
  * PHP 8.4+ 升级说明：
- * - 保留 getData()/setData() 向后兼容
- * - 新增 Property Hooks 支持，子类可使用 PHP 8.4 语法
- * - 支持运行时注册属性钩子（兼容低版本）
+ * - 移除运行时 Property Hooks polyfill，优先使用原生 Property Hooks 语法
+ * - 子类可使用 PHP 8.4 原生 Property Hooks 定义具体属性
  * 
  * 子类使用 PHP 8.4 Property Hooks 示例：
  * ```php
@@ -66,15 +65,6 @@ class DataObject implements \ArrayAccess
      * @var array
      */
     protected static array $_underscoreCache = [];
-    
-    /**
-     * Property Hooks 注册表（运行时兼容模式）
-     * 
-     * 结构: [类名][属性名] => ['get' => callable, 'set' => callable]
-     * 
-     * @var array<string, array<string, array{get?: callable, set?: callable}>>
-     */
-    protected static array $_propertyHooks = [];
 
     /**
      * DataObject 初始函数...
@@ -86,94 +76,26 @@ class DataObject implements \ArrayAccess
     {
         $this->_data = $data;
     }
-    
-    // ==================== PHP 8.4 Property Hooks 支持 ====================
-    
-    /**
-     * 注册属性钩子（运行时兼容模式）
-     * 
-     * 用于 PHP < 8.4 环境，或需要动态注册钩子的场景
-     * PHP 8.4+ 优先使用原生 Property Hooks 语法
-     * 
-     * @param string $property 属性名
-     * @param callable|null $getter 读取时的处理函数
-     * @param callable|null $setter 设置时的处理函数，接收 $value 参数
-     * @return static
-     */
-    protected function registerPropertyHook(string $property, ?callable $getter = null, ?callable $setter = null): static
-    {
-        $class = static::class;
-        if (!isset(self::$_propertyHooks[$class])) {
-            self::$_propertyHooks[$class] = [];
-        }
-        self::$_propertyHooks[$class][$property] = [
-            'get' => $getter,
-            'set' => $setter,
-        ];
-        return $this;
-    }
-    
-    /**
-     * 检查属性是否有注册的钩子
-     * 
-     * @param string $property 属性名
-     * @return bool
-     */
-    protected function hasPropertyHook(string $property): bool
-    {
-        $class = static::class;
-        return isset(self::$_propertyHooks[$class][$property]);
-    }
-    
-    /**
-     * 获取属性钩子
-     * 
-     * @param string $property 属性名
-     * @param string $type 'get' 或 'set'
-     * @return callable|null
-     */
-    protected function getPropertyHook(string $property, string $type): ?callable
-    {
-        $class = static::class;
-        return self::$_propertyHooks[$class][$property][$type] ?? null;
-    }
-    
+
     /**
      * 魔术方法：获取属性
-     * 
-     * 优先级：
-     * 1. 已注册的 Property Hook getter
-     * 2. getData() 方法
      * 
      * @param string $name 属性名
      * @return mixed
      */
     public function __get(string $name): mixed
     {
-        $hook = $this->getPropertyHook($name, 'get');
-        if ($hook !== null) {
-            return $hook();
-        }
         return $this->getData($name);
     }
     
     /**
      * 魔术方法：设置属性
      * 
-     * 优先级：
-     * 1. 已注册的 Property Hook setter
-     * 2. setData() 方法
-     * 
      * @param string $name 属性名
      * @param mixed $value 值
      */
     public function __set(string $name, mixed $value): void
     {
-        $hook = $this->getPropertyHook($name, 'set');
-        if ($hook !== null) {
-            $hook($value);
-            return;
-        }
         $this->setData($name, $value);
     }
     
@@ -185,7 +107,7 @@ class DataObject implements \ArrayAccess
      */
     public function __isset(string $name): bool
     {
-        return $this->hasData($name) || $this->hasPropertyHook($name);
+        return $this->hasData($name);
     }
     
     /**
@@ -197,8 +119,6 @@ class DataObject implements \ArrayAccess
     {
         $this->unsetData($name);
     }
-    
-    // ==================== PHP 8.4 Property Hooks 支持结束 ====================
 
     /**
      * 获取变化值
@@ -276,18 +196,25 @@ class DataObject implements \ArrayAccess
      */
     public function setData(string|array $key, mixed $value = null): static
     {
-        if ($key === (array)$key) {
+        if (is_array($key)) {
             foreach ($key as $sub_key => $sub_val) {
                 if (!is_string($sub_key)) {
                     continue;
                 }
-                if (!isset($this->_data[$sub_key])) {
-                    $this->_changed[$sub_key] = $sub_val;
-                } elseif ($this->_data[$sub_key] !== $sub_val) {
-                    $this->_changed[$sub_key] = $sub_val;
-                }
+                $this->setData($sub_key, $sub_val);
             }
             $this->_data = array_merge($this->_data, $key);
+        } elseif (str_contains($key, '.')) {
+            $keys = explode('.', $key);
+            $root = &$this->_data;
+            $last = array_pop($keys);
+            foreach ($keys as $k) {
+                if (!isset($root[$k]) || !is_array($root[$k])) {
+                    $root[$k] = [];
+                }
+                $root = &$root[$k];
+            }
+            $root[$last] = $value;
         } else {
             if (!isset($this->_data[$key])) {
                 $this->_changed[$key] = $value;
@@ -323,7 +250,7 @@ class DataObject implements \ArrayAccess
             if (isset($this->_data[$key]) || array_key_exists($key, $this->_data)) {
                 unset($this->_data[$key]);
             }
-        } elseif ($key === (array)$key) {
+        } elseif (is_array($key)) {
             foreach ($key as $element) {
                 $this->unsetData($element);
             }
@@ -392,7 +319,7 @@ class DataObject implements \ArrayAccess
         }
 
         if ($index !== null) {
-            if ($data === (array)$data) {
+            if (is_array($data)) {
                 $data = $data[$index] ?? null;
             } elseif (is_string($data)) {
                 $data = explode(PHP_EOL, $data);
@@ -424,7 +351,7 @@ class DataObject implements \ArrayAccess
 
         $data = $this->_data;
         foreach ($keys as $key) {
-            if ((array)$data === $data && isset($data[$key])) {
+            if (is_array($data) && isset($data[$key])) {
                 $data = $data[$key];
             } elseif ($data instanceof DataObject) {
                 $data = $data->getDataByKey($key);
