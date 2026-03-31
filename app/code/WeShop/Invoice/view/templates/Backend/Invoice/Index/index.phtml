@@ -1,0 +1,343 @@
+<?php
+/**
+ * Invoice List - 发票列表
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var array $invoices 发票列表
+ * @var array $filters 筛选条件
+ * @var array $pagination 分页信息
+ * @var array $statusOptions 状态选项
+ * @var array $summary 统计信息
+ */
+$title = $title ?? __('Invoice Management');
+$invoices = $invoices ?? [];
+$filters = $filters ?? [];
+$pagination = $pagination ?? [];
+$statusOptions = $statusOptions ?? [];
+$summary = $summary ?? [];
+$invoiceIndexUrl = $this->getBackendUrl('*/backend/invoice');
+$invoiceIssueUrl = $this->getData('invoiceIssueUrl') ?? $this->getBackendUrl('*/backend/invoice/issue');
+
+$statusBadgeMap = [
+    'pending' => 'bg-warning',
+    'processing' => 'bg-info',
+    'issued' => 'bg-success',
+    'cancelled' => 'bg-secondary',
+    'refunded' => 'bg-danger',
+];
+?>
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= $title ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('WeShop') ?></a></li>
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('Invoice') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('Invoice List') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class="row mb-3">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+        <div id="page-message-container"></div>
+    </div>
+</div>
+<!-- end message -->
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <div class="avatar-sm rounded-circle bg-primary bg-soft">
+                            <span class="avatar-title bg-primary rounded-circle">
+                                <i class="mdi mdi-receipt font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('Total Invoices') ?></p>
+                        <h4 class="mb-0"><?= number_format($summary['total'] ?? 0) ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <div class="avatar-sm rounded-circle bg-warning bg-soft">
+                            <span class="avatar-title bg-warning rounded-circle">
+                                <i class="mdi mdi-clock-outline font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('Pending') ?></p>
+                        <h4 class="mb-0"><?= number_format($summary['pending'] ?? 0) ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <div class="avatar-sm rounded-circle bg-success bg-soft">
+                            <span class="avatar-title bg-success rounded-circle">
+                                <i class="mdi mdi-check-circle font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('Issued') ?></p>
+                        <h4 class="mb-0"><?= number_format($summary['issued'] ?? 0) ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-3 col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex align-items-center">
+                    <div class="flex-shrink-0">
+                        <div class="avatar-sm rounded-circle bg-info bg-soft">
+                            <span class="avatar-title bg-info rounded-circle">
+                                <i class="mdi mdi-currency-cny font-size-24"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <p class="text-uppercase fw-medium text-muted mb-0"><?= __('Total Amount') ?></p>
+                        <h4 class="mb-0"><?= number_format($summary['total_amount'] ?? 0, 2) ?></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Form -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0"><i class="mdi mdi-filter me-2"></i><?= __('Filter Invoices') ?></h5>
+            </div>
+            <div class="card-body">
+                <form method="get" action="<?= htmlspecialchars($invoiceIndexUrl) ?>">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('Invoice Number') ?></label>
+                            <input type="text" class="form-control" name="invoice_number"
+                                   value="<?= htmlspecialchars($filters['invoice_number'] ?? '') ?>"
+                                   placeholder="<?= __('Enter invoice number') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('Order Number') ?></label>
+                            <input type="text" class="form-control" name="order_increment_id"
+                                   value="<?= htmlspecialchars($filters['order_increment_id'] ?? '') ?>"
+                                   placeholder="<?= __('Enter order number') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><?= __('Status') ?></label>
+                            <select class="form-select" name="status">
+                                <option value=""><?= __('All Statuses') ?></option>
+                                <?php foreach ($statusOptions as $code => $label): ?>
+                                    <option value="<?= htmlspecialchars($code) ?>" <?= ($filters['status'] ?? '') === $code ? 'selected' : '' ?>>
+                                        <?= htmlspecialchars($label) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="mdi mdi-filter"></i> <?= __('Apply Filters') ?>
+                            </button>
+                            <a href="<?= htmlspecialchars($invoiceIndexUrl) ?>" class="btn btn-secondary">
+                                <i class="mdi mdi-refresh"></i> <?= __('Reset') ?>
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Invoice List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="card-title mb-0"><?= __('Invoice List') ?></h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="issueNewInvoice()">
+                        <i class="mdi mdi-plus"></i> <?= __('Issue New Invoice') ?>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-success" onclick="exportInvoices()">
+                        <i class="mdi mdi-download"></i> <?= __('Export') ?>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <?php if (empty($invoices)): ?>
+                    <div class="text-center text-muted py-5">
+                        <i class="mdi mdi-receipt-long font-size-48 d-block mb-3"></i>
+                        <p><?= __('No invoices found') ?></p>
+                    </div>
+                <?php else: ?>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th><?= __('Invoice ID') ?></th>
+                                    <th><?= __('Invoice Number') ?></th>
+                                    <th><?= __('Order Number') ?></th>
+                                    <th><?= __('Customer') ?></th>
+                                    <th><?= __('Amount') ?></th>
+                                    <th><?= __('Tax Amount') ?></th>
+                                    <th><?= __('Type') ?></th>
+                                    <th><?= __('Status') ?></th>
+                                    <th><?= __('Issue Date') ?></th>
+                                    <th><?= __('Actions') ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($invoices as $invoice): ?>
+                                    <?php
+                                    $invoiceId = (int) ($invoice['invoice_id'] ?? $invoice['id'] ?? 0);
+                                    $status = (string) ($invoice['status'] ?? 'pending');
+                                    $badgeClass = $statusBadgeMap[$status] ?? 'bg-secondary';
+                                    $statusLabel = $statusOptions[$status] ?? ucfirst($status);
+                                    ?>
+                                    <tr>
+                                        <td><strong>#<?= $invoiceId ?></strong></td>
+                                        <td>
+                                            <code><?= htmlspecialchars((string) ($invoice['invoice_number'] ?? '')) ?></code>
+                                        </td>
+                                        <td>
+                                            <a href="<?= $this->getBackendUrl('*/backend/order/view', ['id' => $invoice['order_id'] ?? 0]) ?>">
+                                                #<?= htmlspecialchars((string) ($invoice['order_increment_id'] ?? $invoice['order_id'] ?? '')) ?>
+                                            </a>
+                                        </td>
+                                        <td>
+                                            <?= htmlspecialchars((string) ($invoice['customer_name'] ?? $invoice['customer_id'] ?? '-')) ?>
+                                        </td>
+                                        <td class="text-end">
+                                            <?= number_format((float) ($invoice['amount'] ?? 0), 2) ?>
+                                        </td>
+                                        <td class="text-end">
+                                            <?= number_format((float) ($invoice['tax_amount'] ?? 0), 2) ?>
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-light text-dark">
+                                                <?= htmlspecialchars((string) ($invoice['type'] ?? 'invoice')) ?>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <span class="badge <?= $badgeClass ?>">
+                                                <?= htmlspecialchars($statusLabel) ?>
+                                            </span>
+                                        </td>
+                                        <td><?= htmlspecialchars((string) ($invoice['issued_at'] ?? $invoice['created_at'] ?? '-')) ?></td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <a href="<?= $this->getBackendUrl('*/backend/invoice/view', ['id' => $invoiceId]) ?>"
+                                                   class="btn btn-outline-info"
+                                                   title="<?= __('View') ?>">
+                                                    <i class="mdi mdi-eye"></i>
+                                                </a>
+                                                <?php if ($status === 'issued'): ?>
+                                                    <a href="<?= $this->getBackendUrl('*/backend/invoice/download', ['id' => $invoiceId]) ?>"
+                                                       class="btn btn-outline-success"
+                                                       title="<?= __('Download') ?>">
+                                                        <i class="mdi mdi-download"></i>
+                                                    </a>
+                                                <?php endif; ?>
+                                                <?php if ($status === 'pending'): ?>
+                                                    <a href="<?= $this->getBackendUrl('*/backend/invoice/issue', ['id' => $invoiceId]) ?>"
+                                                       class="btn btn-outline-primary"
+                                                       title="<?= __('Issue') ?>">
+                                                        <i class="mdi mdi-check"></i>
+                                                    </a>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination -->
+                    <?php if (!empty($pagination) && ($pagination['total_pages'] ?? 1) > 1): ?>
+                        <nav aria-label="Page navigation" class="mt-4">
+                            <ul class="pagination justify-content-center">
+                                <?php if ($pagination['has_previous'] ?? false): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="<?= $this->getBackendUrl('*/backend/invoice', array_merge($filters, ['page' => $pagination['previous_page'] ?? 1])) ?>">
+                                            <?= __('Previous') ?>
+                                        </a>
+                                    </li>
+                                <?php endif; ?>
+
+                                <?php
+                                $currentPage = (int) ($pagination['current_page'] ?? 1);
+                                $totalPages = (int) ($pagination['total_pages'] ?? 1);
+                                $startPage = max(1, $currentPage - 2);
+                                $endPage = min($totalPages, $currentPage + 2);
+                                ?>
+                                <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                                    <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                                        <a class="page-link" href="<?= $this->getBackendUrl('*/backend/invoice', array_merge($filters, ['page' => $i])) ?>">
+                                            <?= $i ?>
+                                        </a>
+                                    </li>
+                                <?php endfor; ?>
+
+                                <?php if ($pagination['has_next'] ?? false): ?>
+                                    <li class="page-item">
+                                        <a class="page-link" href="<?= $this->getBackendUrl('*/backend/invoice', array_merge($filters, ['page' => $pagination['next_page'] ?? 2])) ?>">
+                                            <?= __('Next') ?>
+                                        </a>
+                                    </li>
+                                <?php endif; ?>
+                            </ul>
+                        </nav>
+                        <div class="text-center text-muted mt-2">
+                            <?= __('Page %{1} of %{2}', [$currentPage, $totalPages]) ?>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function issueNewInvoice() {
+    window.location.href = '<?= htmlspecialchars($invoiceIssueUrl) ?>';
+}
+
+function exportInvoices() {
+    window.location.href = '<?= $this->getBackendUrl('*/backend/invoice/export') ?>';
+}
+</script>
