@@ -78,8 +78,16 @@ class SourceItemManagementService
 
     public function updateSourceItem(int $sourceItemId, array $payload): SourceItem
     {
-        $quantity = (float) ($payload['quantity'] ?? 0);
-        $threshold = (int) ($payload['low_stock_threshold'] ?? 0);
+        $rawQuantity = $payload['quantity'] ?? 0;
+        $rawThreshold = $payload['low_stock_threshold'] ?? 0;
+        if (!is_numeric($rawQuantity)) {
+            throw new \InvalidArgumentException((string) __('Quantity must be a valid number.'));
+        }
+        if (!is_numeric($rawThreshold)) {
+            throw new \InvalidArgumentException((string) __('Low stock threshold must be a valid integer.'));
+        }
+        $quantity = (float) $rawQuantity;
+        $threshold = (int) $rawThreshold;
 
         if ($sourceItemId <= 0) {
             throw new \InvalidArgumentException((string) __('Invalid source item id.'));
