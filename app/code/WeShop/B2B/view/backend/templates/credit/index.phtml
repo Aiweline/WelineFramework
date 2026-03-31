@@ -1,0 +1,61 @@
+<?php
+/** @var array $items */
+/** @var array $pagination */
+$items = $this->getData('items') ?? [];
+$pagination = $this->getData('pagination') ?? [];
+$creditSaveUrl = (string) ($this->getData('creditSaveUrl') ?? '');
+$creditIndexUrl = (string) ($this->getData('creditIndexUrl') ?? '');
+?>
+<div class="container-fluid py-3">
+    <h1 class="h3 mb-3"><?= __('B2B Credit Lines') ?></h1>
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <h2 class="h5"><?= __('Set credit limit') ?></h2>
+            <form method="post" action="<?= htmlspecialchars($creditSaveUrl, ENT_QUOTES) ?>" class="row g-2 align-items-end" data-e2e="weshop-b2b-credit-limit-form">
+                <input type="hidden" name="back_url" value="<?= htmlspecialchars($creditIndexUrl, ENT_QUOTES) ?>">
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Customer ID') ?></label>
+                    <input type="number" name="customer_id" class="form-control" required min="1">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Credit limit') ?></label>
+                    <input type="number" step="0.01" name="credit_limit" class="form-control" required min="0">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label"><?= __('Credit level') ?></label>
+                    <input type="text" name="credit_level" class="form-control" placeholder="A/B/C">
+                </div>
+                <div class="col-md-3">
+                    <button type="submit" class="btn btn-primary"><?= __('Save') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+            <tr>
+                <th><?= __('Customer ID') ?></th>
+                <th><?= __('Limit') ?></th>
+                <th><?= __('Used') ?></th>
+                <th><?= __('Available') ?></th>
+                <th><?= __('Status') ?></th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($items as $row): ?>
+                <?php if (!is_array($row)) {
+                    continue;
+                } ?>
+                <tr>
+                    <td><?= (int) ($row['customer_id'] ?? 0) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['credit_limit'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['used_credit'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['available_credit'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= ((int) ($row['status'] ?? 0) === 1) ? __('Active') : __('Frozen') ?></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
