@@ -53,8 +53,8 @@ $sourceAddUrl = (string) ($this->getData('sourceAddUrl') ?? $this->getBackendUrl
                                     </a>
                                     <form method="post"
                                           action="<?= $this->getBackendUrl('*/backend/inventory/source/delete', ['id' => $sourceId]) ?>"
-                                          class="d-inline"
-                                          onsubmit="return confirm('<?= addslashes((string) __('Delete this inventory source?')) ?>');">
+                                          class="d-inline inventory-source-delete-form"
+                                          data-confirm-message="<?= htmlspecialchars((string) __('Delete this inventory source?'), ENT_QUOTES) ?>">
                                         <button type="submit" class="btn btn-sm btn-outline-danger"><?= __('Delete') ?></button>
                                     </form>
                                 </td>
@@ -73,3 +73,31 @@ $sourceAddUrl = (string) ($this->getData('sourceAddUrl') ?? $this->getBackendUrl
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    document.addEventListener('DOMContentLoaded', function () {
+        var forms = document.querySelectorAll('form.inventory-source-delete-form');
+        forms.forEach(function (form) {
+            form.addEventListener('submit', function (e) {
+                // Prevent double-submit when we re-submit programmatically after confirmation.
+                if (form.dataset.confirmed === '1') return;
+                e.preventDefault();
+
+                if (typeof BackendConfirm === 'undefined') {
+                    form.dataset.confirmed = '1';
+                    form.submit();
+                    return;
+                }
+
+                var msg = form.dataset.confirmMessage || '';
+                BackendConfirm.show(msg, { type: 'warning' }).then(function (confirmed) {
+                    if (!confirmed) return;
+                    form.dataset.confirmed = '1';
+                    form.submit();
+                });
+            });
+        });
+    });
+})();
+</script>
