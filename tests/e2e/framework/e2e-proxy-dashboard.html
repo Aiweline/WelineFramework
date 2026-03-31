@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Weline E2E 代理 · 状态</title>
+  <style>
+    :root {
+      --backend-primary: #556ee6;
+      --backend-primary-hover: #485ec4;
+      --backend-bg: #f8f9fa;
+      --backend-card: #ffffff;
+      --backend-border: #e9ecef;
+      --backend-text: #495057;
+      --backend-muted: #74788d;
+      --backend-success: #34c38f;
+      --backend-danger: #f46a6a;
+      --backend-radius: 0.25rem;
+      --backend-shadow: 0 0.75rem 1.5rem rgba(18, 38, 63, 0.03);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      color: var(--backend-text);
+      background: var(--backend-bg);
+      min-height: 100vh;
+    }
+    .topbar {
+      background: var(--backend-card);
+      border-bottom: 1px solid var(--backend-border);
+      box-shadow: var(--backend-shadow);
+    }
+    .topbar-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1rem 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+    }
+    .brand-mark {
+      width: 2.25rem;
+      height: 2.25rem;
+      border-radius: var(--backend-radius);
+      background: linear-gradient(135deg, var(--backend-primary), #7b8fe8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.75rem;
+      letter-spacing: 0.02em;
+    }
+    .brand-title {
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: #212529;
+    }
+    .brand-sub {
+      font-size: 0.8125rem;
+      color: var(--backend-muted);
+      margin-top: 0.125rem;
+    }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 2.5rem;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .card {
+      background: var(--backend-card);
+      border: 1px solid var(--backend-border);
+      border-radius: calc(var(--backend-radius) + 0.125rem);
+      box-shadow: var(--backend-shadow);
+      padding: 1.125rem 1.25rem;
+    }
+    .card h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--backend-muted);
+    }
+    dl {
+      margin: 0;
+    }
+    dt {
+      font-size: 0.75rem;
+      color: var(--backend-muted);
+      margin-top: 0.5rem;
+    }
+    dt:first-child { margin-top: 0; }
+    dd {
+      margin: 0.15rem 0 0;
+      font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+      font-size: 0.8125rem;
+      word-break: break-all;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.65rem;
+      border-radius: 2rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .badge-ok {
+      background: rgba(52, 195, 143, 0.12);
+      color: #1e7e5e;
+    }
+    .badge-wait {
+      background: rgba(244, 106, 106, 0.12);
+      color: #c0392b;
+    }
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.45rem 0.9rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border-radius: var(--backend-radius);
+      text-decoration: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn-primary {
+      background: var(--backend-primary);
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: var(--backend-primary-hover);
+      color: #fff;
+    }
+    .btn-outline {
+      background: var(--backend-card);
+      border-color: var(--backend-border);
+      color: var(--backend-text);
+    }
+    .btn-outline:hover {
+      background: var(--backend-bg);
+      border-color: #ced4da;
+    }
+    .hint {
+      margin-top: 1.5rem;
+      padding: 1rem 1.25rem;
+      background: rgba(85, 110, 230, 0.06);
+      border: 1px solid rgba(85, 110, 230, 0.15);
+      border-radius: var(--backend-radius);
+      font-size: 0.8125rem;
+      color: var(--backend-muted);
+    }
+    .hint strong { color: var(--backend-primary); }
+    footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--backend-muted);
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-mark">E2E</div>
+        <div>
+          <div class="brand-title">Weline 端到端代理</div>
+          <div class="brand-sub">与后台默认主题色系一致 · 仅用于本地/CI 调试</div>
+        </div>
+      </div>
+      <div id="status-badge"></div>
+    </div>
+  </header>
+  <main class="wrap">
+    <div class="grid">
+      <section class="card">
+        <h2>代理</h2>
+        <dl id="proxy-dl"></dl>
+        <div class="actions">
+          <a class="btn btn-outline" href="/.well-known/weline-e2e/health" target="_blank" rel="noopener">健康检查 (纯文本)</a>
+        </div>
+      </section>
+      <section class="card">
+        <h2>目标运行时</h2>
+        <dl id="runtime-dl"></dl>
+      </section>
+      <section class="card">
+        <h2>路由前缀</h2>
+        <dl id="routes-dl"></dl>
+      </section>
+    </div>
+    <div class="card">
+      <h2>快捷链接</h2>
+      <div class="actions">
+        <a class="btn btn-primary" href="/.well-known/weline-e2e/runtime.json" target="_blank" rel="noopener">runtime.json</a>
+        <a class="btn btn-outline" id="link-target" href="#" target="_blank" rel="noopener">打开目标 origin</a>
+      </div>
+      <p class="hint">
+        <strong>Playwright</strong> 的 <code>webServer</code> 依赖 <code>/.well-known/weline-e2e/health</code> 返回 <strong>200</strong>；
+        完整数据见 <code>runtime.json</code>。执行测试：<code>node tests/e2e/start.js</code> 或 <code>npx playwright test</code>（在 <code>tests/e2e</code> 目录）。
+      </p>
+    </div>
+    <footer>WelineFramework · E2E Proxy Dashboard</footer>
+  </main>
+  <script type="application/json" id="weline-e2e-runtime">__E2E_RUNTIME_JSON__</script>
+  <script>
+    (function () {
+      var el = document.getElementById('weline-e2e-runtime');
+      var data = {};
+      try {
+        data = JSON.parse(el.textContent);
+      } catch (e) {
+        data = { parseError: String(e.message) };
+      }
+      var rt = data.runtime || {};
+      var proxy = data.proxy || {};
+      var routes = data.routes || {};
+      var paths = data.paths || {};
+      var reachable = rt.reachable !== false;
+
+      var badge = document.getElementById('status-badge');
+      badge.innerHTML = reachable
+        ? '<span class="badge badge-ok"><span class="badge-dot"></span>目标可达</span>'
+        : '<span class="badge badge-wait"><span class="badge-dot"></span>等待目标</span>';
+
+      function addDl(container, pairs) {
+        pairs.forEach(function (p) {
+          var dt = document.createElement('dt');
+          dt.textContent = p[0];
+          var dd = document.createElement('dd');
+          dd.textContent = p[1] == null ? '—' : String(p[1]);
+          container.appendChild(dt);
+          container.appendChild(dd);
+        });
+      }
+
+      addDl(document.getElementById('proxy-dl'), [
+        ['Origin', proxy.origin],
+        ['Scheme', proxy.scheme],
+        ['Host:Port', (proxy.host || '') + ':' + (proxy.port || '')],
+      ]);
+      addDl(document.getElementById('runtime-dl'), [
+        ['Target origin', rt.target_origin],
+        ['来源', rt.source],
+        ['实例', rt.instance_name || '—'],
+        ['SSL', rt.ssl_enabled ? '是' : '否'],
+      ]);
+      addDl(document.getElementById('routes-dl'), [
+        ['后台前缀 (PC)', routes.backend],
+        ['前台 REST 前缀', routes.rest_frontend],
+        ['后台 REST 前缀', routes.rest_backend],
+        ['frontend_api_prefix_path', paths.frontend_api_prefix_path],
+      ]);
+
+      var targetLink = document.getElementById('link-target');
+      if (rt.target_origin) {
+        targetLink.href = rt.target_origin;
+      } else {
+        targetLink.style.opacity = '0.5';
+        targetLink.setAttribute('aria-disabled', 'true');
+      }
+    })();
+  </script>
+</body>
+</html>
