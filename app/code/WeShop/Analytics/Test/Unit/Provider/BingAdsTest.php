@@ -28,6 +28,15 @@ class BingAdsTest extends TestCase
         self::assertSame('', $snippets['footer']);
     }
 
+    public function testGetPixelCodeSanitizesUetTagIdInSnippet(): void
+    {
+        $provider = new BingAds("1234\");alert(1);//", 'token', true);
+        $snippet = $provider->getPixelCode();
+
+        self::assertStringContainsString('ti: "1234alert1"', $snippet);
+        self::assertStringNotContainsString('alert(', $snippet);
+    }
+
     public function testGetPixelCodeReturnsEmptyWhenDisabled(): void
     {
         $provider = new BingAds('12345678', 'token', false);
