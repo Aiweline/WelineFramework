@@ -2,6 +2,10 @@
 RMA已批准,RMA已批准
 "RMA ID is required.","RMA ID 不能为空。"
 "RMA has been rejected.","RMA 已拒绝。"
+"RMA record not found.","未找到 RMA 记录。"
+Pending,待处理
+Approved,已批准
+Rejected,已拒绝
 "Order ID is required.","订单 ID 不能为空。"
 "Order and reason are required.",订单和原因不能为空。
 "You do not have access to this order.",您无权访问该订单。
@@ -16,11 +20,45 @@ Exchange,换货
 "Changed my mind",改变主意
 Other,其他
 "Return reason is required.",退货原因不能为空。
-"RMA record not found.","未找到 RMA 记录。"
+"RMA Management","RMA 管理"
+"RMA Detail","RMA 详情"
 After-Sales,售后服务
 "Open RMA","打开 RMA"
 "Requests Submitted",已提交申请
 "Manage Return Requests",管理退换货申请
+WeShop,WeShop
+"Total RMA Requests","RMA 申请总数"
+"No RMA Requests","暂无 RMA 申请"
+ID,ID
+"Order ID","Order ID"
+"Customer ID","客户 ID"
+Reason,Reason
+Status,状态
+"Created At",创建时间
+Actions,Actions
+"Search by Order ID...",按订单ID搜索...
+"All Status",全部状态
+Search,Search
+"Clear Filter",清除筛选
+"View Detail",查看详情
+"Are you sure you want to approve this RMA request?","确定要批准此 RMA 申请吗？"
+Approve,批准
+"Are you sure you want to reject this RMA request?","确定要拒绝此 RMA 申请吗？"
+Reject,拒绝
+Detail,Detail
+"RMA ID","RMA ID"
+"Back to List",返回列表
+"RMA Information","RMA 信息"
+"Updated At",更新时间
+"Reason & Description",原因与描述
+Description,Description
+"Audit Trail",审计跟踪
+"RMA Request Submitted","RMA 申请已提交"
+"RMA Approved","RMA 已批准"
+"RMA Rejected","RMA 已拒绝"
+"Quick Actions",快捷操作
+"Approve RMA","批准 RMA"
+"Reject RMA","拒绝 RMA"
 "Returns Center","Returns Center"
 "Back To Orders","Back To Orders"
 "Account Center","Account Center"
@@ -30,12 +68,9 @@ After-Sales,售后服务
 "Choose an order from your order list to start a request instantly.","Choose an order from your order list to start a request instantly."
 "New Request","New Request"
 "Submit Return / Exchange","Submit Return / Exchange"
-"Order ID","Order ID"
 "Input your order id","Input your order id"
 "Request Type","Request Type"
-Reason,Reason
 "Select a reason","Select a reason"
-Description,Description
 "Tell us more details about your request","Tell us more details about your request"
 "Submit Request","Submit Request"
 "Request Timeline","Request Timeline"
