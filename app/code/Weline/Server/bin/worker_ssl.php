@@ -502,6 +502,14 @@ try {
     w_log_error('[WLS Worker SSL] Bootstrap error: ' . $e->getMessage());
 }
 
+// ========== Fiber 调度器初始化（确保 SSE/长任务不阻塞主循环） ==========
+$fiberScheduler = new \Weline\Server\Scheduler\FiberScheduler();
+\Weline\Server\Observer\SchedulerWaitObserver::setScheduler($fiberScheduler);
+\Weline\Framework\Runtime\SchedulerSystem::enableScheduler();
+$longLivedProtocolResolver = new \Weline\Server\Service\Protocol\LongLived\ProtocolResolver();
+$activeFibers = [];
+WlsLogger::info_("Fiber 调度器已初始化");
+
 // ========== WLS 内存缓存配置（智能模式） ==========
 // 读取 env 配置中的 WLS 缓存配置
 $wlsCacheConfig = [];
@@ -1233,7 +1241,8 @@ if ($controlPort > 0) {
         $identity,
         $handler,
         $ipcSelfTag,
-        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
+        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE),
+        $instanceName
     );
     if ($kernel->connectAndRegister($controlPort)) {
         $ipcClient = $kernel->getClient();
@@ -1259,19 +1268,33 @@ $activeRequests = 0; // 正在处理的请求数
 $requestBuffers = [];
 $connectionLastActivity = []; // 连接最后活动时间（用于超时清理）
 $requestLogged = []; // 记录已输出日志的连接（前端模式使用）
-$writeBuffers = []; // H4: 应用层发送缓冲区（Workerman 方案）
-$writableConnections = []; // H4: 需要监听可写事件的连接
-$pendingPeek = []; // H12: 等待 peek 首包的连接（非阻塞协议检测）
-$pendingPeekStartTimes = []; // H12: peek 开始时间（用于超时检测）
-$pendingHandshakes = []; // H5: 正在进行 SSL 握手的连接
-$pendingClose = []; // H11: 待关闭的连接（缓冲区发送完再关闭）
-$handshakeStartTimes = []; // H5: 握手开始时间（用于超时检测）
+$writeBuffers = [];
+$writableConnections = [];
+$pendingPeek = [];
+$pendingPeekStartTimes = [];
+$pendingHandshakes = [];
+$pendingClose = [];
+$handshakeStartTimes = [];
 $startTime = \time(); // 记录启动时间
 
 // Keep-Alive 连接超时配置（秒）
 $keepAliveTimeout = 60; // 默认 60 秒空闲超时
 $connectionTimeoutCheckInterval = 5; // 每 5 秒检查一次超时连接
 $lastTimeoutCheck = \time();
+if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
+    $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
+    $env = \is_array($env) ? $env : [];
+    $wls = \is_array($env['wls'] ?? null) ? $env['wls'] : [];
+    $wlsServers = \is_array($wls['servers'] ?? null) ? $wls['servers'] : [];
+    $wlsInstance = \is_array($wlsServers[$instanceName] ?? null) ? $wlsServers[$instanceName] : [];
+    $configuredKeepAliveTimeout = $wlsInstance['keep_alive_timeout'] ?? $wls['keep_alive_timeout'] ?? null;
+    if (\is_numeric($configuredKeepAliveTimeout)) {
+        $configuredKeepAliveTimeout = (int)$configuredKeepAliveTimeout;
+        if ($configuredKeepAliveTimeout > 0) {
+            $keepAliveTimeout = $configuredKeepAliveTimeout;
+        }
+    }
+}
 
 // 重载日志输出函数
 $logReload = function (string $method) use ($workerId, $instanceName) {
@@ -1305,7 +1328,7 @@ $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$re
     // 关闭所有连接（仅对有效 stream 调用 fclose，避免已关闭或无效 resource 导致 TypeError）
     foreach ($connections as $conn) {
         if (\is_resource($conn) && \get_resource_type($conn) === 'stream') {
-            @\fclose($conn);
+            safeCloseStream($conn);
         }
     }
     if (\is_resource($socket) && \get_resource_type($socket) === 'stream') {
@@ -1502,7 +1525,6 @@ while (true) {
             
             // 如果连接空闲时间超过超时时间，关闭连接
             if ($idleTime >= $keepAliveTimeout) {
-                // H12: 修复 Content-Length mismatch - 超时清理前检查写缓冲区
                 // 如果缓冲区有数据，说明还在发送响应，不能关闭连接
                 $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
                 if ($hasBufferedData) {
@@ -1511,7 +1533,9 @@ while (true) {
                     if ($idleTime >= $keepAliveTimeout * 3) {
                         // 超过 3 倍超时时间仍未发送完成，强制关闭（防止僵尸连接）
                         WlsLogger::warning_("连接超时且缓冲区有数据，强制关闭 (connId: {$connId}, 剩余: " . \strlen($writeBuffers[$connId]) . " 字节)");
-                        @\fclose($conn);
+                        if (\is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                            safeCloseStream($conn);
+                        }
                         unset($connections[$connId]);
                         unset($requestBuffers[$connId]);
                         unset($connectionLastActivity[$connId]);
@@ -1522,8 +1546,10 @@ while (true) {
                     }
                     continue; // 跳过正常超时关闭
                 }
-                
-                @\fclose($conn);
+
+                if (\is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                    safeCloseStream($conn);
+                }
                 unset($connections[$connId]);
                 unset($requestBuffers[$connId]);
                 unset($connectionLastActivity[$connId]);
@@ -1555,7 +1581,6 @@ while (true) {
         }
     }
     
-    // H12: 将等待 peek 的连接加入监听列表（非阻塞协议检测）
     $pendingPeekConns = [];
     foreach ($pendingPeek as $connId => $info) {
         if (\is_resource($info['conn']) && \get_resource_type($info['conn']) === 'stream') {
@@ -1566,7 +1591,6 @@ while (true) {
         }
     }
     
-    // H5: 将握手进行中的连接也加入监听列表
     // 同时验证所有资源是否仍然有效（防止 stream_select 错误）
     $pendingConns = [];
     foreach ($pendingHandshakes as $connId => $info) {
@@ -1609,7 +1633,6 @@ while (true) {
     if ($socket && \is_resource($socket)) {
         $readSockets[] = $socket; // 监听 socket（排水后已关闭则不加入）
     }
-    // H12: 加入待 peek 的连接（监听首包到达）
     $readSockets = \array_merge($readSockets, $validConnections, $pendingConns, $pendingPeekConns);
     
     // 加入 IPC 控制 socket
@@ -1619,11 +1642,54 @@ while (true) {
     }
     
     $read = $readSockets;
-    // H4: 保留 connId 键，避免 stream_select 修改 $write 后与 writeConnIdMap 错位
     $write = $validWritableConnections;
     $except = [];
     
-    $changed = @\stream_select($read, $write, $except, 0, 100000);
+    // Fiber 调度器感知：有到期定时器时缩短 select 超时
+    $selectTimeoutSec = 0;
+    $selectTimeoutUsec = 100000;
+    $nextDelay = $fiberScheduler->getNextTimerDelay();
+    if ($nextDelay !== null) {
+        $delayUsec = (int)($nextDelay * 1_000_000);
+        if ($delayUsec < $selectTimeoutUsec) {
+            $selectTimeoutUsec = \max(0, $delayUsec);
+        }
+    }
+    $changed = @\stream_select($read, $write, $except, $selectTimeoutSec, $selectTimeoutUsec);
+
+    // 先 tick，避免 sleep/usleep 挂起的 Fiber 饿死
+    $fiberScheduler->tick(function (\Fiber $fiber) use (&$activeFibers): void {
+        foreach ($activeFibers as $afData) {
+            if (($afData['fiber'] ?? null) === $fiber && isset($afData['context'])) {
+                $afData['context']->restore();
+                return;
+            }
+        }
+    });
+    foreach ($activeFibers as $afConnId => $afData) {
+        $af = $afData['fiber'] ?? null;
+        if (!($af instanceof \Fiber)) {
+            unset($activeFibers[$afConnId]);
+            continue;
+        }
+        if ($af->isTerminated()) {
+            $fiberScheduler->unregisterFiber();
+            // SSE/流式请求：数据已在 Fiber 内逐步写出，不再二次写响应
+            if (isset($connections[$afConnId]) && \is_resource($afData['conn'] ?? null)) {
+                safeCloseStream($afData['conn']);
+                unset($connections[$afConnId], $requestBuffers[$afConnId], $connectionLastActivity[$afConnId], $requestLogged[$afConnId], $writeBuffers[$afConnId], $writableConnections[$afConnId]);
+            }
+            $activeRequests = \max(0, $activeRequests - 1);
+            \Weline\Framework\Http\Sse\SseContext::reset();
+            unset($activeFibers[$afConnId]);
+            continue;
+        }
+        if ($af->isSuspended()) {
+            $afData['context'] = \Weline\Framework\Runtime\WlsFiberContext::capture();
+            $afData['suspended_at'] = \time();
+            $activeFibers[$afConnId] = $afData;
+        }
+    }
     
     if ($changed === false) {
         // stream_select 失败，可能是资源问题，记录错误但继续
@@ -1631,6 +1697,18 @@ while (true) {
         WlsLogger::warning_("stream_select 失败: " . ($error['message'] ?? 'unknown'));
         continue;
     }
+
+    // Fiber tick 已可能让 SSE 等长连接向 writeBuffers 追加数据；若等到本轮末尾才 fwrite，
+    // 中间批量 fread 其它连接时同 Worker 上的静态资源会长时间 Pending（头阻塞）。
+    wlsSslFlushQueuedWrites(
+        $writableConnections,
+        $writeBuffers,
+        $connections,
+        $requestBuffers,
+        $connectionLastActivity,
+        $requestLogged,
+        $pendingClose
+    );
     
     // 处理 IPC 控制通道消息
     if ($ipcSocket && \in_array($ipcSocket, $read, true)) {
@@ -1649,7 +1727,6 @@ while (true) {
                 WlsLogger::info_("新连接: {$peerName} (connId: {$connId})");
             }
             
-            // H12: 延迟 SSL 模式下完全非阻塞处理（解决 Windows SSL 握手慢问题）
             if ($deferSsl) {
                 // 设置非阻塞模式，将连接加入 pendingPeek 队列等待首包
                 \stream_set_blocking($conn, false);
@@ -1671,7 +1748,6 @@ while (true) {
         unset($read[$key]);
     }
     
-    // H12: 处理等待 peek 首包的连接（非阻塞协议检测）
     $peekTimeout = 5.0; // 5 秒 peek 超时（比握手超时一致）
     $completedPeeks = [];
     $failedPeeks = [];
@@ -1737,7 +1813,8 @@ while (true) {
                     $raw .= $chunk;
                 }
                 $path = '/';
-                $redirectHost = $host . ':' . $port;
+                $redirectHost = $host;
+                $redirectPort = 443;
                 if (\preg_match('/^\w+\s+(\S+)\s+/', $raw, $m)) {
                     $path = \parse_url($m[1], \PHP_URL_PATH);
                     if ($path === false || $path === null) {
@@ -1750,25 +1827,29 @@ while (true) {
                 if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $raw, $h)) {
                     $redirectHost = \trim($h[1]);
                 }
+                if (\strpos($redirectHost, ':') !== false) {
+                    [$hostOnly, $hostPort] = \explode(':', $redirectHost, 2);
+                    $redirectHost = $hostOnly;
+                    if (\ctype_digit($hostPort)) {
+                        $redirectPort = (int)$hostPort;
+                    }
+                }
 
-                $hostOnly = \strtolower(\explode(':', $redirectHost)[0]);
+                $hostOnly = \strtolower($redirectHost);
                 $policy = _getDomainPolicy($hostOnly);
 
                 if ($policy['force_https'] === 1) {
-                    $redirectPort = (int) $port;
-                    if (\strpos($redirectHost, ':') !== false) {
+                    if ($redirectPort === 443) {
                         $redirectUrl = "https://{$redirectHost}{$path}";
                     } else {
-                        $redirectUrl = ($redirectPort === 443)
-                            ? "https://{$redirectHost}{$path}"
-                            : "https://{$redirectHost}:{$redirectPort}{$path}";
+                        $redirectUrl = "https://{$redirectHost}:{$redirectPort}{$path}";
                     }
 
                     if ($policy['force_root_to_www'] === 1) {
                         $hostParts = \explode('.', $hostOnly);
                         if (\count($hostParts) === 2) {
                             $wwwHost = 'www.' . $hostOnly;
-                            $redirectUrl = ($redirectPort === 443 || \strpos($redirectHost, ':') !== false)
+                            $redirectUrl = ($redirectPort === 443)
                                 ? "https://{$wwwHost}{$path}"
                                 : "https://{$wwwHost}:{$redirectPort}{$path}";
                         }
@@ -1777,12 +1858,14 @@ while (true) {
                     $body = '';
                     $response = "HTTP/1.1 301 Moved Permanently\r\nLocation: {$redirectUrl}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
                     @\fwrite($conn, $response);
-                    @\fclose($conn);
+                    safeCloseStream($conn);
                     $completedPeeks[] = $connId;
                     continue;
                 }
                 // force_https disabled: close plain HTTP (HTTPS-only port cannot serve HTTP)
-                @\fclose($conn);
+                if (\is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                    safeCloseStream($conn);
+                }
                 $completedPeeks[] = $connId;
                 continue;
             }
@@ -1830,6 +1913,7 @@ while (true) {
             $pendingHandshakes[$connId] = [
                 'conn' => $conn,
                 'peerName' => $peerName,
+                'phase' => 'pending',
             ];
             $handshakeStartTimes[$connId] = \microtime(true);
             $connections[$connId] = $conn;
@@ -1840,7 +1924,7 @@ while (true) {
             // 握手失败
             $error = \error_get_last();
             $errorMsg = $error['message'] ?? 'unknown';
-            WlsLogger::warning_("SSL 握手失败: {$peerName} (connId: {$connId}) - {$errorMsg}");
+            logSslHandshakeFailure($peerName, $connId, $errorMsg);
             $failedPeeks[] = $connId;
         }
     }
@@ -1860,7 +1944,6 @@ while (true) {
         unset($pendingPeekStartTimes[$connId]);
     }
     
-    // H5: 处理握手进行中的连接（非阻塞继续握手）
     $handshakeTimeout = 5.0; // 5秒握手超时
     $completedHandshakes = [];
     $failedHandshakes = [];
@@ -1894,7 +1977,7 @@ while (true) {
             $error = \error_get_last();
             $errorMsg = $error['message'] ?? 'unknown';
             $failedHandshakes[] = $connId;
-            WlsLogger::warning_("SSL 握手失败: {$peerName} (connId: {$connId}) - {$errorMsg}");
+            logSslHandshakeFailure($peerName, $connId, $errorMsg);
         }
     }
     
@@ -1921,30 +2004,26 @@ while (true) {
     foreach ($read as $conn) {
         $connId = \get_resource_id($conn);
         
-        // H12: 跳过等待 peek 的连接（协议检测阶段）
         if (isset($pendingPeek[$connId])) {
             continue;
         }
         
-        // H5: 跳过握手进行中的连接
         if (isset($pendingHandshakes[$connId])) {
             continue;
         }
         
-        // H5: 跳过已经被清理的连接（握手失败后被移除）
         if (!isset($connections[$connId])) {
             continue;
         }
         
         $data = @\fread($conn, 65535);
         
-        // H7: 修复非阻塞流空数据判断
         // fread 返回 false 表示错误
         // fread 返回空字符串只表示暂无数据（非阻塞模式），不是连接关闭
         // 需要用 feof() 检查连接是否真正关闭
         if ($data === false) {
             // 读取错误，关闭连接
-            @\fclose($conn);
+            safeCloseStream($conn);
             unset($connections[$connId]);
             unset($requestBuffers[$connId]);
             unset($connectionLastActivity[$connId]);
@@ -1958,7 +2037,7 @@ while (true) {
             // 暂无数据，检查连接是否已关闭
             if (\feof($conn)) {
                 // 连接已关闭
-                @\fclose($conn);
+                safeCloseStream($conn);
                 unset($connections[$connId]);
                 unset($requestBuffers[$connId]);
                 unset($connectionLastActivity[$connId]);
@@ -2038,7 +2117,7 @@ while (true) {
                     $_body = '';
                     $_resp = "HTTP/1.1 301 Moved Permanently\r\nLocation: {$_wwwUrl}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
                     @\fwrite($conn, $_resp);
-                    @\fclose($conn);
+                    safeCloseStream($conn);
                     unset($connections[$connId], $connectionLastActivity[$connId], $requestBuffers[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId]);
                     $activeRequests--;
                     continue;
@@ -2048,6 +2127,39 @@ while (true) {
 
         // 设置 SSE 上下文（让控制器可以直接写入连接）
         \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
+        \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
+        $longLivedDetection = $longLivedProtocolResolver->detect($rawRequest);
+        $isLongLivedProtocolRequest = $longLivedDetection['is_long_lived'] ?? false;
+        $requestProtocol = (string)($longLivedDetection['protocol'] ?? 'http');
+        $isSseProtocolRequest = ($requestProtocol === 'sse');
+        if ($isSseProtocolRequest) {
+            \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
+                static function (string $data) use (
+                    $connId,
+                    $conn,
+                    &$connections,
+                    &$requestBuffers,
+                    &$connectionLastActivity,
+                    &$requestLogged,
+                    &$writeBuffers,
+                    &$writableConnections,
+                    &$pendingClose
+                ): void {
+                    enqueueSseWriteAndAwaitDrain(
+                        $connId,
+                        $conn,
+                        $data,
+                        $connections,
+                        $requestBuffers,
+                        $connectionLastActivity,
+                        $requestLogged,
+                        $writeBuffers,
+                        $writableConnections,
+                        $pendingClose
+                    );
+                }
+            );
+        }
         
         // 诊断：进入 handleRequest 前打点（若此后无「即将写回响应」则说明 handleRequest 阻塞）
         $uriForLog = '/';
@@ -2056,6 +2168,99 @@ while (true) {
         }
         WlsLogger::info_("Worker 开始处理请求 connId={$connId} uri=" . (\strlen($uriForLog) > 80 ? \substr($uriForLog, 0, 80) . '...' : $uriForLog));
         $handleStartTime = \microtime(true);
+
+        // HTTPS Worker 下长连接协议必须走 Fiber（SSE/WebSocket 等），避免同步路径阻塞主循环。
+        if ($isLongLivedProtocolRequest) {
+            $layer = (string)($longLivedDetection['layer'] ?? 'unknown');
+            $protocol = (string)($longLivedDetection['protocol'] ?? 'long-lived');
+            WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
+            $fiberConnId = $connId;
+            $fiberConn = $conn;
+            $fiberRawRequest = $rawRequest;
+            $requestFiber = new \Fiber(function () use (
+                $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
+                $requestCount, &$activeRequests, &$connections, $startTime,
+                $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal,
+                $WLS_UOPZ_EXIT_GUARD
+            ) {
+                try {
+                    return handleRequest(
+                        $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
+                        $requestCount, $activeRequests, \count($connections), $startTime,
+                        $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal
+                    );
+                } catch (\Weline\Framework\Runtime\RequestExitException $e) {
+                    throw $e;
+                } catch (\Error $e) {
+                    if ($WLS_UOPZ_EXIT_GUARD && \str_contains($e->getMessage(), 'uopz')) {
+                        WlsLogger::warning_('SSL Worker：exit()/die() 已由 uopz 拦截');
+                        return "HTTP/1.1 500 Internal Server Error\r\nContent-Type: text/plain; charset=UTF-8\r\n"
+                            . "Connection: close\r\nContent-Length: 52\r\n\r\n"
+                            . "Internal error: exit()/die() not allowed in WLS request\n";
+                    }
+                    throw $e;
+                }
+            });
+            $fiberScheduler->registerFiber();
+            try {
+                $requestFiber->start();
+            } catch (\Weline\Framework\Runtime\RequestExitException) {
+            } catch (\Throwable $e) {
+                WlsLogger::error_("长连接请求 Fiber 启动异常: " . $e->getMessage());
+            }
+
+            if ($requestFiber->isTerminated()) {
+                $fiberScheduler->unregisterFiber();
+                $response = (string)($requestFiber->getReturn() ?? '');
+                $handleDurationMs = (\microtime(true) - $handleStartTime) * 1000;
+                $response = injectWlsProcessTimeHeader($response, $handleDurationMs);
+                // 仅按当前请求判定 SSE，避免并发请求共享上下文导致误判
+                $isSseMode = $isSseProtocolRequest;
+                $activeRequests = \max(0, $activeRequests - 1);
+                if (!$isSseMode && $response !== '') {
+                    // 长链被误判或快速返回时，仍需把响应完整写回，避免 ERR_EMPTY_RESPONSE
+                    $responseLen = \strlen($response);
+                    $writtenTotal = 0;
+                    $maxRetries = 1000;
+                    $retries = 0;
+                    $streamOk = \is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
+                    if (!$streamOk) {
+                        WlsLogger::warning_("长链终止写回时连接已失效，跳过写回 (connId: {$connId})");
+                    }
+                    while ($streamOk && $writtenTotal < $responseLen && $retries < $maxRetries) {
+                        if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                            break;
+                        }
+                        $written = @\fwrite($conn, \substr($response, $writtenTotal));
+                        if ($written === false) {
+                            break;
+                        }
+                        if ($written === 0) {
+                            $retries++;
+                            // 写缓冲区满时使用协作式让步，避免阻塞 Worker 事件循环
+                            \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(1);
+                            continue;
+                        }
+                        $writtenTotal += $written;
+                        $retries = 0;
+                    }
+                }
+                \Weline\Framework\Http\Sse\SseContext::reset();
+                safeCloseStream($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId]);
+            } elseif ($requestFiber->isSuspended()) {
+                $activeFibers[$fiberConnId] = [
+                    'fiber' => $requestFiber,
+                    'conn' => $fiberConn,
+                    'context' => \Weline\Framework\Runtime\WlsFiberContext::capture(),
+                    'suspended_at' => \time(),
+                ];
+                WlsLogger::info_("长连接请求进入 Fiber 异步模式 (connId: {$connId})");
+            } else {
+                $activeRequests = \max(0, $activeRequests - 1);
+            }
+            continue;
+        }
         
         try {
             $response = handleRequest(
@@ -2084,6 +2289,16 @@ while (true) {
         if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
             $responseStatus = (int)$statusMatches[1];
         }
+        if ($responseStatus >= 500) {
+            $requestLine = '';
+            $requestUri = '';
+            if (\preg_match('/^([^\r\n]+)/', $rawRequest, $lineMatches)) {
+                $requestLine = (string)($lineMatches[1] ?? '');
+            }
+            if (\preg_match('/^\S+\s+(\S+)/', $requestLine, $uriMatches)) {
+                $requestUri = (string)($uriMatches[1] ?? '');
+            }
+        }
         $responseBytes = 0;
         $requestHost = getHeaderValue($rawRequest, 'Host') ?? '';
         if (\str_contains($requestHost, ':')) {
@@ -2097,10 +2312,12 @@ while (true) {
         WlsLogger::info_("Worker 即将写回响应 connId={$connId} len={$responseLenPre}");
         
         // 检查是否是 SSE 模式（如果是，响应已经流式发送，不需要再发送）
-        $isSseMode = \Weline\Framework\Http\Sse\SseContext::isSseEnabled();
+        // 仅按当前请求判定 SSE，避免并发请求共享上下文导致误判
+        $isSseMode = $isSseProtocolRequest;
         
         if (!$isSseMode) {
-            // H6+H10: 响应队列模式 - 高并发非阻塞
+            // 响应队列模式
+
             // 每个连接有自己的缓冲区（connId 级别隔离）
             // HTTP/1.1 Keep-Alive 要求同一连接上响应按顺序发送
             // 如果缓冲区已有数据，直接追加（保证顺序），由后续循环统一发送
@@ -2125,13 +2342,13 @@ while (true) {
             if (!$streamOk) {
                 unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId]);
                 \Weline\Framework\Http\Sse\SseContext::reset();
-                $activeRequests--;
                 continue;
             }
             
             // 立即尝试写入（最多重试几次，避免阻塞太久）
             $immediateRetries = 0;
             $maxImmediateRetries = 10; // 减少重试次数，提升并发
+            $immediateWriteStart = \microtime(true);
             
             while ($totalWritten < $responseLen && $immediateRetries < $maxImmediateRetries) {
                 $remaining = \substr($response, $totalWritten);
@@ -2139,7 +2356,7 @@ while (true) {
                 
                 if ($written === false) {
                     // 写入失败，可能连接已断开
-                    @\fclose($conn);
+                    safeCloseStream($conn);
                     unset($connections[$connId]);
                     unset($requestBuffers[$connId]);
                     unset($connectionLastActivity[$connId]);
@@ -2172,12 +2389,7 @@ while (true) {
             $writeBuffers[$connId] = \substr($response, $totalWritten);
             $writableConnections[$connId] = $conn;
             WlsLogger::info_("Worker 响应入队 connId={$connId} written={$totalWritten} total={$responseLen} remaining={$remainingBytes}");
-            
-            // 调试日志：追踪大响应的缓冲区状态
-            if ($responseLen > 100000) { // 大于 100KB 的响应
-                WlsLogger::debug_("大响应入缓冲区: connId={$connId}, 总长度={$responseLen}, 已写={$totalWritten}, 剩余={$remainingBytes}, URI=" . ($requestUri ?? 'unknown'));
-            }
-            
+
             goto skip_sync_write;
             
             // === 以下是旧的同步写入逻辑（已弃用，保留作为参考） ===
@@ -2191,7 +2403,7 @@ while (true) {
                 $elapsed = \microtime(true) - $writeStartTime;
                 if ($elapsed > $writeTimeout) {
                     WlsLogger::warning_("响应写入超时 (connId: {$connId})，已写入 {$totalWritten}/{$responseLen} 字节");
-                    @\fclose($conn);
+                    safeCloseStream($conn);
                     unset($connections[$connId]);
                     unset($requestBuffers[$connId]);
                     unset($connectionLastActivity[$connId]);
@@ -2211,7 +2423,7 @@ while (true) {
                 if ($selectResult === false) {
                     // stream_select 失败，放弃写入
                     WlsLogger::warning_("stream_select 失败 (connId: {$connId})");
-                    @\fclose($conn);
+                    safeCloseStream($conn);
                     unset($connections[$connId]);
                     unset($requestBuffers[$connId]);
                     unset($connectionLastActivity[$connId]);
@@ -2228,7 +2440,7 @@ while (true) {
                 
                 // 写入前确认 stream 仍有效（客户端可能已断开）
                 if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
-                    @\fclose($conn);
+                    safeCloseStream($conn);
                     unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
                     \Weline\Framework\Http\Sse\SseContext::reset();
                     continue 2;
@@ -2239,7 +2451,7 @@ while (true) {
                 
                 if ($written === false) {
                     WlsLogger::warning_("响应写入失败 (connId: {$connId})");
-                    @\fclose($conn);
+                    safeCloseStream($conn);
                     unset($connections[$connId]);
                     unset($requestBuffers[$connId]);
                     unset($connectionLastActivity[$connId]);
@@ -2260,7 +2472,7 @@ while (true) {
             
             if ($retries >= $maxRetries) {
                 WlsLogger::warning_("响应写入重试次数超限 (connId: {$connId})，已写入 {$totalWritten}/{$responseLen} 字节");
-                @\fclose($conn);
+                safeCloseStream($conn);
                 unset($connections[$connId]);
                 unset($requestBuffers[$connId]);
                 unset($connectionLastActivity[$connId]);
@@ -2269,7 +2481,7 @@ while (true) {
                 continue;
             }
             
-            skip_sync_write: // H4: goto 标签，跳过同步写入逻辑
+            skip_sync_write:
         } else {
             // SSE 模式：响应已流式发送，记录日志
             WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
@@ -2292,12 +2504,11 @@ while (true) {
             ));
         }
         
-        // H11: 修复 Content-Length mismatch - 只有缓冲区为空才能关闭连接
         // SSE 连接通常是长连接，但处理完成后应该关闭
         // 普通请求根据 Keep-Alive 决定
         $keepAlive = isKeepAlive($rawRequest);
         $shouldClose = $isSseMode || !$keepAlive || $ipcDraining; // 排水模式强制关闭连接，不保持 Keep-Alive
-        
+
         if ($shouldClose) {
             // 检查缓冲区是否为空
             $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
@@ -2307,7 +2518,7 @@ while (true) {
                 $pendingClose[$connId] = true;
             } else {
                 // 缓冲区为空，可以安全关闭
-                @\fclose($conn);
+                safeCloseStream($conn);
                 unset($connections[$connId]);
                 unset($requestBuffers[$connId]);
                 unset($connectionLastActivity[$connId]);
@@ -2318,88 +2529,16 @@ while (true) {
         }
     }
     
-    // H4: 处理可写连接（Workerman 风格的应用层缓冲区）
-    // H9: 修复 stream_select 重新索引数组导致 connId 错误的 bug
-    // stream_select 会把关联数组 [101 => $conn1] 变成 [0 => $conn1]
-    // PHP 8.4 不允许 (int)$resource 强制转换，必须用 get_resource_id()
-    foreach ($write as $conn) {
-        $connId = \get_resource_id($conn);  // PHP 8.0+ 获取资源 ID
-        
-        if (!isset($writeBuffers[$connId])) {
-            continue;
-        }
-
-        // H14: 优化大缓冲区发送 - 在一次事件循环中尽可能多地写入数据
-        // 这可以显著加速大文件的发送，避免 Content-Length mismatch
-        $initialBufferLen = \strlen($writeBuffers[$connId]);
-        $totalWrittenThisLoop = 0;
-        $maxWriteAttempts = 50; // 防止死循环
-        $writeAttempts = 0;
-        
-        while (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '' && $writeAttempts < $maxWriteAttempts) {
-            $writeAttempts++;
-            // 写入前确认 stream 仍有效（客户端可能已断开）
-            if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
-                @\fclose($conn);
-                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
-                break;
-            }
-            $buffer = $writeBuffers[$connId];
-            $bufferLen = \strlen($buffer);
-            
-            $written = @\fwrite($conn, $buffer);
-            
-            if ($written === false) {
-                // 写入失败，关闭连接并清理
-                WlsLogger::warning_("缓冲区写入失败 (connId: {$connId}, 剩余: {$bufferLen} 字节)");
-                @\fclose($conn);
-                unset($connections[$connId]);
-                unset($requestBuffers[$connId]);
-                unset($connectionLastActivity[$connId]);
-                unset($requestLogged[$connId]);
-                unset($writeBuffers[$connId]);
-                unset($writableConnections[$connId]);
-                unset($pendingClose[$connId]);
-                break;
-            }
-            
-            // H13: 即使 fwrite 返回 0（缓冲区满），也更新活动时间
-            $connectionLastActivity[$connId] = \time();
-            
-            if ($written === 0) {
-                // 缓冲区满，暂时无法写入更多数据，退出循环等待下次事件
-                break;
-            }
-            
-            $totalWrittenThisLoop += $written;
-            
-            // 更新缓冲区（移除已写入的数据）
-            $writeBuffers[$connId] = \substr($buffer, $written);
-            
-            // 如果缓冲区已空，移除可写监听
-            if ($writeBuffers[$connId] === '' || $writeBuffers[$connId] === false) {
-                unset($writeBuffers[$connId]);
-                unset($writableConnections[$connId]);
-                
-                // H11: 检查是否有待关闭的连接，缓冲区空了就可以关闭
-                if (isset($pendingClose[$connId])) {
-                    @\fclose($conn);
-                    unset($connections[$connId]);
-                    unset($requestBuffers[$connId]);
-                    unset($connectionLastActivity[$connId]);
-                    unset($requestLogged[$connId]);
-                    unset($pendingClose[$connId]);
-                }
-                break;
-            }
-        }
-        
-        // 调试日志：追踪大缓冲区的发送状态
-        if ($initialBufferLen > 100000 && $totalWrittenThisLoop > 0) {
-            $remainingLen = isset($writeBuffers[$connId]) ? \strlen($writeBuffers[$connId]) : 0;
-            WlsLogger::debug_("大缓冲区批量发送: connId={$connId}, 初始={$initialBufferLen}, 本轮写入={$totalWrittenThisLoop}, 剩余={$remainingLen}, 尝试次数={$writeAttempts}");
-        }
-    }
+    // 处理可写连接
+    wlsSslFlushQueuedWrites(
+        $writableConnections,
+        $writeBuffers,
+        $connections,
+        $requestBuffers,
+        $connectionLastActivity,
+        $requestLogged,
+        $pendingClose
+    );
     
     // 重置连续错误计数（本轮循环成功完成）
     $consecutiveErrors = 0;
@@ -2427,6 +2566,79 @@ while (true) {
         // 短暂休眠后继续（避免错误风暴）
         \Weline\Framework\Runtime\SchedulerSystem::usleep(10000); // 10ms
         continue;
+    }
+}
+
+/**
+ * 将 writeBuffers 中的数据写入 SSL 流（非阻塞 fwrite，单连接每轮最多尝试若干次）。
+ * 供事件循环在 Fiber tick 之后及早调用，减轻 SSE 与同 Worker 其它 HTTP 请求之间的写方向头阻塞。
+ *
+ * @param array<int|string, resource> $writableConnections
+ * @param array<int|string, string> $writeBuffers
+ */
+function wlsSslFlushQueuedWrites(
+    array &$writableConnections,
+    array &$writeBuffers,
+    array &$connections,
+    array &$requestBuffers,
+    array &$connectionLastActivity,
+    array &$requestLogged,
+    array &$pendingClose
+): void {
+    foreach ($writableConnections as $connId => $conn) {
+        if (!isset($writeBuffers[$connId]) || $writeBuffers[$connId] === '') {
+            continue;
+        }
+        if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+            unset($writeBuffers[$connId], $writableConnections[$connId]);
+            continue;
+        }
+
+        $initialBufferLen = \strlen($writeBuffers[$connId]);
+        $totalWrittenThisLoop = 0;
+        $maxWriteAttempts = 50;
+        $writeAttempts = 0;
+
+        while (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '' && $writeAttempts < $maxWriteAttempts) {
+            $writeAttempts++;
+            if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                safeCloseStream($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                break;
+            }
+            $buffer = $writeBuffers[$connId];
+            $bufferLen = \strlen($buffer);
+
+            $written = @\fwrite($conn, $buffer);
+
+            if ($written === false) {
+                WlsLogger::warning_("缓冲区写入失败 (connId: {$connId}, 剩余: {$bufferLen} 字节)");
+                safeCloseStream($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $writeBuffers[$connId], $writableConnections[$connId], $pendingClose[$connId]);
+                break;
+            }
+
+            $connectionLastActivity[$connId] = \time();
+
+            if ($written === 0) {
+                break;
+            }
+
+            $totalWrittenThisLoop += $written;
+            $writeBuffers[$connId] = \substr($buffer, $written);
+
+            if ($writeBuffers[$connId] === '' || $writeBuffers[$connId] === false) {
+                unset($writeBuffers[$connId]);
+                unset($writableConnections[$connId]);
+
+                if (isset($pendingClose[$connId])) {
+                    safeCloseStream($conn);
+                    unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId], $pendingClose[$connId]);
+                }
+                break;
+            }
+        }
+
     }
 }
 
@@ -2528,6 +2740,128 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
     $ms = \round($durationMs, 2);
     $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"\r\n";
     return \substr_replace($response, $headers, $pos + 2, 0);
+}
+
+/**
+ * 安全关闭 stream/socket 资源，避免重复关闭触发 warning。
+ */
+function safeCloseStream(mixed $conn): void
+{
+    if (!\is_resource($conn)) {
+        return;
+    }
+    if (!\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+        return;
+    }
+    try {
+        \fclose($conn);
+    } catch (\Throwable $e) {
+        // 连接关闭存在竞态（另一处分支已关闭），这里静默兜底，避免打断事件循环。
+        if (!\str_contains($e->getMessage(), 'supplied resource is not a valid stream resource')) {
+            throw $e;
+        }
+    }
+}
+
+/**
+ * 判断是否属于可预期的 TLS 握手失败（客户端主动中断、证书不信任等）。
+ */
+function isBenignSslHandshakeFailure(string $errorMsg): bool
+{
+    $msg = \strtolower($errorMsg);
+    $patterns = [
+        'certificate unknown',
+        'alert unknown ca',
+        'connection reset by peer',
+        'software caused connection abort',
+        '你的主机中的软件中止了一个已建立的连接',
+        'sslv3 alert certificate unknown',
+    ];
+
+    foreach ($patterns as $pattern) {
+        if (\str_contains($msg, $pattern)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * 统一记录握手失败日志：可预期失败降级为 info，保留关键告警信噪比。
+ */
+function logSslHandshakeFailure(string $peerName, int $connId, string $errorMsg): void
+{
+    $message = "SSL 握手失败: {$peerName} (connId: {$connId}) - {$errorMsg}";
+    if (isBenignSslHandshakeFailure($errorMsg)) {
+        WlsLogger::info_($message . ' [benign]');
+        return;
+    }
+
+    WlsLogger::warning_($message);
+}
+
+/**
+ * 将 SSE 数据接入 worker 现有的非阻塞写缓冲，并协作等待缓冲区排空。
+ */
+function enqueueSseWriteAndAwaitDrain(
+    int $connId,
+    mixed $conn,
+    string $data,
+    array &$connections,
+    array &$requestBuffers,
+    array &$connectionLastActivity,
+    array &$requestLogged,
+    array &$writeBuffers,
+    array &$writableConnections,
+    array &$pendingClose
+): void {
+    if ($data === '') {
+        return;
+    }
+
+    $streamOk = isset($connections[$connId])
+        && \is_resource($conn)
+        && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
+
+    if (!$streamOk) {
+        if (\is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+            safeCloseStream($conn);
+        }
+        unset(
+            $connections[$connId],
+            $requestBuffers[$connId],
+            $connectionLastActivity[$connId],
+            $requestLogged[$connId],
+            $writeBuffers[$connId],
+            $writableConnections[$connId],
+            $pendingClose[$connId]
+        );
+        return;
+    }
+
+    $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $data;
+    $writableConnections[$connId] = $conn;
+    $connectionLastActivity[$connId] = \time();
+
+    while (isset($connections[$connId]) && isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '') {
+        $streamStillOpen = \is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
+        if (!$streamStillOpen) {
+            unset(
+                $connections[$connId],
+                $requestBuffers[$connId],
+                $connectionLastActivity[$connId],
+                $requestLogged[$connId],
+                $writeBuffers[$connId],
+                $writableConnections[$connId],
+                $pendingClose[$connId]
+            );
+            return;
+        }
+
+        $connectionLastActivity[$connId] = \time();
+        \Weline\Framework\Runtime\SchedulerSystem::usleep(1000);
+    }
 }
 
 function handleRequest(
@@ -2742,7 +3076,7 @@ function handleRequest(
         
         $result = $runtime->handle($request);
         
-        // H9: 释放 PHP Session 文件锁，防止同一 Session 的后续请求被阻塞
+        // 释放 PHP Session 文件锁
         // 在 WLS 常驻进程模式下，session_start() 会锁定 session 文件
         // 必须在请求处理完成后立即释放锁，否则同一 session 的并发请求会被阻塞
         if (\session_status() === PHP_SESSION_ACTIVE) {
@@ -2782,17 +3116,12 @@ function handleRequest(
             return $result;
         }
         $result = \is_string($result) ? \trim($result) : (string) $result;
-        $statusCode = 200;
-        $first = \ltrim($result);
-        if (($first[0] ?? '') === '{') {
-            $decoded = \json_decode($result, true);
-            if (\is_array($decoded) && \array_key_exists('code', $decoded)) {
-                $code = (int) $decoded['code'];
-                if ($code >= 400 && $code < 600) {
-                    $statusCode = $code;
-                }
-            }
-        }
+        $pendingResponseStatus = $runtime->consumePendingResponseStatus();
+        $statusCode = (new \Weline\Server\Service\ResponseStatusResolver())->resolve(
+            $result,
+            $pendingResponseStatus['status_code'] ?? null,
+            (bool) ($pendingResponseStatus['explicit'] ?? false)
+        );
         $response = \Weline\Framework\Http\WlsResponse::fromContent($result, $statusCode);
         
         // WLS 模式核心：将 Runtime 保存的 Cookie/Header 合并进 HTTP 响应
@@ -2877,7 +3206,7 @@ function handleRequest(
         $response = new \Weline\Framework\Http\WlsResponse($errorBody, $statusCode);
         $response->setHeader('Content-Type', 'application/json; charset=utf-8');
         
-        // H9: 异常情况下也要释放 Session 锁
+        // 异常情况下也要释放 Session 锁
         if (\session_status() === PHP_SESSION_ACTIVE) {
             \session_write_close();
         }
@@ -3093,6 +3422,12 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
 
     $candidateUris = \array_values(\array_unique($candidateUris));
 
+    foreach ($candidateUris as $candidateUri) {
+        if (\Weline\Server\Service\StaticRequestBypassDecider::shouldDeferToFramework($candidateUri)) {
+            return null;
+        }
+    }
+
     // 查找文件位置（按优先级）
     $filename = null;
     foreach ($candidateUris as $candidateUri) {
@@ -3236,7 +3571,6 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     // 计算内容长度
     $contentLength = \strlen($content);
     
-    // H14: 验证内容长度与文件大小是否一致（诊断 Content-Length mismatch）
     if ($contentLength !== $fileSize && !$fromCache) {
         // 文件可能在读取过程中被修改，重新读取
         $content = @\file_get_contents($filename);
@@ -3246,7 +3580,6 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $contentLength = \strlen($content);
     }
     
-    // H13: 根据客户端请求设置正确的 Connection 头
     // HTTP/1.1 默认 keep-alive，除非客户端显式请求 close
     $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
     $hasCloseHeader = \stripos($rawRequest, 'Connection: close') !== false;
@@ -3262,14 +3595,11 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $response .= "Connection: {$connectionHeader}\r\n";
     // WLS 内存缓存状态标识（HIT=内存缓存命中, MISS=磁盘读取）
     $response .= "X-WLS-Static-Cache: " . ($fromCache ? 'HIT' : 'MISS') . "\r\n";
-    // H13: 添加文件大小调试头（帮助诊断 Content-Length mismatch）
     $response .= "X-WLS-File-Size: {$fileSize}\r\n";
-    // H14: 添加内容长度验证头
     $response .= "X-WLS-Content-Length: {$contentLength}\r\n";
     $response .= "\r\n";
     $response .= $content;
     
-    // H14: 最终验证响应完整性
     $expectedResponseLen = \strlen($response);
     $headerEndPos = \strpos($response, "\r\n\r\n");
     $actualBodyLen = $expectedResponseLen - $headerEndPos - 4;

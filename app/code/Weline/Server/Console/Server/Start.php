@@ -50,6 +50,16 @@ class Start extends CommandAbstract
      * 默认端口（80/443）被占用时的备用端口
      */
     public const DEFAULT_PORT_FALLBACK = 9981;
+
+    /**
+     * Worker 端口分配锁等待超时（秒）
+     */
+    private const WORKER_PORT_ALLOCATION_LOCK_TIMEOUT = 5;
+
+    /**
+     * 启动中实例的 worker 端口预留 TTL（秒）
+     */
+    private const WORKER_PORT_RESERVATION_TTL = 120;
     
     /**
      * 可用的进程控制函数
@@ -70,12 +80,25 @@ class Start extends CommandAbstract
      * 启动锁文件路径
      */
     private string $startLockFile = '';
+
+    /**
+     * Worker 端口分配锁句柄
+     */
+    private $workerPortAllocationLockHandle = null;
+
+    /**
+     * Worker 端口分配锁文件路径
+     */
+    private string $workerPortAllocationLockFile = '';
     
     /**
      * @inheritDoc
      */
     public function execute(array $args = [], array $data = [])
     {
+        // 欢迎语
+        $this->printWelcome();
+
         // --cli / -cli：强制使用 PHP 内置 CLI 服务器
         $useCli = isset($args['cli']);
         if (!$useCli) {
@@ -437,45 +460,19 @@ class Start extends CommandAbstract
         // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
         $workerSslEnabled = $sslEnabled;
         
-        // ========== HTTP Redirect：仅 HTTPS=443 时默认 80；非 443 不启独立 Worker（可配 http_redirect_port） ==========
+        // ========== HTTP Redirect：固定规则：仅 HTTPS=443 时启用 80；非 443 不启独立 Worker ==========
         $httpRedirectPort = 0;
-        $explicitRedirectPort = false;
         if ($sslEnabled) {
-            // 优先级：命令行参数 > 配置文件 > 自动计算
-            // 检查是否明确指定（命令行参数或配置文件中明确设置为 0 表示禁用）
-            $explicitRedirectPort = $config['http_redirect_port_explicit'] ?? false;
-            // 检查配置文件中是否明确设置了 http_redirect_port（包括 0）
-            $configHasRedirectPort = isset($config['http_redirect_port']);
-            $configRedirectPort = (int)($config['http_redirect_port'] ?? 0);
-            
-            if ($explicitRedirectPort) {
-                // 命令行明确指定（包括 0，表示禁用）
-                $httpRedirectPort = $configRedirectPort;
-                if ($httpRedirectPort === 0) {
-                    $this->printer->note(__('HTTP 重定向已禁用（--http-redirect-port 0）'));
-                }
-            } elseif ($configHasRedirectPort) {
-                // 配置文件明确指定（包括 0，表示禁用）
-                $httpRedirectPort = $configRedirectPort;
-                if ($httpRedirectPort === 0) {
-                    $this->printer->note(__('HTTP 重定向已禁用（wls.http_redirect_port = 0）'));
-                }
-            } else {
-                $httpRedirectPort = ($port === 443) ? 80 : 0;
-                if ($sslEnabled && $httpRedirectPort === 0 && $port !== 443) {
-                    $this->printer->note(__('HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS'));
-                }
-            }
-
-            if ($httpRedirectPort !== 0 && ($httpRedirectPort < 1 || $httpRedirectPort > 65535)) {
-                $this->printer->error(__('HTTP 重定向端口无效: %{1}', [$httpRedirectPort]));
-                $httpRedirectPort = ($port === 443) ? 80 : 0;
+            $httpRedirectPort = ($port === 443) ? 80 : 0;
+            if ($httpRedirectPort === 0) {
+                $this->printer->note(__('HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS'));
             }
         }
         
         // 主端口（Dispatcher 端口）被非框架进程占用时：
         // - 用户未指定 -p 且端口为 80/443（通用 web 端口，可能被宝塔/nginx 占用）→ 自动降级到 9981
         // - 用户指定了 -p 或降级端口 9981 也被占用 → 报错退出
+        $autoDowngradedFromDefaultPort = false;
         $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
         if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
             if (!$portExplicit && ($port === self::DEFAULT_PORT || $port === self::DEFAULT_PORT_HTTPS)) {
@@ -483,26 +480,25 @@ class Start extends CommandAbstract
                 $port = self::DEFAULT_PORT_FALLBACK;
                 $config['port'] = $port;
                 $httpRedirectPort = 0;
+                $autoDowngradedFromDefaultPort = true;
             }
             // 降级后的端口占用由下方统一处理：异常占用尝试自动切换，其他场景保持报错。
             $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
         }
 
-        if (($mainPortInspect['in_use'] ?? false)
-            && !($mainPortInspect['is_weline'] ?? false)
-            && !$portExplicit
-            && (($mainPortInspect['state'] ?? '') === 'orphan')
-        ) {
-            $fallbackPort = $this->findAvailableMainPort($port + 1);
-            if ($fallbackPort !== $port) {
+        $fallbackPort = $this->resolveOrphanMainPortFallback(
+            $port,
+            $portExplicit,
+            $autoDowngradedFromDefaultPort,
+            $mainPortInspect
+        );
+        if ($fallbackPort !== $port) {
                 $this->printer->warning(__('主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），已自动切换到 %{2}', [$port, $fallbackPort]));
                 $this->printer->note(__('自动切换仅对未显式指定端口的异常占用生效；启动成功后会记住新端口'));
                 $port = $fallbackPort;
                 $config['port'] = $port;
                 $mainPortInspect = Processer::inspectPortOccupantWithHistory($port);
             }
-        }
-
         if (($mainPortInspect['in_use'] ?? false) && !($mainPortInspect['is_weline'] ?? false)) {
             if (($mainPortInspect['state'] ?? '') === 'orphan') {
                 $this->printer->error(__('主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）', [$port]));
@@ -520,21 +516,40 @@ class Start extends CommandAbstract
             return;
         }
 
-        if ($dispatcherEnabled) {
-            $workerPort = $workerBasePort + $port;
-        } elseif ($useDirectMode) {
-            $workerPort = $port;
-        } else {
-            $workerPort = $workerBasePort + $port;
+        $reservedWorkerPorts = $this->getWorkerAllocationReservedPorts($port, $dispatcherEnabled);
+        $requiresWorkerPortAllocationLock = !$useDirectMode && $count > 1;
+        $workerPortAllocationLocked = false;
+        if ($requiresWorkerPortAllocationLock) {
+            if (!$this->acquireWorkerPortAllocationLock()) {
+                $this->printer->error(__('无法分配 Worker 端口：全局端口分配锁正被其他启动流程占用'));
+                $this->printer->note(__('请稍后重试，或等待其他实例启动完成'));
+                return;
+            }
+            $workerPortAllocationLocked = true;
         }
+
+        try {
+            if ($dispatcherEnabled) {
+                $workerPort = $workerBasePort + $port;
+            } elseif ($useDirectMode) {
+                $workerPort = $port;
+            } else {
+                $workerPort = $workerBasePort + $port;
+            }
 
         // Dispatcher 模式或独立端口模式：Worker 端口段需智能分配
         // - WLS 进程占用的端口：释放后分配给新进程
         // - 非 WLS 进程占用的端口：跳过，使用下一个可用端口
         if ($dispatcherEnabled || (!$useDirectMode && $count > 1)) {
-            $nextWorkerPort = $this->findAvailableWorkerPortBaseWithRelease($workerPort, $count);
+            $nextWorkerPort = $this->findAvailableWorkerPortBase(
+                $workerPort,
+                $count,
+                500,
+                $instanceName,
+                $reservedWorkerPorts
+            );
             if ($nextWorkerPort !== $workerPort) {
-                $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在端口占用，自动切换到 %{3}-%{4}', [
+                $this->printer->warning(__('Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}', [
                     $workerPort,
                     $workerPort + $count - 1,
                     $nextWorkerPort,
@@ -559,8 +574,7 @@ class Start extends CommandAbstract
             $this->printer->note('');
             $this->printer->setup(__('解决方案：'));
             $this->printer->note(__('  1. 手动停止占用端口 %{1} 的进程', [$httpRedirectPort]));
-            $this->printer->note(__('  2. 或使用 --http-redirect-port 参数指定其他端口'));
-            $this->printer->note(__('  3. 或使用 --http-redirect-port 0 禁用 HTTP 重定向'));
+            $this->printer->note(__('  2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
             return;
         }
 
@@ -620,61 +634,67 @@ class Start extends CommandAbstract
             }
         }
         
-        // ========== 检查 Session Server 端口（多 Worker 时 Master 会启动 Session Server，需提前释放避免 Address already in use） ==========
-        $sessionRuntime = \is_array($sharedStateRuntime['session'] ?? null) ? $sharedStateRuntime['session'] : [];
-        if ($count > 1 && $sessionServerPort > 0) {
-            if ($this->shouldSkipSharedStatePortReleaseCheck($sessionRuntime)) {
-                $this->printSharedStatePortReadyMessage('Session Server', $sessionServerPort, $sessionRuntime);
-            } elseif (!$this->checkAndReleasePort($host, $sessionServerPort, $forceRestart, 'Session Server', $instanceName)) {
-                if (!empty($maintenanceEnabledByUs)) {
-                    $this->disableMaintenanceMode();
-                    $this->printer->note(__('维护模式已关闭（Session Server 端口检查未通过）。'));
-                }
-                $this->printer->note(__('解决方案：先执行 php bin/w server:stop，或使用 -r 强制重启（仅杀框架进程）'));
-                return;
-            }
-        }
-        $memoryRuntime = \is_array($sharedStateRuntime['memory'] ?? null) ? $sharedStateRuntime['memory'] : [];
-        if ($memoryServerPort > 0) {
-            if ($this->shouldSkipSharedStatePortReleaseCheck($memoryRuntime)) {
-                $this->printSharedStatePortReadyMessage('Memory Service', $memoryServerPort, $memoryRuntime);
-            } elseif (!$this->checkAndReleasePort($host, $memoryServerPort, $forceRestart, 'Memory Service', $instanceName)) {
-                if (!empty($maintenanceEnabledByUs)) {
-                    $this->disableMaintenanceMode();
-                    $this->printer->note(__('Maintenance mode disabled (Memory Service port check failed).'));
-                }
-                $this->printer->note(__('Resolution: run php bin/w server:stop first, or use -r to force restart (framework processes only).'));
-                return;
-            }
-        }
-
         // ========== 检查 HTTP 重定向端口（在启动前检测，避免启动到一半才报错） ==========
         if ($sslEnabled && $httpRedirectPort > 0) {
-            if (!$this->checkAndReleasePort($host, $httpRedirectPort, $forceRestart, 'HTTP Redirect', $instanceName)) {
-                if (!empty($maintenanceEnabledByUs)) {
-                    $this->disableMaintenanceMode();
-                    $this->printer->note(__('维护模式已关闭（HTTP 重定向端口检查未通过）。'));
+            // HTTP Redirect 端口被占用时，提示用户确认是否强制停用
+            if (Processer::isPortInUse($httpRedirectPort)) {
+                $portInspect = Processer::inspectPortOccupantWithHistory($httpRedirectPort);
+                $isWelineProcess = (bool) ($portInspect['is_weline'] ?? false);
+                $processName = $portInspect['process_name'] ?? __('未知进程');
+
+                // 深橙色警告提示
+                $this->printer->warning(__('HTTP Redirect 端口 %{1} 被占用: %{2}', [$httpRedirectPort, $processName]));
+                $this->printer->note(__('是否强制停用该进程以释放端口？[y/N]: ', []));
+                echo '  > ';
+                $input = \trim((string)@\fgets(STDIN));
+                if (!\in_array(\strtolower($input), ['y', 'yes', '是'], true)) {
+                    $this->printer->note(__('已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。', [$httpRedirectPort]));
+                    $this->printer->note(__('提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
+                    // 禁用 HTTP Redirect
+                    $httpRedirectPort = 0;
+                } else {
+                    // 用户确认，尝试强制释放
+                    $this->printer->note(__('正在强制停用占用端口 %{1} 的进程...', [$httpRedirectPort]));
+                    $released = Processer::killProcessByPort($httpRedirectPort);
+                    if (!$released) {
+                        $released = Processer::forceReleasePort($httpRedirectPort);
+                    }
+                    if (IS_WIN && !$released) {
+                        $waited = 0;
+                        while ($waited < 3000 && Processer::isPortInUse($httpRedirectPort)) {
+                            SchedulerSystem::usleep(300000);
+                            $waited += 300;
+                        }
+                        $released = !Processer::isPortInUse($httpRedirectPort);
+                    }
+                    if (!Processer::isPortInUse($httpRedirectPort)) {
+                        $this->printer->success(__('端口 %{1} 已释放，HTTP Redirect 将正常启动', [$httpRedirectPort]));
+                    } else {
+                        $this->printer->error(__('无法释放端口 %{1}，HTTP Redirect 将不启用', [$httpRedirectPort]));
+                        $this->printer->note(__('提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
+                        $httpRedirectPort = 0;
+                    }
                 }
-                $this->printer->note(__(''));
-                $this->printer->setup(__('解决方案：'));
-                $this->printer->note(__('  1. 停止占用端口 %{1} 的进程', [$httpRedirectPort]));
-                $this->printer->note(__('  2. 或使用 --http-redirect-port 参数指定其他端口'));
-                $this->printer->note(__('  3. 或在 env.php 中配置 http_redirect_port'));
-                $this->printer->note(__('  4. 或使用 --http-redirect-port 0 禁用 HTTP 重定向'));
-                return;
             }
         }
         
-        // 创建 Worker 脚本路径（Dispatcher 模式下使用非 SSL 脚本）
-        $workerScript = $this->ensureWorkerScript($workerSslEnabled);
+            // 创建 Worker 脚本路径（Dispatcher 模式下使用非 SSL 脚本）
+            $workerScript = $this->ensureWorkerScript($workerSslEnabled);
         
-        // 保存实例信息（Master 将从这里读取配置并启动所有进程）
-        $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime);
+            // 保存实例信息（Master 将从这里读取配置并启动所有进程）
+            $workerScript = $this->ensureWorkerScript($workerSslEnabled);
+            $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime);
+        } finally {
+            if ($workerPortAllocationLocked) {
+                $this->releaseWorkerPortAllocationLock();
+            }
+        }
         
         // 保存实例配置（配置记忆：下次 server:start <name> 直接使用相同配置）
         $this->saveInstanceConfig($instanceName, $args, $config);
         
         // 将实际的 host/port/https 同步到 env.php，供 http:req 等 CLI 工具读取
+        $this->saveInstanceConfig($instanceName, $args, $config);
         $this->syncServerConfigToEnv($host, $port, $sslEnabled);
         
         // 显示优化建议
@@ -705,6 +725,8 @@ class Start extends CommandAbstract
             $this->startMasterInBackground($instanceName, $sslEnabled, $host, $port);
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
+            // 打印成功结束语
+            $this->printGoodbye(true, __('服务器正在后台启动，请使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
             return;
         }
         
@@ -717,7 +739,28 @@ class Start extends CommandAbstract
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
         $this->runMasterProcess($instanceName, $config, $workerScript, [], $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend);
     }
-    
+
+    /**
+     * @param array<string, mixed> $mainPortInspect
+     */
+    protected function resolveOrphanMainPortFallback(
+        int $port,
+        bool $portExplicit,
+        bool $autoDowngradedFromDefaultPort,
+        array $mainPortInspect
+    ): int {
+        if (!($mainPortInspect['in_use'] ?? false)
+            || ($mainPortInspect['is_weline'] ?? false)
+            || $portExplicit
+            || (($mainPortInspect['state'] ?? '') !== 'orphan')
+            || $autoDowngradedFromDefaultPort
+        ) {
+            return $port;
+        }
+
+        return $this->findAvailableMainPort($port + 1);
+    }
+
     /**
      * 仅运行 Master 进程（由 startMasterInBackground 通过子进程调用，从实例文件恢复状态）
      * 非 Windows 下调用 posix_setsid() 脱离控制终端，避免 SSH 断开或父进程退出时收到 SIGHUP 导致 Master 退出。
@@ -744,7 +787,7 @@ class Start extends CommandAbstract
         // 因此通过实际 stream_socket_server 测试替代单纯的 euid 检查。
         if (!IS_WIN && \function_exists('posix_geteuid')) {
             $mainPort = (int)($data['port'] ?? 0);
-            $redirectPort = (int)($data['http_redirect_port'] ?? 0);
+            $redirectPort = ($mainPort === 443) ? 80 : 0;
             $sslEnabledFlag = (bool)($data['ssl_enabled'] ?? false);
             $needsPrivileged = ($mainPort > 0 && $mainPort < 1024)
                 || ($sslEnabledFlag && $redirectPort > 0 && $redirectPort < 1024);
@@ -783,14 +826,10 @@ class Start extends CommandAbstract
             'memory_server_token_file_name' => (string) ($data['memory_server_token_file_name'] ?? 'memory_server.token'),
             'daemon' => true,
         ];
-        // HTTPS 模式始终启动 HTTP Redirect Worker（从实例文件或智能计算）
+        // HTTPS 模式固定规则：仅 443 启动 80 端口 Redirect Worker
         $httpRedirectPort = 0;
         if ($sslEnabled) {
-            // 优先使用实例文件中保存的端口，否则智能计算
-            $httpRedirectPort = (int)($data['http_redirect_port'] ?? 0);
-            if ($httpRedirectPort <= 0) {
-                $httpRedirectPort = ($port === 443) ? 80 : 0;
-            }
+            $httpRedirectPort = ($port === 443) ? 80 : 0;
         }
         $workerPids = \array_values($data['worker_pids'] ?? []);
         // 读取前台模式标记
@@ -1021,8 +1060,7 @@ class Start extends CommandAbstract
             $this->printer->note(__(''));
             $this->printer->note(__('解决方案：'));
             $this->printer->note(__('  1. 停止占用端口的进程'));
-            $this->printer->note(__('  2. 或使用 --http-redirect-port 参数指定其他端口'));
-            $this->printer->note(__('  3. 或在 env.php 中配置 http_redirect_port'));
+            $this->printer->note(__('  2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）'));
             $this->printer->note(__(''));
             throw $e;
         }
@@ -1542,16 +1580,8 @@ class Start extends CommandAbstract
             $config['ssl_domain'] = $args['ssl-domain'] ?? $args['domain'] ?? '';
         }
         
-        // HTTP 重定向端口配置（命令行参数优先）
-        // 注意：需要区分"未指定"和"明确指定 0"（0 表示禁用重定向）
         if (isset($args['http-redirect-port']) || isset($args['redirect-port'])) {
-            $redirectPortArg = $args['http-redirect-port'] ?? $args['redirect-port'] ?? null;
-            // 即使值为 0，也认为是用户明确指定（禁用重定向）
-            if ($redirectPortArg !== null) {
-                $config['http_redirect_port'] = (int) $redirectPortArg;
-                $config['http_redirect_port_explicit'] = true; // 标记为明确指定
-                $config['source'] = __('命令行参数');
-            }
+            $this->printer->warning(__('参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。'));
         }
         
         /** @var SslCertificateService $sslService */
@@ -2663,7 +2693,7 @@ class Start extends CommandAbstract
         $this->printer->note(__('请尝试: php bin/w server:kill-port %{1} -f', [$port]));
         return false;
     }
-    
+
     /**
      * 检查并释放多个端口（Worker 端口）
      * 框架进程占用时最多尝试 3 轮；仍杀不死则按 Master 前缀清理逃逸 Master 后再试一轮。
@@ -2767,19 +2797,34 @@ class Start extends CommandAbstract
     /**
      * 查找 Dispatcher 模式下可用的 Worker 连续端口段（仅跳过非框架占用）
      */
-    protected function findAvailableWorkerPortBase(int $startPort, int $count, int $maxScan = 500): int
+    protected function findAvailableWorkerPortBase(
+        int $startPort,
+        int $count,
+        int $maxScan = 500,
+        ?string $ignoreInstanceName = null,
+        array $extraReservedPorts = []
+    ): int
     {
-        $base = $startPort;
+        $reservedPorts = $this->getReservedWorkerPortsFromOtherInstances($ignoreInstanceName);
+        $reservedPortLookup = [];
+        foreach ($reservedPorts as $reservedPort) {
+            $reservedPortLookup[$reservedPort] = true;
+        }
+        foreach ($extraReservedPorts as $reservedPort) {
+            $reservedPortLookup[(int) $reservedPort] = true;
+        }
+
+        $base = \max($startPort, 1);
         for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
-            $hasNonFrameworkConflict = false;
+            $hasConflict = false;
             for ($i = 0; $i < $count; $i++) {
                 $port = $base + $i;
-                if (Processer::isPortInUse($port) && !Processer::isPortUsedByWeline($port)) {
-                    $hasNonFrameworkConflict = true;
+                if ($this->isWorkerPortAllocated($port) || isset($reservedPortLookup[$port])) {
+                    $hasConflict = true;
                     break;
                 }
             }
-            if (!$hasNonFrameworkConflict) {
+            if (!$hasConflict) {
                 return $base;
             }
         }
@@ -2809,67 +2854,193 @@ class Start extends CommandAbstract
      * @param int $maxScan 最大扫描次数
      * @return int 可用的起始端口
      */
-    protected function findAvailableWorkerPortBaseWithRelease(int $startPort, int $count, int $maxScan = 500): int
+    protected function findAvailableWorkerPortBaseWithRelease(int $startPort, int $count, int $maxScan = 500, ?string $ignoreInstanceName = null): int
     {
-        $base = $startPort;
-        
-        for ($attempt = 0; $attempt < $maxScan; $attempt++, $base++) {
-            $hasNonFrameworkConflict = false;
-            $welinePortsToRelease = [];
-            
-            // 检查这一段端口的占用情况
-            for ($i = 0; $i < $count; $i++) {
-                $port = $base + $i;
-                
-                if (!Processer::isPortInUse($port)) {
-                    // 端口空闲，继续检查下一个
-                    continue;
-                }
-                
-                if (Processer::isPortUsedByWeline($port)) {
-                    // WLS 进程占用，记录待释放
-                    $welinePortsToRelease[] = $port;
-                } else {
-                    // 非 WLS 进程占用，跳过这一段
-                    $hasNonFrameworkConflict = true;
-                    break;
-                }
-            }
-            
-            if ($hasNonFrameworkConflict) {
-                // 有非框架进程占用，跳到下一段
+        return $this->findAvailableWorkerPortBase($startPort, $count, $maxScan, $ignoreInstanceName);
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function getWorkerAllocationReservedPorts(int $mainPort, bool $dispatcherEnabled): array
+    {
+        if (!$dispatcherEnabled) {
+            return [];
+        }
+
+        $controlPort = $this->resolvePreferredControlPort($mainPort);
+        if ($controlPort <= 0) {
+            return [];
+        }
+
+        return [$controlPort];
+    }
+
+    protected function resolvePreferredControlPort(int $mainPort): int
+    {
+        $configuredControlPort = (int) (Env::get('server.control_port', 0) ?? 0);
+        if ($configuredControlPort > 0) {
+            return $configuredControlPort;
+        }
+
+        return $mainPort + 10000;
+    }
+
+    protected function isWorkerPortAllocated(int $port): bool
+    {
+        return $port > 0 && Processer::isPortInUse($port);
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function getReservedWorkerPortsFromOtherInstances(?string $ignoreInstanceName = null): array
+    {
+        $instanceDir = $this->getInstanceRuntimeDir();
+        if (!\is_dir($instanceDir)) {
+            return [];
+        }
+
+        $reservedPortLookup = [];
+        $instanceFiles = \glob($instanceDir . '*.json') ?: [];
+        foreach ($instanceFiles as $instanceFile) {
+            $instanceName = \basename($instanceFile, '.json');
+            if ($ignoreInstanceName !== null && $instanceName === $ignoreInstanceName) {
                 continue;
             }
-            
-            // 释放 WLS 占用的端口
-            foreach ($welinePortsToRelease as $portToRelease) {
-                $pid = Processer::getProcessIdByPort($portToRelease);
-                if ($pid > 0) {
-                    $this->printer->note(__('释放 WLS 进程占用的端口 %{1} (PID: %{2})...', [$portToRelease, $pid]));
-                    Processer::killByPid($pid);
-                    // 等待进程退出
-                    SchedulerSystem::usleep(100000); // 100ms
-                }
+
+            $raw = @\file_get_contents($instanceFile);
+            if (!\is_string($raw) || $raw === '') {
+                continue;
             }
-            
-            // 再次确认端口已释放
-            $allReleased = true;
-            foreach ($welinePortsToRelease as $portToCheck) {
-                Processer::clearPortCache($portToCheck);
-                if (Processer::isPortInUse($portToCheck)) {
-                    $allReleased = false;
-                    break;
-                }
+
+            $data = \json_decode($raw, true);
+            if (!\is_array($data)) {
+                continue;
             }
-            
-            if ($allReleased) {
-                return $base;
+
+            if (!$this->isWorkerPortReservationActive($data, $instanceFile)) {
+                continue;
             }
-            
-            // 如果释放失败，继续尝试下一段
+
+            foreach ($this->extractReservedWorkerPortsFromInstanceData($data) as $reservedPort) {
+                $reservedPortLookup[$reservedPort] = true;
+            }
         }
-        
-        return $startPort;
+
+        return \array_map('intval', \array_keys($reservedPortLookup));
+    }
+
+    protected function getInstanceRuntimeDir(): string
+    {
+        return Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+    }
+
+    protected function isWorkerPortReservationActive(array $instanceData, string $instanceFile = ''): bool
+    {
+        if ($this->extractReservedWorkerPortsFromInstanceData($instanceData) === []) {
+            return false;
+        }
+
+        $activePids = [];
+        $starterPid = (int) ($instanceData['pid'] ?? 0);
+        if ($starterPid > 0) {
+            $activePids[] = $starterPid;
+        }
+
+        $masterPid = (int) ($instanceData['master_pid'] ?? 0);
+        if ($masterPid > 0) {
+            $activePids[] = $masterPid;
+        }
+
+        foreach (($instanceData['worker_pids'] ?? []) as $workerPid) {
+            $workerPid = (int) $workerPid;
+            if ($workerPid > 0) {
+                $activePids[] = $workerPid;
+            }
+        }
+
+        $dispatcherPid = (int) ($instanceData['dispatcher_pid'] ?? 0);
+        if ($dispatcherPid > 0) {
+            $activePids[] = $dispatcherPid;
+        }
+
+        foreach ($activePids as $activePid) {
+            if (Processer::processExists($activePid)) {
+                return true;
+            }
+        }
+
+        $startedTimestamp = (int) ($instanceData['started_timestamp'] ?? 0);
+        if ($startedTimestamp <= 0 && $instanceFile !== '' && \is_file($instanceFile)) {
+            $startedTimestamp = (int) (@\filemtime($instanceFile) ?: 0);
+        }
+
+        return $startedTimestamp > 0
+            && (\time() - $startedTimestamp) <= self::WORKER_PORT_RESERVATION_TTL;
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function extractReservedWorkerPortsFromInstanceData(array $instanceData): array
+    {
+        $masterMode = (string) ($instanceData['master_mode'] ?? MasterProcess::MODE_LEGACY);
+        if ($masterMode === MasterProcess::MODE_LINUX_DIRECT) {
+            return [];
+        }
+
+        $workerPorts = $this->normalizeWorkerPorts($instanceData['worker_ports'] ?? []);
+        if ($workerPorts !== []) {
+            return $workerPorts;
+        }
+
+        $workerPort = (int) ($instanceData['worker_port'] ?? 0);
+        if ($workerPort <= 0) {
+            return [];
+        }
+
+        $count = \max(1, (int) ($instanceData['count'] ?? 1));
+
+        return \range($workerPort, $workerPort + $count - 1);
+    }
+
+    /**
+     * @param mixed $workerPorts
+     * @return list<int>
+     */
+    protected function normalizeWorkerPorts(mixed $workerPorts): array
+    {
+        if (!\is_array($workerPorts)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($workerPorts as $workerPort) {
+            $workerPort = (int) $workerPort;
+            if ($workerPort > 0) {
+                $normalized[$workerPort] = $workerPort;
+            }
+        }
+
+        return \array_values($normalized);
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function buildPersistedWorkerPorts(int $workerPort, int $count, bool $useDirectMode): array
+    {
+        if ($workerPort <= 0) {
+            return [];
+        }
+
+        $count = \max(1, $count);
+        if ($useDirectMode) {
+            return \array_fill(0, $count, $workerPort);
+        }
+
+        return \range($workerPort, $workerPort + $count - 1);
     }
     
     /**
@@ -2877,7 +3048,7 @@ class Start extends CommandAbstract
      */
     protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = []): void
     {
-        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        $instanceDir = $this->getInstanceRuntimeDir();
         if (!\is_dir($instanceDir)) {
             @\mkdir($instanceDir, 0755, true);
         }
@@ -2903,6 +3074,7 @@ class Start extends CommandAbstract
             'dispatcher_port' => $dispatcherEnabled ? $port : 0,
             'dispatcher_pid' => 0,
             'worker_port' => $workerPort ?: $port,  // Worker 实际监听的端口（Dispatcher 模式下为内网端口）
+            'worker_ports' => $this->buildPersistedWorkerPorts($workerPort ?: $port, $count, $useDirectMode),
             'worker_base_port' => $workerBasePort,   // Worker 基础端口（用于计算各 Worker 端口）
             'session_server_port' => (int) ($sharedStateRuntime['session']['port'] ?? 19970),
             'session_server_token_file_name' => (string) ($sharedStateRuntime['session']['token_file_name'] ?? 'session_server.token'),
@@ -3048,7 +3220,7 @@ class Start extends CommandAbstract
         
         // 从当前合并后的配置中提取可复用项
         // 注意：不保存 no_ssl，这是临时参数，HTTPS 偏好应以 wls.https 为准
-        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'http_redirect_port', 'worker_base_port'];
+        $persistKeys = ['host', 'port', 'mode', 'ssl_cert', 'ssl_key', 'ssl_domain', 'worker_base_port'];
         foreach ($persistKeys as $key) {
             if (isset($config[$key])) {
                 $savedConfig[$key] = $config[$key];
@@ -4080,8 +4252,6 @@ PHP;
                 '--no-ssl' => __('仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）'),
                 '--ssl-cert <path>' => __('SSL 证书文件路径（启用 HTTPS）'),
                 '--ssl-key <path>' => __('SSL 私钥文件路径（启用 HTTPS）'),
-                '--http-redirect-port <port>' => __('HTTP 重定向端口（HTTPS 模式专用，默认：自动计算或 80）'),
-                '--redirect-port <port>' => __('HTTP 重定向端口（--http-redirect-port 的简写）'),
                 '--direct' => __('直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）'),
                 '--no-dispatcher' => __('独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口'),
                 '--dispatcher' => __('强制 Dispatcher 模式（默认）'),
@@ -4099,7 +4269,7 @@ PHP;
                 __('SSL 协议') => __('支持 TLS 1.0/1.1/1.2/1.3，默认使用最高可用版本'),
                 __('Master 进程') => __('默认启用，持续监控 Worker 状态，Worker 崩溃自动重启；HTTPS 时自动启动 HTTP 重定向进程'),
                 __('80/443 端口') => __('默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap'),
-                __('HTTP 重定向端口') => __('HTTPS 模式下自动启动 HTTP 重定向进程，默认自动计算（HTTPS端口-463，如 443→80）；可通过 --http-redirect-port 指定；设为 0 禁用重定向'),
+                __('HTTP 重定向端口') => __('固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker'),
             ],
             [
                 __('启动默认实例') => 'php bin/w server:start',
@@ -4113,8 +4283,6 @@ PHP;
                 __('强制重启（不等待）') => 'php bin/w server:start -r -f',
                 __('启用 HTTPS') => 'php bin/w server:start --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
                 __('Windows 无 HTTPS 运行') => 'php bin/w server:start --no-ssl',
-                __('指定 HTTP 重定向端口') => 'php bin/w server:start --http-redirect-port 8080',
-                __('禁用 HTTP 重定向') => 'php bin/w server:start --http-redirect-port 0',
                 __('策略模式（跨平台优化）') => 'php bin/w server:start --strategy',
                 __('查看所有实例状态') => 'php bin/w server:status --all',
                 __('停止指定实例') => 'php bin/w server:stop api',
@@ -4417,11 +4585,7 @@ PHP;
         $strategyMainPort = (int) ($config['port'] ?? ($sslEnabled ? 443 : 80));
         $strategyRedirect = 0;
         if ($sslEnabled) {
-            if (isset($config['http_redirect_port'])) {
-                $strategyRedirect = (int) $config['http_redirect_port'];
-            } else {
-                $strategyRedirect = ($strategyMainPort === 443) ? 80 : 0;
-            }
+            $strategyRedirect = ($strategyMainPort === 443) ? 80 : 0;
         }
         $serverConfig = new ServerConfig([
             'instance_name' => $instanceName,
@@ -4553,5 +4717,159 @@ PHP;
         if ($this->startLockFile !== '' && \is_file($this->startLockFile)) {
             @\unlink($this->startLockFile);
         }
+    }
+
+    protected function acquireWorkerPortAllocationLock(int $timeout = self::WORKER_PORT_ALLOCATION_LOCK_TIMEOUT): bool
+    {
+        $lockDir = Env::VAR_DIR . 'server' . DS . 'locks' . DS;
+        if (!\is_dir($lockDir)) {
+            @\mkdir($lockDir, 0755, true);
+        }
+
+        $this->workerPortAllocationLockFile = $this->getWorkerPortAllocationLockFilePath();
+        $fp = @\fopen($this->workerPortAllocationLockFile, 'c');
+        if ($fp === false) {
+            return false;
+        }
+
+        $startTime = \time();
+        while ((\time() - $startTime) < $timeout) {
+            if (\flock($fp, \LOCK_EX | \LOCK_NB)) {
+                $this->workerPortAllocationLockHandle = $fp;
+                @\ftruncate($fp, 0);
+                @\fwrite($fp, \json_encode([
+                    'pid' => \getmypid(),
+                    'started_at' => \date('Y-m-d H:i:s'),
+                    'command' => \implode(' ', $_SERVER['argv'] ?? []),
+                ], JSON_PRETTY_PRINT));
+                @\fflush($fp);
+                return true;
+            }
+
+            SchedulerSystem::usleep(100000);
+        }
+
+        @\fclose($fp);
+        return false;
+    }
+
+    public function releaseWorkerPortAllocationLock(): void
+    {
+        if ($this->workerPortAllocationLockHandle !== null) {
+            @\flock($this->workerPortAllocationLockHandle, \LOCK_UN);
+            @\fclose($this->workerPortAllocationLockHandle);
+            $this->workerPortAllocationLockHandle = null;
+        }
+    }
+
+    protected function getWorkerPortAllocationLockFilePath(): string
+    {
+        return Env::VAR_DIR . 'server' . DS . 'locks' . DS . 'worker_port_allocation.lock';
+    }
+
+    /**
+     * 打印欢迎语
+     */
+    protected function printWelcome(): void
+    {
+        $width = 60;
+        $title = 'Weline Framework Server';
+        $version = 'v' . $this->getWelineVersion();
+        $padding = ($width - \mb_strlen($title) - \mb_strlen($version) - 3) / 2;
+
+        $this->printer->note('');
+        $this->printer->note($this->colorize(str_repeat('═', $width), 'Blue'));
+        $this->printer->note(
+            $this->colorize('║', 'Blue') .
+            \str_repeat(' ', $width - 2) .
+            $this->colorize('║', 'Blue')
+        );
+        $this->printer->note(
+            $this->colorize('║', 'Blue') .
+            \str_repeat(' ', (int)\floor($padding)) .
+            $this->colorize($title, 'Green') .
+            ' ' .
+            $this->colorize($version, 'Yellow') .
+            \str_repeat(' ', (int)\ceil($padding)) .
+            $this->colorize('║', 'Blue')
+        );
+        $this->printer->note(
+            $this->colorize('║', 'Blue') .
+            \str_repeat(' ', $width - 2) .
+            $this->colorize('║', 'Blue')
+        );
+        $this->printer->note($this->colorize(str_repeat('═', $width), 'Blue'));
+        $this->printer->note('');
+    }
+
+    /**
+     * 打印结束语
+     *
+     * @param bool $success 是否成功
+     * @param string $message 附加消息
+     */
+    protected function printGoodbye(bool $success = true, string $message = ''): void
+    {
+        $this->printer->note('');
+
+        if ($success) {
+            $this->printer->successIcon(__('Weline Server 启动完成！'));
+        } else {
+            $this->printer->errorIcon(__('Weline Server 启动失败'));
+        }
+
+        if ($message) {
+            $this->printer->note('  ' . $message);
+        }
+
+        $this->printer->note('');
+        $this->printer->note(__('使用 %{1}php bin/w server:status%{2} 查看服务器状态', ['<info>', '</info>']));
+        $this->printer->note(__('使用 %{1}php bin/w server:stop%{2} 停止服务器', ['<info>', '</info>']));
+        $this->printer->note('');
+        $this->printer->note($this->colorize(str_repeat('─', 60), 'Blue'));
+        $this->printer->note('');
+    }
+
+    /**
+     * 获取 Weline 版本
+     */
+    protected function getWelineVersion(): string
+    {
+        // 尝试从 composer.json 获取版本
+        static $version = null;
+        if ($version === null) {
+            $composerFile = BP . 'composer.json';
+            if (\is_file($composerFile)) {
+                $composer = \json_decode(\file_get_contents($composerFile), true);
+                $version = $composer['version'] ?? '3.0.0';
+            } else {
+                $version = '3.0.0';
+            }
+        }
+        return $version;
+    }
+
+    /**
+     * 彩色化输出（内部使用 ANSI 颜色）
+     *
+     * @param string $text 文本
+     * @param string $color 颜色
+     * @return string
+     */
+    private function colorize(string $text, string $color): string
+    {
+        $colors = [
+            'Black' => '30',
+            'Red' => '31',
+            'Green' => '32',
+            'Yellow' => '33',
+            'Blue' => '34',
+            'Magenta' => '35',
+            'Cyan' => '36',
+            'White' => '37',
+        ];
+
+        $code = $colors[$color] ?? '34';
+        return "\033[{$code}m{$text}\033[0m";
     }
 }

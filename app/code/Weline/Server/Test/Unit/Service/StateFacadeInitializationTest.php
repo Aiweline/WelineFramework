@@ -17,29 +17,24 @@ use Weline\Server\Shared\Service\SharedMemoryService;
 
 final class StateFacadeInitializationTest extends TestCase
 {
-    public function testSessionFacadeReleasesAcquireWhenClientConnectFails(): void
+    public function testSessionFacadeDisconnectsWithoutReleaseWhenClientConnectFails(): void
     {
         $manager = new class extends SharedStateServiceManager {
-            public array $releaseCalls = [];
+            public array $ensureCalls = [];
 
-            public function acquire(string $role, string $consumerCode = '', array $options = []): array
+            public function ensure(
+                string $role,
+                array $config = [],
+                array $envConfig = [],
+                string $requesterInstanceName = 'system'
+            ): array
             {
+                $this->ensureCalls[] = [$role, $requesterInstanceName, $config];
+
                 return [
                     'host' => '127.0.0.1',
                     'port' => 19970,
                     'token_file_name' => 'session_server.token',
-                ];
-            }
-
-            public function release(string $role, string $consumerCode = '', array $options = []): array
-            {
-                $this->releaseCalls[] = [$role, $consumerCode, $options];
-
-                return [
-                    'released' => true,
-                    'local_ref_count' => 0,
-                    'shutdown_scheduled' => false,
-                    'runtime' => \is_array($options['runtime'] ?? null) ? $options['runtime'] : [],
                 ];
             }
         };
@@ -62,34 +57,29 @@ final class StateFacadeInitializationTest extends TestCase
             self::assertSame('connect failed', $throwable->getMessage());
         }
 
-        self::assertCount(1, $manager->releaseCalls);
-        self::assertSame(ControlMessage::ROLE_SESSION_SERVER, $manager->releaseCalls[0][0]);
-        self::assertSame('cli:test-session', $manager->releaseCalls[0][1]);
+        self::assertCount(1, $manager->ensureCalls);
+        self::assertSame(ControlMessage::ROLE_SESSION_SERVER, $manager->ensureCalls[0][0]);
+        self::assertSame('cli:test-session', $manager->ensureCalls[0][1]);
     }
 
-    public function testMemoryFacadeReleasesAcquireWhenInitializationFails(): void
+    public function testMemoryFacadeDisconnectsWithoutReleaseWhenInitializationFails(): void
     {
         $manager = new class extends SharedStateServiceManager {
-            public array $releaseCalls = [];
+            public array $ensureCalls = [];
 
-            public function acquire(string $role, string $consumerCode = '', array $options = []): array
+            public function ensure(
+                string $role,
+                array $config = [],
+                array $envConfig = [],
+                string $requesterInstanceName = 'system'
+            ): array
             {
+                $this->ensureCalls[] = [$role, $requesterInstanceName, $config];
+
                 return [
                     'host' => '127.0.0.1',
                     'port' => 19971,
                     'token_file_name' => 'memory_server.token',
-                ];
-            }
-
-            public function release(string $role, string $consumerCode = '', array $options = []): array
-            {
-                $this->releaseCalls[] = [$role, $consumerCode, $options];
-
-                return [
-                    'released' => true,
-                    'local_ref_count' => 0,
-                    'shutdown_scheduled' => false,
-                    'runtime' => \is_array($options['runtime'] ?? null) ? $options['runtime'] : [],
                 ];
             }
         };
@@ -116,36 +106,29 @@ final class StateFacadeInitializationTest extends TestCase
             self::assertSame('memory init failed', $throwable->getMessage());
         }
 
-        self::assertCount(1, $manager->releaseCalls);
-        self::assertSame(ControlMessage::ROLE_MEMORY_SERVER, $manager->releaseCalls[0][0]);
-        self::assertSame('cli:test-memory', $manager->releaseCalls[0][1]);
+        self::assertCount(1, $manager->ensureCalls);
+        self::assertSame(ControlMessage::ROLE_MEMORY_SERVER, $manager->ensureCalls[0][0]);
+        self::assertSame('cli:test-memory', $manager->ensureCalls[0][1]);
     }
 
     public function testSessionFacadeUsesDirectConnectWhenPreferredAndHealthy(): void
     {
         $manager = new class extends SharedStateServiceManager {
-            public int $acquireCalls = 0;
-            public array $releaseCalls = [];
+            public int $ensureCalls = 0;
 
-            public function acquire(string $role, string $consumerCode = '', array $options = []): array
+            public function ensure(
+                string $role,
+                array $config = [],
+                array $envConfig = [],
+                string $requesterInstanceName = 'system'
+            ): array
             {
-                $this->acquireCalls++;
+                $this->ensureCalls++;
 
                 return [
                     'host' => '127.0.0.1',
                     'port' => 19970,
                     'token_file_name' => 'session_server.token',
-                ];
-            }
-
-            public function release(string $role, string $consumerCode = '', array $options = []): array
-            {
-                $this->releaseCalls[] = [$role, $consumerCode, $options];
-
-                return [
-                    'released' => true,
-                    'local_ref_count' => 0,
-                    'shutdown_scheduled' => false,
                 ];
             }
         };
@@ -171,22 +154,26 @@ final class StateFacadeInitializationTest extends TestCase
             }
         };
 
-        self::assertSame(0, $manager->acquireCalls);
+        self::assertSame(0, $manager->ensureCalls);
         self::assertSame(20970, $facade->getRuntime()['port'] ?? null);
         self::assertSame('session_server.direct.token', $facade->getRuntime()['token_file_name'] ?? null);
 
         $facade->disconnect();
-        self::assertCount(0, $manager->releaseCalls);
     }
 
-    public function testSessionFacadeFailsFastWithoutAcquireWhenDirectConnectIsUnhealthy(): void
+    public function testSessionFacadeFailsFastWithoutEnsureWhenDirectConnectIsUnhealthy(): void
     {
         $manager = new class extends SharedStateServiceManager {
-            public int $acquireCalls = 0;
+            public int $ensureCalls = 0;
 
-            public function acquire(string $role, string $consumerCode = '', array $options = []): array
+            public function ensure(
+                string $role,
+                array $config = [],
+                array $envConfig = [],
+                string $requesterInstanceName = 'system'
+            ): array
             {
-                $this->acquireCalls++;
+                $this->ensureCalls++;
 
                 return [];
             }
@@ -216,6 +203,6 @@ final class StateFacadeInitializationTest extends TestCase
             self::assertSame('Shared session facade is not healthy', $throwable->getMessage());
         }
 
-        self::assertSame(0, $manager->acquireCalls);
+        self::assertSame(0, $manager->ensureCalls);
     }
 }

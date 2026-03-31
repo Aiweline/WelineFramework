@@ -51,6 +51,10 @@ class SchedulerWaitObserver implements ObserverInterface
         match ($data['type']) {
             'sleep' => self::$scheduler->addSleepTimer($fiber, (int) ($data['seconds'] ?? 1)),
             'usleep' => self::$scheduler->addUsleepTimer($fiber, (int) ($data['microseconds'] ?? 1000)),
+            // yield: 让出控制权，下一轮事件循环立即 resume（通过 getNextTimerDelay 返回 0 实现）
+            'yield' => self::$scheduler->addYieldTimer($fiber),
+            // yield_delay: 让出控制权并注册延迟定时器
+            'yield_delay' => self::$scheduler->addYieldDelayTimer($fiber, (int) ($data['milliseconds'] ?? 1)),
             default => null,
         };
     }

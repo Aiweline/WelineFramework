@@ -159,7 +159,8 @@ if ($controlPort > 0) {
         $identity,
         $handler,
         'Redirect',
-        $isDev
+        $isDev,
+        $instanceName
     );
     if ($kernel->connectAndRegister($controlPort)) {
         if ($isDev) {

@@ -33,7 +33,8 @@ class Restart extends CommandAbstract
     public function execute(array $args = [], array $data = [])
     {
         $instanceName = $this->parseInstanceName($args);
-        $forceRestart = isset($args['r']) || isset($args['restart']) || isset($args['force']);
+        $forceSwitch = isset($args['f']);
+        $forceRestart = isset($args['r']) || isset($args['restart']) || isset($args['force']) || $forceSwitch;
         
         // 检查服务器是否已在运行
         if ($this->isServerRunning($instanceName)) {
@@ -44,7 +45,11 @@ class Restart extends CommandAbstract
 
             // 强制重启：保持 Master 运行，通过 IPC 发送 reload 命令，由 Orchestrator 执行维护模式+滚动重载
             // 只有 server:stop 才会停止 Master
-            $this->printer->note(__('检测到服务器已运行，执行滚动重启（Master 保持运行）...'));
+            if ($forceSwitch) {
+                $this->printer->warning(__('检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）...'));
+            } else {
+                $this->printer->note(__('检测到服务器已运行，执行滚动重启（Master 保持运行）...'));
+            }
             $reloadCommand = ObjectManager::getInstance(Reload::class);
             $reloadCommand->execute($args, $data);
             return;
@@ -156,6 +161,7 @@ class Restart extends CommandAbstract
             __('确保 Weline Server 运行中（已运行 -r 时保持 Master 滚动重载，未运行则启动）'),
             [
                 '-r, --force' => __('强制重启（保持 Master，滚动重载 Worker）'),
+                '-f' => __('与 -r 同用时：单批次重启 Worker（跳过分批策略）'),
                 '-h, --host <ip>' => __('监听地址（默认：0.0.0.0）'),
                 '-p, --port <port>' => __('监听端口（默认：443）'),
                 '-c, --count <n>' => __('Worker 进程数（默认：4）'),
@@ -165,6 +171,7 @@ class Restart extends CommandAbstract
             [
                 __('确保服务器运行') => 'php bin/w server:restart',
                 __('强制重启服务器') => 'php bin/w server:restart -r',
+                __('强制单批次重启') => 'php bin/w server:restart -r -f',
                 __('重启并更改端口') => 'php bin/w server:restart -r -p 9000',
             ]
         );
