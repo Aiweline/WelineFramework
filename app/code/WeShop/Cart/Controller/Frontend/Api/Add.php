@@ -45,11 +45,23 @@ class Add extends FrontendController
                 return;
             }
 
+            // 购物车写入类接口：先校验登录，再校验业务参数（避免访客因 JSON/参数缺失拿到 400 而非 401）
+            /** @var CustomerSession $session */
+            $session = ObjectManager::getInstance(CustomerSession::class);
+            $customer = $session->getCustomer();
+
+            if (!$customer || (int) $customer->getAuthIdentifier() <= 0) {
+                $this->jsonError(__('请先登录'), 401);
+                return;
+            }
+
+            $customerId = (int) $customer->getAuthIdentifier();
+
             // 获取参数
             $productId = (int)$this->request->getPost('product_id', 0);
             $qty = (int)$this->request->getPost('qty', 1);
             $selectedOptions = $this->request->getPost('selected_options', []);
-            
+
             if (!is_array($selectedOptions)) {
                 $selectedOptions = json_decode($selectedOptions, true) ?? [];
             }
@@ -63,18 +75,6 @@ class Add extends FrontendController
             if ($qty <= 0) {
                 $qty = 1;
             }
-
-            // 获取客户信息
-            /** @var CustomerSession $session */
-            $session = ObjectManager::getInstance(CustomerSession::class);
-            $customer = $session->getCustomer();
-            
-            if (!$customer || !$customer->getId()) {
-                $this->jsonError(__('请先登录'), 401);
-                return;
-            }
-
-            $customerId = (int)$customer->getId();
 
             // 加载产品
             /** @var Product $product */
@@ -97,7 +97,7 @@ class Add extends FrontendController
             $isConfigurable = $configurableService->isConfigurable($productId);
 
             $finalProductId = $productId;
-            $finalPrice = $this->priceService->calculatePrice($productId);
+            $finalPrice = $this->priceService->calculatePrice($productId, $customerId, $qty);
 
             if ($isConfigurable) {
                 // 可配置产品必须选择选项
@@ -121,17 +121,17 @@ class Add extends FrontendController
                 }
 
                 $finalProductId = (int)$variant->getId();
-                $finalPrice = $this->priceService->calculatePrice($finalProductId);
+                $finalPrice = $this->priceService->calculatePrice($finalProductId, $customerId, $qty);
 
                 // 检查子产品库存
                 if ($variant->getStock() < $qty) {
-                    $this->jsonError(__('库存不足，当前库存: %1', $variant->getStock()));
+                    $this->jsonError(__('库存不足，当前库存: %{1}', $variant->getStock()));
                     return;
                 }
             } else {
                 // 简单产品检查库存
                 if ($product->getStock() < $qty) {
-                    $this->jsonError(__('库存不足，当前库存: %1', $product->getStock()));
+                    $this->jsonError(__('库存不足，当前库存: %{1}', $product->getStock()));
                     return;
                 }
             }
@@ -140,6 +140,13 @@ class Add extends FrontendController
             /** @var CartService $cartService */
             $cartService = ObjectManager::getInstance(CartService::class);
             $cart = $cartService->addToCart($customerId, $finalProductId, $qty, $finalPrice);
+            $cartItemId = (int) $cart->getId();
+            if ($cartItemId <= 0) {
+                $cartItemId = $cartService->findCartItemId($customerId, $finalProductId);
+                if ($cartItemId > 0) {
+                    $cart->setId($cartItemId);
+                }
+            }
 
             // 获取购物车总数
             $cartCount = $cartService->getCartItemCount($customerId);
@@ -148,7 +155,7 @@ class Add extends FrontendController
             $this->jsonResponse([
                 'success' => true,
                 'message' => __('已成功加入购物车'),
-                'cart_item_id' => $cart->getId(),
+                'cart_item_id' => $cartItemId,
                 'cart_count' => $cartCount,
                 'cart_total' => $totals['total'] ?? 0,
                 'product' => [
@@ -161,7 +168,7 @@ class Add extends FrontendController
             ]);
 
         } catch (\Throwable $e) {
-            $this->jsonError(__('添加购物车失败: %1', $e->getMessage()), 500);
+            $this->jsonError(__('添加购物车失败: %{1}', $e->getMessage()), 500);
         }
     }
 
@@ -221,7 +228,7 @@ class Add extends FrontendController
             ]);
 
         } catch (\Throwable $e) {
-            $this->jsonError(__('获取产品选项失败: %1', $e->getMessage()), 500);
+            $this->jsonError(__('获取产品选项失败: %{1}', $e->getMessage()), 500);
         }
     }
 
