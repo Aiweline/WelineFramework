@@ -63,4 +63,87 @@ class MembershipAdminPageDataServiceTest extends TestCase
         $this->assertSame('bronze', $data['editingRecord']['level']);
         $this->assertSame(680, $data['summary']['total_points']);
     }
+
+    public function testGetMembershipRecordReturnsNormalizedArray(): void
+    {
+        $mockMembership = $this->createMock(Membership::class);
+        $mockMembership->method('getId')->willReturn(5);
+        $mockMembership->method('getData')
+            ->willReturnCallback(function (string $field) {
+                return match ($field) {
+                    Membership::schema_fields_CUSTOMER_ID => 42,
+                    Membership::schema_fields_LEVEL => 'platinum',
+                    Membership::schema_fields_POINTS => 1500,
+                    Membership::schema_fields_CREATED_AT => '2026-01-15 09:30:00',
+                    Membership::schema_fields_UPDATED_AT => '2026-03-20 14:00:00',
+                    default => null,
+                };
+            });
+
+        $membershipService = $this->createMock(MembershipService::class);
+        $membershipService->method('getMembershipRecord')->willReturn($mockMembership);
+        $membershipService->method('getLevelOptions')->willReturn([
+            'bronze' => 'Bronze',
+            'silver' => 'Silver',
+            'gold' => 'Gold',
+            'platinum' => 'Platinum',
+        ]);
+
+        $service = new MembershipAdminPageDataService($membershipService);
+        $result = $service->getMembershipRecord(5);
+
+        $this->assertIsArray($result);
+        $this->assertSame(5, $result['membership_id']);
+        $this->assertSame(42, $result['customer_id']);
+        $this->assertSame('platinum', $result['level']);
+        $this->assertSame('Platinum', $result['level_label']);
+        $this->assertSame(1500, $result['points']);
+    }
+
+    public function testGetMembershipRecordReturnsNullForNonexistent(): void
+    {
+        $membershipService = $this->createMock(MembershipService::class);
+        $membershipService->method('getMembershipRecord')->willReturn(null);
+
+        $service = new MembershipAdminPageDataService($membershipService);
+        $result = $service->getMembershipRecord(999);
+
+        $this->assertNull($result);
+    }
+
+    public function testGetLevelOptionsReturnsServiceOptions(): void
+    {
+        $expectedOptions = [
+            'bronze' => 'Bronze',
+            'silver' => 'Silver',
+            'gold' => 'Gold',
+            'platinum' => 'Platinum',
+        ];
+
+        $membershipService = $this->createMock(MembershipService::class);
+        $membershipService->method('getLevelOptions')->willReturn($expectedOptions);
+
+        $service = new MembershipAdminPageDataService($membershipService);
+        $result = $service->getLevelOptions();
+
+        $this->assertSame($expectedOptions, $result);
+    }
+
+    public function testGetLevelBenefitsReturnsTranslatedBenefits(): void
+    {
+        $membershipService = $this->createMock(MembershipService::class);
+
+        $service = new MembershipAdminPageDataService($membershipService);
+        $benefits = $service->getLevelBenefits();
+
+        $this->assertIsArray($benefits);
+        $this->assertArrayHasKey('bronze', $benefits);
+        $this->assertArrayHasKey('silver', $benefits);
+        $this->assertArrayHasKey('gold', $benefits);
+        $this->assertArrayHasKey('platinum', $benefits);
+        $this->assertNotEmpty($benefits['bronze']);
+        $this->assertNotEmpty($benefits['silver']);
+        $this->assertNotEmpty($benefits['gold']);
+        $this->assertNotEmpty($benefits['platinum']);
+    }
 }
