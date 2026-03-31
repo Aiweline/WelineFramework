@@ -34,8 +34,8 @@ class View extends BaseController
         $this->assign(array_merge(
             [
                 'title' => (string) __('Order Detail'),
-                'orderIndexUrl' => $this->getBackendUrl('*/backend/order'),
-                'updateStatusUrl' => $this->getBackendUrl('*/backend/order/update-status'),
+                'orderIndexUrl' => $this->getUrl('*/backend/order'),
+                'updateStatusUrl' => $this->getUrl('*/backend/order/update-status'),
             ],
             $detailData
         ));
