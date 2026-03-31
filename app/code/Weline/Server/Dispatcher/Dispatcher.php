@@ -152,6 +152,17 @@ class Dispatcher
      * 连接清理间隔（秒）
      */
     private int $connectionCleanupInterval = 30;
+
+    /**
+     * 首包超时（秒）：请求已转发到 Worker 但迟迟无任何响应字节时，主动断开并标记 Worker 失败。
+     */
+    private float $firstResponseTimeout = 0.0;
+
+    /**
+     * 是否启用“首包超时强制断连”启发式。
+     * 默认关闭，避免高负载/长处理请求被误判导致 ERR_CONNECTION_CLOSED。
+     */
+    private bool $enforceFirstResponseTimeout = false;
     
     /**
      * 上次 Worker 健康探活时间
@@ -320,6 +331,13 @@ class Dispatcher
         if (isset($config['connection_timeout'])) {
             $this->connectionTimeout = (int) $config['connection_timeout'];
         }
+        if (isset($config['first_response_timeout'])) {
+            // <=0 表示关闭该启发式（避免对长处理请求误杀）。
+            $this->firstResponseTimeout = \max(0.0, (float)$config['first_response_timeout']);
+        }
+        if (isset($config['enforce_first_response_timeout'])) {
+            $this->enforceFirstResponseTimeout = (bool)$config['enforce_first_response_timeout'];
+        }
         
         if (isset($config['attack_detection_enabled'])) {
             $this->attackDetectionEnabled = (bool) $config['attack_detection_enabled'];
@@ -457,7 +475,10 @@ class Dispatcher
             $this->port,
             0,
             $this->orchestratorEpoch,
-            $this->orchestratorLaunchId
+            $this->orchestratorLaunchId,
+            ControlMessage::PROCESS_KIND_FRAMEWORK,
+            '',
+            $this->instanceName
         );
         $this->log("IPC 控制通道已连接 (端口: {$this->controlPort})", 'INFO');
         
@@ -580,6 +601,28 @@ class Dispatcher
                 } elseif (!empty($msg['ip'])) {
                     $this->attackDetector->unblock((string) $msg['ip']);
                     $this->log("已解封 IP: {$msg['ip']}", 'INFO');
+                }
+                break;
+
+            case ControlMessage::TYPE_WORKER_SATURATION:
+                $workerId = (int) ($msg['worker_id'] ?? 0);
+                $port = (int) ($msg['port'] ?? 0);
+                $longLivedCount = (int) ($msg['long_lived_count'] ?? 0);
+                $longLivedMax = (int) ($msg['long_lived_max'] ?? 0);
+                $totalFiber = (int) ($msg['total_fiber_count'] ?? 0);
+                if ($port > 0) {
+                    $this->passthroughCore->setWorkerSaturation($port, $longLivedCount, $longLivedMax);
+                    $this->log("Worker 长连接饱和 (port={$port}, long_lived={$longLivedCount}/{$longLivedMax}, fibers={$totalFiber})", 'WARN');
+                }
+                break;
+
+            case ControlMessage::TYPE_WORKER_SATURATION_CLEARED:
+                $port = (int) ($msg['port'] ?? 0);
+                $longLivedCount = (int) ($msg['long_lived_count'] ?? 0);
+                $longLivedMax = (int) ($msg['long_lived_max'] ?? 0);
+                if ($port > 0) {
+                    $this->passthroughCore->clearWorkerSaturation($port);
+                    $this->log("Worker 长连接饱和解除 (port={$port}, long_lived={$longLivedCount}/{$longLivedMax})", 'INFO');
                 }
                 break;
         }
@@ -806,7 +849,25 @@ class Dispatcher
         
         foreach ($this->connectionLastActivity as $connId => $lastActivity) {
             if (($nowMicro - $lastActivity) > $this->connectionTimeout) {
-                $this->closeConnection($connId);
+                $hasClientSocket = isset($this->clientConnections[$connId]);
+                $clientInputClosed = false;
+                if ($hasClientSocket) {
+                    $clientInputClosed = $this->passthroughCore->isClientInputClosed($this->clientConnections[$connId]);
+                }
+                $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
+                $inBytes = (int)($bytes['in'] ?? 0);
+                $outBytes = (int)($bytes['out'] ?? 0);
+
+                // 客户端上行半关闭后仍可能等待 worker 长处理：
+                // 这里不要简单按 connectionTimeout 直接关闭，改为续约。
+                if ($hasClientSocket && $clientInputClosed) {
+                    if ($inBytes > 0 && $outBytes <= 0) {
+                        $this->connectionLastActivity[$connId] = $nowMicro;
+                        continue;
+                    }
+                }
+                
+                $this->closeConnection($connId, 'flush_pending_buffers_failed');
                 $closedCount++;
             }
         }
@@ -831,6 +892,8 @@ class Dispatcher
     {
         // H15: 先刷新所有有缓冲数据的客户端连接
         $this->flushPendingBuffers();
+        // 清理“请求已发出但 Worker 无响应”的卡死连接，避免用户侧随机超时。
+        $this->cleanupStalledResponseConnections();
         
         // 准备 socket 列表
         $readSockets = [$this->serverSocket];
@@ -838,7 +901,10 @@ class Dispatcher
         
         // 添加所有客户端连接
         foreach ($this->clientConnections as $connId => $clientSocket) {
-            $readSockets[] = $clientSocket;
+            // 客户端上行半关闭后，不再监听其可读事件（避免持续 EOF 触发误关连接）
+            if (!$this->passthroughCore->isClientInputClosed($clientSocket)) {
+                $readSockets[] = $clientSocket;
+            }
             
             // 添加对应的 Worker 连接（如果 Worker 未关闭）
             $workerSocket = $this->passthroughCore->getWorkerSocket($clientSocket);
@@ -889,7 +955,48 @@ class Dispatcher
             }
         }
     }
-    
+
+    /**
+     * 清理首包超时的连接（请求已转发但无任何响应字节）。
+     */
+    private function cleanupStalledResponseConnections(): void
+    {
+        if (!$this->enforceFirstResponseTimeout || $this->firstResponseTimeout <= 0) {
+            return;
+        }
+
+        $nowMicro = \microtime(true);
+        foreach ($this->connectionLastActivity as $connId => $lastActivity) {
+            if (!isset($this->clientConnections[$connId]) || !isset($this->connectionBytes[$connId])) {
+                continue;
+            }
+
+            $bytes = $this->connectionBytes[$connId];
+            $inBytes = (int)($bytes['in'] ?? 0);
+            $outBytes = (int)($bytes['out'] ?? 0);
+
+            // 条件：请求已经转发给 Worker，但还没有收到任何返回字节
+            if ($inBytes <= 0 || $outBytes > 0) {
+                continue;
+            }
+
+            if (($nowMicro - (float)$lastActivity) < $this->firstResponseTimeout) {
+                continue;
+            }
+
+            $clientSocket = $this->clientConnections[$connId];
+            $workerPort = $this->passthroughCore->getConnectionWorkerPort($clientSocket);
+            if ($workerPort !== null) {
+                $this->passthroughCore->markWorkerFailureByPort($workerPort);
+            }
+
+            if ($this->isDevMode) {
+                $this->log("首包超时，关闭连接 connId: {$connId}, worker: {$workerPort}", 'WARN');
+            }
+            $this->closeConnection($connId, 'stalled_first_response_timeout');
+        }
+    }
+
     /**
      * H15: 刷新所有有缓冲数据的客户端连接
      */
@@ -907,7 +1014,7 @@ class Dispatcher
             
             if ($flushed === -1) {
                 // 写入失败，关闭连接
-                $this->closeConnection($connId);
+                $this->closeConnection($connId, 'receive_request_failed');
                 continue;
             }
             
@@ -922,7 +1029,7 @@ class Dispatcher
             // 如果缓冲区已空且 Worker 已关闭，现在可以安全关闭连接
             if (!$this->passthroughCore->hasBufferedData($clientSocket) 
                 && $this->passthroughCore->isWorkerClosedWithBuffer($clientSocket)) {
-                $this->closeConnection($connId);
+                $this->closeConnection($connId, 'forward_to_worker_failed');
             }
         }
     }
@@ -1023,8 +1130,11 @@ class Dispatcher
                 }
                 if ($this->shouldServeMaintenanceFallback()) {
                     $this->respondWithStartupProtection($clientSocket);
-                } else {
+                } elseif (!$this->tryRespondServiceUnavailable($clientSocket)) {
+                    // HTTPS/TLS 原始流无法返回明文 503，只能关闭连接
                     @\socket_close($clientSocket);
+                } else {
+                    // 已返回 503 并关闭连接
                 }
             }
             
@@ -1085,6 +1195,30 @@ class Dispatcher
     {
         @\socket_write($clientSocket, $this->fallbackMaintenancePage);
         @\socket_close($clientSocket);
+    }
+
+    /**
+     * 在非 TLS 的 HTTP 请求上返回 503，避免浏览器表现为 ERR_CONNECTION_CLOSED。
+     *
+     * @param \Socket|resource $clientSocket
+     */
+    private function tryRespondServiceUnavailable($clientSocket): bool
+    {
+        $peek = '';
+        $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
+        if ($peekLen === false || $peekLen <= 0 || $peek === '') {
+            return false;
+        }
+
+        $firstByte = \ord($peek[0]);
+        // TLS 握手流不发送明文 HTTP 503，避免破坏协议
+        if ($firstByte === 0x16) {
+            return false;
+        }
+
+        @\socket_write($clientSocket, $this->fallbackMaintenancePage);
+        @\socket_close($clientSocket);
+        return true;
     }
 
     /**
@@ -1199,14 +1333,8 @@ class Dispatcher
             $target = '/' . \ltrim($target, '/');
         }
 
-        $redirectHost = "127.0.0.1:{$this->port}";
-        if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $raw, $h)) {
-            $redirectHost = \trim((string)$h[1]);
-        }
-        if (!\str_contains($redirectHost, ':') && $this->port !== 443) {
-            $redirectHost .= ':' . $this->port;
-        }
-        $redirectUrl = "https://{$redirectHost}{$target}";
+        ['host' => $redirectHost, 'port' => $redirectPort] = $this->resolveHttpsRedirectHostAndPort($raw);
+        $redirectUrl = $redirectPort === 443 ? "https://{$redirectHost}{$target}" : "https://{$redirectHost}:{$redirectPort}{$target}";
 
         $response = "HTTP/1.1 301 Moved Permanently\r\n"
             . "Location: {$redirectUrl}\r\n"
@@ -1230,6 +1358,36 @@ class Dispatcher
         @\socket_close($clientSocket);
         $this->log("HTTP->HTTPS 301 (inline): {$clientIp} (connId: {$connId}) => {$redirectUrl}", 'ROUTE');
         return true;
+    }
+
+    /**
+     * 透传模式下解析 HTTPS 重定向目标（仅信任 Host 头）
+     *
+     * 规则：
+     * - Host 带端口：使用该端口
+     * - Host 不带端口：默认 443
+     */
+    private function resolveHttpsRedirectHostAndPort(string $raw): array
+    {
+        $redirectHost = '127.0.0.1';
+        $redirectPort = 443;
+
+        if (\preg_match('/\r\nHost:\s*([^\r\n]+)/i', $raw, $h)) {
+            $redirectHost = \trim((string)$h[1]);
+        }
+
+        if (\str_contains($redirectHost, ':')) {
+            [$hostOnly, $hostPort] = \explode(':', $redirectHost, 2);
+            $redirectHost = $hostOnly;
+            if (\ctype_digit($hostPort)) {
+                $redirectPort = (int)$hostPort;
+            }
+        }
+
+        return [
+            'host' => $redirectHost,
+            'port' => $redirectPort,
+        ];
     }
     
     /**
@@ -1262,15 +1420,28 @@ class Dispatcher
         $connId = $this->socketId($clientSocket);
         
         $result = $this->passthroughCore->forwardToWorker($clientSocket);
-        
+        $terminalReasonPeek = $this->passthroughCore->peekConnectionTerminalReasonByConnId($connId);
+
         if ($result === -1) {
+            // 兜底保护：客户端上行 FIN 在某些分支被映射为 -1 时，不应关闭整连接。
+            if ($terminalReasonPeek === 'forward_to_worker_client_read_eof'
+                || $this->passthroughCore->isClientInputClosed($clientSocket)) {
+                $this->connectionLastActivity[$connId] = \microtime(true);
+                return;
+            }
             // 连接真正关闭或错误
             if ($this->isDevMode) {
                 $connInfo = $this->passthroughCore->getConnectionInfo($clientSocket);
                 $clientIp = $connInfo['client_ip'] ?? 'unknown';
                 $this->log("连接关闭(客户端→Worker): {$clientIp} (connId: {$connId})", 'CLOSE');
             }
-            $this->closeConnection($connId);
+            $this->closeConnection($connId, 'forward_to_client_failed');
+            return;
+        }
+        
+        // result === -2: 客户端上行半关闭（FIN），但下行仍可继续，不关闭连接
+        if ($result === -2) {
+            $this->connectionLastActivity[$connId] = \microtime(true);
             return;
         }
         
@@ -1303,7 +1474,7 @@ class Dispatcher
                 $clientIp = $connInfo['client_ip'] ?? 'unknown';
                 $this->log("连接关闭(Worker→客户端): {$clientIp} (connId: {$connId})", 'CLOSE');
             }
-            $this->closeConnection($connId);
+            $this->closeConnection($connId, 'worker_closed_or_client_disconnected');
             return;
         }
         
@@ -1329,7 +1500,7 @@ class Dispatcher
      *
      * @param int $connId 连接 ID
      */
-    private function closeConnection(int $connId): void
+    private function closeConnection(int $connId, string $reason = 'unknown'): void
     {
         if (isset($this->clientConnections[$connId])) {
             $clientSocket = $this->clientConnections[$connId];
@@ -1470,7 +1641,7 @@ class Dispatcher
         
         // 关闭所有连接
         foreach ($this->clientConnections as $connId => $socket) {
-            $this->closeConnection($connId);
+            $this->closeConnection($connId, 'socket_select_exception_or_read_error');
         }
         
         // 关闭透传核心中的所有连接
