@@ -1,0 +1,114 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var array<string, mixed> $priceData */
+$priceData = $this->getData() ?? [];
+$price = (float) ($priceData['price'] ?? 0);
+$formattedPrice = (string) ($priceData['formatted_price'] ?? $this->formatPrice($price));
+$currency = (string) ($priceData['currency'] ?? 'CNY');
+$quantity = (int) ($priceData['quantity'] ?? 1);
+$productId = (int) ($priceData['product_id'] ?? 0);
+?>
+<div class="weshop-price-display" data-weshop-price-product="<?= $productId ?>">
+    <div class="price-display__main">
+        <span class="price-display__amount"><?= $formattedPrice ?></span>
+    </div>
+    <?php if (isset($priceData['has_discount']) && $priceData['has_discount']): ?>
+        <div class="price-display__original">
+            <span class="price-display__original-amount">
+                <?= $this->formatPrice((float) ($priceData['original_price'] ?? 0)) ?>
+            </span>
+        </div>
+        <div class="price-display__badges">
+            <?php if (isset($priceData['discount_percent']) && $priceData['discount_percent'] > 0): ?>
+                <span class="price-badge price-badge--discount">
+                    -<?= (int) $priceData['discount_percent'] ?>%
+                </span>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+    <?php if (isset($priceData['tier_prices']) && is_array($priceData['tier_prices']) && count($priceData['tier_prices']) > 0): ?>
+        <div class="price-display__tier-info">
+            <span class="tier-info__label"><?= __('Volume discount available') ?></span>
+        </div>
+    <?php endif; ?>
+</div>
+
+<style>
+.weshop-price-display {
+    display: inline-flex;
+    flex-direction: column;
+    gap: var(--spacing-xs, 0.25rem);
+    font-family: inherit;
+}
+
+.price-display__main {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-xs, 0.25rem);
+}
+
+.price-display__amount {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-price, #e74c3c);
+    line-height: 1.2;
+}
+
+.price-display__original {
+    display: flex;
+    align-items: center;
+}
+
+.price-display__original-amount {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #6c757d);
+    text-decoration: line-through;
+}
+
+.price-display__badges {
+    display: flex;
+    gap: var(--spacing-xs, 0.25rem);
+    flex-wrap: wrap;
+}
+
+.price-badge {
+    display: inline-block;
+    padding: 0.125rem 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: var(--border-radius-sm, 0.25rem);
+    line-height: 1.4;
+}
+
+.price-badge--discount {
+    background-color: var(--color-discount-bg, #fde8e8);
+    color: var(--color-discount, #c0392b);
+}
+
+.price-display__tier-info {
+    margin-top: var(--spacing-xs, 0.25rem);
+}
+
+.tier-info__label {
+    font-size: 0.75rem;
+    color: var(--color-text-hint, #999);
+}
+
+[data-weshop-price-loading="true"] .price-display__amount::after {
+    content: "";
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-left: 0.5em;
+    border: 2px solid var(--color-border, #ddd);
+    border-top-color: var(--color-accent, #3498db);
+    border-radius: 50%;
+    animation: price-spin 0.6s linear infinite;
+}
+
+@keyframes price-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+</style>
