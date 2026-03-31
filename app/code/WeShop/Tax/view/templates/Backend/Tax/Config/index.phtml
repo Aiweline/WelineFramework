@@ -1,0 +1,574 @@
+<?php
+/**
+ * Tax Configuration - Backend
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var string $title 页面标题
+ * @var string $taxConfigUrl 税费配置URL
+ * @var string $saveUrl 保存配置URL
+ */
+$title = $title ?? __('Tax Configuration');
+$taxConfigUrl = $taxConfigUrl ?? '';
+$saveUrl = $saveUrl ?? '';
+?>
+<!-- start page title -->
+<div class="row">
+    <div class="col-12">
+        <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+            <h4 class="mb-sm-0"><?= $title ?></h4>
+            <div class="page-title-right">
+                <ol class="breadcrumb m-0">
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('WeShop') ?></a></li>
+                    <li class="breadcrumb-item"><a href="javascript: void(0);"><?= __('Tax') ?></a></li>
+                    <li class="breadcrumb-item active"><?= __('Configuration') ?></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class="row mb-3">
+    <div class="col-12">
+        <template>Weline_Component::message.phtml</template>
+        <div id="page-message-container"></div>
+    </div>
+</div>
+<!-- end message -->
+
+<style>
+    .tax-config-page .card {
+        border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        border-radius: var(--border-radius-xl);
+        box-shadow: var(--shadow-card);
+    }
+
+    .tax-config-page .card-header {
+        background: var(--color-bg-secondary);
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+        padding: var(--spacing-md) var(--spacing-lg);
+    }
+
+    .tax-config-page .card-body {
+        padding: var(--spacing-lg);
+    }
+
+    .tax-config-page .form-label {
+        font-weight: 600;
+        color: var(--color-text-dark);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .tax-config-page .form-text {
+        color: var(--color-text-secondary);
+        font-size: 0.875rem;
+    }
+
+    .tax-config-page .tax-config-section {
+        margin-bottom: var(--spacing-xl);
+    }
+
+    .tax-config-page .tax-config-section:last-child {
+        margin-bottom: 0;
+    }
+
+    .tax-config-page .section-title {
+        font-size: 1.125rem;
+        font-weight: 600;
+        color: var(--color-text-dark);
+        margin-bottom: var(--spacing-md);
+        padding-bottom: var(--spacing-sm);
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+    }
+
+    .tax-config-page .rate-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: var(--spacing-md);
+    }
+
+    .tax-config-page .rate-table th,
+    .tax-config-page .rate-table td {
+        padding: var(--spacing-sm) var(--spacing-md);
+        text-align: left;
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+    }
+
+    .tax-config-page .rate-table th {
+        background: var(--color-bg-secondary);
+        font-weight: 600;
+        color: var(--color-text-dark);
+    }
+
+    .tax-config-page .rate-table input {
+        width: 100%;
+        border: var(--border-input);
+        border-radius: var(--border-radius-md);
+        padding: 0.5rem 0.75rem;
+        font-size: 0.9rem;
+    }
+
+    .tax-config-page .rate-table input:focus {
+        outline: none;
+        border-color: var(--color-accent);
+        box-shadow: 0 0 0 3px var(--color-accent-light);
+    }
+
+    .tax-config-page .test-result {
+        margin-top: var(--spacing-lg);
+        padding: var(--spacing-lg);
+        background: var(--color-bg-secondary);
+        border-radius: var(--border-radius-lg);
+        display: none;
+    }
+
+    .tax-config-page .test-result.is-visible {
+        display: block;
+    }
+
+    .tax-config-page .test-result-title {
+        font-weight: 600;
+        color: var(--color-text-dark);
+        margin-bottom: var(--spacing-md);
+    }
+
+    .tax-config-page .test-result-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: var(--spacing-md);
+    }
+
+    .tax-config-page .test-result-item {
+        background: var(--color-bg-primary);
+        padding: var(--spacing-md);
+        border-radius: var(--border-radius-md);
+    }
+
+    .tax-config-page .test-result-item-label {
+        font-size: 0.875rem;
+        color: var(--color-text-secondary);
+        margin-bottom: var(--spacing-xs);
+    }
+
+    .tax-config-page .test-result-item-value {
+        font-size: 1.25rem;
+        font-weight: 600;
+        color: var(--color-accent);
+    }
+
+    .tax-config-page .btn-group-config {
+        display: flex;
+        gap: var(--spacing-md);
+        margin-top: var(--spacing-lg);
+    }
+</style>
+
+<div class="row tax-config-page">
+    <div class="col-12">
+        <form id="tax-config-form">
+            <!-- General Settings -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="mdi mdi-cog me-2"></i><?= __('General Tax Settings') ?>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="tax-config-section">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label" for="default-rate">
+                                        <?= __('Default Tax Rate') ?>
+                                    </label>
+                                    <input type="number" class="form-control" id="default-rate" name="default_rate"
+                                           step="0.0001" min="0" max="1" value="0"
+                                           placeholder="<?= __('e.g. 0.08 for 8%') ?>">
+                                    <div class="form-text">
+                                        <?= __('Enter as decimal (0.08 = 8%%) or percentage (8%%). Applied when no country/region rate matches.') ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label" for="prices-include-tax">
+                                        <?= __('Prices Include Tax') ?>
+                                    </label>
+                                    <select class="form-select" id="prices-include-tax" name="prices_include_tax">
+                                        <option value="0"><?= __('No') ?></option>
+                                        <option value="1"><?= __('Yes') ?></option>
+                                    </select>
+                                    <div class="form-text">
+                                        <?= __('Whether product prices in the store include tax.') ?>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label" for="apply-to-shipping">
+                                        <?= __('Apply Tax to Shipping') ?>
+                                    </label>
+                                    <select class="form-select" id="apply-to-shipping" name="apply_to_shipping">
+                                        <option value="0"><?= __('No') ?></option>
+                                        <option value="1"><?= __('Yes') ?></option>
+                                    </select>
+                                    <div class="form-text">
+                                        <?= __('Whether shipping charges are subject to tax.') ?>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Country Rates -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="mdi mdi-earth me-2"></i><?= __('Country Tax Rates') ?>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="tax-config-section">
+                        <p class="text-muted">
+                            <?= __('Configure tax rates for specific countries. Country codes should use ISO 3166-1 alpha-2 format (e.g., US, CN, DE).') ?>
+                        </p>
+                        <div class="table-responsive">
+                            <table class="rate-table" id="country-rates-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30%;"><?= __('Country Code') ?></th>
+                                        <th style="width: 50%;"><?= __('Tax Rate') ?></th>
+                                        <th style="width: 20%;"><?= __('Actions') ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="country-rates-body">
+                                    <tr data-index="0">
+                                        <td>
+                                            <input type="text" name="country_rates[0][code]" placeholder="<?= __('e.g. US') ?>">
+                                        </td>
+                                        <td>
+                                            <input type="number" name="country_rates[0][rate]" step="0.0001" min="0" max="1"
+                                                   placeholder="<?= __('e.g. 0.08') ?>">
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-rate-btn">
+                                                <i class="mdi mdi-delete"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-3" id="add-country-rate-btn">
+                            <i class="mdi mdi-plus"></i> <?= __('Add Country Rate') ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Region Rates -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="mdi mdi-map-marker me-2"></i><?= __('Region Tax Rates') ?>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="tax-config-section">
+                        <p class="text-muted">
+                            <?= __('Configure tax rates for specific regions. Use format Country-Region (e.g., US-CA for California, US-TX for Texas) or just region code for fallback matching.') ?>
+                        </p>
+                        <div class="table-responsive">
+                            <table class="rate-table" id="region-rates-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 30%;"><?= __('Region Code') ?></th>
+                                        <th style="width: 50%;"><?= __('Tax Rate') ?></th>
+                                        <th style="width: 20%;"><?= __('Actions') ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="region-rates-body">
+                                    <tr data-index="0">
+                                        <td>
+                                            <input type="text" name="region_rates[0][code]" placeholder="<?= __('e.g. US-CA') ?>">
+                                        </td>
+                                        <td>
+                                            <input type="number" name="region_rates[0][rate]" step="0.0001" min="0" max="1"
+                                                   placeholder="<?= __('e.g. 0.0825') ?>">
+                                        </td>
+                                        <td>
+                                            <button type="button" class="btn btn-sm btn-outline-danger remove-rate-btn">
+                                                <i class="mdi mdi-delete"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-primary mt-3" id="add-region-rate-btn">
+                            <i class="mdi mdi-plus"></i> <?= __('Add Region Rate') ?>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Calculation -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="mdi mdi-calculator me-2"></i><?= __('Test Calculation') ?>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="tax-config-section">
+                        <p class="text-muted">
+                            <?= __('Test your tax configuration with sample values before saving.') ?>
+                        </p>
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <label class="form-label" for="test-subtotal"><?= __('Subtotal') ?></label>
+                                <input type="number" class="form-control" id="test-subtotal" name="test_subtotal"
+                                       step="0.01" min="0" value="100">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" for="test-country"><?= __('Country') ?></label>
+                                <input type="text" class="form-control" id="test-country" name="test_country"
+                                       placeholder="<?= __('e.g. US') ?>">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label" for="test-region"><?= __('Region') ?></label>
+                                <input type="text" class="form-control" id="test-region" name="test_region"
+                                       placeholder="<?= __('e.g. CA') ?>">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <button type="button" class="btn btn-info w-100" id="test-calculate-btn">
+                                    <i class="mdi mdi-play"></i> <?= __('Test Calculate') ?>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="test-result" id="test-result">
+                            <div class="test-result-title"><?= __('Test Result') ?></div>
+                            <div class="test-result-grid" id="test-result-grid"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="btn-group-config">
+                <button type="submit" class="btn btn-primary" id="save-config-btn">
+                    <i class="mdi mdi-content-save"></i> <?= __('Save Configuration') ?>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="reset-form-btn">
+                    <i class="mdi mdi-refresh"></i> <?= __('Reset') ?>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    (function () {
+        var form = document.getElementById('tax-config-form');
+        var saveUrl = <?= json_encode($saveUrl) ?>;
+        var testResult = document.getElementById('test-result');
+        var testResultGrid = document.getElementById('test-result-grid');
+
+        function addRateRow(tableBodyId) {
+            var tbody = document.getElementById(tableBodyId);
+            if (!tbody) return;
+
+            var rows = tbody.querySelectorAll('tr');
+            var newIndex = rows.length;
+            var lastRow = rows[rows.length - 1];
+            var isRegion = tableBodyId === 'region-rates-body';
+            var codePlaceholder = isRegion ? '<?= __('e.g. US-CA') ?>' : '<?= __('e.g. US') ?>';
+
+            var newRow = document.createElement('tr');
+            newRow.setAttribute('data-index', newIndex);
+            newRow.innerHTML = '<td><input type="text" name="' + (isRegion ? 'region_rates' : 'country_rates') + '[' + newIndex + '][code]" placeholder="' + codePlaceholder + '"></td>'
+                + '<td><input type="number" name="' + (isRegion ? 'region_rates' : 'country_rates') + '[' + newIndex + '][rate]" step="0.0001" min="0" max="1" placeholder="<?= __('e.g. 0.08') ?>"></td>'
+                + '<td><button type="button" class="btn btn-sm btn-outline-danger remove-rate-btn"><i class="mdi mdi-delete"></i></button></td>';
+            tbody.appendChild(newRow);
+        }
+
+        function removeRateRow(button) {
+            var row = button.closest('tr');
+            var tbody = row.parentElement;
+            if (tbody.querySelectorAll('tr').length > 1) {
+                row.remove();
+            }
+        }
+
+        document.getElementById('add-country-rate-btn').addEventListener('click', function () {
+            addRateRow('country-rates-body');
+        });
+
+        document.getElementById('add-region-rate-btn').addEventListener('click', function () {
+            addRateRow('region-rates-body');
+        });
+
+        document.addEventListener('click', function (e) {
+            if (e.target.closest('.remove-rate-btn')) {
+                removeRateRow(e.target.closest('.remove-rate-btn'));
+            }
+        });
+
+        function formatRate(rate) {
+            var num = Number(rate || 0);
+            return (num * 100).toFixed(2) + '%';
+        }
+
+        function formatPrice(amount) {
+            var num = Number(amount || 0);
+            if (window.Intl && typeof window.Intl.NumberFormat === 'function') {
+                try {
+                    return new Intl.NumberFormat(undefined, {
+                        style: 'currency',
+                        currency: 'USD',
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    }).format(num);
+                } catch (e) {}
+            }
+            return num.toFixed(2);
+        }
+
+        function renderTestResult(data) {
+            if (!testResult || !testResultGrid || !data) return;
+
+            var html = '<div class="test-result-item">'
+                + '<div class="test-result-item-label"><?= __('Subtotal') ?></div>'
+                + '<div class="test-result-item-value">' + formatPrice(data.subtotal || 0) + '</div>'
+                + '</div>'
+                + '<div class="test-result-item">'
+                + '<div class="test-result-item-label"><?= __('Country') ?></div>'
+                + '<div class="test-result-item-value">' + (data.country || '-') + '</div>'
+                + '</div>'
+                + '<div class="test-result-item">'
+                + '<div class="test-result-item-label"><?= __('Region') ?></div>'
+                + '<div class="test-result-item-value">' + (data.region || '-') + '</div>'
+                + '</div>'
+                + '<div class="test-result-item">'
+                + '<div class="test-result-item-label"><?= __('Tax Rate') ?></div>'
+                + '<div class="test-result-item-value">' + formatRate(data.tax_rate) + '</div>'
+                + '</div>'
+                + '<div class="test-result-item">'
+                + '<div class="test-result-item-label"><?= __('Tax Amount') ?></div>'
+                + '<div class="test-result-item-value">' + formatPrice(data.tax_amount) + '</div>'
+                + '</div>';
+
+            testResultGrid.innerHTML = html;
+            testResult.classList.add('is-visible');
+        }
+
+        document.getElementById('test-calculate-btn').addEventListener('click', function () {
+            var formData = new FormData(form);
+            var params = new URLSearchParams();
+            formData.forEach(function (value, key) {
+                if (value !== '' && value !== null) {
+                    params.append(key, String(value));
+                }
+            });
+
+            fetch(saveUrl + '?' + params.toString(), {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (response) {
+                return response.json();
+            }).then(function (payload) {
+                if (payload && payload.success && payload.data && payload.data.test_result) {
+                    renderTestResult(payload.data.test_result);
+                } else {
+                    var msg = (payload && payload.message) || <?= json_encode(__('Test calculation failed')) ?>;
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(msg);
+                    } else {
+                        console.error(msg);
+                    }
+                }
+            }).catch(function (error) {
+                console.error('Test calculation error:', error);
+                var msg = <?= json_encode(__('Test calculation failed')) ?>;
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(msg);
+                } else {
+                    console.error(msg);
+                }
+            });
+        });
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            var formData = new FormData(form);
+            var submitBtn = document.getElementById('save-config-btn');
+            submitBtn.disabled = true;
+
+            fetch(saveUrl, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (response) {
+                return response.json();
+            }).then(function (payload) {
+                if (payload && payload.success) {
+                    var msg = <?= json_encode(__('Configuration saved successfully!')) ?>;
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.success(msg);
+                    } else {
+                        console.log(msg);
+                    }
+                    if (payload.data && payload.data.test_result) {
+                        renderTestResult(payload.data.test_result);
+                    }
+                } else {
+                    var msg = (payload && payload.message) || <?= json_encode(__('Failed to save configuration')) ?>;
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.error(msg);
+                    } else {
+                        console.error(msg);
+                    }
+                }
+            }).catch(function (error) {
+                console.error('Save configuration error:', error);
+                var msg = <?= json_encode(__('Failed to save configuration')) ?>;
+                if (typeof BackendToast !== 'undefined') {
+                    BackendToast.error(msg);
+                } else {
+                    console.error(msg);
+                }
+            }).finally(function () {
+                submitBtn.disabled = false;
+            });
+        });
+
+        document.getElementById('reset-form-btn').addEventListener('click', function () {
+            var msg = <?= json_encode(__('Are you sure you want to reset the form?')) ?>;
+            if (typeof BackendConfirm === 'undefined') {
+                form.reset();
+                if (testResult) {
+                    testResult.classList.remove('is-visible');
+                }
+                return;
+            }
+            BackendConfirm.show(msg, { type: 'warning' }).then(function (confirmed) {
+                if (!confirmed) return;
+                form.reset();
+                if (testResult) {
+                    testResult.classList.remove('is-visible');
+                }
+            });
+        });
+    })();
+</script>
