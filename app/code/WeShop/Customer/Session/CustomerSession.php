@@ -14,96 +14,96 @@ use Weline\Framework\Session\SessionInterface;
 
 class CustomerSession implements AuthenticatedSessionInterface
 {
-    private AuthenticatedSessionInterface $session;
+    private ?AuthenticatedSessionInterface $frontendSession = null;
 
-    public function __construct()
-    {
-        $this->session = SessionFactory::getInstance()->createFrontendSession();
+    public function __construct(
+        private readonly ?SessionFactory $sessionFactory = null
+    ) {
     }
 
     public function login(AuthenticableInterface $user): void
     {
-        $this->session->login($user);
+        $this->getFrontendSession()->login($user);
     }
 
     public function logout(): void
     {
-        $this->session->logout();
+        $this->getFrontendSession()->logout();
     }
 
     public function isLoggedIn(): bool
     {
-        return $this->session->isLoggedIn();
+        return $this->getFrontendSession()->isLoggedIn();
     }
 
     public function getUser(): ?AuthenticableInterface
     {
-        return $this->session->getUser();
+        return $this->getFrontendSession()->getUser();
     }
 
     public function getCustomer(): ?AuthenticableInterface
     {
-        return $this->session->getCustomer();
+        return $this->getFrontendSession()->getCustomer();
     }
 
     public function getUserId(): int|string|null
     {
-        return $this->session->getUserId();
+        return $this->getFrontendSession()->getUserId();
     }
 
     public function getUsername(): ?string
     {
-        return $this->session->getUsername();
+        return $this->getFrontendSession()->getUsername();
     }
 
     public function getSession(): SessionInterface
     {
-        return $this->session->getSession();
+        return $this->getFrontendSession()->getSession();
     }
 
     public function get(string $key): mixed
     {
-        return $this->session->get($key);
+        return $this->getFrontendSession()->get($key);
     }
 
     public function set(string $key, mixed $value): void
     {
-        $this->session->set($key, $value);
+        $this->getFrontendSession()->set($key, $value);
     }
 
     public function delete(string $key): void
     {
-        $this->session->delete($key);
+        $this->getFrontendSession()->delete($key);
     }
 
     public function getId(): string
     {
-        return $this->session->getId();
+        return $this->getFrontendSession()->getId();
     }
 
     public function start(?string $sessionId = null): void
     {
-        $this->session->start($sessionId);
+        $this->getFrontendSession()->start($sessionId);
     }
 
     public function destroy(): void
     {
-        $this->session->destroy();
+        $this->getFrontendSession()->destroy();
     }
 
     public function regenerate(bool $deleteOldSession = true): void
     {
-        $this->session->regenerate($deleteOldSession);
+        $this->getFrontendSession()->regenerate($deleteOldSession);
     }
 
     public function isStarted(): bool
     {
-        return $this->session->isStarted();
+        return $this->getFrontendSession()->isStarted();
     }
 
     public function getArea(): string
     {
-        return $this->session->getArea();
+        return $this->getFrontendSession()->getArea();
     }
 
     public function isLogin(): bool
@@ -128,21 +128,21 @@ class CustomerSession implements AuthenticatedSessionInterface
 
     public function getSessionId(): string
     {
-        return $this->session->getSession()->getId();
+        return $this->getFrontendSession()->getSession()->getId();
     }
 
     public function getData(string $name = ''): mixed
     {
         if ($name === '') {
-            return $this->session->getSession()->all();
+            return $this->getFrontendSession()->getSession()->all();
         }
 
-        return $this->session->getSession()->get($name);
+        return $this->getFrontendSession()->getSession()->get($name);
     }
 
     public function setData(string $name, mixed $value): static
     {
-        $this->session->set($name, $value);
+        $this->getFrontendSession()->set($name, $value);
         return $this;
     }
 
@@ -172,5 +172,15 @@ class CustomerSession implements AuthenticatedSessionInterface
 
         $this->login($customer);
         return $this;
+    }
+
+    private function getFrontendSession(): AuthenticatedSessionInterface
+    {
+        if ($this->frontendSession instanceof AuthenticatedSessionInterface) {
+            return $this->frontendSession;
+        }
+
+        $this->frontendSession = ($this->sessionFactory ?? SessionFactory::getInstance())->createFrontendSession();
+        return $this->frontendSession;
     }
 }

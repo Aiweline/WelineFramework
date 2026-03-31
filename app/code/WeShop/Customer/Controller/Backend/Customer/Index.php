@@ -17,24 +17,57 @@ class Index extends BackendController
     {
         /** @var Customer $customerModel */
         $customerModel = ObjectManager::getInstance(Customer::class);
-        
+
         // 获取客户统计数据
         $totalCount = $customerModel->clear()->count();
         $activeCount = $customerModel->clear()->where('is_active', 1)->count();
         $inactiveCount = $customerModel->clear()->where('is_active', 0)->count();
-        
+
         // 今日新增
-        $today = date('Y-m-d');
+        $todayStart = date('Y-m-d 00:00:00');
+        $todayEnd = date('Y-m-d 23:59:59');
         $todayCount = $customerModel->clear()
-            ->where('DATE(created_at)', $today)
+            ->where(Customer::schema_fields_CREATED_AT, $todayStart, '>=')
+            ->where(Customer::schema_fields_CREATED_AT, $todayEnd, '<=')
             ->count();
-        
+
+        // 获取客户列表
+        $search = trim((string) $this->getRequest()->getGet('search', ''));
+        $page = (int) $this->getRequest()->getGet('page', 1);
+        $pageSize = 20;
+
+        $query = $customerModel->clear()->select();
+
+        if ($search) {
+            $query = $query->where(Customer::schema_fields_EMAIL, '%' . $search . '%', 'LIKE')
+                ->where(Customer::schema_fields_FIRST_NAME, '%' . $search . '%', 'LIKE', 'OR')
+                ->where(Customer::schema_fields_LAST_NAME, '%' . $search . '%', 'LIKE', 'OR');
+        }
+
+        $customers = $query->order('customer_id DESC')
+            ->pagination($page, $pageSize)
+            ->fetch();
+
+        // 获取分页HTML
+        $paginationQuery = $customerModel->clear()->select();
+        if ($search) {
+            $paginationQuery = $paginationQuery->where(Customer::schema_fields_EMAIL, '%' . $search . '%', 'LIKE')
+                ->where(Customer::schema_fields_FIRST_NAME, '%' . $search . '%', 'LIKE', 'OR')
+                ->where(Customer::schema_fields_LAST_NAME, '%' . $search . '%', 'LIKE', 'OR');
+        }
+        $pagination = $paginationQuery->order('customer_id DESC')
+            ->pagination($page, $pageSize)
+            ->fetch()
+            ->getPaginationHtml();
+
         $this->assign('title', __('客户管理'));
         $this->assign('total_count', $totalCount);
         $this->assign('active_count', $activeCount);
         $this->assign('inactive_count', $inactiveCount);
         $this->assign('today_count', $todayCount);
-        
+        $this->assign('customers', $customers);
+        $this->assign('pagination', $pagination);
+
         return $this->fetch('customer/index');
     }
 }
