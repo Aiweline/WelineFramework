@@ -1,0 +1,757 @@
+<?php
+$cartItems = $this->getData('cart_items') ?? [];
+$cartSummary = $this->getData('cart_summary') ?? [];
+$customer = $this->getData('customer') ?? null;
+$savedAddresses = $this->getData('saved_addresses') ?? [];
+$selectedShippingAddressId = (int) ($this->getData('selected_shipping_address_id') ?? 0);
+$shippingMethods = $this->getData('shipping_methods') ?? [];
+$paymentMethods = $this->getData('payment_methods') ?? [];
+$countries = $this->getData('countries') ?? [];
+$isRetryPayment = (bool) ($this->getData('is_retry_payment') ?? false);
+$retryOrderId = (int) ($this->getData('retry_order_id') ?? 0);
+$retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ?? '');
+$checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD'));
+?>
+<w:hook name="WeShop_Checkout::page::before"/>
+
+<style>
+/* ========================================
+   结账页面样式
+   使用主题变量和 BEM 命名规范
+   ======================================== */
+
+.checkout-page__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+    gap: var(--spacing-lg);
+}
+
+.checkout-form__stack {
+    display: grid;
+    gap: var(--spacing-md);
+}
+
+.checkout-form__card {
+    background: var(--color-bg-primary);
+    border: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+    border-radius: var(--border-radius-xl);
+    padding: var(--spacing-lg);
+    box-shadow: var(--shadow-card);
+}
+
+.checkout-form__card-title {
+    margin: 0 0 var(--spacing-md);
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-text-dark);
+}
+
+.checkout-form__grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--spacing-md);
+}
+
+.checkout-form__field {
+    display: grid;
+    gap: var(--spacing-xs);
+}
+
+.checkout-form__field--full {
+    grid-column: 1 / -1;
+}
+
+.checkout-form__label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-dark);
+}
+
+.checkout-form__input,
+.checkout-form__select {
+    width: 100%;
+    border: var(--border-input);
+    border-radius: var(--border-radius-lg);
+    padding: 0.75rem 0.9rem;
+    font-size: 0.95rem;
+    background: var(--color-bg-primary);
+    color: var(--color-text-dark);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.checkout-form__input:focus,
+.checkout-form__select:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+.checkout-form__choice-list {
+    display: grid;
+    gap: var(--spacing-md);
+}
+
+.checkout-form__choice {
+    display: flex;
+    gap: var(--spacing-md);
+    align-items: flex-start;
+    border: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
+    border-radius: var(--border-radius-xl);
+    padding: var(--spacing-md);
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.checkout-form__choice:has(input:checked) {
+    border-color: var(--color-accent);
+    background-color: var(--color-accent-light);
+}
+
+.checkout-form__choice input {
+    margin-top: 0.25rem;
+}
+
+.checkout-form__choice-title {
+    font-weight: 600;
+    color: var(--color-text-dark);
+}
+
+.checkout-form__choice-meta {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-xs);
+}
+
+.checkout-summary__list {
+    display: grid;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-md);
+}
+
+.checkout-summary__item {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    gap: var(--spacing-md);
+    align-items: center;
+}
+
+.checkout-summary__item img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: var(--border-radius-lg);
+    background: var(--color-bg-secondary);
+}
+
+.checkout-summary__item-name {
+    font-weight: 600;
+    color: var(--color-text-dark);
+}
+
+.checkout-summary__item-meta {
+    font-size: 0.85rem;
+    color: var(--color-text-secondary);
+    margin-top: var(--spacing-xs);
+}
+
+.checkout-summary__totals {
+    display: grid;
+    gap: var(--spacing-sm);
+    padding-top: var(--spacing-md);
+    border-top: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
+}
+
+.checkout-summary__row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--spacing-md);
+    color: var(--color-text-secondary);
+    font-size: 0.95rem;
+}
+
+.checkout-summary__row--total {
+    font-weight: 700;
+    color: var(--color-text-dark);
+    font-size: 1.05rem;
+}
+
+.checkout-form__submit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    border: 0;
+    border-radius: var(--border-radius-full);
+    padding: 0.9rem 1.2rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--color-text-light);
+    background: var(--color-accent);
+    cursor: pointer;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.checkout-form__submit:hover {
+    background: var(--color-accent-hover);
+    transform: translateY(-1px);
+}
+
+.checkout-form__empty {
+    padding: var(--spacing-md);
+    border-radius: var(--border-radius-xl);
+    background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+    color: var(--color-warning);
+    font-size: 0.9rem;
+}
+
+.checkout-form__terms {
+    display: flex;
+    gap: var(--spacing-sm);
+    align-items: flex-start;
+    font-size: 0.9rem;
+    color: var(--color-text-secondary);
+}
+
+.checkout-form__terms a {
+    color: var(--color-link);
+    text-decoration: none;
+}
+
+.checkout-form__terms a:hover {
+    text-decoration: underline;
+}
+
+@media (max-width: 991px) {
+    .checkout-page__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .checkout-form__grid {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<div class="checkout-page__grid">
+    <form class="checkout-form__stack" id="weshop-checkout-form" action="<?= $this->getUrl('checkout/place-order') ?>" method="post">
+        <?php if ($isRetryPayment && $retryOrderId > 0): ?>
+            <input type="hidden" name="order_id" value="<?= $retryOrderId ?>">
+            <section class="checkout-form__card">
+                <h2 class="checkout-form__card-title"><?= __('Retry Payment') ?></h2>
+                <div class="checkout-form__empty" style="background:color-mix(in srgb, var(--color-info) 15%, transparent);color:var(--color-info);">
+                    <?= __('You are retrying payment for order #%{1}. The existing order will be reused instead of creating a new one.', [$retryOrderIncrementId !== '' ? $retryOrderIncrementId : (string) $retryOrderId]) ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <section class="checkout-form__card">
+            <h2 class="checkout-form__card-title"><?= __('Shipping Address') ?></h2>
+
+            <?php if ($savedAddresses): ?>
+                <div class="checkout-form__choice-list" style="margin-bottom: var(--spacing-md);">
+                    <?php foreach ($savedAddresses as $index => $address): ?>
+                        <label class="checkout-form__choice">
+                            <?php $addressId = (int) ($address['address_id'] ?? 0); ?>
+                            <input type="radio" name="shipping_address_id" value="<?= $addressId ?>" <?= ($selectedShippingAddressId > 0 ? $addressId === $selectedShippingAddressId : $index === 0) ? 'checked' : '' ?>>
+                            <span>
+                                <div class="checkout-form__choice-title"><?= htmlspecialchars((string) ($address['name'] ?? '')) ?></div>
+                                <div class="checkout-form__choice-meta">
+                                    <?= htmlspecialchars((string) ($address['street'] ?? '')) ?><br>
+                                    <?= htmlspecialchars((string) ($address['city'] ?? '')) ?>, <?= htmlspecialchars((string) ($address['state'] ?? '')) ?> <?= htmlspecialchars((string) ($address['postcode'] ?? '')) ?>
+                                </div>
+                            </span>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <div class="checkout-form__grid" id="weshop-new-address-grid">
+                <div class="checkout-form__field">
+                    <label class="checkout-form__label" for="shipping-firstname"><?= __('First Name') ?></label>
+                    <input class="checkout-form__input" id="shipping-firstname" name="shipping_address[firstname]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="checkout-form__field">
+                    <label class="checkout-form__label" for="shipping-lastname"><?= __('Last Name') ?></label>
+                    <input class="checkout-form__input" id="shipping-lastname" name="shipping_address[lastname]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="checkout-form__field checkout-form__field--full">
+                    <label class="checkout-form__label" for="shipping-street"><?= __('Street Address') ?></label>
+                    <input class="checkout-form__input" id="shipping-street" name="shipping_address[street]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="checkout-form__field">
+                    <label class="checkout-form__label" for="shipping-city"><?= __('City') ?></label>
+                    <input class="checkout-form__input" id="shipping-city" name="shipping_address[city]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="checkout-form__field">
+                    <label class="checkout-form__label" for="shipping-region"><?= __('State / Province') ?></label>
+                    <input class="checkout-form__input" id="shipping-region" name="shipping_address[region]" type="text" data-new-address-field>
+                </div>
+                <div class="checkout-form__field">
+                    <label class="checkout-form__label" for="shipping-postcode"><?= __('Zip / Postal Code') ?></label>
+                    <input class="checkout-form__input" id="shipping-postcode" name="shipping_address[postcode]" type="text" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                </div>
+                <div class="checkout-form__field">
+                    <label class="checkout-form__label" for="shipping-telephone"><?= __('Phone Number') ?></label>
+                    <input class="checkout-form__input" id="shipping-telephone" name="shipping_address[telephone]" type="tel" data-new-address-field>
+                </div>
+                <div class="checkout-form__field checkout-form__field--full">
+                    <label class="checkout-form__label" for="shipping-country"><?= __('Country') ?></label>
+                    <select class="checkout-form__select" id="shipping-country" name="shipping_address[country_id]" data-new-address-field <?= $savedAddresses ? '' : 'required' ?>>
+                        <option value=""><?= __('Select Country') ?></option>
+                        <?php foreach ($countries as $country): ?>
+                            <option value="<?= htmlspecialchars((string) ($country['code'] ?? '')) ?>"><?= htmlspecialchars((string) ($country['name'] ?? '')) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+        </section>
+
+        <section class="checkout-form__card">
+            <h2 class="checkout-form__card-title"><?= __('Shipping Method') ?></h2>
+            <w:hook name="WeShop_Shipping::frontend::layouts::checkout::methods"/>
+            <div data-weshop-shipping-method-host>
+                <w:hook name="WeShop_Checkout::frontend::partials::checkout::shipping-methods"/>
+            </div>
+        </section>
+
+        <section class="checkout-form__card">
+            <h2 class="checkout-form__card-title"><?= __('Payment Method') ?></h2>
+            <div data-weshop-payment-method-host>
+                <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-methods"/>
+            </div>
+            <div data-weshop-payment-detail-host>
+                <w:hook name="WeShop_Checkout::frontend::partials::checkout::payment-details"/>
+            </div>
+        </section>
+
+        <section class="checkout-form__card">
+            <h2 class="checkout-form__card-title"><?= __('Review and Submit') ?></h2>
+            <w:hook name="WeShop_Checkout::review::before"/>
+            <label class="checkout-form__terms">
+                <input type="checkbox" name="agree_terms" required>
+                <span>
+                    <?= __('I agree to the') ?>
+                    <a href="<?= $this->getUrl('cms/page/terms') ?>"><?= __('Terms of Service') ?></a>
+                    <?= __('and') ?>
+                    <a href="<?= $this->getUrl('cms/page/privacy') ?>"><?= __('Privacy Policy') ?></a>.
+                </span>
+            </label>
+            <div style="margin-top: var(--spacing-md);">
+                <w:hook name="WeShop_Checkout::review::place_order_button"/>
+                <button class="checkout-form__submit weline-pixel::begin_checkout" type="submit"><?= __('Place Order') ?></button>
+            </div>
+            <w:hook name="WeShop_Checkout::review::after"/>
+        </section>
+    </form>
+
+    <aside class="checkout-form__card">
+        <w:hook name="WeShop_Checkout::summary::before"/>
+        <h2 class="checkout-form__card-title"><?= __('Order Summary') ?></h2>
+        <div class="checkout-summary__list">
+            <?php foreach ($cartItems as $item): ?>
+                <div class="checkout-summary__item">
+                    <img src="<?= htmlspecialchars((string) ($item['image'] ?? '')) ?>" alt="<?= htmlspecialchars((string) ($item['name'] ?? '')) ?>">
+                    <div>
+                        <div class="checkout-summary__item-name"><?= htmlspecialchars((string) ($item['name'] ?? '')) ?></div>
+                        <div class="checkout-summary__item-meta"><?= __('Qty: %1', (int) ($item['qty'] ?? 0)) ?></div>
+                    </div>
+                    <div><?= $this->formatPrice((float) ($item['row_total'] ?? 0)) ?></div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="checkout-summary__totals" data-weshop-summary-host data-weshop-summary-currency="<?= htmlspecialchars($checkoutCurrency) ?>">
+            <w:hook name="WeShop_Checkout::summary::rows_before"/>
+            <div class="checkout-summary__row">
+                <w:hook name="WeShop_Checkout::summary::subtotal_before"/>
+                <span><?= __('Subtotal') ?></span>
+                <span data-weshop-summary-subtotal><?= $this->formatPrice((float) ($cartSummary['subtotal'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::subtotal_after"/>
+            </div>
+            <div class="checkout-summary__row">
+                <w:hook name="WeShop_Checkout::summary::shipping_before"/>
+                <span><?= __('Shipping') ?></span>
+                <span data-weshop-summary-shipping><?= $this->formatPrice((float) ($cartSummary['shipping'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::shipping_after"/>
+            </div>
+            <div class="checkout-summary__row">
+                <w:hook name="WeShop_Checkout::summary::tax_before"/>
+                <span><?= __('Tax') ?></span>
+                <span data-weshop-summary-tax><?= $this->formatPrice((float) ($cartSummary['tax'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::tax_after"/>
+            </div>
+            <div class="checkout-summary__row" data-weshop-summary-discount-row <?= (float) ($cartSummary['discount'] ?? 0) > 0 ? '' : 'hidden' ?>>
+                <w:hook name="WeShop_Checkout::summary::discount_before"/>
+                <span><?= __('Discount') ?></span>
+                <span data-weshop-summary-discount>-<?= $this->formatPrice((float) ($cartSummary['discount'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::discount_after"/>
+            </div>
+            <div class="checkout-summary__row checkout-summary__row--total">
+                <w:hook name="WeShop_Checkout::summary::grand_total_before"/>
+                <span><?= __('Grand Total') ?></span>
+                <span data-weshop-summary-grand-total><?= $this->formatPrice((float) ($cartSummary['grand_total'] ?? 0)) ?></span>
+                <w:hook name="WeShop_Checkout::summary::grand_total_after"/>
+            </div>
+            <w:hook name="WeShop_Checkout::summary::rows_after"/>
+        </div>
+        <w:hook name="WeShop_Checkout::summary::after"/>
+    </aside>
+</div>
+
+<script>
+    (function () {
+        var radios = document.querySelectorAll('input[name="shipping_address_id"]');
+        var newAddressFields = document.querySelectorAll('[data-new-address-field]');
+        var form = document.getElementById('weshop-checkout-form');
+        var submitButton = form ? form.querySelector('button[type="submit"]') : null;
+        var successUrl = '<?= $this->getUrl('checkout/success') ?>';
+        var methodsUrl = '<?= $this->getUrl('checkout/methods') ?>';
+        var shippingMethodHost = document.querySelector('[data-weshop-shipping-method-host]');
+        var paymentMethodHost = document.querySelector('[data-weshop-payment-method-host]');
+        var paymentDetailHost = document.querySelector('[data-weshop-payment-detail-host]');
+        var summaryHost = document.querySelector('[data-weshop-summary-host]');
+        var subtotalValue = document.querySelector('[data-weshop-summary-subtotal]');
+        var shippingValue = document.querySelector('[data-weshop-summary-shipping]');
+        var taxValue = document.querySelector('[data-weshop-summary-tax]');
+        var discountRow = document.querySelector('[data-weshop-summary-discount-row]');
+        var discountValue = document.querySelector('[data-weshop-summary-discount]');
+        var grandTotalValue = document.querySelector('[data-weshop-summary-grand-total]');
+        var refreshTimer = null;
+
+        function syncNewAddressRequirement() {
+            var hasSavedAddress = false;
+            radios.forEach(function (radio) {
+                if (radio.checked) {
+                    hasSavedAddress = true;
+                }
+            });
+
+            newAddressFields.forEach(function (field) {
+                if (hasSavedAddress) {
+                    field.removeAttribute('required');
+                }
+            });
+        }
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', syncNewAddressRequirement);
+        });
+
+        function showCheckoutMessage(message, type) {
+            if (window.WeShop && typeof window.WeShop.showNotification === 'function') {
+                window.WeShop.showNotification(message, type);
+                return;
+            }
+
+            console.error(message);
+        }
+
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, function (character) {
+                return {
+                    '&': '&amp;',
+                    '<': '&lt;',
+                    '>': '&gt;',
+                    '"': '&quot;',
+                    "'": '&#039;'
+                }[character] || character;
+            });
+        }
+
+        function getCheckedValue(name) {
+            if (!form) {
+                return '';
+            }
+
+            var checked = form.querySelector('input[name="' + name + '"]:checked');
+            return checked ? checked.value : '';
+        }
+
+        function formatSummaryAmount(value) {
+            var amount = Number(value || 0);
+            var currency = summaryHost ? String(summaryHost.getAttribute('data-weshop-summary-currency') || 'USD') : 'USD';
+
+            if (window.Intl && typeof window.Intl.NumberFormat === 'function') {
+                try {
+                    return new Intl.NumberFormat(undefined, {
+                        style: 'currency',
+                        currency: currency,
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    }).format(amount);
+                } catch (error) {
+                    console.warn('Checkout summary currency formatting fallback:', error);
+                }
+            }
+
+            return amount.toFixed(2);
+        }
+
+        function renderCartSummary(summary) {
+            if (!summaryHost || !summary) {
+                return;
+            }
+
+            var normalized = {
+                subtotal: Number(summary.subtotal || 0),
+                shipping: Number(summary.shipping || 0),
+                discount: Number(summary.discount || 0),
+                tax: Number(summary.tax || 0),
+                grand_total: Number(summary.grand_total || summary.total || 0)
+            };
+
+            if (subtotalValue) {
+                subtotalValue.textContent = formatSummaryAmount(normalized.subtotal);
+            }
+
+            if (shippingValue) {
+                shippingValue.textContent = formatSummaryAmount(normalized.shipping);
+            }
+
+            if (taxValue) {
+                taxValue.textContent = formatSummaryAmount(normalized.tax);
+            }
+
+            if (discountValue) {
+                discountValue.textContent = '-' + formatSummaryAmount(normalized.discount);
+            }
+
+            if (discountRow) {
+                discountRow.hidden = normalized.discount <= 0;
+            }
+
+            if (grandTotalValue) {
+                grandTotalValue.textContent = formatSummaryAmount(normalized.grand_total);
+            }
+        }
+
+        function renderShippingMethods(methods) {
+            if (!shippingMethodHost) {
+                return;
+            }
+
+            if (!Array.isArray(methods) || methods.length === 0) {
+                shippingMethodHost.innerHTML = '<div class="weshop-checkout-empty"><?= __('No shipping methods are available for the current checkout context.') ?></div>';
+                return;
+            }
+
+            var html = '<div class="checkout-form__choice-list" data-weshop-shipping-method-list>';
+            methods.forEach(function (method) {
+                if (!method || !method.code) {
+                    return;
+                }
+
+                html += '<label class="checkout-form__choice">'
+                    + '<input type="radio" name="shipping_method" value="' + escapeHtml(method.code) + '"' + (method.is_default ? ' checked' : '') + ' required>'
+                    + '<span>'
+                    + '<div class="weshop-checkout-choice-title">' + escapeHtml(method.name || method.title || method.code) + '</div>';
+
+                if (method.description) {
+                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.description) + '</div>';
+                }
+
+                html += '</span></label>';
+            });
+            html += '</div>';
+            shippingMethodHost.innerHTML = html;
+        }
+
+        function renderPaymentMethods(methods) {
+            if (!paymentMethodHost) {
+                return;
+            }
+
+            if (!Array.isArray(methods) || methods.length === 0) {
+                paymentMethodHost.innerHTML = '<div class="weshop-checkout-empty"><?= __('No payment methods are available for the current checkout context.') ?></div>';
+                return;
+            }
+
+            var html = '<div class="checkout-form__choice-list" data-weshop-payment-method-list>';
+            methods.forEach(function (method) {
+                if (!method || !method.code) {
+                    return;
+                }
+
+                html += '<label class="checkout-form__choice">'
+                    + '<input type="radio" name="payment_method" value="' + escapeHtml(method.code) + '"' + (method.is_default ? ' checked' : '') + ' required>'
+                    + '<span style="flex: 1; min-width: 0;">'
+                    + '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">'
+                    + '<div class="weshop-checkout-choice-title">' + escapeHtml(method.title || method.name || method.code) + '</div>';
+
+                if (method.badge) {
+                    html += '<span class="weshop-checkout-payment-badge">' + escapeHtml(method.badge) + '</span>';
+                }
+
+                html += '</div>';
+
+                if (method.description) {
+                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.description) + '</div>';
+                }
+
+                if (method.checkout_note) {
+                    html += '<div class="weshop-checkout-choice-meta">' + escapeHtml(method.checkout_note) + '</div>';
+                }
+
+                html += '</span></label>';
+            });
+            html += '</div>';
+            paymentMethodHost.innerHTML = html;
+        }
+
+        function renderPaymentDetails(methods) {
+            if (!paymentDetailHost) {
+                return;
+            }
+
+            if (!Array.isArray(methods) || methods.length === 0) {
+                paymentDetailHost.innerHTML = '';
+                return;
+            }
+
+            var html = '<div class="weshop-checkout-payment-details" data-weshop-payment-detail-list>';
+            methods.forEach(function (method) {
+                if (!method || !method.code) {
+                    return;
+                }
+
+                html += '<article class="weshop-checkout-payment-detail' + (method.is_default ? ' is-active' : '') + '" data-weshop-payment-detail="' + escapeHtml(method.code) + '">'
+                    + '<div class="weshop-checkout-payment-detail-title">' + escapeHtml(method.title || method.name || method.code) + '</div>';
+
+                if (method.flow_label) {
+                    html += '<div class="weshop-checkout-payment-detail-meta"><?= __('Payment flow: %1', '__FLOW__') ?>'.replace('__FLOW__', escapeHtml(method.flow_label)) + '</div>';
+                }
+
+                if (method.checkout_note) {
+                    html += '<div class="weshop-checkout-payment-detail-meta">' + escapeHtml(method.checkout_note) + '</div>';
+                } else if (method.description) {
+                    html += '<div class="weshop-checkout-payment-detail-meta">' + escapeHtml(method.description) + '</div>';
+                }
+
+                html += '</article>';
+            });
+            html += '</div>';
+            paymentDetailHost.innerHTML = html;
+            syncPaymentDetails();
+        }
+
+        function syncPaymentDetails() {
+            if (!form) {
+                return;
+            }
+
+            var selectedCode = getCheckedValue('payment_method');
+            document.querySelectorAll('[data-weshop-payment-detail]').forEach(function (panel) {
+                var isActive = panel.getAttribute('data-weshop-payment-detail') === selectedCode;
+                panel.classList.toggle('is-active', isActive);
+            });
+        }
+
+        function refreshCheckoutMethods() {
+            if (!form) {
+                return Promise.resolve();
+            }
+
+            return fetch(methodsUrl, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            }).then(function (response) {
+                return response.json();
+            }).then(function (payload) {
+                if (!payload || !payload.success) {
+                    showCheckoutMessage((payload && payload.message) || 'Unable to refresh checkout methods right now.', 'error');
+                    return;
+                }
+
+                var data = payload.data || {};
+                renderShippingMethods(Array.isArray(data.shipping_methods) ? data.shipping_methods : []);
+                renderPaymentMethods(Array.isArray(data.payment_methods) ? data.payment_methods : []);
+                renderPaymentDetails(Array.isArray(data.payment_methods) ? data.payment_methods : []);
+                renderCartSummary(data.cart_summary || {});
+            }).catch(function (error) {
+                console.error('Checkout method refresh error:', error);
+                showCheckoutMessage('Unable to refresh checkout methods right now.', 'error');
+            });
+        }
+
+        function scheduleCheckoutMethodRefresh() {
+            if (refreshTimer) {
+                window.clearTimeout(refreshTimer);
+            }
+
+            refreshTimer = window.setTimeout(function () {
+                refreshCheckoutMethods();
+            }, 180);
+        }
+
+        if (form) {
+            form.addEventListener('change', function (event) {
+                var target = event.target;
+                if (!target || !target.name) {
+                    return;
+                }
+
+                if (target.name === 'payment_method') {
+                    syncPaymentDetails();
+                    return;
+                }
+
+                if (target.name === 'shipping_address_id'
+                    || target.name === 'shipping_method'
+                    || target.name === 'shipping_address[country_id]'
+                    || target.name === 'shipping_address[region]') {
+                    scheduleCheckoutMethodRefresh();
+                }
+            });
+
+            form.addEventListener('submit', function (event) {
+                event.preventDefault();
+
+                if (submitButton) {
+                    submitButton.disabled = true;
+                }
+
+                fetch(form.action, {
+                    method: 'POST',
+                    body: new FormData(form),
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                }).then(function (response) {
+                    return response.json();
+                }).then(function (payload) {
+                    if (!payload || !payload.success) {
+                        showCheckoutMessage((payload && payload.message) || 'Unable to place the order right now.', 'error');
+                        return;
+                    }
+
+                    var redirectUrl = payload.data && payload.data.redirect_url ? payload.data.redirect_url : '';
+                    window.location.href = redirectUrl || successUrl;
+                }).catch(function (error) {
+                    console.error('Checkout submit error:', error);
+                    showCheckoutMessage('Unable to place the order right now.', 'error');
+                }).finally(function () {
+                    if (submitButton) {
+                        submitButton.disabled = false;
+                    }
+                });
+            });
+        }
+
+        newAddressFields.forEach(function (field) {
+            field.addEventListener('input', scheduleCheckoutMethodRefresh);
+            field.addEventListener('change', scheduleCheckoutMethodRefresh);
+        });
+
+        radios.forEach(function (radio) {
+            radio.addEventListener('change', scheduleCheckoutMethodRefresh);
+        });
+
+        syncNewAddressRequirement();
+        syncPaymentDetails();
+    })();
+</script>
+
+<w:hook name="WeShop_Checkout::page::after"/>
