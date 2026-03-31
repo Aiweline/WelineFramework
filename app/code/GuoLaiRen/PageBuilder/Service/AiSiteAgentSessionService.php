@@ -142,13 +142,13 @@ class AiSiteAgentSessionService
         return true;
     }
 
-    public function bindWelineTheme(int $sessionId, int $forAdminUserId, int $welineThemeId): bool
+    public function bindVirtualTheme(int $sessionId, int $forAdminUserId, int $virtualThemeId): bool
     {
         $session = $this->loadById($sessionId, $forAdminUserId);
         if ($session === null) {
             return false;
         }
-        $session->setData(AiSiteAgentSession::schema_fields_WELINE_THEME_ID, \max(0, $welineThemeId));
+        $session->setData(AiSiteAgentSession::schema_fields_VIRTUAL_THEME_ID, \max(0, $virtualThemeId));
         $this->touchUpdateTime($session);
         $session->save();
         return true;
@@ -169,7 +169,14 @@ class AiSiteAgentSessionService
     /**
      * @param array<string, mixed> $payload
      */
-    public function appendEvent(int $sessionId, int $forAdminUserId, string $eventType, array $payload = []): bool
+    public function appendEvent(
+        int $sessionId,
+        int $forAdminUserId,
+        string $eventType,
+        array $payload = [],
+        string $stageCode = '',
+        string $level = AiSiteAgentSessionEvent::LEVEL_INFO
+    ): bool
     {
         if ($this->loadById($sessionId, $forAdminUserId) === null) {
             return false;
@@ -177,7 +184,12 @@ class AiSiteAgentSessionService
         $event = clone $this->eventModel;
         $event->clearData()->clearQuery();
         $event->setData(AiSiteAgentSessionEvent::schema_fields_AGENT_SESSION_ID, $sessionId);
+        $event->setData(AiSiteAgentSessionEvent::schema_fields_STAGE_CODE, \trim($stageCode));
         $event->setData(AiSiteAgentSessionEvent::schema_fields_EVENT_TYPE, $eventType);
+        $event->setData(
+            AiSiteAgentSessionEvent::schema_fields_LEVEL,
+            \trim($level) !== '' ? \trim($level) : AiSiteAgentSessionEvent::LEVEL_INFO
+        );
         $event->setPayloadArray($payload);
         $event->save();
         return true;
@@ -186,7 +198,14 @@ class AiSiteAgentSessionService
     /**
      * 按事件主键游标拉取新事件（供 SSE 增量推送）
      *
-     * @return list<array{event_id: int, event_type: string, payload: array<string, mixed>, create_time: string}>
+     * @return list<array{
+     *   event_id: int,
+     *   stage_code: string,
+     *   event_type: string,
+     *   level: string,
+     *   payload: array<string, mixed>,
+     *   create_time: string
+     * }>
      */
     public function getLatestEventId(int $sessionId, int $forAdminUserId): int
     {
@@ -230,7 +249,9 @@ class AiSiteAgentSessionService
             $m->setData($row);
             $out[] = [
                 'event_id' => $m->getId(),
+                'stage_code' => $m->getStageCode(),
                 'event_type' => $m->getEventType(),
+                'level' => $m->getLevel(),
                 'payload' => $m->getPayloadArray(),
                 'create_time' => (string) ($row[AiSiteAgentSessionEvent::schema_fields_CREATE_TIME] ?? ''),
             ];
@@ -239,7 +260,14 @@ class AiSiteAgentSessionService
     }
 
     /**
-     * @return list<array{event_id: int, event_type: string, payload: array<string, mixed>, create_time: string}>
+     * @return list<array{
+     *   event_id: int,
+     *   stage_code: string,
+     *   event_type: string,
+     *   level: string,
+     *   payload: array<string, mixed>,
+     *   create_time: string
+     * }>
      */
     public function listRecentEvents(int $sessionId, int $forAdminUserId, int $limit = 200): array
     {
@@ -267,7 +295,9 @@ class AiSiteAgentSessionService
             $m->setData($row);
             $out[] = [
                 'event_id' => $m->getId(),
+                'stage_code' => $m->getStageCode(),
                 'event_type' => $m->getEventType(),
+                'level' => $m->getLevel(),
                 'payload' => $m->getPayloadArray(),
                 'create_time' => (string) ($row[AiSiteAgentSessionEvent::schema_fields_CREATE_TIME] ?? ''),
             ];
@@ -284,7 +314,7 @@ class AiSiteAgentSessionService
     }
 
     /**
-     * @return list<array{public_id: string, stage: string, publish_status: string, website_id: int, weline_theme_id: int, update_time: string}>
+     * @return list<array{public_id: string, stage: string, publish_status: string, website_id: int, virtual_theme_id: int, update_time: string}>
      */
     public function listRecentSessionsForAdmin(int $adminUserId, int $limit = 20): array
     {
@@ -317,7 +347,7 @@ class AiSiteAgentSessionService
                 'stage' => $m->getStage(),
                 'publish_status' => $m->getPublishStatus(),
                 'website_id' => $m->getWebsiteId(),
-                'weline_theme_id' => $m->getWelineThemeId(),
+                'virtual_theme_id' => $m->getVirtualThemeId(),
                 'update_time' => (string) ($row[AiSiteAgentSession::schema_fields_UPDATE_TIME] ?? ''),
             ];
         }

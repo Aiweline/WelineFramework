@@ -12,6 +12,8 @@ namespace GuoLaiRen\PageBuilder\Controller\Backend;
 use GuoLaiRen\PageBuilder\Helper\PageBuilderUrlCacheInvalidator;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
@@ -447,17 +449,18 @@ class AiGenerate extends BackendController
             $aiService = ObjectManager::getInstance(AiService::class);
             $locale = !empty($targetLocale) ? $targetLocale : (State::getLang() ?: 'zh_Hans_CN');
             $fullContent = '';
+            $chunkBuffer = '';
             $streamError = null;
 
             try {
                 $aiService->generateStream(
                     $prompt,
-                    function (string $chunk) use ($sse, &$fullContent): bool {
+                    function (string $chunk) use ($sse, &$fullContent, &$chunkBuffer): bool {
                         $fullContent .= $chunk;
-                        $sse->sendEvent('chunk', [
-                            'content' => $chunk,
-                            'total_length' => \strlen($fullContent),
-                        ]);
+                        $chunkBuffer .= $chunk;
+                        if ($this->shouldFlushSseChunkBuffer($chunkBuffer)) {
+                            $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent));
+                        }
                         return $sse->isAlive();
                     },
                     null,
@@ -465,6 +468,9 @@ class AiGenerate extends BackendController
                     $locale,
                     []
                 );
+                if ($chunkBuffer !== '') {
+                    $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent), true);
+                }
             } catch (\Throwable $e) {
                 $streamError = $this->sanitizeErrorMessage($e->getMessage());
                 $sse->sendEvent('error', ['message' => $streamError]);
@@ -516,9 +522,11 @@ class AiGenerate extends BackendController
 
         try {
             $pageId = (int)$this->request->getPost('page_id', 0);
+            $publicId = \trim((string)$this->request->getPost('public_id', ''));
+            $pageType = \trim((string)$this->request->getPost('page_type', ''));
             $styleCode = trim($this->request->getPost('style_code', ''));
 
-            if ($pageId <= 0) {
+            if ($pageId <= 0 && ($publicId === '' || $pageType === '')) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -535,10 +543,21 @@ class AiGenerate extends BackendController
             }
 
             // 加载页面数据
-            $page = clone $this->pageModel;
-            $page->load($pageId);
+            $context = $this->resolveComponentGenerationContext($pageId, $publicId, $pageType, $styleCode);
+            if ($context === null) {
+                $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+                return json_encode([
+                    'success' => false,
+                    'message' => $pageId > 0 ? __('页面不存在') : __('会话不存在或无访问权限')
+                ]);
+            }
 
-            if (!$page->getId()) {
+            /** @var PageModel $page */
+            $page = $context['page'];
+            $layoutConfig = $context['layout_config'];
+            $styleCode = (string)$context['style_code'];
+
+            if (!$context['is_virtual'] && !$page->getId()) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -559,7 +578,7 @@ class AiGenerate extends BackendController
             }
 
             // 获取模板的文字配置项
-            $textConfigs = $this->getTextConfigs($styleCode, $pageId);
+            $textConfigs = $this->getTextConfigsFromLayout($styleCode, $layoutConfig);
 
             // 构建提示词
             $prompt = $this->buildTemplateConfigPrompt(
@@ -628,12 +647,14 @@ class AiGenerate extends BackendController
 
         try {
             $pageId = (int)$this->request->getPost('page_id', 0);
+            $publicId = \trim((string)$this->request->getPost('public_id', ''));
+            $pageType = \trim((string)$this->request->getPost('page_type', ''));
             $styleCode = trim($this->request->getPost('style_code', ''));
             $componentCode = trim($this->request->getPost('component_code', ''));
             $region = trim($this->request->getPost('region', ''));
             $index = (int)$this->request->getPost('index', 0);
 
-            if ($pageId <= 0) {
+            if ($pageId <= 0 && ($publicId === '' || $pageType === '')) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -658,10 +679,21 @@ class AiGenerate extends BackendController
             }
 
             // 加载页面数据
-            $page = clone $this->pageModel;
-            $page->load($pageId);
+            $context = $this->resolveComponentGenerationContext($pageId, $publicId, $pageType, $styleCode);
+            if ($context === null) {
+                $this->request->getResponse()->setHeader('Content-Type', 'application/json');
+                return json_encode([
+                    'success' => false,
+                    'message' => $pageId > 0 ? __('页面不存在') : __('会话不存在或无访问权限')
+                ]);
+            }
 
-            if (!$page->getId()) {
+            /** @var PageModel $page */
+            $page = $context['page'];
+            $layoutConfig = $context['layout_config'];
+            $styleCode = (string)$context['style_code'];
+
+            if (!$context['is_virtual'] && !$page->getId()) {
                 $this->request->getResponse()->setHeader('Content-Type', 'application/json');
                 return json_encode([
                     'success' => false,
@@ -696,7 +728,6 @@ class AiGenerate extends BackendController
 
             // 获取组件当前配置（如果有）
             $currentConfig = [];
-            $layoutConfig = $page->getFullLayoutConfig();
             if (!empty($region) && isset($layoutConfig[$region]) && isset($layoutConfig[$region][$index])) {
                 $componentInLayout = $layoutConfig[$region][$index];
                 if ($componentInLayout['code'] === $componentCode) {
@@ -781,12 +812,14 @@ class AiGenerate extends BackendController
             }
 
             $pageId = (int)$this->request->getPost('page_id', 0);
+            $publicId = \trim((string)$this->request->getPost('public_id', ''));
+            $pageType = \trim((string)$this->request->getPost('page_type', ''));
             $styleCode = trim($this->request->getPost('style_code', ''));
             $componentCode = trim($this->request->getPost('component_code', ''));
             $region = trim($this->request->getPost('region', ''));
             $index = (int)$this->request->getPost('index', 0);
 
-            if ($pageId <= 0) {
+            if ($pageId <= 0 && ($publicId === '' || $pageType === '')) {
                 $sse->sendEvent('error', ['message' => __('页面ID不能为空')]);
                 $sse->close();
                 return;
@@ -802,9 +835,17 @@ class AiGenerate extends BackendController
                 return;
             }
 
-            $page = clone $this->pageModel;
-            $page->load($pageId);
-            if (!$page->getId()) {
+            $context = $this->resolveComponentGenerationContext($pageId, $publicId, $pageType, $styleCode);
+            if ($context === null) {
+                $sse->sendEvent('error', ['message' => $pageId > 0 ? __('页面不存在') : __('会话不存在或无访问权限')]);
+                $sse->close();
+                return;
+            }
+            /** @var PageModel $page */
+            $page = $context['page'];
+            $layoutConfig = $context['layout_config'];
+            $styleCode = (string)$context['style_code'];
+            if (!$context['is_virtual'] && !$page->getId()) {
                 $sse->sendEvent('error', ['message' => __('页面不存在')]);
                 $sse->close();
                 return;
@@ -826,7 +867,6 @@ class AiGenerate extends BackendController
             }
 
             $currentConfig = [];
-            $layoutConfig = $page->getFullLayoutConfig();
             if ($region !== '' && isset($layoutConfig[$region]) && isset($layoutConfig[$region][$index])) {
                 $componentInLayout = $layoutConfig[$region][$index];
                 if (($componentInLayout['code'] ?? '') === $componentCode) {
@@ -871,6 +911,7 @@ class AiGenerate extends BackendController
             $pageLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
             $locale = $pageLocale !== '' ? $pageLocale : (State::getLang() ?: 'zh_Hans_CN');
             $fullContent = '';
+            $chunkBuffer = '';
             $streamError = null;
             $chunkCount = 0;
             $traceSteps = [];
@@ -882,13 +923,13 @@ class AiGenerate extends BackendController
             try {
                 $aiService->generateStream(
                     $prompt,
-                    function (string $chunk) use ($sse, &$fullContent, &$chunkCount): bool {
-                        $chunkCount++;
+                    function (string $chunk) use ($sse, &$fullContent, &$chunkBuffer, &$chunkCount): bool {
                         $fullContent .= $chunk;
-                        $sse->sendEvent('chunk', [
-                            'content' => $chunk,
-                            'total_length' => \strlen($fullContent),
-                        ]);
+                        $chunkBuffer .= $chunk;
+                        if ($this->shouldFlushSseChunkBuffer($chunkBuffer)) {
+                            $chunkCount++;
+                            $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent));
+                        }
                         return $sse->isAlive();
                     },
                     null,
@@ -896,6 +937,10 @@ class AiGenerate extends BackendController
                     $locale,
                     ['component_meta_text_configs' => $textConfigs] // 供适配器按 meta 提取格式与条数
                 );
+                if ($chunkBuffer !== '') {
+                    $chunkCount++;
+                    $this->flushSseChunkBuffer($sse, $chunkBuffer, \strlen($fullContent), true);
+                }
             } catch (\Throwable $e) {
                 $streamError = $this->sanitizeErrorMessage($e->getMessage());
                 $traceSteps[] = sprintf('[2] %s：%s', __('AI 调用异常'), $streamError);
@@ -1226,6 +1271,20 @@ class AiGenerate extends BackendController
      */
     private function getExistingSitePagesList(PageModel $page): array
     {
+        $virtualPagesByType = $page->getData('virtual_pages_by_type');
+        if (\is_array($virtualPagesByType) && $virtualPagesByType !== []) {
+            $list = [];
+            foreach ($virtualPagesByType as $type => $item) {
+                $handle = (string)($item['handle'] ?? '');
+                $list[] = [
+                    'type' => (string)$type,
+                    'handle' => $handle,
+                    'title' => (string)($item['title'] ?? $handle ?: $type),
+                    'url' => $type === PageModel::TYPE_HOME ? '/' : ($handle !== '' ? '/' . \ltrim($handle, '/') : '/'),
+                    'status' => PageModel::STATUS_PUBLISHED,
+                ];
+            }
+        } else {
         $parentId = (int)$page->getData(PageModel::schema_fields_PARENT_ID);
         try {
             if ($parentId === 0) {
@@ -1248,6 +1307,7 @@ class AiGenerate extends BackendController
             }
         } catch (\Throwable $e) {
             return ['list' => [], 'unpublished' => []];
+        }
         }
         $typeNames = PageModel::getPageTypes();
         $result = [];
@@ -1570,6 +1630,140 @@ class AiGenerate extends BackendController
      * @param string $message 原始错误消息
      * @return string 清理后的纯文本消息
      */
+    /**
+     * @return array{
+     *   page:PageModel,
+     *   layout_config:array<string,mixed>,
+     *   style_code:string,
+     *   is_virtual:bool
+     * }|null
+     */
+    private function resolveComponentGenerationContext(int $pageId, string $publicId, string $requestedPageType, string $styleCode): ?array
+    {
+        if ($pageId > 0) {
+            $page = clone $this->pageModel;
+            $page->load($pageId);
+            if (!$page->getId()) {
+                return null;
+            }
+            $resolvedStyleCode = \trim($styleCode);
+            if ($resolvedStyleCode === '') {
+                $resolvedStyleCode = (string)($page->getData(PageModel::schema_fields_STYLE) ?: '');
+            }
+            return [
+                'page' => $page,
+                'layout_config' => $page->getFullLayoutConfig(),
+                'style_code' => $resolvedStyleCode,
+                'is_virtual' => false,
+            ];
+        }
+
+        $publicId = \trim($publicId);
+        $requestedPageType = \trim($requestedPageType);
+        $adminId = (int)$this->getLoginUserId();
+        if ($publicId === '' || $requestedPageType === '' || $adminId <= 0) {
+            return null;
+        }
+
+        $context = $this->getVirtualLayoutService()->loadContext($publicId, $adminId, $requestedPageType);
+        if ($context === null) {
+            return null;
+        }
+
+        $scopeService = $this->getScopeCompatibilityService();
+        $scope = $scopeService->normalizeScope($context['scope']);
+        $virtualPages = $scopeService->buildVirtualPagesByType(
+            $scopeService->normalizePageTypes($scope['page_types'] ?? []),
+            $scope
+        );
+        $pageType = $scopeService->resolvePreviewPageType($virtualPages, $requestedPageType);
+        if ($pageType === '' || !isset($virtualPages[$pageType])) {
+            return null;
+        }
+
+        $virtualThemeId = (int)$context['virtual_theme_id'];
+        $virtualPage = $virtualPages[$pageType];
+        $resolvedStyleCode = \trim($styleCode !== '' ? $styleCode : (string)($virtualPage['style_code'] ?? 'default'));
+        $resolvedStyleCode = $resolvedStyleCode !== '' ? $resolvedStyleCode : 'default';
+        $layoutConfig = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
+        $locale = \trim((string)($virtualPage['locale'] ?? ''));
+        $locale = $locale !== '' ? $locale : 'en_US';
+
+        /** @var PageModel $page */
+        $page = ObjectManager::make(PageModel::class);
+        $page->setData([
+            PageModel::schema_fields_ID => 0,
+            PageModel::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
+            PageModel::schema_fields_PARENT_ID => $pageType === PageModel::TYPE_HOME ? 0 : 1,
+            PageModel::schema_fields_STATUS => PageModel::STATUS_DRAFT,
+            PageModel::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
+            PageModel::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
+            PageModel::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
+            PageModel::schema_fields_STYLE => $resolvedStyleCode,
+            PageModel::schema_fields_TYPE => $pageType,
+            PageModel::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
+            PageModel::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
+            PageModel::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
+            PageModel::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
+            PageModel::schema_fields_LOCALES => \json_encode([$locale], JSON_UNESCAPED_UNICODE),
+            PageModel::schema_fields_DEFAULT_LOCALE => $locale,
+            PageModel::schema_fields_STYLE_SETTING => \json_encode([
+                $resolvedStyleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
+            ], JSON_UNESCAPED_UNICODE),
+            PageModel::schema_fields_LAYOUT_CONFIG => \json_encode($layoutConfig, JSON_UNESCAPED_UNICODE),
+        ]);
+        $page->setData('virtual_public_id', $publicId);
+        $page->setData('virtual_page_type', $pageType);
+        $page->setData('virtual_theme_id', $virtualThemeId);
+        $page->setData('virtual_pages_by_type', $virtualPages);
+
+        return [
+            'page' => $page,
+            'layout_config' => $layoutConfig,
+            'style_code' => $resolvedStyleCode,
+            'is_virtual' => true,
+        ];
+    }
+
+    private function shouldFlushSseChunkBuffer(string $buffer): bool
+    {
+        if ($buffer === '') {
+            return false;
+        }
+        if (\preg_match('/(\r?\n){2,}$/u', $buffer)) {
+            return true;
+        }
+        if (\preg_match('/[。！？；.!?;]\s*$/u', $buffer)) {
+            return true;
+        }
+        return \mb_strlen($buffer) >= 48;
+    }
+
+    private function flushSseChunkBuffer(\Weline\Framework\Http\Sse\SseWriter $sse, string &$buffer, int $totalLength, bool $force = false): void
+    {
+        if ($buffer === '') {
+            return;
+        }
+        if (!$force && !$this->shouldFlushSseChunkBuffer($buffer)) {
+            return;
+        }
+        $sse->sendEvent('chunk', [
+            'content' => $buffer,
+            'total_length' => $totalLength,
+        ]);
+        $buffer = '';
+    }
+
+    private function getVirtualLayoutService(): AiSiteVirtualLayoutService
+    {
+        return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
+    }
+
+    private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
+    {
+        return ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
+    }
+
     private function sanitizeErrorMessage(string $message): string
     {
         // 去除所有HTML标签
@@ -1807,20 +2001,20 @@ class AiGenerate extends BackendController
      */
     private function getTextConfigs(string $styleCode, int $pageId): array
     {
-        // 获取 LayoutAssembler 服务
-        $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
-        
-        // 加载页面获取布局配置
         $page = clone $this->pageModel;
         $page->load($pageId);
-        
         if (!$page->getId()) {
             return [];
         }
-        
-        // 获取页面的完整布局配置（包含继承的 header/footer）
-        $layoutConfig = $page->getFullLayoutConfig();
-        
+
+        return $this->getTextConfigsFromLayout($styleCode, $page->getFullLayoutConfig());
+    }
+
+    private function getTextConfigsFromLayout(string $styleCode, array $layoutConfig): array
+    {
+        // 获取 LayoutAssembler 服务
+        $layoutAssembler = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class);
+
         // 从布局配置中提取所有使用的组件代码
         $usedComponents = [];
         foreach (['header', 'content', 'footer'] as $region) {

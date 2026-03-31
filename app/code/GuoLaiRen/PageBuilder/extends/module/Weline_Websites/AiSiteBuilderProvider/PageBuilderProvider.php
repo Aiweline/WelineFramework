@@ -23,12 +23,12 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
 
     public function getName(): string
     {
-        return (string)__('AI 建站工作台 · PageBuilder 扩展');
+        return (string)__('AI 建站工作台 · PageBuilder');
     }
 
     public function getDescription(): string
     {
-        return (string)__('适合在 Websites 基础建站准备完成后，切换到 PageBuilder styles 模板、页面组件和可视化精修扩展流程的建站任务。');
+        return (string)__('Websites 负责准备信息、域名和镜像工作区，真正的 AI 建站、虚拟主题、页面物化和可视化编辑全部交给 PageBuilder 原生流程。');
     }
 
     public function isEnabled(): bool
@@ -48,9 +48,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
         array $providerState = [],
         array $context = []
     ): array {
-        $legacyUrl = $this->url->getBackendUrl('pagebuilder/backend/aiSiteAgent/index', ['legacy' => 1]);
+        $legacyUrl = $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/index', ['legacy' => 1]);
         $nativeEntryUrl = $this->resolveNativeEntryUrl($sessionState, $scope, $legacyUrl);
-        $quickBuildUrl = $this->url->getBackendUrl('pagebuilder/backend/quickBuild/wizard');
         $domainManagementUrl = $this->url->getBackendUrl('pagebuilder/backend/domainManagement/index');
         $websiteManagementUrl = $this->url->getBackendUrl('pagebuilder/backend/websiteManagement/index');
         $pageIndexUrl = $this->url->getBackendUrl('pagebuilder/backend/page/index');
@@ -58,106 +57,94 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
         $resolvedScope = [
             'provider_code' => 'pagebuilder',
             'preferred_editor' => 'pagebuilder',
-            'preferred_flow' => 'pagebuilder_style_template',
-            'theme_generation_mode' => 'existing_style_template',
-            'pagebuilder_theme_source' => 'styles',
+            'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
+            'provider_authority' => 'pagebuilder_native',
         ];
         if (($context['source'] ?? '') !== '') {
             $resolvedScope['created_from'] = (string)$context['source'];
         }
 
-        $initialStage = ((int)($scope['preview_page_id'] ?? 0) > 0 || (int)($scope['website_id'] ?? 0) > 0)
+        $initialStage = ((int)($scope['draft_website_id'] ?? 0) > 0
+            || (int)($scope['preview_page_id'] ?? 0) > 0
+            || \trim((string)($scope['pagebuilder_workspace_public_id'] ?? '')) !== '')
             ? 'generate'
             : 'prepare';
 
         return [
-            'badge' => (string)__('扩展流程'),
+            'badge' => (string)__('PageBuilder 扩展'),
             'target_url' => $nativeEntryUrl,
-            'target_label' => (string)__('进入 PageBuilder 扩展流程'),
-            'workspace_label' => (string)__('创建兼容工作区'),
-            'handoff_label' => (string)__('继续到 PageBuilder 扩展工作台'),
+            'target_label' => (string)__('进入 PageBuilder 原生流程'),
+            'workspace_label' => (string)__('创建 Websites 镜像工作区'),
+            'handoff_label' => (string)__('继续到 PageBuilder 原生工作台'),
             'native_entry_url' => $nativeEntryUrl,
-            'welcome_message' => (string)__('已为你创建兼容 PageBuilder 的 AI 建站工作区。这里会沿用 Websites 的信息准备结果，但页面生成和精修会由 PageBuilder 扩展流程接管，不属于 Websites 默认流程。'),
+            'welcome_message' => (string)__('已为你创建兼容 PageBuilder 的镜像工作区。这里继续收集站点准备信息，真正的虚拟主题和可视化编辑会在 PageBuilder 中完成。'),
             'initial_stage' => $initialStage,
             'scope' => $resolvedScope,
             'provider_state' => [
                 'provider' => [
                     'code' => 'pagebuilder',
                     'native_entry_url' => $nativeEntryUrl,
-                    'quick_build_url' => $quickBuildUrl,
                 ],
             ],
             'stage_guides' => [
                 'prepare' => [
-                    'description' => (string)__('这一阶段先沿用 Websites 的基础建站准备，整理需求和域名建议；确认后再切换到 PageBuilder 的 styles 模板扩展流程。'),
-                    'ai_recommendation' => (string)__('AI 会先帮你收敛适合的 PageBuilder 风格方向，为后面的 styles 模板选择减少试错。'),
-                    'confirm_label' => (string)__('确认基础信息，切换到 PageBuilder 扩展'),
+                    'description' => (string)__('先完成站点简介、目标域名、注册商选择等准备信息，然后把流程交给 PageBuilder。'),
+                    'ai_recommendation' => (string)__('AI 会先整理网站级资料输入，进入 PageBuilder 后再一次性生成草稿站点、虚拟主题、页面和可视化预览。'),
+                    'confirm_label' => (string)__('确认准备信息并进入 PageBuilder'),
                     'scope_patch' => [
                         'journey_stage' => 'prepare',
                         'preferred_editor' => 'pagebuilder',
+                        'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
                     ],
                 ],
                 'generate' => [
-                    'title' => (string)__('页面生成（PageBuilder 扩展）'),
-                    'description' => (string)__('从这一步开始由 PageBuilder 扩展流程接管，不再沿用 Websites 默认主题生成。PageBuilder 的主题来自 `styles` 目录里的风格模板，建议先选最接近的 styles 模板，再替换页面区域和内容组件。'),
-                    'ai_recommendation_title' => (string)__('AI 模板建议'),
-                    'ai_recommendation' => (string)__('AI 会优先推荐一个 `styles` 模板方向，再给出页面类型和组件建议。Header / Footer 默认固定，不建议在这一步随意改。'),
-                    'confirm_label' => (string)__('确认 styles 模板与扩展页面方案'),
+                    'title' => (string)__('PageBuilder AI 建站'),
+                    'description' => (string)__('从这一步开始由 PageBuilder 原生工作区接管。虚拟主题、页面物化、可视化预览和编辑都以 PageBuilder 状态为准。'),
+                    'ai_recommendation_title' => (string)__('PageBuilder 原生闭环'),
+                    'ai_recommendation' => (string)__('进入 PageBuilder 后执行“虚拟主题编排”，系统会创建或恢复真实草稿站点，批量物化页面，并直接给出 preview/full?visual_editor=1 的真实可视化地址。'),
+                    'confirm_label' => (string)__('继续到 PageBuilder 原生工作台'),
                     'tool_codes' => [
-                        'resume_legacy_workspace',
+                        'open_pagebuilder_workspace',
                         'open_page_index',
-                        'prepare_visual_edit_stage',
                     ],
                     'scope_patch' => [
                         'journey_stage' => 'generate',
                         'preferred_editor' => 'pagebuilder',
-                        'preferred_flow' => 'pagebuilder_style_template',
-                        'theme_generation_mode' => 'existing_style_template',
-                        'pagebuilder_theme_source' => 'styles',
-                        'header_footer_locked' => 1,
+                        'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
                     ],
                     'key_points' => [
-                        (string)__('先选 styles 模板'),
-                        (string)__('再替换内容区域和页面组件'),
-                        (string)__('Header / Footer 固定不可编辑'),
+                        (string)__('草稿站点会先创建，后续发布仍是同一个 website_id'),
+                        (string)__('虚拟主题和页面都由 PageBuilder 服务层负责写入'),
+                        (string)__('可视化预览与编辑完全复用现有 preview/full 与 page/edit 核心'),
                     ],
                 ],
                 'complete' => [
-                    'description' => (string)__('最后以预览和可视化精修为主，确认域名环境准备好后再交付。'),
-                    'ai_recommendation' => (string)__('AI 建议先从 PageBuilder 预览页检查首页首屏、导航和页脚，再决定是否回退到模板阶段。'),
+                    'description' => (string)__('最后在 Websites 里只做镜像确认，真实发布仍针对同一个草稿站点。'),
+                    'ai_recommendation' => (string)__('优先回看镜像工作区里的可视化 iframe 和编辑器入口，确认 URLs 与 PageBuilder 原生工作区保持一致。'),
                     'tool_codes' => [
-                        'resume_legacy_workspace',
+                        'open_pagebuilder_workspace',
                         'open_website_management',
                     ],
                     'scope_patch' => [
                         'journey_stage' => 'complete',
-                        'provider_handoff_mode' => 'legacy_workspace',
+                        'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
                     ],
                 ],
             ],
             'tools' => [
                 [
-                    'code' => 'resume_legacy_workspace',
+                    'code' => 'open_pagebuilder_workspace',
                     'label' => (string)__('打开 PageBuilder 工作台'),
-                    'description' => (string)__('进入 PageBuilder 原生 AI 建站工作台，继续由扩展流程处理 styles 模板与精修。'),
+                    'description' => (string)__('进入 PageBuilder 原生 AI 建站工作区，继续虚拟主题和可视化编辑流程。'),
                     'type' => 'link',
                     'icon' => 'mdi mdi-view-dashboard-edit-outline',
                     'button_class' => 'btn-primary',
                     'url' => $nativeEntryUrl,
                 ],
                 [
-                    'code' => 'open_quick_build_wizard',
-                    'label' => (string)__('打开快速建站向导'),
-                    'description' => (string)__('直接进入 PageBuilder 的站点初始化向导。'),
-                    'type' => 'link',
-                    'icon' => 'mdi mdi-wizard-hat',
-                    'button_class' => 'btn-outline-secondary',
-                    'url' => $quickBuildUrl,
-                ],
-                [
                     'code' => 'open_domain_management',
                     'label' => (string)__('管理域名'),
-                    'description' => (string)__('查看或处理 PageBuilder 侧的域名相关任务。'),
+                    'description' => (string)__('查看或处理 PageBuilder 侧的域名任务。'),
                     'type' => 'link',
                     'icon' => 'mdi mdi-earth-box',
                     'button_class' => 'btn-outline-secondary',
@@ -181,23 +168,6 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                     'button_class' => 'btn-outline-secondary',
                     'url' => $pageIndexUrl,
                 ],
-                [
-                    'code' => 'prepare_visual_edit_stage',
-                    'label' => (string)__('应用 PageBuilder 模板流'),
-                    'description' => (string)__('把当前工作区从 Websites 基础准备阶段切换到 PageBuilder styles 模板扩展流程，并进入页面生成阶段。'),
-                    'type' => 'scope_patch',
-                    'icon' => 'mdi mdi-image-edit-outline',
-                    'button_class' => 'btn-outline-primary',
-                    'stage' => 'generate',
-                    'scope_patch' => [
-                        'preferred_editor' => 'pagebuilder',
-                        'preferred_flow' => 'pagebuilder_style_template',
-                        'theme_generation_mode' => 'existing_style_template',
-                        'pagebuilder_theme_source' => 'styles',
-                        'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
-                        'header_footer_locked' => 1,
-                    ],
-                ],
             ],
         ];
     }
@@ -215,7 +185,7 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
 
         $workspacePublicId = \trim((string)($scope['pagebuilder_workspace_public_id'] ?? ''));
         if ($workspacePublicId !== '') {
-            return $this->url->getBackendUrl('pagebuilder/backend/aiSiteAgent/workspace', ['public_id' => $workspacePublicId]);
+            return $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $workspacePublicId]);
         }
 
         $sessionPublicId = \trim((string)($sessionState['public_id'] ?? ''));
