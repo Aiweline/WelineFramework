@@ -15,7 +15,8 @@ final class SubprocessControlKernel
         private readonly ChildProcessIdentity $identity,
         private readonly RoleControlHandlerInterface $handler,
         private readonly string $selfTag,
-        private readonly bool $verboseLog = false
+        private readonly bool $verboseLog = false,
+        private readonly string $instanceCode = ''
     ) {
     }
 
@@ -56,7 +57,8 @@ final class SubprocessControlKernel
             $this->identity->epoch,
             $this->identity->launchId,
             $this->identity->processKind,
-            $this->identity->moduleCode
+            $this->identity->moduleCode,
+            $this->instanceCode
         );
         if (!$registered) {
             $client->close();

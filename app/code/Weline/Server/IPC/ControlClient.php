@@ -233,7 +233,8 @@ class ControlClient
         int $epoch = 0,
         string $launchId = '',
         string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
-        string $moduleCode = ''
+        string $moduleCode = '',
+        string $instanceCode = ''
     ): bool
     {
         // 保存注册信息，用于重连后自动重新注册
@@ -246,9 +247,10 @@ class ControlClient
             'launch_id'    => $launchId,
             'process_kind' => $processKind,
             'module_code'  => $moduleCode,
+            'instance_code' => $instanceCode,
         ];
 
-        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId, $processKind, $moduleCode));
+        return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId, $processKind, $moduleCode, $instanceCode));
     }
 
     /**
@@ -537,7 +539,8 @@ class ControlClient
                 (int)($this->registerInfo['epoch'] ?? 0),
                 (string)($this->registerInfo['launch_id'] ?? ''),
                 (string)($this->registerInfo['process_kind'] ?? ControlMessage::PROCESS_KIND_FRAMEWORK),
-                (string)($this->registerInfo['module_code'] ?? '')
+                (string)($this->registerInfo['module_code'] ?? ''),
+                (string)($this->registerInfo['instance_code'] ?? '')
             );
             if (!$registered) {
                 return false;

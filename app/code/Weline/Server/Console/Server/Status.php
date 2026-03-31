@@ -16,9 +16,11 @@ use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\ServerInstanceInfo;
 use Weline\Server\Service\Contract\ServiceInfo;
 use Weline\Server\Service\ServerInstanceManager;
+use Weline\Server\Service\SharedStateServiceManager;
 
 /**
  * server:status - 查看服务器状态
@@ -69,7 +71,7 @@ class Status extends CommandAbstract
             }
 
             echo "\n  [ " . __('每 3 秒刷新') . " | Ctrl+C " . __('退出') . " ]\n";
-            \sleep(3);
+            \Weline\Framework\Runtime\SchedulerSystem::sleep(3);
         }
     }
     
@@ -173,7 +175,7 @@ class Status extends CommandAbstract
             // 所有服务进程列表
             $this->printer->note($childPrefix . '  └─ ' . __('服务：'));
             
-            $services = $info->services;
+            $services = $this->filterVisibleServices($info->services);
             $serviceCount = \count($services);
             $svcIndex = 0;
             foreach ($services as $service) {
@@ -193,6 +195,8 @@ class Status extends CommandAbstract
             echo "\n";
             $index++;
         }
+
+        $this->showSharedDependencies();
 
         $this->printer->note(__('使用 server:status <name> 查看详细状态'));
         $this->printer->note(__('使用 server:stop <name> 停止实例'));
@@ -254,7 +258,8 @@ class Status extends CommandAbstract
         
         // 显示所有服务实例（按优先级排序，使用预取的内存信息）
         $this->showServicesTree($info, $processInfoMap);
-        
+        $this->showSharedDependencies();
+
         // 总结
         $stats = $this->getServiceStats($info, $processInfoMap);
         $runningCount = $stats['running'];
@@ -283,7 +288,7 @@ class Status extends CommandAbstract
     {
         // 按角色分组
         $servicesByRole = [];
-        foreach ($info->services as $service) {
+        foreach ($this->filterVisibleServices($info->services) as $service) {
             $servicesByRole[$service->role][] = $service;
         }
 
@@ -425,6 +430,9 @@ class Status extends CommandAbstract
             if (!$includeSharedExternal && $this->isSharedExternalService($service)) {
                 continue;
             }
+            if ($this->isSharedDependencyService($service)) {
+                continue;
+            }
 
             $total++;
             if ($this->isServiceRunning($service, $processInfoMap)) {
@@ -442,6 +450,66 @@ class Status extends CommandAbstract
     protected function isSharedExternalService(ServiceInfo $service): bool
     {
         return (bool) ($service->metadata['shared_external'] ?? false);
+    }
+
+    /**
+     * @param ServiceInfo[] $services
+     * @return ServiceInfo[]
+     */
+    protected function filterVisibleServices(array $services): array
+    {
+        return \array_values(\array_filter($services, fn(ServiceInfo $service): bool => !$this->isSharedDependencyService($service)));
+    }
+
+    protected function isSharedDependencyService(ServiceInfo $service): bool
+    {
+        return $service->role === ControlMessage::ROLE_SESSION_SERVER
+            || $service->role === ControlMessage::ROLE_MEMORY_SERVER;
+    }
+
+    protected function showSharedDependencies(): void
+    {
+        $manager = new SharedStateServiceManager();
+
+        echo "\n";
+        $this->printer->note(__('全局共享依赖：'));
+        $this->showSharedDependencyStatus(
+            __('Session Server'),
+            $manager->status(ControlMessage::ROLE_SESSION_SERVER)
+        );
+        $this->showSharedDependencyStatus(
+            __('Memory Service'),
+            $manager->status(ControlMessage::ROLE_MEMORY_SERVER)
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $status
+     */
+    protected function showSharedDependencyStatus(string $label, array $status): void
+    {
+        if (($status['enabled'] ?? true) === false) {
+            $this->printer->note('  ' . $label . ': ' . __('disabled'));
+
+            return;
+        }
+
+        $healthy = (bool) ($status['healthy'] ?? false);
+        $color = $healthy ? 'success' : 'warning';
+        $summary = $label
+            . ': '
+            . ($healthy ? __('运行中') : __('不可用'))
+            . ' '
+            . (string) ($status['host'] ?? '127.0.0.1')
+            . ':'
+            . (int) ($status['port'] ?? 0)
+            . ' (PID:'
+            . (int) ($status['pid'] ?? 0)
+            . ', token:'
+            . (string) ($status['token_file_name'] ?? '')
+            . ')';
+
+        $this->printer->$color('  ' . $summary);
     }
 
     /**
