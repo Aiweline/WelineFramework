@@ -1,4 +1,11 @@
-﻿"Shipping query provider does not support operation: %{1}","Shipping query provider does not support operation: %{1}"
+﻿"Shipping Methods","Shipping Methods"
+"Invalid request method.","Invalid request method."
+"Shipping settings saved successfully.","Shipping settings saved successfully."
+"Shipping settings save failed: %{1}","Shipping settings save failed: %{1}"
+"Failed to write shipping configuration.","Failed to write shipping configuration."
+"Shipping method is required.","Shipping method is required."
+"Shipping fee calculated successfully.","Shipping fee calculated successfully."
+"Shipping query provider does not support operation: %{1}","Shipping query provider does not support operation: %{1}"
 "Shipping Query","Shipping Query"
 "Provides checkout shipping method data and shipping calculation access.","Provides checkout shipping method data and shipping calculation access."
 "Get enabled shipping methods for checkout.","Get enabled shipping methods for checkout."
@@ -25,3 +32,33 @@ FedEx标准配送,FedEx标准配送
 "Pick up your order at the selected local location.","Pick up your order at the selected local location."
 "DHL carrier integration (sandbox-ready, disabled by default).","DHL carrier integration (sandbox-ready, disabled by default)."
 "FedEx carrier integration (sandbox-ready, disabled by default).","FedEx carrier integration (sandbox-ready, disabled by default)."
+"Estimated delivery: %{1}.","Estimated delivery: %{1}."
+"Free shipping available for this service.","Free shipping available for this service."
+"shipping service","shipping service"
+"Shipping service provided by %{1}.","Shipping service provided by %{1}."
+"%{1}-%{2} days","%{1}-%{2} days"
+"%{1} day(s)","%{1} day(s)"
+WeShop,WeShop
+Shipping,Shipping
+Configuration,Configuration
+"Total Methods","Total Methods"
+"Enabled At Checkout","Enabled At Checkout"
+"Reserved / Disabled","Reserved / Disabled"
+"Default Method","Default Method"
+Enabled,Enabled
+Disabled,Disabled
+Default,Default
+Code,Code
+Areas,Areas
+Price,Price
+"Sort Order","Sort Order"
+"Flat Rate Price","Flat Rate Price"
+"Set the fixed shipping fee for Flat Rate shipping.","Set the fixed shipping fee for Flat Rate shipping."
+"Save Shipping Settings","Save Shipping Settings"
+"Choose your preferred shipping method for this order.","Choose your preferred shipping method for this order."
+"No shipping methods are currently available.","No shipping methods are currently available."
+Free,Free
+Recommended,Recommended
+"Continue to Payment","Continue to Payment"
+"Please select a shipping method.","Please select a shipping method."
+"Unable to process shipping method.","Unable to process shipping method."

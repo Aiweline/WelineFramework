@@ -6,14 +6,25 @@ namespace WeShop\Shipping\Service;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Service\ShippingServiceManager as FrameworkShippingServiceManager;
 use WeShop\Shipping\Interface\ShippingProviderInterface;
 use WeShop\Shipping\Provider\DHL;
 use WeShop\Shipping\Provider\FedEx;
 
 class ShippingService
 {
+    public function __construct(
+        private readonly ?FrameworkShippingServiceManager $frameworkShippingManager = null
+    ) {
+    }
+
     public function calculateShipping(array $shippingData, string $shippingMethod): float
     {
+        $frameworkFee = $this->calculateFrameworkShippingFee($shippingMethod, $shippingData);
+        if ($frameworkFee !== null) {
+            return $frameworkFee;
+        }
+
         $method = $this->getShippingMethod($shippingMethod);
         if ($method === null || !$this->isEnabled($method)) {
             throw new \InvalidArgumentException((string) __('Unsupported shipping method: %{1}', [$shippingMethod]));
@@ -31,6 +42,11 @@ class ShippingService
      */
     public function getCheckoutShippingMethods(array $context = []): array
     {
+        $frameworkMethods = $this->getFrameworkCheckoutShippingMethods($context);
+        if ($frameworkMethods !== []) {
+            return $frameworkMethods;
+        }
+
         $methods = [];
         foreach ($this->getMethodRegistry() as $method) {
             $method = $this->normalizeMethod($method);
@@ -308,5 +324,239 @@ class ShippingService
     protected function isEnabled(array $method): bool
     {
         return (bool) ($method['enabled'] ?? false);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getFrameworkCheckoutShippingMethods(array $context): array
+    {
+        $services = $this->getFrameworkServices($context);
+        if ($services === []) {
+            return [];
+        }
+
+        $methods = [];
+        foreach ($services as $index => $service) {
+            $code = trim((string) ($service['service_code'] ?? ''));
+            $name = trim((string) ($service['service_name'] ?? $code));
+            if ($code === '' || $name === '') {
+                continue;
+            }
+
+            $methods[] = [
+                'code' => $code,
+                'name' => $name,
+                'description' => $this->buildFrameworkMethodDescription($service),
+                'enabled' => true,
+                'is_default' => $index === 0,
+                'sort_order' => ($index + 1) * 10,
+                'price' => 0.0,
+                'areas' => ['frontend', 'backend', 'api'],
+                'currencies' => [],
+                'countries' => [],
+                'source' => 'weline_shipping',
+                'service_id' => (int) ($service['service_id'] ?? 0),
+            ];
+        }
+
+        return $methods;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    protected function calculateFrameworkShippingFee(string $shippingMethod, array $context): ?float
+    {
+        foreach ($this->getFrameworkServices($context) as $service) {
+            if (trim((string) ($service['service_code'] ?? '')) !== $shippingMethod) {
+                continue;
+            }
+
+            $serviceId = (int) ($service['service_id'] ?? 0);
+            if ($serviceId <= 0 || $this->frameworkShippingManager === null) {
+                return null;
+            }
+
+            [$subtotal, $weight, $volume, $quantity, $memberLevelId, $regionId, $couponCode] = $this->extractFrameworkQuoteMetrics($context);
+
+            try {
+                $result = $this->frameworkShippingManager->calculateShippingFee(
+                    $serviceId,
+                    $subtotal,
+                    $weight,
+                    $volume,
+                    $quantity,
+                    $memberLevelId,
+                    $regionId,
+                    $couponCode
+                );
+            } catch (\Throwable) {
+                return null;
+            }
+
+            if (!\is_array($result) || !isset($result['fee']) || !is_numeric($result['fee'])) {
+                return 0.0;
+            }
+
+            return round(max(0.0, (float) $result['fee']), 2);
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getFrameworkServices(array $context): array
+    {
+        if ($this->frameworkShippingManager === null) {
+            return [];
+        }
+
+        $address = $this->extractFrameworkAddress($context);
+        $country = $address['country'];
+        if ($country === '') {
+            return [];
+        }
+
+        try {
+            $services = $this->frameworkShippingManager->getAvailableServices(
+                $country,
+                $address['province'] !== '' ? $address['province'] : null,
+                $address['city'] !== '' ? $address['city'] : null,
+                $address['district'] !== '' ? $address['district'] : null
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+
+        if (!\is_array($services)) {
+            return [];
+        }
+
+        return array_values(array_filter($services, static fn(mixed $service): bool => \is_array($service)));
+    }
+
+    /**
+     * @param array<string, mixed> $service
+     */
+    protected function buildFrameworkMethodDescription(array $service): string
+    {
+        $parts = [];
+        $estimatedDays = $this->formatEstimatedDays(
+            (int) ($service['estimated_days_min'] ?? 0),
+            (int) ($service['estimated_days_max'] ?? 0)
+        );
+        if ($estimatedDays !== '') {
+            $parts[] = (string) __('Estimated delivery: %{1}.', [$estimatedDays]);
+        }
+
+        if (!empty($service['is_free_shipping'])) {
+            $parts[] = (string) __('Free shipping available for this service.');
+        }
+
+        if ($parts === []) {
+            $serviceName = (string) ($service['service_name'] ?? $service['service_code'] ?? __('shipping service'));
+            return (string) __('Shipping service provided by %{1}.', [$serviceName]);
+        }
+
+        return implode(' ', $parts);
+    }
+
+    protected function formatEstimatedDays(int $minDays, int $maxDays): string
+    {
+        $minDays = max(0, $minDays);
+        $maxDays = max(0, $maxDays);
+
+        if ($minDays === 0 && $maxDays === 0) {
+            return '';
+        }
+
+        if ($minDays > 0 && $maxDays > 0 && $minDays !== $maxDays) {
+            return (string) __('%{1}-%{2} days', [$minDays, $maxDays]);
+        }
+
+        $days = max($minDays, $maxDays);
+        if ($days <= 0) {
+            return '';
+        }
+
+        return (string) __('%{1} day(s)', [$days]);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array{country: string, province: string, city: string, district: string}
+     */
+    protected function extractFrameworkAddress(array $context): array
+    {
+        $address = [];
+        foreach (['address', 'shipping_address', 'shipping'] as $key) {
+            if (\is_array($context[$key] ?? null)) {
+                $address = $context[$key];
+                break;
+            }
+        }
+
+        if ($address === []) {
+            $address = $context;
+        }
+
+        return [
+            'country' => strtoupper(trim((string) ($address['country'] ?? $address['country_id'] ?? $address['country_code'] ?? ''))),
+            'province' => trim((string) ($address['province'] ?? $address['region'] ?? $address['state'] ?? '')),
+            'city' => trim((string) ($address['city'] ?? '')),
+            'district' => trim((string) ($address['district'] ?? '')),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array{0: float, 1: float, 2: float, 3: int, 4: ?int, 5: ?int, 6: ?string}
+     */
+    protected function extractFrameworkQuoteMetrics(array $context): array
+    {
+        $subtotal = max(0.0, (float) ($context['subtotal'] ?? 0.0));
+        $weight = max(0.0, (float) ($context['weight'] ?? 0.0));
+        $volume = max(0.0, (float) ($context['volume'] ?? 0.0));
+        $quantity = max(1, (int) ($context['quantity'] ?? 1));
+
+        if (\is_array($context['items'] ?? null) && $context['items'] !== []) {
+            $weight = 0.0;
+            $volume = 0.0;
+            $quantity = 0;
+            foreach ($context['items'] as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+
+                $itemQty = max(1, (int) ($item['qty'] ?? 1));
+                $quantity += $itemQty;
+                $weight += max(0.0, (float) ($item['weight'] ?? 0.0)) * $itemQty;
+                $volume += max(0.0, (float) ($item['volume'] ?? 0.0)) * $itemQty;
+            }
+            $quantity = max(1, $quantity);
+        }
+
+        $memberLevelId = isset($context['member_level_id']) && is_numeric($context['member_level_id'])
+            ? (int) $context['member_level_id']
+            : null;
+        $regionId = isset($context['region_id']) && is_numeric($context['region_id'])
+            ? (int) $context['region_id']
+            : null;
+        $couponCode = trim((string) ($context['coupon_code'] ?? ''));
+
+        return [
+            $subtotal,
+            round($weight, 4),
+            round($volume, 4),
+            $quantity,
+            $memberLevelId,
+            $regionId,
+            $couponCode !== '' ? $couponCode : null,
+        ];
     }
 }
