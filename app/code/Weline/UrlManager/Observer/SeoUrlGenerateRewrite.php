@@ -156,6 +156,7 @@ class SeoUrlGenerateRewrite implements ObserverInterface
             ->clearQuery()
             ->where(UrlRewrite::schema_fields_WEBSITE_ID, $websiteId)
             ->where(UrlRewrite::schema_fields_PATH, $path)
+            ->order(UrlRewrite::schema_fields_ID, 'DESC')
             ->find()
             ->fetch();
 
