@@ -22,7 +22,10 @@ class Ajax extends FrontendController
     {
         $categoryId = (int) $this->request->getParam('category_id', 0);
         $page = max(1, (int) $this->request->getParam('page', 1));
-        $limit = min(100, max(1, (int) $this->request->getParam('limit', 24)));
+        $pageSize = (int) $this->request->getParam('page_size', 0);
+        $limitParam = (int) $this->request->getParam('limit', 0);
+        $resolved = $pageSize > 0 ? $pageSize : ($limitParam > 0 ? $limitParam : 24);
+        $limit = min(100, max(1, $resolved));
 
         if ($categoryId <= 0) {
             return $this->jsonError((string) __('Invalid category ID.'));
