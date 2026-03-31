@@ -1,0 +1,10 @@
+<?php
+/**
+ * 框架 fetch() 期望模板位于 `view/Backend/...`。
+ * 本模块模板实际放在 `view/templates/Backend/...`，这里做转发以保持兼容。
+ *
+ * 注意：框架会把模板编译到 `view/tpl/{lang}/...` 目录执行，所以不能使用 __DIR__ 来相对定位；
+ * 这里使用 BP（项目根目录常量）拼出绝对路径，确保无论被编译到哪里都能 include 成功。
+ */
+require BP . 'app/code/Weline/Smtp/view/templates/Backend/Config.phtml';
+
