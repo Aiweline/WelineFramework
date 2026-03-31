@@ -1,0 +1,637 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Customer\Model\Customer $user */
+$this->setData('title', __('个人中心'));
+$avatar = $user->getAvatar();
+$username = $user->getUsername();
+$email = $user->getEmail();
+$avatarInitial = strtoupper(mb_substr($username, 0, 1));
+$loginIp = (string) ($user->getLoginIp() ?: __('未知'));
+$sessionId = (string) ($user->getSessionId() ?: __('未知'));
+$emailStatus = $email ? __('已绑定') : __('待完善');
+?>
+<section class="motor-account-index">
+    <section class="motor-account-section" id="overview-section">
+        <div class="motor-account-hero">
+            <div class="motor-account-hero__panel">
+                <div class="motor-account-eyebrow">
+                    <i class="fa fa-dashboard"></i>
+                    <lang>Motor Garage</lang>
+                </div>
+
+                <h1 class="motor-account-title"><?= htmlspecialchars($username) ?></h1>
+                <p class="motor-account-description"><lang>欢迎回来。这里集中管理你的头像、登录安全和会话状态，让账号信息像车库仪表盘一样清晰好找。</lang></p>
+
+                <div class="motor-account-chip-row">
+                    <span class="motor-account-chip">
+                        <i class="fa fa-envelope"></i>
+                        <?= htmlspecialchars((string) $emailStatus) ?>
+                    </span>
+                    <span class="motor-account-chip">
+                        <i class="fa fa-user-circle"></i>
+                        <lang>头像可更新</lang>
+                    </span>
+                    <span class="motor-account-chip">
+                        <i class="fa fa-lock"></i>
+                        <lang>密码可随时修改</lang>
+                    </span>
+                </div>
+            </div>
+
+            <aside class="motor-account-summary-card">
+                <div class="motor-account-summary-card__avatar">
+                    <?php if ($avatar): ?>
+                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                        <div class="motor-account-summary-card__avatar-fallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
+                    <?php else: ?>
+                        <div class="motor-account-summary-card__avatar-fallback"><?= htmlspecialchars($avatarInitial) ?></div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="motor-account-badge motor-account-badge--success">
+                    <i class="fa fa-check-circle"></i>
+                    <lang>账号在线</lang>
+                </div>
+
+                <div class="motor-account-summary-card__caption">
+                    <?php if ($email): ?>
+                        <strong><?= htmlspecialchars($email) ?></strong>
+                    <?php else: ?>
+                        <strong><lang>暂未绑定邮箱</lang></strong>
+                    <?php endif; ?>
+                    <br>
+                    <lang>账户 ID：</lang><?= (int) $user->getId() ?>
+                </div>
+            </aside>
+        </div>
+
+        <div class="motor-account-stat-grid">
+            <article class="motor-account-stat">
+                <div class="motor-account-stat__label"><lang>账户 ID</lang></div>
+                <div class="motor-account-stat__value"><?= (int) $user->getId() ?></div>
+                <div class="motor-account-stat__meta"><lang>用于区分你的唯一账户档案</lang></div>
+            </article>
+
+            <article class="motor-account-stat">
+                <div class="motor-account-stat__label"><lang>邮箱状态</lang></div>
+                <div class="motor-account-stat__value"><?= htmlspecialchars((string) $emailStatus) ?></div>
+                <div class="motor-account-stat__meta">
+                    <?php if ($email): ?>
+                        <?= htmlspecialchars($email) ?>
+                    <?php else: ?>
+                        <lang>建议尽快补充常用邮箱</lang>
+                    <?php endif; ?>
+                </div>
+            </article>
+
+            <article class="motor-account-stat">
+                <div class="motor-account-stat__label"><lang>最近登录 IP</lang></div>
+                <div class="motor-account-stat__value"><?= htmlspecialchars($loginIp) ?></div>
+                <div class="motor-account-stat__meta"><lang>如不是你的操作，建议尽快修改密码</lang></div>
+            </article>
+        </div>
+
+        <div class="motor-account-actions">
+            <button type="button" class="motor-account-action" data-target-section="profile">
+                <span class="motor-account-action__icon"><i class="fa fa-user"></i></span>
+                <span class="motor-account-action__copy">
+                    <strong><lang>编辑资料</lang></strong>
+                    <span><lang>调整头像与查看基础账户信息</lang></span>
+                </span>
+            </button>
+
+            <button type="button" class="motor-account-action" data-target-section="security">
+                <span class="motor-account-action__icon"><i class="fa fa-lock"></i></span>
+                <span class="motor-account-action__copy">
+                    <strong><lang>更新密码</lang></strong>
+                    <span><lang>更换登录密码，提升账户安全性</lang></span>
+                </span>
+            </button>
+
+            <button type="button" class="motor-account-action" data-target-section="login-info">
+                <span class="motor-account-action__icon"><i class="fa fa-clock-o"></i></span>
+                <span class="motor-account-action__copy">
+                    <strong><lang>查看会话</lang></strong>
+                    <span><lang>检查登录 IP 与当前会话标识</lang></span>
+                </span>
+            </button>
+        </div>
+    </section>
+
+    <section class="motor-account-section" id="profile-section" hidden>
+        <div class="motor-account-grid">
+            <article class="motor-account-card">
+                <header class="motor-account-card__header">
+                    <div>
+                        <h2 class="motor-account-card__title"><lang>个人资料</lang></h2>
+                        <p class="motor-account-card__description"><lang>当前接口支持更新头像，用户名、ID 和邮箱会作为只读信息展示。</lang></p>
+                    </div>
+                    <div class="motor-account-badge motor-account-badge--warning">
+                        <i class="fa fa-pencil"></i>
+                        <lang>可编辑头像</lang>
+                    </div>
+                </header>
+
+                <div class="motor-account-card__body">
+                    <div id="profileSuccessMsg" class="motor-account-message motor-account-message--success" hidden></div>
+                    <div id="profileErrorMsg" class="motor-account-message motor-account-message--error" hidden></div>
+
+                    <form id="profileForm" class="motor-account-form">
+                        <?= $this->getFormKey('/customer/account/update') ?>
+
+                        <div class="motor-account-form__row">
+                            <div class="motor-account-form__group">
+                                <label class="motor-account-form__label" for="account_username">
+                                    <span class="motor-account-form__label-main"><i class="fa fa-user"></i><lang>用户名</lang></span>
+                                    <span class="motor-account-form__label-hint"><lang>当前版本不可修改</lang></span>
+                                </label>
+                                <div class="motor-account-form__input-wrap">
+                                    <input class="motor-account-form__input" type="text" id="account_username" value="<?= htmlspecialchars($username) ?>" disabled>
+                                    <i class="motor-account-form__input-icon fa fa-user"></i>
+                                </div>
+                                <div class="motor-account-form__hint"><lang>如果后续支持修改，这里会开放编辑。</lang></div>
+                            </div>
+
+                            <div class="motor-account-form__group">
+                                <label class="motor-account-form__label" for="account_id">
+                                    <span class="motor-account-form__label-main"><i class="fa fa-id-card"></i><lang>账户 ID</lang></span>
+                                    <span class="motor-account-form__label-hint"><lang>用于标识唯一账户</lang></span>
+                                </label>
+                                <div class="motor-account-form__input-wrap">
+                                    <input class="motor-account-form__input" type="text" id="account_id" value="<?= (int) $user->getId() ?>" disabled>
+                                    <i class="motor-account-form__input-icon fa fa-id-badge"></i>
+                                </div>
+                                <div class="motor-account-form__hint"><lang>这个编号会跟随你的账户长期保留。</lang></div>
+                            </div>
+                        </div>
+
+                        <div class="motor-account-form__group">
+                            <label class="motor-account-form__label" for="avatar">
+                                <span class="motor-account-form__label-main"><i class="fa fa-image"></i><lang>头像 URL</lang></span>
+                                <span class="motor-account-form__label-hint"><lang>输入完整图片地址后可先预览</lang></span>
+                            </label>
+                            <div class="motor-account-form__inline">
+                                <div class="motor-account-form__input-wrap">
+                                    <input class="motor-account-form__input" type="url" id="avatar" name="avatar" value="<?= htmlspecialchars((string) ($avatar ?: '')) ?>" placeholder="https://example.com/avatar.jpg">
+                                    <i class="motor-account-form__input-icon fa fa-link"></i>
+                                </div>
+                                <button type="button" class="motor-account-button motor-account-button--ghost" id="previewAvatarBtn">
+                                    <i class="fa fa-eye"></i>
+                                    <lang>预览</lang>
+                                </button>
+                            </div>
+                            <div class="motor-account-form__hint"><lang>如果留空，则保持当前头像不变。</lang></div>
+                        </div>
+
+                        <?php if ($email): ?>
+                            <div class="motor-account-form__group">
+                                <label class="motor-account-form__label" for="account_email">
+                                    <span class="motor-account-form__label-main"><i class="fa fa-envelope"></i><lang>邮箱</lang></span>
+                                    <span class="motor-account-form__label-hint"><lang>当前版本不可修改</lang></span>
+                                </label>
+                                <div class="motor-account-form__input-wrap">
+                                    <input class="motor-account-form__input" type="email" id="account_email" value="<?= htmlspecialchars($email) ?>" disabled>
+                                    <i class="motor-account-form__input-icon fa fa-envelope"></i>
+                                </div>
+                                <div class="motor-account-form__hint"><lang>邮箱会用于找回密码与重要通知。</lang></div>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="motor-account-form__actions">
+                            <span class="motor-account-form__hint"><lang>保存后页面不会离开，你可以继续检查其它设置。</lang></span>
+                            <button type="submit" id="profileSubmit" class="motor-account-button motor-account-button--primary">
+                                <span><i class="fa fa-save"></i> <lang>保存头像设置</lang></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </article>
+
+            <aside class="motor-account-card">
+                <header class="motor-account-card__header">
+                    <div>
+                        <h2 class="motor-account-card__title"><lang>预览与建议</lang></h2>
+                        <p class="motor-account-card__description"><lang>头像更新前先看看展示效果，避免上传后才发现裁切不合适。</lang></p>
+                    </div>
+                </header>
+
+                <div class="motor-account-card__body">
+                    <div class="motor-account-profile-preview">
+                        <div class="motor-account-profile-preview__avatar">
+                            <?php if ($avatar): ?>
+                                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="motor-account-profile-preview__fallback" id="avatarFallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
+                            <?php else: ?>
+                                <img src="" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" hidden>
+                                <div class="motor-account-profile-preview__fallback" id="avatarFallback"><?= htmlspecialchars($avatarInitial) ?></div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="motor-account-badge motor-account-badge--success">
+                            <i class="fa fa-check"></i>
+                            <lang>实时预览</lang>
+                        </div>
+
+                        <ul class="motor-account-helper-list">
+                            <li><lang>建议使用清晰的正方形图片，展示更稳定。</lang></li>
+                            <li><lang>如果链接失效，系统会自动回退到你的姓名首字母。</lang></li>
+                            <li><lang>头像主要用于侧边栏和个人中心展示。</lang></li>
+                        </ul>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="motor-account-section" id="security-section" hidden>
+        <div class="motor-account-grid">
+            <article class="motor-account-card">
+                <header class="motor-account-card__header">
+                    <div>
+                        <h2 class="motor-account-card__title"><lang>安全设置</lang></h2>
+                        <p class="motor-account-card__description"><lang>更换密码时需要先验证旧密码，建议使用更强的新密码组合。</lang></p>
+                    </div>
+                    <div class="motor-account-badge motor-account-badge--warning">
+                        <i class="fa fa-lock"></i>
+                        <lang>需验证旧密码</lang>
+                    </div>
+                </header>
+
+                <div class="motor-account-card__body">
+                    <div id="securitySuccessMsg" class="motor-account-message motor-account-message--success" hidden></div>
+                    <div id="securityErrorMsg" class="motor-account-message motor-account-message--error" hidden></div>
+
+                    <form id="securityForm" class="motor-account-form">
+                        <?= $this->getFormKey('/customer/account/update') ?>
+
+                        <div class="motor-account-form__group">
+                            <label class="motor-account-form__label" for="old_password">
+                                <span class="motor-account-form__label-main"><i class="fa fa-key"></i><lang>当前密码</lang></span>
+                                <span class="motor-account-form__label-hint"><lang>用于确认是你本人在操作</lang></span>
+                            </label>
+                            <div class="motor-account-form__input-wrap">
+                                <input class="motor-account-form__input" type="password" id="old_password" name="old_password" autocomplete="current-password" placeholder="<lang>请输入当前密码</lang>" required>
+                                <i class="motor-account-form__input-icon fa fa-lock"></i>
+                                <button type="button" class="motor-account-form__password-toggle" data-account-password="#old_password" aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>">
+                                    <i class="fa fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="motor-account-form__row">
+                            <div class="motor-account-form__group">
+                                <label class="motor-account-form__label" for="new_password">
+                                    <span class="motor-account-form__label-main"><i class="fa fa-shield"></i><lang>新密码</lang></span>
+                                    <span class="motor-account-form__label-hint"><lang>至少 6 位，建议更长</lang></span>
+                                </label>
+                                <div class="motor-account-form__input-wrap">
+                                    <input class="motor-account-form__input" type="password" id="new_password" name="new_password" minlength="6" autocomplete="new-password" placeholder="<lang>请输入新密码</lang>" required>
+                                    <i class="motor-account-form__input-icon fa fa-lock"></i>
+                                    <button type="button" class="motor-account-form__password-toggle" data-account-password="#new_password" aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>">
+                                        <i class="fa fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="motor-account-form__group">
+                                <label class="motor-account-form__label" for="confirm_password">
+                                    <span class="motor-account-form__label-main"><i class="fa fa-check-circle"></i><lang>确认新密码</lang></span>
+                                    <span class="motor-account-form__label-hint"><lang>再次输入，避免保存错误</lang></span>
+                                </label>
+                                <div class="motor-account-form__input-wrap">
+                                    <input class="motor-account-form__input" type="password" id="confirm_password" name="confirm_password" minlength="6" autocomplete="new-password" placeholder="<lang>请再次输入新密码</lang>" required>
+                                    <i class="motor-account-form__input-icon fa fa-check-circle"></i>
+                                    <button type="button" class="motor-account-form__password-toggle" data-account-password="#confirm_password" aria-label="<?= htmlspecialchars(__('显示密码'), ENT_QUOTES) ?>">
+                                        <i class="fa fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="motor-account-form__actions">
+                            <span class="motor-account-form__hint"><lang>如果你在公共设备上登录，修改后建议重新登录一次确认状态。</lang></span>
+                            <button type="submit" id="securitySubmit" class="motor-account-button motor-account-button--primary">
+                                <span><i class="fa fa-refresh"></i> <lang>更新密码</lang></span>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </article>
+
+            <aside class="motor-account-card">
+                <header class="motor-account-card__header">
+                    <div>
+                        <h2 class="motor-account-card__title"><lang>安全建议</lang></h2>
+                        <p class="motor-account-card__description"><lang>几个简单动作，就能让账户更不容易被冒用。</lang></p>
+                    </div>
+                </header>
+
+                <div class="motor-account-card__body">
+                    <ul class="motor-account-helper-list">
+                        <li><lang>不要在多个网站重复使用同一组密码。</lang></li>
+                        <li><lang>新密码可以混合大小写字母、数字和特殊符号。</lang></li>
+                        <li><lang>如果发现异常登录 IP，请尽快更新密码并检查邮箱。</lang></li>
+                    </ul>
+                </div>
+            </aside>
+        </div>
+    </section>
+
+    <section class="motor-account-section" id="login-info-section" hidden>
+        <div class="motor-account-info-grid">
+            <article class="motor-account-info-card">
+                <div class="motor-account-info-card__label"><lang>最近登录 IP</lang></div>
+                <div class="motor-account-info-card__value"><?= htmlspecialchars($loginIp) ?></div>
+                <div class="motor-account-info-card__meta"><lang>用于帮助你识别最近一次登录来源。</lang></div>
+            </article>
+
+            <article class="motor-account-info-card">
+                <div class="motor-account-info-card__label">Session ID</div>
+                <div class="motor-account-info-card__value"><?= htmlspecialchars($sessionId) ?></div>
+                <div class="motor-account-info-card__meta"><lang>当前会话标识，可用于排查登录状态问题。</lang></div>
+            </article>
+
+            <article class="motor-account-info-card">
+                <div class="motor-account-info-card__label"><lang>会员档案</lang></div>
+                <div class="motor-account-info-card__value"><?= htmlspecialchars($username) ?></div>
+                <div class="motor-account-info-card__meta"><lang>如果信息不一致，请回到“个人资料”检查头像与邮箱状态。</lang></div>
+            </article>
+        </div>
+
+        <article class="motor-account-card">
+            <header class="motor-account-card__header">
+                <div>
+                    <h2 class="motor-account-card__title"><lang>会话提醒</lang></h2>
+                    <p class="motor-account-card__description"><lang>登录信息主要用于帮助你确认最近的访问是否来自自己熟悉的设备与网络环境。</lang></p>
+                </div>
+            </header>
+
+            <div class="motor-account-card__body">
+                <ul class="motor-account-helper-list">
+                    <li><lang>如果最近登录 IP 看起来陌生，建议立即更新密码。</lang></li>
+                    <li><lang>在公用设备上使用后，记得手动退出登录。</lang></li>
+                    <li><lang>头像、邮箱和密码修改完成后，可回到总览页继续查看当前状态。</lang></li>
+                </ul>
+            </div>
+        </article>
+    </section>
+</section>
+
+<script>
+(function() {
+    'use strict';
+
+    var navLinks = Array.prototype.slice.call(document.querySelectorAll('.motor-account-sidebar__link[data-section]'));
+    var actionButtons = Array.prototype.slice.call(document.querySelectorAll('[data-target-section]'));
+    var sections = Array.prototype.slice.call(document.querySelectorAll('.motor-account-section'));
+    var profileForm = document.getElementById('profileForm');
+    var securityForm = document.getElementById('securityForm');
+    var avatarInput = document.getElementById('avatar');
+    var avatarPreview = document.getElementById('avatarPreview');
+    var avatarFallback = document.getElementById('avatarFallback');
+    var profileSubmit = document.getElementById('profileSubmit');
+    var securitySubmit = document.getElementById('securitySubmit');
+    var showPasswordText = <?= json_encode((string) __('显示密码'), JSON_UNESCAPED_UNICODE) ?>;
+    var hidePasswordText = <?= json_encode((string) __('隐藏密码'), JSON_UNESCAPED_UNICODE) ?>;
+    var updateFailedText = <?= json_encode((string) __('更新失败，请稍后重试'), JSON_UNESCAPED_UNICODE) ?>;
+
+    function decodeHtmlEntities(message) {
+        var decoded = String(message || '');
+        var helper = document.createElement('textarea');
+
+        for (var i = 0; i < 3; i++) {
+            helper.innerHTML = decoded;
+            if (!helper.value || helper.value === decoded) {
+                break;
+            }
+            decoded = helper.value;
+        }
+
+        return decoded;
+    }
+
+    function setMessage(element, message) {
+        if (!element) {
+            return;
+        }
+
+        if (!message) {
+            element.textContent = '';
+            element.hidden = true;
+            return;
+        }
+
+        element.textContent = decodeHtmlEntities(message);
+        element.hidden = false;
+    }
+
+    function clearMessagePair(successElement, errorElement) {
+        setMessage(successElement, '');
+        setMessage(errorElement, '');
+    }
+
+    function setButtonLoading(button, loading) {
+        if (!button) {
+            return;
+        }
+
+        button.classList.toggle('is-loading', loading);
+        button.disabled = loading;
+    }
+
+    function request(url, options) {
+        if (window.Weline && window.Weline.Api && typeof window.Weline.Api.request === 'function') {
+            return window.Weline.Api.request(url, options);
+        }
+
+        return fetch(url, options).then(function(response) {
+            return response.json().then(function(data) {
+                return { ok: response.ok, data: data };
+            });
+        });
+    }
+
+    function showSection(sectionName, shouldScroll) {
+        var targetId = sectionName + '-section';
+
+        sections.forEach(function(section) {
+            section.hidden = section.id !== targetId;
+        });
+
+        navLinks.forEach(function(link) {
+            var isActive = link.getAttribute('data-section') === sectionName;
+            link.classList.toggle('motor-account-sidebar__link--active', isActive);
+        });
+
+        if (window.history && typeof window.history.replaceState === 'function') {
+            window.history.replaceState(null, '', '#' + sectionName);
+        }
+
+        if (shouldScroll) {
+            var targetSection = document.getElementById(targetId);
+            if (targetSection && typeof targetSection.scrollIntoView === 'function') {
+                targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        }
+    }
+
+    navLinks.forEach(function(link) {
+        link.addEventListener('click', function(event) {
+            event.preventDefault();
+            showSection(link.getAttribute('data-section'), true);
+        });
+    });
+
+    actionButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+            showSection(button.getAttribute('data-target-section'), true);
+        });
+    });
+
+    var initialSection = (window.location.hash || '#overview').replace('#', '');
+    if (!document.getElementById(initialSection + '-section')) {
+        initialSection = 'overview';
+    }
+    showSection(initialSection, false);
+
+    function updateAvatarPreview() {
+        if (!avatarPreview || !avatarFallback) {
+            return;
+        }
+
+        var url = avatarInput ? avatarInput.value.trim() : '';
+        if (!url) {
+            avatarPreview.hidden = true;
+            avatarPreview.removeAttribute('src');
+            avatarFallback.style.display = 'flex';
+            return;
+        }
+
+        avatarPreview.hidden = false;
+        avatarPreview.src = url;
+        avatarFallback.style.display = 'none';
+    }
+
+    if (avatarInput) {
+        avatarInput.addEventListener('input', function() {
+            var profileError = document.getElementById('profileErrorMsg');
+            if (profileError) {
+                profileError.hidden = true;
+            }
+        });
+    }
+
+    var previewAvatarBtn = document.getElementById('previewAvatarBtn');
+    if (previewAvatarBtn) {
+        previewAvatarBtn.addEventListener('click', updateAvatarPreview);
+    }
+
+    document.querySelectorAll('[data-account-password]').forEach(function(button) {
+        var target = document.querySelector(button.getAttribute('data-account-password'));
+        if (!target) {
+            return;
+        }
+
+        button.setAttribute('aria-label', showPasswordText);
+        button.addEventListener('click', function() {
+            var visible = target.type === 'password';
+            var icon = button.querySelector('i');
+            target.type = visible ? 'text' : 'password';
+            button.setAttribute('aria-label', visible ? hidePasswordText : showPasswordText);
+            if (icon) {
+                icon.className = visible ? 'fa fa-eye-slash' : 'fa fa-eye';
+            }
+        });
+    });
+
+    if (profileForm) {
+        profileForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            var successMsg = document.getElementById('profileSuccessMsg');
+            var errorMsg = document.getElementById('profileErrorMsg');
+            clearMessagePair(successMsg, errorMsg);
+            setButtonLoading(profileSubmit, true);
+
+            var serialized = new URLSearchParams(new FormData(profileForm)).toString();
+            request('/customer/account/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: serialized
+            })
+            .then(function(response) {
+                var data = response.data || {};
+                if (response.ok && data.success) {
+                    setMessage(successMsg, data.message || <?= json_encode((string) __('更新成功'), JSON_UNESCAPED_UNICODE) ?>);
+                    updateAvatarPreview();
+                    return;
+                }
+
+                setMessage(errorMsg, data.message || updateFailedText);
+            })
+            .catch(function(error) {
+                setMessage(errorMsg, (error && error.message) || updateFailedText);
+            })
+            .finally(function() {
+                setButtonLoading(profileSubmit, false);
+            });
+        });
+    }
+
+    if (securityForm) {
+        securityForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+
+            var successMsg = document.getElementById('securitySuccessMsg');
+            var errorMsg = document.getElementById('securityErrorMsg');
+            var oldPassword = document.getElementById('old_password');
+            var newPassword = document.getElementById('new_password');
+            var confirmPassword = document.getElementById('confirm_password');
+
+            clearMessagePair(successMsg, errorMsg);
+
+            if (!oldPassword.value || !newPassword.value || !confirmPassword.value) {
+                setMessage(errorMsg, <?= json_encode((string) __('请填写所有密码字段'), JSON_UNESCAPED_UNICODE) ?>);
+                return;
+            }
+
+            if (newPassword.value.length < 6) {
+                setMessage(errorMsg, <?= json_encode((string) __('新密码长度不能少于 6 位'), JSON_UNESCAPED_UNICODE) ?>);
+                newPassword.focus();
+                return;
+            }
+
+            if (newPassword.value !== confirmPassword.value) {
+                setMessage(errorMsg, <?= json_encode((string) __('两次输入的新密码不一致'), JSON_UNESCAPED_UNICODE) ?>);
+                confirmPassword.focus();
+                return;
+            }
+
+            setButtonLoading(securitySubmit, true);
+
+            var serialized = new URLSearchParams(new FormData(securityForm)).toString();
+            request('/customer/account/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: serialized
+            })
+            .then(function(response) {
+                var data = response.data || {};
+                if (response.ok && data.success) {
+                    setMessage(successMsg, data.message || <?= json_encode((string) __('修改成功'), JSON_UNESCAPED_UNICODE) ?>);
+                    securityForm.reset();
+                    return;
+                }
+
+                setMessage(errorMsg, data.message || updateFailedText);
+            })
+            .catch(function(error) {
+                setMessage(errorMsg, (error && error.message) || updateFailedText);
+            })
+            .finally(function() {
+                setButtonLoading(securitySubmit, false);
+            });
+        });
+    }
+})();
+</script>

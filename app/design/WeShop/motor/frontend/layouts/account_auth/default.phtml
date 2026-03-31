@@ -1,9 +1,34 @@
 <?php
+/**
+ * Layout: account auth pages - Motor Theme
+ */
+$this->setData('meta.showBreadcrumb', false);
+$this->setData('showHeader', false);
+$this->setData('showFooter', false);
 $this->setLayout('base');
 ?>
-<main class="mx-auto max-w-screen-md px-4 sm:px-6 lg:px-8 py-10">
+<theme:css>Weline_Theme::theme/frontend/assets/css/motor-account-auth.css</theme:css>
+<div class="account-auth-container w-full h-full" data-layout="account_auth_content">
+    <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::content-before</w:hook>
+
     <section data-wslot="account-auth-main"
              data-wslot-name="Account Auth Main"
              data-wslot-accept="content,banner"
-             data-wslot-multiple="true"></section>
-</main>
+             data-wslot-multiple="true">
+        <if condition="meta.content">
+            {{meta.content}}
+            <elseif condition="content"/>
+            {{content}}
+            <elseif condition="meta.contentTemplate"/>
+            <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+            <elseif condition="contentTemplate"/>
+            <?php echo $this->fetch($this->getData("contentTemplate")); ?>
+            <else>
+            <?= $this->getChildHtml('content') ?>
+        </if>
+    </section>
+
+    <w:hook>Weline_Theme::frontend::layouts::account_auth::content-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+</div>
