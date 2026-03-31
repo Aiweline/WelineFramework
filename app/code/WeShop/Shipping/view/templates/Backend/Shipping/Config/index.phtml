@@ -1,0 +1,137 @@
+<?php
+$pageTitle = (string) ($this->getData('page_title') ?? __('Shipping Methods'));
+$saveUrl = (string) ($this->getData('save_url') ?? '');
+$methods = $this->getData('methods') ?? [];
+$stats = $this->getData('stats') ?? [];
+?>
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="page-title-box d-sm-flex align-items-center justify-content-between">
+                <h4 class="mb-sm-0"><?= htmlspecialchars($pageTitle) ?></h4>
+                <div class="page-title-right">
+                    <ol class="breadcrumb m-0">
+                        <li class="breadcrumb-item"><?= __('WeShop') ?></li>
+                        <li class="breadcrumb-item"><?= __('Shipping') ?></li>
+                        <li class="breadcrumb-item active"><?= __('Configuration') ?></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Total Methods') ?></div>
+                    <div class="display-6 fw-semibold"><?= (int) ($stats['total_methods'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Enabled At Checkout') ?></div>
+                    <div class="display-6 fw-semibold text-success"><?= (int) ($stats['enabled_methods'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Reserved / Disabled') ?></div>
+                    <div class="display-6 fw-semibold text-warning"><?= (int) ($stats['reserved_methods'] ?? 0) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small"><?= __('Default Method') ?></div>
+                    <div class="fw-semibold fs-5"><?= htmlspecialchars((string) ($stats['default_method_title'] ?? '')) ?></div>
+                    <div class="small text-muted"><?= htmlspecialchars((string) ($stats['default_method'] ?? '')) ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <form action="<?= htmlspecialchars($saveUrl) ?>" method="post" class="d-grid gap-4">
+        <?php foreach ($methods as $method): ?>
+            <?php
+            if (!\is_array($method)) {
+                continue;
+            }
+            $code = (string) ($method['code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+            $config = \is_array($method['config'] ?? null) ? $method['config'] : [];
+            ?>
+            <div class="card border-0 shadow-sm">
+                <div class="card-body p-4">
+                    <div class="d-flex flex-column flex-lg-row justify-content-between align-items-start gap-3 mb-4">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <h5 class="mb-0"><?= htmlspecialchars((string) ($method['name'] ?? $code)) ?></h5>
+                                <?php if (!empty($method['enabled'])): ?>
+                                    <span class="badge bg-success-subtle text-success"><?= __('Enabled') ?></span>
+                                <?php else: ?>
+                                    <span class="badge bg-warning-subtle text-warning"><?= __('Disabled') ?></span>
+                                <?php endif; ?>
+                                <?php if (!empty($method['is_default'])): ?>
+                                    <span class="badge bg-primary-subtle text-primary"><?= __('Default') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <div class="text-muted mb-2"><?= htmlspecialchars((string) ($method['description'] ?? '')) ?></div>
+                            <div class="small text-muted">
+                                <span class="me-3"><?= __('Code') ?>: <code><?= htmlspecialchars($code) ?></code></span>
+                                <span class="me-3"><?= __('Areas') ?>: <?= htmlspecialchars(implode(', ', (array) ($method['areas'] ?? []))) ?></span>
+                                <span class="me-3"><?= __('Price') ?>: <?= $this->formatPrice((float) ($method['price'] ?? 0)) ?></span>
+                            </div>
+                        </div>
+
+                        <div class="row g-3 w-100 w-lg-auto" style="min-width: 320px; max-width: 420px;">
+                            <div class="col-sm-4">
+                                <label class="form-label fw-semibold"><?= __('Enabled') ?></label>
+                                <input type="hidden" name="methods[<?= htmlspecialchars($code) ?>][enabled]" value="0">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" name="methods[<?= htmlspecialchars($code) ?>][enabled]" value="1" <?= !empty($method['enabled']) ? 'checked' : '' ?>>
+                                </div>
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label fw-semibold"><?= __('Default') ?></label>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="radio" name="default_method" value="<?= htmlspecialchars($code) ?>" <?= !empty($method['is_default']) ? 'checked' : '' ?>>
+                                </div>
+                            </div>
+                            <div class="col-sm-4">
+                                <label class="form-label fw-semibold"><?= __('Sort Order') ?></label>
+                                <input class="form-control" type="number" name="methods[<?= htmlspecialchars($code) ?>][sort_order]" value="<?= (int) ($method['sort_order'] ?? 0) ?>">
+                            </div>
+                        </div>
+                    </div>
+
+                    <?php if ($code === 'flat_rate'): ?>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold"><?= __('Flat Rate Price') ?></label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input class="form-control" type="number" name="flat_rate_price" value="<?= (float) ($method['price'] ?? 5.00) ?>" step="0.01" min="0">
+                                </div>
+                                <div class="form-text"><?= __('Set the fixed shipping fee for Flat Rate shipping.') ?></div>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+
+        <div class="d-flex justify-content-end">
+            <button class="btn btn-primary btn-lg" type="submit">
+                <i class="mdi mdi-content-save-outline me-1"></i><?= __('Save Shipping Settings') ?>
+            </button>
+        </div>
+    </form>
+</div>
