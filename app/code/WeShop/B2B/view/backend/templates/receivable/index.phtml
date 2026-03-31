@@ -1,0 +1,64 @@
+<?php
+$items = $this->getData('items') ?? [];
+$paymentPostUrl = (string) ($this->getData('paymentPostUrl') ?? '');
+$receivableIndexUrl = (string) ($this->getData('receivableIndexUrl') ?? '');
+$filters = $this->getData('filters') ?? [];
+?>
+<div class="container-fluid py-3">
+    <h1 class="h3 mb-3"><?= __('B2B Receivables') ?></h1>
+    <form method="get" action="<?= htmlspecialchars($receivableIndexUrl, ENT_QUOTES) ?>" class="row g-2 mb-3">
+        <div class="col-md-2">
+            <input type="number" name="customer_id" class="form-control" placeholder="<?= __('Customer ID') ?>"
+                   value="<?= (int) ($filters['customer_id'] ?? 0) > 0 ? (int) $filters['customer_id'] : '' ?>">
+        </div>
+        <div class="col-md-2">
+            <input type="text" name="status" class="form-control" placeholder="<?= __('Status') ?>"
+                   value="<?= htmlspecialchars((string) ($filters['status'] ?? ''), ENT_QUOTES) ?>">
+        </div>
+        <div class="col-md-2">
+            <button type="submit" class="btn btn-outline-primary"><?= __('Filter') ?></button>
+        </div>
+    </form>
+    <div class="table-responsive">
+        <table class="table table-striped align-middle">
+            <thead>
+            <tr>
+                <th><?= __('ID') ?></th>
+                <th><?= __('Customer') ?></th>
+                <th><?= __('Order') ?></th>
+                <th><?= __('Invoice') ?></th>
+                <th><?= __('Amount') ?></th>
+                <th><?= __('Paid') ?></th>
+                <th><?= __('Due') ?></th>
+                <th><?= __('Status') ?></th>
+                <th><?= __('Record payment') ?></th>
+            </tr>
+            </thead>
+            <tbody>
+            <?php foreach ($items as $row): ?>
+                <?php if (!is_array($row)) {
+                    continue;
+                } ?>
+                <tr>
+                    <td><?= (int) ($row['receivable_id'] ?? 0) ?></td>
+                    <td><?= (int) ($row['customer_id'] ?? 0) ?></td>
+                    <td><?= (int) ($row['order_id'] ?? 0) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['invoice_no'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['amount'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['paid_amount'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['due_date'] ?? ''), ENT_QUOTES) ?></td>
+                    <td><?= htmlspecialchars((string) ($row['status'] ?? ''), ENT_QUOTES) ?></td>
+                    <td>
+                        <form method="post" action="<?= htmlspecialchars($paymentPostUrl, ENT_QUOTES) ?>" class="d-flex gap-1">
+                            <input type="hidden" name="back_url" value="<?= htmlspecialchars($receivableIndexUrl, ENT_QUOTES) ?>">
+                            <input type="hidden" name="receivable_id" value="<?= (int) ($row['receivable_id'] ?? 0) ?>">
+                            <input type="number" step="0.01" name="amount" class="form-control form-control-sm w-auto" min="0.01" required>
+                            <button type="submit" class="btn btn-sm btn-success"><?= __('Pay') ?></button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>

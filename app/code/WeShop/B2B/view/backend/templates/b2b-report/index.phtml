@@ -1,0 +1,34 @@
+<?php
+$creditLines = (int) ($this->getData('credit_lines') ?? 0);
+$openReceivables = (int) ($this->getData('open_receivables') ?? 0);
+$overdueReceivables = (int) ($this->getData('overdue_receivables') ?? 0);
+?>
+<div class="container-fluid py-3">
+    <h1 class="h3 mb-4"><?= __('B2B Credit & AR Summary') ?></h1>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small text-uppercase"><?= __('Credit lines') ?></div>
+                    <div class="display-6"><?= $creditLines ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small text-uppercase"><?= __('Open receivables') ?></div>
+                    <div class="display-6"><?= $openReceivables ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="text-muted small text-uppercase"><?= __('Overdue') ?></div>
+                    <div class="display-6 text-danger"><?= $overdueReceivables ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
