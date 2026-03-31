@@ -63,7 +63,12 @@ class TikTokPixel implements PixelProviderInterface
             return '';
         }
 
-        return $this->buildHeadSnippet($this->readPixelId());
+        $pixelId = $this->sanitizeSnippetToken($this->readPixelId());
+        if ($pixelId === '') {
+            return '';
+        }
+
+        return $this->buildHeadSnippet($pixelId);
     }
 
     /**
@@ -79,8 +84,17 @@ class TikTokPixel implements PixelProviderInterface
             ];
         }
 
+        $pixelId = $this->sanitizeSnippetToken($this->readPixelId());
+        if ($pixelId === '') {
+            return [
+                'head' => '',
+                'body' => '',
+                'footer' => '',
+            ];
+        }
+
         return [
-            'head' => $this->buildHeadSnippet($this->readPixelId()),
+            'head' => $this->buildHeadSnippet($pixelId),
             'body' => '',
             'footer' => '',
         ];
@@ -144,6 +158,12 @@ HTML;
     private function readTestEventCode(): string
     {
         return trim((string) ($this->testEventCode ?? $this->getConfigValue('test_event_code', '')));
+    }
+
+    private function sanitizeSnippetToken(string $value): string
+    {
+        $sanitized = preg_replace('/[^a-zA-Z0-9._-]/', '', $value);
+        return trim((string) $sanitized);
     }
 
     private function mapEventName(string $eventName): string
@@ -281,13 +301,21 @@ HTML;
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $json);
         curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 2);
+        curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 5);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
         curl_setopt($ch, CURLOPT_HTTPHEADER, array_merge(['Content-Type: application/json'], $headers));
         $response = curl_exec($ch);
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $hasError = $response === false || curl_errno($ch) !== 0;
         curl_close($ch);
 
-        if ($statusCode === 0 || ($statusCode >= 200 && $statusCode < 300)) {
+        if ($hasError) {
+            return false;
+        }
+
+        if ($statusCode >= 200 && $statusCode < 300) {
             if (is_string($response) && $response !== '') {
                 $decoded = json_decode($response, true);
                 if (is_array($decoded) && array_key_exists('code', $decoded)) {
