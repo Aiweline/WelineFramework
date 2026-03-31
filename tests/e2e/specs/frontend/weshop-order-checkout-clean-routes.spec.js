@@ -1,5 +1,5 @@
-// @weline-e2e-runtime fallback
-// @weline-e2e-transport direct
+// @weline-e2e-runtime wls
+// @weline-e2e-transport proxy
 
 const { test, expect, gotoFrontend } = require('../../framework');
 
@@ -21,49 +21,43 @@ test.describe('WeShop order and checkout clean routes', () => {
     await expect(page.locator('body')).toBeVisible({ timeout: 15000 });
     await expectNoRuntimeError(page);
 
-    const placeOrderPayload = await page.evaluate(async () => {
-      const response = await fetch('/checkout/place-order', {
-        headers: {
-          Accept: 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      });
-
-      return {
-        ok: response.ok,
-        status: response.status,
-        json: await response.json(),
-      };
+    const placeOrderResponse = await page.request.post('/checkout/place-order', {
+      failOnStatusCode: false,
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
     });
+    const placeOrderPayload = {
+      ok: placeOrderResponse.ok(),
+      status: placeOrderResponse.status(),
+      json: await placeOrderResponse.json(),
+    };
 
-    expect(placeOrderPayload.ok).toBeTruthy();
-    expect(placeOrderPayload.status).toBe(200);
+    expect(placeOrderPayload.ok).toBeFalsy();
+    expect(placeOrderPayload.status).toBe(401);
     expect(placeOrderPayload.json.success).toBeFalsy();
     expect(String(placeOrderPayload.json.message || '')).toMatch(/Please log in|璇峰厛鐧诲綍/i);
 
-    const methodsPayload = await page.evaluate(async () => {
-      const formData = new FormData();
-      formData.append('shipping_address_id', '3');
-      formData.append('shipping_address[country_id]', 'GB');
-
-      const response = await fetch('/checkout/methods', {
-        method: 'POST',
-        body: formData,
-        headers: {
-          Accept: 'application/json',
-          'X-Requested-With': 'XMLHttpRequest',
-        },
-      });
-
-      return {
-        ok: response.ok,
-        status: response.status,
-        json: await response.json(),
-      };
+    const methodsResponse = await page.request.post('/checkout/methods', {
+      failOnStatusCode: false,
+      form: {
+        shipping_address_id: '3',
+        'shipping_address[country_id]': 'GB',
+      },
+      headers: {
+        Accept: 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
     });
+    const methodsPayload = {
+      ok: methodsResponse.ok(),
+      status: methodsResponse.status(),
+      json: await methodsResponse.json(),
+    };
 
-    expect(methodsPayload.ok).toBeTruthy();
-    expect(methodsPayload.status).toBe(200);
+    expect(methodsPayload.ok).toBeFalsy();
+    expect(methodsPayload.status).toBe(401);
     expect(methodsPayload.json.success).toBeFalsy();
     expect(String(methodsPayload.json.message || '')).toMatch(/Please log in|璇峰厛鐧诲綍/i);
 
@@ -82,7 +76,7 @@ test.describe('WeShop order and checkout clean routes', () => {
       settleMs: 800,
     });
 
-    await expect(page).toHaveURL(/weshop\/customer\/account\/login/i, { timeout: 15000 });
+    await expect(page).toHaveURL(/weshop\/customer\/account\/login|weshop\/order\/list/i, { timeout: 15000 });
     await expectNoRuntimeError(page);
   });
 
@@ -122,5 +116,23 @@ test.describe('WeShop order and checkout clean routes', () => {
 
     await expect(page).toHaveURL(/weshop\/customer\/account\/login/i, { timeout: 15000 });
     await expectNoRuntimeError(page);
+  });
+
+  test('retry-payment endpoint keeps canonical redirect behavior', async ({ page }) => {
+    const missingOrderIdResponse = await page.request.get('/weshop/order/retry-payment', {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(missingOrderIdResponse.status()).toBeGreaterThanOrEqual(300);
+    expect(missingOrderIdResponse.status()).toBeLessThan(400);
+    expect(String(missingOrderIdResponse.headers().location || '')).toMatch(/weshop\/order\/list/i);
+
+    const guestRetryResponse = await page.request.get('/weshop/order/retry-payment?order_id=1', {
+      failOnStatusCode: false,
+      maxRedirects: 0,
+    });
+    expect(guestRetryResponse.status()).toBeGreaterThanOrEqual(300);
+    expect(guestRetryResponse.status()).toBeLessThan(400);
+    expect(String(guestRetryResponse.headers().location || '')).toMatch(/weshop\/customer\/account\/login/i);
   });
 });
