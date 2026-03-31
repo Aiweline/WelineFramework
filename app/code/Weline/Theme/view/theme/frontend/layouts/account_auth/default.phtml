@@ -22,21 +22,27 @@
     <w:hook>Weline_Theme::frontend::layouts::account::head-after</w:hook>
 </head>
 <body>
-    @template(Weline_Frontend::templates/public/header.phtml)
-    
-    <main class="account-auth-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth-content" data-layout="account_auth_content">
-        <div class="auth-container">
-            <if condition="meta.content">
-                {{meta.content}}
-                <elseif condition="content"/>
-                {{content}}
-                <elseif condition="meta.contentTemplate"/>
-                <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
-            </if>
+    <div class="account-auth <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth" data-layout="account_auth">
+        <div class="account-auth__header">
+            @template(Weline_Frontend::templates/public/header.phtml)
         </div>
-    </main>
-    
-    @template(Weline_Frontend::templates/public/footer.phtml)
+
+        <main class="account-auth__main" id="account-auth-content" data-layout="account_auth_content">
+            <div class="auth-container">
+                <if condition="meta.content">
+                    {{meta.content}}
+                    <elseif condition="content"/>
+                    {{content}}
+                    <elseif condition="meta.contentTemplate"/>
+                    <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
+                </if>
+            </div>
+        </main>
+
+        <footer class="account-auth__footer">
+            @template(Weline_Frontend::templates/public/footer.phtml)
+        </footer>
+    </div>
 </body>
 </html>
 

@@ -286,22 +286,24 @@ class PreviewTokenService
 
     /**
      * 检测预览模式（内部方法，带缓存）
+     * 注意：在 WLS 环境下，静态变量会跨请求保持
+     * 策略：如果当前请求有 token，使用新 token；没有 token 则重置状态
      */
     private function detectPreviewMode(): void
     {
-        if (self::$detected) {
-            return;
-        }
-        
-        self::$detected = true;
-        
+        // 每次都从当前请求获取 token
         $token = $this->getTokenFromRequest();
-        if ($token === null) {
-            self::$currentPreviewData = null;
+
+        if ($token !== null) {
+            // 当前请求有 token，使用它（并更新缓存）
+            self::$currentPreviewData = $this->validateToken($token);
+            self::$detected = true;
             return;
         }
-        
-        self::$currentPreviewData = $this->validateToken($token);
+
+        // 当前请求没有 token - 重置状态，不使用上一个请求的缓存
+        self::$currentPreviewData = null;
+        self::$detected = true;
     }
 
     /**

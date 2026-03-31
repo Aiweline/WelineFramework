@@ -84,6 +84,11 @@ class AssetsExtractor
                     // 保留theme.js的外部引用，不提取
                     return $matches[0];
                 }
+
+                // 任意带 src 的外部脚本：不得按「内联脚本」抽走并删除标签，否则依赖顺序的 jQuery 等会整段丢失（页面报 $ is not defined）。
+                if (preg_match('/\ssrc\s*=\s*["\'][^"\']+["\']/i', $scriptContent)) {
+                    return $matches[0];
+                }
                 
                 // 检查是否有data-no-extract属性（不提取，保留在HTML中）
                 // 正则表达式匹配：data-no-extract="true" 或 data-no-extract='true' 或 data-no-extract=true
