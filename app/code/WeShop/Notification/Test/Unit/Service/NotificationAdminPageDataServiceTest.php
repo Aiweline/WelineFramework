@@ -67,9 +67,9 @@ class NotificationAdminPageDataServiceTest extends TestCase
             'title' => 'shipped',
         ], $notificationService->receivedFilters);
         $this->assertSame('Order #WS100015 shipped', $result['notifications'][0]['title']);
-        $this->assertSame('Unread', $result['notifications'][0]['read_label']);
+        $this->assertSame((string) __('Unread'), $result['notifications'][0]['read_label']);
         $this->assertSame('warning', $result['notifications'][0]['read_badge_class']);
-        $this->assertSame(['0' => 'Unread', '1' => 'Read'], $result['readOptions']);
+        $this->assertSame(['0' => (string) __('Unread'), '1' => (string) __('Read')], $result['readOptions']);
         $this->assertSame(['current_page' => 2, 'page_size' => 50], $result['pagination']);
     }
 
@@ -85,7 +85,7 @@ class NotificationAdminPageDataServiceTest extends TestCase
         $service = new NotificationAdminPageDataService($notificationService);
 
         $this->expectException(\InvalidArgumentException::class);
-        $this->expectExceptionMessage('Notification not found.');
+        $this->expectExceptionMessage((string) __('Notification not found.'));
 
         $service->getDetailData(999);
     }
@@ -128,6 +128,6 @@ class NotificationAdminPageDataServiceTest extends TestCase
         $this->assertSame(27, $result['notification']['notification_id']);
         $this->assertSame('membership', $result['notification']['type']);
         $this->assertSame('Membership', $result['notification']['type_label']);
-        $this->assertSame('Read', $result['notification']['read_label']);
+        $this->assertSame((string) __('Read'), $result['notification']['read_label']);
     }
 }
