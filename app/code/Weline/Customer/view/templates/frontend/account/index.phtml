@@ -1,4 +1,24 @@
 <?php
+$themeTemplate = null;
+try {
+    $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+    $theme = $themeContext->resolveTheme('frontend');
+    if ($theme && $theme->getId()) {
+        $candidate = rtrim((string)$theme->getPath(), '\\/') . DIRECTORY_SEPARATOR
+            . 'Weline' . DIRECTORY_SEPARATOR . 'Customer' . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR
+            . 'templates' . DIRECTORY_SEPARATOR . 'frontend' . DIRECTORY_SEPARATOR . 'account' . DIRECTORY_SEPARATOR
+            . 'index.phtml';
+        if (is_file($candidate) && realpath($candidate) !== __FILE__) {
+            $themeTemplate = $candidate;
+        }
+    }
+} catch (\Throwable) {
+}
+
+if ($themeTemplate) {
+    include $themeTemplate;
+    return;
+}
 /**@var \Weline\Framework\View\Template $this */
 /**@var \Weline\Customer\Model\Customer $user */
 $avatar = $user->getAvatar();
@@ -7,274 +27,579 @@ $email = $user->getEmail();
 $avatarInitial = strtoupper(mb_substr($username, 0, 1));
 ?>
 <!-- 主内容区 -->
-        <!-- 个人资料头部 -->
-        <div class="profile-header">
-            <div class="profile-header-content">
-                <div class="avatar-large">
-                    <?php if ($avatar): ?>
-                        <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                        <div class="avatar-fallback" id="avatarFallback"><?= $avatarInitial ?></div>
-                    <?php else: ?>
-                        <div class="avatar-fallback"><?= $avatarInitial ?></div>
-                    <?php endif; ?>
-                </div>
-                <div class="profile-info">
-                    <h2><?= htmlspecialchars($username) ?></h2>
+<section class="account-index">
+    <!-- 个人资料头部 -->
+    <header class="account-index__header">
+        <div class="account-index__avatar">
+            <?php if ($avatar): ?>
+                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="avatarPreview" class="account-index__avatar-img" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="account-index__avatar-fallback" id="avatarFallback"><?= $avatarInitial ?></div>
+            <?php else: ?>
+                <div class="account-index__avatar-fallback"><?= $avatarInitial ?></div>
+            <?php endif; ?>
+        </div>
+        <div class="account-index__user-info">
+            <h1 class="account-index__username"><?= htmlspecialchars($username) ?></h1>
+            <?php if ($email): ?>
+                <p class="account-index__email">
+                    <i class="ri-mail-line"></i> <?= htmlspecialchars($email) ?>
+                </p>
+            <?php endif; ?>
+            <p class="account-index__welcome"><lang>欢迎回来！您可以在这里管理您的账户信息</lang></p>
+        </div>
+    </header>
+
+    <!-- 个人资料部分 -->
+    <div class="account-index__section" id="profile-section">
+        <div class="account-card">
+            <header class="account-card__header">
+                <h2 class="account-card__title"><?= __('个人资料') ?></h2>
+            </header>
+            <div class="account-card__body">
+                <div class="account-card__alert account-card__alert--success d-none" id="profileSuccessMsg"></div>
+                <div class="account-card__alert account-card__alert--danger d-none" id="profileErrorMsg"></div>
+
+                <form id="profileForm" class="account-form">
+                    <div class="account-form__row">
+                        <div class="account-form__group">
+                            <label for="username" class="account-form__label"><?= __('用户名') ?></label>
+                            <input type="text" class="account-form__input" id="username"
+                                   value="<?= htmlspecialchars($user->getUsername()) ?>" disabled>
+                            <span class="account-form__hint"><?= __('用户名不可修改') ?></span>
+                        </div>
+
+                        <div class="account-form__group">
+                            <label for="userId" class="account-form__label"><?= __('用户ID') ?></label>
+                            <input type="text" class="account-form__input" id="userId"
+                                   value="<?= $user->getId() ?>" disabled>
+                        </div>
+                    </div>
+
+                    <div class="account-form__group">
+                        <label for="avatar" class="account-form__label"><?= __('头像URL') ?></label>
+                        <div class="account-form__input-group">
+                            <input type="url" class="account-form__input" id="avatar" name="avatar"
+                                   value="<?= htmlspecialchars($user->getAvatar() ?: '') ?>"
+                                   placeholder="https://example.com/avatar.jpg">
+                            <button type="button" class="account-form__btn account-form__btn--outline" id="previewAvatarBtn">
+                                <i class="ri-eye-line"></i> <?= __('预览') ?>
+                            </button>
+                        </div>
+                        <span class="account-form__hint"><?= __('输入头像图片的完整URL地址') ?></span>
+                    </div>
+
                     <?php if ($email): ?>
-                        <p class="profile-email">
-                            <i class="ri-mail-line"></i> <?= htmlspecialchars($email) ?>
-                        </p>
+                    <div class="account-form__group">
+                        <label for="email" class="account-form__label"><?= __('邮箱') ?></label>
+                        <input type="email" class="account-form__input" id="email"
+                               value="<?= htmlspecialchars($email) ?>" disabled>
+                        <span class="account-form__hint"><?= __('邮箱不可修改') ?></span>
+                    </div>
                     <?php endif; ?>
-                    <p class="profile-welcome"><lang>欢迎回来！您可以在这里管理您的账户信息</lang></p>
+
+                    <div class="account-form__actions">
+                        <button type="submit" class="account-form__btn account-form__btn--primary">
+                            <i class="ri-save-line"></i> <?= __('保存更改') ?>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 安全设置部分 -->
+    <div class="account-index__section d-none" id="security-section">
+        <div class="account-card">
+            <header class="account-card__header">
+                <h2 class="account-card__title"><?= __('修改密码') ?></h2>
+            </header>
+            <div class="account-card__body">
+                <div class="account-card__alert account-card__alert--success d-none" id="securitySuccessMsg"></div>
+                <div class="account-card__alert account-card__alert--danger d-none" id="securityErrorMsg"></div>
+
+                <form id="securityForm" class="account-form">
+                    <div class="account-form__group">
+                        <label for="old_password" class="account-form__label"><?= __('原密码') ?></label>
+                        <input type="password" class="account-form__input" id="old_password" name="old_password"
+                               placeholder="<?= __('请输入原密码') ?>" required>
+                        <span class="account-form__hint"><?= __('请输入当前密码以验证身份') ?></span>
+                    </div>
+
+                    <div class="account-form__row">
+                        <div class="account-form__group">
+                            <label for="new_password" class="account-form__label"><?= __('新密码') ?></label>
+                            <input type="password" class="account-form__input" id="new_password" name="new_password"
+                                   placeholder="<?= __('至少6位字符') ?>" minlength="6">
+                            <span class="account-form__hint"><?= __('建议使用字母、数字和特殊字符组合') ?></span>
+                        </div>
+
+                        <div class="account-form__group">
+                            <label for="confirm_password" class="account-form__label"><?= __('确认新密码') ?></label>
+                            <input type="password" class="account-form__input" id="confirm_password" name="confirm_password"
+                                   placeholder="<?= __('再次输入新密码') ?>" minlength="6">
+                            <span class="account-form__hint"><?= __('再次输入新密码以确认') ?></span>
+                        </div>
+                    </div>
+
+                    <div class="account-form__actions">
+                        <button type="submit" class="account-form__btn account-form__btn--primary">
+                            <i class="ri-lock-password-line"></i> <?= __('修改密码') ?>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- 登录信息部分 -->
+    <div class="account-index__section d-none" id="login-info-section">
+        <div class="account-card">
+            <header class="account-card__header">
+                <h2 class="account-card__title"><?= __('登录信息') ?></h2>
+            </header>
+            <div class="account-card__body">
+                <div class="account-info-grid">
+                    <div class="account-info-item">
+                        <label class="account-info-item__label"><?= __('最后登录IP') ?></label>
+                        <div class="account-info-item__value"><?= $user->getLoginIp() ?: '<lang>未知</lang>' ?></div>
+                    </div>
+                    <div class="account-info-item">
+                        <label class="account-info-item__label">Session ID</label>
+                        <div class="account-info-item__value"><?= $user->getSessionId() ?: '<lang>未知</lang>' ?></div>
+                    </div>
                 </div>
             </div>
         </div>
+    </div>
+</section>
 
-        <!-- 个人资料部分 -->
-        <div class="content-section" id="profile-section">
-            <?php
-            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
-                'title' => __('个人资料'),
-                'content' => '
-                    <div class="alert alert-success d-none" id="profileSuccessMsg"></div>
-                    <div class="alert alert-danger d-none" id="profileErrorMsg"></div>
+<style>
+.account-index {
+    --ai-border-radius: var(--border-radius-xl, 1rem);
+    --ai-transition: var(--transition-base, 0.2s ease);
+    --ai-gutter: var(--spacing-lg, 2rem);
+}
 
-                    <form id="profileForm">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="username" class="form-label">' . __('用户名') . '</label>
-                                <input type="text" class="form-control" id="username" 
-                                       value="' . htmlspecialchars($user->getUsername()) . '" disabled>
-                                <small class="text-muted">' . __('用户名不可修改') . '</small>
-                            </div>
+.account-index__header {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    padding: var(--ai-gutter);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border-radius: var(--ai-border-radius);
+    margin-bottom: var(--ai-gutter);
+}
 
-                            <div class="col-md-6 mb-3">
-                                <label for="userId" class="form-label">' . __('用户ID') . '</label>
-                                <input type="text" class="form-control" id="userId" 
-                                       value="' . $user->getId() . '" disabled>
-                            </div>
+.account-index__avatar {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    flex-shrink: 0;
+}
 
-                            <div class="col-12 mb-3">
-                                <label for="avatar" class="form-label">' . __('头像URL') . '</label>
-                                <div class="avatar-input-group">
-                                    <input type="url" class="form-control" id="avatar" name="avatar" 
-                                           value="' . htmlspecialchars($user->getAvatar() ?: '') . '" 
-                                           placeholder="https://example.com/avatar.jpg">
-                                    <button type="button" class="btn btn-outline-secondary" id="previewAvatarBtn">
-                                        <i class="ri-eye-line"></i> ' . __('预览') . '
-                                    </button>
-                                </div>
-                                <small class="form-text text-muted">' . __('输入头像图片的完整URL地址') . '</small>
-                            </div>
-                            
-                            ' . ($email ? '
-                            <div class="col-12 mb-3">
-                                <label for="email" class="form-label">' . __('邮箱') . '</label>
-                                <input type="email" class="form-control" id="email" 
-                                       value="' . htmlspecialchars($email) . '" disabled>
-                                <small class="text-muted">' . __('邮箱不可修改') . '</small>
-                            </div>
-                            ' : '') . '
-                        </div>
+.account-index__avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--color-bg-primary);
+}
 
-                        <div class="mt-4">
-                            ' . $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
-                                'text' => __('保存更改'),
-                                'type' => 'primary',
-                                'attributes' => 'type="submit"'
-                            ]) . '
-                        </div>
-                    </form>
-                '
-            ]);
-            ?>
-        </div>
+.account-index__avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background: var(--color-bg-primary);
+    color: var(--color-primary-dark);
+    font-size: 2rem;
+    font-weight: 700;
+}
 
-        <!-- 安全设置部分 -->
-        <div class="content-section d-none" id="security-section">
-            <?php
-            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
-                'title' => __('修改密码'),
-                'content' => '
-                    <div class="alert alert-success d-none" id="securitySuccessMsg"></div>
-                    <div class="alert alert-danger d-none" id="securityErrorMsg"></div>
+.account-index__user-info {
+    flex: 1;
+    min-width: 0;
+}
 
-                    <form id="securityForm">
-                        <div class="row">
-                            <div class="col-12 mb-3">
-                                <label for="old_password" class="form-label">' . __('原密码') . '</label>
-                                <input type="password" class="form-control" id="old_password" name="old_password" 
-                                       placeholder="' . __('请输入原密码') . '" required>
-                                <small class="form-text text-muted">' . __('请输入当前密码以验证身份') . '</small>
-                            </div>
+.account-index__username {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--color-text-dark);
+    margin: 0;
+}
 
-                            <div class="col-md-6 mb-3">
-                                <label for="new_password" class="form-label">' . __('新密码') . '</label>
-                                <input type="password" class="form-control" id="new_password" name="new_password" 
-                                       placeholder="' . __('至少6位字符') . '" minlength="6">
-                                <small class="form-text text-muted">' . __('建议使用字母、数字和特殊字符组合') . '</small>
-                            </div>
+.account-index__email {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin: 0.5rem 0 0;
+    font-size: 0.9375rem;
+    color: var(--color-text-dark);
+    opacity: 0.9;
+}
 
-                            <div class="col-md-6 mb-3">
-                                <label for="confirm_password" class="form-label">' . __('确认新密码') . '</label>
-                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" 
-                                       placeholder="' . __('再次输入新密码') . '" minlength="6">
-                                <small class="form-text text-muted">' . __('再次输入新密码以确认') . '</small>
-                            </div>
-                        </div>
+.account-index__email i {
+    font-size: 1rem;
+}
 
-                        <div class="mt-4">
-                            ' . $this->fetch('Weline_Theme::theme/frontend/components/button.phtml', [
-                                'text' => __('修改密码'),
-                                'type' => 'primary',
-                                'attributes' => 'type="submit"'
-                            ]) . '
-                        </div>
-                    </form>
-                '
-            ]);
-            ?>
-        </div>
+.account-index__welcome {
+    margin: 0.5rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-text-dark);
+    opacity: 0.8;
+}
 
-        <!-- 登录信息部分 -->
-        <div class="content-section d-none" id="login-info-section">
-            <?php
-            echo $this->fetch('Weline_Theme::theme/frontend/components/card.phtml', [
-                'title' => __('登录信息'),
-                'content' => '
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">' . __('最后登录IP') . '</label>
-                            <div class="form-control-plaintext">' . ($user->getLoginIp() ?: '<lang>未知</lang>') . '</div>
-                        </div>
+.account-index__section {
+    margin-bottom: var(--ai-gutter);
+}
 
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label">"Session ID"</label>
-                            <div class="form-control-plaintext">' . ($user->getSessionId() ?: '<lang>未知</lang>') . '</div>
-                        </div>
-                    </div>
-                '
-            ]);
-            ?>
-        </div>
+.account-card {
+    background: var(--color-bg-primary);
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--ai-border-radius);
+    overflow: hidden;
+}
+
+.account-card__header {
+    padding: 1.25rem var(--ai-gutter);
+    background: var(--color-bg-secondary);
+    border-bottom: 1px solid var(--color-border-light);
+}
+
+.account-card__title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--color-text-primary);
+    margin: 0;
+}
+
+.account-card__body {
+    padding: var(--ai-gutter);
+}
+
+.account-card__alert {
+    padding: 1rem;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    margin-bottom: 1.5rem;
+    font-size: 0.875rem;
+}
+
+.account-card__alert--success {
+    background: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+.account-card__alert--danger {
+    background: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.account-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+}
+
+.account-form__row {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+    .account-form__row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.account-form__group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.account-form__label {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+}
+
+.account-form__input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 0.9375rem;
+    color: var(--color-text-primary);
+    background: var(--color-bg-primary);
+    border: 2px solid var(--color-border-default);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    transition: var(--ai-transition);
+}
+
+.account-form__input:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(240, 193, 75, 0.15);
+}
+
+.account-form__input:disabled {
+    background: var(--color-bg-secondary);
+    cursor: not-allowed;
+}
+
+.account-form__input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.account-form__input-group .account-form__input {
+    flex: 1;
+}
+
+.account-form__hint {
+    font-size: 0.8125rem;
+    color: var(--color-text-secondary);
+}
+
+.account-form__actions {
+    margin-top: 0.5rem;
+}
+
+.account-form__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    transition: var(--ai-transition);
+    cursor: pointer;
+    border: 2px solid transparent;
+}
+
+.account-form__btn--primary {
+    background: var(--color-primary);
+    color: var(--color-text-dark);
+    border-color: var(--color-primary);
+}
+
+.account-form__btn--primary:hover {
+    background: var(--color-primary-dark);
+    border-color: var(--color-primary-dark);
+    transform: translateY(-2px);
+}
+
+.account-form__btn--outline {
+    background: transparent;
+    color: var(--color-text-primary);
+    border-color: var(--color-border-default);
+}
+
+.account-form__btn--outline:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary-dark);
+}
+
+.account-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+    .account-info-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.account-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.account-info-item__label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-secondary);
+}
+
+.account-info-item__value {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    word-break: break-all;
+}
+
+@media (max-width: 640px) {
+    .account-index__header {
+        flex-direction: column;
+        text-align: center;
+        padding: 1.5rem;
+    }
+
+    .account-index__email {
+        justify-content: center;
+    }
+
+    .account-card__body {
+        padding: 1.25rem;
+    }
+}
+</style>
 
 <script>
-$(document).ready(function() {
-    // 标签页切换
-    $('.nav-link').on('click', function(e) {
-        e.preventDefault();
-        
-        // 移除所有活动状态
-        $('.nav-link').removeClass('active');
-        $('.content-section').addClass('d-none');
-        
-        // 添加当前活动状态
-        $(this).addClass('active');
-        
-        // 显示对应内容
-        const targetId = $(this).attr('href').substring(1);
-        $('#' + targetId + '-section').removeClass('d-none');
-    });
-    
-    // 头像预览
-    $('#previewAvatarBtn').on('click', function() {
-        const avatarUrl = $('#avatar').val();
-        if (avatarUrl) {
-            $('#avatarPreview').attr('src', avatarUrl).show();
-            $('#avatarFallback').hide();
-        }
-    });
-    
-    // 个人资料表单提交
-    $('#profileForm').on('submit', function(e) {
-        e.preventDefault();
-        
-        // 显示加载状态
-        const $btn = $(this).find('button[type="submit"]');
-        const originalText = $btn.html();
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i> ' + __('保存中...'));
-        
-        // 隐藏之前的消息
-        $('#profileSuccessMsg, #profileErrorMsg').addClass('d-none');
-        
-        // 发送AJAX请求
-        $.ajax({
-            url: '/customer/account/update',
-            method: 'POST',
-            data: $(this).serialize(),
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    $('#profileSuccessMsg').text(response.message).removeClass('d-none');
-                } else {
-                    $('#profileErrorMsg').text(response.message).removeClass('d-none');
-                }
-            },
-            error: function() {
-                $('#profileErrorMsg').text('<lang>更新失败，请稍后重试</lang>').removeClass('d-none');
-            },
-            complete: function() {
-                // 恢复按钮状态
-                $btn.prop('disabled', false).html(originalText);
+(function() {
+    var navLinks = document.querySelectorAll('.account-sidebar__nav-link');
+    var sections = document.querySelectorAll('.account-index__section');
+
+    navLinks.forEach(function(link) {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+
+            navLinks.forEach(function(nav) {
+                nav.classList.remove('account-sidebar__nav-link--active');
+            });
+            this.classList.add('account-sidebar__nav-link--active');
+
+            sections.forEach(function(section) {
+                section.classList.add('d-none');
+            });
+
+            var targetId = this.getAttribute('href').substring(1);
+            var targetSection = document.getElementById(targetId + '-section');
+            if (targetSection) {
+                targetSection.classList.remove('d-none');
             }
         });
     });
-    
-    // 密码修改表单提交
-    $('#securityForm').on('submit', function(e) {
-        e.preventDefault();
-        
-        // 基本验证
-        const oldPassword = $('#old_password').val();
-        const newPassword = $('#new_password').val();
-        const confirmPassword = $('#confirm_password').val();
-        
-        if (!oldPassword || !newPassword || !confirmPassword) {
-            $('#securityErrorMsg').text('<lang>请填写所有字段</lang>').removeClass('d-none');
-            return;
-        }
-        
-        if (newPassword.length < 6) {
-            $('#securityErrorMsg').text('<lang>新密码长度不能少于6位</lang>').removeClass('d-none');
-            return;
-        }
-        
-        if (newPassword !== confirmPassword) {
-            $('#securityErrorMsg').text('<lang>两次输入的新密码不一致</lang>').removeClass('d-none');
-            return;
-        }
-        
-        // 显示加载状态
-        const $btn = $(this).find('button[type="submit"]');
-        const originalText = $btn.html();
-        $btn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin me-2"></i> ' + __('修改中...'));
-        
-        // 隐藏之前的消息
-        $('#securitySuccessMsg, #securityErrorMsg').addClass('d-none');
-        
-        // 发送AJAX请求
-        $.ajax({
-            url: '/customer/account/update',
-            method: 'POST',
-            data: $(this).serialize(),
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    $('#securitySuccessMsg').text(response.message).removeClass('d-none');
-                    // 清空密码字段
-                    $('#old_password, #new_password, #confirm_password').val('');
-                } else {
-                    $('#securityErrorMsg').text(response.message).removeClass('d-none');
+
+    var previewBtn = document.getElementById('previewAvatarBtn');
+    if (previewBtn) {
+        previewBtn.addEventListener('click', function() {
+            var avatarUrl = document.getElementById('avatar').value;
+            var avatarPreview = document.getElementById('avatarPreview');
+            var avatarFallback = document.getElementById('avatarFallback');
+            if (avatarUrl && avatarPreview) {
+                avatarPreview.src = avatarUrl;
+                avatarPreview.style.display = 'block';
+                if (avatarFallback) {
+                    avatarFallback.style.display = 'none';
                 }
-            },
-            error: function() {
-                $('#securityErrorMsg').text('<lang>修改失败，请稍后重试</lang>').removeClass('d-none');
-            },
-            complete: function() {
-                // 恢复按钮状态
-                $btn.prop('disabled', false).html(originalText);
             }
         });
-    });
-});
+    }
+
+    var profileForm = document.getElementById('profileForm');
+    if (profileForm) {
+        profileForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var btn = this.querySelector('button[type="submit"]');
+            var originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ri-loader-4-line"></i> <?= htmlspecialchars((string) __('保存中...'), ENT_QUOTES) ?>';
+
+            var successMsg = document.getElementById('profileSuccessMsg');
+            var errorMsg = document.getElementById('profileErrorMsg');
+            successMsg.classList.add('d-none');
+            errorMsg.classList.add('d-none');
+
+            var formData = new FormData(this);
+            fetch('/customer/account/update', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    successMsg.textContent = data.message;
+                    successMsg.classList.remove('d-none');
+                } else {
+                    errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
+                    errorMsg.classList.remove('d-none');
+                }
+            })
+            .catch(function() {
+                errorMsg.textContent = '<?= htmlspecialchars((string) __('更新失败，请稍后重试'), ENT_QUOTES) ?>';
+                errorMsg.classList.remove('d-none');
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
+        });
+    }
+
+    var securityForm = document.getElementById('securityForm');
+    if (securityForm) {
+        securityForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            var oldPassword = document.getElementById('old_password').value;
+            var newPassword = document.getElementById('new_password').value;
+            var confirmPassword = document.getElementById('confirm_password').value;
+
+            var errorMsg = document.getElementById('securityErrorMsg');
+            errorMsg.classList.add('d-none');
+
+            if (!oldPassword || !newPassword || !confirmPassword) {
+                errorMsg.textContent = '<?= htmlspecialchars((string) __('请填写所有字段'), ENT_QUOTES) ?>';
+                errorMsg.classList.remove('d-none');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                errorMsg.textContent = '<?= htmlspecialchars((string) __('新密码长度不能少于6位'), ENT_QUOTES) ?>';
+                errorMsg.classList.remove('d-none');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                errorMsg.textContent = '<?= htmlspecialchars((string) __('两次输入的新密码不一致'), ENT_QUOTES) ?>';
+                errorMsg.classList.remove('d-none');
+                return;
+            }
+
+            var btn = this.querySelector('button[type="submit"]');
+            var originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="ri-loader-4-line"></i> <?= htmlspecialchars((string) __('修改中...'), ENT_QUOTES) ?>';
+
+            var successMsg = document.getElementById('securitySuccessMsg');
+            successMsg.classList.add('d-none');
+
+            var formData = new FormData(this);
+            fetch('/customer/account/update', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(response) { return response.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    successMsg.textContent = data.message;
+                    successMsg.classList.remove('d-none');
+                    document.getElementById('old_password').value = '';
+                    document.getElementById('new_password').value = '';
+                    document.getElementById('confirm_password').value = '';
+                } else {
+                    errorMsg.textContent = data.message || '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
+                    errorMsg.classList.remove('d-none');
+                }
+            })
+            .catch(function() {
+                errorMsg.textContent = '<?= htmlspecialchars((string) __('修改失败，请稍后重试'), ENT_QUOTES) ?>';
+                errorMsg.classList.remove('d-none');
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            });
+        });
+    }
+})();
 </script>
