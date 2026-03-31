@@ -23,27 +23,27 @@ use Weline\Eav\Model\EavEntity;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Admin\Controller\BaseController;
 
-class Product extends \Weline\Framework\App\Controller\BackendController
+class Product extends BaseController
 {
     private \WeShop\Product\Model\Product $product;
 
     public function __construct(
         \WeShop\Product\Model\Product $product
-    )
-    {
+    ) {
         $this->product = $product;
         $this->product->loadLocalDescription();
     }
 
-    public function index()
+    public function index(): string
     {
         // 明确指定排序字段，使用表别名避免JOIN时的字段歧义
         $products = $this->product->order('main_table.' . \WeShop\Product\Model\Product::schema_fields_ID, 'DESC')
             ->pagination()
             ->select()
             ->fetch();
-        
+
         // 获取子产品数量统计
         $items = $products->getItems();
         $productIds = [];
@@ -51,7 +51,7 @@ class Product extends \Weline\Framework\App\Controller\BackendController
             $productIds[] = $item['product_id'] ?? ($item->getData('product_id') ?? 0);
         }
         $childrenCounts = [];
-        
+
         if (!empty($productIds)) {
             // 查询每个产品的子产品数量
             $childrenData = $this->product->reset()
@@ -60,12 +60,12 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                 ->group('parent_id')
                 ->select()
                 ->fetchArray();
-            
+
             foreach ($childrenData as $row) {
                 $childrenCounts[$row['parent_id']] = (int)$row['children_count'];
             }
         }
-        
+
         // 将子产品数量附加到产品数据中（通过 setData 设置到模型对象）
         foreach ($items as $item) {
             $productId = $item['product_id'] ?? ($item->getData('product_id') ?? 0);
@@ -76,19 +76,21 @@ class Product extends \Weline\Framework\App\Controller\BackendController
                 $item['children_count'] = $count;
             }
         }
-        
+
         $this->assign('products', $items);
         $this->assign('pagination', $products->getPagination());
         return $this->fetch();
     }
 
-    function searchBy()
+    public function searchBy(): string
     {
-        $filed = $this->request->getGet('field');
+        $field = $this->request->getGet('field');
         $value = $this->request->getGet('value');
-        if ($filed && $value) {
+        // Whitelist allowed fields to prevent SQL injection
+        $allowedFields = ['product_id', 'sku', 'name', 'status', 'price', 'stock'];
+        if ($field && $value && in_array($field, $allowedFields, true)) {
             $product = $this->product
-                ->where($filed, $value)
+                ->where($field, $value)
                 ->find()
                 ->fetch();
             return $this->fetchJson($product->getData());

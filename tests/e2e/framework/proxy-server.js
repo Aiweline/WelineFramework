@@ -333,12 +333,69 @@ function createServer() {
 
 const server = createServer();
 maybeStartWls(resolveRuntime());
-server.listen(Number(proxyUrl.port), proxyUrl.hostname, () => {
-  const runtime = resolveRuntime();
-  console.log(`[weline-e2e] proxy listening on ${runtime.proxy.origin}`);
-  console.log(`[weline-e2e] proxy target ${runtime.runtime.target_origin}`);
-  console.log(`[weline-e2e] dashboard (后台默认主题风) ${runtime.proxy.origin}/.well-known/weline-e2e/`);
-});
+
+// 动态端口分配：如果首选端口被占用，自动换到下一个可用端口
+const net = require('net');
+function findAvailablePort(startPort, hostname, maxAttempts = 10) {
+  return new Promise((resolve) => {
+    let port = startPort;
+    let attempts = 0;
+    const tryPort = () => {
+      if (attempts >= maxAttempts) {
+        console.warn(`[weline-e2e] all ports from ${startPort} to ${startPort + maxAttempts - 1} are busy`);
+        resolve(null);
+        return;
+      }
+      const sock = net.createConnection({ port, host: hostname, timeout: 1000 });
+      sock.on('connect', () => {
+        sock.destroy();
+        attempts++;
+        port = startPort + attempts;
+        tryPort();
+      });
+      sock.on('timeout', () => {
+        sock.destroy();
+        attempts++;
+        port = startPort + attempts;
+        tryPort();
+      });
+      sock.on('error', () => {
+        sock.destroy();
+        resolve(port);
+      });
+    };
+    tryPort();
+  });
+}
+
+// 将实际监听的端口写入文件，供 playwright.config.js 读取
+const ACTIVE_PORT_FILE = path.join(__dirname, '.active-proxy-port');
+
+async function startServer() {
+  const preferredPort = Number(proxyUrl.port) || 3999;
+  const hostname = proxyUrl.hostname || '127.0.0.1';
+  const actualPort = await findAvailablePort(preferredPort, hostname);
+
+  if (!actualPort) {
+    console.error('[weline-e2e] no available port found, exiting');
+    process.exit(1);
+  }
+
+  server.listen(actualPort, hostname, () => {
+    const runtime = resolveRuntime();
+    const actualOrigin = `${proxyUrl.protocol}//${hostname}:${actualPort}`;
+    // 写入实际端口到文件（格式：PORT=3999）
+    fs.writeFileSync(ACTIVE_PORT_FILE, `PORT=${actualPort}`, 'utf8');
+    console.log(`[weline-e2e] proxy listening on ${actualOrigin}`);
+    console.log(`[weline-e2e] proxy target ${runtime.runtime.target_origin}`);
+    console.log(`[weline-e2e] dashboard (后台默认主题风) ${actualOrigin}/.well-known/weline-e2e/`);
+    if (actualPort !== preferredPort) {
+      console.log(`[weline-e2e] note: preferred port ${preferredPort} was busy, using ${actualPort}`);
+    }
+  });
+}
+
+startServer();
 
 function closeServer(exitCode) {
   server.close(() => process.exit(exitCode));

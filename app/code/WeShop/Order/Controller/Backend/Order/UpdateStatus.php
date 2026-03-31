@@ -26,16 +26,22 @@ class UpdateStatus extends BaseController
         );
 
         if (!$orderId) {
-            $this->getMessageManager()->addError(__('Order ID is required.'));
+            $this->getMessageManager()->addError((string) __('Order ID is required.'));
+            $this->redirect($backUrl);
+            return '';
+        }
+
+        if ($status === '' || !$this->orderService->isValidStatus($status)) {
+            $this->getMessageManager()->addError((string) __('Invalid order status.'));
             $this->redirect($backUrl);
             return '';
         }
 
         try {
             $this->orderService->updateOrderStatus($orderId, $status);
-            $this->getMessageManager()->addSuccess(__('Order status updated.'));
+            $this->getMessageManager()->addSuccess((string) __('Order status updated.'));
         } catch (\Throwable $throwable) {
-            $this->getMessageManager()->addError($throwable->getMessage() ?: __('Order status update failed.'));
+            $this->getMessageManager()->addError($throwable->getMessage() ?: (string) __('Order status update failed.'));
         }
 
         $this->redirect($backUrl);

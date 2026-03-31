@@ -21,13 +21,11 @@ use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\Template\TemplatePathResolver;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentResolver;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
-use GuoLaiRen\PageBuilder\Service\Theme\PageBuilderThemeComponentBridge;
+use GuoLaiRen\PageBuilder\Service\Theme\PageBuilderVirtualThemeBridge;
 use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
-use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\ThemeComponentRenderer;
 
 class PageRenderService
 {
@@ -298,33 +296,15 @@ class PageRenderService
             return null;
         }
         try {
-            $bridge = ObjectManager::getInstance(PageBuilderThemeComponentBridge::class);
-            $definition = $bridge->resolveDefinition($code, $this->renderWelineThemeId, 'frontend');
-            if ($definition === null) {
-                return null;
-            }
-            $themeProto = ObjectManager::getInstance(WelineTheme::class);
-            $theme = clone $themeProto;
-            $theme->clearData()->clearQuery()->load($this->renderWelineThemeId);
-            if (!$theme->getId()) {
-                return null;
-            }
-            $renderer = ObjectManager::getInstance(ThemeComponentRenderer::class);
             $instanceConfig = array_merge($config, [
                 'page' => $page,
                 'style' => $styleSettings,
                 'style_settings' => $styleSettings,
                 'component_config' => $config,
             ]);
-            $html = $renderer->render(
-                $definition,
-                $instanceConfig,
-                $theme,
-                [
-                    'area' => $definition->area ?: 'frontend',
-                    'preview_mode' => $mode !== self::MODE_LIVE,
-                ]
-            );
+            $instanceConfig['preview_mode'] = $mode !== self::MODE_LIVE;
+            $bridge = ObjectManager::getInstance(PageBuilderVirtualThemeBridge::class);
+            $html = $bridge->render($code, $this->renderWelineThemeId, 'frontend', $instanceConfig);
             return is_string($html) ? $html : '';
         } catch (\Throwable) {
             return null;
