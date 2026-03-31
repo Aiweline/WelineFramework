@@ -16,6 +16,8 @@ class LoginTemplateGoogleHostTest extends TestCase
         $content = (string) file_get_contents($templateFile);
 
         $this->assertStringContainsString('$redirectUrl = (string) ($this->getData(\'redirect_url\')', $content);
+        $this->assertStringContainsString('<form id="loginForm" class="login-form" action="/customer/account/login" method="post">', $content);
+        $this->assertStringContainsString('$this->getFormKey(\'/customer/account/login\')', $content);
         $this->assertStringContainsString('name="redirect_url"', $content);
         $this->assertStringContainsString('value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>"', $content);
 
