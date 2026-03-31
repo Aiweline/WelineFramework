@@ -19,18 +19,18 @@ class MiniItems extends BaseController
 {
     /**
      * 获取 MiniCart 商品列表
-     * 
-     * @return array JSON 响应
+     *
+     * 使用 fetchJson，确保 Content-Type 与 JSON 体一致。
      */
-    public function index(): array
+    public function index(): string
     {
         try {
             /** @var CustomerSession $session */
             $session = ObjectManager::getInstance(CustomerSession::class);
-            $customer = $session->getCustomer();
-            
-            if (!$customer) {
-                return [
+            $customerId = (int)($session->getUserId() ?? 0);
+
+            if ($customerId <= 0) {
+                return $this->fetchJson([
                     'success' => true,
                     'html' => $this->renderEmptyCart(),
                     'items' => [],
@@ -39,15 +39,15 @@ class MiniItems extends BaseController
                         'subtotal_formatted' => $this->formatPrice(0),
                         'count' => 0,
                     ],
-                ];
+                ]);
             }
             
             /** @var CartService $cartService */
             $cartService = ObjectManager::getInstance(CartService::class);
             
             // 获取购物车数据
-            $items = $cartService->getCartItems($customer->getId());
-            $totals = $cartService->calculateTotals($customer->getId());
+            $items = $cartService->getCartItems($customerId);
+            $totals = $cartService->calculateTotals($customerId);
             
             // 格式化商品数据
             $formattedItems = [];
@@ -76,20 +76,20 @@ class MiniItems extends BaseController
             
             // 渲染商品列表 HTML
             $this->assign('items', $formattedItems);
-            $html = $this->fetch('WeShop_Cart::frontend/cart/mini-items.phtml');
+            $html = $this->fetch('WeShop_Cart::templates/frontend/cart/mini-items.phtml');
             
             // 触发事件
             $eventData = [
                 'data' => [
-                    'customer_id' => $customer->getId(),
+                    'customer_id' => $customerId,
                     'items' => $formattedItems,
                     'totals' => $totals,
                     'html' => $html,
                 ],
             ];
-            EventsManager::getInstance()->dispatch('WeShop_Cart::mini_cart_loaded', $eventData);
+            $this->getEventsManager()->dispatch('WeShop_Cart::mini_cart_loaded', $eventData);
             
-            return [
+            return $this->fetchJson([
                 'success' => true,
                 'html' => $html,
                 'items' => $formattedItems,
@@ -106,10 +106,9 @@ class MiniItems extends BaseController
                     'total_formatted' => $this->formatPrice($totals['total'] ?? 0),
                     'count' => $cartCount,
                 ],
-            ];
-            
+            ]);
         } catch (\Exception $e) {
-            return [
+            return $this->fetchJson([
                 'success' => false,
                 'message' => $e->getMessage(),
                 'html' => '',
@@ -119,7 +118,7 @@ class MiniItems extends BaseController
                     'subtotal_formatted' => $this->formatPrice(0),
                     'count' => 0,
                 ],
-            ];
+            ]);
         }
     }
     
@@ -135,5 +134,10 @@ class MiniItems extends BaseController
                 <a href="' . $this->getUrl('/') . '" class="start-shopping-link" data-action="close-mini-cart">' . __('Start Shopping') . '</a>
             </div>
         </div>';
+    }
+
+    private function getEventsManager(): EventsManager
+    {
+        return ObjectManager::getInstance(EventsManager::class);
     }
 }
