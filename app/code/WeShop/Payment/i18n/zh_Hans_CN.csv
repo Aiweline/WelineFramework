@@ -22,10 +22,13 @@
 "%{1} is missing required configuration: %{2}","%{1} is missing required configuration: %{2}"
 "Order %{1}","Order %{1}"
 "Unable to initialize the WeChat Pay order.","Unable to initialize the WeChat Pay order."
+"B2B Credit Account","B2B 信用账户"
+"Charge the order to your enterprise credit line and pay by invoice before the due date.",使用企业授信下单，请在到期日前按账单付款。
+"Available only for approved B2B customers with an active credit line.","仅对已审核且授信有效的 B2B 客户开放。"
+Instructions,说明
 "Manual Transfer",手动转账
 "Pay by bank transfer after the order is created.",订单创建后通过银行转账付款。
 "Use the order number as the payment reference.",请使用订单号作为付款备注。
-Instructions,说明
 "Shown to the customer after the order is created.",下单成功后展示给客户。
 "Account Name",账户名称
 "Bank Name",银行名称
