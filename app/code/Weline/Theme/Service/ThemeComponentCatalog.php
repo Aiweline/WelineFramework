@@ -17,6 +17,7 @@ class ThemeComponentCatalog
         private readonly ThemeFileComponentSource $fileSource,
         private readonly VirtualThemeComponentSource $virtualSource,
         private readonly WidgetRegistryComponentSource $widgetSource,
+        private readonly ThemeContextService $themeContextService,
     ) {
     }
 
@@ -98,11 +99,8 @@ class ThemeComponentCatalog
             return $theme;
         }
 
-        $activeTheme = clone $this->welineTheme;
-        $activeTheme->clearData()->clearQuery();
-        $activeTheme->getActiveTheme($area);
-
-        return $activeTheme->getId() ? $activeTheme : null;
+        // Use ThemeContextService which properly handles preview themes
+        return $this->themeContextService->resolveTheme($area, null, true);
     }
 
     private function buildIdentity(string $module, string $type, string $code): string
