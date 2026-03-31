@@ -489,8 +489,6 @@ if ($engineType === SearchEngineConfig::ENGINE_OPENSEARCH) {
     </div>
 </div>
 
-<link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
-<script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     const form = document.getElementById('search-engine-form');
@@ -520,22 +518,22 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function showAlert(icon, title, text) {
-        if (typeof Swal !== 'undefined') {
-            return Swal.fire({
-                icon: icon,
-                title: title,
-                text: text || '',
-                confirmButtonText: '<?= __('确定') ?>'
-            });
+        const message = text ? (title + "\n" + text) : title;
+        if (typeof BackendToast !== 'undefined') {
+            if (icon === 'success') {
+                BackendToast.success(message);
+            } else if (icon === 'error') {
+                BackendToast.error(message);
+            } else {
+                // warning/info/unknown 等统一走通用 toast
+                BackendToast.show(message);
+            }
         }
 
-        if (text) {
-            alert(title + "\n" + text);
-        } else {
-            alert(title);
-        }
-
-        return Promise.resolve();
+        // 保持和 Swal.fire().then(...) 语义相近：给用户一点时间看到提示再继续下一步
+        return new Promise(function (resolve) {
+            setTimeout(resolve, 1200);
+        });
     }
 
     function extractResponseData(response) {
@@ -555,14 +553,8 @@ document.addEventListener('DOMContentLoaded', function () {
             payload.append(key, value);
         });
 
-        if (typeof Swal !== 'undefined') {
-            Swal.fire({
-                title: '<?= __('正在测试连接...') ?>',
-                allowOutsideClick: false,
-                didOpen: function () {
-                    Swal.showLoading();
-                }
-            });
+        if (typeof BackendToast !== 'undefined') {
+            BackendToast.show('<?= __('正在测试连接...') ?>');
         }
 
         window.Weline.Api.request('<?= $this->getUrl('search/backend/engine/test') ?>', {

@@ -32,7 +32,8 @@ class Index extends BackendController
         $this->assign('availableEngines', $availableEngines);
         $this->assign('title', __('搜索引擎配置管理'));
 
-        return $this->fetch();
+        // 显式指定真实模板路径：view/templates/Backend/Engine/index.phtml
+        return (string) $this->fetch('WeShop_Search::templates/Backend/Engine/index.phtml');
     }
 
     public function save(): string
@@ -176,7 +177,8 @@ class Index extends BackendController
         $this->assign('availableEngines', $availableEngines);
         $this->assign('title', $config ? __('编辑搜索引擎配置') : __('新增搜索引擎配置'));
 
-        return $this->fetch();
+        // 显式指定真实模板路径：view/templates/Backend/Engine/form.phtml
+        return (string) $this->fetch('WeShop_Search::templates/Backend/Engine/form.phtml');
     }
 
     /**
