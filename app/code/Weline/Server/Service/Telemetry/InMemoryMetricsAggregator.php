@@ -7,12 +7,24 @@ class InMemoryMetricsAggregator implements MetricsAggregatorInterface, MetricsQu
 {
     private const BUCKET_SECONDS = 60;
     private const FLUSH_INTERVAL_SECONDS = 30;
+    /** 最大保留的 bucket 数量（超过则清理最老的） */
+    private const MAX_BUCKETS = 100;
+    /** 最大保留时间（秒），超过则清理 */
+    private const MAX_BUCKET_AGE_SECONDS = 600;
+    /** 内存检查间隔（次） */
+    private const MEMORY_CHECK_INTERVAL = 50;
+    /** 内存使用阈值（MB），超过则强制清理 */
+    private const MEMORY_THRESHOLD_MB = 48;
+    /** 紧急清理阈值（MB），超过则立即丢弃最老的一半数据 */
+    private const MEMORY_EMERGENCY_MB = 80;
 
     /** @var array<string,array<string,int|string>> */
     private static array $buckets = [];
     /** @var array<int,array{instance:string,host:string,bucket_ts:int,metric_type:string,payload:array}> */
     private static array $retryQueue = [];
     private static int $lastFlushAt = 0;
+    /** @var int 记录计数，用于定期内存检查 */
+    private static int $recordCount = 0;
 
     public function __construct(
         private readonly MetricsFlushScheduler $flushScheduler
@@ -32,7 +44,134 @@ class InMemoryMetricsAggregator implements MetricsAggregatorInterface, MetricsQu
         $this->recordBucket($instance, '*', $bucketTs, $status, $latency, $bytesOut);
         $this->recordBucket($instance, $host, $bucketTs, $status, $latency, $bytesOut);
 
+        // 定期检查内存，超过阈值则强制清理最老的 buckets
+        self::$recordCount++;
+        if (self::$recordCount % self::MEMORY_CHECK_INTERVAL === 0) {
+            $this->checkMemoryPressure();
+        }
+
         $this->flushDueBuckets(false);
+    }
+
+    /**
+     * 内存压力检测：超过阈值时清理最老的 buckets
+     */
+    private function checkMemoryPressure(): void
+    {
+        $currentMemMb = \memory_get_usage(true) / 1024 / 1024;
+
+        // 紧急清理：内存超过紧急阈值时立即丢弃一半数据
+        if ($currentMemMb > self::MEMORY_EMERGENCY_MB) {
+            $this->emergencyEvict();
+            return;
+        }
+
+        // 普通清理：超过阈值时清理最老的 buckets
+        if ($currentMemMb > self::MEMORY_THRESHOLD_MB) {
+            $this->evictOldBuckets();
+        }
+    }
+
+    /**
+     * 紧急清理：内存即将耗尽时快速释放一半 buckets
+     */
+    private function emergencyEvict(): void
+    {
+        $count = \count(self::$buckets);
+        if ($count === 0) {
+            return;
+        }
+
+        // 按时间戳排序，保留最新的一半
+        $keysByTs = [];
+        foreach (self::$buckets as $key => $bucket) {
+            $bucketTs = (int)($bucket['bucket_ts'] ?? 0);
+            if (!isset($keysByTs[$bucketTs])) {
+                $keysByTs[$bucketTs] = [];
+            }
+            $keysByTs[$bucketTs][] = $key;
+        }
+
+        \krsort($keysByTs);  // 最新的排在前面
+        $keepCount = 0;
+        $keepKeys = [];
+
+        foreach ($keysByTs as $keys) {
+            foreach ($keys as $key) {
+                if ($keepCount >= \ceil($count / 2)) {
+                    break 2;
+                }
+                $keepKeys[$key] = true;
+                $keepCount++;
+            }
+        }
+
+        $evicted = 0;
+        foreach (\array_keys(self::$buckets) as $key) {
+            if (!isset($keepKeys[$key])) {
+                unset(self::$buckets[$key]);
+                $evicted++;
+            }
+        }
+
+        // 清空重试队列
+        self::$retryQueue = [];
+
+        $currentMemMb = \round(\memory_get_usage(true) / 1024 / 1024, 1);
+        \error_log("[Metrics] 紧急内存清理：丢弃 {$evicted} 个 buckets，保留 {$keepCount} 个，当前内存 {$currentMemMb}MB");
+    }
+
+    /**
+     * 清理最老的 buckets（SOLID: 单一职责 - 只负责内存管理）
+     */
+    private function evictOldBuckets(): void
+    {
+        $now = \time();
+        $maxAge = $now - self::MAX_BUCKET_AGE_SECONDS;
+        $evicted = 0;
+
+        // 按时间戳排序，删除最老的
+        $keysByTs = [];
+        foreach (self::$buckets as $key => $bucket) {
+            $bucketTs = (int)($bucket['bucket_ts'] ?? 0);
+            if (!isset($keysByTs[$bucketTs])) {
+                $keysByTs[$bucketTs] = [];
+            }
+            $keysByTs[$bucketTs][] = $key;
+        }
+
+        \ksort($keysByTs);
+        foreach ($keysByTs as $bucketTs => $keys) {
+            // 只清理超过最大保留时间的
+            if ($bucketTs >= $maxAge && \count(self::$buckets) <= self::MAX_BUCKETS) {
+                break;
+            }
+            foreach ($keys as $key) {
+                unset(self::$buckets[$key]);
+                $evicted++;
+            }
+        }
+
+        // 如果 bucket 数量仍然过多，直接删除最老的一半
+        if (\count(self::$buckets) > self::MAX_BUCKETS) {
+            $toKeep = \array_slice(\array_keys($keysByTs), -(int)\ceil(self::MAX_BUCKETS / 2), null, true);
+            foreach (\array_keys(self::$buckets) as $key) {
+                if (!isset($toKeep[$key])) {
+                    unset(self::$buckets[$key]);
+                    $evicted++;
+                }
+            }
+        }
+
+        // 清理重试队列（只保留最新的 100 条）
+        if (\count(self::$retryQueue) > 100) {
+            self::$retryQueue = \array_slice(self::$retryQueue, -100);
+        }
+
+        if ($evicted > 0) {
+            $currentMemMb = \round(\memory_get_usage(true) / 1024 / 1024, 1);
+            \error_log("[Metrics] 内存压力清理：释放 {$evicted} 个 buckets，当前内存 {$currentMemMb}MB");
+        }
     }
 
     public function snapshotGlobal(string $instanceName, int $sinceTs): array

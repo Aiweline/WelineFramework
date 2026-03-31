@@ -310,10 +310,12 @@ P99：%{1},"P99: %{1}"
 "如需重载最接近的实例，可执行 server:reload %{1}","如需重载最接近的实例，可执行 server:reload %{1}"
 "请确认实例名称，或执行 server:listing 查看所有实例","请确认实例名称，或执行 server:listing 查看所有实例"
 "未检测到运行中的 WLS Worker","未检测到运行中的 WLS Worker"
+当前操作实例：%{1},当前操作实例：%{1}
 "强制重载模式：批量杀死所有 Worker 后重新启动","强制重载模式：批量杀死所有 Worker 后重新启动"
 执行滚动重启（优雅重载）...,执行滚动重启（优雅重载）...
 "Worker 数：%{1}","Worker 数：%{1}"
 "✓ 热重载命令已发送","✓ Hot reload command sent"
+"等待实例 [%{1}] 的 Orchestrator 完成滚动重启...","等待实例 [%{1}] 的 Orchestrator 完成滚动重启..."
 "可用 server:status 查看当前状态","Use server:status to check current state"
 "✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）","✓ 滚动重启完成（耗时: %{1}，Worker: %{2}）"
 "✗ 滚动重启失败：Worker #%{1} - %{2}","✗ 滚动重启失败：Worker #%{1} - %{2}"
@@ -350,6 +352,7 @@ P99：%{1},"P99: %{1}"
 滚动重载（默认等待）,滚动重载（默认等待）
 不等待,不等待
 强制重载,强制重载
+"检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）...","检测到服务器已运行，-f 强制模式：单批次重启 Worker（Master 保持运行）..."
 "检测到服务器已运行，执行滚动重启（Master 保持运行）...","检测到服务器已运行，执行滚动重启（Master 保持运行）..."
 服务器未运行，正在启动...,服务器未运行，正在启动...
 "✓ 服务器已在运行中","✓ 服务器已在运行中"
@@ -359,15 +362,32 @@ P99：%{1},"P99: %{1}"
 "重启 Weline 常驻内存 HTTP 服务器","Restart Weline persistent HTTP server"
 "确保 Weline Server 运行中（已运行 -r 时保持 Master 滚动重载，未运行则启动）","确保 Weline Server 运行中（已运行 -r 时保持 Master 滚动重载，未运行则启动）"
 "强制重启（保持 Master，滚动重载 Worker）","强制重启（保持 Master，滚动重载 Worker）"
+"与 -r 同用时：单批次重启 Worker（跳过分批策略）","与 -r 同用时：单批次重启 Worker（跳过分批策略）"
 监听地址（默认：0.0.0.0）,监听地址（默认：0.0.0.0）
 监听端口（默认：443）,监听端口（默认：443）
 "Worker 进程数（默认：4）","Worker count (default: 4)"
 确保服务器运行,确保服务器运行
 强制重启服务器,强制重启服务器
+强制单批次重启,强制单批次重启
 重启并更改端口,"Restart with new port"
 "请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁","请指定 --ip=<IP> 解封单个 IP，或 --clear-all 清空全部封禁"
 "未检测到运行中的 WLS Dispatcher，无需执行解封","未检测到运行中的 WLS Dispatcher，无需执行解封"
 "命令已发送，若 Dispatcher 正在运行应已生效","命令已发送，若 Dispatcher 正在运行应已生效"
+"Memory Service disabled by configuration.","Memory Service disabled by configuration."
+"启动全局共享 Session/Memory 服务","启动全局共享 Session/Memory 服务"
+"启动或重启全局共享 Session/Memory 服务","启动或重启全局共享 Session/Memory 服务"
+行为,行为
+"共享服务独立于实例 Master；此命令只管理全局 Session/Memory。","共享服务独立于实例 Master；此命令只管理全局 Session/Memory。"
+启动共享服务,启动共享服务
+"%{1} ready: %{2}:%{3} (pid=%{4}, token=%{5})","%{1} ready: %{2}:%{3} (pid=%{4}, token=%{5})"
+"查看全局共享 Session/Memory 服务状态","查看全局共享 Session/Memory 服务状态"
+查看共享服务状态,查看共享服务状态
+"%{1}: %{2} %{3}:%{4} (pid=%{5}, token=%{6})","%{1}: %{2} %{3}:%{4} (pid=%{5}, token=%{6})"
+%{1},%{1}
+"Session Server %{1}","Session Server %{1}"
+"Memory Service %{1}","Memory Service %{1}"
+"停止全局共享 Session/Memory 服务","停止全局共享 Session/Memory 服务"
+停止共享服务,停止共享服务
 "正在重载域名 %{1} 的证书...","正在重载域名 %{1} 的证书..."
 正在从证书管理重载所有可用证书...,正在从证书管理重载所有可用证书...
 "已启用 --clear：将清除不完整证书的 DB 记录和磁盘文件，重置为可重新申请状态","已启用 --clear：将清除不完整证书的 DB 记录和磁盘文件，重置为可重新申请状态"
@@ -415,10 +435,7 @@ P99：%{1},"P99: %{1}"
 "Worker基础端口: %{1}","Worker基础端口: %{1}"
 "共享状态运行时: %{1}","共享状态运行时: %{1}"
 "共享状态运行时解析失败: %{1}","共享状态运行时解析失败: %{1}"
-"HTTP 重定向已禁用（--http-redirect-port 0）","HTTP 重定向已禁用（--http-redirect-port 0）"
-"HTTP 重定向已禁用（wls.http_redirect_port = 0）","HTTP 重定向已禁用（wls.http_redirect_port = 0）"
 "HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS","HTTPS 非 443：未启用独立 HTTP 重定向 Worker；明文入口仍可由 Dispatcher 内联跳转 HTTPS"
-"HTTP 重定向端口无效: %{1}","HTTP 重定向端口无效: %{1}"
 "默认端口 %{1} 被占用（可能被宝塔/nginx 等 web 服务占用），已降级到 %{2}","Default port %{1} occupied (likely by BT Panel/nginx), downgraded to %{2}"
 "主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），已自动切换到 %{2}","主端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），已自动切换到 %{2}"
 自动切换仅对未显式指定端口的异常占用生效；启动成功后会记住新端口,自动切换仅对未显式指定端口的异常占用生效；启动成功后会记住新端口
@@ -428,20 +445,23 @@ P99：%{1},"P99: %{1}"
 "1. 手动停止占用端口 %{1} 的进程","1. 手动停止占用端口 %{1} 的进程"
 "2. 或使用 -p 参数显式指定其他端口：","2. 或使用 -p 参数显式指定其他端口："
 "3. 查看端口占用：","3. 查看端口占用："
-"Worker 端口段 %{1}-%{2} 存在端口占用，自动切换到 %{3}-%{4}","Worker 端口段 %{1}-%{2} 存在端口占用，自动切换到 %{3}-%{4}"
+"无法分配 Worker 端口：全局端口分配锁正被其他启动流程占用","无法分配 Worker 端口：全局端口分配锁正被其他启动流程占用"
+请稍后重试，或等待其他实例启动完成,请稍后重试，或等待其他实例启动完成
+"Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}","Worker 端口段 %{1}-%{2} 存在端口冲突或系统预留，自动切换到 %{3}-%{4}"
 "HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）","HTTP 重定向端口 %{1} 处于异常占用状态（系统返回的 PID 已失效）"
 "HTTP 重定向端口 %{1} 被非框架进程占用","HTTP 重定向端口 %{1} 被非框架进程占用"
-"2. 或使用 --http-redirect-port 参数指定其他端口","2. 或使用 --http-redirect-port 参数指定其他端口"
-"3. 或使用 --http-redirect-port 0 禁用 HTTP 重定向","3. 或使用 --http-redirect-port 0 禁用 HTTP 重定向"
+"2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","2. 或改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
 "提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。","提示：当前为独立端口模式，%{1} 个 Worker 分别监听端口 %{2}-%{3}。"
 "提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。","提示：当前为 SO_REUSEPORT 直连模式，多 Worker 复用同一端口 %{1}。"
 维护模式已关闭（端口检查未通过）。,维护模式已关闭（端口检查未通过）。
-"维护模式已关闭（Session Server 端口检查未通过）。","维护模式已关闭（Session Server 端口检查未通过）。"
-"Maintenance mode disabled (Memory Service port check failed).","Maintenance mode disabled (Memory Service port check failed)."
-"维护模式已关闭（HTTP 重定向端口检查未通过）。","Maintenance mode disabled (HTTP redirect port check failed)."
-"1. 停止占用端口 %{1} 的进程","1. 停止占用端口 %{1} 的进程"
-"3. 或在 env.php 中配置 http_redirect_port","3. 或在 env.php 中配置 http_redirect_port"
-"4. 或使用 --http-redirect-port 0 禁用 HTTP 重定向","4. 或使用 --http-redirect-port 0 禁用 HTTP 重定向"
+未知进程,未知进程
+"HTTP Redirect 端口 %{1} 被占用: %{2}","HTTP Redirect 端口 %{1} 被占用: %{2}"
+是否强制停用该进程以释放端口？[y/N]:,是否强制停用该进程以释放端口？[y/N]:
+"已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。","已取消。HTTP Redirect 端口 %{1} 无法使用，将不启用 HTTP→HTTPS 重定向。"
+"提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）","提示：可改用非 443 主端口启动（将不启用独立 HTTP 重定向 Worker）"
+"正在强制停用占用端口 %{1} 的进程...","正在强制停用占用端口 %{1} 的进程..."
+"端口 %{1} 已释放，HTTP Redirect 将正常启动","端口 %{1} 已释放，HTTP Redirect 将正常启动"
+"无法释放端口 %{1}，HTTP Redirect 将不启用","无法释放端口 %{1}，HTTP Redirect 将不启用"
 维护模式已关闭。,维护模式已关闭。
 "Master 进程启动中，将管理所有 Worker 和 Dispatcher...","Master 进程启动中，将管理所有 Worker 和 Dispatcher..."
 实例文件不存在：%{1},实例文件不存在：%{1}
@@ -485,6 +505,7 @@ P99：%{1},"P99: %{1}"
 env.wls.servers.%{1},env.wls.servers.%{1}
 env.wls,env.wls
 命令行参数,命令行参数
+"参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。","参数 --http-redirect-port/--redirect-port 已弃用并忽略。HTTP 重定向规则固定为：仅 HTTPS=443 时使用 80。"
 "SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动","SSL 证书文件不存在：%{1}，已清理失效配置，请重新启动"
 "SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动","SSL 私钥文件不存在：%{1}，已清理失效配置，请重新启动"
 手动配置,"Manually configured"
@@ -553,7 +574,6 @@ env.wls,env.wls
 "端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程","端口 %{1} 处于异常占用状态（系统返回的 PID 已失效），不执行杀进程"
 "端口 %{1} 被非框架进程占用，不予杀死","端口 %{1} 被非框架进程占用，不予杀死"
 "端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程...","端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程..."
-"释放 WLS 进程占用的端口 %{1} (PID: %{2})...","释放 WLS 进程占用的端口 %{1} (PID: %{2})..."
 "├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功","├─ Worker #%{1} (%{2} 端口: %{3}) - 启动成功"
 "├─ Worker #%{1} (端口: %{2}) - 启动失败","├─ Worker #%{1} (端口: %{2}) - 启动失败"
 "启动 Dispatcher 进程...","启动 Dispatcher 进程..."
@@ -631,8 +651,6 @@ env.wls,env.wls
 "仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）","仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）"
 "SSL 证书文件路径（启用 HTTPS）","SSL 证书文件路径（启用 HTTPS）"
 "SSL 私钥文件路径（启用 HTTPS）","SSL 私钥文件路径（启用 HTTPS）"
-"HTTP 重定向端口（HTTPS 模式专用，默认：自动计算或 80）","HTTP 重定向端口（HTTPS 模式专用，默认：自动计算或 80）"
-"HTTP 重定向端口（--http-redirect-port 的简写）","HTTP 重定向端口（--http-redirect-port 的简写）"
 "直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）","直连模式：多 Worker 直接监听同一端口（Linux/Mac SO_REUSEPORT）"
 "独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口","独立端口模式：禁用 Dispatcher，每个 Worker 使用独立端口"
 "强制 Dispatcher 模式（默认）","强制 Dispatcher 模式（默认）"
@@ -658,7 +676,7 @@ env.wls,env.wls
 "80/443 端口","80/443 端口"
 "默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap","默认监听 80/443 省去 Nginx；HTTPS 时自动用 443，可 -p 9981 等改端口；Linux/Mac 特权端口需 root/setcap"
 "HTTP 重定向端口","HTTP 重定向端口"
-"HTTPS 模式下自动启动 HTTP 重定向进程，默认自动计算（HTTPS端口-463，如 443→80）；可通过 --http-redirect-port 指定；设为 0 禁用重定向","HTTPS 模式下自动启动 HTTP 重定向进程，默认自动计算（HTTPS端口-463，如 443→80）；可通过 --http-redirect-port 指定；设为 0 禁用重定向"
+"固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker","固定规则：仅 HTTPS 主端口为 443 时启动 HTTP:80 重定向 Worker；非 443 时不启动独立重定向 Worker"
 启动默认实例,"Start default instance"
 "使用 CLI 服务器","Use CLI server"
 启动命名实例（首次需指定端口）,启动命名实例（首次需指定端口）
@@ -669,8 +687,6 @@ CPU密集模式,CPU密集模式
 强制重启（不等待）,强制重启（不等待）
 "启用 HTTPS","启用 HTTPS"
 "Windows 无 HTTPS 运行","Windows 无 HTTPS 运行"
-"指定 HTTP 重定向端口","指定 HTTP 重定向端口"
-"禁用 HTTP 重定向","禁用 HTTP 重定向"
 策略模式（跨平台优化）,策略模式（跨平台优化）
 查看所有实例状态,查看所有实例状态
 停止指定实例,"Stop specific instance"
@@ -690,6 +706,8 @@ CPU密集模式,CPU密集模式
 架构,架构
 "使用策略: %{1}","使用策略: %{1}"
 "架构: %{1}","架构: %{1}"
+"Weline Server 启动完成！","Weline Server 启动完成！"
+"Weline Server 启动失败","Weline Server 启动失败"
 "每 3 秒刷新","每 3 秒刷新"
 退出,退出
 "Weline Server 状态","Weline Server status"
@@ -720,6 +738,11 @@ unknown,unknown
 "状态：全部停止 (%{1}/%{2})","状态：全部停止 (%{1}/%{2})"
 "测试请求：curl %{1}/","测试请求：curl %{1}/"
 端口：,Port:
+全局共享依赖：,全局共享依赖：
+"Session Server","Session Server"
+"Memory Service","Memory Service"
+disabled,disabled
+不可用,不可用
 "查看 Weline Server 运行状态","View Weline Server status"
 "查看服务器实例状态，树形展示所有 Worker 进程","查看服务器实例状态，树形展示所有 Worker 进程"
 实例名称（默认显示所有实例）,实例名称（默认显示所有实例）
@@ -758,6 +781,9 @@ unknown,unknown
 停止默认实例,"Stop default instance"
 "停止 PHP 内置服务器","停止 PHP 内置服务器"
 强制停止,"Force stop"
+正在停止服务器...,正在停止服务器...
+"Weline Server 已停止！","Weline Server 已停止！"
+"Weline Server 停止失败","Weline Server 停止失败"
 "请指定域名：--domain example.com","请指定域名：--domain example.com"
 "正在为 %{1} 申请 SSL 证书...","Requesting SSL certificate for %{1}..."
 联系邮箱：%{1},"Contact email: %{1}"
@@ -947,6 +973,8 @@ HTTPS,HTTPS
 证书自动续签任务失败：%{1},"Certificate auto-renewal task failed: %{1}"
 "SSL 证书即将过期","SSL 证书即将过期"
 "域名 %{1} 的 SSL 证书将在 %{2} 天后过期（%{3}），请关注续签或手动续签。","域名 %{1} 的 SSL 证书将在 %{2} 天后过期（%{3}），请关注续签或手动续签。"
+WLS错误扫描,WLS错误扫描
+"扫描 WLS 日志中的 Fatal/ParseError/TypeError 等关键错误，生成修复任务","扫描 WLS 日志中的 Fatal/ParseError/TypeError 等关键错误，生成修复任务"
 "需要安装 event 扩展","Event extension required"
 读事件处理错误：%{1},"Read event error: %{1}"
 写事件处理错误：%{1},"Write event error: %{1}"
@@ -1259,10 +1287,9 @@ DDoS攻击,DDoS攻击
 "IPC 清场：已取消 Fiber 池统计请求","IPC 清场：已取消 Fiber 池统计请求"
 "IPC 清场：已由更高优先级控制指令中断","IPC 清场：已由更高优先级控制指令中断"
 服务器已就绪,服务器已就绪
-"服务实例: %{1} 个已就绪","服务实例: %{1} 个已就绪"
 使用说明：,使用说明：
 "WLS 默认仅监听 127.0.0.1，仅本机可访问","WLS 默认仅监听 127.0.0.1，仅本机可访问"
-"外网访问需用 Nginx/Caddy 等反向代理转发到","外网访问需用 Nginx/Caddy 等反向代理转发到"
+"外网访问需用 Nginx/Caddy 等反向代理转发到 %{1}:%{2}","外网访问需用 Nginx/Caddy 等反向代理转发到 %{1}:%{2}"
 "Nginx 示例：","Nginx 示例："
 需直连外网时：,需直连外网时：
 "已有 Fiber 统计请求进行中，请稍后再试","已有 Fiber 统计请求进行中，请稍后再试"
@@ -1489,7 +1516,6 @@ DDoS攻击,DDoS攻击
 已最优,已最优
 查看安装指南,查看安装指南
 已连接,已连接
-不可用,不可用
 共享状态管理,共享状态管理
 "覆盖 Session 与 Memory Service 的状态、检索、清理能力","覆盖 Session 与 Memory Service 的状态、检索、清理能力"
 "Session 数","Session 数"

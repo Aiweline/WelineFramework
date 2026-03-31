@@ -174,69 +174,6 @@ WlsLogger::info_("Persist file: " . ($sessionConfig['persist_file_name'] ?? 'wls
 $ipcReceivedShutdown = false;
 $kernel = null;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
-$sharedStateRegistry = $sharedService ? new \Weline\Server\Service\SharedStateServiceRegistry() : null;
-$sharedStateManager = $sharedService ? new \Weline\Server\Service\SharedStateServiceManager() : null;
-$lastSharedLifecycleCheckAt = 0;
-$parseSharedStateTimestamp = static function (mixed $value): ?int {
-    if (!\is_string($value) || \trim($value) === '') {
-        return null;
-    }
-
-    $timestamp = \strtotime($value);
-
-    return $timestamp === false ? null : $timestamp;
-};
-$shouldSelfShutdownSharedService = static function (array $record) use ($parseSharedStateTimestamp): bool {
-    $consumers = \is_array($record['consumers'] ?? null) ? $record['consumers'] : [];
-    if ($consumers !== []) {
-        return false;
-    }
-
-    $shutdownDueAt = $parseSharedStateTimestamp($record['shutdown_due_at'] ?? null);
-
-    return $shutdownDueAt !== null && $shutdownDueAt <= \time();
-};
-$runSharedLifecycleSelfCheck = static function () use (
-    &$lastSharedLifecycleCheckAt,
-    $sharedService,
-    $sharedStateManager,
-    $sharedStateRegistry,
-    $role,
-    $shouldSelfShutdownSharedService,
-    $server,
-    $host,
-    $port
-): void {
-    if (!$sharedService) {
-        return;
-    }
-
-    $now = \time();
-    if ($now === $lastSharedLifecycleCheckAt) {
-        return;
-    }
-
-    $lastSharedLifecycleCheckAt = $now;
-
-    try {
-        $sweepResult = $sharedStateManager?->sweepStaleConsumersIfAvailable($role) ?? [];
-        if (($sweepResult['skipped_locked'] ?? false) === true) {
-            return;
-        }
-        $record = $sharedStateRegistry?->getRecord($role) ?? [];
-        if (\is_array($record) && $shouldSelfShutdownSharedService($record)) {
-            WlsLogger::info_(
-                "Shared service idle shutdown due reached for {$role} on {$host}:{$port}, stopping self."
-            );
-            $server->getStore()->forcePersist();
-            $server->setRunning(false);
-        }
-    } catch (\Throwable $throwable) {
-        WlsLogger::warning_(
-            'Shared service lifecycle self-check failed: ' . $throwable->getMessage()
-        );
-    }
-};
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 if ($controlPort > 0) {
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
@@ -266,7 +203,8 @@ if ($controlPort > 0) {
         $identity,
         $handler,
         'SessionServer',
-        $isDev
+        $isDev,
+        $instanceName
     );
     if ($kernel->connectAndRegister($controlPort)) {
         WlsLogger::info_("Connected to Master IPC on port {$controlPort}");
@@ -316,9 +254,6 @@ while ($server->isRunning()) {
     if ($kernel !== null && !$kernel->isConnected() && !$ipcReceivedShutdown) {
         $kernel->reconnect();
     }
-
-    $runSharedLifecycleSelfCheck();
-
     if (!$sharedService && $orphanGuard->shouldExit(
         $masterPid,
         $kernel !== null && $kernel->isConnected(),

@@ -105,6 +105,27 @@ class PassthroughCore
      * @var array<int, array{worker: resource, port: int, clientIp: string, sni: string, open_time: float}>
      */
     private array $connections = [];
+
+    /**
+     * 空闲 Worker 连接池（port => list<socket+expire>）
+     * @var array<int, array<int, array{socket: mixed, expires_at: float}>>
+     */
+    private array $idleWorkerPool = [];
+
+    /**
+     * 是否启用后端连接池复用（默认关闭，需显式配置）
+     */
+    private bool $backendPoolEnabled = false;
+
+    /**
+     * 每个 Worker 端口允许缓存的最大空闲连接数
+     */
+    private int $backendPoolMaxIdlePerWorker = 16;
+
+    /**
+     * 空闲连接 TTL（秒）
+     */
+    private int $backendPoolIdleTtl = 15;
     
     /**
      * H15: 客户端写入缓冲区
@@ -121,11 +142,32 @@ class PassthroughCore
     private array $workerClosed = [];
     
     /**
+     * 客户端上行（client->worker）是否已半关闭（FIN）。
+     * @var array<int, bool>
+     */
+    private array $clientInputClosed = [];
+    
+    /**
+     * 每条连接最近一次终止原因（用于 Dispatcher 侧诊断）。
+     * @var array<int, string>
+     */
+    private array $connectionTerminalReasons = [];
+    
+    /**
      * Worker 健康状态
      * 格式: [port => ['failures' => int, 'blacklisted_at' => float, 'last_success' => float, 'total_failures' => int]]
      * @var array<int, array{failures: int, blacklisted_at: float, last_success: float, total_failures: int}>
      */
     private array $workerHealth = [];
+
+    /**
+     * Worker 长连接饱和状态
+     * 当 Worker 上报长连接饱和时，Dispatcher 暂缓向该 Worker 分配新连接，
+     * 但仍保持现有长连接（让现有 SSE/长轮询继续工作）。
+     * 格式: [port => ['long_lived_count' => int, 'long_lived_max' => int, 'saturated_at' => float|null]]
+     * @var array<int, array{long_lived_count: int, long_lived_max: int, saturated_at: float|null}>
+     */
+    private array $workerSaturation = [];
     
     /**
      * 读取缓冲区大小
@@ -141,6 +183,12 @@ class PassthroughCore
      * 连接超时（秒）
      */
     private int $connectTimeout = 5;
+
+    /**
+     * Worker 首字节响应超时（秒）
+     * 连接已建立但长时间无任何响应字节时，判定该 Worker 假活跃并触发故障转移黑名单。
+     */
+    private float $firstByteTimeoutSeconds = 2.5;
     
     /**
      * Worker 全部不可用时的自旋等待总时长（秒）
@@ -172,6 +220,9 @@ class PassthroughCore
         'bytes_out' => 0,
         'worker_failures' => 0,
         'all_workers_down' => 0,
+        'backend_pool_reused' => 0,
+        'backend_pool_released' => 0,
+        'backend_pool_discarded' => 0,
     ];
     
     /**
@@ -192,7 +243,7 @@ class PassthroughCore
         // 后续 Master 的 add_worker / set_worker_pool 会覆盖为权威池。
         if ($workerCount > 0 && $workerBasePort > 0) {
             $seedPorts = [];
-            for ($i = 0; $i < $workerCount; $i++) {
+            for ($i = 1; $i <= $workerCount; $i++) {
                 $seedPorts[] = $workerBasePort + $i;
             }
             $this->setWorkerPorts($seedPorts);
@@ -221,11 +272,23 @@ class PassthroughCore
         if (isset($config['connect_timeout'])) {
             $this->connectTimeout = (int) $config['connect_timeout'];
         }
+        if (isset($config['first_byte_timeout_seconds'])) {
+            $this->firstByteTimeoutSeconds = \max(0.5, (float)$config['first_byte_timeout_seconds']);
+        }
         if (isset($config['spin_wait_max_seconds'])) {
             $this->spinWaitMaxSeconds = (float) $config['spin_wait_max_seconds'];
         }
         if (isset($config['spin_wait_interval_ms'])) {
             $this->spinWaitIntervalMs = \max(10, (int) $config['spin_wait_interval_ms']);
+        }
+        if (isset($config['backend_pool_enabled'])) {
+            $this->backendPoolEnabled = (bool)$config['backend_pool_enabled'];
+        }
+        if (isset($config['backend_pool_max_idle_per_worker'])) {
+            $this->backendPoolMaxIdlePerWorker = \max(1, (int)$config['backend_pool_max_idle_per_worker']);
+        }
+        if (isset($config['backend_pool_idle_ttl'])) {
+            $this->backendPoolIdleTtl = \max(1, (int)$config['backend_pool_idle_ttl']);
         }
         
         // 传递缓存配置
@@ -236,6 +299,9 @@ class PassthroughCore
         // HTTP 重定向端口
         if (isset($config['http_redirect_port'])) {
             $this->httpRedirectPort = (int) $config['http_redirect_port'];
+        }
+        if (!$this->backendPoolEnabled) {
+            $this->closeAllIdleWorkerSockets();
         }
     }
 
@@ -284,6 +350,8 @@ class PassthroughCore
             'clientIp' => $clientIp,
             'sni' => '',
             'open_time' => \microtime(true),
+            'request_sent_at' => 0.0,
+            'worker_responded' => false,
         ];
         
         $this->stats['active_connections']++;
@@ -309,6 +377,7 @@ class PassthroughCore
         $sni = '';
         $workerPort = null;
         $fromCache = false;
+        $routeSource = 'none';
         
         // 1. 尝试从连接缓存查找路由（Keep-Alive 场景）
         $routeInfo = $this->routingCache->getRouteByConnection($connId);
@@ -316,38 +385,55 @@ class PassthroughCore
             $workerPort = $routeInfo['port'];
             $sni = $routeInfo['sni'];
             $fromCache = true;
+            $routeSource = 'connection_cache';
         }
-        
-        // 2. 尝试从 IP 缓存查找路由
+
+        // 2. 提前提取 SNI（若可用），用于避免同 IP 多域名时被 IP 缓存误路由。
+        // 典型场景：本机 127.0.0.1 多域名/多站点，IP 一样但 SNI 不同。
+        if ($this->sniRoutingEnabled) {
+            $peekedSni = $this->extractSniFromSocket($clientSocket);
+            if (!empty($peekedSni)) {
+                $this->stats['sni_extractions']++;
+                $sni = $peekedSni;
+            }
+        }
+
+        // 3. SNI 缓存优先（比 IP 缓存更精确）
+        if ($workerPort === null && $sni !== '') {
+            $sniRoutePort = $this->routingCache->getRouteBySni($sni);
+            if ($sniRoutePort !== null) {
+                $workerPort = $sniRoutePort;
+                $fromCache = true;
+                $routeSource = 'sni_cache';
+            }
+        }
+
+        // 4. IP 缓存兜底：
+        // - 仅在 SNI 未命中时使用
+        // - 若 IP 缓存里带 SNI，必须与当前 SNI 一致才可复用，避免跨域误路由
         if ($workerPort === null) {
             $routeInfo = $this->routingCache->getRouteByIp($clientIp);
             if ($routeInfo !== null) {
-                $workerPort = $routeInfo['port'];
-                $sni = $routeInfo['sni'];
-                $fromCache = true;
-            }
-        }
-        
-        // 3. 如果启用 SNI 路由，尝试 Peek ClientHello 提取 SNI
-        if ($workerPort === null && $this->sniRoutingEnabled) {
-            $sni = $this->extractSniFromSocket($clientSocket);
-            if (!empty($sni)) {
-                $this->stats['sni_extractions']++;
-                $workerPort = $this->routingCache->getRouteBySni($sni);
-                if ($workerPort !== null) {
+                $ipRouteSni = (string)($routeInfo['sni'] ?? '');
+                $sniMismatch = ($sni !== '' && $ipRouteSni !== '' && \strcasecmp($ipRouteSni, $sni) !== 0);
+                if (!$sniMismatch) {
+                    $workerPort = $routeInfo['port'];
+                    if ($sni === '') {
+                        $sni = $ipRouteSni;
+                    }
                     $fromCache = true;
+                    $routeSource = 'ip_cache';
                 }
             }
         }
-        
-        // 4. 如果有缓存路由，先尝试连接该 Worker
+
+        // 5. 如果有缓存路由，先尝试连接该 Worker
         if ($workerPort !== null) {
             // 检查缓存路由的 Worker 是否在黑名单中
             if (!$this->isWorkerBlacklisted($workerPort)) {
                 $workerSocket = $this->connectToWorker($workerPort);
                 if ($workerSocket !== false) {
                     $this->stats['cache_routed']++;
-                    $this->recordWorkerSuccess($workerPort);
                     return $this->registerConnection($connId, $clientSocket, $workerSocket, $workerPort, $clientIp, $sni);
                 }
                 // 缓存的 Worker 连接失败，记录失败并继续尝试其他 Worker
@@ -359,20 +445,20 @@ class PassthroughCore
             }
         }
         
-        // 5. 故障转移：尝试所有可用 Worker（跳过黑名单中的）
+        // 6. 故障转移：尝试所有可用 Worker（跳过黑名单中的）
         $workerSocket = $this->connectToAvailableWorker($workerPort, $sni);
         if ($workerSocket !== false) {
             return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
         }
-        
-        // 6. 所有健康 Worker 都失败了，最后尝试黑名单中的 Worker（可能已经恢复）
+
+        // 7. 所有健康 Worker 都失败了，最后尝试黑名单中的 Worker（可能已经恢复）
         $workerSocket = $this->connectToAnyWorker($workerPort);
         if ($workerSocket !== false) {
             return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
         }
-        
-        // 7. 自旋等待：热重载/启动窗口期间 Worker 池可能短暂为空，重试以降低瞬时 503
-        if ($this->spinWaitMaxSeconds > 0) {
+
+        // 8. 自旋等待：仅在 Worker 池暂时为空时重试，避免逐请求阻塞事件循环
+        if ($this->shouldSpinWaitForWorkerRecovery()) {
             $deadline = \microtime(true) + $this->spinWaitMaxSeconds;
             while (\microtime(true) < $deadline) {
                 SchedulerSystem::usleep((int)($this->spinWaitIntervalMs * 1000));
@@ -391,6 +477,38 @@ class PassthroughCore
         
         // 所有 Worker 均不可用（含自旋等待后仍失败）
         $this->stats['all_workers_down']++;
+        return false;
+    }
+
+    /**
+     * 当当前没有可分配 Worker 时进行自旋等待：
+     * - Worker 端口池为空（启动窗口）
+     * - Worker 存在但全部处于黑名单（重载/故障恢复窗口）
+     *
+     * 目的：在短暂恢复窗口内等待 Worker 上线后再分配流量，减少瞬时失败。
+     */
+    private function shouldSpinWaitForWorkerRecovery(): bool
+    {
+        if ($this->spinWaitMaxSeconds <= 0) {
+            return false;
+        }
+        if (empty($this->workerPorts)) {
+            return true;
+        }
+
+        return !$this->hasAllocatableWorkerPort();
+    }
+
+    /**
+     * 是否存在可分配（未黑名单且未饱和）的 Worker 端口。
+     */
+    private function hasAllocatableWorkerPort(): bool
+    {
+        foreach ($this->workerPorts as $port) {
+            if (!$this->isWorkerBlacklisted((int)$port) && !$this->isWorkerSaturated((int)$port)) {
+                return true;
+            }
+        }
         return false;
     }
     
@@ -413,6 +531,8 @@ class PassthroughCore
             'clientIp' => $clientIp,
             'sni' => $sni,
             'open_time' => \microtime(true),
+            'request_sent_at' => 0.0,
+            'worker_responded' => false,
         ];
         
         $this->stats['active_connections']++;
@@ -450,14 +570,21 @@ class PassthroughCore
         for ($i = 0; $i < $count; $i++) {
             $index = ($startIndex + $i) % $count;
             $port = $this->workerPorts[$index];
-            
+
             // 跳过已尝试的端口
             if ($port === $excludePort) {
                 continue;
             }
-            
+
             // 跳过黑名单中的 Worker
             if ($this->isWorkerBlacklisted($port)) {
+                continue;
+            }
+
+            // 跳过处于长连接饱和状态的 Worker
+            // 注意：这意味着当所有 Worker 都饱和时，所有新连接都会被拒绝。
+            // 这是一种保护机制，防止 Worker 过载。
+            if ($this->isWorkerSaturated($port)) {
                 continue;
             }
             
@@ -468,7 +595,6 @@ class PassthroughCore
                 } else {
                     $this->stats['round_robin_routed']++;
                 }
-                $this->recordWorkerSuccess($port);
                 return ['socket' => $workerSocket, 'port' => $port];
             }
             
@@ -501,7 +627,6 @@ class PassthroughCore
             $workerSocket = $this->connectToWorker($port);
             if ($workerSocket !== false) {
                 $this->stats['failover_routed']++;
-                $this->recordWorkerSuccess($port);
                 return ['socket' => $workerSocket, 'port' => $port];
             }
         }
@@ -556,6 +681,14 @@ class PassthroughCore
      */
     private function connectToWorker(int $workerPort)
     {
+        if ($this->backendPoolEnabled) {
+            $reusedSocket = $this->acquireIdleWorkerSocket($workerPort);
+            if ($reusedSocket !== false) {
+                $this->stats['backend_pool_reused']++;
+                return $reusedSocket;
+            }
+        }
+
         $workerSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         if ($workerSocket === false) {
             return false;
@@ -563,7 +696,7 @@ class PassthroughCore
         
         // 设置非阻塞
         \socket_set_nonblock($workerSocket);
-        
+
         // 尝试连接
         $result = @\socket_connect($workerSocket, $this->workerHost, $workerPort);
         
@@ -619,6 +752,8 @@ class PassthroughCore
         if (!isset($this->workerHealth[$port])) {
             return false;
         }
+
+        return $this->workerHealth[$port]['blacklisted_at'] > 0;
         
         $health = $this->workerHealth[$port];
         
@@ -690,7 +825,15 @@ class PassthroughCore
             $this->workerHealth[$port]['blacklisted_at'] = \microtime(true);
         }
     }
-    
+
+    /**
+     * 外部上报 Worker 失败（如 Dispatcher 检测到首包超时）。
+     */
+    public function markWorkerFailureByPort(int $port): void
+    {
+        $this->recordWorkerFailure($port);
+    }
+
     /**
      * 主动探活：尝试连接到所有黑名单中的 Worker
      * 
@@ -702,6 +845,22 @@ class PassthroughCore
     public function probeBlacklistedWorkers(): array
     {
         $recovered = [];
+        $now = \microtime(true);
+
+        foreach ($this->workerHealth as $port => $health) {
+            if (($health['blacklisted_at'] ?? 0.0) <= 0) {
+                continue;
+            }
+            if (($now - (float)$health['blacklisted_at']) < self::WORKER_BLACKLIST_RECOVERY_SECONDS) {
+                continue;
+            }
+            if ($this->probeWorkerApplicationHealth((int)$port)) {
+                $this->recordWorkerSuccess((int)$port);
+                $recovered[] = (int)$port;
+            }
+        }
+
+        return $recovered;
         
         foreach ($this->workerHealth as $port => $health) {
             if ($health['blacklisted_at'] <= 0) {
@@ -718,6 +877,52 @@ class PassthroughCore
         }
         
         return $recovered;
+    }
+
+    private function probeWorkerApplicationHealth(int $port): bool
+    {
+        $context = \stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+                'SNI_enabled' => false,
+            ],
+        ]);
+
+        $timeout = \max(0.3, \min((float)$this->connectTimeout, 0.8));
+        $conn = @\stream_socket_client(
+            "ssl://{$this->workerHost}:{$port}",
+            $errno,
+            $errstr,
+            $timeout,
+            STREAM_CLIENT_CONNECT,
+            $context
+        );
+
+        if (!\is_resource($conn)) {
+            return false;
+        }
+
+        try {
+            @\stream_set_timeout($conn, 0, 500000);
+            $request = "GET /_wls/health HTTP/1.1\r\n"
+                . "Host: {$this->workerHost}\r\n"
+                . "Connection: close\r\n\r\n";
+            $written = @\fwrite($conn, $request);
+            if (!\is_int($written) || $written <= 0) {
+                return false;
+            }
+
+            $responseHead = @\fread($conn, 64);
+            if (!\is_string($responseHead) || $responseHead === '') {
+                return false;
+            }
+
+            return \str_starts_with($responseHead, 'HTTP/');
+        } finally {
+            @\fclose($conn);
+        }
     }
     
     // ========== IPC 控制通道：外部调用接口 ==========
@@ -753,6 +958,60 @@ class PassthroughCore
             $this->workerHealth[$port]['blacklisted_at'] = 0.0;
             $this->workerHealth[$port]['failures'] = 0;
         }
+    }
+
+    /**
+     * 更新 Worker 长连接饱和状态
+     *
+     * 当 Worker 上报饱和时，将该 Worker 标记为"长连接饱和"，
+     * 在饱和解除前，新连接会绕过该 Worker。
+     * 与黑名单不同：饱和状态下 Worker 仍可处理现有长连接，只是不再接受新分配。
+     *
+     * @param int $port Worker 端口
+     * @param int $longLivedCount 当前长连接数
+     * @param int $longLivedMax 长连接上限
+     */
+    public function setWorkerSaturation(int $port, int $longLivedCount, int $longLivedMax): void
+    {
+        $this->workerSaturation[$port] = [
+            'long_lived_count' => $longLivedCount,
+            'long_lived_max' => $longLivedMax,
+            'saturated_at' => \microtime(true),
+        ];
+    }
+
+    /**
+     * 清除 Worker 长连接饱和状态（当 Worker 上报饱和解除时调用）
+     *
+     * @param int $port Worker 端口
+     */
+    public function clearWorkerSaturation(int $port): void
+    {
+        if (isset($this->workerSaturation[$port])) {
+            unset($this->workerSaturation[$port]);
+        }
+    }
+
+    /**
+     * 检查 Worker 是否处于长连接饱和状态
+     *
+     * 饱和状态下，该 Worker 不应被分配新连接（但现有长连接仍正常工作）。
+     *
+     * @param int $port Worker 端口
+     * @return bool
+     */
+    public function isWorkerSaturated(int $port): bool
+    {
+        if (!isset($this->workerSaturation[$port])) {
+            return false;
+        }
+        $sat = $this->workerSaturation[$port];
+        // 饱和超时：超过 60 秒自动解除（假设 Worker 会重新上报）
+        if ($sat['saturated_at'] > 0 && (\microtime(true) - $sat['saturated_at']) > 60.0) {
+            unset($this->workerSaturation[$port]);
+            return false;
+        }
+        return true;
     }
     
     /**
@@ -825,6 +1084,7 @@ class PassthroughCore
 
         // 清理健康记录
         unset($this->workerHealth[$port]);
+        $this->closeIdleSocketsByPort($port);
     }
 
     /**
@@ -834,9 +1094,11 @@ class PassthroughCore
      */
     public function setWorkerPorts(array $ports): void
     {
+        $oldPorts = $this->workerPorts;
         $this->workerPorts = \array_values(\array_unique(\array_map('intval', $ports)));
         $this->workerCount = \count($this->workerPorts);
         $this->workerHealth = [];
+        $this->workerSaturation = [];
         foreach ($this->workerPorts as $port) {
             if ($port <= 0) {
                 continue;
@@ -851,41 +1113,58 @@ class PassthroughCore
         $this->writeStderr(
             '[PassthroughCore] SET_WORKER_POOL 当前列表: ' . (\implode(',', $this->workerPorts) ?: '(空)') . "\n"
         );
+        $removedPorts = \array_diff($oldPorts, $this->workerPorts);
+        foreach ($removedPorts as $removedPort) {
+            $this->closeIdleSocketsByPort((int)$removedPort);
+        }
     }
     
     /**
      * 获取 Worker 健康状态摘要
      *
-     * @return array{healthy: int, blacklisted: int, total: int, details: array}
+     * @return array{healthy: int, blacklisted: int, saturated: int, total: int, details: array}
      */
     public function getWorkerHealthSummary(): array
     {
         $healthy = 0;
         $blacklisted = 0;
+        $saturated = 0;
         $details = [];
-        
+
         foreach ($this->workerHealth as $port => $health) {
             $isBlacklisted = $this->isWorkerBlacklisted($port);
-            
+            $isSaturated = $this->isWorkerSaturated($port);
+
             if ($isBlacklisted) {
                 $blacklisted++;
+            } elseif ($isSaturated) {
+                $saturated++;
             } else {
                 $healthy++;
             }
-            
+
+            $satInfo = $this->workerSaturation[$port] ?? null;
             $details[$port] = [
-                'status' => $isBlacklisted ? 'blacklisted' : 'healthy',
+                'status' => $isBlacklisted ? 'blacklisted' : ($isSaturated ? 'saturated' : 'healthy'),
                 'failures' => $health['failures'],
                 'total_failures' => $health['total_failures'],
-                'last_success' => $health['last_success'] > 0 
-                    ? \round(\microtime(true) - $health['last_success'], 1) . 's ago' 
+                'last_success' => $health['last_success'] > 0
+                    ? \round(\microtime(true) - $health['last_success'], 1) . 's ago'
                     : 'never',
             ];
+            if ($satInfo !== null) {
+                $details[$port]['long_lived_count'] = $satInfo['long_lived_count'];
+                $details[$port]['long_lived_max'] = $satInfo['long_lived_max'];
+                $details[$port]['saturated_at'] = $satInfo['saturated_at'] > 0
+                    ? \round(\microtime(true) - $satInfo['saturated_at'], 1) . 's ago'
+                    : 'now';
+            }
         }
-        
+
         return [
             'healthy' => $healthy,
             'blacklisted' => $blacklisted,
+            'saturated' => $saturated,
             'total' => $this->workerCount,
             'details' => $details,
         ];
@@ -902,6 +1181,7 @@ class PassthroughCore
         $connId = \spl_object_id($clientSocket);
         
         if (!isset($this->connections[$connId])) {
+            $this->connectionTerminalReasons[$connId] = 'forward_to_worker_missing_connection';
             return -1;
         }
         
@@ -922,13 +1202,16 @@ class PassthroughCore
             }
             
             // 真正的错误，关闭连接
+            $this->connectionTerminalReasons[$connId] = 'forward_to_worker_client_read_error:' . (string)$errCode;
             return -1;
         }
         
-        // socket_read 返回空字符串表示对方关闭了连接（发送了 FIN）
+        // socket_read 返回空字符串表示客户端发送了 FIN（上行半关闭）
         if ($data === '') {
-            // 连接已关闭
-            return -1;
+            // 半关闭：停止 client->worker，上行不再读取；下行继续发回响应
+            $this->connectionTerminalReasons[$connId] = 'forward_to_worker_client_read_eof';
+            $this->clientInputClosed[$connId] = true;
+            return -2;
         }
         
         $length = \strlen($data);
@@ -945,6 +1228,8 @@ class PassthroughCore
             
             if ($written === false) {
                 // Worker 写入失败（Worker 可能掉线），记录到健康状态
+                $errCode = \socket_last_error($workerSocket);
+                $this->connectionTerminalReasons[$connId] = 'forward_to_worker_worker_write_error:' . (string)$errCode;
                 $this->recordWorkerFailure($workerPort);
                 return $totalWritten > 0 ? $totalWritten : -1;
             }
@@ -957,6 +1242,13 @@ class PassthroughCore
             
             $totalWritten += $written;
             $retries = 0;
+        }
+
+        if ($totalWritten > 0 && isset($this->connections[$connId])) {
+            $requestSentAt = (float)($this->connections[$connId]['request_sent_at'] ?? 0.0);
+            if ($requestSentAt <= 0.0) {
+                $this->connections[$connId]['request_sent_at'] = \microtime(true);
+            }
         }
         
         return $totalWritten;
@@ -977,6 +1269,7 @@ class PassthroughCore
         $connId = \spl_object_id($clientSocket);
         
         if (!isset($this->connections[$connId])) {
+            $this->connectionTerminalReasons[$connId] = 'forward_to_client_missing_connection';
             return -1;
         }
         
@@ -988,6 +1281,7 @@ class PassthroughCore
         if (isset($this->clientWriteBuffers[$connId]) && $this->clientWriteBuffers[$connId] !== '') {
             $flushed = $this->flushClientBuffer($clientSocket);
             if ($flushed === -1) {
+                $this->connectionTerminalReasons[$connId] = 'forward_to_client_flush_failed';
                 return -1; // 写入失败，连接错误
             }
             // 如果缓冲区还有数据，先不读 Worker，等下次再来
@@ -1014,11 +1308,20 @@ class PassthroughCore
                 // WOULDBLOCK 系列错误码表示暂无数据，但连接仍然有效
                 if (\in_array($errCode, self::WOULDBLOCK_ERRORS, true)) {
                     \socket_clear_error($workerSocket);
+
+                    // 连接已建立但迟迟拿不到首字节：将该 Worker 视为假活跃（hung）
+                    // 记录失败并让上层关闭当前连接，后续请求会逐步黑名单该 Worker。
+                    if ($this->shouldTreatSilentWorkerAsFailure($conn, $totalBytesForwarded)) {
+                        $this->recordWorkerFailure($workerPort);
+                        $this->connectionTerminalReasons[$connId] = 'forward_to_client_first_byte_timeout';
+                        return -1;
+                    }
                     break; // 暂无更多数据
                 }
                 
                 // Worker 读取失败（Worker 掉线），记录到健康状态
                 $this->recordWorkerFailure($workerPort);
+                $this->connectionTerminalReasons[$connId] = 'forward_to_client_worker_read_error:' . (string)$errCode;
                 return $totalBytesForwarded > 0 ? $totalBytesForwarded : -1;
             }
             
@@ -1029,6 +1332,7 @@ class PassthroughCore
             }
             
             $length = \strlen($data);
+            $this->markWorkerResponsive($connId, $workerPort);
             $this->stats['bytes_out'] += $length;
             
             // 写入客户端（尽可能多写）
@@ -1050,6 +1354,7 @@ class PassthroughCore
                         continue;
                     }
                     // 写入错误，连接断开
+                    $this->connectionTerminalReasons[$connId] = 'forward_to_client_client_write_error:' . (string)$errCode;
                     return $totalBytesForwarded + $totalWritten > 0 
                         ? $totalBytesForwarded + $totalWritten 
                         : -1;
@@ -1087,12 +1392,48 @@ class PassthroughCore
                 return $totalBytesForwarded > 0 ? $totalBytesForwarded : -2;
             }
             // 没有缓冲数据，连接真正结束
+            $this->connectionTerminalReasons[$connId] = 'forward_to_client_worker_eof_without_buffer';
             return $totalBytesForwarded > 0 ? $totalBytesForwarded : -1;
         }
         
         return $totalBytesForwarded;
     }
-    
+
+    /**
+     * Only start the worker first-byte timeout after some request bytes were
+     * actually forwarded upstream. Browser preconnect / idle sockets should not
+     * blacklist a healthy worker.
+     *
+     * @param array{request_sent_at?: float} $conn
+     */
+    private function shouldTreatSilentWorkerAsFailure(array $conn, int $totalBytesForwarded): bool
+    {
+        if ($totalBytesForwarded > 0 || $this->firstByteTimeoutSeconds <= 0) {
+            return false;
+        }
+
+        $requestSentAt = (float)($conn['request_sent_at'] ?? 0.0);
+        if ($requestSentAt <= 0.0) {
+            return false;
+        }
+
+        return (\microtime(true) - $requestSentAt) >= $this->firstByteTimeoutSeconds;
+    }
+
+    private function markWorkerResponsive(int $connId, int $workerPort): void
+    {
+        if (!isset($this->connections[$connId])) {
+            return;
+        }
+
+        if (!empty($this->connections[$connId]['worker_responded'])) {
+            return;
+        }
+
+        $this->connections[$connId]['worker_responded'] = true;
+        $this->recordWorkerSuccess($workerPort);
+    }
+
     /**
      * H15: 刷新客户端写缓冲区
      * 
@@ -1126,6 +1467,7 @@ class PassthroughCore
                     continue;
                 }
                 // 写入错误
+                $this->connectionTerminalReasons[$connId] = 'flush_client_buffer_client_write_error:' . (string)$errCode;
                 unset($this->clientWriteBuffers[$connId]);
                 return -1;
             }
@@ -1165,6 +1507,15 @@ class PassthroughCore
     {
         $connId = \spl_object_id($clientSocket);
         return isset($this->workerClosed[$connId]);
+    }
+    
+    /**
+     * 客户端上行是否已半关闭（FIN）。
+     */
+    public function isClientInputClosed($clientSocket): bool
+    {
+        $connId = \spl_object_id($clientSocket);
+        return !empty($this->clientInputClosed[$connId]);
     }
     
     /**
@@ -1219,6 +1570,27 @@ class PassthroughCore
     }
     
     /**
+     * 按 connId 获取并清理终止原因，避免重复读到旧值。
+     */
+    public function consumeConnectionTerminalReasonByConnId(int $connId): ?string
+    {
+        if (!isset($this->connectionTerminalReasons[$connId])) {
+            return null;
+        }
+        $reason = $this->connectionTerminalReasons[$connId];
+        unset($this->connectionTerminalReasons[$connId]);
+        return $reason;
+    }
+    
+    /**
+     * 按 connId 读取最近终止原因（不消费）。
+     */
+    public function peekConnectionTerminalReasonByConnId(int $connId): ?string
+    {
+        return $this->connectionTerminalReasons[$connId] ?? null;
+    }
+    
+    /**
      * 获取所有活跃的 Worker 套接字
      *
      * @return array Worker 套接字数组
@@ -1245,14 +1617,24 @@ class PassthroughCore
             // H15: 即使没有连接记录也要清理缓冲区
             unset($this->clientWriteBuffers[$connId]);
             unset($this->workerClosed[$connId]);
+            unset($this->connectionTerminalReasons[$connId]);
+            unset($this->clientInputClosed[$connId]);
             return;
         }
         
         $workerSocket = $this->connections[$connId]['worker'];
-        
-        // 关闭 Worker 连接
-        if (\is_resource($workerSocket)) {
-            @\socket_close($workerSocket);
+        $workerPort = (int)$this->connections[$connId]['port'];
+        $isTlsTunnelLikely = (($this->connections[$connId]['sni'] ?? '') !== '');
+
+        $reusable = $this->backendPoolEnabled
+            && !$isTlsTunnelLikely
+            && empty($this->clientWriteBuffers[$connId])
+            && empty($this->workerClosed[$connId]);
+
+        if ($reusable && $this->releaseWorkerSocketToPool($workerPort, $workerSocket)) {
+            $this->stats['backend_pool_released']++;
+        } else {
+            $this->discardWorkerSocket($workerSocket);
         }
         
         // 移除连接记录
@@ -1261,6 +1643,8 @@ class PassthroughCore
         // H15: 清理写缓冲区
         unset($this->clientWriteBuffers[$connId]);
         unset($this->workerClosed[$connId]);
+        unset($this->connectionTerminalReasons[$connId]);
+        unset($this->clientInputClosed[$connId]);
         
         // 移除连接缓存
         $this->routingCache->removeConnection($connId);
@@ -1274,14 +1658,140 @@ class PassthroughCore
     public function closeAllConnections(): void
     {
         foreach ($this->connections as $connId => $conn) {
-            if (\is_resource($conn['worker'])) {
-                @\socket_close($conn['worker']);
-            }
+            $this->discardWorkerSocket($conn['worker']);
             $this->routingCache->removeConnection($connId);
         }
         
         $this->connections = [];
+        $this->clientInputClosed = [];
         $this->stats['active_connections'] = 0;
+        $this->closeAllIdleWorkerSockets();
+    }
+
+    private function closeAllIdleWorkerSockets(): void
+    {
+        foreach (\array_keys($this->idleWorkerPool) as $port) {
+            $this->closeIdleSocketsByPort((int)$port);
+        }
+    }
+
+    private function closeIdleSocketsByPort(int $workerPort): void
+    {
+        if (!isset($this->idleWorkerPool[$workerPort])) {
+            return;
+        }
+        foreach ($this->idleWorkerPool[$workerPort] as $entry) {
+            $this->discardWorkerSocket($entry['socket'] ?? null);
+        }
+        unset($this->idleWorkerPool[$workerPort]);
+    }
+
+    private function acquireIdleWorkerSocket(int $workerPort)
+    {
+        $this->cleanupIdleWorkerSockets($workerPort);
+        if (empty($this->idleWorkerPool[$workerPort])) {
+            return false;
+        }
+
+        while (!empty($this->idleWorkerPool[$workerPort])) {
+            $entry = \array_pop($this->idleWorkerPool[$workerPort]);
+            $socket = $entry['socket'] ?? null;
+            if ($this->canReuseWorkerSocket($socket)) {
+                return $socket;
+            }
+            $this->discardWorkerSocket($socket);
+        }
+
+        return false;
+    }
+
+    private function releaseWorkerSocketToPool(int $workerPort, $socket): bool
+    {
+        if (!$this->backendPoolEnabled) {
+            return false;
+        }
+
+        if (!\in_array($workerPort, $this->workerPorts, true)) {
+            return false;
+        }
+
+        if (!$this->canReuseWorkerSocket($socket)) {
+            return false;
+        }
+
+        $this->cleanupIdleWorkerSockets($workerPort);
+        if (!isset($this->idleWorkerPool[$workerPort])) {
+            $this->idleWorkerPool[$workerPort] = [];
+        }
+        if (\count($this->idleWorkerPool[$workerPort]) >= $this->backendPoolMaxIdlePerWorker) {
+            return false;
+        }
+
+        $this->idleWorkerPool[$workerPort][] = [
+            'socket' => $socket,
+            'expires_at' => \microtime(true) + $this->backendPoolIdleTtl,
+        ];
+        return true;
+    }
+
+    private function cleanupIdleWorkerSockets(?int $targetPort = null): void
+    {
+        $ports = $targetPort === null ? \array_keys($this->idleWorkerPool) : [$targetPort];
+        $now = \microtime(true);
+        foreach ($ports as $port) {
+            $port = (int)$port;
+            if (empty($this->idleWorkerPool[$port])) {
+                continue;
+            }
+            $nextPool = [];
+            foreach ($this->idleWorkerPool[$port] as $entry) {
+                $socket = $entry['socket'] ?? null;
+                $expiresAt = (float)($entry['expires_at'] ?? 0.0);
+                if ($expiresAt <= $now || !$this->canReuseWorkerSocket($socket)) {
+                    $this->discardWorkerSocket($socket);
+                    continue;
+                }
+                $nextPool[] = $entry;
+            }
+            if ($nextPool === []) {
+                unset($this->idleWorkerPool[$port]);
+                continue;
+            }
+            $this->idleWorkerPool[$port] = $nextPool;
+        }
+    }
+
+    private function canReuseWorkerSocket($socket): bool
+    {
+        if (!\is_resource($socket) && !($socket instanceof \Socket)) {
+            return false;
+        }
+
+        $peekBuffer = '';
+        $peek = @\socket_recv($socket, $peekBuffer, 1, MSG_PEEK);
+        if ($peek === 0) {
+            return false;
+        }
+        if ($peek === false) {
+            $err = \socket_last_error($socket);
+            if (\in_array($err, self::WOULDBLOCK_ERRORS, true)) {
+                \socket_clear_error($socket);
+                return true;
+            }
+            \socket_clear_error($socket);
+            return false;
+        }
+
+        // 有残留可读数据，说明连接并非干净空闲状态。
+        return false;
+    }
+
+    private function discardWorkerSocket($socket): void
+    {
+        if (\is_resource($socket) || $socket instanceof \Socket) {
+            @\socket_close($socket);
+            $this->stats['backend_pool_discarded']++;
+        }
     }
     
     /**
@@ -1313,6 +1823,9 @@ class PassthroughCore
             'bytes_out' => 0,
             'worker_failures' => 0,
             'all_workers_down' => 0,
+            'backend_pool_reused' => 0,
+            'backend_pool_released' => 0,
+            'backend_pool_discarded' => 0,
         ];
     }
     

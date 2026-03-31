@@ -17,6 +17,16 @@ class IpcControlGateway implements IpcControlGatewayInterface
         array $payload = [],
         float $timeout = 6.0
     ): array {
+        if ($action === ControlMessage::ACTION_STOP && !isset($payload['stop_intent'])) {
+            $payload['stop_intent'] = 'explicit';
+        }
+        if ($action === ControlMessage::ACTION_STOP && !isset($payload['stop_source'])) {
+            $payload['stop_source'] = 'ipc_gateway';
+        }
+        if ($action === ControlMessage::ACTION_STOP && !isset($payload['stop_trace_id'])) {
+            $payload['stop_trace_id'] = 'gw-' . \getmypid() . '-' . \time();
+        }
+
         $controlPort = $this->resolveControlPort($instanceName);
         if ($controlPort <= 0) {
             return [
