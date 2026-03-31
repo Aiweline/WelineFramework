@@ -21,6 +21,7 @@ $mergeScopeUrl = (string)($this->getData('merge_scope_url') ?? '');
 $replaceScopeUrl = (string)($this->getData('replace_scope_url') ?? '');
 $setStageUrl = (string)($this->getData('set_stage_url') ?? '');
 $runVirtualThemeUrl = (string)($this->getData('run_virtual_theme_url') ?? '');
+$startRegeneratePageUrl = (string)($this->getData('start_regenerate_page_url') ?? '');
 $startPublishUrl = (string)($this->getData('start_publish_url') ?? '');
 $operationSseUrl = (string)($this->getData('operation_sse_url') ?? '');
 $switchPreviewPageUrl = (string)($this->getData('switch_preview_page_url') ?? '');
@@ -42,6 +43,7 @@ $websiteProfile = \is_array($state['website_profile'] ?? null) ? $state['website
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
 $pageTypeLabels = \GuoLaiRen\PageBuilder\Model\Page::getPageTypes();
+$selectedPageTypes = $pageTypes !== [] ? $pageTypes : \array_keys($pageTypeLabels);
 $pagesByType = \is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : [];
 $virtualPagesByType = \is_array($state['virtual_pages_by_type'] ?? null) ? $state['virtual_pages_by_type'] : [];
 $previewPageOptions = \is_array($state['preview_page_options'] ?? null) ? $state['preview_page_options'] : [];
@@ -133,28 +135,48 @@ foreach ($guidedSteps as $i => $s) {
 <style>
 .pb-guided { font-family: system-ui, -apple-system, sans-serif; }
 .pb-guided-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.pb-guided-steps { display: flex; gap: 0; margin: 1.5rem 0 1rem; border-radius: 12px; overflow: hidden; background: #f0f2f5; padding: 4px; }
-.pb-guided-step { flex: 1; display: flex; align-items: center; gap: .5rem; padding: .6rem 1rem; border-radius: 8px; font-size: .875rem; font-weight: 500; color: #6b7280; cursor: default; transition: all .2s; }
-.pb-guided-step.active { background: #fff; color: #2563eb; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-.pb-guided-step.done { color: #16a34a; cursor: pointer; }
-.pb-guided-step.done:hover { background: #f0fdf4; }
+.pb-guided-steps { display: flex; gap: 0; margin: 1.5rem 0 1rem; border-radius: 12px; overflow: hidden; background: var(--backend-color-bg-secondary, #f0f2f5); padding: 4px; }
+.pb-guided-step { flex: 1; display: flex; align-items: center; gap: .5rem; padding: .6rem 1rem; border-radius: 8px; font-size: .875rem; font-weight: 500; color: var(--backend-color-text-secondary, #6b7280); cursor: default; transition: all .2s; }
+.pb-guided-step.active { background: var(--backend-color-bg-primary, #fff); color: var(--backend-color-primary, #2563eb); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+.pb-guided-step.done { color: var(--backend-color-success, #16a34a); cursor: pointer; }
+.pb-guided-step.done:hover { background: var(--backend-color-success-bg-soft, #f0fdf4); }
 .pb-guided-step .step-icon { font-size: 1.1rem; line-height: 1; }
 .pb-guided-step .step-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pb-guided-panel { animation: pb-guided-fadein .25s ease; }
 @keyframes pb-guided-fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .pb-guided-main { display: flex; flex-direction: column; gap: 1rem; }
 .pb-guided-main .card { border: 0; box-shadow: 0 2px 12px rgba(0,0,0,.07); border-radius: 16px; }
-.pb-guided-preview-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; background: #f8fafc; border-radius: 16px; border: 2px dashed #e2e8f0; color: #94a3b8; gap: .75rem; }
+.pb-guided-preview-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; background: var(--backend-color-bg-secondary, #f8fafc); border-radius: 16px; border: 2px dashed var(--backend-color-border-default, #e2e8f0); color: var(--backend-color-text-tertiary, #94a3b8); gap: .75rem; }
 .pb-guided-preview-placeholder .mdi { font-size: 3rem; }
-.pb-guided-extra-toggle { display: inline-flex; align-items: center; gap: .25rem; font-size: .8125rem; color: #2563eb; cursor: pointer; background: none; border: none; padding: .25rem .5rem; border-radius: 6px; }
-.pb-guided-extra-toggle:hover { background: #eff6ff; }
+.pb-guided-extra-toggle { display: inline-flex; align-items: center; gap: .25rem; font-size: .8125rem; color: var(--backend-color-primary, #2563eb); cursor: pointer; background: none; border: none; padding: .25rem .5rem; border-radius: 6px; }
+.pb-guided-extra-toggle:hover { background: var(--backend-color-primary-bg-subtle, #eff6ff); }
 .pb-guided-extra-toggle .mdi { transition: transform .2s; }
 .pb-guided-extra-toggle.open .mdi { transform: rotate(180deg); }
 .pb-guided-extra-types { display: none; margin-top: .5rem; }
 .pb-guided-extra-types.open { display: flex; flex-wrap: wrap; gap: .5rem; }
-.pb-guided-extra-types label { background: #f1f5f9; border-radius: 20px; padding: .35rem .85rem; font-size: .8125rem; cursor: pointer; transition: background .15s; }
-.pb-guided-extra-types label:hover { background: #e2e8f0; }
+.pb-guided-extra-types label { background: var(--backend-color-bg-secondary, #f1f5f9); border-radius: 20px; padding: .35rem .85rem; font-size: .8125rem; cursor: pointer; transition: background .15s; color: var(--backend-color-text-primary, inherit); }
+.pb-guided-extra-types label:hover { background: var(--backend-color-bg-tertiary, #e2e8f0); }
 .pb-guided-extra-types input { margin-right: .35rem; }
+/* 页面内 Bootstrap 语义类桥接，保证浅/暗主题背景一致 */
+.pb-guided .text-muted { color: var(--backend-color-text-secondary, #64748b) !important; }
+.pb-guided .bg-light {
+    background: var(--backend-color-bg-secondary, #f8fafc) !important;
+    color: var(--backend-color-text-primary, #0f172a);
+    border: 1px solid var(--backend-color-border-light, #e2e8f0);
+}
+.pb-guided .border.rounded {
+    border-color: var(--backend-color-border-default, #dbe3ee) !important;
+    background: var(--backend-color-bg-primary, #ffffff);
+}
+.pb-guided .bg-soft-info {
+    background: var(--backend-color-info-bg-subtle, rgba(14, 165, 233, 0.12)) !important;
+    color: var(--backend-color-info, #0284c7) !important;
+}
+.pb-guided .form-check-label.bg-primary.text-white {
+    background: var(--backend-color-primary-bg-subtle, rgba(37, 99, 235, 0.14)) !important;
+    color: var(--backend-color-primary, #2563eb) !important;
+    border-color: var(--backend-color-input-focus-border, rgba(37, 99, 235, 0.35)) !important;
+}
 </style>
 
 <div class="pb-guided">
@@ -237,7 +259,7 @@ foreach ($guidedSteps as $i => $s) {
                             <div class="d-flex flex-wrap gap-2 mb-2">
                                 <?php foreach ($commonPageTypes as $pt => $label): ?>
                                     <label class="form-check-label border rounded-pill px-3 py-2 mb-0 bg-primary text-white" style="cursor:pointer;">
-                                        <input class="form-check-input me-2 pb-ai-page-type-check" type="checkbox" value="<?= htmlspecialchars((string)$pt, ENT_QUOTES, 'UTF-8') ?>" checked>
+                                        <input class="form-check-input me-2 pb-ai-page-type-check" type="checkbox" value="<?= htmlspecialchars((string)$pt, ENT_QUOTES, 'UTF-8') ?>"<?= \in_array($pt, $selectedPageTypes, true) ? ' checked' : '' ?>>
                                         <span><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
                                     </label>
                                 <?php endforeach; ?>
@@ -251,7 +273,7 @@ foreach ($guidedSteps as $i => $s) {
                             <div class="pb-guided-extra-types" id="pb-guided-extra-types-panel">
                                 <?php foreach ($extraPageTypes as $pt => $label): ?>
                                     <label>
-                                        <input class="pb-ai-page-type-check" type="checkbox" value="<?= htmlspecialchars((string)$pt, ENT_QUOTES, 'UTF-8') ?><?= \in_array($pt, $pageTypes, true) ? ' checked' : '' ?>">
+                                        <input class="pb-ai-page-type-check" type="checkbox" value="<?= htmlspecialchars((string)$pt, ENT_QUOTES, 'UTF-8') ?>"<?= \in_array($pt, $selectedPageTypes, true) ? ' checked' : '' ?>>
                                         <?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?>
                                     </label>
                                 <?php endforeach; ?>
@@ -277,12 +299,12 @@ foreach ($guidedSteps as $i => $s) {
                     <div class="mt-4">
                         <?php if ($draftWebsiteId > 0): ?>
                         <button type="button" class="btn btn-primary" id="pb-ai-run-virtual-theme">
-                            <i class="mdi mdi-refresh me-1"></i><?= htmlspecialchars((string)__('重新生成'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-refresh me-1"></i><?= htmlspecialchars((string)__('确认并生成'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                         <span class="text-muted ms-2" style="font-size:.85rem;"><?= htmlspecialchars((string)__('已有草稿，重新生成会覆盖现有内容'), ENT_QUOTES, 'UTF-8') ?></span>
                         <?php else: ?>
                         <button type="button" class="btn btn-primary btn-lg" id="pb-ai-run-virtual-theme">
-                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('生成站点与页面'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('确认并生成'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                         <?php endif; ?>
                     </div>
@@ -308,8 +330,8 @@ foreach ($guidedSteps as $i => $s) {
                             <?php endif; ?>
                         </div>
                         <?php if ($previewPageOptions): ?>
-                        <div class="d-flex gap-2 align-items-center">
-                            <select class="form-select form-select-sm" id="pb-ai-preview-page-select" style="width:auto;">
+                        <div class="w-100">
+                            <ul class="nav nav-tabs pb-ai-preview-tabs" role="tablist">
                                 <?php foreach ($previewPageOptions as $opt): ?>
                                     <?php
                                     $optPageType = (string)($opt['type'] ?? '');
@@ -319,14 +341,17 @@ foreach ($guidedSteps as $i => $s) {
                                         ? $optPageType === $previewPageType
                                         : $optPageId === $previewPageId;
                                     ?>
-                                    <option value="<?= htmlspecialchars($optValue, ENT_QUOTES, 'UTF-8') ?>"
-                                            data-page-id="<?= $optPageId ?>"
-                                            data-page-type="<?= htmlspecialchars($optPageType, ENT_QUOTES, 'UTF-8') ?>"<?= $isSelected ? ' selected' : '' ?>>
-                                        <?= htmlspecialchars((string)($opt['label'] ?? $optValue), ENT_QUOTES, 'UTF-8') ?>
-                                    </option>
+                                    <li class="nav-item" role="presentation">
+                                        <button type="button"
+                                                class="nav-link pb-ai-preview-tab<?= $isSelected ? ' active' : '' ?>"
+                                                data-page-id="<?= $optPageId ?>"
+                                                data-page-type="<?= htmlspecialchars($optPageType, ENT_QUOTES, 'UTF-8') ?>"
+                                                data-page-value="<?= htmlspecialchars($optValue, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars((string)($opt['label'] ?? $optValue), ENT_QUOTES, 'UTF-8') ?>
+                                        </button>
+                                    </li>
                                 <?php endforeach; ?>
-                            </select>
-                            <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-switch-preview-page"><?= htmlspecialchars((string)__('切换'), ENT_QUOTES, 'UTF-8') ?></button>
+                            </ul>
                         </div>
                         <?php endif; ?>
                     </div>
@@ -378,337 +403,6 @@ foreach ($guidedSteps as $i => $s) {
         <?php endif; ?>
     </div>
 </div>
-
-<script>
-(function () {
-    'use strict';
-
-    const publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    const mergeScopeUrl = <?= \json_encode($mergeScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    const setStageUrl = <?= \json_encode($setStageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    const runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    const switchPreviewPageUrl = <?= \json_encode($switchPreviewPageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    const publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    const guidedUrl = <?= \json_encode($guidedUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    const messages = {
-        networkError: <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        saveSuccess: <?= \json_encode((string)__('已保存'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        orchestrated: <?= \json_encode((string)__('站点和页面已生成，正在跳转…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        switched: <?= \json_encode((string)__('预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-    };
-
-    function toast(type, message) {
-        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-            window.BackendToast[type](message);
-        } else {
-            console[type === 'error' ? 'error' : 'log'](message);
-        }
-    }
-
-    function postForm(url, fields) {
-        var fd = new FormData();
-        Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
-        return fetch(url, {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin',
-            body: fd
-        }).then(function (r) { return r.json(); });
-    }
-
-    function selectedPageTypes() {
-        return Array.from(document.querySelectorAll('.pb-ai-page-type-check:checked')).map(function (c) {
-            return c.value;
-        });
-    }
-
-    function buildVirtualThemePatch() {
-        return {
-            site_title: (document.getElementById('pb-ai-site-title') || {}).value || '',
-            site_tagline: '',
-            target_domain: (document.getElementById('pb-ai-target-domain') || {}).value || '',
-            brief_description: (document.getElementById('pb-ai-brief-description') || {}).value || '',
-            user_description: (document.getElementById('pb-ai-brief-description') || {}).value || '',
-            page_types: selectedPageTypes()
-        };
-    }
-
-    /* 步骤条返回上一步 */
-    document.querySelectorAll('.pb-guided-step.done').forEach(function (el) {
-        el.addEventListener('click', function () {
-            var stage = el.getAttribute('data-goto-stage');
-            if (!stage || !setStageUrl) { return; }
-            postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
-                if (data && data.success) {
-                    window.location.href = guidedUrl;
-                } else {
-                    toast('error', (data && data.message) ? data.message : messages.networkError);
-                }
-            }).catch(function () { toast('error', messages.networkError); });
-        });
-    });
-
-    /* 更多页面类型折叠 */
-    var extraToggle = document.getElementById('pb-guided-toggle-extra-types');
-    var extraPanel = document.getElementById('pb-guided-extra-types-panel');
-    if (extraToggle && extraPanel) {
-        extraToggle.addEventListener('click', function () {
-            extraPanel.classList.toggle('open');
-            extraToggle.classList.toggle('open');
-        });
-    }
-
-    /* 生成站点 */
-    var runBtn = document.getElementById('pb-ai-run-virtual-theme');
-    if (runBtn) {
-        runBtn.addEventListener('click', function () {
-            if (!runVirtualThemeUrl) { return; }
-            runBtn.disabled = true;
-            postForm(runVirtualThemeUrl, {
-                public_id: publicId,
-                scope_patch: JSON.stringify(buildVirtualThemePatch())
-            }).then(function (data) {
-                if (data && data.success) {
-                    toast('success', messages.orchestrated);
-                    setTimeout(function () { window.location.reload(); }, 1200);
-                } else {
-                    runBtn.disabled = false;
-                    toast('error', (data && data.message) ? data.message : messages.networkError);
-                }
-            }).catch(function () {
-                runBtn.disabled = false;
-                toast('error', messages.networkError);
-            });
-        });
-    }
-
-    /* 切换预览页 */
-    var switchBtn = document.getElementById('pb-ai-switch-preview-page');
-    var pageSelect = document.getElementById('pb-ai-preview-page-select');
-    if (switchBtn && pageSelect) {
-        switchBtn.addEventListener('click', function () {
-            if (!switchPreviewPageUrl) { return; }
-            var selectedOption = pageSelect.options[pageSelect.selectedIndex];
-            postForm(switchPreviewPageUrl, {
-                public_id: publicId,
-                preview_page_id: selectedOption ? (selectedOption.getAttribute('data-page-id') || pageSelect.value) : pageSelect.value,
-                preview_page_type: selectedOption ? (selectedOption.getAttribute('data-page-type') || '') : ''
-            }).then(function (data) {
-                if (data && data.success) {
-                    toast('success', messages.switched);
-                    window.location.reload();
-                } else {
-                    toast('error', (data && data.message) ? data.message : messages.networkError);
-                }
-            }).catch(function () { toast('error', messages.networkError); });
-        });
-    }
-
-    /* 发布检查 */
-    var publishBtn = document.getElementById('pb-ai-run-publish-check');
-    var publishOutput = document.getElementById('pb-ai-publish-check-output');
-    if (publishBtn && publishOutput) {
-        publishBtn.addEventListener('click', function () {
-            if (!publishCheckUrl) { return; }
-            postForm(publishCheckUrl, { public_id: publicId }).then(function (data) {
-                if (data && data.success) {
-                    publishOutput.textContent = JSON.stringify(data.data || {}, null, 2);
-                    publishOutput.style.display = 'block';
-                    var passed = data.data && data.data.passed;
-                    toast(passed ? 'success' : 'warning', passed
-                        ? <?= \json_encode((string)__('检查通过，可以上线！'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                        : <?= \json_encode((string)__('检查完成，有项目未完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                    );
-                } else {
-                    toast('error', (data && data.message) ? data.message : messages.networkError);
-                }
-            }).catch(function () { toast('error', messages.networkError); });
-        });
-    }
-})();
-</script>
-
-<script>
-(function () {
-    'use strict';
-
-    var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
-    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var streamBaseUrl = <?= \json_encode($streamSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var lastEventId = <?= (int)$initialLastEventId ?>;
-    var reconnectTimer = null;
-    var reconnectAttempts = 0;
-    var reconnectAttemptsMax = 20;
-    var seenEventIds = [];
-    var seenEventIdMap = Object.create(null);
-    var recentSignalMap = Object.create(null);
-    var suppressTransportErrorUntil = 0;
-
-    if (!terminal || !streamBaseUrl || !publicId) {
-        return;
-    }
-
-    function parseSsePayload(event) {
-        if (!event || typeof event.data !== 'string' || event.data === '') {
-            return {};
-        }
-        try {
-            return JSON.parse(event.data);
-        } catch (error) {
-            return {};
-        }
-    }
-
-    function buildWorkspaceStreamUrl() {
-        try {
-            var requestUrl = new URL(streamBaseUrl, window.location.origin);
-            requestUrl.searchParams.set('public_id', publicId);
-            if (lastEventId > 0) {
-                requestUrl.searchParams.set('last_event_id', String(lastEventId));
-            } else {
-                requestUrl.searchParams.delete('last_event_id');
-            }
-            return requestUrl.toString();
-        } catch (error) {
-            var separator = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
-            var url = streamBaseUrl + separator + 'public_id=' + encodeURIComponent(publicId);
-            if (lastEventId > 0) {
-                url += '&last_event_id=' + encodeURIComponent(String(lastEventId));
-            }
-            return url;
-        }
-    }
-
-    function formatWorkspaceLog(entry) {
-        var payload = entry && entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
-        var stageLabel = payload.stage_label || payload.stage_code || entry.stage_code || '';
-        var message = payload.message || entry.message || entry.event_type || '';
-        if (!message && payload.operation) {
-            message = String(payload.operation);
-        }
-        return stageLabel ? (stageLabel + ': ' + message) : message;
-    }
-
-    function rememberEventId(eventId) {
-        if (!eventId || seenEventIdMap[eventId]) {
-            return;
-        }
-        seenEventIdMap[eventId] = true;
-        seenEventIds.push(eventId);
-        if (seenEventIds.length > 400) {
-            var removedEventId = seenEventIds.shift();
-            if (removedEventId) {
-                delete seenEventIdMap[removedEventId];
-            }
-        }
-    }
-
-    function isDuplicateSignal(kind, payload) {
-        var message = payload && payload.message ? String(payload.message) : '';
-        var cursor = payload && payload.last_event_id ? String(payload.last_event_id) : '';
-        var fingerprint = kind + '|' + cursor + '|' + message;
-        var now = Date.now();
-        var lastSeenAt = recentSignalMap[fingerprint] || 0;
-        recentSignalMap[fingerprint] = now;
-        Object.keys(recentSignalMap).forEach(function (key) {
-            if (now - recentSignalMap[key] > 5000) {
-                delete recentSignalMap[key];
-            }
-        });
-        return lastSeenAt > 0 && (now - lastSeenAt) < 2000;
-    }
-
-    function scheduleReconnect() {
-        if (reconnectTimer || reconnectAttempts >= reconnectAttemptsMax) {
-            return;
-        }
-        reconnectAttempts++;
-        reconnectTimer = window.setTimeout(function () {
-            reconnectTimer = null;
-            if (terminal.isRunning()) {
-                return;
-            }
-            var nextUrl = buildWorkspaceStreamUrl();
-            if (!nextUrl) {
-                return;
-            }
-            terminal.setUrl(nextUrl);
-            terminal.start(nextUrl);
-        }, 1500);
-    }
-
-    terminal.on('snapshot', function (event) {
-        var data = parseSsePayload(event);
-        if (!Array.isArray(data.events)) {
-            return;
-        }
-        data.events.forEach(function (entry) {
-            var eventId = parseInt(entry && entry.event_id ? entry.event_id : 0, 10) || 0;
-            if (eventId > lastEventId) {
-                lastEventId = eventId;
-            }
-            rememberEventId(eventId);
-        });
-    });
-
-    terminal.on('log', function (event) {
-        var entry = parseSsePayload(event);
-        if (!entry || typeof entry !== 'object') {
-            return;
-        }
-        var eventId = parseInt(entry.event_id || 0, 10) || 0;
-        if (eventId > 0 && seenEventIdMap[eventId]) {
-            return;
-        }
-        if (eventId > lastEventId) {
-            lastEventId = eventId;
-        }
-        rememberEventId(eventId);
-        terminal.log(formatWorkspaceLog(entry), entry.level || 'info');
-    });
-
-    terminal.on('done', function (event) {
-        var data = parseSsePayload(event);
-        if (isDuplicateSignal('done', data)) {
-            return;
-        }
-        if (data && data.last_event_id) {
-            lastEventId = parseInt(data.last_event_id, 10) || lastEventId;
-        }
-        reconnectAttempts = 0;
-        suppressTransportErrorUntil = Date.now() + 1500;
-        if (data && data.message) {
-            terminal.log(data.message, 'done');
-        }
-        scheduleReconnect();
-    });
-
-    terminal.on('error', function (event) {
-        var data = parseSsePayload(event);
-        if (!data.message && Date.now() < suppressTransportErrorUntil) {
-            return;
-        }
-        if (isDuplicateSignal('error', data)) {
-            return;
-        }
-        var message = (data && data.message) ? String(data.message) : '';
-        if (message) {
-            terminal.log(message, 'error');
-            if (message.indexOf('会话不存在') >= 0 || message.indexOf('无访问权限') >= 0 || message.indexOf('参数无效') >= 0) {
-                reconnectAttempts = 0;
-                return;
-            }
-        }
-        scheduleReconnect();
-    });
-
-    var initialStreamUrl = buildWorkspaceStreamUrl();
-    if (initialStreamUrl) {
-        terminal.setUrl(initialStreamUrl);
-        terminal.start(initialStreamUrl);
-    }
-})();
-</script>
 
 <?php else: ?>
 <?php /* ============================================================
@@ -835,7 +529,7 @@ foreach ($guidedSteps as $i => $s) {
                         <div class="d-flex flex-wrap gap-2" id="pb-ai-page-types">
                             <?php foreach ($pageTypeLabels as $pt => $label): ?>
                                 <label class="form-check form-check-inline border rounded-pill px-3 py-2 mb-0">
-                                    <input class="form-check-input me-2 pb-ai-page-type-check" type="checkbox" value="<?= htmlspecialchars((string)$pt, ENT_QUOTES, 'UTF-8') ?>"<?= \in_array($pt, $pageTypes, true) ? ' checked' : '' ?>>
+                                    <input class="form-check-input me-2 pb-ai-page-type-check" type="checkbox" value="<?= htmlspecialchars((string)$pt, ENT_QUOTES, 'UTF-8') ?>"<?= \in_array($pt, $selectedPageTypes, true) ? ' checked' : '' ?>>
                                     <span class="form-check-label"><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
                                 </label>
                             <?php endforeach; ?>
@@ -860,11 +554,9 @@ foreach ($guidedSteps as $i => $s) {
 
                 <div class="d-flex flex-wrap gap-2 mt-4">
                     <button type="button" class="btn btn-primary" id="pb-ai-run-virtual-theme">
-                        <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('生成草稿站点与虚拟主题'), ENT_QUOTES, 'UTF-8') ?>
+                        <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('确认并生成'), ENT_QUOTES, 'UTF-8') ?>
                     </button>
-                    <button type="button" class="btn btn-outline-secondary" id="pb-ai-save-scope">
-                        <?= htmlspecialchars((string)__('只保存当前输入'), ENT_QUOTES, 'UTF-8') ?>
-                    </button>
+                    <span class="text-muted small align-self-center"><?= htmlspecialchars((string)__('输入会自动保存；点击“确认并生成”后才会启动生成任务。'), ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
             </div>
         </div>
@@ -875,9 +567,10 @@ foreach ($guidedSteps as $i => $s) {
                 <p class="text-muted mb-0"><?= htmlspecialchars((string)__('页面切换只会更新当前预览页与可视化 URL，不再手填 preview_page_id。'), ENT_QUOTES, 'UTF-8') ?></p>
             </div>
             <div class="card-body p-4">
+                <?php if ($previewPageOptions !== []): ?>
                 <div class="mb-3">
-                    <label class="form-label" for="pb-ai-preview-page-select"><?= htmlspecialchars((string)__('当前预览页'), ENT_QUOTES, 'UTF-8') ?></label>
-                    <select class="form-select" id="pb-ai-preview-page-select">
+                    <label class="form-label"><?= htmlspecialchars((string)__('当前预览页'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <ul class="nav nav-tabs pb-ai-preview-tabs" role="tablist">
                         <?php foreach ($previewPageOptions as $opt): ?>
                             <?php
                             $optPageType = (string)($opt['type'] ?? '');
@@ -887,16 +580,20 @@ foreach ($guidedSteps as $i => $s) {
                                 ? $optPageType === $previewPageType
                                 : $optPageId === $previewPageId;
                             ?>
-                            <option value="<?= htmlspecialchars($optValue, ENT_QUOTES, 'UTF-8') ?>"
-                                    data-page-id="<?= $optPageId ?>"
-                                    data-page-type="<?= htmlspecialchars($optPageType, ENT_QUOTES, 'UTF-8') ?>"<?= $isSelected ? ' selected' : '' ?>>
-                                <?= htmlspecialchars((string)($opt['label'] ?? $optValue), ENT_QUOTES, 'UTF-8') ?>
-                            </option>
+                            <li class="nav-item" role="presentation">
+                                <button type="button"
+                                        class="nav-link pb-ai-preview-tab<?= $isSelected ? ' active' : '' ?>"
+                                        data-page-id="<?= $optPageId ?>"
+                                        data-page-type="<?= htmlspecialchars($optPageType, ENT_QUOTES, 'UTF-8') ?>"
+                                        data-page-value="<?= htmlspecialchars($optValue, ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars((string)($opt['label'] ?? $optValue), ENT_QUOTES, 'UTF-8') ?>
+                                </button>
+                            </li>
                         <?php endforeach; ?>
-                    </select>
+                    </ul>
                 </div>
+                <?php endif; ?>
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <button type="button" class="btn btn-outline-primary" id="pb-ai-switch-preview-page"><?= htmlspecialchars((string)__('切换当前页面'), ENT_QUOTES, 'UTF-8') ?></button>
                     <?php if ($visualEditUrl): ?>
                         <a class="btn btn-primary" href="<?= htmlspecialchars($visualEditUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars((string)__('进入真实编辑器'), ENT_QUOTES, 'UTF-8') ?></a>
                     <?php endif; ?>
@@ -966,7 +663,7 @@ foreach ($guidedSteps as $i => $s) {
                 <?php if ($visualPreviewUrl !== ''): ?>
                     <iframe id="pb-ai-visual-preview-frame" title="<?= htmlspecialchars((string)__('PageBuilder 可视化预览'), ENT_QUOTES, 'UTF-8') ?>"
                             src="<?= htmlspecialchars($visualPreviewUrl, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" referrerpolicy="no-referrer"
-                            style="width:100%;min-height:860px;border:1px solid #e5e7eb;border-radius:16px;background:#fff;"></iframe>
+                            style="width:100%;min-height:860px;border:1px solid var(--backend-color-border-default, #e5e7eb);border-radius:16px;background:var(--backend-color-bg-primary, #fff);"></iframe>
                 <?php else: ?>
                     <div class="alert alert-info mb-0"><?= htmlspecialchars((string)__('完成虚拟主题编排后，这里会直接显示真实的 PageBuilder 可视化预览。'), ENT_QUOTES, 'UTF-8') ?></div>
                 <?php endif; ?>
@@ -1001,6 +698,8 @@ foreach ($guidedSteps as $i => $s) {
     </div>
 </div>
 
+<?php endif; ?>
+
 <script>
 (function () {
     'use strict';
@@ -1010,26 +709,33 @@ foreach ($guidedSteps as $i => $s) {
     var replaceScopeUrl = <?= \json_encode($replaceScopeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var setStageUrl = <?= \json_encode($setStageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var startRegeneratePageUrl = <?= \json_encode($startRegeneratePageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var switchPreviewPageUrl = <?= \json_encode($switchPreviewPageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var guidedUrl = <?= \json_encode($guidedUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var messages = {
         networkError: <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        saveSuccess: <?= \json_encode((string)__('已保存'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        orchestrated: <?= \json_encode((string)__('虚拟主题与页面已更新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        switched: <?= \json_encode((string)__('当前预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        saveSuccess: <?= \json_encode((string)__('已自动保存'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        saveFailed: <?= \json_encode((string)__('自动保存失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        orchestrated: <?= \json_encode((string)__('已确认，正在生成虚拟主题与页面'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        switched: <?= \json_encode((string)__('预览页已切换'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        noPageType: <?= \json_encode((string)__('请至少选择一个页面类型'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
     };
 
     function toast(type, message) {
+        if (!message) {
+            return;
+        }
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
             window.BackendToast[type](message);
-        } else {
-            console[type === 'error' ? 'error' : 'log'](message);
+            return;
         }
+        console[type === 'error' ? 'error' : 'log'](message);
     }
 
     function postForm(url, fields) {
         var fd = new FormData();
-        Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
+        Object.keys(fields || {}).forEach(function (k) { fd.append(k, fields[k]); });
         return fetch(url, {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
@@ -1042,87 +748,286 @@ foreach ($guidedSteps as $i => $s) {
         return Array.from(document.querySelectorAll('.pb-ai-page-type-check:checked')).map(function (c) { return c.value; });
     }
 
+    function ensureDefaultPageTypes() {
+        var checks = Array.from(document.querySelectorAll('.pb-ai-page-type-check'));
+        if (checks.length === 0) {
+            return;
+        }
+        var selected = checks.filter(function (item) { return item.checked; });
+        if (selected.length > 0) {
+            return;
+        }
+        checks.forEach(function (item) { item.checked = true; });
+    }
+
     function buildVirtualThemePatch() {
+        var pageTypes = selectedPageTypes();
         return {
             site_title: (document.getElementById('pb-ai-site-title') || {}).value || '',
             site_tagline: (document.getElementById('pb-ai-site-tagline') || {}).value || '',
             target_domain: (document.getElementById('pb-ai-target-domain') || {}).value || '',
             brief_description: (document.getElementById('pb-ai-brief-description') || {}).value || '',
             user_description: (document.getElementById('pb-ai-brief-description') || {}).value || '',
-            page_types: selectedPageTypes()
+            page_types: pageTypes
         };
     }
 
-    function reloadPage() { window.location.reload(); }
+    function debounce(fn, wait) {
+        var timer = null;
+        return function () {
+            var args = arguments;
+            window.clearTimeout(timer);
+            timer = window.setTimeout(function () { fn.apply(null, args); }, wait);
+        };
+    }
+
+    var autoSaveScope = debounce(function () {
+        if (!mergeScopeUrl) {
+            return;
+        }
+        postForm(mergeScopeUrl, { public_id: publicId, scope_patch: JSON.stringify(buildVirtualThemePatch()) }).then(function (data) {
+            if (!data || !data.success) {
+                toast('error', (data && data.message) ? String(data.message) : messages.saveFailed);
+            }
+        }).catch(function () {
+            toast('error', messages.networkError);
+        });
+    }, 500);
+
+    var tabClickLocked = false;
+    function getPreviewTabContainers() {
+        return Array.from(document.querySelectorAll('.pb-ai-preview-tabs'));
+    }
+
+    function buildLabelMapFromChecks() {
+        var map = Object.create(null);
+        document.querySelectorAll('.pb-ai-page-type-check').forEach(function (check) {
+            var type = String(check.value || '');
+            if (!type) {
+                return;
+            }
+            var labelEl = check.closest('label');
+            var text = labelEl ? String(labelEl.textContent || '').trim() : type;
+            map[type] = text || type;
+        });
+        return map;
+    }
+
+    function syncPreviewTabsWithSelection() {
+        var selectedMap = Object.create(null);
+        selectedPageTypes().forEach(function (type) { selectedMap[type] = true; });
+        var labelMap = buildLabelMapFromChecks();
+        getPreviewTabContainers().forEach(function (container) {
+            var existing = Array.from(container.querySelectorAll('.pb-ai-preview-tab'));
+            existing.forEach(function (tab) {
+                var pageType = String(tab.getAttribute('data-page-type') || '');
+                if (pageType && !selectedMap[pageType]) {
+                    var li = tab.closest('li');
+                    if (li) {
+                        li.remove();
+                    }
+                }
+            });
+            Object.keys(selectedMap).forEach(function (pageType) {
+                if (container.querySelector('.pb-ai-preview-tab[data-page-type="' + pageType + '"]')) {
+                    return;
+                }
+                var li = document.createElement('li');
+                li.className = 'nav-item';
+                li.setAttribute('role', 'presentation');
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'nav-link pb-ai-preview-tab';
+                btn.setAttribute('data-page-id', '0');
+                btn.setAttribute('data-page-type', pageType);
+                btn.setAttribute('data-page-value', pageType);
+                btn.textContent = labelMap[pageType] || pageType;
+                btn.addEventListener('click', function () { switchPreviewByTab(btn); });
+                li.appendChild(btn);
+                container.appendChild(li);
+            });
+        });
+    }
+
+    function setActiveTab(pageType) {
+        document.querySelectorAll('.pb-ai-preview-tab').forEach(function (tab) {
+            var tabType = String(tab.getAttribute('data-page-type') || '');
+            tab.classList.toggle('active', tabType === pageType);
+        });
+    }
+
+    function switchPreviewByTab(tab) {
+        if (!tab || !switchPreviewPageUrl || tabClickLocked) {
+            return;
+        }
+        var pageType = String(tab.getAttribute('data-page-type') || '');
+        if (!pageType) {
+            return;
+        }
+        var pageId = String(tab.getAttribute('data-page-id') || '0');
+        tabClickLocked = true;
+        postForm(switchPreviewPageUrl, {
+            public_id: publicId,
+            preview_page_id: pageId,
+            preview_page_type: pageType
+        }).then(function (data) {
+            tabClickLocked = false;
+            if (data && data.success) {
+                setActiveTab(pageType);
+                toast('success', messages.switched);
+                window.location.reload();
+                return;
+            }
+            toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+        }).catch(function () {
+            tabClickLocked = false;
+            toast('error', messages.networkError);
+        });
+    }
+
+    function triggerIncrementalRegenerateForAddedPageTypes() {
+        var activeTypes = selectedPageTypes();
+        var tabs = Array.from(document.querySelectorAll('.pb-ai-preview-tab'));
+        if (!startRegeneratePageUrl || tabs.length === 0) {
+            return;
+        }
+        var existingTypeMap = Object.create(null);
+        tabs.forEach(function (tab) {
+            var t = String(tab.getAttribute('data-page-type') || '');
+            if (t) {
+                existingTypeMap[t] = true;
+            }
+        });
+        activeTypes.forEach(function (pageType) {
+            if (existingTypeMap[pageType]) {
+                return;
+            }
+            postForm(startRegeneratePageUrl, { public_id: publicId, page_type: pageType }).then(function (data) {
+                if (data && data.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
+                    window.PbAiOperationRunner.startFromResponse(data);
+                }
+            }).catch(function () {
+                // no-op: avoid noisy toasts for background incremental task
+            });
+        });
+    }
+
+    ensureDefaultPageTypes();
+
+    document.querySelectorAll('.pb-guided-step.done').forEach(function (el) {
+        el.addEventListener('click', function () {
+            var stage = el.getAttribute('data-goto-stage');
+            if (!stage || !setStageUrl) { return; }
+            postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
+                if (data && data.success) {
+                    window.location.href = guidedUrl || window.location.href;
+                } else {
+                    toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                }
+            }).catch(function () { toast('error', messages.networkError); });
+        });
+    });
 
     document.querySelectorAll('.pb-ai-set-stage').forEach(function (btn) {
         btn.addEventListener('click', function () {
             var stage = btn.getAttribute('data-stage') || '';
             if (!stage || !setStageUrl) { return; }
             postForm(setStageUrl, { public_id: publicId, stage: stage }).then(function (data) {
-                if (data && data.success) { reloadPage(); return; }
-                toast('error', (data && data.message) ? data.message : messages.networkError);
+                if (data && data.success) {
+                    window.location.reload();
+                    return;
+                }
+                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
             }).catch(function () { toast('error', messages.networkError); });
         });
     });
 
-    var saveScopeBtn = document.getElementById('pb-ai-save-scope');
-    if (saveScopeBtn) {
-        saveScopeBtn.addEventListener('click', function () {
-            if (!mergeScopeUrl) { return; }
-            postForm(mergeScopeUrl, { public_id: publicId, scope_patch: JSON.stringify(buildVirtualThemePatch()) }).then(function (data) {
-                if (data && data.success) { toast('success', messages.saveSuccess); reloadPage(); return; }
-                toast('error', (data && data.message) ? data.message : messages.networkError);
-            }).catch(function () { toast('error', messages.networkError); });
+    var extraToggle = document.getElementById('pb-guided-toggle-extra-types');
+    var extraPanel = document.getElementById('pb-guided-extra-types-panel');
+    if (extraToggle && extraPanel) {
+        extraToggle.addEventListener('click', function () {
+            extraPanel.classList.toggle('open');
+            extraToggle.classList.toggle('open');
         });
     }
+
+    ['pb-ai-site-title', 'pb-ai-site-tagline', 'pb-ai-target-domain', 'pb-ai-brief-description'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (!el) {
+            return;
+        }
+        el.addEventListener('input', autoSaveScope);
+        el.addEventListener('change', autoSaveScope);
+    });
+
+    document.querySelectorAll('.pb-ai-page-type-check').forEach(function (check) {
+        check.addEventListener('change', function () {
+            if (selectedPageTypes().length === 0) {
+                check.checked = true;
+                toast('warning', messages.noPageType);
+                return;
+            }
+            autoSaveScope();
+            syncPreviewTabsWithSelection();
+            triggerIncrementalRegenerateForAddedPageTypes();
+        });
+    });
+
+    document.querySelectorAll('.pb-ai-preview-tab').forEach(function (tab) {
+        tab.addEventListener('click', function () { switchPreviewByTab(tab); });
+    });
+    syncPreviewTabsWithSelection();
 
     var runVTBtn = document.getElementById('pb-ai-run-virtual-theme');
     if (runVTBtn) {
         runVTBtn.addEventListener('click', function () {
             if (!runVirtualThemeUrl) { return; }
+            var pageTypes = selectedPageTypes();
+            if (pageTypes.length === 0) {
+                toast('warning', messages.noPageType);
+                return;
+            }
             runVTBtn.disabled = true;
-            postForm(runVirtualThemeUrl, { public_id: publicId, scope_patch: JSON.stringify(buildVirtualThemePatch()) }).then(function (data) {
-                if (data && data.success) { toast('success', messages.orchestrated); reloadPage(); return; }
-                runVTBtn.disabled = false;
-                toast('error', (data && data.message) ? data.message : messages.networkError);
-            }).catch(function () { runVTBtn.disabled = false; toast('error', messages.networkError); });
-        });
-    }
-
-    var switchBtn = document.getElementById('pb-ai-switch-preview-page');
-    if (switchBtn) {
-        switchBtn.addEventListener('click', function () {
-            var sel = document.getElementById('pb-ai-preview-page-select');
-            if (!sel || !switchPreviewPageUrl) { return; }
-            var selectedOption = sel.options[sel.selectedIndex];
-            postForm(switchPreviewPageUrl, {
+            postForm(runVirtualThemeUrl, {
                 public_id: publicId,
-                preview_page_id: selectedOption ? (selectedOption.getAttribute('data-page-id') || sel.value) : sel.value,
-                preview_page_type: selectedOption ? (selectedOption.getAttribute('data-page-type') || '') : ''
+                scope_patch: JSON.stringify(buildVirtualThemePatch())
             }).then(function (data) {
-                if (data && data.success) { toast('success', messages.switched); reloadPage(); return; }
-                toast('error', (data && data.message) ? data.message : messages.networkError);
-            }).catch(function () { toast('error', messages.networkError); });
+                if (!data || !data.success) {
+                    runVTBtn.disabled = false;
+                    toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                    return;
+                }
+                toast('success', messages.orchestrated);
+                if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
+                    if (window.PbAiOperationRunner.startFromResponse(data)) {
+                        return;
+                    }
+                }
+                window.location.reload();
+            }).catch(function () {
+                runVTBtn.disabled = false;
+                toast('error', messages.networkError);
+            });
         });
     }
 
-    var pubBtn = document.getElementById('pb-ai-run-publish-check');
-    var pubOut = document.getElementById('pb-ai-publish-check-output');
-    if (pubBtn && pubOut) {
-        pubBtn.addEventListener('click', function () {
+    var publishBtn = document.getElementById('pb-ai-run-publish-check');
+    var publishOutput = document.getElementById('pb-ai-publish-check-output');
+    if (publishBtn && publishOutput) {
+        publishBtn.addEventListener('click', function () {
             if (!publishCheckUrl) { return; }
             postForm(publishCheckUrl, { public_id: publicId }).then(function (data) {
                 if (data && data.success) {
-                    pubOut.textContent = JSON.stringify(data.data || {}, null, 2);
-                    pubOut.classList.remove('d-none');
-                    toast((data.data && data.data.passed) ? 'success' : 'warning',
-                        (data.data && data.data.passed)
-                            ? <?= \json_encode((string)__('发布检查通过'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                            : <?= \json_encode((string)__('发布检查存在未完成项'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    publishOutput.textContent = JSON.stringify(data.data || {}, null, 2);
+                    publishOutput.classList.remove('d-none');
+                    publishOutput.style.display = 'block';
+                    var passed = data.data && data.data.passed;
+                    toast(passed ? 'success' : 'warning', passed
+                        ? <?= \json_encode((string)__('发布检查通过'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                        : <?= \json_encode((string)__('发布检查存在未完成项'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
                     );
                 } else {
-                    toast('error', (data && data.message) ? data.message : messages.networkError);
+                    toast('error', (data && data.message) ? String(data.message) : messages.networkError);
                 }
             }).catch(function () { toast('error', messages.networkError); });
         });
@@ -1135,25 +1040,25 @@ foreach ($guidedSteps as $i => $s) {
     if (mergeBtn && patchTA) {
         mergeBtn.addEventListener('click', function () {
             postForm(mergeScopeUrl, { public_id: publicId, scope_patch: patchTA.value }).then(function (data) {
-                if (data && data.success) { toast('success', messages.saveSuccess); reloadPage(); return; }
-                toast('error', (data && data.message) ? data.message : messages.networkError);
+                if (data && data.success) { toast('success', messages.saveSuccess); window.location.reload(); return; }
+                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
             }).catch(function () { toast('error', messages.networkError); });
         });
     }
     if (replaceBtn && fullTA) {
         replaceBtn.addEventListener('click', function () {
             postForm(replaceScopeUrl, { public_id: publicId, scope: fullTA.value }).then(function (data) {
-                if (data && data.success) { toast('success', messages.saveSuccess); reloadPage(); return; }
-                toast('error', (data && data.message) ? data.message : messages.networkError);
+                if (data && data.success) { toast('success', messages.saveSuccess); window.location.reload(); return; }
+                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
             }).catch(function () { toast('error', messages.networkError); });
         });
     }
 })();
 </script>
+
 <script>
 (function () {
     'use strict';
-
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = <?= \json_encode($streamSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
@@ -1174,11 +1079,7 @@ foreach ($guidedSteps as $i => $s) {
         if (!event || typeof event.data !== 'string' || event.data === '') {
             return {};
         }
-        try {
-            return JSON.parse(event.data);
-        } catch (error) {
-            return {};
-        }
+        try { return JSON.parse(event.data); } catch (error) { return {}; }
     }
 
     function buildWorkspaceStreamUrl() {
@@ -1331,7 +1232,6 @@ foreach ($guidedSteps as $i => $s) {
     }
 })();
 </script>
-<?php endif; ?>
 
 <script>
 (function () {
@@ -1448,6 +1348,9 @@ foreach ($guidedSteps as $i => $s) {
             var payload = parsePayload(event);
             if (payload && payload.message) {
                 lastServerError = String(payload.message);
+                if (Array.isArray(payload.required_params) && payload.required_params.length > 0) {
+                    lastServerError += ' [' + payload.required_params.join(', ') + ']';
+                }
             }
         });
 
@@ -1485,6 +1388,31 @@ foreach ($guidedSteps as $i => $s) {
         return true;
     }
 
+    function startFromResponse(data, fallbackOperation) {
+        if (!data || !data.success) {
+            return false;
+        }
+        var executionToken = String(data.execution_token || '');
+        var operation = String(data.operation || fallbackOperation || '');
+        var streamUrl = String(data.stream_url || buildOperationUrl(executionToken));
+        if (!executionToken || !streamUrl) {
+            var missing = [];
+            if (!executionToken) {
+                missing.push('execution_token');
+            }
+            if (!streamUrl) {
+                missing.push('stream_url');
+            }
+            toast('error', <?= \json_encode((string)__('操作已创建但缺少 SSE 参数'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ': ' + missing.join(', '));
+            return false;
+        }
+        return startOperationStream(streamUrl, operation, executionToken);
+    }
+
+    window.PbAiOperationRunner = {
+        startFromResponse: startFromResponse
+    };
+
     var publishBtn = document.getElementById('pb-ai-start-publish');
     if (publishBtn) {
         publishBtn.addEventListener('click', function () {
@@ -1498,10 +1426,7 @@ foreach ($guidedSteps as $i => $s) {
                     toast('error', (data && data.message) ? String(data.message) : <?= \json_encode((string)__('启动发布失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
                     return;
                 }
-
-                var executionToken = String(data.execution_token || '');
-                var streamUrl = String(data.stream_url || buildOperationUrl(executionToken));
-                if (!startOperationStream(streamUrl, data.operation || 'publish', executionToken)) {
+                if (!startFromResponse(data, 'publish')) {
                     window.location.reload();
                 }
             }).catch(function () {
@@ -1514,7 +1439,7 @@ foreach ($guidedSteps as $i => $s) {
     if (
         activeOperation
         && typeof activeOperation === 'object'
-        && String(activeOperation.status || '') === 'queued'
+        && ['queued', 'running'].indexOf(String(activeOperation.status || '')) >= 0
         && String(activeOperation.execution_token || '') !== ''
     ) {
         startOperationStream(

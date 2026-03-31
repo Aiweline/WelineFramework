@@ -18,12 +18,10 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Component;
 use GuoLaiRen\PageBuilder\Model\Layout;
 use GuoLaiRen\PageBuilder\Model\Page as PageModel;
+use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Theme\Dto\ThemeComponentDefinition;
-use Weline\Theme\Model\WelineTheme;
-use Weline\Theme\Service\ThemeComponentCatalog;
 
 class ComponentService
 {
@@ -440,37 +438,37 @@ class ComponentService
         if ($layoutRegionKeys === []) {
             return [];
         }
-        
-        $themeModel = ObjectManager::getInstance(WelineTheme::class);
-        $theme = clone $themeModel;
-        $theme->clearData()->clearQuery()->load($welineThemeId);
-        if (!$theme->getId()) {
-            return [];
-        }
-        
-        $catalog = ObjectManager::getInstance(ThemeComponentCatalog::class);
-        $definitions = $catalog->getDefinitions($themeComponentArea, $theme);
-        
+
+        /** @var VirtualThemeComponent $componentModel */
+        $componentModel = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+        $componentModel->clearData()->clearQuery();
+        $components = $componentModel
+            ->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $welineThemeId)
+            ->where(VirtualThemeComponent::schema_fields_AREA, $themeComponentArea)
+            ->where(VirtualThemeComponent::schema_fields_IS_ACTIVE, 1)
+            ->select()
+            ->fetch()
+            ->getItems();
+
         $normalizer = ObjectManager::getInstance(LayoutConfigNormalizer::class);
         $renderer = ComponentRenderer::getInstance();
         $rows = [];
-        
-        foreach ($definitions as $def) {
-            if (!$def instanceof ThemeComponentDefinition) {
+
+        foreach ($components as $component) {
+            if (!$component instanceof VirtualThemeComponent) {
                 continue;
             }
-            if (strtolower($def->sourceType) !== 'virtual') {
-                continue;
-            }
-            $code = $def->code;
+            $code = (string)$component->getComponentCode();
             $normKey = strtolower($normalizer->normalizeComponentCode($code));
             if ($normKey === '' || isset($existingNormalizedCodes[$normKey])) {
                 continue;
             }
             $existingNormalizedCodes[$normKey] = true;
-            
+
+            $meta = $component->getMeta();
+            $positions = \is_array($meta['position'] ?? null) ? $meta['position'] : ['content'];
             $primaryPos = 'content';
-            foreach ($def->position as $p) {
+            foreach ($positions as $p) {
                 $p = strtolower((string) $p);
                 if ($p !== '' && $p !== '*') {
                     $primaryPos = $p;
@@ -484,27 +482,28 @@ class ComponentService
                 Layout::REGION_SIDEBAR => Component::CATEGORY_WIDGET,
                 default => Component::CATEGORY_CONTENT,
             };
-            
+
+            $defaultConfig = $component->getDefaultConfig();
             $row = [
                 '_layout_region' => $layoutRegion,
                 'id' => 0,
                 'code' => $code,
-                'name' => $def->name,
-                'description' => $def->description,
+                'name' => (string)$component->getName(),
+                'description' => '',
                 'style_code' => $styleCode,
                 'category' => $pbCategory,
                 'region' => $layoutRegion,
                 'type' => 'section',
                 'thumbnail' => '',
                 'thumbnail_url' => '',
-                'icon' => $def->icon,
-                'config_schema' => $def->configSchema,
-                'default_config' => $def->defaultConfig,
+                'icon' => null,
+                'config_schema' => [],
+                'default_config' => $defaultConfig,
                 'compatible_styles' => [],
                 'is_system' => false,
                 'is_shared' => false,
-                'is_ai_generated' => $def->isAiGenerated,
-                'sort_order' => $def->sortOrder,
+                'is_ai_generated' => $component->isAiGenerated(),
+                'sort_order' => (int)($meta['sort_order'] ?? 0),
                 'preview_html' => '',
                 'preview_html_encoded' => false,
                 'is_weline_virtual' => true,
@@ -519,7 +518,7 @@ class ComponentService
                 $previewResult = $renderer->renderPreview(
                     $code,
                     $styleCode !== '' ? $styleCode : 'default',
-                    $def->defaultConfig,
+                    $defaultConfig,
                     [
                         'weline_theme_id' => $welineThemeId,
                         'theme_component_area' => $themeComponentArea,

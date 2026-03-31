@@ -1,6 +1,6 @@
 // @weline-e2e-runtime wls
 // @ts-check
-const { test, expect, gotoBackend, loginAsAdmin, buildBackendUrl } = require('../../framework');
+const { test, expect, gotoBackend, loginAsAdmin, buildBackendPath, buildBackendUrl } = require('../../framework');
 
 const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 const CHAT_TECHNICAL_PATTERN = /鏈敞鍐岀殑鏌ヨ鍣▅QueryProviderInterface|Too few arguments|ArgumentCountError|executeAgentStream|executeAgent\(/i;
@@ -107,8 +107,10 @@ async function gotoRoleAddForm(page) {
 }
 
 async function ensureCsrfToken(page, sourceRoute = 'bot/backend/role/add') {
+  void sourceRoute;
+
   const tryReadToken = async () => {
-    const tokenInput = page.locator('input[name="form_key"], input[name="csrf"]').first();
+    const tokenInput = page.locator('input[name="form_key"], input[name="csrf"], input[name="t"]').first();
     if (!(await tokenInput.count())) {
       return null;
     }
@@ -127,31 +129,7 @@ async function ensureCsrfToken(page, sourceRoute = 'bot/backend/role/add') {
     return currentToken;
   }
 
-  if (sourceRoute === 'bot/backend/role/add') {
-    await gotoRoleAddForm(page);
-  } else {
-    await gotoBackend(page, sourceRoute, {
-      timeout: 60000,
-      settleMs: 1200,
-    });
-  }
-
-  const refreshedToken = await tryReadToken();
-  if (refreshedToken) {
-    return refreshedToken;
-  }
-
-  await loginAsAdmin(page, { timeout: 90000 });
-  if (sourceRoute === 'bot/backend/role/add') {
-    await gotoRoleAddForm(page);
-  } else {
-    await gotoBackend(page, sourceRoute, {
-      timeout: 60000,
-      settleMs: 1200,
-    });
-  }
-
-  return await tryReadToken();
+  return null;
 }
 
 async function postWithCsrf(page, url, extraFields = {}, options = {}) {
@@ -207,7 +185,7 @@ async function deleteRole(page, roleId) {
 async function deleteSchedule(page, scheduleId) {
   return await postWithCsrf(
     page,
-    buildBackendUrl('bot/backend/schedule/delete'),
+    buildBackendPath('bot/backend/schedule/delete'),
     { id: scheduleId },
     { sourceRoute: 'bot/backend/schedule/add' }
   );
@@ -279,6 +257,11 @@ async function createSessionViaApi(page, roleCode, suffix) {
   };
 }
 
+function findSessionPayloadById(result, sessionId) {
+  const sessions = Array.isArray(result?.data?.sessions) ? result.data.sessions : [];
+  return sessions.find(session => Number(session?.session_id || 0) === Number(sessionId)) || null;
+}
+
 test.describe('Weline_Bot backend management', () => {
   test.describe.configure({ retries: 1 });
   test.setTimeout(180000);
@@ -314,36 +297,74 @@ test.describe('Weline_Bot backend management', () => {
     await expect(body).not.toContainText(FATAL_PATTERN);
   });
 
-  test('creates guided role and saves it successfully', async ({ page }) => {
-    const suffix = Date.now();
-
-    await gotoRoleAddForm(page);
-
-    await page.locator('#guide_brief').fill(`Manage program ${suffix} with daily summaries`);
-    await page.locator('#target_outcome').fill(`Create priority board ${suffix}`);
-    await page.locator('#generateSuggestionBtn').click();
-
-    await expect(page.locator('#suggestionSource')).toBeVisible();
-    await expect(page.locator('#system_prompt')).toHaveValue(new RegExp(String(suffix)));
-
-    const roleCode = `e2e_guided_${suffix}`;
-    const roleName = `E2E Guided ${suffix}`;
-    await page.locator('#code').fill(roleCode);
-    await page.locator('#name').fill(roleName);
-
-    const result = await submitFormAsJson(page, 'form[action*="bot/backend/role/save"]');
-    expect(result.success).toBeTruthy();
-    expect(Number(result.data && result.data.id)).toBeGreaterThan(0);
-
+  test('guided quick-start entry pre-fills the role form', async ({ page }) => {
     await gotoBackend(page, 'bot/backend/role/listing', {
       timeout: 60000,
       settleMs: 1200,
     });
 
     const body = page.locator('body');
-    await expect(body).toContainText(roleCode);
-    await expect(body).toContainText(roleName);
-    await expect(body).not.toContainText(FATAL_PATTERN);
+    await expect(body).toContainText(/Guided Role Setup/i);
+    await expect(body).toContainText(/Template Quick Start|Existing Roles/i);
+
+    const createGuidedRoleLink = page.getByRole('link', { name: /Create Guided Role/i });
+    await expect(createGuidedRoleLink).toBeVisible();
+    await createGuidedRoleLink.click();
+
+    await expect(page.locator('#template_code')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('#bot_profile')).toBeVisible();
+    await expect(page.locator('#project_count')).toBeVisible();
+    await expect(page.locator('#guide_brief')).toBeVisible();
+    await expect(page.locator('#toggleAdvancedBtn')).toBeVisible();
+
+    const templateValue = await page.locator('#template_code').inputValue();
+    const botProfileValue = await page.locator('#bot_profile').inputValue();
+    const projectCountValue = Number(await page.locator('#project_count').inputValue());
+
+    expect(templateValue).not.toBe('');
+    expect(botProfileValue).not.toBe('');
+    expect(projectCountValue).toBeGreaterThan(0);
+  });
+
+  test('creates guided role and saves it successfully', async ({ page }) => {
+    const suffix = Date.now();
+    let roleId = 0;
+
+    try {
+      await gotoRoleAddForm(page);
+
+      await page.locator('#guide_brief').fill(`Manage program ${suffix} with daily summaries`);
+      await page.locator('#target_outcome').fill(`Create priority board ${suffix}`);
+      await page.locator('#generateSuggestionBtn').click();
+
+      await expect(page.locator('#suggestionSource')).toBeVisible();
+      await expect(page.locator('#system_prompt')).toHaveValue(new RegExp(String(suffix)));
+
+      const roleCode = `e2e_guided_${suffix}`;
+      const roleName = `E2E Guided ${suffix}`;
+      await page.locator('#code').fill(roleCode);
+      await page.locator('#name').fill(roleName);
+
+      const result = await submitFormAsJson(page, 'form[action*="bot/backend/role/save"]');
+      expect(result.success).toBeTruthy();
+      roleId = Number(result.data && result.data.id);
+      expect(roleId).toBeGreaterThan(0);
+
+      await gotoBackend(page, 'bot/backend/role/listing', {
+        timeout: 60000,
+        settleMs: 1200,
+      });
+
+      const body = page.locator('body');
+      await expect(body).toContainText(roleCode);
+      await expect(body).toContainText(roleName);
+      await expect(body).not.toContainText(FATAL_PATTERN);
+    } finally {
+      if (roleId > 0) {
+        const deleteResult = await deleteRole(page, roleId);
+        expect(deleteResult.success, JSON.stringify(deleteResult)).toBeTruthy();
+      }
+    }
   });
 
   test('persists advanced role config and exercises role lifecycle endpoints', async ({ page }) => {
@@ -404,7 +425,7 @@ test.describe('Weline_Bot backend management', () => {
     await expect(disabledRow).toContainText(/Disabled/i);
 
     const deleteResult = await deleteRole(page, roleId);
-    expect(deleteResult.success).toBeTruthy();
+    expect(deleteResult.success, JSON.stringify(deleteResult)).toBeTruthy();
 
     await gotoBackend(page, 'bot/backend/role/listing', {
       timeout: 60000,
@@ -433,10 +454,12 @@ test.describe('Weline_Bot backend management', () => {
     const categoryOptions = await categorySelect.locator('option').evaluateAll(options =>
       options.map(option => option.value).filter(Boolean)
     );
+    let filteredCategory = '';
     if (categoryOptions.length) {
-      await categorySelect.selectOption(categoryOptions[0]);
+      filteredCategory = categoryOptions[0];
+      await categorySelect.selectOption(filteredCategory);
       await page.locator('form[action*="bot/backend/skill/listing"] button[type="submit"]').click();
-      await expect(categorySelect).toHaveValue(categoryOptions[0]);
+      await expect(categorySelect).toHaveValue(filteredCategory);
     }
 
     let skillLinks = page.locator('a[href*="skill/view?id="]');
@@ -468,6 +491,9 @@ test.describe('Weline_Bot backend management', () => {
     expect(firstSkill.id).toBeGreaterThan(0);
     expect(firstSkill.code).not.toBe('');
     expect(firstSkill.name).not.toBe('');
+    if (filteredCategory && firstSkill.category) {
+      expect(firstSkill.category).toBe(filteredCategory);
+    }
 
     await gotoBackend(page, `bot/backend/skill/view?id=${firstSkill.id}`, {
       timeout: 60000,
@@ -482,19 +508,36 @@ test.describe('Weline_Bot backend management', () => {
     await expect(body).toContainText(/Permission Required/i);
     await expect(body).not.toContainText(FATAL_PATTERN);
 
-    const toggleResult = await postWithCsrf(page, buildBackendUrl('bot/backend/skill/toggle'), { id: firstSkill.id });
-    expect(toggleResult.success).toBeTruthy();
+    const startedEnabled = /Enabled/i.test(firstSkill.activeLabel);
+    let toggled = false;
 
-    await gotoBackend(page, 'bot/backend/skill/listing', {
-      timeout: 60000,
-      settleMs: 1200,
-    });
-    const toggledRow = page.locator('tr').filter({ hasText: firstSkill.code }).first();
-    await expect(toggledRow).toBeVisible();
-    await expect(toggledRow).toContainText(/Enabled/i.test(firstSkill.activeLabel) ? /Disabled/i : /Enabled/i);
+    try {
+      const toggleResult = await postWithCsrf(page, buildBackendUrl('bot/backend/skill/toggle'), { id: firstSkill.id });
+      expect(toggleResult.success).toBeTruthy();
+      toggled = true;
 
-    const restoreResult = await postWithCsrf(page, buildBackendUrl('bot/backend/skill/toggle'), { id: firstSkill.id });
-    expect(restoreResult.success).toBeTruthy();
+      await gotoBackend(page, 'bot/backend/skill/listing', {
+        timeout: 60000,
+        settleMs: 1200,
+      });
+      const toggledRow = page.locator('tr').filter({ hasText: firstSkill.code }).first();
+      await expect(toggledRow).toBeVisible();
+      await expect(toggledRow).toContainText(startedEnabled ? /Disabled/i : /Enabled/i);
+
+      await gotoRoleAddForm(page);
+      await showRoleAdvancedFields(page);
+      const toggledCheckbox = page.locator(`.role-skill-checkbox[value="${firstSkill.code}"]`);
+      if (startedEnabled) {
+        await expect(toggledCheckbox).toHaveCount(0);
+      } else {
+        await expect(toggledCheckbox).toHaveCount(1);
+      }
+    } finally {
+      if (toggled) {
+        const restoreResult = await postWithCsrf(page, buildBackendUrl('bot/backend/skill/toggle'), { id: firstSkill.id });
+        expect(restoreResult.success, JSON.stringify(restoreResult)).toBeTruthy();
+      }
+    }
   });
 
   test('creates, edits, runs, toggles, and deletes a schedule', async ({ page }) => {
@@ -530,15 +573,15 @@ test.describe('Weline_Bot backend management', () => {
 
     const runResult = await postWithCsrf(
       page,
-      buildBackendUrl('bot/backend/schedule/run'),
+      buildBackendPath('bot/backend/schedule/run'),
       { id: scheduleId },
       { sourceRoute: 'bot/backend/schedule/add' }
     );
-    expect(runResult.success).toBeTruthy();
+    expect(runResult.success, JSON.stringify(runResult)).toBeTruthy();
 
     const toggleResult = await postWithCsrf(
       page,
-      buildBackendUrl('bot/backend/schedule/toggle'),
+      buildBackendPath('bot/backend/schedule/toggle'),
       { id: scheduleId },
       { sourceRoute: 'bot/backend/schedule/add' }
     );
@@ -554,7 +597,7 @@ test.describe('Weline_Bot backend management', () => {
     await expect(row).toContainText(/disabled/i);
 
     const deleteResult = await deleteSchedule(page, scheduleId);
-    expect(deleteResult.success).toBeTruthy();
+    expect(deleteResult.success, JSON.stringify(deleteResult)).toBeTruthy();
 
     await gotoBackend(page, 'bot/backend/schedule/listing', {
       timeout: 60000,
@@ -580,11 +623,17 @@ test.describe('Weline_Bot backend management', () => {
     const historyResult = await getChatHistory(page, sessionId);
     expect(historyResult.success).toBeTruthy();
     expect(Number(historyResult.data && historyResult.data.session && historyResult.data.session.session_id)).toBe(sessionId);
-    expect(JSON.stringify(historyResult.data && historyResult.data.messages)).toContain(apiResult.requestPayload.message);
+    const messages = Array.isArray(historyResult.data?.messages) ? historyResult.data.messages : [];
+    expect(
+      messages.some(message => String(message?.content || '').includes(apiResult.requestPayload.message)),
+      JSON.stringify(historyResult)
+    ).toBeTruthy();
 
     const sessionsResult = await getChatSessions(page, apiResult.requestPayload.context_id);
     expect(sessionsResult.success).toBeTruthy();
-    expect(JSON.stringify(sessionsResult.data && sessionsResult.data.sessions)).toContain(`"session_id":${sessionId}`);
+    const matchedSession = findSessionPayloadById(sessionsResult, sessionId);
+    expect(matchedSession, JSON.stringify(sessionsResult)).toBeTruthy();
+    expect(String(matchedSession?.context_id || '')).toBe(apiResult.requestPayload.context_id);
 
     await gotoBackend(page, 'bot/backend/chat/index', {
       timeout: 60000,

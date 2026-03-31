@@ -679,6 +679,12 @@ SEO解码,SEO解码
 "在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。","在URL SEO解码时触发，允许其他模块自定义SEO解码逻辑。"
 视图文件获取,视图文件获取
 "在获取视图文件时触发，允许其他模块自定义视图文件路径。可以通过修改 filename 字段来改变要加载的视图文件。","在获取视图文件时触发，允许其他模块自定义视图文件路径。可以通过修改 filename 字段来改变要加载的视图文件。"
+"解析主题静态资源 URL","解析主题静态资源 URL"
+"Framework 通过该事件向外部模块请求主题资源 URL。观察者可读取 module_name/area/relative_path 并回填 url。","Framework 通过该事件向外部模块请求主题资源 URL。观察者可读取 module_name/area/relative_path 并回填 url。"
+"解析预览 Token","解析预览 Token"
+"Framework 通过该事件向外部模块请求预览态信息。观察者可回填 is_preview 与 preview_token。","Framework 通过该事件向外部模块请求预览态信息。观察者可回填 is_preview 与 preview_token。"
+解析视图缓存主题后缀,解析视图缓存主题后缀
+"Framework 在视图编译文件缓存 key 中追加主题/预览相关后缀时触发。观察者可根据 filename/area 回填 suffix，用于按主题/预览隔离缓存。","Framework 在视图编译文件缓存 key 中追加主题/预览相关后缀时触发。观察者可根据 filename/area 回填 suffix，用于按主题/预览隔离缓存。"
 视图位置,视图位置
 "在渲染视图指定位置时触发，允许其他模块注入该位置的内容。position 可以是 head、footer 等。","在渲染视图指定位置时触发，允许其他模块注入该位置的内容。position 可以是 head、footer 等。"
 标签配置后,标签配置后
@@ -1633,10 +1639,41 @@ HTTP方法,HTTP方法
 主题回滚成功,主题回滚成功
 "未找到翻译包 %{1} 的备份","未找到翻译包 %{1} 的备份"
 翻译包回滚成功,翻译包回滚成功
+"未找到 E2E 目录：%{1}","未找到 E2E 目录：%{1}"
+"模块 %{1} 未找到 E2E 用例，退出。","模块 %{1} 未找到 E2E 用例，退出。"
+工作目录：%{1},工作目录：%{1}
+执行命令：%{1},执行命令：%{1}
+"E2E 测试执行成功。","E2E 测试执行成功。"
+"E2E 测试执行失败，退出码：%{1}","E2E 测试执行失败，退出码：%{1}"
+"运行 Playwright E2E（自动在 tests/e2e 目录执行）","运行 Playwright E2E（自动在 tests/e2e 目录执行）"
+"直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。","直接通过框架命令驱动 Playwright E2E，无需手动 cd tests/e2e。"
+"可选，指定测试文件或目录，例如 specs/backend/WeShop_Cart-smoke-backend.spec.js","可选，指定测试文件或目录，例如 specs/backend/WeShop_Cart-smoke-backend.spec.js"
+"指定 Playwright project，如 chromium/firefox/webkit","指定 Playwright project，如 chromium/firefox/webkit"
+"只运行指定模块（基于 collected-tests.json 精准过滤）","只运行指定模块（基于 collected-tests.json 精准过滤）"
+"按测试标题关键词筛选（映射为 --grep）","按测试标题关键词筛选（映射为 --grep）"
+"按 `[case:ID]` 标签筛选，推荐新用例使用该风格","按 `[case:ID]` 标签筛选，推荐新用例使用该风格"
+列出可运行模块及文件数量,列出可运行模块及文件数量
+强制刷新测试收集映射,强制刷新测试收集映射
+有界面模式（默认会自动追加）,有界面模式（默认会自动追加）
+"无界面模式（设置 PLAYWRIGHT_HEADLESS=1）","无界面模式（设置 PLAYWRIGHT_HEADLESS=1）"
+"Playwright UI 模式","Playwright UI 模式"
+按测试名过滤,按测试名过滤
+"并发 worker 数","并发 worker 数"
+"运行全部 E2E","运行全部 E2E"
+运行单个后端用例,运行单个后端用例
+按模块运行,按模块运行
+按用例标题运行,按用例标题运行
+"按用例 ID 运行","按用例 ID 运行"
+列模块,列模块
+"UI 调试","UI 调试"
+"检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
+测试收集脚本执行失败，模块过滤可能不可用。,测试收集脚本执行失败，模块过滤可能不可用。
+"可用 E2E 模块列表：","可用 E2E 模块列表："
 "使用 Pest 测试框架运行测试...","使用 Pest 测试框架运行测试..."
 "提示：默认使用 PHPUnit，如需使用 Pest，请添加 --pest 参数","提示：默认使用 PHPUnit，如需使用 Pest，请添加 --pest 参数"
 所有测试通过！,所有测试通过！
 "测试失败，退出代码: %{1}","测试失败，退出代码: %{1}"
+"检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）","检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）"
 "Pest 测试运行失败: %{1}","Pest 测试运行失败: %{1}"
 "回退到 PHPUnit 模式...","回退到 PHPUnit 模式..."
 "调试 - 所有参数: %{1}","调试 - 所有参数: %{1}"
@@ -1812,6 +1849,7 @@ hello,hello
 源文件：%{1},源文件：%{1}
 "模板文件：%{1} START","模板文件：%{1} START"
 "模板文件：%{1} END","模板文件：%{1} END"
+无法创建模板编译目录：%{1},无法创建模板编译目录：%{1}
 源模板文件不存在：%{1},源模板文件不存在：%{1}
 无法创建缓存锁文件：%{1},无法创建缓存锁文件：%{1}
 写入编译缓存失败：%{1},写入编译缓存失败：%{1}

@@ -185,6 +185,21 @@ return [
         'description' => __('在获取视图文件时触发，允许其他模块自定义视图文件路径。可以通过修改 filename 字段来改变要加载的视图文件。'),
         'doc' => 'view/视图文件获取.md',
     ],
+    'Weline_Framework_View::resolve_theme_asset_url' => [
+        'name' => __('解析主题静态资源 URL'),
+        'description' => __('Framework 通过该事件向外部模块请求主题资源 URL。观察者可读取 module_name/area/relative_path 并回填 url。'),
+        'doc' => 'view/解析主题静态资源URL.md',
+    ],
+    'Weline_Framework_View::resolve_preview_token' => [
+        'name' => __('解析预览 Token'),
+        'description' => __('Framework 通过该事件向外部模块请求预览态信息。观察者可回填 is_preview 与 preview_token。'),
+        'doc' => 'view/解析预览Token.md',
+    ],
+    'Weline_Framework_View::resolve_theme_cache_suffix' => [
+        'name' => __('解析视图缓存主题后缀'),
+        'description' => __('Framework 在视图编译文件缓存 key 中追加主题/预览相关后缀时触发。观察者可根据 filename/area 回填 suffix，用于按主题/预览隔离缓存。'),
+        'doc' => 'view/解析视图缓存主题后缀.md',
+    ],
     // 动态事件：使用 {position} 表示动态位置，可以匹配 Framework_View::head、Framework_View::footer 等
     'Framework_View::{position}' => [
         'name' => __('视图位置'),

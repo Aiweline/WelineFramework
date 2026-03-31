@@ -289,6 +289,10 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 // 如果启用了 Web 模式，启动 Web 服务器并打开浏览器
                 $isBackground = isset($args['web']) || isset($args['--web']); // Pest 模式也需要 --web 参数
                 if ($isBackground && !$watchMode) {
+                    if (!$this->isInteractiveConsole()) {
+                        $this->printing->warning(__('检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）'));
+                        return $exitCode;
+                    }
                     $php_unit_report_path = DEV_PATH . 'phpunit' . DS . 'report';
                     if (!is_dir($php_unit_report_path)) {
                         mkdir($php_unit_report_path, 0755, true);
@@ -666,6 +670,11 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         # 启动报告服务器
         if ($isBackground) {
+            if (!$this->isInteractiveConsole()) {
+                $this->printing->warning(__('检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）'));
+                $this->printing->note(__('如需查看报告，请在交互终端手动执行：php bin/w phpunit:run --web'));
+                return;
+            }
             $this->startPhpUnitServerBackground($php_unit_report_path, $port, $watchMode);
             
             # 自动打开浏览器
@@ -722,6 +731,26 @@ class Run implements \Weline\Framework\Console\CommandInterface
         } else {
             $this->printing->note(__('提示：请手动访问 %{1}', [$url]));
         }
+    }
+
+    /**
+     * 判断是否为交互终端，避免在批处理/CI中拉起后台 web 服务造成进程堆积。
+     */
+    private function isInteractiveConsole(): bool
+    {
+        if (\function_exists('stream_isatty') && \defined('STDOUT')) {
+            try {
+                return \stream_isatty(STDOUT);
+            } catch (\Throwable) {
+            }
+        }
+        if (\function_exists('posix_isatty') && \defined('STDOUT')) {
+            try {
+                return \posix_isatty(STDOUT);
+            } catch (\Throwable) {
+            }
+        }
+        return false;
     }
 
     /**

@@ -95,18 +95,42 @@ class TwoFactorConfig extends Model
             return false;
         }
 
-        $scope = $this->resolveWritableScope($module, $area);
-        $config = $this->findConfigByScope($scope);
+        // Determine the target scope for writing
+        $targetScope = $this->resolveTargetScope($module, $area);
+        $config = $this->findConfigByScope($targetScope);
 
         if (!$config || !$config->getId()) {
+            // No existing row for this scope - create new one
             $config = clone $this;
-            $config->clearData();
-            $config->setData(self::schema_fields_SCOPE, $scope);
+            $config->reset();
+            $config->setData(self::schema_fields_SCOPE, $targetScope);
             $this->seedDefaultValues($config);
         }
 
         $config->setData($column, $this->encodeStoredValue($column, $value));
         return (bool) $config->save();
+    }
+
+    /**
+     * Resolve the target scope for writing a config value.
+     * Returns the most specific scope (area > module > default).
+     * Unlike resolveWritableScope which finds existing rows, this always returns
+     * the target scope for writing.
+     */
+    private function resolveTargetScope(string $module, string $area): string
+    {
+        $module = trim($module);
+        $area = trim($area);
+
+        // Priority: area > module > default
+        // For TwoFactorConfig, the area (frontend/backend) is more specific than module
+        if ($area !== '') {
+            return $area;
+        }
+        if ($module !== '') {
+            return $module;
+        }
+        return self::default_scope;
     }
 
     public function deleteConfig(
@@ -196,17 +220,57 @@ class TwoFactorConfig extends Model
             ->find()
             ->fetch();
 
-        return $config instanceof self && $config->getId() ? $config : null;
+        if (!$config instanceof self) {
+            return null;
+        }
+
+        $id = $config->getId();
+        if ($id && $id > 0) {
+            return $config;
+        }
+
+        // If getId() returns 0 but we have scope data, check if the row exists
+        $exists = $config->reset()
+            ->where(self::schema_fields_SCOPE, $scope)
+            ->select()
+            ->fetchArray();
+        if (!empty($exists)) {
+            // Re-fetch and return with proper ID
+            return $config->reset()
+                ->where(self::schema_fields_SCOPE, $scope)
+                ->find()
+                ->fetch();
+        }
+
+        return null;
     }
 
     private function resolveWritableScope(string $module, string $area): string
     {
-        $existing = $this->findConfigRow($module, $area);
-        if ($existing && $existing->getId()) {
-            return (string) ($existing->getData(self::schema_fields_SCOPE) ?: self::default_scope);
+        $scopeCandidates = [];
+        $module = trim($module);
+        if ($module !== '') {
+            $scopeCandidates[] = $module;
+        }
+        $area = trim($area);
+        if ($area !== '') {
+            $scopeCandidates[] = $area;
+        }
+        $scopeCandidates[] = self::default_scope;
+        $scopeCandidates = array_values(array_unique($scopeCandidates));
+
+        // First pass: check if any of the specific scopes already exist
+        // If they do, we update them (use their exact scope)
+        foreach ($scopeCandidates as $scope) {
+            $config = $this->findConfigByScope($scope);
+            if ($config && $config->getId()) {
+                return (string) ($config->getData(self::schema_fields_SCOPE) ?: self::default_scope);
+            }
         }
 
-        return self::default_scope;
+        // No existing config found - use the most specific scope (first candidate)
+        // This allows creating new scope-specific rows
+        return $scopeCandidates[0] ?? self::default_scope;
     }
 
     private function seedDefaultValues(self $config): void

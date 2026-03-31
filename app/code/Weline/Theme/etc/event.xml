@@ -44,6 +44,30 @@
                   shared="true"
                   sort="0"/>
     </event>
+
+    <event name="Weline_Framework_View::resolve_theme_asset_url">
+        <observer name="Weline_Theme::resolve_theme_asset_url"
+                  instance="Weline\Theme\Observer\ResolveThemeAssetUrl"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+
+    <event name="Weline_Framework_View::resolve_preview_token">
+        <observer name="Weline_Theme::resolve_preview_token"
+                  instance="Weline\Theme\Observer\ResolvePreviewToken"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
+
+    <event name="Weline_Framework_View::resolve_theme_cache_suffix">
+        <observer name="Weline_Theme::resolve_theme_cache_suffix"
+                  instance="Weline\Theme\Observer\ResolveThemeCacheSuffix"
+                  disabled="false"
+                  shared="true"
+                  sort="0"/>
+    </event>
     
     <!-- 
         控制器模板获取前事件 - 根据 layoutType 自动加载主题布局

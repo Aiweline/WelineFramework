@@ -189,7 +189,7 @@ foreach ($themes as $themeItem) {
 <!-- 批量生成预览图弹窗 -->
 <div class="modal fade" id="batchGenerateModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content theme-preview-modal">
             <div class="modal-header">
                 <h5 class="modal-title"><?= __('批量生成预览图') ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -229,7 +229,7 @@ foreach ($themes as $themeItem) {
 <!-- 单个主题生成预览图弹窗 -->
 <div class="modal fade" id="singleGenerateModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content theme-preview-modal">
             <div class="modal-header">
                 <h5 class="modal-title" id="singleGenerateTitle"><?= __('生成预览图') ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
@@ -239,7 +239,7 @@ foreach ($themes as $themeItem) {
                     <div class="spinner-border text-primary" role="status" style="display: none;" id="singleSpinner">
                         <span class="visually-hidden">Loading...</span>
                     </div>
-                    <i class="mdi mdi-camera-text" style="font-size: 64px; color: #ccc;"></i>
+                    <i class="mdi mdi-camera-text single-generate-icon"></i>
                 </div>
                 <div class="text-center small text-muted" id="singleStatus">
                     <?= __('正在生成预览图，请稍候...') ?>
@@ -372,13 +372,41 @@ foreach ($themes as $themeItem) {
 
         // 事件结束后关闭弹窗并刷新页面
         term.on('done', function(e) {
-            // 在终端内容区域显示完成消息
-            const data = parseSseData(e);
-            if (data && data.message && typeof term.log === 'function') {
-                term.log(data.message);
-            } else if (typeof term.log === 'function') {
-                term.log('全部预览图生成完成！');
+            const data = parseSseData(e) || {};
+            const detail = data.data && typeof data.data === 'object' ? data.data : {};
+            const failed = Number(detail.failed || 0);
+            const success = Number(detail.success || 0);
+            const total = Number(detail.total || batchTotal || 0);
+            const doneMessage = data.message || (failed > 0 ? '批量生成完成（存在失败）' : '全部预览图生成完成！');
+
+            if (typeof term.log === 'function') {
+                term.log(doneMessage);
+                if (total > 0) {
+                    term.log('结果：成功 ' + success + ' / 失败 ' + failed + ' / 总计 ' + total);
+                }
             }
+
+            const statusEl = document.getElementById('batchStatus');
+            const countEl = document.getElementById('batchCount');
+            if (statusEl) {
+                statusEl.innerText = doneMessage;
+            }
+            if (countEl && total > 0) {
+                countEl.innerText = success + ' / ' + total + '（失败 ' + failed + '）';
+            }
+
+            if (failed > 0) {
+                const resultEl = document.getElementById('batchResult');
+                if (resultEl) {
+                    resultEl.style.display = 'block';
+                    resultEl.innerHTML = '<div class="alert alert-warning mb-0">' +
+                        '<i class="mdi mdi-alert-circle-outline me-1"></i>' +
+                        '仍有 ' + failed + ' 个预览图生成失败，请查看终端日志中的超时/错误项后重试。' +
+                        '</div>';
+                }
+                return;
+            }
+
             modal.hide();
             location.reload();
         });
@@ -394,6 +422,7 @@ foreach ($themes as $themeItem) {
         const fd = new FormData();
         fd.append('form_key', CSRF_TOKEN);
 
+        fd.append('concurrency', '2');
         term.start(streamUrl, { method: 'POST', body: fd });
     }
 
@@ -462,7 +491,16 @@ foreach ($themes as $themeItem) {
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: new URLSearchParams({ form_key: CSRF_TOKEN, theme_id: themeId, area: area })
             }).then(r => r.json()).then(function(result) {
-                if (result.status === 'success') {
+                const isSuccess = result && (
+                    result.status === 'success' ||
+                    result.success === true ||
+                    result.success === 1 ||
+                    result.success === '1' ||
+                    result.code === 200 ||
+                    result.code === '200'
+                );
+
+                if (isSuccess) {
                     if (typeof BackendToast !== 'undefined') {
                         BackendToast.success('<?= __('主题已设为%{1}主题') ?>'.replace('%{1}', areaLabel));
                         location.reload();
@@ -584,6 +622,18 @@ foreach ($themes as $themeItem) {
 
 <style>
 /* 主题管理：使用主题变量，避免硬编码颜色 */
+.weline-theme-manage {
+    background: var(--backend-color-bg-body, #f8f9fa);
+    color: var(--backend-color-text-primary, #212529);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: 0.25rem 0;
+}
+
+.weline-theme-manage .tab-content,
+.weline-theme-manage .themes-grid {
+    background: transparent;
+}
+
 .weline-theme-manage__tabbar {
     display: flex;
     align-items: center;
@@ -745,6 +795,36 @@ foreach ($themes as $themeItem) {
 
 .weline-theme-manage .theme-card.suspended .theme-name {
     text-decoration: line-through;
+}
+
+.theme-preview-modal {
+    background: var(--backend-color-card-bg, #ffffff);
+    color: var(--backend-color-text-primary, #212529);
+    border: 1px solid var(--backend-color-border-default, #dee2e6);
+}
+
+.theme-preview-modal .modal-header,
+.theme-preview-modal .modal-footer {
+    border-color: var(--backend-color-border-default, #dee2e6);
+}
+
+.theme-preview-modal .modal-title {
+    color: var(--backend-color-text-primary, #212529);
+}
+
+#batchGenerateModal #batchStatus,
+#batchGenerateModal #batchCount,
+#singleGenerateModal #singleStatus {
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+#batchGenerateModal .progress {
+    background: var(--backend-color-bg-secondary, #edf0f3);
+}
+
+.single-generate-icon {
+    font-size: 64px;
+    color: var(--backend-color-text-tertiary, #a0a7b5);
 }
 
 /* 响应式调整 */
