@@ -10,6 +10,7 @@ use WeShop\Order\Model\Order;
 use WeShop\Payment\Interface\PaymentProviderInterface;
 use WeShop\Payment\Provider\Alipay;
 use WeShop\Payment\Provider\CashOnDelivery;
+use WeShop\B2B\Payment\Provider\CreditAccount;
 use WeShop\Payment\Provider\ManualTransfer;
 use WeShop\Payment\Provider\PayPal;
 use WeShop\Payment\Provider\WeChatPay;
@@ -22,6 +23,25 @@ class PaymentService
     protected function getMethodRegistry(): array
     {
         return [
+            'b2b_credit_account' => [
+                'code' => 'b2b_credit_account',
+                'title' => (string) __('B2B Credit Account'),
+                'description' => (string) __('Charge the order to your enterprise credit line and pay by invoice before the due date.'),
+                'provider' => CreditAccount::class,
+                'enabled' => true,
+                'is_default' => false,
+                'sort_order' => 15,
+                'icon' => '',
+                'areas' => ['frontend', 'backend', 'api'],
+                'currencies' => [],
+                'countries' => [],
+                'config' => [
+                    'instructions' => (string) __('Available only for approved B2B customers with an active credit line.'),
+                ],
+                'config_fields' => [
+                    ['key' => 'instructions', 'label' => (string) __('Instructions'), 'type' => 'textarea'],
+                ],
+            ],
             'manual_transfer' => [
                 'code' => 'manual_transfer',
                 'title' => (string) __('Manual Transfer'),
