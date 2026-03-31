@@ -109,6 +109,10 @@ class InvoiceTest extends TestCase
 
         $response = $this->createMock(Response::class);
         $response->expects($this->once())
+            ->method('setHttpResponseCode')
+            ->with(200)
+            ->willReturnSelf();
+        $response->expects($this->once())
             ->method('setHeader')
             ->with('Content-Type', 'application/json; charset=utf-8')
             ->willReturnSelf();
@@ -126,9 +130,50 @@ class InvoiceTest extends TestCase
 
         $payload = json_decode($api->getList(), true, 512, JSON_THROW_ON_ERROR);
 
-        $this->assertSame('200', $payload['code'] ?? null);
-        $this->assertSame('301', $payload['data']['invoices'][0]['invoice_id'] ?? null);
-        $this->assertSame('1', $payload['data']['invoice_count'] ?? null);
+        $this->assertSame(200, $payload['code'] ?? null);
+        $this->assertSame(301, $payload['data']['invoices'][0]['invoice_id'] ?? null);
+        $this->assertSame(1, $payload['data']['invoice_count'] ?? null);
+    }
+
+    public function testGetListClampsPageSizeToMaximumLimit(): void
+    {
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->expects($this->once())
+            ->method('getUserId')
+            ->willReturn(12);
+
+        $pageDataService = $this->createMock(InvoicePageDataService::class);
+        $pageDataService->expects($this->once())
+            ->method('build')
+            ->with(12, 1, 50)
+            ->willReturn([
+                'invoices' => [],
+                'invoice_count' => 0,
+                'invoice_pending_count' => 0,
+                'invoice_issued_count' => 0,
+            ]);
+
+        $api = $this->getMockBuilder(Invoice::class)
+            ->setConstructorArgs([
+                $customerContext,
+                $pageDataService,
+            ])
+            ->onlyMethods(['fetchJson'])
+            ->getMock();
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['page', 1, 1],
+            ['page_size', 20, 999],
+        ]);
+        $this->setProtectedProperty($api, 'request', $request);
+
+        $api->expects($this->once())
+            ->method('fetchJson')
+            ->with($this->callback(static fn(array $payload): bool => ($payload['code'] ?? null) === 200))
+            ->willReturn('ok');
+
+        $this->assertSame('ok', $api->getList());
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void
