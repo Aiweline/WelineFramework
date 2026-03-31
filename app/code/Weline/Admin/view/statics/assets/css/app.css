@@ -12,7 +12,8 @@ File: Main Css File
     top: 0;
     left: 0;
     right: 0;
-    z-index: 1002;
+    /* 高于 .rightbar-overlay(10040)，避免遮罩拦截顶栏点击；低于 .right-bar(10060) 保证设置抽屉仍在最前 */
+    z-index: 10050;
     background-color: #ffffff;
     -webkit-box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
     box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
@@ -336,7 +337,7 @@ body[data-layout="horizontal"] .footer {
     -webkit-transition: all 200ms ease-out;
     transition: all 200ms ease-out;
     width: 280px;
-    z-index: 9999;
+    z-index: 10060;
     float: left !important;
     left: -290px;
     top: 0;
@@ -365,7 +366,7 @@ body[data-layout="horizontal"] .footer {
     top: 0;
     bottom: 0;
     display: none;
-    z-index: 9998;
+    z-index: 10040;
     -webkit-transition: all .2s ease-out;
     transition: all .2s ease-out;
 }
