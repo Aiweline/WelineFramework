@@ -9,6 +9,7 @@ use Agent\CursorBase\Api\TaskPoolInterface;
 use Agent\CursorBase\Service\CursorAiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\System\Process\Processer;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
  * 交互式 Shell 服务
@@ -246,6 +247,28 @@ class InteractiveShellService
         }
         
         return true;
+    }
+
+    /**
+     * 非阻塞读取一行输入
+     */
+    private function readInputNonBlocking(): ?string
+    {
+        $read = [STDIN];
+        $write = null;
+        $except = null;
+
+        $changed = @stream_select($read, $write, $except, 0, 0);
+        if ($changed === false || $changed === 0) {
+            return null;
+        }
+
+        $line = @fgets(STDIN);
+        if ($line === false) {
+            return null;
+        }
+
+        return $line;
     }
     
     /**
@@ -996,7 +1019,7 @@ class InteractiveShellService
         } elseif ($subCmd === 'restart') {
             $this->output("\n🔄 重启 Watchdog...");
             Processer::destroy('--name=' . $processName);
-            usleep(500000); // 等待 500ms
+            SchedulerSystem::yieldDelay(500); // 等待 500ms
             $this->output("   请退出后重新启动 cursor:supervisor:start");
         } elseif ($subCmd === 'stop') {
             $this->output("\n🛑 停止 Watchdog...");
@@ -1084,26 +1107,18 @@ class InteractiveShellService
             $foundPid = 0;
             
             if (PHP_OS_FAMILY === 'Windows') {
-                // Windows: 使用 PowerShell Start-Process 启动后台进程
-                // 使用正斜杠避免转义问题
-                $phpBinPs = str_replace('\\', '/', $phpBin);
-                $scriptPs = str_replace('\\', '/', $script);
-                $pathsPs = str_replace('\\', '/', $paths);
-                $pidFilePs = str_replace('\\', '/', $pidFile);
-                
-                // 构建 PowerShell 命令
-                // 注意：使用单引号包裹路径，内部单引号用两个单引号转义
-                // 使用字符串拼接避免 $p 被 PHP 解释为变量
+                // Windows: 使用 PowerShell Start-Process 启动后台进程并完整传递参数
+                $arguments = trim($script . ' ' . $cmdArgs);
                 $psCmd = 'powershell -NoProfile -Command "' .
-                    '$p = Start-Process -FilePath \'' . str_replace("'", "''", $phpBinPs) . '\' ' .
-                    '-ArgumentList \'' . str_replace("'", "''", $scriptPs) . ' cursor:supervisor:watchdog --path=' . str_replace("'", "''", $pathsPs) . ' --interval=' . $interval . '\' ' .
+                    '$p = Start-Process -FilePath ' . self::toPowershellSingleQuoted($phpBin) . ' ' .
+                    '-ArgumentList ' . self::toPowershellSingleQuoted($arguments) . ' ' .
                     '-WindowStyle Hidden -PassThru; ' .
-                    'if ($p) { Set-Content -Path \'' . str_replace("'", "''", $pidFilePs) . '\' -Value $p.Id -NoNewline }"';
-                
+                    'if ($p) { Set-Content -Path ' . self::toPowershellSingleQuoted($pidFile) . ' -Value $p.Id -NoNewline }"';
+
                 exec($psCmd . ' 2>&1');
                 
                 // 等待 PID 文件写入
-                usleep(500000);
+                SchedulerSystem::yieldDelay(500);
                 
                 if (file_exists($pidFile)) {
                     $foundPid = (int) trim(@file_get_contents($pidFile));
@@ -1118,7 +1133,7 @@ class InteractiveShellService
             }
             
             // 等待一下让进程启动
-            usleep(200000);
+            SchedulerSystem::yieldDelay(200);
             
             // 检查是否成功
             if (file_exists($pidFile)) {
@@ -1180,6 +1195,14 @@ class InteractiveShellService
         
         $this->output("❓ 未知子命令: {$subCmd}");
         $this->output("   可用: start, stop, status, log");
+    }
+
+    /**
+     * 转义为 PowerShell 单引号字符串
+     */
+    public static function toPowershellSingleQuoted(string $value): string
+    {
+        return "'" . str_replace("'", "''", $value) . "'";
     }
 
     /**
