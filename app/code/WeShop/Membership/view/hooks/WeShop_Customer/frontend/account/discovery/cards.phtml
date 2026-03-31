@@ -38,7 +38,7 @@ $benefits = array_values((array) ($data['benefits'] ?? []));
             <?= htmlspecialchars((string) ($membership['level_label'] ?? ''), ENT_QUOTES) ?>
         </p>
         <p class="mt-2 text-sm text-text-secondary-light dark:text-text-secondary-dark">
-            <?= __('Points: %1', (int) ($membership['points'] ?? 0)) ?>
+            <?= __('Points: %{1}', (int) ($membership['points'] ?? 0)) ?>
         </p>
     </div>
 

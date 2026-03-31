@@ -17,15 +17,15 @@ class Index extends BaseController
     public function index(): string
     {
         $page = max(1, (int) $this->request->getParam('page', 1));
-        $pageSize = max(1, (int) $this->request->getParam('page_size', 20));
+        $pageSize = min(100, max(1, (int) $this->request->getParam('page_size', 20)));
         $editingId = (int) $this->request->getParam('id', 0);
-        $membershipIndexUrl = $this->getBackendUrl('*/backend/membership');
+        $membershipIndexUrl = $this->_url->getBackendUrl('*/backend/membership');
 
         $this->assign(array_merge(
             [
                 'title' => (string) __('Membership Management'),
                 'membershipIndexUrl' => $membershipIndexUrl,
-                'membershipSaveUrl' => $this->getBackendUrl('*/backend/membership/save'),
+                'membershipSaveUrl' => $this->_url->getBackendUrl('*/backend/membership/save'),
             ],
             $this->membershipAdminPageDataService->getPageData($page, $pageSize, [
                 'customer_id' => $this->request->getParam('customer_id', ''),
