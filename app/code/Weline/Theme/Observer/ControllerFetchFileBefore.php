@@ -103,7 +103,8 @@ class ControllerFetchFileBefore implements ObserverInterface
             return;
         }
         $fileName = $eventData->getData('fileName');
-        
+        $contentTemplateFileName = $fileName; // 统一用初始控制器模板路径作为内容模板
+
         // 判断区域（frontend/backend）
         $area = 'frontend';
         if ($request && $request->isBackend()) {
@@ -127,6 +128,8 @@ class ControllerFetchFileBefore implements ObserverInterface
         
         // 获取当前主题：预览 / 激活由 ThemeContextService 统一解析
         $theme = $this->resolveThemeForLayout($area);
+
+        error_log('DEBUG ControllerFetchFileBefore: area=' . $area . ' layoutType=' . $layoutType . ' resolved theme=' . ($theme ? $theme->getName() . '(id=' . $theme->getId() . ', path=' . $theme->getPath() . ', originPath=' . $theme->getOriginPath() . ')' : 'null'));
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -270,14 +273,14 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 将原模板路径保存为变量，供布局模板使用
                 // 布局模板可以通过 $this->getData('contentTemplate') 获取原模板路径
                 // 然后使用 $this->fetch($contentTemplate) 渲染原模板内容
-                $eventData->setData('contentTemplate', $fileName);
+                $eventData->setData('contentTemplate', $contentTemplateFileName);
                 $eventData->setData('layoutTemplate', $resolvedLayoutPath);
                 $eventData->setData('fileName', $fileName);
                 $eventData->setData('layoutType', $layoutType);
                 $eventData->setData('layoutOption', $layoutOption);
                 
                 // 同时将 contentTemplate 传递给模板数据，方便布局模板直接使用
-                $template->setData('contentTemplate', $fileName);
+                $template->setData('contentTemplate', $contentTemplateFileName);
                 $template->setData('layoutTemplate', $resolvedLayoutPath);
                 $template->setData('fileName', $fileName);
 

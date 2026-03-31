@@ -41,27 +41,27 @@ $this->assign('title', $title);
     <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     
     <?php if ($breadcrumb): ?>
-        <nav class="breadcrumb-nav">
+        <nav class="checkout-page__breadcrumb breadcrumb-nav">
             {{breadcrumb}}
         </nav>
     <?php endif; ?>
     
     <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-    <main class="checkout-main <?= htmlspecialchars($class ?? '') ?>" id="checkout-main" data-layout="checkout">
-        <div class="checkout-container">
+    <main class="checkout-page <?= htmlspecialchars($class ?? '') ?>" id="checkout-page" data-layout="checkout">
+        <div class="checkout-page__container">
             <?php if ($steps): ?>
-                <div class="checkout-steps">
+                <div class="checkout-page__steps">
                     {{steps}}
                 </div>
             <?php endif; ?>
             
-            <div class="checkout-content-wrapper">
-                <div class="checkout-form">
+            <div class="checkout-page__grid">
+                <div class="checkout-page__form">
                     {{content}}
                 </div>
                 
                 <?php if ($orderSummary): ?>
-                    <aside class="checkout-summary">
+                    <aside class="checkout-page__summary">
                         {{orderSummary}}
                     </aside>
                 <?php endif; ?>
