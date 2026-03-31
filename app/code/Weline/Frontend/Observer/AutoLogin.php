@@ -31,6 +31,9 @@ class AutoLogin implements ObserverInterface
      */
     public function execute(Event &$event): void
     {
+        // WLS 下 Observer 可能复用旧实例，这里强制切到当前会话上下文。
+        $this->session = SessionFactory::getInstance()->createFrontendSession();
+
         // 如果已经登录，跳过
         if ($this->session->isLoggedIn()) {
             return;
