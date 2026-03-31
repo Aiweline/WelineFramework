@@ -56,4 +56,41 @@ class TaxQueryProviderTest extends TestCase
 
         $this->assertSame(0.19, $result);
     }
+
+    public function testExecuteReturnsTaxBreakdownThroughService(): void
+    {
+        $taxService = $this->createMock(TaxService::class);
+        $taxService->expects($this->once())
+            ->method('calculateTaxBreakdown')
+            ->with(
+                110.0,
+                'DE',
+                'BE',
+                [
+                    'shipping_amount' => 11.0,
+                    'discount' => 0.0,
+                    'prices_include_tax' => true,
+                    'shipping_includes_tax' => true,
+                ]
+            )
+            ->willReturn([
+                'tax_amount' => 11.0,
+                'chargeable_tax' => 0.0,
+            ]);
+
+        $provider = new TaxQueryProvider($taxService);
+
+        $result = $provider->execute('calculateTaxBreakdown', [
+            'subtotal' => 110.0,
+            'country' => 'DE',
+            'region' => 'BE',
+            'shipping_amount' => 11.0,
+            'discount' => 0.0,
+            'prices_include_tax' => true,
+            'shipping_includes_tax' => true,
+        ]);
+
+        $this->assertSame(11.0, $result['tax_amount']);
+        $this->assertSame(0.0, $result['chargeable_tax']);
+    }
 }
