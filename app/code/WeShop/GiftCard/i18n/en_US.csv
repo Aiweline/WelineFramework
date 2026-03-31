@@ -1,6 +1,11 @@
-﻿"Gift Card Management","Gift Card Management"
+﻿"Gift card deleted successfully.","Gift card deleted successfully."
+"Failed to delete gift card.","Failed to delete gift card."
+"Gift Card Management","Gift Card Management"
 "Gift card saved.","Gift card saved."
 "Gift card save failed.","Gift card save failed."
+"Invalid gift card ID.","Invalid gift card ID."
+"Gift card not found.","Gift card not found."
+"Gift Card Details","Gift Card Details"
 "Please log in to continue.","Please log in to continue."
 "Gift card page hooks","Gift card page hooks"
 "Inject storefront content above the gift card list page.","Inject storefront content above the gift card list page."
@@ -10,12 +15,12 @@ Active,Active
 Redeemed,Redeemed
 Expired,Expired
 Disabled,Disabled
-"Customer ID is required.","Customer ID is required."
-"Gift card amount must be greater than zero.","Gift card amount must be greater than zero."
 "Gift card does not exist.","Gift card does not exist."
 "Gift card is not active.","Gift card is not active."
 "Gift card has expired.","Gift card has expired."
 "Gift card balance is insufficient.","Gift card balance is insufficient."
+"Customer ID is required.","Customer ID is required."
+"Gift card amount must be greater than zero.","Gift card amount must be greater than zero."
 "Gift card balance cannot be negative.","Gift card balance cannot be negative."
 "Gift card balance cannot exceed the face amount.","Gift card balance cannot exceed the face amount."
 "Unsupported gift card status.","Unsupported gift card status."
@@ -42,9 +47,24 @@ Reset,Reset
 "Created At","Created At"
 Actions,Actions
 Never,Never
+View,View
 Edit,Edit
+Delete,Delete
+Pagination,Pagination
+Previous,Previous
+Next,Next
 "No gift cards found.","No gift cards found."
 "Create the first gift card to enable stored-value and promotion workflows.","Create the first gift card to enable stored-value and promotion workflows."
+"View and manage gift card information.","View and manage gift card information."
+"Back to List","Back to List"
+"Card Information","Card Information"
+"Save Changes","Save Changes"
+"Card Status","Card Status"
+"Updated At","Updated At"
+"Balance Summary","Balance Summary"
+"Face Amount","Face Amount"
+"Current Balance","Current Balance"
+Used,Used
 "Wallet Value","Wallet Value"
 "Gift Cards","Gift Cards"
 "Open Wallet","Open Wallet"
