@@ -56,6 +56,42 @@ function createUpstreamAgent(targetUrl) {
     : new http.Agent();
 }
 
+function getForwardedPort(targetUrl) {
+  return targetUrl.port || (targetUrl.protocol === 'https:' ? '443' : '80');
+}
+
+function getForwardedHost(targetUrl) {
+  const forwardedPort = getForwardedPort(targetUrl);
+  const isDefaultPort = (targetUrl.protocol === 'https:' && forwardedPort === '443')
+    || (targetUrl.protocol === 'http:' && forwardedPort === '80');
+
+  return isDefaultPort ? targetUrl.hostname : `${targetUrl.hostname}:${forwardedPort}`;
+}
+
+function buildForwardedHeaders(clientRequest, targetUrl) {
+  const browserFacingProto = proxyUrl.protocol.replace(':', '');
+  const browserFacingPort = proxyUrl.port || (browserFacingProto === 'https' ? '443' : '80');
+  // 必须使用浏览器访问代理时的 Host（含 :port），否则 PHP 的 getBaseHost() 会生成
+  // https://127.0.0.1/static/...（无代理端口），子资源绕过代理直连上游默认端口导致 E2E 样式断言失败。
+  const browserFacingHost =
+    clientRequest.headers.host
+    || clientRequest.headers.Host
+    || getForwardedHost(proxyUrl);
+
+  return {
+    ...clientRequest.headers,
+    host: browserFacingHost,
+    'x-forwarded-host': browserFacingHost,
+    'x-forwarded-proto': browserFacingProto,
+    'x-forwarded-port': browserFacingPort,
+    'weline-via-dispatcher': '1',
+    'weline-original-host': browserFacingHost,
+    'weline-original-scheme': browserFacingProto,
+    'weline-original-port': browserFacingPort,
+    'weline-original-ssl': browserFacingProto === 'https' ? 'on' : 'off',
+  };
+}
+
 function sendJson(response, statusCode, payload) {
   if (!response || response.destroyed || response.writableEnded || response.headersSent) {
     return false;
@@ -134,23 +170,63 @@ function rewriteLocationHeader(value, runtime, targetUrl) {
   return rewriteOne(value);
 }
 
-function handleWellKnown(response, pathname, runtime) {
-  if (pathname === '/.well-known/weline-e2e/health') {
-    if (runtime.runtime && runtime.runtime.reachable === false) {
-      maybeStartWls(runtime);
-      sendJson(response, 503, {
-        status: 'waiting_for_target',
-        target: runtime.runtime.target_origin,
-        source: runtime.runtime.source,
-      });
-      return true;
-    }
+const DASHBOARD_TEMPLATE = path.join(__dirname, 'e2e-proxy-dashboard.html');
 
+function buildDashboardPayload(runtime) {
+  return {
+    proxy: runtime.proxy,
+    runtime: runtime.runtime,
+    routes: runtime.routes,
+    paths: runtime.paths,
+  };
+}
+
+function renderDashboardHtml(runtime) {
+  let template;
+  try {
+    template = fs.readFileSync(DASHBOARD_TEMPLATE, 'utf8');
+  } catch {
+    template = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>E2E</title></head><body><p>Dashboard template missing.</p></body></html>';
+  }
+  const json = JSON.stringify(buildDashboardPayload(runtime));
+  const safe = json.replace(/</g, '\\u003c');
+  return template.replace('__E2E_RUNTIME_JSON__', safe);
+}
+
+function handleWellKnown(response, pathname, runtime) {
+  if (pathname === '/.well-known/weline-e2e' || pathname === '/.well-known/weline-e2e/') {
+    const html = renderDashboardHtml(runtime);
     response.writeHead(200, {
-      'content-type': 'text/plain; charset=utf-8',
+      'content-type': 'text/html; charset=utf-8',
       'cache-control': 'no-store',
     });
-    response.end('ok');
+    response.end(html);
+    return true;
+  }
+
+  if (pathname === '/.well-known/weline-e2e/health') {
+    // Playwright `webServer.url` only accepts a successful response; 503 here caused
+    // indefinite wait until webServer.timeout even though the proxy is already listening.
+    if (runtime.runtime && runtime.runtime.reachable === false) {
+      maybeStartWls(runtime);
+    }
+
+    const refreshed = resolveRuntime();
+    const reachable = !(refreshed.runtime && refreshed.runtime.reachable === false);
+    response.writeHead(200, {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-weline-e2e-upstream-reachable': reachable ? '1' : '0',
+    });
+    response.end(
+      JSON.stringify({
+        ok: true,
+        proxy: 'up',
+        target_reachable: reachable,
+        target: refreshed.runtime?.target_origin ?? null,
+        source: refreshed.runtime?.source ?? null,
+      })
+    );
     return true;
   }
 
@@ -177,13 +253,7 @@ function proxyRequest(clientRequest, clientResponse) {
   upstreamUrl.pathname = rewritePath(incomingUrl.pathname, runtime, incomingUrl.searchParams);
   upstreamUrl.search = incomingUrl.search;
 
-  const headers = {
-    ...clientRequest.headers,
-    host: targetUrl.host,
-    'x-forwarded-host': proxyUrl.host,
-    'x-forwarded-proto': proxyUrl.protocol.replace(':', ''),
-    'x-forwarded-port': proxyUrl.port || (proxyUrl.protocol === 'https:' ? '443' : '80'),
-  };
+  const headers = buildForwardedHeaders(clientRequest, targetUrl);
 
   const requestOptions = {
     protocol: targetUrl.protocol,
@@ -267,6 +337,7 @@ server.listen(Number(proxyUrl.port), proxyUrl.hostname, () => {
   const runtime = resolveRuntime();
   console.log(`[weline-e2e] proxy listening on ${runtime.proxy.origin}`);
   console.log(`[weline-e2e] proxy target ${runtime.runtime.target_origin}`);
+  console.log(`[weline-e2e] dashboard (后台默认主题风) ${runtime.proxy.origin}/.well-known/weline-e2e/`);
 });
 
 function closeServer(exitCode) {

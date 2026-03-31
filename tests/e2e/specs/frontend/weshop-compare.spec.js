@@ -78,4 +78,71 @@ test.describe('WeShop compare clean routes', () => {
     expect(String(removePayload.json.data?.redirect_url || '')).toMatch(/customer\/account\/login/i);
     await expectNoRuntimeError(page);
   });
+
+  test('compare mutation endpoints reject non-post methods', async ({ page }) => {
+    await gotoFrontend(page, '/compare', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+      settleMs: 800,
+    });
+
+    const [addPayload, removePayload] = await page.evaluate(async () => {
+      const callJson = async (url) => {
+        const response = await fetch(url, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+
+        return {
+          ok: response.ok,
+          status: response.status,
+          json: await response.json(),
+        };
+      };
+
+      return Promise.all([callJson('/compare/add'), callJson('/compare/remove')]);
+    });
+
+    for (const payload of [addPayload, removePayload]) {
+      expect(payload.ok).toBeTruthy();
+      expect(payload.status).toBe(200);
+      expect(payload.json.success).toBeFalsy();
+      expect(String(payload.json.message || '')).toMatch(/Invalid request method|请求方法无效/i);
+    }
+    await expectNoRuntimeError(page);
+  });
+
+  test('guest non-ajax remove post is redirected to login page', async ({ page }) => {
+    await gotoFrontend(page, '/compare', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+      settleMs: 800,
+    });
+
+    const nonAjaxRemove = await page.evaluate(async () => {
+      const response = await fetch('/compare/remove', {
+        method: 'POST',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml',
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        },
+        body: 'compare_id=1',
+        redirect: 'follow',
+      });
+
+      return {
+        ok: response.ok,
+        status: response.status,
+        finalUrl: response.url,
+      };
+    });
+
+    expect(nonAjaxRemove.ok).toBeTruthy();
+    expect(nonAjaxRemove.status).toBe(200);
+    expect(String(nonAjaxRemove.finalUrl || '')).toMatch(/customer\/account\/login/i);
+    await expectNoRuntimeError(page);
+  });
 });

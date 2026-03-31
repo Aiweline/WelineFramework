@@ -17,6 +17,7 @@ const { runFrameworkPreflight } = require('./framework/preflight-refresh');
 const ROOT_DIR = path.resolve(__dirname, '../..');
 const MODULES_JSON = path.join(__dirname, 'modules.json');
 const RUNTIME_INFO_SCRIPT = path.join(__dirname, 'framework', 'runtime-info.php');
+const RUNTIME_TARGET_ORIGIN_FILE = path.join(__dirname, '.weline-e2e-target-origin');
 const FALLBACK_HOST = '127.0.0.1';
 const FALLBACK_PORTS = [9991, 9992, 9993, 9994, 9995];
 const ALLOW_FALLBACK_RUNTIME_REUSE = process.env.PLAYWRIGHT_REUSE_FALLBACK_RUNTIME === '1';
@@ -384,6 +385,28 @@ function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function writeRuntimeTargetOriginFile(origin) {
+    const value = String(origin || '').trim();
+    if (!value) {
+        return;
+    }
+    try {
+        fs.writeFileSync(RUNTIME_TARGET_ORIGIN_FILE, `${value}\n`, 'utf8');
+    } catch (error) {
+        console.warn(`[e2e] could not write ${path.basename(RUNTIME_TARGET_ORIGIN_FILE)}: ${error.message}`);
+    }
+}
+
+function clearRuntimeTargetOriginFile() {
+    try {
+        if (fs.existsSync(RUNTIME_TARGET_ORIGIN_FILE)) {
+            fs.unlinkSync(RUNTIME_TARGET_ORIGIN_FILE);
+        }
+    } catch (error) {
+        // ignore
+    }
+}
+
 async function waitForUrl(url, options = {}) {
     const attempts = options.attempts || 30;
     const intervalMs = options.intervalMs || 500;
@@ -491,12 +514,20 @@ async function resolveFallbackRuntime() {
     return startFallbackPhpServer(dynamicPort);
 }
 
-async function finalizePreparedRuntime(runtimeInfo, userPinnedProxyMode, note, cleanup = null) {
+async function finalizePreparedRuntime(runtimeInfo, userPinnedProxyMode, note, cleanup = null, options = {}) {
+    const forceProxyTransport = options.forceProxyTransport === true;
+
     if (!runtimeInfo.runtime.reachable) {
         return { runtimeInfo, cleanup, note };
     }
 
-    if (!userPinnedProxyMode && process.env.PLAYWRIGHT_DISABLE_PROXY !== '1') {
+    // 显式要求走代理的用例：不要在 Playwright 拉起 webServer 之前因「探测失败」强行改 direct，
+    // 否则会出现日志里 transport=proxy 但实际 PLAYWRIGHT_DISABLE_PROXY=1 的不一致。
+    if (
+        !forceProxyTransport
+        && !userPinnedProxyMode
+        && process.env.PLAYWRIGHT_DISABLE_PROXY !== '1'
+    ) {
         const proxyHealth = await requestUrl(
             `${runtimeInfo.proxy.origin}/.well-known/weline-e2e/health`,
             {
@@ -522,13 +553,20 @@ async function finalizePreparedRuntime(runtimeInfo, userPinnedProxyMode, note, c
 
 async function prepareRuntime(args = process.argv.slice(2)) {
     const userPinnedTarget = Boolean(process.env.PLAYWRIGHT_TARGET_ORIGIN);
-    const userPinnedProxyMode = Object.prototype.hasOwnProperty.call(process.env, 'PLAYWRIGHT_DISABLE_PROXY');
+    let userPinnedProxyMode = Object.prototype.hasOwnProperty.call(process.env, 'PLAYWRIGHT_DISABLE_PROXY');
     const runtimeStrategy = resolveRuntimeStrategy(args, process.env);
     const transportStrategy = resolveTransportStrategy(args, process.env);
 
     if (!userPinnedProxyMode && transportStrategy === 'direct') {
         process.env.PLAYWRIGHT_DISABLE_PROXY = '1';
     }
+
+    if (transportStrategy === 'proxy') {
+        delete process.env.PLAYWRIGHT_DISABLE_PROXY;
+        userPinnedProxyMode = false;
+    }
+
+    const proxyTransportOpts = { forceProxyTransport: transportStrategy === 'proxy' };
 
     if (!userPinnedTarget) {
         const detectedRuntimeInfo = readRuntimeInfo(process.env);
@@ -540,20 +578,25 @@ async function prepareRuntime(args = process.argv.slice(2)) {
                 throw new Error('E2E runtime strategy "wls" was requested, but runtime-info.php did not discover a WLS target.');
             }
 
-            const note = detectedRuntimeInfo.runtime.reachable
-                ? `[e2e] using detected WLS runtime ${detectedRuntimeInfo.runtime.target_origin} because the selected specs require it`
-                : `[e2e] waiting for detected WLS runtime ${detectedRuntimeInfo.runtime.target_origin} because the selected specs require it`;
+            if (detectedRuntimeInfo.runtime.reachable) {
+                const note = `[e2e] using detected WLS runtime ${detectedRuntimeInfo.runtime.target_origin} because the selected specs require it`;
+                return finalizePreparedRuntime(detectedRuntimeInfo, userPinnedProxyMode, note, null, proxyTransportOpts);
+            }
 
-            return finalizePreparedRuntime(detectedRuntimeInfo, userPinnedProxyMode, note);
+            console.warn(
+                `[e2e] WLS runtime ${detectedRuntimeInfo.runtime.target_origin} is not reachable; starting local PHP fallback (same as auto).`,
+            );
+            // fall through to resolveFallbackRuntime() below
         }
 
         if (runtimeStrategy !== 'fallback' && detectedRuntimeInfo.runtime.reachable) {
             const note = `[e2e] using detected runtime ${detectedRuntimeInfo.runtime.target_origin} (strategy: ${runtimeStrategy})`;
-            return finalizePreparedRuntime(detectedRuntimeInfo, userPinnedProxyMode, note);
+            return finalizePreparedRuntime(detectedRuntimeInfo, userPinnedProxyMode, note, null, proxyTransportOpts);
         }
 
         const preferredLocalRuntime = await resolveFallbackRuntime();
         process.env.PLAYWRIGHT_TARGET_ORIGIN = preferredLocalRuntime.origin;
+        writeRuntimeTargetOriginFile(preferredLocalRuntime.origin);
         if (!userPinnedProxyMode) {
             process.env.PLAYWRIGHT_DISABLE_PROXY = '1';
         }
@@ -570,7 +613,12 @@ async function prepareRuntime(args = process.argv.slice(2)) {
         };
     }
 
-    return finalizePreparedRuntime(readRuntimeInfo(process.env), userPinnedProxyMode, null);
+    const pinnedOrigin = String(process.env.PLAYWRIGHT_TARGET_ORIGIN || '').trim();
+    if (pinnedOrigin !== '') {
+        writeRuntimeTargetOriginFile(pinnedOrigin);
+    }
+
+    return finalizePreparedRuntime(readRuntimeInfo(process.env), userPinnedProxyMode, null, null, proxyTransportOpts);
 }
 
 async function main() {
@@ -668,6 +716,7 @@ async function main() {
         return 0;
     } finally {
         cleanup && cleanup();
+        clearRuntimeTargetOriginFile();
     }
 }
 
