@@ -60,6 +60,20 @@ class PublicApiAuthRouteMatcher
         'datatable/rest/v1/demo-form/record',
     ];
 
+    private const GUEST_FRONTEND_PATH_PATTERNS = [
+        'api/rest/v1/weshop/checkout/methods',
+        'api/rest/v1/weshop/cart/add',
+        'api/rest/v1/weshop/cart/options',
+        'api/rest/v1/weshop/cart/update',
+        'api/rest/v1/weshop/cart/remove',
+        'api/rest/v1/weshop/cart/mini-items',
+        'api/rest/v1/weshop/order/list',
+        'api/rest/v1/weshop/order/detail',
+        'api/rest/v1/weshop/order/unpaid-count',
+        'api/rest/v1/weshop/order/unpaid-list',
+        'api/rest/v1/weshop/invoice/list',
+    ];
+
     private const AUTH_CONTROLLERS = ['Auth', 'Challenge'];
 
     private const AUTH_ACTIONS = [
@@ -117,11 +131,31 @@ class PublicApiAuthRouteMatcher
         return false;
     }
 
-    private function matchesPath(string $path): bool
+    public function matchesGuestFrontendRoute(Request $request): bool
+    {
+        $paths = array_filter([
+            $request->getRouteUrlPath(),
+            $request->getPath(),
+            (string) ($request->getRouterData('module_path') ?? ''),
+        ]);
+
+        foreach ($paths as $path) {
+            if ($this->matchesPath((string) $path, self::GUEST_FRONTEND_PATH_PATTERNS)) {
+                return true;
+            }
+        }
+
+        return $this->matchesPublicFrontendController(
+            (string) ($request->getRouterData('controller') ?? ''),
+            (string) $request->getAction()
+        );
+    }
+
+    private function matchesPath(string $path, ?array $patterns = null): bool
     {
         $normalizedPath = ltrim($path, '/');
 
-        foreach (array_merge(self::AUTH_PATH_PATTERNS, self::DEMO_PATH_PATTERNS) as $pattern) {
+        foreach (($patterns ?? array_merge(self::AUTH_PATH_PATTERNS, self::DEMO_PATH_PATTERNS)) as $pattern) {
             if (
                 $normalizedPath === $pattern
                 || str_ends_with($normalizedPath, '/' . $pattern)
@@ -135,5 +169,32 @@ class PublicApiAuthRouteMatcher
         }
 
         return false;
+    }
+
+    private function matchesPublicFrontendController(string $controllerClass, string $action): bool
+    {
+        if ($controllerClass === '' || $action === '' || !class_exists($controllerClass)) {
+            return false;
+        }
+
+        if (!is_subclass_of($controllerClass, \Weline\Framework\App\Controller\FrontendRestController::class)) {
+            return false;
+        }
+
+        try {
+            $reflection = new \ReflectionClass($controllerClass);
+            if (!$reflection->hasMethod($action)) {
+                return false;
+            }
+
+            if ($reflection->getAttributes(\Weline\Framework\Acl\Acl::class) !== []) {
+                return false;
+            }
+
+            $method = $reflection->getMethod($action);
+            return $method->getAttributes(\Weline\Framework\Acl\Acl::class) === [];
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

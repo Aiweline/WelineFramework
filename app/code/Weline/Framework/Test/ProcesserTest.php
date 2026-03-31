@@ -378,6 +378,28 @@ class ProcesserTest extends TestCore
         );
     }
 
+    public function testPartitionRunningPidsSeparatesExitedProcessesBeforeFallbackKill(): void
+    {
+        $driver = $this->createMock(ProcessDriverInterface::class);
+        $driver->expects(self::exactly(2))
+            ->method('isRunningByPid')
+            ->willReturnMap([
+                [101, false],
+                [202, true],
+            ]);
+
+        $reflection = new \ReflectionProperty(ProcessDriverFactory::class, 'driver');
+        $reflection->setAccessible(true);
+        $reflection->setValue(null, $driver);
+
+        $state = $this->invokePrivateStatic(Processer::class, 'partitionRunningPids', [[101, 202]]);
+
+        self::assertSame([
+            'running' => [202],
+            'exited' => [101],
+        ], $state);
+    }
+
     public function testBatchCheckRunningUsesBatchProcessInfoQueryForLargePidSets(): void
     {
         $pids = \range(101, 117);

@@ -12,25 +12,33 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Sse;
 
+use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
+
 /**
  * SSE 写入器
- * 
+ *
  * 用法示例：
  * ```php
  * // 在控制器中
  * $sse = new SseWriter();
  * $sse->start();  // 发送 SSE 头并启用流式模式
- * 
+ *
  * $sse->sendEvent('start', ['message' => '开始处理']);
- * 
+ *
  * foreach ($items as $item) {
  *     $sse->sendData(['progress' => $progress]);
- *     usleep(100000); // 100ms
+ *     // 无需手动调用 yieldAfterSend()，默认自动让步
  * }
- * 
+ *
  * $sse->sendEvent('complete', ['message' => '处理完成']);
  * $sse->close();
  * ```
+ *
+ * 注意：
+ * - SSE 长连接会占用 1 个 Fiber 槽位，这是正常的设计
+ * - 默认每次发送后自动让出控制权，使 Worker 能处理其他请求
+ * - 如需禁用自动让步，调用 $sse->setCooperativeYield(false)
  */
 class SseWriter
 {
@@ -38,26 +46,36 @@ class SseWriter
      * 是否已启动
      */
     private bool $started = false;
-    
+
     /**
      * 事件 ID 计数器
      */
     private int $eventId = 0;
-    
+
     /**
      * 重试间隔（毫秒）
      */
     private int $retryInterval = 3000;
-    
+
     /**
      * 心跳间隔（秒）
      */
     private int $heartbeatInterval = 30;
-    
+
     /**
      * 上次心跳时间
      */
     private int $lastHeartbeat = 0;
+
+    /**
+     * 是否启用协作式让步（避免长连接独占 Worker）
+     */
+    private bool $cooperativeYield = true;
+
+    /**
+     * 让步延迟毫秒数（0 = 立即让步）
+     */
+    private int $yieldDelayMs = 0;
     
     /**
      * 设置重试间隔
@@ -111,8 +129,9 @@ class SseWriter
             $headers .= "X-Accel-Buffering: no\r\n";
             $headers .= "Access-Control-Allow-Origin: *\r\n";
             $headers .= "\r\n";
-            
-            SseContext::write($headers);
+
+            // 使用带重试的写入方法
+            $this->writeWithRetry($headers);
         } else {
             // FPM/CLI 模式：使用 PHP 原生 header() 函数
             if (!\headers_sent()) {
@@ -122,18 +141,18 @@ class SseWriter
                 \header('X-Accel-Buffering: no');
                 \header('Access-Control-Allow-Origin: *');
             }
-            
+
             // 清空所有输出缓冲区
             while (\ob_get_level() > 0) {
                 \ob_end_flush();
             }
             \flush();
         }
-        
+
         SseContext::markHeadersSent();
-        
+
         // 发送重试间隔
-        SseContext::write("retry: {$this->retryInterval}\n\n");
+        $this->writeWithRetry("retry: {$this->retryInterval}\n\n");
         
         $this->started = true;
         $this->lastHeartbeat = \time();
@@ -143,34 +162,50 @@ class SseWriter
     
     /**
      * 发送 SSE 事件
-     * 
+     *
      * @param string $event 事件名称
      * @param mixed $data 事件数据（会自动 JSON 编码）
      * @param int|null $id 事件 ID（可选，默认自动递增）
      */
     public function sendEvent(string $event, mixed $data = null, ?int $id = null): self
     {
+        // #region agent debug log
+        if (Env::get('dev.mode') || Env::get('wls.debug', false)) {
+            \Weline\Framework\App\Env::log('sse_debug', "SSE sendEvent: event={$event}", 'debug');
+        }
+        // #endregion
+
         if (!$this->started) {
             $this->start();
         }
-        
+
         $this->checkHeartbeat();
-        
+
         $id = $id ?? ++$this->eventId;
         $dataStr = \is_string($data) ? $data : \json_encode($data, JSON_UNESCAPED_UNICODE);
-        
+
         $message = "id: {$id}\n";
         $message .= "event: {$event}\n";
         $message .= "data: {$dataStr}\n\n";
-        
-        SseContext::write($message);
-        
+
+        // 使用带重试的写入方法，避免缓冲区满时阻塞
+        $this->writeWithRetry($message);
+
+        // 发送后自动让出控制权，让 Worker 处理其他请求
+        $this->yieldAfterSend();
+
+        // #region agent debug log
+        if (Env::get('dev.mode') || Env::get('wls.debug', false)) {
+            \Weline\Framework\App\Env::log('sse_debug', "SSE sendEvent done: event={$event}", 'debug');
+        }
+        // #endregion
+
         return $this;
     }
-    
+
     /**
      * 发送数据（无事件名）
-     * 
+     *
      * @param mixed $data 数据（会自动 JSON 编码）
      */
     public function sendData(mixed $data): self
@@ -178,11 +213,11 @@ class SseWriter
         if (!$this->started) {
             $this->start();
         }
-        
+
         $this->checkHeartbeat();
-        
+
         $dataStr = \is_string($data) ? $data : \json_encode($data, JSON_UNESCAPED_UNICODE);
-        
+
         // SSE 数据格式：多行数据需要每行都加 "data: " 前缀
         $lines = \explode("\n", $dataStr);
         $message = '';
@@ -190,15 +225,68 @@ class SseWriter
             $message .= "data: {$line}\n";
         }
         $message .= "\n";
-        
-        SseContext::write($message);
-        
+
+        // 使用带重试的写入方法，避免缓冲区满时阻塞
+        $this->writeWithRetry($message);
+
+        // 发送后自动让出控制权，让 Worker 处理其他请求
+        $this->yieldAfterSend();
+
         return $this;
+    }
+
+    /**
+     * 带重试的写入方法
+     *
+     * 如果缓冲区满，yield 让出控制权后重试，不阻塞 Worker。
+     *
+     * @param string $data 要写入的数据
+     * @param int $maxRetries 最大重试次数
+     * @return bool 是否成功写入
+     */
+    private function writeWithRetry(string $data, int $maxRetries = 50): bool
+    {
+        $writtenLen = \strlen($data);
+        for ($i = 0; $i < $maxRetries; $i++) {
+            $result = SseContext::write($data);
+            if ($result !== false) {
+                // #region agent debug log
+                if (Env::get('dev.mode') || Env::get('wls.debug', false)) {
+                    $preview = \substr($data, 0, 50);
+                    \Weline\Framework\App\Env::log('sse_debug', "SSE write success [retry:{$i}/{$maxRetries}] len={$writtenLen} data=" . \json_encode($preview), 'debug');
+                }
+                // #endregion
+                return true;
+            }
+
+            // #region agent debug log
+            if (Env::get('dev.mode') || Env::get('wls.debug', false)) {
+                \Weline\Framework\App\Env::log('sse_debug', "SSE write blocked [retry:{$i}/{$maxRetries}] buffer_full, yielding", 'debug');
+            }
+            // #endregion
+
+            // 缓冲区满，yield 让出控制权，下一轮再试
+            if ($this->cooperativeYield) {
+                if ($this->yieldDelayMs > 0) {
+                    SchedulerSystem::yieldDelay($this->yieldDelayMs);
+                } else {
+                    SchedulerSystem::yield();
+                }
+            }
+        }
+
+        // #region agent debug log
+        if (Env::get('dev.mode') || Env::get('wls.debug', false)) {
+            \Weline\Framework\App\Env::log('sse_debug', "SSE write FAILED [retries:{$maxRetries}] len={$writtenLen}", 'error');
+        }
+        // #endregion
+
+        return false;  // 重试次数用尽
     }
     
     /**
      * 发送注释（心跳/保活）
-     * 
+     *
      * @param string $comment 注释内容
      */
     public function sendComment(string $comment = ''): self
@@ -206,10 +294,11 @@ class SseWriter
         if (!$this->started) {
             $this->start();
         }
-        
-        SseContext::write(": {$comment}\n\n");
+
+        // 使用带重试的写入方法，避免缓冲区满时阻塞
+        $this->writeWithRetry(": {$comment}\n\n");
         $this->lastHeartbeat = \time();
-        
+
         return $this;
     }
     
@@ -243,6 +332,89 @@ class SseWriter
         if ($now - $this->lastHeartbeat >= $this->heartbeatInterval) {
             $this->sendHeartbeat();
         }
+    }
+
+    /**
+     * 设置协作式让步模式
+     *
+     * @param bool $enabled 是否启用让步
+     * @param int $delayMs 让步延迟毫秒数（0 = 立即让步）
+     * @return $this
+     */
+    public function setCooperativeYield(bool $enabled, int $delayMs = 0): self
+    {
+        $this->cooperativeYield = $enabled;
+        $this->yieldDelayMs = \max(0, $delayMs);
+        return $this;
+    }
+
+    /**
+     * 发送后让出控制权（协作式调度）
+     *
+     * 在每次 sendEvent/sendData 后调用，使当前 Fiber 让出控制权，
+     * 让 Worker 可以处理其他请求，避免一个长连接独占整个 Worker。
+     *
+     * 用法：
+     * ```php
+     * $sse->sendEvent('chunk', ['data' => $chunk]);
+     * $sse->yieldAfterSend(); // 让步，Worker 可处理其他 Fiber
+     * ```
+     *
+     * @return $this
+     */
+    public function yieldAfterSend(): self
+    {
+        // #region agent debug log
+        if (Env::get('dev.mode') || Env::get('wls.debug', false)) {
+            \Weline\Framework\App\Env::log('sse_debug', "SSE yieldAfterSend: cooperativeYield=" . ($this->cooperativeYield ? 'true' : 'false') . " delayMs={$this->yieldDelayMs}", 'debug');
+        }
+        // #endregion
+
+        if (!$this->cooperativeYield) {
+            return $this;
+        }
+
+        if ($this->yieldDelayMs > 0) {
+            SchedulerSystem::yieldDelay($this->yieldDelayMs);
+        } else {
+            SchedulerSystem::yield();
+        }
+
+        // #region agent debug log
+        if (Env::get('dev.mode') || Env::get('wls.debug', false)) {
+            \Weline\Framework\App\Env::log('sse_debug', "SSE yieldAfterSend: resumed from yield", 'debug');
+        }
+        // #endregion
+
+        return $this;
+    }
+
+    /**
+     * 发送事件后自动让步（替代手动调用 yieldAfterSend）
+     *
+     * @param string $event 事件名称
+     * @param mixed $data 事件数据
+     * @param int|null $id 事件 ID
+     * @return $this
+     */
+    public function sendEventAndYield(string $event, mixed $data = null, ?int $id = null): self
+    {
+        $this->sendEvent($event, $data, $id);
+        $this->yieldAfterSend();
+        return $this;
+    }
+
+    /**
+     * 发送数据后自动让步
+     *
+     * @param mixed $data 数据
+     * @return $this
+     */
+    public function sendDataAndYield(mixed $data): self
+    {
+        $this->sendData($data);
+        $this->yieldAfterSend();
+        return $this;
     }
     
     /**
@@ -290,7 +462,7 @@ class SseWriter
             return;
         }
         // 发送结束注释，便于客户端/代理识别流结束
-        SseContext::write(": stream closed\n\n");
+        $this->writeWithRetry(": stream closed\n\n");
         // 刷新输出，确保数据发送完毕
         if (SseContext::getConnection() !== null && \is_resource(SseContext::getConnection())) {
             @\fflush(SseContext::getConnection());

@@ -393,38 +393,40 @@ class App
                 // 标记 URL 解析已完成（用于 CheckFullPageCache 判断）
                 $_SERVER['WELINE_URL_PARSED'] = true;
                 
-                $default_cookies = [
-                    'WELINE_USER_LANG',
-                    'WELINE_USER_CURRENCY',
-                    'WELINE_WEBSITE_ID',
-                    'WELINE_WEBSITE_CODE',
-                    'WELINE_WEBSITE_URL',
-                ];
-                if ($parse['currency']) {
-                    $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
-                }
-                if ($parse['language']) {
-                    $_SERVER['WELINE_USER_LANG'] = $parse['language'];
-                }
-                // 性能优化：批量检查并设置 Cookie，减少 Cookie::set 调用次数
-                $cookiesToSet = [];
-                foreach ($default_cookies as $key) {
-                    if (!isset($_SERVER[$key])) {
-                        if (in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true)) {
-                            $_SERVER[$key] = '';
-                        } else {
-                            throw new Exception(__('系统SERVER缺少key：%{1}', $key));
+                if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
+                    $default_cookies = [
+                        'WELINE_USER_LANG',
+                        'WELINE_USER_CURRENCY',
+                        'WELINE_WEBSITE_ID',
+                        'WELINE_WEBSITE_CODE',
+                        'WELINE_WEBSITE_URL',
+                    ];
+                    if ($parse['currency']) {
+                        $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
+                    }
+                    if ($parse['language']) {
+                        $_SERVER['WELINE_USER_LANG'] = $parse['language'];
+                    }
+                    // 性能优化：批量检查并设置 Cookie，减少 Cookie::set 调用次数
+                    $cookiesToSet = [];
+                    foreach ($default_cookies as $key) {
+                        if (!isset($_SERVER[$key])) {
+                            if (in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true)) {
+                                $_SERVER[$key] = '';
+                            } else {
+                                throw new Exception(__('系统SERVER缺少key：%{1}', $key));
+                            }
+                        }
+                        // 只在值发生变化时设置 Cookie（减少不必要的 Cookie 操作）
+                        $currentCookieValue = Cookie::get($key);
+                        if ($currentCookieValue !== $_SERVER[$key]) {
+                            $cookiesToSet[$key] = $_SERVER[$key];
                         }
                     }
-                    // 只在值发生变化时设置 Cookie（减少不必要的 Cookie 操作）
-                    $currentCookieValue = Cookie::get($key);
-                    if ($currentCookieValue !== $_SERVER[$key]) {
-                        $cookiesToSet[$key] = $_SERVER[$key];
+                    // 批量设置 Cookie
+                    foreach ($cookiesToSet as $key => $value) {
+                        Cookie::set($key, $value, 3600 * 24 * 30, []);
                     }
-                }
-                // 批量设置 Cookie
-                foreach ($cookiesToSet as $key => $value) {
-                    Cookie::set($key, $value, 3600 * 24 * 30, []);
                 }
                 
                 // URL 解析后，再次检查全页缓存（此时 WELINE_IS_BACKEND 已设置）
@@ -435,9 +437,11 @@ class App
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
             }
-            // 请求早期统一启动 Session（从 Cookie + 存储加载），供各区域（后台/前台等）复用
+            // 请求早期统一启动 Session（从 Cookie + 存储加载），供各区域（后台/前台等）复用；静态资源不启动
 
-            SessionFactory::getInstance()->createSession()->start(null);
+            if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
+                SessionFactory::getInstance()->createSession()->start(null);
+            }
             $routerStartBegin = microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::pushCurrentParent('router_start');
