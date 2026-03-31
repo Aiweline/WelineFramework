@@ -161,39 +161,7 @@ app/design/WeShop/default/
 - `WeShop_Frontend::homepage::content_after` - 首页内容后
 
 ### Footer Hook点
-- `WeShop_Social::footer::social_links` - 社交媒体链接
-
-## 文件覆盖机制
-
-### 核心原则：同名文件以激活主题为准
-
-主题系统支持文件覆盖机制，遵循以下规则：
-
-1. **同名文件覆盖**：如果激活主题存在同名文件，直接使用激活主题的文件，不再查找父主题
-2. **文件查找顺序**：
-   - 激活主题 → 如果存在同名文件，直接使用
-   - 父主题链 → 仅在激活主题不存在时查找
-   - 默认主题 → 作为后备
-
-### 支持覆盖的文件类型
-
-- **布局文件**：`view/theme/{area}/layouts/{type}/{option}.phtml`
-- **片段文件**：`view/theme/{area}/partials/{type}/{option}.phtml`
-- **组件文件**：`view/theme/{area}/components/{name}.phtml`
-- **CSS文件**：`view/theme/{area}/assets/css/{file}.css`
-- **JS模块文件**：`view/theme/{area}/assets/js/{module}.js` ⭐
-- **配置文件**：`view/theme/{area}/config/{file}.json`
-
-### JS模块继承机制
-
-JS模块文件（如 `search.js`）支持主题继承和覆盖：
-
-- **覆盖规则**：如果激活主题存在同名JS文件，直接使用激活主题的文件，跳过父主题的同名文件
-- **模块收集**：JS模块收集时，如果激活主题存在同名文件，只收集激活主题的版本
-- **示例**：
-  - 父主题：`app/design/Weline/default/view/theme/frontend/assets/js/search.js`
-  - 激活主题：`app/design/WeShop/default/view/theme/frontend/assets/js/search.js`
-  - **结果**：系统只使用激活主题的 `search.js`，不会加载父主题的同名文件
+- `WeShop_Social::frontend::partials::footer::social-links` - 社交媒体链接
 
 ## 文件覆盖机制
 
@@ -235,7 +203,6 @@ JS模块文件（如 `search.js`）支持主题继承和覆盖：
 4. **URL生成**：使用 `$this->getUrl()` 方法生成URL
 5. **静态资源**：使用 `$this->getStaticUrl()` 方法引用静态资源
 6. **数据绑定**：使用 `$this->getData()` 获取数据，使用 `$this->assign()` 设置数据
-7. **文件覆盖**：要覆盖父主题的文件，在激活主题中创建同名文件即可
 7. **文件覆盖**：要覆盖父主题的文件，在激活主题中创建同名文件即可
 
 ## UI设计文件位置
