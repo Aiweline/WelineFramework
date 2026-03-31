@@ -11,6 +11,9 @@ $currentPage = max(1, (int) ($pagination['page'] ?? 1));
 $pageCount = max(1, (int) ($pagination['page_count'] ?? 1));
 $totalCompanies = max(0, (int) ($pagination['total'] ?? 0));
 $editingId = max(0, (int) ($editingRecord['company_id'] ?? 0));
+$companyBackUrl = $editingId > 0
+    ? (string) $this->getBackendUrl('*/backend/company', ['id' => $editingId])
+    : $companyIndexUrl;
 ?>
 
 <div class="container-fluid py-3">
@@ -50,9 +53,9 @@ $editingId = max(0, (int) ($editingRecord['company_id'] ?? 0));
             <div class="card shadow-sm">
                 <div class="card-body">
                     <h2 class="h5 mb-3"><?= $editingId ? __('Edit B2B Company') : __('Create B2B Company') ?></h2>
-                    <form method="post" action="<?= $companySaveUrl ?>" class="d-grid gap-3">
+                    <form method="post" action="<?= $companySaveUrl ?>" class="d-grid gap-3" data-e2e="weshop-b2b-company-edit-form">
                         <input type="hidden" name="company_id" value="<?= $editingId ?>">
-                        <input type="hidden" name="back_url" value="<?= htmlspecialchars($companyIndexUrl, ENT_QUOTES) ?>">
+                        <input type="hidden" name="back_url" value="<?= htmlspecialchars($companyBackUrl, ENT_QUOTES) ?>">
                         <div>
                             <label class="form-label"><?= __('Company Name') ?></label>
                             <input type="text"

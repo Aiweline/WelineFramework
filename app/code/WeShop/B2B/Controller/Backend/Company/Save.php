@@ -16,7 +16,7 @@ class Save extends BaseController
 
     public function post(): string
     {
-        $backUrl = (string) $this->request->getParam('back_url', $this->getBackendUrl('*/backend/company'));
+        $backUrl = (string) $this->request->getParam('back_url', $this->request->getUrlBuilder()->getBackendUrl('*/backend/company'));
 
         try {
             $company = $this->companyService->saveCompany([
@@ -30,7 +30,7 @@ class Save extends BaseController
             ]);
 
             $this->getMessageManager()->addSuccess(__('Company profile saved.'));
-            $this->redirect($this->getBackendUrl('*/backend/company', ['id' => $company->getId()]));
+            $this->redirect($this->request->getUrlBuilder()->getBackendUrl('*/backend/company', ['id' => $company->getId()]));
             return '';
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage() ?: __('Company profile save failed.'));
