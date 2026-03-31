@@ -25,6 +25,7 @@ class ProductEavService
     private Option $attributeOption;
 
     private ?EavEntity $productEntity = null;
+    private ?ProductEavCompatibilityService $compatibilityService = null;
 
     public function __construct(
         EavEntity $eavEntity,
@@ -402,7 +403,16 @@ class ProductEavService
      */
     public function getSearchIndexData(int $productId, ?int $setId = null): array
     {
-        $groups = $this->getProductAttributes($productId, $setId);
+        try {
+            $groups = $this->getProductAttributes($productId, $setId);
+        } catch (\Throwable) {
+            $groups = [];
+        }
+
+        if ($groups === []) {
+            return $this->getCompatibilityService()->getSearchIndexData($productId);
+        }
+
         $searchTexts = [];
         $facets = [];
 
@@ -429,6 +439,11 @@ class ProductEavService
             'eav_search_text' => array_values(array_filter(array_unique($searchTexts))),
             'eav_facets' => array_values($facets),
         ];
+    }
+
+    private function getCompatibilityService(): ProductEavCompatibilityService
+    {
+        return $this->compatibilityService ??= ObjectManager::getInstance(ProductEavCompatibilityService::class);
     }
 
     /**
