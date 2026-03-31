@@ -24,7 +24,7 @@
 <body class="bg-pattern <?= htmlspecialchars($meta['class'] ?? '') ?>">
     <w:hook>Weline_Theme::backend::layouts::login::body-start</w:hook>
     
-    <?php echo $this->fetch('theme/backend/partials/layout/content.phtml'); ?>
+    <?php echo $this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml'); ?>
     
     <w:hook>Weline_Theme::backend::layouts::login::body-end</w:hook>
     

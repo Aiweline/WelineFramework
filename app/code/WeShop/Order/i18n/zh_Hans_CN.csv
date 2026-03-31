@@ -2,6 +2,7 @@
 Success,Success
 "Order Management",订单管理
 "Order ID is required.",订单ID不能为空。
+"Invalid order status.","Invalid order status."
 "Order status updated.",订单状态已更新。
 "Order status update failed.",订单状态更新失败。
 "Order not found.",订单不存在。

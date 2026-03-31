@@ -368,6 +368,46 @@ final class PreviewContextService
             $context['frontend_theme_id'] = $welineThemeId;
         }
 
+        // 最高优先级：原始 URL 查询参数（REQUEST_URI）显式选择必须覆盖会话/旧上下文。
+        // 这可以避免 request parameter bag 被历史上下文回写后，污染当前预览直链。
+        $rawFrontendThemeId = $this->getRawQueryInt('frontend_theme_id');
+        if ($rawFrontendThemeId > 0) {
+            $requestFrontendThemeId = $rawFrontendThemeId;
+            $context['frontend_theme_id'] = $rawFrontendThemeId;
+        }
+        $rawBackendThemeId = $this->getRawQueryInt('backend_theme_id');
+        if ($rawBackendThemeId > 0) {
+            $requestBackendThemeId = $rawBackendThemeId;
+            $context['backend_theme_id'] = $rawBackendThemeId;
+        }
+        $rawLegacyPreviewThemeId = $this->getRawQueryInt('preview_theme');
+        if ($rawLegacyPreviewThemeId > 0) {
+            $legacyPreviewThemeId = $rawLegacyPreviewThemeId;
+            $rawPreviewArea = $this->normalizeArea(
+                $this->getRawQueryString(
+                    'preview_area',
+                    (string)($context['editor_area'] ?? self::AREA_FRONTEND)
+                )
+            );
+            if ($rawPreviewArea === self::AREA_BACKEND) {
+                if ($requestBackendThemeId <= 0) {
+                    $context['backend_theme_id'] = $rawLegacyPreviewThemeId;
+                }
+            } else {
+                if ($requestFrontendThemeId <= 0) {
+                    $context['frontend_theme_id'] = $rawLegacyPreviewThemeId;
+                }
+            }
+            $context['editor_area'] = $context['editor_area'] ?? $rawPreviewArea;
+            $context['shell'] = $context['shell'] ?? self::SHELL_PREVIEW;
+        }
+
+        $rawPreviewToken = \trim($this->getRawQueryString(PreviewTokenService::TOKEN_KEY, ''));
+        if ($rawPreviewToken !== '') {
+            $hasExplicitPreviewToken = true;
+            $context['preview_token'] = $rawPreviewToken;
+        }
+
         $hasExplicitThemeSelection = $requestFrontendThemeId > 0
             || $requestBackendThemeId > 0
             || $legacyPreviewThemeId > 0
@@ -391,6 +431,44 @@ final class PreviewContextService
         }
 
         return $context;
+    }
+
+    private function getRawQueryInt(string $key, int $default = 0): int
+    {
+        $value = $this->getRawQueryString($key, null);
+        if ($value === null || $value === '') {
+            return $default;
+        }
+
+        return (int)$value;
+    }
+
+    private function getRawQueryString(string $key, ?string $default = null): ?string
+    {
+        $params = $this->getRawQueryParams();
+        if (!\array_key_exists($key, $params)) {
+            return $default;
+        }
+
+        $value = $params[$key];
+        if (\is_array($value)) {
+            $value = \reset($value);
+        }
+
+        return \is_scalar($value) ? (string)$value : $default;
+    }
+
+    private function getRawQueryParams(): array
+    {
+        $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $query = (string)\parse_url($requestUri, \PHP_URL_QUERY);
+        if ($query === '') {
+            return [];
+        }
+
+        $params = [];
+        \parse_str($query, $params);
+        return \is_array($params) ? $params : [];
     }
 
     private function detectShellFromRequest(): string

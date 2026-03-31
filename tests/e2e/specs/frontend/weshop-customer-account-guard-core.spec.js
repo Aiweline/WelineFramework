@@ -15,8 +15,9 @@ test.describe('WeShop customer account core guard', () => {
     const body = page.locator('body');
     await expect(body).toBeVisible({ timeout: 15000 });
     const maintenanceText = await body.textContent();
-    if (/网站维护|maintenance/i.test(maintenanceText || '')) {
-      await expect(body).toContainText(/网站维护|maintenance/i, { timeout: 15000 });
+    const maintenancePattern = /网站维护中|网站正在维护|maintenance mode|site maintenance/i;
+    if (maintenancePattern.test(maintenanceText || '')) {
+      await expect(body).toContainText(maintenancePattern, { timeout: 15000 });
       return;
     }
 

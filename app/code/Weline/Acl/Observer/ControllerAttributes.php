@@ -378,6 +378,22 @@ class ControllerAttributes implements \Weline\Framework\Event\ObserverInterface
         $sourceId = (string)$acl->getSourceId();
         $parentSource = (string)$acl->getParentSource();
 
+        // 如果当前模块还没有任何菜单 ACL 记录（首次安装 / 菜单尚未同步），跳过严格校验，
+        // 避免安装顺序导致的“菜单未入库但类级 ACL 已扫描”误报。
+        $module = (string)$acl->getModule();
+        if ($module !== '') {
+            $existingMenus = $this->acl->reset()
+                ->where(\Weline\Acl\Model\Acl::schema_fields_MODULE, $module)
+                ->where(\Weline\Acl\Model\Acl::schema_fields_TYPE, \Weline\Acl\Model\Acl::type_MENUS)
+                ->fields(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID)
+                ->limit(1)
+                ->select()
+                ->fetchArray();
+            if (empty($existingMenus)) {
+                return;
+            }
+        }
+
         $sourceMenu = $this->acl->reset()
             ->where(\Weline\Acl\Model\Acl::schema_fields_SOURCE_ID, $sourceId)
             ->where(\Weline\Acl\Model\Acl::schema_fields_TYPE, \Weline\Acl\Model\Acl::type_MENUS)
