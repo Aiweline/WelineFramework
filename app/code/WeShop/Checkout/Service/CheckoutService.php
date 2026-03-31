@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Checkout\Service;
 
 use WeShop\Address\Service\AddressService;
+use WeShop\B2B\Service\B2BCheckoutValidator;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use WeShop\Order\Model\Order;
@@ -14,7 +15,8 @@ class CheckoutService
 {
     public function __construct(
         private readonly OrderService $orderService,
-        private readonly ?AddressService $addressService = null
+        private readonly ?AddressService $addressService = null,
+        private readonly ?B2BCheckoutValidator $b2bCheckoutValidator = null
     ) {
     }
 
@@ -211,6 +213,8 @@ class CheckoutService
             throw new \InvalidArgumentException((string) __('Payment method is required.'));
         }
 
+        $this->b2bCheckoutValidator?->validate($checkoutData);
+
         return true;
     }
 
@@ -230,8 +234,9 @@ class CheckoutService
         $subtotal = (float) ($totals['subtotal'] ?? $this->calculateSubtotalFromCartItems($cartItems));
         $discount = max(0.0, (float) ($totals['discount'] ?? 0.0));
         $shipping = $this->calculateCheckoutShipping($cartItems, $subtotal, $checkoutData);
-        $tax = $this->calculateCheckoutTax($cartItems, $subtotal, $discount, $shipping, $checkoutData);
-        $grandTotal = max(0.0, round($subtotal + $shipping + $tax - $discount, 2));
+        $taxDetails = $this->calculateCheckoutTaxDetails($cartItems, $totals, $subtotal, $discount, $shipping, $checkoutData);
+        $tax = $taxDetails['tax_amount'];
+        $grandTotal = max(0.0, round($subtotal + $shipping + $taxDetails['chargeable_tax'] - $discount, 2));
 
         return [
             'subtotal' => round($subtotal, 2),
@@ -305,35 +310,65 @@ class CheckoutService
 
     /**
      * @param array<int, mixed> $cartItems
+     * @param array<string, mixed> $totals
      * @param array<string, mixed> $checkoutData
+     * @return array{tax_amount: float, chargeable_tax: float, included_tax: float}
      */
-    protected function calculateCheckoutTax(
+    protected function calculateCheckoutTaxDetails(
         array $cartItems,
+        array $totals,
         float $subtotal,
         float $discount,
         float $shipping,
         array $checkoutData
-    ): float {
+    ): array {
         $address = $this->normalizeShippingAddress($checkoutData);
         $country = (string) ($address['country_id'] ?? $address['country'] ?? '');
         $region = (string) ($address['region'] ?? '');
-
-        $taxAmount = $this->query('tax', 'calculateTax', [
+        $context = $this->buildCheckoutTaxContext($cartItems, $totals, $discount, $shipping, $checkoutData);
+        $params = [
             'subtotal' => $subtotal,
             'country' => $country,
             'region' => $region,
             'shipping_amount' => $shipping,
             'discount' => $discount,
-            'context' => [
-                'shipping_amount' => $shipping,
-                'discount' => $discount,
-                'currency' => (string) ($checkoutData['currency'] ?? ''),
-                'customer_id' => (int) ($checkoutData['customer_id'] ?? 0),
-                'items' => $this->mapCartItemsForShipping($cartItems),
-            ],
-        ]);
+            'context' => $context,
+        ];
 
-        return round(max(0.0, is_numeric($taxAmount) ? (float) $taxAmount : 0.0), 2);
+        try {
+            $taxResult = $this->query('tax', 'calculateTaxBreakdown', $params);
+        } catch (\Throwable) {
+            $taxResult = null;
+        }
+
+        if (is_array($taxResult)) {
+            $taxAmount = round(max(0.0, (float) ($taxResult['tax_amount'] ?? $taxResult['tax'] ?? 0.0)), 2);
+            $chargeableTax = round(
+                max(0.0, (float) ($taxResult['chargeable_tax'] ?? $taxResult['tax_amount'] ?? $taxResult['tax'] ?? 0.0)),
+                2
+            );
+            $includedTax = round(max(0.0, (float) ($taxResult['included_tax'] ?? 0.0)), 2);
+
+            return [
+                'tax_amount' => $taxAmount,
+                'chargeable_tax' => $chargeableTax,
+                'included_tax' => $includedTax,
+            ];
+        }
+
+        $taxAmount = is_numeric($taxResult) ? (float) $taxResult : 0.0;
+        if (!is_numeric($taxResult)) {
+            $legacyResult = $this->query('tax', 'calculateTax', $params);
+            $taxAmount = is_numeric($legacyResult) ? (float) $legacyResult : 0.0;
+        }
+
+        $taxAmount = round(max(0.0, $taxAmount), 2);
+
+        return [
+            'tax_amount' => $taxAmount,
+            'chargeable_tax' => $taxAmount,
+            'included_tax' => 0.0,
+        ];
     }
 
     /**
@@ -386,6 +421,55 @@ class CheckoutService
         }
 
         return $result;
+    }
+
+    /**
+     * @param array<int, mixed> $cartItems
+     * @param array<string, mixed> $totals
+     * @param array<string, mixed> $checkoutData
+     * @return array<string, mixed>
+     */
+    protected function buildCheckoutTaxContext(
+        array $cartItems,
+        array $totals,
+        float $discount,
+        float $shipping,
+        array $checkoutData
+    ): array {
+        $context = [];
+        if (is_array($totals['tax_context'] ?? null)) {
+            $context = $totals['tax_context'];
+        }
+
+        if (is_array($checkoutData['tax_context'] ?? null)) {
+            $context = array_merge($context, $checkoutData['tax_context']);
+        }
+
+        $passthroughKeys = [
+            'apply_to_shipping',
+            'default_rate',
+            'country_rates',
+            'region_rates',
+            'prices_include_tax',
+            'price_includes_tax',
+            'shipping_includes_tax',
+        ];
+        foreach ($passthroughKeys as $key) {
+            if (array_key_exists($key, $totals) && !array_key_exists($key, $context)) {
+                $context[$key] = $totals[$key];
+            }
+            if (array_key_exists($key, $checkoutData)) {
+                $context[$key] = $checkoutData[$key];
+            }
+        }
+
+        $context['shipping_amount'] = $shipping;
+        $context['discount'] = $discount;
+        $context['currency'] = (string) ($checkoutData['currency'] ?? $totals['currency'] ?? '');
+        $context['customer_id'] = (int) ($checkoutData['customer_id'] ?? $totals['customer_id'] ?? 0);
+        $context['items'] = $this->mapCartItemsForShipping($cartItems);
+
+        return $context;
     }
 
     protected function getEventsManager(): EventsManager

@@ -78,16 +78,20 @@ class PlaceOrderTest extends TestCase
             ]);
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')
-            ->willReturnMap([
-                ['order_id', null, 0],
-                ['shipping_address_id', null, 3],
-                ['billing_address_id', null, 0],
-                ['shipping_address', null, ['firstname' => 'Ada']],
-                ['shipping', null, null],
-                ['shipping_method', null, 'flat_rate'],
-                ['payment_method', null, 'paypal'],
-            ]);
+        $request->method('getBodyParam')->willReturnCallback(static fn(string $key, mixed $default = null): mixed => $default);
+        $request->method('getPost')->willReturnCallback(static fn(string $key, mixed $default = null): mixed => $default);
+        $request->method('getParam')->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+            return match ($key) {
+                'order_id' => 0,
+                'shipping_address_id' => 3,
+                'billing_address_id' => 0,
+                'shipping_address' => ['firstname' => 'Ada'],
+                'shipping' => null,
+                'shipping_method' => 'flat_rate',
+                'payment_method' => 'paypal',
+                default => $default,
+            };
+        });
         $request->method('getServer')
             ->willReturnMap([
                 ['REMOTE_ADDR', '203.0.113.9'],
@@ -151,16 +155,20 @@ class PlaceOrderTest extends TestCase
             ]);
 
         $request = $this->createMock(Request::class);
-        $request->method('getParam')
-            ->willReturnMap([
-                ['order_id', null, 77],
-                ['shipping_address_id', null, 3],
-                ['billing_address_id', null, 0],
-                ['shipping_address', null, ['firstname' => 'Ada']],
-                ['shipping', null, null],
-                ['shipping_method', null, 'flat_rate'],
-                ['payment_method', null, 'paypal'],
-            ]);
+        $request->method('getBodyParam')->willReturnCallback(static fn(string $key, mixed $default = null): mixed => $default);
+        $request->method('getPost')->willReturnCallback(static fn(string $key, mixed $default = null): mixed => $default);
+        $request->method('getParam')->willReturnCallback(static function (string $key, mixed $default = null): mixed {
+            return match ($key) {
+                'order_id' => 77,
+                'shipping_address_id' => 3,
+                'billing_address_id' => 0,
+                'shipping_address' => ['firstname' => 'Ada'],
+                'shipping' => null,
+                'shipping_method' => 'flat_rate',
+                'payment_method' => 'paypal',
+                default => $default,
+            };
+        });
         $request->method('getServer')->willReturnMap([['REMOTE_ADDR', '203.0.113.9']]);
 
         $controller = $this->getMockBuilder(PlaceOrder::class)
@@ -172,6 +180,86 @@ class PlaceOrderTest extends TestCase
             ->with($this->callback(static function (array $payload): bool {
                 return (bool) ($payload['success'] ?? false)
                     && (int) ($payload['data']['order_id'] ?? 0) === 77
+                    && ($payload['data']['is_retry_payment'] ?? null) === true;
+            }))
+            ->willReturn('json');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+
+        $this->assertSame('json', $controller->index());
+    }
+
+    public function testIndexReadsBodyAndPostPayloadWithRetryOrderFallback(): void
+    {
+        $_SERVER['WELINE_USER_CURRENCY'] = 'USD';
+
+        $customer = $this->createCustomer(9);
+        $customerSession = $this->createMock(CustomerSession::class);
+        $customerSession->expects($this->once())
+            ->method('getCustomer')
+            ->willReturn($customer);
+        $customerSession->expects($this->once())
+            ->method('set')
+            ->with($this->equalTo('weshop_checkout_last_order_context'), $this->callback(static function (array $context): bool {
+                return (int) ($context['order_id'] ?? 0) === 71
+                    && ($context['is_retry_payment'] ?? null) === true;
+            }));
+
+        $checkoutService = $this->createMock(CheckoutService::class);
+        $checkoutService->expects($this->once())
+            ->method('placeOrder')
+            ->with($this->callback(static function (array $payload): bool {
+                return (int) ($payload['order_id'] ?? 0) === 71
+                    && (int) ($payload['shipping_address_id'] ?? 0) === 4
+                    && (int) ($payload['billing_address_id'] ?? 0) === 12
+                    && (string) ($payload['shipping_method'] ?? '') === 'dhl'
+                    && (string) ($payload['payment_method'] ?? '') === 'paypal'
+                    && (string) (($payload['shipping_address']['country_id'] ?? '')) === 'GB';
+            }))
+            ->willReturn([
+                'order_id' => 71,
+                'order_increment_id' => 'WS000071',
+                'payment' => [],
+                'payment_method' => ['code' => 'paypal', 'title' => 'PayPal'],
+                'order_summary' => ['grand_total' => 59.5],
+                'is_retry_payment' => true,
+            ]);
+
+        $request = $this->createMock(Request::class);
+        $request->method('getBodyParam')
+            ->willReturnMap([
+                ['order_id', null, null],
+                ['retry_order_id', null, null],
+                ['shipping_address_id', null, 4],
+                ['billing_address_id', null, null],
+                ['shipping_address', null, null],
+                ['shipping', null, null],
+                ['shipping_method', null, null],
+                ['payment_method', null, 'paypal'],
+            ]);
+        $request->method('getPost')
+            ->willReturnMap([
+                ['order_id', null, null],
+                ['retry_order_id', null, 71],
+                ['shipping_address_id', null, null],
+                ['billing_address_id', null, 12],
+                ['shipping_address', null, null],
+                ['shipping', null, ['country_id' => 'GB']],
+                ['shipping_method', null, 'dhl'],
+                ['payment_method', null, null],
+            ]);
+        $request->method('getParam')->willReturn(null);
+        $request->method('getServer')->willReturnMap([['REMOTE_ADDR', '203.0.113.9']]);
+
+        $controller = $this->getMockBuilder(PlaceOrder::class)
+            ->setConstructorArgs([$checkoutService, $customerSession])
+            ->onlyMethods(['fetchJson'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('fetchJson')
+            ->with($this->callback(static function (array $payload): bool {
+                return (bool) ($payload['success'] ?? false)
+                    && (int) ($payload['data']['order_id'] ?? 0) === 71
                     && ($payload['data']['is_retry_payment'] ?? null) === true;
             }))
             ->willReturn('json');

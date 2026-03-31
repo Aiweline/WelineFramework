@@ -1,6 +1,9 @@
-﻿"This order can no longer be retried.","This order can no longer be retried."
+﻿"Please log in first","Please log in first"
+"Checkout methods resolved successfully.","Checkout methods resolved successfully."
+"This order can no longer be retried.","This order can no longer be retried."
 "The checkout is empty.","The checkout is empty."
 "Please log in to continue.","Please log in to continue."
+"Checkout methods refreshed successfully.","Checkout methods refreshed successfully."
 "Order placed successfully.","Order placed successfully."
 "Order ID is required.","Order ID is required."
 "The requested order could not be found.","The requested order could not be found."
@@ -31,23 +34,43 @@ Redirect,Redirect
 "Payment method is required.","Payment method is required."
 "2. Payment Method","2. Payment Method"
 "No payment methods are available for the current checkout context.","No payment methods are available for the current checkout context."
-"Payment flow: %1",支付流程：%1
+"Payment flow: %1","Payment flow: %1"
 "Complete this payment flow after confirming the order.","Complete this payment flow after confirming the order."
 "No shipping methods are available for the current checkout context.","No shipping methods are available for the current checkout context."
+"Retry Payment","Retry Payment"
+"You are retrying payment for order #%{1}. The existing order will be reused instead of creating a new one.","You are retrying payment for order #%{1}. The existing order will be reused instead of creating a new one."
+"Shipping Address","Shipping Address"
+"First Name","First Name"
+"Last Name","Last Name"
+"Street Address","Street Address"
+City,City
+"State / Province","State / Province"
+"Zip / Postal Code","Zip / Postal Code"
+"Phone Number","Phone Number"
+Country,Country
+"Select Country","Select Country"
+"Shipping Method","Shipping Method"
+"Payment Method","Payment Method"
+"Review and Submit","Review and Submit"
+"I agree to the","I agree to the"
+"Terms of Service","Terms of Service"
+and,and
+"Privacy Policy","Privacy Policy"
+"Place Order","Place Order"
+"Order Summary","Order Summary"
+"Qty: %1","Qty: %1"
+Subtotal,Subtotal
+Shipping,Shipping
+Tax,Tax
+Discount,Discount
+"Grand Total","Grand Total"
 "Order Confirmed!","Order Confirmed!"
 "Thank you for your purchase","Thank you for your purchase"
 "Order Number:","Order Number:"
 "Order placed on","Order placed on"
 Total,Total
 "Order Items","Order Items"
-"Qty: %1","Qty: %1"
-"Shipping Address","Shipping Address"
-"Payment Method","Payment Method"
 "Card ending in %1","Card ending in %1"
-Subtotal,Subtotal
-Shipping,Shipping
-Discount,Discount
-Tax,Tax
 "Confirmation Email","Confirmation Email"
 "A confirmation email has been sent to your address.","A confirmation email has been sent to your address."
 Processing,Processing
