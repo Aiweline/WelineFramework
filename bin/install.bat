@@ -292,7 +292,7 @@ set "VALIDATE_ZIP_FILE=%~1"
 if not defined VALIDATE_ZIP_FILE exit /b 1
 if not exist "%VALIDATE_ZIP_FILE%" exit /b 1
 for %%z in ("%VALIDATE_ZIP_FILE%") do if %%~zz LEQ 100000 exit /b 1
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$path=$env:VALIDATE_ZIP_FILE; try { $stream=[System.IO.File]::OpenRead($path); $zip=$null; try { $zip=New-Object -TypeName System.IO.Compression.ZipArchive -ArgumentList @($stream, [System.IO.Compression.ZipArchiveMode]::Read, $false); if ($zip.Entries.Count -gt 0) { exit 0 } exit 1 } finally { if ($zip -ne $null) { $zip.Dispose() }; if ($stream -ne $null) { $stream.Dispose() } } } catch { exit 1 }" >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$path=$env:VALIDATE_ZIP_FILE; try { Add-Type -AssemblyName System.IO.Compression; Add-Type -AssemblyName System.IO.Compression.FileSystem; $stream=[System.IO.File]::OpenRead($path); $zip=$null; try { $zip=New-Object -TypeName System.IO.Compression.ZipArchive -ArgumentList @($stream, [System.IO.Compression.ZipArchiveMode]::Read, $false); if ($zip.Entries.Count -gt 0) { exit 0 } exit 1 } finally { if ($zip -ne $null) { $zip.Dispose() }; if ($stream -ne $null) { $stream.Dispose() } } } catch { exit 1 }" >nul 2>&1
 if errorlevel 1 exit /b 1
 exit /b 0
 
