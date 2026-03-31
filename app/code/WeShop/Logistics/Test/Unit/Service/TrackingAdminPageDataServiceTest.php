@@ -47,7 +47,7 @@ class TrackingAdminPageDataServiceTest extends TestCase
             'status' => 'in_transit',
         ], $trackingService->receivedFilters);
         $this->assertCount(1, $data['trackingRecords']);
-        $this->assertSame('In Transit', $data['trackingRecords'][0]['status_label']);
+        $this->assertSame((string) __('In Transit'), $data['trackingRecords'][0]['status_label']);
         $this->assertSame('DHL', $data['editingRecord']['carrier']);
     }
 }
