@@ -21,6 +21,8 @@ interface PrintInterface
 
     public const ERROR = 'ERROR';
 
+    public const DEEP_ORANGE = 'DEEP_ORANGE';
+
     /**
      * @DESC         |错误打印
      *

@@ -516,14 +516,14 @@ abstract class RequestAbstract extends RequestFilter
     {
         $uri = $this->getOriginUri();
         $url_exp = explode('?', $uri);
-        return $this->getBaseHost() . array_shift($url_exp);
+        return $this->getBaseHost() . $this->normalizeBaseUrlPath((string) array_shift($url_exp));
     }
 
     public function getBaseUrl(): string
     {
         $uri = $this->getUri();
         $url_exp = explode('?', $uri);
-        return $this->getBaseHost() . array_shift($url_exp);
+        return $this->getBaseHost() . $this->normalizeBaseUrlPath((string) array_shift($url_exp));
     }
 
     public function getFullUrl(): string
@@ -535,7 +535,16 @@ abstract class RequestAbstract extends RequestFilter
     {
         $uri = $this->getUri();
         $url_exp = explode('?', $uri);
-        return $this->getBaseHost() . array_shift($url_exp);
+        return $this->getBaseHost() . $this->normalizeBaseUrlPath((string) array_shift($url_exp));
+    }
+
+    private function normalizeBaseUrlPath(string $path): string
+    {
+        if ($path === '') {
+            return '';
+        }
+
+        return str_starts_with($path, '/') ? $path : '/' . ltrim($path, '/');
     }
 
     public function getFirstUrlPath(): string
@@ -604,10 +613,14 @@ abstract class RequestAbstract extends RequestFilter
     public function getBaseHost(): string
     {
         $currentScheme = $this->getSsl();
-        
-        // 直接从 $_SERVER 读取（ServerBag 可能在 Url::parser() 前初始化，值已过时）
-        $currentPort = $_SERVER['SERVER_PORT'] ?? '';
-        $isNonStandardPort = ($currentPort !== '' && $currentPort != 80 && $currentPort != 443);
+
+        // 透传模式：优先信任 HTTP_HOST（客户端原始 Host）
+        $currentPort = '';
+        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+        if (\str_contains($host, ':')) {
+            $hostParts = \explode(':', $host, 2);
+            $currentPort = (string)($hostParts[1] ?? '');
+        }
         
         // WELINE_WEBSITE_URL 由 Url::parser() → processUrlParse() 写入 $_SERVER
         // 它包含 scheme://host[:port][/sub_path]
@@ -617,13 +630,23 @@ abstract class RequestAbstract extends RequestFilter
             $parsed = \parse_url($websiteUrl);
             $hostPart = $parsed['host'] ?? 'localhost';
             $pathPart = $parsed['path'] ?? '';
+            if ($currentPort === '' && isset($parsed['port'])) {
+                $currentPort = (string)$parsed['port'];
+            }
+            if ($currentPort === '') {
+                $currentPort = $currentScheme === 'https' ? '443' : '80';
+            }
+            $isNonStandardPort = $currentPort !== '' && !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
 
             $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
             return $currentScheme . '://' . $hostPart . $portSuffix . $pathPart;
         }
+        if ($currentPort === '') {
+            $currentPort = $currentScheme === 'https' ? '443' : '80';
+        }
+        $isNonStandardPort = $currentPort !== '' && !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
         
         // 优先使用 HTTP_HOST（客户端发送的 Host 头通常带端口，如 localhost:9981），保证生成的后台 URL 携带当前后端端口
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
         if (\str_contains($host, ':')) {
             return $currentScheme . '://' . $host;
         }
@@ -690,7 +713,10 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getResponse(): Response
     {
-        return $this->_response = ObjectManager::getInstance(\Weline\Framework\Http\Response::class);
+        if (!isset($this->_response)) {
+            $this->_response = ObjectManager::getInstance(\Weline\Framework\Http\Response::class);
+        }
+        return $this->_response;
     }
 
     public function isAjax(): bool

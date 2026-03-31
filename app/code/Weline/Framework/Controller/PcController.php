@@ -242,10 +242,11 @@ class PcController extends Core
         $eventData = new DataObject([
             'fileName' => $fileName,
             'content' => '',
+            'contentTemplate' => $fileName,
             'controller' => $this,
             'layoutType' => $this->layoutType ?? null
         ]);
-        
+
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
         $fileName = $eventData->getData('fileName');
         $content = $this->getTemplate()->fetch($fileName);
@@ -342,8 +343,9 @@ class PcController extends Core
     {
         // 触发Weline_Framework_Controller::fetch_file_before事件
         $eventData = new DataObject([
-            'fileName' => $fileName, 
+            'fileName' => $fileName,
             'content' => '',
+            'contentTemplate' => $fileName,
             'controller' => $this,
             'layoutType' => $this?->layoutType
         ]);

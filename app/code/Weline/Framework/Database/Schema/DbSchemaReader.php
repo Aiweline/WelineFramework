@@ -111,21 +111,20 @@ final class DbSchemaReader
         if ($tableNames === []) {
             return [];
         }
-
         // 一次查询确认哪些表实际存在（N→1 DB round-trip）
         $existing = array_flip($connector->getExistingTables($tableNames));
 
         $result = [];
         foreach ($tableNames as $name) {
             $cleanName = trim(str_replace(['`', '"'], '', $name));
-            if ($cleanName === '' || !isset($existing[$cleanName])) {
+            $lookupName = $this->extractLookupTableName($cleanName);
+            if ($lookupName === '' || !isset($existing[$lookupName])) {
                 continue;
             }
-            $tableComment = $connector->getTableComment($cleanName);
-            $columnRows   = $connector->getTableColumns($cleanName);
-            $indexRows    = $connector->getTableIndexes($cleanName);
-            $fkRows       = $connector->getTableForeignKeys($cleanName);
-
+            $tableComment = $connector->getTableComment($lookupName);
+            $columnRows   = $connector->getTableColumns($lookupName);
+            $indexRows    = $connector->getTableIndexes($lookupName);
+            $fkRows       = $connector->getTableForeignKeys($lookupName);
             $columns = [];
             foreach ($columnRows as $row) {
                 $columns[] = new ColumnDefinition(
@@ -164,8 +163,9 @@ final class DbSchemaReader
                 );
             }
 
-            $result[$cleanName] = new TableSchema(
-                tableName: $cleanName,
+            // 用声明侧原始键回填，保证 SchemaDiffStage 可通过 declared key 命中 actual schema。
+            $result[$name] = new TableSchema(
+                tableName: $name,
                 comment: $tableComment,
                 columns: $columns,
                 indexes: $indexes,
@@ -176,4 +176,18 @@ final class DbSchemaReader
 
         return $result;
     }
+
+    private function extractLookupTableName(string $name): string
+    {
+        if ($name === '') {
+            return '';
+        }
+        $parts = \array_values(\array_filter(\array_map('trim', \explode('.', $name)), static fn(string $part): bool => $part !== ''));
+        if ($parts === []) {
+            return '';
+        }
+
+        return (string) \end($parts);
+    }
+
 }
