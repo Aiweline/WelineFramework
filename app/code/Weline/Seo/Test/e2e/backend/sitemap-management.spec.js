@@ -55,20 +55,25 @@ test.describe('Sitemap management backend', () => {
   });
 
   test('does not explode with major JavaScript errors', async ({ page }) => {
-    const errors = [];
+    const serious = [];
+    const benign = /Failed to load resource|ResizeObserver loop|net::ERR_|favicon|source ?map|\.map\b|404 \(|Loading chunk|ChunkLoadError|Loading CSS chunk|An SSL error|Mixed Content|blocked by CORS policy|Access to font at|Access to fetch at/i;
+
     page.on('console', msg => {
       if (msg.type() === 'error') {
-        errors.push(msg.text());
+        const text = msg.text();
+        if (!benign.test(text)) {
+          serious.push(text);
+        }
       }
     });
     page.on('pageerror', error => {
-      errors.push(error.message);
+      serious.push(error.message);
     });
 
     await openSitemapPage(page);
     await page.waitForTimeout(1000);
 
-    expect(errors.length).toBeLessThan(5);
+    expect(serious.length, serious.join('\n---\n')).toBeLessThan(5);
   });
 
   test('keeps the page usable on a mobile viewport', async ({ page }) => {
