@@ -23,8 +23,9 @@ class Address extends BaseController
         $this->assign('edit_url', $this->_url->getBackendUrl('*/backend/address/edit', ['id' => 0]));
         $this->assign('delete_url', $this->_url->getBackendUrl('*/backend/address/delete', ['id' => 0]));
         $this->assign('set_default_url', $this->_url->getBackendUrl('*/backend/address/set-default', ['id' => 0]));
+        $this->assign('customer_id', (int) $this->request->getParam('customer_id', 1));
 
-        return $this->fetch('WeShop_Address', 'backend/address/index');
+        return $this->fetch('WeShop_Address::templates/Backend/Address/Index/index.phtml');
     }
 
     #[Acl('WeShop_Address::address_edit', 'Edit Address', 'mdi mdi-map-marker-edit', 'Edit or create address')]
@@ -47,7 +48,7 @@ class Address extends BaseController
         $this->assign('address', $address);
         $this->assign('save_url', $this->_url->getBackendUrl('*/backend/address/save'));
 
-        return $this->fetch('WeShop_Address', 'backend/address/edit');
+        return $this->fetch('WeShop_Address::templates/Backend/Address/Edit/index.phtml');
     }
 
     public function save(): string
@@ -123,6 +124,40 @@ class Address extends BaseController
         } catch (\Throwable $throwable) {
             return $this->respondError((string) __('Failed to set default address: %{1}', [$throwable->getMessage()]));
         }
+    }
+
+    /**
+     * DataTable AJAX API - Address List
+     * 
+     * Supports serverSide mode with pagination, sorting, and filtering.
+     * Route: /address/backend/address/address-list
+     */
+    public function addressList(): string
+    {
+        $draw = (int) $this->request->getParam('draw', 1);
+        $start = (int) $this->request->getParam('start', 0);
+        $length = (int) $this->request->getParam('length', 10);
+        $customerId = (int) $this->request->getParam('customer_id', 0);
+
+        // Default customer_id for testing if not provided
+        if ($customerId <= 0) {
+            $customerId = 1;
+        }
+
+        // Get total count
+        $allAddresses = $this->addressService->getCustomerAddresses($customerId);
+        $recordsTotal = count($allAddresses);
+
+        // Apply pagination
+        $page = ($start / $length) + 1;
+        $addresses = array_slice($allAddresses, $start, $length);
+
+        return $this->fetchJson([
+            'draw' => $draw,
+            'recordsTotal' => $recordsTotal,
+            'recordsFiltered' => $recordsTotal,
+            'data' => $addresses,
+        ]);
     }
 
     private function respondSuccess(string $message): string

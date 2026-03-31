@@ -13,6 +13,24 @@ use Weline\Theme\Service\PreviewTokenService;
 
 class PreviewContextServiceTest extends TestCase
 {
+    private ?string $originalRequestUri = null;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->originalRequestUri = $_SERVER['REQUEST_URI'] ?? null;
+    }
+
+    protected function tearDown(): void
+    {
+        if ($this->originalRequestUri === null) {
+            unset($_SERVER['REQUEST_URI']);
+        } else {
+            $_SERVER['REQUEST_URI'] = $this->originalRequestUri;
+        }
+        parent::tearDown();
+    }
+
     public function testLegacyPreviewThemeOverridesStaleTokenThemeAndClearsToken(): void
     {
         $service = $this->createService(
@@ -65,6 +83,44 @@ class PreviewContextServiceTest extends TestCase
         $this->assertSame(11, $context['backend_theme_id']);
         $this->assertSame('', $context['preview_token']);
         $this->assertNull($context['version_id']);
+    }
+
+    public function testRawQueryFrontendThemeIdOverridesRequestParamBagValue(): void
+    {
+        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?frontend_theme_id=6&preview_theme=6&editor_area=frontend';
+
+        $service = $this->createService(
+            [
+                // 模拟 request bag 被旧上下文污染（与 URL 不一致）
+                'frontend_theme_id' => 2,
+                'preview_theme' => 2,
+                'editor_area' => 'frontend',
+            ],
+            null
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame(6, $context['frontend_theme_id']);
+        $this->assertSame(0, $context['backend_theme_id']);
+    }
+
+    public function testRawQueryPreviewTokenOverridesRequestParamBagToken(): void
+    {
+        $_SERVER['REQUEST_URI'] = '/theme/frontend/theme-preview/content?frontend_theme_id=6&weline_preview_token=pv_6_raw_token';
+
+        $service = $this->createService(
+            [
+                // 模拟 request bag 残留旧 token
+                'frontend_theme_id' => 6,
+                'weline_preview_token' => 'pv_2_stale_token',
+            ],
+            null
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame('pv_6_raw_token', $context['preview_token']);
     }
 
     /**
