@@ -508,6 +508,127 @@ function closeAgentModal() {
     document.getElementById('agent-modal').style.display = 'none';
 }
 
+function csToastError(message) {
+    if (typeof BackendToast !== 'undefined' && BackendToast && typeof BackendToast.error === 'function') {
+        BackendToast.error(message);
+        return;
+    }
+
+    // 兜底：不使用浏览器原生 alert，改为页面内提示
+    let el = document.getElementById('cs-agent-toast-error');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'cs-agent-toast-error';
+        el.style.cssText = [
+            'position:fixed',
+            'left:50%',
+            'top:20px',
+            'transform:translateX(-50%)',
+            'z-index:10050',
+            'background:#dc3545',
+            'color:#fff',
+            'padding:10px 14px',
+            'border-radius:8px',
+            'max-width:92vw',
+            'white-space:pre-wrap',
+            'box-shadow:0 8px 24px rgba(0,0,0,.15)',
+            'opacity:0',
+            'transition:opacity .15s ease-in-out',
+        ].join(';');
+        document.body.appendChild(el);
+    }
+
+    el.textContent = message || '';
+    el.style.opacity = '1';
+    if (el._timer) clearTimeout(el._timer);
+    el._timer = setTimeout(function () {
+        el.style.opacity = '0';
+    }, 3000);
+}
+
+function csShowConfirmDialog(message, options) {
+    options = options || {};
+
+    if (typeof BackendConfirm !== 'undefined' && BackendConfirm && typeof BackendConfirm.show === 'function') {
+        return BackendConfirm.show(message, options).then(function (confirmed) {
+            return !!confirmed;
+        });
+    }
+
+    // 兜底：自建确认弹窗（避免使用浏览器原生 confirm）
+    return new Promise(function (resolve) {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = [
+            'position:fixed',
+            'inset:0',
+            'background:rgba(0,0,0,.5)',
+            'z-index:10004',
+            'display:flex',
+            'align-items:center',
+            'justify-content:center',
+            'padding:1rem'
+        ].join(';');
+
+        const dlg = document.createElement('div');
+        dlg.style.cssText = [
+            'background:#fff',
+            'border-radius:12px',
+            'padding:16px 18px',
+            'max-width:92vw',
+            'width:560px',
+            'box-shadow:0 10px 30px rgba(0,0,0,.2)'
+        ].join(';');
+
+        const title = options.title || '<?= __('提示') ?>';
+        const confirmText = options.confirmText || '<?= __('确认') ?>';
+        const cancelText = options.cancelText || '<?= __('取消') ?>';
+        const type = options.type || '';
+
+        const titleEl = document.createElement('div');
+        titleEl.style.cssText = 'font-weight:600;margin-bottom:8px;color:#6c757d;';
+        titleEl.textContent = title;
+        dlg.appendChild(titleEl);
+
+        const msgEl = document.createElement('div');
+        msgEl.style.cssText = 'white-space:pre-wrap;line-height:1.4;margin-bottom:14px;';
+        msgEl.textContent = message || '';
+        dlg.appendChild(msgEl);
+
+        const btnRow = document.createElement('div');
+        btnRow.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+
+        const cancelBtn = document.createElement('button');
+        cancelBtn.type = 'button';
+        cancelBtn.className = 'btn btn-outline-secondary';
+        cancelBtn.textContent = cancelText;
+        btnRow.appendChild(cancelBtn);
+
+        const confirmBtn = document.createElement('button');
+        confirmBtn.type = 'button';
+        confirmBtn.className = 'btn ' + (type === 'danger' ? 'btn-danger' : 'btn-primary');
+        confirmBtn.textContent = confirmText;
+        btnRow.appendChild(confirmBtn);
+
+        dlg.appendChild(btnRow);
+        overlay.appendChild(dlg);
+        document.body.appendChild(overlay);
+
+        function cleanup() {
+            overlay.remove();
+        }
+
+        cancelBtn.addEventListener('click', function () {
+            cleanup();
+            resolve(false);
+        });
+
+        confirmBtn.addEventListener('click', function () {
+            cleanup();
+            resolve(true);
+        });
+    });
+}
+
 function editAgent(agentId) {
     showAgentModal(agentId);
 }
@@ -529,38 +650,46 @@ function saveAgent() {
             closeAgentModal();
             location.reload();
         } else {
-            alert(data.message || '<?= __('保存失败') ?>');
+            csToastError(data.message || '<?= __('保存失败') ?>');
         }
     })
     .catch(error => {
         console.error('Error:', error);
-        alert('<?= __('保存失败') ?>');
+        csToastError('<?= __('保存失败') ?>');
     });
 }
 
 function deleteAgent(agentId) {
-    if (!confirm('<?= __('确定要删除此客服吗？') ?>')) {
-        return;
-    }
-    
-    fetch(AgentManager.deleteUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({ agent_id: agentId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            location.reload();
-        } else {
-            alert(data.message || '<?= __('删除失败') ?>');
+    csShowConfirmDialog(
+        '<?= __('确定要删除此客服吗？') ?>',
+        {
+            title: '<?= __('删除确认') ?>',
+            confirmText: '<?= __('确认') ?>',
+            cancelText: '<?= __('取消') ?>',
+            type: 'danger'
         }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        alert('<?= __('删除失败') ?>');
+    ).then(function (confirmed) {
+        if (!confirmed) return;
+
+        fetch(AgentManager.deleteUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({ agent_id: agentId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                csToastError(data.message || '<?= __('删除失败') ?>');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            csToastError('<?= __('删除失败') ?>');
+        });
     });
 }
 
@@ -573,12 +702,12 @@ function viewStatistics(agentId) {
             if (data.success) {
                 showStatisticsModal(data.data);
             } else {
-                alert(data.message || '<?= __('获取统计数据失败') ?>');
+                csToastError(data.message || '<?= __('获取统计数据失败') ?>');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alert('<?= __('获取统计数据失败') ?>');
+            csToastError('<?= __('获取统计数据失败') ?>');
         });
 }
 
