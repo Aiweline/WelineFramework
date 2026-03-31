@@ -21,9 +21,17 @@ class OrderCreatedPixel implements ObserverInterface
     public function execute(Event &$event): void
     {
         $data = $event->getData();
-        $order = $data->getData('order');
+        $order = is_array($data) ? ($data['order'] ?? null) : (is_object($data) && method_exists($data, 'getData') ? $data->getData('order') : null);
 
-        if (!$order) {
+        if (
+            !$order
+            || !is_object($order)
+            || !method_exists($order, 'getCustomerId')
+            || !method_exists($order, 'getTotal')
+            || !method_exists($order, 'getCurrency')
+            || !method_exists($order, 'getId')
+            || !method_exists($order, 'getIncrementId')
+        ) {
             return;
         }
 

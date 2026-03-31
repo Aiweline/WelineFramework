@@ -56,4 +56,13 @@ class FacebookPixelTest extends TestCase
         self::assertStringContainsString('noscript', $snippets['body']);
         self::assertSame('', $snippets['footer']);
     }
+
+    public function testGetPixelCodeSanitizesPixelIdInSnippet(): void
+    {
+        $provider = new FacebookPixel("12345');alert(1);//", 'token', true);
+        $snippet = $provider->getPixelCode();
+
+        self::assertStringContainsString("fbq('init', '12345alert1')", $snippet);
+        self::assertStringNotContainsString('alert(', $snippet);
+    }
 }
