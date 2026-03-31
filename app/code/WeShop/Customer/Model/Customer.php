@@ -31,12 +31,15 @@ class Customer extends Model implements AuthenticableInterface
     public const schema_fields_PHONE = 'phone';
     #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Avatar')]
     public const schema_fields_AVATAR = 'avatar';
+    #[Col(type: 'varchar', length: 255, nullable: true, comment: 'Legacy password hash compatibility column')]
+    public const schema_fields_PASSWORD = 'password';
     #[Col(type: 'smallint', length: 1, nullable: false, default: 1, comment: 'Active flag')]
     public const schema_fields_STATUS = 'is_active';
     #[Col(type: 'datetime', nullable: true, comment: 'Created at')]
     public const schema_fields_CREATED_AT = 'created_at';
     #[Col(type: 'datetime', nullable: true, comment: 'Updated at')]
     public const schema_fields_UPDATED_AT = 'updated_at';
+
 
     public array $_unit_primary_keys = ['customer_id'];
     public array $_index_sort_keys = ['email', 'is_active'];

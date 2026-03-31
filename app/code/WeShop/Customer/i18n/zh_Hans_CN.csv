@@ -1,20 +1,29 @@
 ﻿客户管理,客户管理
+客户不存在或已被删除,客户不存在或已被删除
+客户不存在,客户不存在
+错误,错误
+客户信息已更新,客户信息已更新
+成功,成功
+客户已禁用,客户已禁用
+客户已启用,客户已启用
+客户已删除,客户已删除
 "The login challenge token is missing.","The login challenge token is missing."
 "The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
 "Two-Factor Verification","Two-Factor Verification"
 "Please enter the verification code.","Please enter the verification code."
 "Two-factor verification succeeded.","Two-factor verification succeeded."
-"The reset link is invalid or has expired.","The reset link is invalid or has expired."
+"The reset link is invalid or has expired.",重设链接无效或已过期。
 重置密码,重置密码
 忘记密码,忘记密码
-"Email is required.","Email is required."
-"Please enter a valid email address.","Please enter a valid email address."
-"If the email is registered, a reset link has been sent.","If the email is registered, a reset link has been sent."
-"Unable to create a password reset request right now.","Unable to create a password reset request right now."
-"The reset token is required.","The reset token is required."
-"Please enter a new password.","Please enter a new password."
-"The password confirmation does not match.","The password confirmation does not match."
-"Your password has been reset. Please sign in with the new password.","Your password has been reset. Please sign in with the new password."
+"Email is required.",邮箱不能为空。
+"Please enter a valid email address.",请输入有效的邮箱地址。
+"The email is not registered.",该邮箱未注册。
+"A reset link has been sent to your email.",重设链接已发送到你的邮箱。
+"Unable to create a password reset request right now.",当前无法创建密码重设请求，请稍后再试。
+"The reset token is required.",重设令牌不能为空。
+"Please enter a new password.",请输入新密码。
+"The password confirmation does not match.",两次输入的密码不一致。
+"Your password has been reset. Please sign in with the new password.",密码已重设，请使用新密码登录。
 "Please log in to continue.","Please log in to continue."
 登录,登录
 邮箱和密码不能为空,邮箱和密码不能为空
@@ -38,6 +47,10 @@
 北京市朝阳区xxx街道xxx号,北京市朝阳区xxx街道xxx号
 "周一至周五 9:00-18:00","周一至周五 9:00-18:00"
 客户服务,客户服务
+"Customer 查询器不支持的操作：%{1}","Customer 查询器不支持的操作：%{1}"
+客户查询,客户查询
+提供客户基础信息查询能力,提供客户基础信息查询能力
+批量获取客户基础信息,批量获取客户基础信息
 "Storefront account security cards",前台账户安全卡片
 "Inject sign-in security modules into the storefront customer account center.",在前台客户账户中心注入登录安全模块。
 "Storefront account discovery cards",前台账户发现卡片
@@ -87,9 +100,67 @@
 账户,账户
 账户及心愿单,账户及心愿单
 "您好, 登录","您好, 登录"
+"店铺 > 客户管理","店铺 > 客户管理"
+系统配置,系统配置
+店铺,店铺
+客户,客户
 总客户数,总客户数
 活跃客户,活跃客户
 非活跃客户,非活跃客户
 今日新增,今日新增
 客户列表,客户列表
-客户管理功能开发中...,客户管理功能开发中...
+管理店铺客户信息,管理店铺客户信息
+保存,保存
+新增客户,新增客户
+关闭,关闭
+ID,ID
+头像,头像
+姓名,姓名
+邮箱,邮箱
+电话,电话
+状态,状态
+注册时间,注册时间
+操作,操作
+活跃,活跃
+禁用,禁用
+查看详情,查看详情
+编辑客户,编辑客户
+你确定要禁用该客户么？,你确定要禁用该客户么？
+你确定要启用该客户么？,你确定要启用该客户么？
+启用,启用
+你确定要删除该客户么？此操作不可恢复！,你确定要删除该客户么？此操作不可恢复！
+删除,删除
+请输入客户名称或邮箱回车搜索,请输入客户名称或邮箱回车搜索
+"店铺 > 客户管理 > 客户详情","店铺 > 客户管理 > 客户详情"
+客户详情,客户详情
+该客户可能已被删除或不存在,该客户可能已被删除或不存在
+返回客户列表,返回客户列表
+账户状态,账户状态
+已禁用,已禁用
+客户ID,客户ID
+更新时间,更新时间
+编辑资料,编辑资料
+编辑客户资料,编辑客户资料
+禁用账户,禁用账户
+启用账户,启用账户
+删除账户,删除账户
+账户统计,账户统计
+订单总数,订单总数
+消费金额,消费金额
+收藏商品,收藏商品
+购物车商品,购物车商品
+订单历史,订单历史
+地址管理,地址管理
+操作日志,操作日志
+暂无订单记录,暂无订单记录
+该客户还没有完成任何订单,该客户还没有完成任何订单
+收货地址,收货地址
+新增地址,新增地址
+新增收货地址,新增收货地址
+暂无收货地址,暂无收货地址
+该客户还没有添加收货地址,该客户还没有添加收货地址
+暂无操作记录,暂无操作记录
+该客户的操作日志将在此处显示,该客户的操作日志将在此处显示
+最近活动,最近活动
+暂无活动记录,暂无活动记录
+该客户的最近活动将在此处显示,该客户的最近活动将在此处显示
