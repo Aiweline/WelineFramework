@@ -7,6 +7,7 @@ namespace WeShop\Customer\Controller\Frontend\Account;
 use WeShop\Customer\Service\PasswordResetService;
 use WeShop\Customer\Session\CustomerSession;
 use WeShop\Frontend\Controller\BaseController;
+use Weline\Framework\Manager\MessageManager;
 
 class ForgotPassword extends BaseController
 {
@@ -40,6 +41,8 @@ class ForgotPassword extends BaseController
         $this->assign('login_url', $this->getUrl('weshop/customer/account/login'));
         $this->assign('register_url', $this->getUrl('weshop/customer/account/register'));
         $this->assign('title', $resetRecord ? __('重置密码') : __('忘记密码'));
+        $this->assign('error_message', MessageManager::get_error_message());
+        $this->assign('success_message', MessageManager::get_success_message());
 
         return $this->fetch();
     }
@@ -58,11 +61,15 @@ class ForgotPassword extends BaseController
         }
 
         try {
-            $this->passwordResetService->requestReset(
+            $sent = $this->passwordResetService->requestReset(
                 $email,
                 $this->getUrl('weshop/customer/account/forgot-password')
             );
-            $this->getMessageManager()->addSuccess(__('If the email is registered, a reset link has been sent.'));
+            if (!$sent) {
+                $this->getMessageManager()->addError(__('The email is not registered.'));
+                return $this->redirect('weshop/customer/account/forgot-password');
+            }
+            $this->getMessageManager()->addSuccess(__('A reset link has been sent to your email.'));
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError(__('Unable to create a password reset request right now.'));
         }

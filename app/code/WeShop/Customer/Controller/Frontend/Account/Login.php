@@ -38,6 +38,9 @@ class Login extends BaseController
     {
         $request = $this->getRequest();
         $email = trim((string) ($request->getPost('email') ?? ''));
+        if ($email === '') {
+            $email = trim((string) ($request->getPost('username') ?? ''));
+        }
         $password = (string) ($request->getPost('password') ?? '');
         $rememberMe = (bool) ($request->getPost('remember_me') ?? $request->getPost('remember') ?? false);
         $redirectUrl = (string) ($request->getPost('redirect_url') ?? $request->getParam('redirect') ?? '');
