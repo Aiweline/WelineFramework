@@ -1,5 +1,71 @@
-﻿"Tax query provider does not support operation: %{1}","Tax query provider does not support operation: %{1}"
-"Tax Query","Tax Query"
-"Provides checkout tax-rate lookup and tax calculation access.","Provides checkout tax-rate lookup and tax calculation access."
-"Calculate tax for a checkout/order subtotal.","Calculate tax for a checkout/order subtotal."
-"Resolve the tax rate for a country/region context.","Resolve the tax rate for a country/region context."
+﻿"Tax Configuration","Tax Configuration"
+"Default tax rate must be between 0 and 1 (0%% to 100%%).","Default tax rate must be between 0 and 1 (0%% to 100%%)."
+"Tax configuration saved successfully.",税费配置保存成功。
+"Tax Information",税费信息
+"Subtotal cannot be negative.",小计不能为负数。
+"Tax calculated successfully.",税费计算成功。
+"Tax query provider does not support operation: %{1}",税费查询提供者不支持操作：%{1}
+"Tax Query",税费查询
+"Provides checkout tax-rate lookup and tax calculation access.",提供结账税费率查询和税费计算访问。
+"Calculate tax for a checkout/order subtotal.",计算结账/订单小计的税费。
+"Return total tax plus included and chargeable tax breakdown data.",返回税费总额及包含和应付税费明细数据。
+"Resolve the tax rate for a country/region context.",解析国家/地区的税费率。
+WeShop,WeShop
+Tax,Tax
+Configuration,Configuration
+"General Tax Settings",常规税费设置
+"Default Tax Rate",默认税率
+"e.g. 0.08 for 8%","e.g. 0.08 for 8%"
+"Enter as decimal (0.08 = 8%%) or percentage (8%%). Applied when no country/region rate matches.","Enter as decimal (0.08 = 8%%) or percentage (8%%). Applied when no country/region rate matches."
+"Prices Include Tax",价格含税
+No,No
+Yes,Yes
+"Whether product prices in the store include tax.",商店中的产品价格是否含税。
+"Apply Tax to Shipping",税费应用于运费
+"Whether shipping charges are subject to tax.",运费是否需要征税。
+"Country Tax Rates",国家税率
+"Country Code",国家代码
+"Tax Rate",税率
+Actions,操作
+"e.g. US","e.g. US"
+"e.g. 0.08","e.g. 0.08"
+"Add Country Rate",添加国家税率
+"Region Tax Rates",地区税率
+"Configure tax rates for specific regions. Use format Country-Region (e.g., US-CA for California, US-TX for Texas) or just region code for fallback matching.","为特定地区配置税率。使用国家-地区""格式（例如：US-CA 表示加利福尼亚州，US-TX 表示德克萨斯州），或仅使用地区代码作为备用匹配。"""
+"Region Code",地区代码
+"e.g. US-CA","e.g. US-CA"
+"e.g. 0.0825","e.g. 0.0825"
+"Add Region Rate",添加地区税率
+"Test Calculation",测试计算
+"Test your tax configuration with sample values before saving.",保存前使用示例值测试您的税费配置。
+Subtotal,小计
+Country,国家
+Region,Region
+"e.g. CA","e.g. CA"
+"Test Calculate",测试计算
+"Test Result",测试结果
+"Save Configuration",保存配置
+Reset,重置
+"Tax Amount",税额
+"Test calculation failed",测试计算失败
+"Configuration saved successfully!",配置保存成功！
+"Failed to save configuration",保存配置失败
+"Are you sure you want to reset the form?",您确定要重置表单吗？
+"Learn about our tax rates and calculation methods",了解我们的税费率和计算方法
+"Current Tax Rate",当前税率
+"Tax rate for %{1}","%{1} 的税率"
+"Default tax rate",默认税率
+"Taxable Amount",计税金额
+"Included Tax",已含税费
+"Chargeable Tax",应付税费
+"Calculate Tax",计算税费
+"Enter subtotal","Enter subtotal"
+"Shipping Amount",运费金额
+"Enter shipping amount","Enter shipping amount"
+"Region / State",省份/州
+Discount,折扣
+"Enter discount","Enter discount"
+Action,操作
+Calculate,计算
+"Calculation Result",计算结果
+"Failed to calculate tax",税费计算失败
