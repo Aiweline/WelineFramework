@@ -1,0 +1,72 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$categoryId = (int)($this->getData('category_id') ?? 0);
+$priceRanges = $this->getData('price_ranges') ?? [];
+$saveUrl = (string)$this->getBackendUrl('*/backend/config/save-price-ranges');
+$configUrl = (string)$this->getBackendUrl('*/backend/config');
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= __('Price Range Configuration') ?></h1>
+            <p class="text-muted mb-0"><?= __('Define price buckets used by the storefront filter panel.') ?></p>
+        </div>
+        <a class="btn btn-outline-secondary" href="<?= $configUrl ?>"><?= __('Back to Filter Config') ?></a>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <form method="post" action="<?= $saveUrl ?>" class="d-grid gap-4">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label"><?= __('Category ID') ?></label>
+                        <input class="form-control" type="number" min="0" name="category_id" value="<?= $categoryId ?>">
+                        <small class="text-muted"><?= __('Use 0 to apply globally.') ?></small>
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="h5 mb-3"><?= __('Ranges') ?></h2>
+                    <div class="table-responsive">
+                        <table class="table align-middle">
+                            <thead>
+                            <tr>
+                                <th style="width: 120px;"><?= __('Sort') ?></th>
+                                <th><?= __('Label') ?></th>
+                                <th><?= __('Min') ?></th>
+                                <th><?= __('Max') ?></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php if ($priceRanges): ?>
+                                <?php foreach ($priceRanges as $idx => $range): ?>
+                                    <tr>
+                                        <td><input class="form-control" type="number" name="ranges[<?= (int)$idx ?>][sort_order]" value="<?= (int)($range['sort_order'] ?? ($idx + 1) * 10) ?>"></td>
+                                        <td><input class="form-control" type="text" name="ranges[<?= (int)$idx ?>][label]" value="<?= htmlspecialchars((string)($range['label'] ?? ''), ENT_QUOTES) ?>" placeholder="<?= htmlspecialchars((string)__('e.g. Budget'), ENT_QUOTES) ?>"></td>
+                                        <td><input class="form-control" type="number" step="0.01" min="0" name="ranges[<?= (int)$idx ?>][min_price]" value="<?= htmlspecialchars((string)($range['min_price'] ?? '0'), ENT_QUOTES) ?>"></td>
+                                        <td><input class="form-control" type="number" step="0.01" min="0" name="ranges[<?= (int)$idx ?>][max_price]" value="<?= htmlspecialchars((string)($range['max_price'] ?? '0'), ENT_QUOTES) ?>"></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php else: ?>
+                                <?php for ($i = 0; $i < 3; $i++): ?>
+                                    <tr>
+                                        <td><input class="form-control" type="number" name="ranges[<?= $i ?>][sort_order]" value="<?= ($i + 1) * 10 ?>"></td>
+                                        <td><input class="form-control" type="text" name="ranges[<?= $i ?>][label]" placeholder="<?= htmlspecialchars((string)__('e.g. Under 100'), ENT_QUOTES) ?>"></td>
+                                        <td><input class="form-control" type="number" step="0.01" min="0" name="ranges[<?= $i ?>][min_price]" value="0"></td>
+                                        <td><input class="form-control" type="number" step="0.01" min="0" name="ranges[<?= $i ?>][max_price]" value="0"></td>
+                                    </tr>
+                                <?php endfor; ?>
+                            <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <button type="submit" class="btn btn-primary"><?= __('Save Price Ranges') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
