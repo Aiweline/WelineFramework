@@ -1,4 +1,4 @@
-// @weline-e2e-runtime fallback
+// @weline-e2e-runtime auto
 // @ts-check
 const { test, expect } = require('@playwright/test');
 const { buildWorkbenchUrl, createWorkspace, loginAsAdmin } = require('./helpers/ai-workbench');
@@ -7,32 +7,100 @@ test.use({ ignoreHTTPSErrors: true });
 
 const HUB_TIMEOUT = 120000;
 const WORKSPACE_TIMEOUT = 180000;
+const SCREENSHOT_OPTIONS = {
+  fullPage: true,
+  animations: 'disabled',
+  caret: 'hide',
+  scale: 'css',
+  maxDiffPixelRatio: 0.06,
+};
+const PAGE_ERROR_ALLOWLIST = [
+  /ResizeObserver loop limit exceeded/i,
+  /ResizeObserver loop completed with undelivered notifications/i,
+];
+const CONSOLE_ERROR_ALLOWLIST = [
+  /favicon\.ico.*404/i,
+  /Failed to load resource/i,
+];
 
 /** 路由表会把 AiSiteAgent 规范为 ai-site-agent；兼容历史/测试里的 aiSiteAgent 字面量 */
 const PAGEBUILDER_AI_WORKSPACE_PATH_RE = /\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/workspace/i;
 
 async function openHub(page, provider = 'pagebuilder', fakeMode = false) {
-  const backendRoot = await loginAsAdmin(page);
+  const loginTransient = /ERR_CONNECTION|ECONNRESET|net::ERR_|TimeoutError/i;
+  let backendRoot;
+  let lastLoginError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      backendRoot = await loginAsAdmin(page, {
+        timeout: 120000,
+        refreshRuntime: attempt > 0,
+      });
+      lastLoginError = null;
+      break;
+    } catch (error) {
+      lastLoginError = error;
+      const msg = String(error && error.message ? error.message : error);
+      if (!loginTransient.test(msg) || attempt === 2) {
+        throw error;
+      }
+      await page.waitForTimeout(2500);
+    }
+  }
+  if (lastLoginError) {
+    throw lastLoginError;
+  }
+
   const hubUrl = buildWorkbenchUrl(backendRoot, provider, fakeMode);
-  await page.goto(hubUrl, { waitUntil: 'domcontentloaded', timeout: HUB_TIMEOUT });
+  const transientNet = /ERR_CONNECTION|ECONNRESET|net::ERR_/i;
+  let lastError = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await page.goto(hubUrl, { waitUntil: 'domcontentloaded', timeout: HUB_TIMEOUT });
+      lastError = null;
+      break;
+    } catch (error) {
+      lastError = error;
+      const msg = String(error && error.message ? error.message : error);
+      if (!transientNet.test(msg) || attempt === 2) {
+        throw error;
+      }
+      await page.waitForTimeout(2500);
+    }
+  }
+  if (lastError) {
+    throw lastError;
+  }
   await page.waitForLoadState('networkidle', { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(1000);
   return { backendRoot, hubUrl };
 }
 
 async function waitForWorkspaceReload(page, urlPattern, action) {
-  const waitForUrl = page.waitForURL(urlPattern, {
+  // 保存简报：postForm(merge-scope) 成功后再 window.location.reload()，URL 不变。
+  // 先等 merge-scope 响应可快速区分「接口失败未重载」与「长时间未触发 reload」。
+  const mergeResponsePromise = page.waitForResponse(
+    response =>
+      /site-builder-agent\/merge-scope/i.test(response.url())
+      && response.request().method() === 'POST',
+    { timeout: WORKSPACE_TIMEOUT }
+  );
+  const navigationPromise = page.waitForNavigation({
     waitUntil: 'domcontentloaded',
     timeout: WORKSPACE_TIMEOUT,
-  }).catch(error => {
-    if (/ERR_ABORTED|frame was detached/i.test(String(error && error.message))) {
-      return null;
-    }
-    throw error;
   });
-
-  await Promise.allSettled([waitForUrl, action()]);
-  await page.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {});
+  await action();
+  const mergeResponse = await mergeResponsePromise;
+  /** @type {any} */
+  let mergeJson = {};
+  try {
+    mergeJson = await mergeResponse.json();
+  } catch {
+    mergeJson = {};
+  }
+  expect(mergeJson && mergeJson.success, JSON.stringify(mergeJson)).toBeTruthy();
+  await navigationPromise;
+  await expect(page).toHaveURL(urlPattern);
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 }
 
@@ -57,6 +125,45 @@ async function readJsonTextarea(page, selector) {
 function buildLocalDomain(prefix) {
   const suffix = Date.now().toString().slice(-8);
   return `${prefix}-${suffix}.local.test`;
+}
+
+function bindPageAnomalies(page) {
+  const pageErrors = [];
+  const consoleErrors = [];
+  page.on('pageerror', error => {
+    pageErrors.push(String(error && error.message ? error.message : error));
+  });
+  page.on('console', msg => {
+    if (msg.type() === 'error') {
+      consoleErrors.push(String(msg.text() || '').trim());
+    }
+  });
+  return { pageErrors, consoleErrors };
+}
+
+function isAllowedAnomaly(text, allowlist) {
+  return allowlist.some(rule => rule.test(String(text || '')));
+}
+
+function filterUnexpectedAnomalies(items, allowlist) {
+  return items.filter(item => !isAllowedAnomaly(item, allowlist));
+}
+
+async function expectWorkbenchScreenshot(page, screenshotName) {
+  await expect(page.locator('body')).toHaveScreenshot(screenshotName, {
+    ...SCREENSHOT_OPTIONS,
+    mask: [
+      page.locator('#site-agent-description'),
+      page.locator('#site-builder-domain'),
+      page.locator('#site-builder-scope-full'),
+      page.locator('#site-builder-workspace-terminal'),
+      page.locator('#site-builder-session-events'),
+      page.locator('#site-builder-session-events-table'),
+      page.locator('#site-builder-visual-preview-frame'),
+      page.locator('#pb-ai-scope-full'),
+      page.locator('#pb-ai-visual-preview-frame'),
+    ],
+  });
 }
 
 async function expectWorkspaceStreamHealthy(page) {
@@ -118,15 +225,27 @@ async function expectWorkspaceStreamHealthy(page) {
   expect(probe.buffer).not.toContain('会话不存在或无访问权限');
 }
 
+async function expectWorkspaceTerminalBootstrapHealthy(page) {
+  await expect(page.locator('#site-builder-workspace-terminal .weline-sse-terminal-title-text'))
+    .not.toHaveText('site_builder_sse_title', { timeout: 30000 });
+  // 终端内 EventSource 与 fetch 的 Cookie/重连时序在代理下可能不一致；流是否健康以 expectWorkspaceStreamHealthy 的 fetch 探测为准。
+}
+
 test.describe('AI Site Workbench', () => {
   test.describe.configure({ mode: 'serial' });
+
+  test.beforeEach(async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 });
+  });
 
   test('pagebuilder provider closes the loop through native virtual theme orchestration and mirrored visual editing', async ({ page }) => {
     test.slow();
     test.setTimeout(420000);
+    const anomalies = bindPageAnomalies(page);
 
     const { backendRoot } = await openHub(page, 'pagebuilder', false);
     await expect(page.locator('#site-agent-description')).toBeVisible({ timeout: 30000 });
+    await expectWorkbenchScreenshot(page, 'ai-site-workbench-hub.png');
 
     await page.fill('#site-agent-description', 'Build a coffee brand site with story pages, contact page, and a clear home page hero.');
     const createWorkspacePayload = await createWorkspace(
@@ -139,7 +258,9 @@ test.describe('AI Site Workbench', () => {
     expect(createWorkspacePayload.workspace_url).toBeTruthy();
 
     await gotoStable(page, new URL(createWorkspacePayload.workspace_url, page.url()).toString());
+    await expectWorkspaceTerminalBootstrapHealthy(page);
     await expectWorkspaceStreamHealthy(page);
+    await expectWorkbenchScreenshot(page, 'ai-site-workbench-workspace.png');
 
     const localDomain = buildLocalDomain('pb-e2e');
     await page.fill('#site-builder-title', 'PageBuilder E2E Coffee');
@@ -187,6 +308,7 @@ test.describe('AI Site Workbench', () => {
       await gotoStable(page, new URL(pagebuilderWorkspaceUrl, page.url()).toString());
     }
     await expect(page.locator('#pb-ai-run-virtual-theme')).toBeVisible({ timeout: 30000 });
+    await expectWorkbenchScreenshot(page, 'ai-site-workbench-pagebuilder-expert.png');
 
     await page.click('#pb-ai-run-virtual-theme', { force: true });
 
@@ -233,6 +355,7 @@ test.describe('AI Site Workbench', () => {
 
     await gotoStable(page, websitesWorkspaceUrl);
     await expect(page.locator('#site-builder-visual-preview-frame')).toBeVisible({ timeout: 30000 });
+    await expectWorkbenchScreenshot(page, 'ai-site-workbench-websites-mirror.png');
 
     await expect
       .poll(async () => {
@@ -265,6 +388,7 @@ test.describe('AI Site Workbench', () => {
     expect(websitesState.visual_edit_url).toBe(editorHref);
 
     const editorPage = await page.context().newPage();
+    const editorAnomalies = bindPageAnomalies(editorPage);
     await gotoStable(editorPage, new URL(editorHref, page.url()).toString());
     await expect(editorPage.locator('#previewIframe')).toBeVisible({ timeout: 30000 });
 
@@ -273,12 +397,21 @@ test.describe('AI Site Workbench', () => {
     expect(editorPreviewSrc).toContain('visual_editor=1');
     expect(editorPreviewSrc).toContain(`page_id=${pageBuilderState.preview_page_id}`);
     expect(editorPreviewSrc).toContain(`virtual_theme_id=${pageBuilderState.virtual_theme_id}`);
+    const unexpectedEditorPageErrors = filterUnexpectedAnomalies(editorAnomalies.pageErrors, PAGE_ERROR_ALLOWLIST);
+    const unexpectedEditorConsoleErrors = filterUnexpectedAnomalies(editorAnomalies.consoleErrors, CONSOLE_ERROR_ALLOWLIST);
+    expect(unexpectedEditorPageErrors, unexpectedEditorPageErrors.join('\n')).toEqual([]);
+    expect(unexpectedEditorConsoleErrors, unexpectedEditorConsoleErrors.join('\n')).toEqual([]);
 
     await editorPage.close();
+    const unexpectedPageErrors = filterUnexpectedAnomalies(anomalies.pageErrors, PAGE_ERROR_ALLOWLIST);
+    const unexpectedConsoleErrors = filterUnexpectedAnomalies(anomalies.consoleErrors, CONSOLE_ERROR_ALLOWLIST);
+    expect(unexpectedPageErrors, unexpectedPageErrors.join('\n')).toEqual([]);
+    expect(unexpectedConsoleErrors, unexpectedConsoleErrors.join('\n')).toEqual([]);
   });
 
   test('pagebuilder provider in fake mode: session scope keeps fake_mode and local_fake_demo', async ({ page }) => {
     test.setTimeout(180000);
+    const anomalies = bindPageAnomalies(page);
     const { backendRoot } = await openHub(page, 'pagebuilder', true);
     await expect(page.locator('#site-agent-description')).toBeVisible({ timeout: 30000 });
 
@@ -289,10 +422,16 @@ test.describe('AI Site Workbench', () => {
     expect(payload.workspace_url).toBeTruthy();
 
     await gotoStable(page, new URL(payload.workspace_url, page.url()).toString());
+    await expectWorkspaceTerminalBootstrapHealthy(page);
     await expectWorkspaceStreamHealthy(page);
+    await expectWorkbenchScreenshot(page, 'ai-site-workbench-fake-mode-workspace.png');
     const scope = await readJsonTextarea(page, '#site-builder-scope-full');
     expect(Number(scope.fake_mode || 0)).toBe(1);
     expect(String(scope.build_execution_mode || '')).toBe('local_fake_demo');
+    const unexpectedPageErrors = filterUnexpectedAnomalies(anomalies.pageErrors, PAGE_ERROR_ALLOWLIST);
+    const unexpectedConsoleErrors = filterUnexpectedAnomalies(anomalies.consoleErrors, CONSOLE_ERROR_ALLOWLIST);
+    expect(unexpectedPageErrors, unexpectedPageErrors.join('\n')).toEqual([]);
+    expect(unexpectedConsoleErrors, unexpectedConsoleErrors.join('\n')).toEqual([]);
   });
 
 });

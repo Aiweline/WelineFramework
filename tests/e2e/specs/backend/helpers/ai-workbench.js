@@ -1,4 +1,10 @@
-const { buildBackendUrl, getBackendRoot, getBaseUrl, loginAsAdmin } = require('../../../framework');
+const {
+  buildBackendUrl,
+  getBackendRoot,
+  getBaseUrl,
+  getRuntimeInfo,
+  loginAsAdmin,
+} = require('../../../framework');
 
 /**
  * Hub 页模板输出的服务端 URL（与 getBackendUrl 一致）；无则回退。
@@ -31,9 +37,40 @@ function resolveSiteBuilderBackendRoot(page, fallbackBackendRoot) {
   return fb;
 }
 
+/**
+ * 兼容代理环境：当模板回传 target-origin 绝对 URL 时，强制回落到当前页面 origin。
+ * @param {import('@playwright/test').Page} page
+ * @param {string} absoluteOrRelativeUrl
+ */
+function normalizeApiUrlForPage(page, absoluteOrRelativeUrl) {
+  const base = new URL(page.url());
+  const target = new URL(String(absoluteOrRelativeUrl || ''), base.toString());
+  if (target.origin === base.origin) {
+    return target.toString();
+  }
+  return new URL(`${target.pathname}${target.search}${target.hash}`, base.toString()).toString();
+}
+
 function buildWorkbenchUrl(backendRoot = getBackendRoot(), provider = 'pagebuilder', fakeMode = false) {
   const normalizedBackendRoot = String(backendRoot || getBackendRoot()).replace(/\/+$/, '');
-  const url = new URL(`${normalizedBackendRoot}/websites/backend/site-builder-agent/index`);
+  const base = new URL(`${normalizedBackendRoot}/`);
+  const runtime = getRuntimeInfo();
+  const backendKey = String(runtime.paths?.backend_prefix_path || '')
+    .replace(/^\/+|\/+$/g, '');
+  const segments = base.pathname.split('/').filter(Boolean);
+  const currency = process.env.PLAYWRIGHT_BACKEND_CURRENCY || 'CNY';
+  const lang = process.env.PLAYWRIGHT_BACKEND_LANG || 'zh_Hans_CN';
+
+  let pathPrefix = base.pathname.replace(/\/+$/, '') || '/';
+  // loginAsAdmin → deriveBackendRoot：若后台首页为 /{backendKey}/admin/{ccy}/{lang}/...，
+  // lastIndexOf('/admin') 会截成仅 /{backendKey}，此处补全货币/语言段，否则会出现
+  // /{backendKey}/websites/... 被路由拒绝，Hub 无 #site-agent-description。
+  const isBareBackendKeyOnly = backendKey !== '' && segments.length === 1 && segments[0] === backendKey;
+  if (isBareBackendKeyOnly) {
+    pathPrefix = `/${backendKey}/${currency}/${lang}`;
+  }
+
+  const url = new URL(`${base.origin}${pathPrefix}/websites/backend/site-builder-agent/index`);
   url.searchParams.set('provider', provider);
   if (fakeMode) {
     url.searchParams.set('fake_mode', '1');
@@ -52,7 +89,10 @@ async function createWorkspace(page, backendRoot, providerCode, description, opt
   const fakeMode = Boolean(options.fakeMode);
   const root = resolveSiteBuilderBackendRoot(page, backendRoot);
   const fallbackCreate = new URL('websites/backend/site-builder-agent/create-session', `${root}/`).toString();
-  const createSessionUrl = await readHubApiUrlFromDom(page, 'site-agent-api-create-session', fallbackCreate);
+  const createSessionUrl = normalizeApiUrlForPage(
+    page,
+    await readHubApiUrlFromDom(page, 'site-agent-api-create-session', fallbackCreate)
+  );
   /** 与 index.phtml 中 postCreateWorkspace 一致；避免 page.request（Node 侧）与浏览器命中不同路由或 404。 */
   return page.evaluate(
     async ({ url, providerCode: provider, description: brief, fakeMode: isFake }) => {
@@ -283,7 +323,7 @@ async function postSetStageFromWorkspace(page, backendRoot, stage) {
   const root = String(resolveSiteBuilderBackendRoot(page, backendRoot)).replace(/\/+$/, '');
   const fallbackUrl = new URL('websites/backend/site-builder-agent/set-stage', `${root}/`).toString();
   const fromDom = await page.locator('#site-builder-api-set-stage').inputValue().catch(() => '');
-  const postUrl = String(fromDom || '').trim() || fallbackUrl;
+  const postUrl = normalizeApiUrlForPage(page, String(fromDom || '').trim() || fallbackUrl);
   return page.evaluate(
     async ({ url, pid, st }) => {
       const fd = new FormData();
@@ -313,6 +353,7 @@ async function postSetStageFromWorkspace(page, backendRoot, stage) {
 
 async function triggerFakeDomainPurchase(page, backendRoot, options = {}) {
   const timeoutMs = options.timeoutMs ?? 120000;
+  const allowReloginRetry = options.allowReloginRetry !== false;
   const pageUrl = page.url();
   const publicMatch = String(pageUrl).match(/[?&]public_id=([^&]+)/);
   if (!publicMatch) {
@@ -325,7 +366,7 @@ async function triggerFakeDomainPurchase(page, backendRoot, options = {}) {
     `${root}/`
   ).toString();
   const fromDom = await page.locator('#site-builder-api-start-domain-purchase').inputValue().catch(() => '');
-  const postUrl = String(fromDom || '').trim() || fallbackPost;
+  const postUrl = normalizeApiUrlForPage(page, String(fromDom || '').trim() || fallbackPost);
 
   /** 与 workspace 内 postForm 一致；避免 page.request（Node）未带浏览器会话而被重定向到登录页 */
   const data = await page.evaluate(
@@ -349,6 +390,12 @@ async function triggerFakeDomainPurchase(page, backendRoot, options = {}) {
     { url: postUrl, pid: publicId }
   );
   if (!data || !data.success) {
+    const failureMessage = String((data && data.message) || '');
+    const looksLikeLoginHtml = /Weline\s*登录面板|<\s*!\s*DOCTYPE\s+html/i.test(failureMessage);
+    if (allowReloginRetry && looksLikeLoginHtml) {
+      await loginAsAdmin(page);
+      return triggerFakeDomainPurchase(page, backendRoot, { ...options, allowReloginRetry: false });
+    }
     throw new Error((data && data.message) || 'start-domain-purchase failed');
   }
   const fromApi = Number(data.state && data.state.order_id ? data.state.order_id : 0);
@@ -410,7 +457,10 @@ async function waitForSseEvent(page, absoluteUrl, eventName, options = {}) {
 async function postRecommendDomain(page, backendRoot, body) {
   const root = String(resolveSiteBuilderBackendRoot(page, backendRoot)).replace(/\/+$/, '');
   const fallbackRec = new URL('websites/backend/site-builder-agent/recommend-domain', `${root}/`).toString();
-  const postUrl = await readHubApiUrlFromDom(page, 'site-agent-api-recommend-domain', fallbackRec);
+  const postUrl = normalizeApiUrlForPage(
+    page,
+    await readHubApiUrlFromDom(page, 'site-agent-api-recommend-domain', fallbackRec)
+  );
   return page.evaluate(
     async ({ url: u, payload }) => {
       const fd = new FormData();
