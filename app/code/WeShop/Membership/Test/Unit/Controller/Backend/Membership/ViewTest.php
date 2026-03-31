@@ -5,26 +5,26 @@ declare(strict_types=1);
 namespace WeShop\Membership\Test\Unit\Controller\Backend\Membership;
 
 use PHPUnit\Framework\TestCase;
-use WeShop\Membership\Controller\Backend\Membership\Index;
+use WeShop\Membership\Controller\Backend\Membership\View;
 use WeShop\Membership\Service\MembershipAdminPageDataService;
 use WeShop\Membership\Service\MembershipService;
 
-class IndexTest extends TestCase
+class ViewTest extends TestCase
 {
     public function testControllerClassExists(): void
     {
-        $this->assertTrue(class_exists(Index::class));
+        $this->assertTrue(class_exists(View::class));
     }
 
     public function testControllerHasIndexMethod(): void
     {
-        $reflection = new \ReflectionClass(Index::class);
+        $reflection = new \ReflectionClass(View::class);
         $this->assertTrue($reflection->hasMethod('index'));
     }
 
     public function testControllerHasRequiredDependencies(): void
     {
-        $reflection = new \ReflectionClass(Index::class);
+        $reflection = new \ReflectionClass(View::class);
         $constructor = $reflection->getConstructor();
         $parameters = $constructor->getParameters();
 
@@ -33,33 +33,37 @@ class IndexTest extends TestCase
         $this->assertSame(MembershipAdminPageDataService::class, $parameters[0]->getType()->getName());
     }
 
-    public function testIndexMethodReturnsString(): void
+    public function testControllerHasHelperMethods(): void
+    {
+        $reflection = new \ReflectionClass(View::class);
+        $this->assertTrue($reflection->hasMethod('getMembershipRecord'));
+        $this->assertTrue($reflection->hasMethod('getLevelOptions'));
+        $this->assertTrue($reflection->hasMethod('getLevelBenefits'));
+    }
+
+    public function testIndexMethodIsPublic(): void
+    {
+        $reflection = new \ReflectionClass(View::class);
+        $indexMethod = $reflection->getMethod('index');
+        $this->assertTrue($indexMethod->isPublic());
+    }
+
+    public function testHelperMethodsArePublic(): void
     {
         $membershipService = $this->createMock(MembershipService::class);
-        $membershipService->method('getMembershipList')->willReturn([
-            'items' => [],
-            'total' => 0,
-            'pagination' => ['current_page' => 1, 'total_pages' => 1],
-        ]);
-        $membershipService->method('getMembershipSummary')->willReturn([
-            'total' => 0,
-            'bronze' => 0,
-            'silver' => 0,
-            'gold' => 0,
-            'platinum' => 0,
-            'total_points' => 0,
-        ]);
         $membershipService->method('getLevelOptions')->willReturn([
             'bronze' => 'Bronze',
             'silver' => 'Silver',
             'gold' => 'Gold',
             'platinum' => 'Platinum',
         ]);
+        $membershipService->method('getMembershipRecord')->willReturn(null);
 
         $adminPageDataService = new MembershipAdminPageDataService($membershipService);
+        $controller = new View($adminPageDataService);
 
-        $controller = new Index($adminPageDataService);
-
-        $this->assertTrue(method_exists($controller, 'index'));
+        $this->assertIsArray($controller->getLevelOptions());
+        $this->assertIsArray($controller->getLevelBenefits());
+        $this->assertNull($controller->getMembershipRecord(0));
     }
 }
