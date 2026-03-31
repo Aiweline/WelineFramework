@@ -48,7 +48,7 @@ class MaterialFilterProvider extends AbstractFilterProvider
         try {
             $info = $this->getProductAttributeInfo($this->attributeCode);
             if (!$info || !($info['attribute_id'] ?? 0)) {
-                return [];
+                return $this->getSearchBackedOptionsFallback($categoryId, $appliedFilters);
             }
             $values = $this->getProductEavValues(
                 (int)$info['attribute_id'],
@@ -90,7 +90,7 @@ class MaterialFilterProvider extends AbstractFilterProvider
             
             return $options;
         } catch (\Throwable $e) {
-            return [];
+            return $this->getSearchBackedOptionsFallback($categoryId, $appliedFilters);
         }
     }
     

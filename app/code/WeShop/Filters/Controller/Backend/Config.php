@@ -153,7 +153,7 @@ class Config extends PcController
         
         if (!is_array($ranges)) {
             MessageManager::error(__('无效的价格区间配置'));
-            return $this->redirect('*/*/priceRanges', ['category_id' => $categoryId]);
+            return $this->redirect('*/*/price-ranges', ['category_id' => $categoryId]);
         }
         
         try {
@@ -171,7 +171,7 @@ class Config extends PcController
             MessageManager::error(__('保存失败: %1', $e->getMessage()));
         }
         
-        return $this->redirect('*/*/priceRanges', ['category_id' => $categoryId]);
+        return $this->redirect('*/*/price-ranges', ['category_id' => $categoryId]);
     }
     
     /**

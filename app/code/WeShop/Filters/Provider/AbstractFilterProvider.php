@@ -7,6 +7,7 @@ namespace WeShop\Filters\Provider;
 use WeShop\Filters\Api\FilterProviderInterface;
 use WeShop\Filters\Api\SearchFacetCapableFilterInterface;
 use WeShop\Filters\Model\CategoryFilterConfig;
+use WeShop\Product\Service\ProductEavCompatibilityService;
 use Weline\Eav\Model\EavAttribute\Option;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -17,6 +18,14 @@ use Weline\Framework\Manager\ObjectManager;
  */
 abstract class AbstractFilterProvider implements FilterProviderInterface, SearchFacetCapableFilterInterface
 {
+    /**
+     * Guard against recursive search -> fallback -> search loops when the
+     * runtime drops back to FilterService-based browse resolution.
+     *
+     * @var array<string, bool>
+     */
+    private static array $searchFacetFallbackGuards = [];
+
     /**
      * @var int 默认排序权重
      */
@@ -259,10 +268,14 @@ abstract class AbstractFilterProvider implements FilterProviderInterface, Search
                     ];
                 }
             }
-            return $labels;
+            if ($labels !== []) {
+                return $labels;
+            }
         } catch (\Throwable $e) {
-            return [];
         }
+
+        return ObjectManager::getInstance(ProductEavCompatibilityService::class)
+            ->getOptionLabelsByAttributeId($attributeId, $optionIds);
     }
 
     /**
@@ -375,10 +388,6 @@ abstract class AbstractFilterProvider implements FilterProviderInterface, Search
         ?string $displayType = null
     ): ?array {
         $info = $this->getProductAttributeInfo($attributeCode);
-        if (!$info || empty($info['attribute_id'])) {
-            return null;
-        }
-
         $configData = $this->getCategoryConfigData($categoryId);
 
         return [
@@ -393,10 +402,66 @@ abstract class AbstractFilterProvider implements FilterProviderInterface, Search
                 ? array_values($configData[CategoryFilterConfig::CONFIG_RANGE_BUCKETS])
                 : [],
             'bucket_size' => max(1, (int) ($configData[CategoryFilterConfig::CONFIG_BUCKET_SIZE] ?? 20)),
-            'has_option' => !empty($info['has_option']),
+            // OpenSearch/Elasticsearch browse facets only need attribute_code.
+            // Keep core EAV filters alive even when local attribute metadata is unavailable.
+            'has_option' => array_key_exists('has_option', $info ?? []) ? !empty($info['has_option']) : true,
             'is_multiple' => !empty($info['is_multiple']),
             'type_code' => (string) ($info['type_code'] ?? ''),
         ];
+    }
+
+    /**
+     * When local EAV metadata lookup is unavailable, reuse the search browse
+     * result as a compatibility source for facet options.
+     *
+     * @param array<string, mixed> $appliedFilters
+     * @return array<int, array<string, mixed>>
+     */
+    protected function getSearchBackedOptionsFallback(int $categoryId, array $appliedFilters = []): array
+    {
+        if ($categoryId <= 0) {
+            return [];
+        }
+
+        $guardKey = static::class . ':' . $this->getCode() . ':' . $categoryId;
+        if (isset(self::$searchFacetFallbackGuards[$guardKey])) {
+            return [];
+        }
+
+        self::$searchFacetFallbackGuards[$guardKey] = true;
+
+        try {
+            $filters = $appliedFilters;
+            unset($filters[$this->getCode()]);
+
+            $browse = w_query('search', 'browseProducts', [
+                'keyword' => '',
+                'filters' => $filters,
+                'page' => 1,
+                'page_size' => 1,
+                'category_ids' => [$categoryId],
+                'include_facets' => true,
+            ]);
+
+            if (!is_array($browse)) {
+                return [];
+            }
+
+            foreach ((array) ($browse['facets'] ?? []) as $facet) {
+                if (!is_array($facet) || (string) ($facet['code'] ?? '') !== $this->getCode()) {
+                    continue;
+                }
+
+                $options = $facet['options'] ?? [];
+                return is_array($options) ? array_values($options) : [];
+            }
+
+            return [];
+        } catch (\Throwable) {
+            return [];
+        } finally {
+            unset(self::$searchFacetFallbackGuards[$guardKey]);
+        }
     }
     
     /**
