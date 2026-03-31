@@ -51,7 +51,12 @@ class CliCommandExecutedObserver implements ObserverInterface
         $printer = ObjectManager::getInstance(Printing::class);
         $result = $this->getDispatchService()->reloadAsync(null, ControlMessage::RELOAD_TYPE_CODE);
 
-        $printer->note((string)__('WLS 通知：%{1}', [$result['message']]));
+        $message = (string)__('WLS 通知：%{1}', [$result['message']]);
+        if (!empty($result['success'])) {
+            $printer->note($message, '', Printing::SUCCESS);
+        } else {
+            $printer->note($message, '', Printing::DEEP_ORANGE);
+        }
     }
 
     public static function triggerReload(string $type = self::RELOAD_TYPE_CODE): void

@@ -180,6 +180,56 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame(1, $orchestrator->sleepCalls);
     }
 
+    public function testShouldWaitForStopFlowExitVerificationSkipsStoppingDispatcher(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $dispatcher = new ServiceInstance(
+            role: 'dispatcher',
+            instanceId: 1,
+            pid: 101,
+            ipcClientId: 11,
+            state: ServiceInstance::STATE_STOPPING
+        );
+
+        self::assertFalse($this->invokePrivate($orchestrator, 'shouldWaitForStopFlowExitVerification', [$dispatcher]));
+    }
+
+    public function testShouldWaitForStopFlowExitVerificationKeepsConnectedStoppingWorkerGraceWindow(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $worker = new ServiceInstance(
+            role: 'worker',
+            instanceId: 1,
+            pid: 202,
+            ipcClientId: 22,
+            state: ServiceInstance::STATE_STOPPING
+        );
+
+        self::assertTrue($this->invokePrivate($orchestrator, 'shouldWaitForStopFlowExitVerification', [$worker]));
+    }
+
+    public function testRequestStopConsumesStopFlowImmediately(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var array<int, array{reason:string,progressClientId:?int}> */
+            public array $stopAllCalls = [];
+
+            public function stopAll(string $reason = 'shutdown', ?int $progressClientId = null): void
+            {
+                $this->stopAllCalls[] = [
+                    'reason' => $reason,
+                    'progressClientId' => $progressClientId,
+                ];
+            }
+        };
+
+        self::assertTrue($orchestrator->requestStop('command', 77, true));
+        self::assertSame([[
+            'reason' => 'command',
+            'progressClientId' => 77,
+        ]], $orchestrator->stopAllCalls);
+    }
+
     public function testVerifyAndKillRemainingProcessesSkipsExternallyManagedSharedSidecar(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
@@ -326,12 +376,12 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
     }
 
-    private function invokePrivate(object $object, string $method): mixed
+    private function invokePrivate(object $object, string $method, array $args = []): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);
         $reflection->setAccessible(true);
 
-        return $reflection->invoke($object);
+        return $reflection->invokeArgs($object, $args);
     }
 
     private function setProperty(object $object, string $property, mixed $value): void

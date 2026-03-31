@@ -3,12 +3,19 @@ declare(strict_types=1);
 
 /**
  * Weline Server Worker 独立进程
- * 
+ *
  * 用法: php worker.php <host> <port> <worker_id> [instance_name]
- * 
+ *
  * 该 Worker 进程集成框架路由，支持完整的 HTTP 请求处理
  * 包含健康检查接口 /_wls/health（仅本地访问）
  * 维护模式由框架自动处理
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │  ⚠ WLS 默认仅监听 127.0.0.1，仅本机可访问                                      │
+ * │  外网访问需用 Nginx/Caddy 等反向代理转发到 127.0.0.1:9090                        │
+ * │  Nginx 示例：proxy_pass https://127.0.0.1:9090;                              │
+ * │  需直连外网时：php bin/w server:start --host 0.0.0.0                          │
+ * └─────────────────────────────────────────────────────────────────────────────┘
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -180,42 +187,41 @@ $runtimeError = null;
 
 try {
     WlsLogger::info_("Worker 启动，监听 tcp://{$host}:{$port}");
+    // 深橙色输出 WLS 配置提示
+    if (\defined('STDOUT') && \is_resource(STDOUT)) {
+        $tips = [
+            "\033[38;5;208m⚠ WLS 默认仅监听 127.0.0.1，仅本机可访问\033[0m",
+            "\033[38;5;208m外网访问需用 Nginx/Caddy 等反向代理转发到 127.0.0.1:9090\033[0m",
+            "\033[38;5;208mNginx 示例：proxy_pass https://127.0.0.1:9090;\033[0m",
+            "\033[38;5;208m需直连外网时：php bin/w server:start --host 0.0.0.0\033[0m",
+        ];
+        foreach ($tips as $tip) {
+            \fwrite(STDOUT, $tip . "\n");
+        }
+    }
     $runtime = new \Weline\Framework\Runtime\WlsRuntime();
     $runtime->bootstrap();
     WlsLogger::info_("框架运行时初始化成功");
 
-    // 启动后必须连上 Session 服务再开始工作，否则拒绝启动（重试 10 次，每次间隔 2 秒）
+    // 自治连接 Session Server（批量启动优化）：
+    // Worker 启动后立即上报 READY，Session 连接在后台异步进行
+    // 不再阻塞等待 Session 连接，所有 Worker 可同时启动
+    // Master 会等待所有 Worker READY 后才认为启动完成
     $sessionHost = (string) ($sessionRuntime['host'] ?? '127.0.0.1');
     $sessionPort = (int) ($sessionRuntime['port'] ?? 19970);
     $sessionTokenFileName = (string) ($sessionRuntime['token_file_name'] ?? 'session_server.token');
-    WlsLogger::info_("[Session] 开始连接 Session 服务 {$sessionHost}:{$sessionPort}，最多重试 10 次，间隔 2 秒");
     $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
-        'connect_timeout' => 1.0,
-        'timeout' => 2.0,
+        'connect_timeout' => 0.5,
+        'timeout' => 1.0,
         'token_file_name' => $sessionTokenFileName,
     ]);
+    $isWindows = defined('IS_WIN') && IS_WIN;
+    $sessionMaxRetries = $isWindows ? 30 : 60;  // 较长超时，由主循环后台重试
+    $sessionRetryInterval = $isWindows ? 0.5 : 1.0;
+    $sessionConnecting = true;
     $sessionConnected = false;
-    for ($attempt = 1; $attempt <= 10; $attempt++) {
-        WlsLogger::info_("[Session] 第 {$attempt}/10 次尝试连接 Session 服务...");
-        if ($sessionClient->connect()) {
-            $sessionConnected = true;
-            WlsLogger::info_("[Session] 第 {$attempt} 次尝试连接成功");
-            break;
-        }
-        WlsLogger::warning_("[Session] 第 {$attempt}/10 次连接失败，2 秒后重试");
-        if ($attempt < 10) {
-            \Weline\Framework\Runtime\SchedulerSystem::sleep(2);
-        }
-    }
-    if (!$sessionConnected) {
-        WlsLogger::error_("[Session] Session 服务连接失败，已重试 10 次，Worker 拒绝工作并退出");
-        w_log_error("[WLS Worker] Session 服务不可达 (host={$sessionHost}, port={$sessionPort})，已重试 10 次，退出");
-        exit(1);
-    }
-    WlsLogger::info_("[Session] Session 服务连接成功，Worker 可开始接收请求");
-    if (\defined('STDOUT') && \is_resource(STDOUT)) {
-        \fwrite(STDOUT, "\033[32m    ✓ Session 服务连接成功\033[0m\n");
-    }
+    $sessionAttempt = 0;
+    WlsLogger::info_("[Session] 自治模式：Session 服务连接将在后台进行 ({$sessionHost}:{$sessionPort})，Worker 先上报 READY");
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
     WlsLogger::error_("框架运行时初始化失败: " . $e->getMessage());
@@ -226,6 +232,7 @@ try {
 $fiberScheduler = new \Weline\Server\Scheduler\FiberScheduler();
 \Weline\Server\Observer\SchedulerWaitObserver::setScheduler($fiberScheduler);
 \Weline\Framework\Runtime\SchedulerSystem::enableScheduler();
+$longLivedProtocolResolver = new \Weline\Server\Service\Protocol\LongLived\ProtocolResolver();
 WlsLogger::info_("Fiber 调度器已初始化");
 
 // 活跃 Fiber 列表：connId => Fiber
@@ -334,7 +341,7 @@ if (!\function_exists('calculateCacheSize')) {
 
 $staticFileCacheMaxTotalConfig = $wlsCacheConfig['static_file_max_total'] ?? 'auto';
 $WLS_STATIC_CACHE_MAX_TOTAL = calculateCacheSize($staticFileCacheMaxTotalConfig, 2, 32 * 1024 * 1024, 256 * 1024 * 1024);
-// H13: 提高默认值到 2MB，支持大型 JS 库如 CKEditor
+// 单文件最大缓存大小
 $staticFileCacheMaxSizeConfig = $wlsCacheConfig['static_file_max_size'] ?? '2M';
 $WLS_STATIC_CACHE_MAX_SIZE = calculateCacheSize($staticFileCacheMaxSizeConfig, 0, 512 * 1024, 10 * 1024 * 1024);
 $WLS_CACHE_EVICTION_THRESHOLD = (int)($wlsCacheConfig['eviction_threshold'] ?? 5 * 1024 * 1024);
@@ -361,7 +368,8 @@ WlsLogger::info_("内存缓存：上限 " . \round($WLS_STATIC_CACHE_MAX_TOTAL /
 $WLS_UOPZ_EXIT_GUARD = false;
 if (\extension_loaded('uopz') && \function_exists('uopz_allow_exit')) {
     try {
-        \uopz_allow_exit(false);
+        // 通过 call_user_func 调用，避免静态分析误报未安装 uopz 扩展。
+        \call_user_func('uopz_allow_exit', false);
         $WLS_UOPZ_EXIT_GUARD = true;
         WlsLogger::info_('uopz 已启用：业务代码中裸 exit()/die() 不再结束 Worker 进程（请优先使用 System::exit）');
     } catch (\Throwable) {
@@ -708,7 +716,8 @@ if ($controlPort > 0) {
         $identity,
         $handler,
         $ipcSelfTag,
-        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE)
+        (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE),
+        $instanceName
     );
     if ($kernel->connectAndRegister($controlPort)) {
         $ipcClient = $kernel->getClient();
@@ -763,6 +772,20 @@ $startTime = \time(); // 记录启动时间
 $keepAliveTimeout = 60; // 默认 60 秒空闲超时
 $connectionTimeoutCheckInterval = 5; // 每 5 秒检查一次超时连接
 $lastTimeoutCheck = \time();
+if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
+    $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
+    $env = \is_array($env) ? $env : [];
+    $wls = \is_array($env['wls'] ?? null) ? $env['wls'] : [];
+    $wlsServers = \is_array($wls['servers'] ?? null) ? $wls['servers'] : [];
+    $wlsInstance = \is_array($wlsServers[$instanceName] ?? null) ? $wlsServers[$instanceName] : [];
+    $configuredKeepAliveTimeout = $wlsInstance['keep_alive_timeout'] ?? $wls['keep_alive_timeout'] ?? null;
+    if (\is_numeric($configuredKeepAliveTimeout)) {
+        $configuredKeepAliveTimeout = (int)$configuredKeepAliveTimeout;
+        if ($configuredKeepAliveTimeout > 0) {
+            $keepAliveTimeout = $configuredKeepAliveTimeout;
+        }
+    }
+}
 
 // 内存监控配置（防止内存泄漏导致 OOM）
 $maxMemoryBytes = 256 * 1024 * 1024; // 256MB 内存上限
@@ -778,6 +801,14 @@ $fiberIdleTtlSec = 0;   // 挂起超过此秒数视为闲置并释放，0=不自
 $fiberMaxActive = 0;    // 最大活跃挂起 Fiber 数，0=不限制
 $fiberReleaseIdleRequested = false;  // IPC 请求立即释放闲置时置 true
 $lastFiberIdleCheck = \time();       // 上次执行闲置检查的时间
+
+// 长连接（长连接/SSE）独立计数与饱和机制
+$longLivedConnections = [];          // connId => ['type' => 'sse'|'longpoll', 'start' => timestamp]
+$longLivedMaxActive = 0;             // 长连接上限，0=不限制（可由 IPC 下发配置）
+$longLivedSaturationReported = false; // 本次饱和已上报（避免重复上报）
+$longLivedSaturationCleared = false; // 饱和解除已上报
+$lastLongLivedSaturationReport = 0;  // 上次饱和上报时间（节流）
+$longLivedSaturationInterval = 10;    // 饱和状态上报间隔（秒）
 
 // 重载日志输出函数
 $logReload = function (string $method) use ($workerId, $instanceName) {
@@ -795,6 +826,14 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
 
 // 是否需要优雅退出（重载时设置为 true）
 $shouldExit = false;
+
+// ========== Session Server 自治连接状态 ==========
+$sessionClient = null;
+$sessionConnected = false;
+$sessionConnecting = false;  // 是否正在连接中
+$sessionReadyReported = false; // 是否已上报 Session 就绪
+$sessionReadySentTime = 0.0;
+$sessionReadyTimeout = 30.0;   // Session 连接超时（秒）
 
 // Worker 优雅退出函数（统一使用进程管理器清理）
 // 优雅关闭配置：热重载给足时间排水，停止服务器短超时（与 Windows 一致，不长时间等待）
@@ -985,6 +1024,28 @@ while (true) {
             }
         }
     }
+
+    // ========== 自治 Session 连接（后台重试） ==========
+    // Worker 启动后立即上报 READY，Session 连接在后台异步进行
+    // 不阻塞 Worker 接收请求
+    if ($sessionConnecting && !$sessionConnected) {
+        $sessionAttempt++;
+        $elapsed = \microtime(true) - $readySentTime;
+        if ($sessionAttempt > $sessionMaxRetries) {
+            WlsLogger::error_("[Session] Session 服务连接超时（{$elapsed}s），Worker 退出");
+            $gracefulExit('Session 连接超时');
+        }
+        if ($sessionClient->connect()) {
+            $sessionConnected = true;
+            $sessionConnecting = false;
+            WlsLogger::info_("[Session] 第 {$sessionAttempt} 次尝试连接成功，Session 服务就绪");
+            if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                \fwrite(STDOUT, "\033[32m    ✓ Session 服务连接成功\033[0m\n");
+            }
+        } elseif ($sessionAttempt % 10 === 0) {
+            WlsLogger::warning_("[Session] 第 {$sessionAttempt}/{$sessionMaxRetries} 次连接失败，继续重试...");
+        }
+    }
     
     // 检查是否需要优雅退出（排水模式）
     if ($shouldExit) {
@@ -1096,12 +1157,19 @@ while (true) {
     }
     
     // 构建 stream_select 读数组
+    // 重要：长连接（SSE/WebSocket）不应该参与读事件检测，因为客户端不会发送数据
+    // 如果把 SSE 连接放在读数组中，stream_select 会一直等到超时（最长100ms），造成延迟累积
     $readSockets = [];
     if ($socket && \is_resource($socket)) {
         $readSockets[] = $socket;
     }
-    $readSockets = \array_merge($readSockets, $connections);
-    
+    // 只把普通连接加入读数组，排除长连接（它们只在 write 数组中等待可写状态）
+    foreach ($connections as $connId => $conn) {
+        if (!isset($longLivedConnections[$connId])) {
+            $readSockets[] = $conn;
+        }
+    }
+
     // 加入 IPC 控制 socket
     $ipcSocket = ($ipcClient && $ipcClient->isConnected()) ? $ipcClient->getSocket() : null;
     if ($ipcSocket && \is_resource($ipcSocket)) {
@@ -1111,7 +1179,7 @@ while (true) {
     $read = $readSockets;
     $write = [];
     $except = [];
-    
+
     // Fiber 调度器感知：有待到期定时器时缩短 select timeout
     $selectTimeoutSec = 0;
     $selectTimeoutUsec = 100000; // 默认 100ms
@@ -1122,9 +1190,29 @@ while (true) {
             $selectTimeoutUsec = \max(0, $delayUsec);
         }
     }
-    
+
+    // #region agent debug log - WLS 调度状态监控
+    static $wlsDebugLogCount = 0;
+    $activeFiberCount = \count($activeFibers);
+    $longLivedCount = \count($longLivedConnections);
+    $pendingTimers = $fiberScheduler->hasPendingTimers() ? 'yes' : 'no';
+    // 每 100 次主循环记录一次状态
+    if ($wlsDebugLogCount % 100 === 0) {
+        WlsLogger::info_("WLS_DEBUG: active_fibers={$activeFiberCount} long_lived={$longLivedCount} next_delay=" . ($nextDelay !== null ? \round($nextDelay * 1000, 1) . 'ms' : 'null') . " select_timeout={$selectTimeoutUsec}us pending_timers={$pendingTimers}");
+    }
+    $wlsDebugLogCount++;
+    // #endregion
+
     $changed = @\stream_select($read, $write, $except, $selectTimeoutSec, $selectTimeoutUsec);
-    
+
+    // #region agent debug log - stream_select 结果
+    static $selectDebugLogCount = 0;
+    if ($selectDebugLogCount % 50 === 0) {
+        WlsLogger::info_("WLS_DEBUG: stream_select returned changed=" . \var_export($changed, true) . " timeout=" . ($changed === 0 ? 'yes' : 'no'));
+    }
+    $selectDebugLogCount++;
+    // #endregion
+
     // 调度器 tick：处理到期定时器，resume 前恢复该 Fiber 的请求级上下文
     $fiberScheduler->tick(function (\Fiber $fiber) use (&$activeFibers) {
         foreach ($activeFibers as $afData) {
@@ -1158,7 +1246,8 @@ while (true) {
                 sendResponseAndCleanup(
                     $afData['conn'], $afConnId, $afResponse, $afData['rawRequest'],
                     $connections, $requestBuffers, $connectionLastActivity, $requestLogged,
-                    $ipcClient, $instanceName, $activeRequests, $afDuration, $ipcDraining
+                    $ipcClient, $instanceName, $activeRequests, $afDuration, $ipcDraining,
+                    $longLivedConnections
                 );
             } else {
                 $activeRequests--;
@@ -1198,6 +1287,10 @@ while (true) {
             }
             unset($connections[$afConnId], $requestBuffers[$afConnId], $connectionLastActivity[$afConnId], $requestLogged[$afConnId]);
             unset($activeFibers[$afConnId]);
+            // 清理长连接计数（如果该 Fiber 是长连接）
+            if (isset($longLivedConnections[$afConnId])) {
+                unset($longLivedConnections[$afConnId]);
+            }
             $activeRequests--;
             $fiberScheduler->unregisterFiber();
         }
@@ -1250,6 +1343,13 @@ while (true) {
             unset($requestBuffers[$connId]);
             unset($connectionLastActivity[$connId]);
             unset($requestLogged[$connId]);
+            // 客户端断开：清理长连接计数
+            if (isset($longLivedConnections[$connId])) {
+                unset($longLivedConnections[$connId]);
+                WlsLogger::info_("客户端断开，长连接已清理 (connId: {$connId}, 剩余长连接数: " . \count($longLivedConnections) . ")");
+            }
+            // 客户端断开时递减 activeRequests（该连接有活跃请求）
+            $activeRequests = \max(0, $activeRequests - 1);
             continue;
         }
         
@@ -1338,7 +1438,33 @@ while (true) {
         
         // 设置 SSE 上下文（让控制器可以直接写入连接）
         \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
-        
+        $longLivedDetection = $longLivedProtocolResolver->detect($rawRequest);
+        $isLongLived = ($longLivedDetection['is_long_lived'] ?? false) === true;
+        if ($isLongLived) {
+            $layer = (string)($longLivedDetection['layer'] ?? 'unknown');
+            $protocol = (string)($longLivedDetection['protocol'] ?? 'long-lived');
+            WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
+
+            // 长连接槽位检查：独立限制，不占用短请求的 Fiber 槽位
+            if ($longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+                $activeRequests--;
+                $body = 'Service Unavailable - Too Many Long Connections';
+                $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+                @\fwrite($conn, $resp);
+                @\fclose($conn);
+                unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
+                WlsLogger::warning_("长连接池已满 (max_long_lived={$longLivedMaxActive})，拒绝长连接请求 (connId: {$connId})");
+                continue;
+            }
+
+            // 预分配长连接槽位（挂起时正式计入）
+            $longLivedConnections[$connId] = [
+                'type' => $protocol,
+                'start' => \time(),
+            ];
+            WlsLogger::info_("长连接槽位已分配 (connId: {$connId}, protocol: {$protocol}, 当前长连接数: " . \count($longLivedConnections) . ")");
+        }
+
         // ========== Fiber 协作式请求处理 ==========
         // 将 handleRequest 放入 Fiber，使 SchedulerSystem::sleep() 可以挂起
         // 而不阻塞整个 Worker 事件循环
@@ -1396,7 +1522,8 @@ while (true) {
             sendResponseAndCleanup(
                 $conn, $connId, $response, $rawRequest,
                 $connections, $requestBuffers, $connectionLastActivity, $requestLogged,
-                $ipcClient, $instanceName, $activeRequests, $handleDuration, $ipcDraining
+                $ipcClient, $instanceName, $activeRequests, $handleDuration, $ipcDraining,
+                $longLivedConnections
             );
         } elseif ($requestFiber->isSuspended()) {
             // 异步路径：Fiber 挂起了（调用了 SchedulerSystem::sleep）
@@ -1408,8 +1535,45 @@ while (true) {
                 'handleStartTime' => $handleStartTime,
                 'context' => \Weline\Framework\Runtime\WlsFiberContext::capture(),
                 'suspended_at' => \time(),
+                'is_long_lived' => $isLongLived,
             ];
             WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
+
+            // 长连接饱和主动上报：避免 Dispatcher 继续向该 Worker 分配长连接
+            // 节流：仅在饱和状态变化时（进入/解除）上报，且有间隔限制
+            $now = \time();
+            if ($longLivedMaxActive > 0) {
+                $isSaturated = \count($longLivedConnections) >= $longLivedMaxActive;
+                if ($isSaturated && !$longLivedSaturationReported && ($now - $lastLongLivedSaturationReport) >= $longLivedSaturationInterval) {
+                    if ($ipcClient && $ipcClient->isConnected()) {
+                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturation(
+                            $workerId,
+                            $port,
+                            \count($longLivedConnections),
+                            $longLivedMaxActive,
+                            \count($activeFibers),
+                            $fiberMaxActive
+                        ));
+                        $lastLongLivedSaturationReport = $now;
+                        $longLivedSaturationReported = true;
+                        $longLivedSaturationCleared = false;
+                        WlsLogger::warning_("长连接饱和上报 (long_lived_count={$longLivedConnections}, max={$longLivedMaxActive})");
+                    }
+                } elseif (!$isSaturated && $longLivedSaturationReported && !$longLivedSaturationCleared) {
+                    // 饱和解除：恢复正常，通知 Dispatcher
+                    if ($ipcClient && $ipcClient->isConnected()) {
+                        $ipcClient->send(\Weline\Server\IPC\ControlMessage::workerSaturationCleared(
+                            $workerId,
+                            $port,
+                            \count($longLivedConnections),
+                            $longLivedMaxActive
+                        ));
+                        $longLivedSaturationReported = false;
+                        $longLivedSaturationCleared = true;
+                        WlsLogger::info_("长连接饱和解除 (long_lived_count={$longLivedConnections})");
+                    }
+                }
+            }
         }
         
     }
@@ -1539,8 +1703,12 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
         return $response;
     }
     $ms = \round($durationMs, 2);
-    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"\r\n";
-    return \substr_replace($response, $headers, $pos + 2, 0);
+    // 注意：不要在最后一行末尾额外附加 \r\n。
+    // $pos 位置对应原响应的 \r\n\r\n 分隔符起点，分隔符自身会提供最后一行结束符与空行。
+    $headers = "X-WLS-Process-Time: {$ms}\r\nServer-Timing: wls;dur={$ms};desc=\"WLS Process\"";
+    // 在 header/body 分隔符（\r\n\r\n）之前插入新增 header，
+    // 避免插入点落在分隔符内部造成多余 CRLF 从而污染 body。
+    return \substr_replace($response, $headers, $pos, 0);
 }
 
 /**
@@ -1561,11 +1729,48 @@ function sendResponseAndCleanup(
     string $instanceName,
     int &$activeRequests,
     float $handleDuration,
-    bool $ipcDraining
+    bool $ipcDraining,
+    array &$longLivedConnections = []
 ): void {
+    // 防御性修正：避免响应里出现 header/body 分隔后多出 leading CRLF，
+    // 从而导致 Content-Length 与实际 body 字节数不一致（curl/浏览器会超时等待）。
+    $headerEnd = \strpos($response, "\r\n\r\n");
+    if ($headerEnd !== false) {
+        $headersPart = \substr($response, 0, $headerEnd);
+        $bodyPart = \substr($response, $headerEnd + 4);
+        if (\preg_match('/^Content-Length:\s*(\d+)/mi', $headersPart, $m)) {
+            $contentLength = (int)($m[1] ?? 0);
+            $bodyLen = \strlen($bodyPart);
+            if ($bodyLen > $contentLength) {
+                if (\str_starts_with($bodyPart, "\r\n") && ($bodyLen - 2) === $contentLength) {
+                    $bodyPart = \substr($bodyPart, 2);
+                    $response = $headersPart . "\r\n\r\n" . $bodyPart;
+                } elseif (\str_starts_with($bodyPart, "\n") && ($bodyLen - 1) === $contentLength) {
+                    $bodyPart = \substr($bodyPart, 1);
+                    $response = $headersPart . "\r\n\r\n" . $bodyPart;
+                }
+            }
+        }
+    }
+
     $responseStatus = 200;
     if (\preg_match('/^HTTP\/\d\.\d\s+(\d{3})/', $response, $statusMatches)) {
         $responseStatus = (int) $statusMatches[1];
+    }
+
+    // 防御性策略：错误响应不复用连接，避免异常包在 keep-alive 链路中影响后续请求。
+    if ($responseStatus >= 400) {
+        $headerEnd = \strpos($response, "\r\n\r\n");
+        if ($headerEnd !== false) {
+            $headersPart = \substr($response, 0, $headerEnd);
+            $bodyPart = \substr($response, $headerEnd + 4);
+            if (\preg_match('/^Connection:\s*.+$/mi', $headersPart)) {
+                $headersPart = (string)\preg_replace('/^Connection:\s*.+$/mi', 'Connection: close', $headersPart);
+            } else {
+                $headersPart .= "\r\nConnection: close";
+            }
+            $response = $headersPart . "\r\n\r\n" . $bodyPart;
+        }
     }
     $responseBytes = 0;
     $requestHost = getHeaderValue($rawRequest, 'Host') ?? '';
@@ -1576,9 +1781,10 @@ function sendResponseAndCleanup(
     $activeRequests--;
 
     $isSseMode = \Weline\Framework\Http\Sse\SseContext::isSseEnabled();
+    $responseLength = \strlen($response);
+    $responseBytes = 0;
 
     if (!$isSseMode) {
-        $responseLength = \strlen($response);
         $totalWritten = 0;
         $maxRetries = 1000;
         $retryCount = 0;
@@ -1602,7 +1808,8 @@ function sendResponseAndCleanup(
                     WlsLogger::warning_("响应写入阻塞过久: {$totalWritten}/{$responseLength} bytes (连续 {$consecutiveZeroWrites} 次写入 0)");
                     break;
                 }
-                \Weline\Framework\Runtime\SchedulerSystem::usleep(1000); // 1ms — 写缓冲区级别的短等待
+                // 写缓冲区满时使用协作式让步，避免阻塞 Worker 事件循环
+                \Weline\Framework\Runtime\SchedulerSystem::yieldDelay(1);
                 continue;
             }
 
@@ -1620,7 +1827,14 @@ function sendResponseAndCleanup(
         }
         $responseBytes = $totalWritten;
     } else {
-        WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
+        // SSE 模式：检查响应体是否有内容（SSE 控制器应该调用 complete() 关闭流）
+        if ($responseLength > 0) {
+            // SSE 模式下有响应体，说明控制器可能没有正确调用 complete()
+            // 这是开发时的问题，日志提醒，但不覆盖已发送的数据
+            WlsLogger::warning_("SSE 模式收到响应体: {$responseLength} bytes，可能未调用 \$sse->complete() (connId: {$connId})");
+        } else {
+            WlsLogger::info_("SSE 流式响应完成 (connId: {$connId})");
+        }
     }
 
     \Weline\Framework\Http\Sse\SseContext::reset();
@@ -1636,10 +1850,14 @@ function sendResponseAndCleanup(
         ));
     }
 
-    $shouldClose = $isSseMode || !isKeepAlive($rawRequest) || $ipcDraining;
+    $shouldClose = $isSseMode || !isKeepAlive($rawRequest) || $ipcDraining || $responseStatus >= 400;
     if ($shouldClose) {
         @\fclose($conn);
         unset($connections[$connId], $requestBuffers[$connId], $connectionLastActivity[$connId], $requestLogged[$connId]);
+        // 清理长连接计数（饱和状态由主循环检测变化后主动上报）
+        if (isset($longLivedConnections[$connId])) {
+            unset($longLivedConnections[$connId]);
+        }
     }
 }
 
@@ -1652,12 +1870,18 @@ function sendResponseAndCleanup(
  */
 function buildFiberSnapshotForHealth(array $activeFibers): array
 {
+    static $resolver = null;
+    if ($resolver === null) {
+        $resolver = new \Weline\Server\Service\Protocol\LongLived\ProtocolResolver();
+    }
+
     $list = [];
     foreach ($activeFibers as $connId => $afData) {
         $fiber = $afData['fiber'] ?? null;
         $raw = $afData['rawRequest'] ?? '';
         $status = ($fiber instanceof \Fiber && $fiber->isSuspended()) ? 'idle' : 'busy';
-        $protocol = (\stripos($raw, 'text/event-stream') !== false) ? 'sse' : 'http';
+        $detected = $resolver->detect($raw);
+        $protocol = (string)($detected['protocol'] ?? 'http');
         $list[] = ['conn_id' => $connId, 'status' => $status, 'protocol' => $protocol];
     }
     return $list;
@@ -1928,11 +2152,43 @@ function handleRequest(
                         }
                         $cookieHeaders .= 'Set-Cookie: ' . \implode('; ', $parts) . "\r\n";
                     }
-                    $result = \substr($result, 0, $headerEnd) . "\r\n" . $cookieHeaders . \substr($result, $headerEnd);
+                    // 可靠拆分 header/body，避免拼接时产生多余 CRLF 导致 Content-Length 与实际收到字节不一致。
+                    $bodyPart = \substr($result, $headerEnd + 4);
+                    $headerPart = \substr($result, 0, $headerEnd);
+
+                    $cookieHeaders = \rtrim($cookieHeaders, "\r\n");
+                    $headerPart = \rtrim($headerPart, "\r\n");
+
+                    if ($cookieHeaders !== '') {
+                        $headerPart .= "\r\n" . $cookieHeaders;
+                    }
+
+                    $result = $headerPart . "\r\n\r\n" . $bodyPart;
                 }
             }
             $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
             $result = \Weline\Server\Service\RouteHintService::addHintToResponse($result, $sni);
+
+            // 防御性修正：避免已格式化 HTTP 响应在 header/body 分隔后多出 leading CRLF，
+            // 导致 Content-Length 与实际收到字节不一致（curl/浏览器会因此等待到超时）。
+            $headerEnd = \strpos($result, "\r\n\r\n");
+            if ($headerEnd !== false) {
+                $headersPart = \substr($result, 0, $headerEnd);
+                $bodyPart = \substr($result, $headerEnd + 4);
+                if (\preg_match('/^Content-Length:\s*(\d+)/mi', $headersPart, $m)) {
+                    $contentLength = (int)($m[1] ?? 0);
+                    $bodyLen = \strlen($bodyPart);
+                    if ($bodyLen > $contentLength) {
+                        // 常见异常：body 实际只多了 2 字节前导 CRLF
+                        if (\str_starts_with($bodyPart, "\r\n") && ($bodyLen - 2) === $contentLength) {
+                            $bodyPart = \substr($bodyPart, 2);
+                        } elseif (\str_starts_with($bodyPart, "\n") && ($bodyLen - 1) === $contentLength) {
+                            $bodyPart = \substr($bodyPart, 1);
+                        }
+                        $result = $headersPart . "\r\n\r\n" . $bodyPart;
+                    }
+                }
+            }
             // HEAD 请求只返回头，不返回 body
             if (\strtoupper($method) === 'HEAD') {
                 $headerEnd = \strpos($result, "\r\n\r\n");
@@ -1945,18 +2201,13 @@ function handleRequest(
         
         // WLS 模式下控制器通过 return 返回 body，header() 无效；需对 body trim 并可从 JSON 的 code 解析出状态码
         $result = \is_string($result) ? \trim($result) : (string) $result;
-        $statusCode = 200;
-        $first = \ltrim($result);
-        if (($first[0] ?? '') === '{') {
-            $decoded = \json_decode($result, true);
-            if (\is_array($decoded) && \array_key_exists('code', $decoded)) {
-                $code = (int) $decoded['code'];
-                if ($code >= 400 && $code < 600) {
-                    $statusCode = $code;
-                }
-            }
-        }
-        
+        $pendingResponseStatus = $runtime->consumePendingResponseStatus();
+        $statusCode = (new \Weline\Server\Service\ResponseStatusResolver())->resolve(
+            $result,
+            $pendingResponseStatus['status_code'] ?? null,
+            (bool) ($pendingResponseStatus['explicit'] ?? false)
+        );
+
         $response = \Weline\Framework\Http\WlsResponse::fromContent($result, $statusCode);
         
         // 合并应用通过 HeaderCollector 设置的响应头（否则 WLS 会“吞掉”页面/控制器设置的 header）
@@ -2249,6 +2500,12 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
 
     $candidateUris = \array_values(\array_unique($candidateUris));
 
+    foreach ($candidateUris as $candidateUri) {
+        if (\Weline\Server\Service\StaticRequestBypassDecider::shouldDeferToFramework($candidateUri)) {
+            return null;
+        }
+    }
+
     // 查找文件位置（按优先级）
     $filename = null;
     foreach ($candidateUris as $candidateUri) {
@@ -2414,7 +2671,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         // 使用实际内容长度，避免 Content-Length 与实际内容不匹配
         $actualContentLength = \strlen($content);
         
-        // H14: 验证内容长度与文件大小是否一致
+        // 验证内容长度与文件大小
         if ($actualContentLength !== $fileSize && !$fromCache) {
             // 文件可能在读取过程中被修改，重新读取
             $content = @\file_get_contents($filename);
@@ -2438,7 +2695,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $response .= "\r\n";
         $response .= $content;
         
-        // H14: 最终验证响应完整性
+        // 验证响应完整性
         $headerEndPos = \strpos($response, "\r\n\r\n");
         $actualBodyLen = \strlen($response) - $headerEndPos - 4;
         if ($actualBodyLen !== $actualContentLength) {
@@ -2472,7 +2729,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         $response = "HTTP/1.1 200 OK\r\n";
     }
     
-    // H13: 根据客户端请求设置正确的 Connection 头
+    // 根据客户端请求设置 Connection 头
     $isHttp11 = \strpos($rawRequest, 'HTTP/1.1') !== false;
     $hasCloseHeader = \stripos($rawRequest, 'Connection: close') !== false;
     $keepAlive = $isHttp11 && !$hasCloseHeader;
@@ -2489,7 +2746,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     $response .= "X-WLS-File-Size: {$fileSize}\r\n";
     $response .= "\r\n";
     
-    // H14: 分块读取文件内容（每次 64KB）
+    // 分块读取文件内容
     // 注意：必须确保实际读取的字节数与 Content-Length 匹配
     $chunkSize = 64 * 1024;
     $remaining = $contentLength;
@@ -2520,7 +2777,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     
     \fclose($fp);
     
-    // H14: 验证实际读取的字节数是否与 Content-Length 匹配
+    // 验证实际读取字节数与 Content-Length
     // 如果不匹配，需要修正响应或返回错误
     if ($totalRead !== $contentLength) {
         // 文件可能在读取过程中被修改，返回错误而不是不完整的响应
