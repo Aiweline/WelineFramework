@@ -382,23 +382,33 @@
     // 暴露给全局的模块接口
     window.FslAdmin = {
         deleteRecord: function(id) {
-            if (confirm('<?= __('确定要删除这条记录吗？') ?>')) {
-                var url = '<?= $this->getUrl("fontsubletter/backend/record/delete") ?>';
-                var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + id };
-                window.Weline.Api.request(url, opts)
-                .then(function(res) {
-                    var data = (res && res.data) !== undefined ? res.data : res;
-                    if (data.code === 200) {
-                        BackendToast.success('<?= __('删除成功') ?>');
-                        setTimeout(function() { location.reload(); }, 1000);
-                    } else {
-                        BackendToast.error(data.msg || '<?= __('删除失败') ?>');
-                    }
-                })
-                .catch(function(error) {
-                    BackendToast.error('<?= __('删除失败') ?>: ' + error.message);
-                });
+            if (typeof BackendConfirm === 'undefined') {
+                BackendToast.error('<?= __('确认组件未加载，无法进行删除确认') ?>');
+                return;
             }
+
+            BackendConfirm.show('<?= __('确定要删除这条记录吗？') ?>', { type: 'danger' })
+                .then(function(confirmed) {
+                    if (!confirmed) {
+                        return;
+                    }
+
+                    var url = '<?= $this->getUrl("fontsubletter/backend/record/delete") ?>';
+                    var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + id };
+                    window.Weline.Api.request(url, opts)
+                    .then(function(res) {
+                        var data = (res && res.data) !== undefined ? res.data : res;
+                        if (data.code === 200) {
+                            BackendToast.success('<?= __('删除成功') ?>');
+                            setTimeout(function() { location.reload(); }, 1000);
+                        } else {
+                            BackendToast.error(data.msg || '<?= __('删除失败') ?>');
+                        }
+                    })
+                    .catch(function(error) {
+                        BackendToast.error('<?= __('删除失败') ?>: ' + error.message);
+                    });
+                });
         }
     };
 
