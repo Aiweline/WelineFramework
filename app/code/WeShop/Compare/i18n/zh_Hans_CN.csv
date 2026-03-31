@@ -1,10 +1,17 @@
-﻿"Please log in to continue.","Please log in to continue."
+﻿"Compare Management","Compare Management"
+"Invalid compare record ID.","无效的对比记录 ID。"
+"Compare record deleted successfully.",对比记录删除成功。
+"Failed to delete compare record.",删除对比记录失败。
+"Invalid request method.",请求方法无效。
+"Please log in to continue.","Please log in to continue."
 "Product ID is required.","缺少商品 ID。"
 "Added to compare.",已加入对比。
 "Compare Products",商品对比
 "Compare item ID is required.","缺少对比项 ID。"
 "Compare item could not be removed.",无法移除该对比项。
 "Removed from compare.",已从对比中移除。
+"Customer #%1","Customer #%1"
+"Product #%1","Product #%1"
 "In stock",有货
 "Out of stock",缺货
 "Side-by-Side Decisions",并排决策
@@ -13,6 +20,29 @@
 "Keep your shortlisted products together so price, availability, and key details stay easy to compare before checkout.",将候选商品集中在一起，方便在下单前快速比较价格、库存和关键差异。
 "Add products from category and product pages to build a side-by-side shortlist inside your account center.",从类目页和商品详情页加入商品，在账户中心形成并排对比清单。
 "Add to Compare",加入对比
+"Review and manage customer product comparison records.",查看和管理客户商品对比记录。
+"Page %d of %d, %d compare records found","第 %d 页，共 %d 页，找到 %d 条对比记录"
+"Total Compare Records",对比记录总数
+"Unique Customers",独立客户数
+"Unique Products",独立商品数
+"Customer ID","客户 ID"
+"Product ID","商品 ID"
+"Apply Filters",应用筛选
+Reset,重置
+"Compare ID","对比 ID"
+Customer,客户
+Product,商品
+SKU,SKU
+"Added At",添加时间
+Actions,操作
+"ID: %1","ID: %1"
+"Compare Record #%1","Compare Record #%1"
+Delete,删除
+"Compare pagination",对比分页
+Previous,上一页
+Next,下一页
+"No compare records found.",未找到对比记录。
+"No customers have added products to compare yet, or adjust filters to find existing records.",还没有客户添加商品进行对比，或调整筛选条件以查找现有记录。
 "Keep shortlisted products together, inspect the differences that matter, and move the right option into checkout with less back-and-forth.","Keep shortlisted products together, inspect the differences that matter, and move the right option into checkout with less back-and-forth."
 "Continue Shopping","Continue Shopping"
 "Back to Account","Back to Account"
@@ -28,7 +58,6 @@
 Remove,Remove
 Attribute,Attribute
 Price,Price
-SKU,SKU
 Availability,Availability
 Brand,Brand
 "No compared products yet","No compared products yet"
