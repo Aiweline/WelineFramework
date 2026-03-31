@@ -20,6 +20,8 @@ class Index extends BaseController
     ) {
     }
 
+    private const CONTENT_TEMPLATE = 'WeShop_RecentlyViewed::templates/Frontend/RecentlyViewed/Index/index.phtml';
+
     public function index(): string
     {
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
@@ -34,6 +36,6 @@ class Index extends BaseController
             $this->assign($key, $value);
         }
 
-        return $this->fetch();
+        return $this->fetch(self::CONTENT_TEMPLATE);
     }
 }
