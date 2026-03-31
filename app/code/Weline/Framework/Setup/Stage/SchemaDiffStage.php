@@ -67,7 +67,6 @@ class SchemaDiffStage extends AbstractStage
         if ($this->prepared) {
             return;
         }
-
         $connector = $this->connectionFactory->getConnector();
         $modules = $this->moduleHandle->getModules();
         $this->diffOps = [];
@@ -158,7 +157,6 @@ class SchemaDiffStage extends AbstractStage
             $this->committed = true;
             return;
         }
-
         $connector = $this->connectionFactory->getConnector();
         try {
             $this->executor->execute($connector, $this->diffOps);
@@ -186,4 +184,5 @@ class SchemaDiffStage extends AbstractStage
     {
         return $this->diffOps;
     }
+
 }
