@@ -45,9 +45,8 @@ class UpgradeDefaultAttribute implements ObserverInterface
                 /**@var \Weline\Eav\EavInterface $eavEntity */
                 $eavEntity = ObjectManager::getInstance($eav);
                 if ($eavEntity instanceof EavInterface) {
-                    // 注意：不设置 EavEntity::schema_fields_ID，让数据库自动生成
-                    // 使用 code 作为唯一键进行更新或插入
-                    $eavEntityModel->reset()
+                    // 单例模型在循环场景会残留上一轮 data/id，必须先 clearData() 再做 forceCheck 保存。
+                    $eavEntityModel->clearData()
                         ->setData(
                             [
                                 EavEntity::schema_fields_code => $eavEntity->getEntityCode(),
@@ -69,14 +68,14 @@ class UpgradeDefaultAttribute implements ObserverInterface
                     #--属性集
                     /**@var Set $setModel */
                     $setModel = ObjectManager::getInstance(Set::class);
-                    $existingSet = $setModel->reset()->clearData()
+                    $existingSet = $setModel->clearData()
                         ->where('eav_entity_id', $savedEntityId)
                         ->where('code', 'default')
                         ->find()->fetch();
                     if (!$existingSet->getId()) {
                         /**@var Set $eavAttributeSet */
                         $eavAttributeSet = ObjectManager::make(Set::class);
-                        $eavAttributeSet->reset()->clearData()
+                        $eavAttributeSet->clearData()
                             ->insert([
                                 'eav_entity_id' => $savedEntityId,
                                 'name' => '默认属性集',
@@ -87,14 +86,14 @@ class UpgradeDefaultAttribute implements ObserverInterface
                     # --属性组
                     /**@var Group $groupModel */
                     $groupModel = ObjectManager::getInstance(Group::class);
-                    $existingGroup = $groupModel->reset()->clearData()
+                    $existingGroup = $groupModel->clearData()
                         ->where('eav_entity_id', $savedEntityId)
                         ->where('code', 'default')
                         ->find()->fetch();
                     if (!$existingGroup->getId()) {
                         # 获取默认属性集
                         $defaultSet = ObjectManager::getInstance(Set::class);
-                        $defaultSet->reset()->clearData()
+                        $defaultSet->clearData()
                             ->where('eav_entity_id', $savedEntityId)
                             ->where('code', 'default')
                             ->find()->fetch();
@@ -102,7 +101,7 @@ class UpgradeDefaultAttribute implements ObserverInterface
                         if ($defaultSet->getId()) {
                             /**@var Group $eavAttributeGroup */
                             $eavAttributeGroup = ObjectManager::make(Group::class);
-                            $eavAttributeGroup->reset()->clearData()
+                            $eavAttributeGroup->clearData()
                                 ->insert([
                                     'set_id' => $defaultSet->getId(),
                                     'eav_entity_id' => $savedEntityId,
