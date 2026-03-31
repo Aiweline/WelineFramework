@@ -71,7 +71,7 @@ class Index extends BackendController
             );
 
             return $response->getBody()->getContents();
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->jsonResponse(false, __('获取模块列表失败：') . $e->getMessage());
         }
     }
@@ -87,21 +87,27 @@ class Index extends BackendController
         try {
             $licenseKey = $this->request->getPost('license_key');
             $version = $this->request->getPost('version');
+            $moduleId = (int)$this->request->getPost('module_id');
 
             if (!$licenseKey) {
                 return $this->jsonResponse(false, __('缺少许可证密钥'));
+            }
+            if ($moduleId <= 0) {
+                return $this->jsonResponse(false, __('缺少模块ID'));
             }
 
             /** @var ModuleInstallerService $installer */
             $installer = ObjectManager::getInstance(ModuleInstallerService::class);
 
             // 下载模块
-            $downloadResult = $installer->download($licenseKey, $version);
+            $downloadResult = $installer->download($licenseKey, $moduleId, $version);
+            $moduleInfo = $downloadResult['module_info'] ?? [];
+            $platformModuleId = (int)($moduleInfo['module_id'] ?? ($moduleInfo['id'] ?? $moduleId));
 
             // 安装模块
             $installResult = $installer->install($downloadResult['file_path'], [
                 'license_key' => $licenseKey,
-                'platform_module_id' => $downloadResult['module_info']['id'] ?? 0,
+                'platform_module_id' => $platformModuleId,
             ]);
 
             if ($installResult['success']) {
@@ -109,7 +115,7 @@ class Index extends BackendController
             } else {
                 return $this->jsonResponse(false, __('模块安装失败：') . ($installResult['message'] ?? ''), $installResult);
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return $this->jsonResponse(false, __('安装失败：') . $e->getMessage());
         }
     }
