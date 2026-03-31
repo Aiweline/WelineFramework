@@ -12,9 +12,9 @@ class ImportExport extends BaseController
     {
         $this->assign([
             'title' => (string) __('Import / Export'),
-            'productExportUrl' => $this->getBackendUrl('*/backend/import-export/export', ['entity' => 'products']),
-            'orderExportUrl' => $this->getBackendUrl('*/backend/import-export/export', ['entity' => 'orders']),
-            'productImportUrl' => $this->getBackendUrl('*/backend/import-export/import', ['entity' => 'products']),
+            'productExportUrl' => $this->getUrl('*/backend/import-export/export', ['entity' => 'products']),
+            'orderExportUrl' => $this->getUrl('*/backend/import-export/export', ['entity' => 'orders']),
+            'productImportUrl' => $this->getUrl('*/backend/import-export/import', ['entity' => 'products']),
         ]);
 
         return $this->fetchBase();
