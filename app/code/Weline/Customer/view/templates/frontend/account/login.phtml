@@ -10,18 +10,19 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
 ]));
 ?>
 <style>
-.login-form-container {
+/* ========== 登录表单容器 ========== */
+.auth-form {
     max-width: 440px;
     width: 100%;
     margin: 0 auto;
-    padding: 3rem 2rem;
+    padding: var(--spacing-xl, 2rem) var(--spacing-lg, 1.5rem);
     background: var(--color-bg-primary);
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-    animation: fadeInUp 0.6s ease-out;
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: var(--shadow-md);
+    animation: authFadeInUp 0.6s ease-out;
 }
 
-@keyframes fadeInUp {
+@keyframes authFadeInUp {
     from {
         opacity: 0;
         transform: translateY(20px);
@@ -32,83 +33,74 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     }
 }
 
-.login-header {
+/* ========== 登录头部 ========== */
+.auth-form__header {
     text-align: center;
-    margin-bottom: 2.5rem;
+    margin-bottom: var(--spacing-xl, 2rem);
 }
 
-.login-icon {
+.auth-form__icon {
     width: 64px;
     height: 64px;
-    margin: 0 auto 1.5rem;
+    margin: 0 auto var(--spacing-md, 1rem);
     background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
-    border-radius: 16px;
+    border-radius: var(--radius-lg, 12px);
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
-    animation: pulse 2s ease-in-out infinite;
 }
 
-@keyframes pulse {
-    0%, 100% {
-        transform: scale(1);
-    }
-    50% {
-        transform: scale(1.05);
-    }
-}
-
-.login-icon i {
+.auth-form__icon i {
     font-size: 2rem;
-    color: #ffffff;
+    color: var(--color-text-light);
 }
 
-.login-title {
-    font-size: 1.875rem;
-    font-weight: 700;
+.auth-form__title {
+    font-size: var(--font-size-xxl, 1.875rem);
+    font-weight: var(--font-weight-bold, 700);
     color: var(--color-text-primary);
-    margin: 0 0 0.5rem 0;
+    margin: 0 0 var(--spacing-xs, 0.25rem) 0;
     letter-spacing: -0.5px;
 }
 
-.login-subtitle {
-    font-size: 0.9375rem;
+.auth-form__subtitle {
+    font-size: var(--font-size-sm, 0.875rem);
     color: var(--color-text-secondary);
     margin: 0;
 }
 
-.login-form {
-    margin-top: 2rem;
+/* ========== 表单样式 ========== */
+.auth-form__body {
+    margin-top: var(--spacing-lg, 1.5rem);
 }
 
-.form-group-enhanced {
-    margin-bottom: 1.5rem;
+.auth-form__field {
+    margin-bottom: var(--spacing-md, 1rem);
 }
 
-.form-group-enhanced label {
-    display: block;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin-bottom: 0.5rem;
+.auth-form__label {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-xs, 0.5rem);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-xs, 0.5rem);
 }
 
-.form-group-enhanced label i {
+.auth-form__label i {
     color: var(--color-primary);
-    font-size: 0.875rem;
+    font-size: var(--font-size-sm, 0.875rem);
 }
 
-.form-input-wrapper {
+.auth-form__input-wrapper {
     position: relative;
 }
 
-.form-input-wrapper i {
+.auth-form__input-wrapper i {
     position: absolute;
-    left: 1rem;
+    left: var(--spacing-sm, 0.75rem);
     top: 50%;
     transform: translateY(-50%);
     color: var(--color-text-tertiary);
@@ -117,83 +109,105 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     transition: color 0.3s;
 }
 
-.form-input-wrapper input,
-.form-input-wrapper select {
+.auth-form__input {
     width: 100%;
-    padding: 0.875rem 1rem 0.875rem 2.75rem;
+    padding: var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-xl, 2.25rem);
     border: 2px solid var(--color-border-default);
-    border-radius: 10px;
-    font-size: 0.9375rem;
+    border-radius: var(--radius-md, 8px);
+    font-size: var(--font-size-base, 0.9375rem);
     transition: all 0.3s;
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
 }
 
-.form-input-wrapper input:focus,
-.form-input-wrapper select:focus {
+.auth-form__input:focus {
     outline: none;
     border-color: var(--color-border-focus);
-    box-shadow: 0 0 0 3px rgba(231, 118, 0, 0.1);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
-.form-input-wrapper input:focus + i,
-.form-input-wrapper:focus-within i {
+.auth-form__input:focus + i,
+.auth-form__input-wrapper:focus-within i {
     color: var(--color-primary);
 }
 
-.form-input-wrapper input::placeholder {
+.auth-form__input::placeholder {
     color: var(--color-text-tertiary);
 }
 
-.remember-section {
-    margin: 1.5rem 0;
-    padding: 1rem;
+/* ========== 记住登录状态区块 ========== */
+.auth-form__remember {
+    margin: var(--spacing-md, 1rem) 0;
+    padding: var(--spacing-sm, 0.75rem);
     background: var(--color-bg-secondary);
-    border-radius: 10px;
+    border-radius: var(--radius-md, 8px);
     border: 1px solid var(--color-border-default);
 }
 
-.remember-section label {
-    display: block;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--color-text-primary);
-    margin-bottom: 0.75rem;
+.auth-form__remember-label {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--spacing-xs, 0.5rem);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-xs, 0.5rem);
 }
 
-.remember-section label i {
+.auth-form__remember-label i {
     color: var(--color-primary);
 }
 
-.remember-section select {
+.auth-form__select {
     width: 100%;
-    padding: 0.75rem 1rem;
+    padding: var(--spacing-xs, 0.5rem) var(--spacing-sm, 0.75rem);
     border: 2px solid var(--color-border-default);
-    border-radius: 8px;
-    font-size: 0.875rem;
+    border-radius: var(--radius-sm, 6px);
+    font-size: var(--font-size-sm, 0.875rem);
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
     transition: all 0.3s;
+    cursor: pointer;
 }
 
-.remember-section select:focus {
+.auth-form__select:focus {
     outline: none;
     border-color: var(--color-border-focus);
-    box-shadow: 0 0 0 3px rgba(231, 118, 0, 0.1);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
 }
 
-.btn-login {
+/* ========== 忘记密码链接 ========== */
+.auth-form__forgot {
+    text-align: right;
+    margin-bottom: var(--spacing-md, 1rem);
+}
+
+.auth-form__forgot-link {
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: var(--font-weight-medium, 500);
+    transition: color 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs, 0.25rem);
+}
+
+.auth-form__forgot-link:hover {
+    color: var(--color-link-hover);
+    text-decoration: underline;
+}
+
+/* ========== 提交按钮 ========== */
+.auth-form__submit {
     width: 100%;
-    padding: 1rem;
+    padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
     background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
     border: 2px solid var(--color-primary-border);
-    border-radius: 10px;
+    border-radius: var(--radius-md, 8px);
     color: var(--color-text-primary);
-    font-size: 1rem;
-    font-weight: 600;
+    font-size: var(--font-size-base, 1rem);
+    font-weight: var(--font-weight-semibold, 600);
     cursor: pointer;
     transition: all 0.3s;
     box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
@@ -201,7 +215,7 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     overflow: hidden;
 }
 
-.btn-login::before {
+.auth-form__submit::before {
     content: '';
     position: absolute;
     top: 50%;
@@ -214,102 +228,39 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     transition: width 0.6s, height 0.6s;
 }
 
-.btn-login:hover::before {
+.auth-form__submit:hover::before {
     width: 300px;
     height: 300px;
 }
 
-.btn-login:hover {
+.auth-form__submit:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(240, 193, 75, 0.5);
-    background: linear-gradient(135deg, var(--color-primary-light) 0%, var(--color-primary) 100%);
 }
 
-.btn-login:active {
+.auth-form__submit:active {
     transform: translateY(0);
 }
 
-.btn-login:disabled {
+.auth-form__submit:disabled {
     opacity: 0.7;
     cursor: not-allowed;
     transform: none;
 }
 
-.btn-login.btn-success {
+.auth-form__submit--success {
     background: linear-gradient(135deg, var(--color-success) 0%, #059669 100%);
     box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
     border-color: var(--color-success);
-    color: #ffffff;
+    color: var(--color-text-light);
 }
 
-.login-footer {
-    margin-top: 2rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--color-border-default);
-    text-align: center;
-}
-
-.login-footer p {
-    margin: 0;
-    font-size: 0.875rem;
-    color: var(--color-text-secondary);
-}
-
-.login-footer a {
-    color: var(--color-link);
-    text-decoration: none;
-    font-weight: 600;
-    transition: color 0.3s;
-}
-
-.login-footer a:hover {
-    color: var(--color-link-hover);
-    text-decoration: underline;
-}
-
-/* 错误提示样式增强 */
-.alert-error {
-    border-radius: 10px;
-    padding: 1rem;
-    margin-bottom: 1.5rem;
-    animation: shake 0.5s;
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    25% { transform: translateX(-10px); }
-    75% { transform: translateX(10px); }
-}
-
-/* 响应式设计 */
-@media (max-width: 640px) {
-    .login-form-container {
-        padding: 2rem 1.5rem;
-        margin: 1rem;
-        border-radius: 12px;
-    }
-    
-    .login-title {
-        font-size: 1.5rem;
-    }
-    
-    .login-icon {
-        width: 56px;
-        height: 56px;
-    }
-    
-    .login-icon i {
-        font-size: 1.75rem;
-    }
-}
-
-/* 加载动画 */
-.btn-loading {
+.auth-form__submit--loading {
     position: relative;
     color: transparent !important;
 }
 
-.btn-loading::after {
+.auth-form__submit--loading::after {
     content: '';
     position: absolute;
     width: 20px;
@@ -318,81 +269,195 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
     left: 50%;
     margin-left: -10px;
     margin-top: -10px;
-    border: 2px solid #ffffff;
+    border: 2px solid var(--color-text-light);
     border-radius: 50%;
     border-top-color: transparent;
-    animation: spin 0.8s linear infinite;
+    animation: authSpin 0.8s linear infinite;
 }
 
-@keyframes spin {
+@keyframes authSpin {
     to { transform: rotate(360deg); }
 }
+
+/* ========== 第三方登录区域 ========== */
+.auth-form__social {
+    margin-top: var(--spacing-lg, 1.5rem);
+    padding-top: var(--spacing-lg, 1.5rem);
+    border-top: 1px solid var(--color-border-light);
+}
+
+.auth-form__social-title {
+    text-align: center;
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--spacing-md, 1rem);
+    position: relative;
+}
+
+.auth-form__social-title::before,
+.auth-form__social-title::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: calc(50% - 60px);
+    height: 1px;
+    background: var(--color-border-light);
+}
+
+.auth-form__social-title::before {
+    left: 0;
+}
+
+.auth-form__social-title::after {
+    right: 0;
+}
+
+/* ========== 页脚链接 ========== */
+.auth-form__footer {
+    margin-top: var(--spacing-lg, 1.5rem);
+    padding-top: var(--spacing-md, 1rem);
+    border-top: 1px solid var(--color-border-default);
+    text-align: center;
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-text-secondary);
+}
+
+.auth-form__footer-link {
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold, 600);
+    transition: color 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs, 0.25rem);
+}
+
+.auth-form__footer-link:hover {
+    color: var(--color-link-hover);
+    text-decoration: underline;
+}
+
+/* ========== 错误提示 ========== */
+.auth-form__error {
+    border-radius: var(--radius-md, 8px);
+    padding: var(--spacing-sm, 0.75rem);
+    margin-bottom: var(--spacing-md, 1rem);
+    animation: authShake 0.5s;
+}
+
+@keyframes authShake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
+/* ========== 输入框焦点效果 ========== */
+.auth-form__input-wrapper--focused {
+    transform: translateY(-2px);
+}
+
+.auth-form__input-wrapper--focused i {
+    color: var(--color-primary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.auth-form--shake {
+    animation: authShake 0.5s;
+}
+
+/* ========== 响应式设计 ========== */
+@media (max-width: 640px) {
+    .auth-form {
+        padding: var(--spacing-lg, 1.5rem) var(--spacing-md, 1rem);
+        margin: var(--spacing-sm, 0.5rem);
+        border-radius: var(--radius-md, 8px);
+    }
+
+    .auth-form__title {
+        font-size: var(--font-size-xl, 1.5rem);
+    }
+
+    .auth-form__icon {
+        width: 56px;
+        height: 56px;
+    }
+
+    .auth-form__icon i {
+        font-size: 1.75rem;
+    }
+}
 </style>
-<div class="login-form-container">
-    <div class="login-header">
-        <div class="login-icon">
+
+<div class="auth-form">
+    <header class="auth-form__header">
+        <div class="auth-form__icon">
             <i class="fas fa-user-circle"></i>
         </div>
-        <h1 class="login-title"><lang>欢迎回来</lang></h1>
-        <p class="login-subtitle"><lang>请登录您的账户以继续</lang></p>
-    </div>
-    
-    <form id="loginForm" class="login-form">
+        <h1 class="auth-form__title"><lang>欢迎回来</lang></h1>
+        <p class="auth-form__subtitle"><lang>请登录您的账户以继续</lang></p>
+    </header>
+
+    <form id="loginForm" class="auth-form__body" action="/customer/account/login" method="post">
+        <?= $this->getFormKey('/customer/account/login') ?>
         <input type="hidden" name="redirect_url" value="<?= htmlspecialchars($redirectUrl, ENT_QUOTES) ?>" />
+        <?php if (!empty($error_message)): ?>
         <?php
-        // 使用主题错误提示组件
         echo $this->fetch('Weline_Theme::theme/frontend/components/alert.phtml', [
             'type' => 'error',
             'id' => 'errorMessage',
-            'message' => '<span id="errorText"></span>',
+            'message' => $error_message,
             'dismissible' => false,
-            'class' => 'd-none'
+            'class' => '',
+            'html' => true
         ]);
         ?>
-        
-        <div class="form-group-enhanced">
-            <label for="username">
+        <?php endif; ?>
+
+        <div class="auth-form__field">
+            <label class="auth-form__label" for="username">
                 <i class="fas fa-user"></i>
                 <lang>用户名或邮箱</lang>
             </label>
-            <div class="form-input-wrapper">
+            <div class="auth-form__input-wrapper">
                 <i class="fas fa-envelope"></i>
-                <input 
-                    type="text" 
-                    id="username" 
-                    name="username" 
+                <input
+                    class="auth-form__input"
+                    type="text"
+                    id="username"
+                    name="username"
                     placeholder="<lang>请输入用户名或邮箱</lang>"
-                    required 
+                    required
                     autocomplete="username"
                     autofocus
                 />
             </div>
         </div>
-        
-        <div class="form-group-enhanced">
-            <label for="password">
+
+        <div class="auth-form__field">
+            <label class="auth-form__label" for="password">
                 <i class="fas fa-lock"></i>
                 <lang>密码</lang>
             </label>
-            <div class="form-input-wrapper">
+            <div class="auth-form__input-wrapper">
                 <i class="fas fa-key"></i>
-                <input 
-                    type="password" 
-                    id="password" 
-                    name="password" 
+                <input
+                    class="auth-form__input"
+                    type="password"
+                    id="password"
+                    name="password"
                     placeholder="<lang>请输入密码</lang>"
-                    required 
+                    required
                     autocomplete="current-password"
                 />
             </div>
         </div>
-        
-        <div class="remember-section">
-            <label for="remember_duration">
+
+        <div class="auth-form__remember">
+            <label class="auth-form__remember-label" for="remember_duration">
                 <i class="fas fa-clock"></i>
                 <lang>记住登录状态</lang>
             </label>
-            <select id="remember_duration" name="remember_duration">
+            <select class="auth-form__select" id="remember_duration" name="remember_duration">
                 <option value="0"><lang>本次会话（关闭浏览器后失效）</lang></option>
                 <option value="21600"><lang>6小时</lang></option>
                 <option value="86400"><lang>1天</lang></option>
@@ -400,149 +465,158 @@ $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Fr
                 <option value="2592000"><lang>1个月</lang></option>
             </select>
         </div>
-        
-        <div class="login-footer" style="margin-top: 0; margin-bottom: 1.25rem; padding-top: 0; border-top: 0; text-align: right;">
-            <a href="/customer/account/forgot-password">
-                <i class="fas fa-key me-1"></i><lang>蹇樿瀵嗙爜锛?/lang>
+
+        <div class="auth-form__forgot">
+            <a href="/customer/account/forgot-password" class="auth-form__forgot-link">
+                <i class="fas fa-key"></i>
+                <lang>忘记密码？</lang>
             </a>
         </div>
 
-        <button type="submit" id="loginBtn" class="btn-login">
+        <button type="submit" id="loginBtn" class="auth-form__submit">
             <span id="loginText"><lang>登录</lang></span>
             <span id="loginSpinner" class="d-none">
                 <i class="fas fa-spinner fa-spin me-2"></i><lang>登录中...</lang>
             </span>
         </button>
     </form>
-    
-    <div class="login-footer">
+
+    <div class="auth-form__social">
         <?php if ($googleLoginButton !== ''): ?>
-            <div class="social-login-provider-section" style="margin-bottom: 1rem;">
+            <p class="auth-form__social-title"><lang>或</lang></p>
+            <div class="auth-form__social-buttons">
                 <?= $googleLoginButton ?>
             </div>
         <?php endif; ?>
-        <p>
-            <lang>还没有账户？</lang> 
-            <a href="/customer/account/register">
-                <i class="fas fa-user-plus me-1"></i><lang>立即注册</lang>
-            </a>
-        </p>
     </div>
+
+    <footer class="auth-form__footer">
+        <lang>还没有账户？</lang>
+        <a href="/customer/account/register" class="auth-form__footer-link">
+            <i class="fas fa-user-plus"></i>
+            <lang>立即注册</lang>
+        </a>
+    </footer>
 </div>
 
 <script>
-$(document).ready(function() {
-    const $form = $('#loginForm');
-    const $errorMsg = $('#errorMessage');
-    const $errorText = $('#errorText');
-    const $loginBtn = $('#loginBtn');
-    const $loginText = $('#loginText');
-    const $loginSpinner = $('#loginSpinner');
-    const $username = $('#username');
-    const $password = $('#password');
+(function() {
+    'use strict';
 
-    // 输入框焦点效果
-    $username.on('focus', function() {
-        $(this).closest('.form-input-wrapper').addClass('focused');
-    }).on('blur', function() {
-        $(this).closest('.form-input-wrapper').removeClass('focused');
-    });
+    $(document).ready(function() {
+        var $form = $('#loginForm');
+        var $errorMsg = $('#errorMessage');
+        var $errorText = $('#errorText');
+        var $loginBtn = $('#loginBtn');
+        var $loginText = $('#loginText');
+        var $loginSpinner = $('#loginSpinner');
+        var $username = $('#username');
+        var $password = $('#password');
 
-    $password.on('focus', function() {
-        $(this).closest('.form-input-wrapper').addClass('focused');
-    }).on('blur', function() {
-        $(this).closest('.form-input-wrapper').removeClass('focused');
-    });
-
-    // 表单验证
-    $form.on('submit', function(e) {
-        e.preventDefault();
-        
-        // 清除之前的错误
-        $errorMsg.addClass('d-none').removeClass('show');
-        
-        // 基本验证
-        if (!$username.val().trim()) {
-            $errorText.text('<lang>请输入用户名或邮箱</lang>');
-            $errorMsg.removeClass('d-none').addClass('show');
-            $username.focus();
-            return;
-        }
-        
-        if (!$password.val()) {
-            $errorText.text('<lang>请输入密码</lang>');
-            $errorMsg.removeClass('d-none').addClass('show');
-            $password.focus();
-            return;
+        function ensureErrorMsg() {
+            if ($errorMsg.length === 0) {
+                var alertHtml = '<div class="alert alert-danger" id="errorMessage" role="alert">' +
+                    '<i class="fa fa-exclamation-circle me-2"></i>' +
+                    '<span id="errorText"></span></div>';
+                $form.before(alertHtml);
+                $errorMsg = $('#errorMessage');
+                $errorText = $('#errorText');
+            }
+            return $errorMsg;
         }
 
-        // 设置加载状态
-        $loginBtn.prop('disabled', true).addClass('btn-loading');
-        $loginText.hide();
-        $loginSpinner.removeClass('d-none').show();
+        $username.on('focus', function() {
+            $(this).closest('.auth-form__input-wrapper').addClass('auth-form__input-wrapper--focused');
+        }).on('blur', function() {
+            $(this).closest('.auth-form__input-wrapper').removeClass('auth-form__input-wrapper--focused');
+        });
 
-        // 发送登录请求（使用 Weline.Api）
-        window.Weline.Api.request('/customer/account/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: $form.serialize()
-        })
-        .then(function(response) {
-            var resp = response.data;
-            if (response.ok && resp && resp.success) {
-                    $loginBtn.removeClass('btn-loading').addClass('btn-success');
+        $password.on('focus', function() {
+            $(this).closest('.auth-form__input-wrapper').addClass('auth-form__input-wrapper--focused');
+        }).on('blur', function() {
+            $(this).closest('.auth-form__input-wrapper').removeClass('auth-form__input-wrapper--focused');
+        });
+
+        $form.on('submit', function(e) {
+            e.preventDefault();
+
+            if ($errorMsg.length) {
+                $errorMsg.addClass('d-none').removeClass('show');
+            }
+
+            if (!$username.val().trim()) {
+                ensureErrorMsg();
+                $errorText.text('<lang>请输入用户名或邮箱</lang>');
+                $username.focus();
+                return;
+            }
+
+            if (!$password.val()) {
+                ensureErrorMsg();
+                $errorText.text('<lang>请输入密码</lang>');
+                $password.focus();
+                return;
+            }
+
+            $loginBtn.prop('disabled', true).addClass('auth-form__submit--loading');
+            $loginText.hide();
+            $loginSpinner.removeClass('d-none').show();
+
+            window.Weline.Api.request('/customer/account/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: $form.serialize()
+            })
+            .then(function(response) {
+                var resp = response.data;
+                if (response.ok && resp && resp.success) {
+                    $loginBtn.removeClass('auth-form__submit--loading').addClass('auth-form__submit--success');
                     $loginSpinner.addClass('d-none').hide();
                     $loginText.html('<i class="fas fa-check-circle me-2"></i><lang>登录成功！</lang>').show();
-                    
-                    // 添加成功动画
+
                     $loginBtn.css({
                         'transform': 'scale(1.05)',
                         'transition': 'transform 0.3s'
                     });
-                    
+
                     setTimeout(function() {
                         window.location.href = (resp.redirect || '/customer/account');
                     }, 800);
                 } else {
                     handleLoginError((resp && resp.message) || '<lang>登录失败，请检查用户名和密码</lang>');
                 }
-        })
-        .catch(function(error) {
-            var errorMsg = (error && error.response && error.response.data && (error.response.data.message || error.response.data.msg)) || (error && error.message) || '<lang>登录请求失败，请稍后重试</lang>';
-            handleLoginError(errorMsg);
+            })
+            .catch(function(error) {
+                var errorMsg = (error && error.response && error.response.data && (error.response.data.message || error.response.data.msg)) || (error && error.message) || '<lang>登录请求失败，请稍后重试</lang>';
+                handleLoginError(errorMsg);
+            });
         });
-    });
 
-    // 处理登录错误
-    function handleLoginError(message) {
-        $errorText.text(message);
-        $errorMsg.removeClass('d-none').addClass('show');
-        
-        // 滚动到错误提示
-        $('html, body').animate({
-            scrollTop: $errorMsg.offset().top - 100
-        }, 300);
-        
-        // 恢复按钮状态
-        $loginBtn.prop('disabled', false)
-            .removeClass('btn-loading btn-success')
-            .css('transform', '');
-        $loginSpinner.addClass('d-none').hide();
-        $loginText.text('<lang>登录</lang>').show();
-        
-        // 添加错误动画
-        $form.addClass('error-shake');
-        setTimeout(function() {
-            $form.removeClass('error-shake');
-        }, 500);
-    }
+        function handleLoginError(message) {
+            var $errEl = ensureErrorMsg();
+            $errorText.html(message);
 
-    // Enter 键快速登录
-    $username.on('keypress', function(e) {
-        if (e.which === 13) {
-            $password.focus();
+            $('html, body').animate({
+                scrollTop: $errEl.offset().top - 100
+            }, 300);
+
+            $loginBtn.prop('disabled', false)
+                .removeClass('auth-form__submit--loading auth-form__submit--success')
+                .css('transform', '');
+            $loginSpinner.addClass('d-none').hide();
+            $loginText.text('<lang>登录</lang>').show();
+
+            $form.addClass('auth-form--shake');
+            setTimeout(function() {
+                $form.removeClass('auth-form--shake');
+            }, 500);
         }
-    });
+
+        $username.on('keypress', function(e) {
+            if (e.which === 13) {
+                $password.focus();
+            }
+        });
 
     $password.on('keypress', function(e) {
         if (e.which === 13 && !$loginBtn.prop('disabled')) {
@@ -551,24 +625,3 @@ $(document).ready(function() {
     });
 });
 </script>
-
-<style>
-.form-input-wrapper.focused {
-    transform: translateY(-2px);
-}
-
-.form-input-wrapper.focused i {
-    color: var(--color-primary);
-    transform: translateY(-50%) scale(1.1);
-}
-
-.error-shake {
-    animation: shake 0.5s;
-}
-
-@keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-    20%, 40%, 60%, 80% { transform: translateX(5px); }
-}
-</style>
