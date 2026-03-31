@@ -42,6 +42,23 @@
         isOpen: false,
         isLoading: false,
         config: null,
+
+        normalizeApiPayload(payload) {
+            if (!payload || typeof payload !== 'object') {
+                return payload || {};
+            }
+
+            if (!Object.prototype.hasOwnProperty.call(payload, 'code') || typeof payload.data !== 'object' || !payload.data) {
+                return payload;
+            }
+
+            const code = Number(payload.code || 0);
+            return Object.assign({
+                code: code,
+                message: payload.msg || payload.data.message || '',
+                success: code >= 200 && code < 300 && payload.data.success !== false,
+            }, payload.data);
+        },
         
         /**
          * 初始化
@@ -52,9 +69,9 @@
                 position: 'right',
                 autoOpen: true,
                 api: {
-                    items: '/cart/api/mini-items',
-                    update: '/cart/api/update',
-                    remove: '/cart/api/remove',
+                    items: '/api123/api/rest/v1/weshop/cart/mini-items',
+                    update: '/api123/api/rest/v1/weshop/cart/update',
+                    remove: '/api123/api/rest/v1/weshop/cart/remove',
                 },
                 cart: {
                     count: 0,
@@ -281,7 +298,7 @@
                 const apiUrl = this.config.api?.items || '/cart/api/mini-items';
                 
                 const raw = await window.Weline.Api.get(apiUrl);
-                const response = (raw && raw.data) || raw;
+                const response = this.normalizeApiPayload((raw && raw.data) || raw);
                 if (response.success) {
                     // 更新商品列表 HTML
                     if (response.html) {
@@ -343,9 +360,15 @@
             
             try {
                 const apiUrl = this.config.api?.update || '/cart/api/update';
-                
-                const raw = await window.Weline.Api.post(apiUrl, { item_id: itemId, quantity: newQty });
-                const response = (raw && raw.data) || raw;
+
+                const raw = await window.Weline.Api.request(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ item_id: itemId, quantity: newQty }),
+                });
+                const response = this.normalizeApiPayload((raw && raw.data) || raw);
                 if (response.success) {
                     // 更新显示
                     if (qtyElement) {
@@ -397,7 +420,7 @@
                 const apiUrl = this.config.api?.remove || '/cart/api/remove';
                 
                 const raw = await window.Weline.Api.post(apiUrl, { item_id: itemId });
-                const response = (raw && raw.data) || raw;
+                const response = this.normalizeApiPayload((raw && raw.data) || raw);
                 if (response.success) {
                     // 移除 DOM 元素（带动画）
                     item.style.transition = 'all 0.3s ease';

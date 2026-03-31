@@ -19,8 +19,8 @@
 
     // API 端点
     const API_ENDPOINTS = {
-        add: '/cart/frontend/api/add',
-        getOptions: '/cart/frontend/api/add/getOptions',
+        add: '/api123/api/rest/v1/weshop/cart/add',
+        getOptions: '/api123/api/rest/v1/weshop/cart/options',
     };
 
     // 状态
@@ -53,6 +53,26 @@
         cacheElements();
         bindEvents();
         console.log('[WeShop Cart] Cart module initialized');
+    }
+
+    /**
+     * 兼容旧接口 success/message 结构和新 unified code/msg/data 结构
+     */
+    function normalizeApiPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return payload || {};
+        }
+
+        if (!Object.prototype.hasOwnProperty.call(payload, 'code') || typeof payload.data !== 'object' || !payload.data) {
+            return payload;
+        }
+
+        const code = Number(payload.code || 0);
+        return Object.assign({
+            code: code,
+            message: payload.msg || payload.data.message || '',
+            success: code >= 200 && code < 300 && payload.data.success !== false,
+        }, payload.data);
     }
 
     /**
@@ -555,6 +575,8 @@
                     elements.popup.setAttribute('aria-hidden', 'false');
                     document.body.style.overflow = 'hidden';
                 }
+            } else if (result.requires_login && result.redirect_url) {
+                window.location.href = result.redirect_url;
             } else {
                 throw new Error(result.message || '添加购物车失败');
             }
@@ -584,7 +606,7 @@
                 'X-Requested-With': 'XMLHttpRequest',
             },
         });
-        return response.json();
+        return normalizeApiPayload(await response.json());
     }
 
     /**
