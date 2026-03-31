@@ -226,7 +226,7 @@ abstract class AbstractProcessDriver implements ProcessDriverInterface
      */
     protected function waitMs(int $ms): void
     {
-        \usleep($ms * 1000);
+        \Weline\Framework\Runtime\SchedulerSystem::usleep($ms * 1000);
     }
     
     /**

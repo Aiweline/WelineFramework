@@ -111,6 +111,7 @@ class WlsRequest extends Request
         $path = $uriParts['path'] ?? '/';
         $queryString = $uriParts['query'] ?? '';
         $this->parsedQueryString = $queryString;
+        $isStaticResource = weline_is_static_file_path($path);
         
         // 解析 GET 参数
         $getParams = [];
@@ -128,7 +129,7 @@ class WlsRequest extends Request
             $_FILES = $parsed['files'];
         }
         
-        // 解析 Cookie
+        // 解析 Cookie。静态资源请求也必须保留原始 Cookie，避免同源资源请求覆盖已有 WELINE_SESSID。
         $cookies = [];
         $cookieHeader = $headers['Cookie'] ?? '';
         if ($cookieHeader) {
@@ -147,17 +148,17 @@ class WlsRequest extends Request
         
         if ($viaDispatcher) {
             // 使用 Weline- 头还原原始请求信息
-            $originalHost = $headers['Weline-Original-Host'] ?? $headers['Host'] ?? 'localhost';
-            $originalScheme = $headers['Weline-Original-Scheme'] ?? 'http';
-            $originalPort = $headers['Weline-Original-Port'] ?? '';
+            $originalHost = \trim(\explode(',', $headers['Weline-Original-Host'] ?? ($headers['Host'] ?? 'localhost'), 2)[0]);
+            $originalScheme = \strtolower(\trim(\explode(',', $headers['Weline-Original-Scheme'] ?? 'http', 2)[0]));
+            $originalPort = \trim(\explode(',', $headers['Weline-Original-Port'] ?? '', 2)[0]);
             $originalSsl = $headers['Weline-Original-Ssl'] ?? 'off';
             $realIp = $headers['CF-Connecting-IP'] ?? ($headers['Weline-Real-Ip'] ?? '');
             $isHttps = ($originalScheme === 'https' || $originalSsl === 'on');
         } else {
             // 回退到标准 X-Forwarded-* 头（兼容其他代理）
-            $originalHost = $headers['X-Forwarded-Host'] ?? $headers['Host'] ?? 'localhost';
-            $originalPort = ''; // 非 Dispatcher 模式，端口从 Host 头解析
-            $forwardedProto = $headers['X-Forwarded-Proto'] ?? '';
+            $originalHost = \trim(\explode(',', $headers['X-Forwarded-Host'] ?? ($headers['Host'] ?? 'localhost'), 2)[0]);
+            $originalPort = \trim(\explode(',', $headers['X-Forwarded-Port'] ?? '', 2)[0]); // 非 Dispatcher 模式，优先使用 X-Forwarded-Port
+            $forwardedProto = \strtolower(\trim(\explode(',', $headers['X-Forwarded-Proto'] ?? '', 2)[0]));
             $realIp = $headers['CF-Connecting-IP'] ?? ($headers['X-Real-IP'] ?? '');
             
             // 检测 HTTPS：多种检测方式
@@ -208,7 +209,7 @@ class WlsRequest extends Request
             'QUERY_STRING' => $queryString,
             'PATH_INFO' => $path,
             // 唯一判断处：静态文件仅按 path 判断，其他处只读此标志
-            'WELINE_IS_STATIC_FILE' => weline_is_static_file_path($path),
+            'WELINE_IS_STATIC_FILE' => $isStaticResource,
 
             // ===== 服务器信息（FPM 标准）=====
             'SERVER_SOFTWARE' => WlsResponse::SERVER_SIGNATURE,
@@ -227,16 +228,16 @@ class WlsRequest extends Request
             'REMOTE_PORT' => '0', // WLS 模式下不可知
             
             // ===== HTTP 头 =====
-            'HTTP_USER_AGENT' => $headers['User-Agent'] ?? '',
-            'HTTP_ACCEPT' => $headers['Accept'] ?? '*/*',
-            'HTTP_ACCEPT_LANGUAGE' => $headers['Accept-Language'] ?? '',
-            'HTTP_ACCEPT_ENCODING' => $headers['Accept-Encoding'] ?? '',
-            'HTTP_ACCEPT_CHARSET' => $headers['Accept-Charset'] ?? '',
+            'HTTP_USER_AGENT' => $isStaticResource ? '' : ($headers['User-Agent'] ?? ''),
+            'HTTP_ACCEPT' => $isStaticResource ? '*/*' : ($headers['Accept'] ?? '*/*'),
+            'HTTP_ACCEPT_LANGUAGE' => $isStaticResource ? '' : ($headers['Accept-Language'] ?? ''),
+            'HTTP_ACCEPT_ENCODING' => $isStaticResource ? '' : ($headers['Accept-Encoding'] ?? ''),
+            'HTTP_ACCEPT_CHARSET' => $isStaticResource ? '' : ($headers['Accept-Charset'] ?? ''),
             'HTTP_CONNECTION' => $headers['Connection'] ?? 'keep-alive',
-            'HTTP_CACHE_CONTROL' => $headers['Cache-Control'] ?? '',
-            'HTTP_PRAGMA' => $headers['Pragma'] ?? '',
-            'HTTP_REFERER' => $headers['Referer'] ?? '',
-            'HTTP_ORIGIN' => $headers['Origin'] ?? '',
+            'HTTP_CACHE_CONTROL' => $isStaticResource ? '' : ($headers['Cache-Control'] ?? ''),
+            'HTTP_PRAGMA' => $isStaticResource ? '' : ($headers['Pragma'] ?? ''),
+            'HTTP_REFERER' => $isStaticResource ? '' : ($headers['Referer'] ?? ''),
+            'HTTP_ORIGIN' => $isStaticResource ? '' : ($headers['Origin'] ?? ''),
             'HTTP_COOKIE' => $headers['Cookie'] ?? '',
             
             // ===== 内容相关 =====
@@ -253,7 +254,6 @@ class WlsRequest extends Request
         ]);
         
         // 保存 Host 信息（供 getBaseHost() 使用）
-        $this->parsedHost = $originalHost;
         
         // 保存 HTTPS 状态（供 isSecure() 和 getBaseHost() 使用）
         $this->parsedHttps = $isHttps;
@@ -282,7 +282,7 @@ class WlsRequest extends Request
         $hostPort = $hostParts[1] ?? null;
         
         // 端口优先级：Weline-Original-Port > Host 头中的端口 > 协议默认端口
-        if ($viaDispatcher && !empty($originalPort)) {
+        if (!empty($originalPort)) {
             $serverPort = (int)$originalPort;
         } elseif ($hostPort !== null) {
             $serverPort = (int)$hostPort;
@@ -300,13 +300,18 @@ class WlsRequest extends Request
             }
         }
         
+        $isDefaultPort = (($serverPort == 80 && !$isHttps) || ($serverPort == 443 && $isHttps));
+        $normalizedHost = $hostName . ($isDefaultPort ? '' : ':' . $serverPort);
+        $server['HTTP_HOST'] = $normalizedHost;
+        $this->parsedHost = $normalizedHost;
+
         $server['SERVER_NAME'] = $hostName;
         $server['SERVER_PORT'] = (string)$serverPort;
         
         // 构建完整请求 URI（默认端口 80/443 不在 URL 中显示）
         $server['WELINE_ORIGIN_REQUEST_URI'] = $uri;
         // 如果是默认端口（HTTP 80 或 HTTPS 443），不在 URL 中包含端口号
-        $portSuffix = (($serverPort == 80 && !$isHttps) || ($serverPort == 443 && $isHttps)) ? '' : ':' . $serverPort;
+        $portSuffix = $isDefaultPort ? '' : ':' . $serverPort;
         $server['WELINE_FULL_REQUEST_URI'] = $server['REQUEST_SCHEME'] . '://' . 
             $hostName . $portSuffix . $uri;
         
@@ -315,6 +320,25 @@ class WlsRequest extends Request
             $serverKey = 'HTTP_' . \strtoupper(\str_replace('-', '_', $name));
             if (!isset($server[$serverKey])) {
                 $server[$serverKey] = $value;
+            }
+        }
+        
+        // 静态资源：保留 Cookie，只去掉浏览器附带的大量非必要头，降低 $_SERVER 噪音。
+        if ($isStaticResource) {
+            $staticStrip = [
+                'HTTP_SEC_FETCH_SITE', 'HTTP_SEC_FETCH_MODE', 'HTTP_SEC_FETCH_DEST', 'HTTP_SEC_FETCH_USER',
+                'HTTP_SEC_CH_UA', 'HTTP_SEC_CH_UA_MOBILE', 'HTTP_SEC_CH_UA_PLATFORM', 'HTTP_SEC_CH_UA_ARCH',
+                'HTTP_SEC_CH_UA_BITNESS', 'HTTP_SEC_CH_UA_MODEL', 'HTTP_SEC_CH_UA_FULL_VERSION_LIST',
+                'HTTP_UPGRADE_INSECURE_REQUESTS', 'HTTP_PRIORITY', 'HTTP_DNT',
+            ];
+            foreach ($staticStrip as $rk) {
+                unset($server[$rk]);
+            }
+            foreach (\array_keys($server) as $sk) {
+                if (!\is_string($sk) || !\str_starts_with($sk, 'HTTP_SEC_')) {
+                    continue;
+                }
+                unset($server[$sk]);
             }
         }
         
@@ -676,7 +700,7 @@ class WlsRequest extends Request
         $currentScheme = $this->isSecure() ? 'https' : 'http';
         $host = $this->parsedHost ?: ($this->getHeader('Host') ?? 'localhost');
 
-        // 当前请求端口（从 Host 头或 SERVER_PORT 获取）
+        // 透传模式：只信 Host 头（含端口），不做代理头推断
         $currentPort = '';
         if (\str_contains($host, ':')) {
             $parts = \explode(':', $host, 2);
@@ -684,12 +708,9 @@ class WlsRequest extends Request
             $currentPort = $parts[1] ?? '';
         } else {
             $hostName = $host;
-            $serverPort = $_SERVER['SERVER_PORT'] ?? '';
-            if ($serverPort && $serverPort !== '80' && $serverPort !== '443') {
-                $currentPort = (string) $serverPort;
-            }
+            $currentPort = $currentScheme === 'https' ? '443' : '80';
         }
-        $isNonStandardPort = ($currentPort !== '' && $currentPort !== '80' && $currentPort !== '443');
+        $isNonStandardPort = $currentPort !== '' && !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
 
         // 直接从 $_SERVER 读取 WELINE_WEBSITE_URL（Url::parser → processUrlParse 写入）
         // 不能用 getServer() / ServerBag，因为 ServerBag 可能在 parser 之前就已初始化
@@ -699,6 +720,10 @@ class WlsRequest extends Request
             $parsed = \parse_url($websiteUrl);
             $wHost = $parsed['host'] ?? 'localhost';
             $wPath = $parsed['path'] ?? '';
+            if (isset($parsed['port'])) {
+                $currentPort = (string)$parsed['port'];
+                $isNonStandardPort = !(($currentScheme === 'https' && $currentPort === '443') || ($currentScheme !== 'https' && $currentPort === '80'));
+            }
             $portSuffix = $isNonStandardPort ? ':' . $currentPort : '';
             return $currentScheme . '://' . $wHost . $portSuffix . $wPath;
         }

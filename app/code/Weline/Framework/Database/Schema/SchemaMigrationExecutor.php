@@ -76,14 +76,18 @@ final class SchemaMigrationExecutor
             }
 
             $moduleName = $this->moduleNameFromClass($op->modelClass);
-            $migrationId = $this->migrationModel->recordSchemaDdl(
-                $moduleName,
-                $op->tableName,
-                $connectionName,
-                $forwardSql,
-                $rollbackSql,
-                $op->modelClass,
-            );
+            try {
+                $migrationId = $this->migrationModel->recordSchemaDdl(
+                    $moduleName,
+                    $op->tableName,
+                    $connectionName,
+                    $forwardSql,
+                    $rollbackSql,
+                    $op->modelClass,
+                );
+            } catch (\Throwable $e) {
+                throw $e;
+            }
             if ($migrationId > 0 && $op->kind === SchemaDiffOp::KIND_DROP_COLUMN && $this->backupService !== null) {
                 /** @var ColumnDefinition $col */
                 $col = $op->payload;
@@ -100,6 +104,11 @@ final class SchemaMigrationExecutor
                         try {
                             $connector->query($sql)->fetch();
                         } catch (\Throwable $e) {
+                            if ($this->shouldHealDuplicateUniqueIndex($op, $e)) {
+                                $this->dedupeDocumentCatalogNamePid($connector, $op->tableName);
+                                $connector->query($sql)->fetch();
+                                continue;
+                            }
                             $colName = ($op->payload instanceof \Weline\Framework\Database\Schema\ColumnDefinition)
                                 ? $op->payload->name : '';
                             $ctx = "table={$op->tableName} kind={$op->kind}" . ($colName !== '' ? " col={$colName}" : '');
@@ -357,4 +366,43 @@ final class SchemaMigrationExecutor
             'onUpdateCascade' => $fk->onUpdateCascade,
         ];
     }
+
+    private function shouldHealDuplicateUniqueIndex(SchemaDiffOp $op, \Throwable $e): bool
+    {
+        if (!\str_contains($op->tableName, 'developer_workspace_document_catalog')) {
+            return false;
+        }
+        if ($op->kind !== SchemaDiffOp::KIND_ADD_INDEX || !$op->payload instanceof IndexDefinition) {
+            return false;
+        }
+        if ($op->payload->name !== 'idx_unique_name_pid') {
+            return false;
+        }
+
+        $message = \strtolower($e->getMessage());
+        return \str_contains($message, 'unique violation')
+            || \str_contains($message, 'duplicate')
+            || \str_contains($message, 'could not create unique index');
+    }
+
+    private function dedupeDocumentCatalogNamePid(ConnectorInterface $connector, string $tableName): int
+    {
+        $table = $connector->quoteTable($tableName);
+        $sql = "DELETE FROM {$table} AS t
+                USING (
+                    SELECT id, ROW_NUMBER() OVER (PARTITION BY name, pid ORDER BY id ASC) AS rn
+                    FROM {$table}
+                ) AS d
+                WHERE t.id = d.id AND d.rn > 1";
+        $result = $connector->query($sql)->fetch();
+        if (\is_array($result) && isset($result['affected_rows'])) {
+            return (int) $result['affected_rows'];
+        }
+        if (\is_array($result) && isset($result[0]['affected_rows'])) {
+            return (int) $result[0]['affected_rows'];
+        }
+
+        return -1;
+    }
+
 }

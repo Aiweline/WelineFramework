@@ -1474,8 +1474,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
             return '';
         }
         
-        $test_path = $targetModule['base_path'] . 'test' . DS;
-        if (!is_dir($test_path)) {
+        $test_path = $this->resolveTestPath($targetModule['base_path']);
+        if ($test_path === null) {
             $this->printing->error(__('模块 %{1} 没有测试目录', [$moduleName]));
             return '';
         }
@@ -1651,8 +1651,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
         
         foreach ($modules as $module) {
-            $test_path = $module['base_path'] . 'test' . DS;
-            if (is_dir($test_path)) {
+            $test_path = $this->resolveTestPath($module['base_path']);
+            if ($test_path !== null) {
                 # 调试信息
                 if ($debug) {
                     $this->printing->note(__('调试 - 检查模块: %{1}, 测试路径: %{2}', [$module['name'], $test_path]));
@@ -2459,8 +2459,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
             return 0;
         }
         
-        $testPath = $targetModule['base_path'] . 'test' . DS;
-        if (!is_dir($testPath)) {
+        $testPath = $this->resolveTestPath($targetModule['base_path']);
+        if ($testPath === null) {
             return 0;
         }
         
@@ -2499,8 +2499,8 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
         
         foreach ($modules as $module) {
-            $testPath = $module['base_path'] . 'test' . DS;
-            if (!is_dir($testPath)) {
+            $testPath = $this->resolveTestPath($module['base_path']);
+            if ($testPath === null) {
                 continue;
             }
             
@@ -3537,6 +3537,21 @@ class Run implements \Weline\Framework\Console\CommandInterface
         }
         
         return $pid;
+    }
+
+    private function resolveTestPath(string $basePath): ?string
+    {
+        $lowerPath = $basePath . 'test' . DS;
+        if (is_dir($lowerPath)) {
+            return $lowerPath;
+        }
+
+        $upperPath = $basePath . 'Test' . DS;
+        if (is_dir($upperPath)) {
+            return $upperPath;
+        }
+
+        return null;
     }
 
     /**

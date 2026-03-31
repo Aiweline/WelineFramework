@@ -135,6 +135,15 @@ class Request extends Request\RequestAbstract implements RequestInterface
 
     static array $url_paths = [];
 
+    /**
+     * WLS：清空静态 URL 路径缓存。须在每请求早期调用，避免上一请求或 parser 前的 getUrlPath
+     * 把错误 path 留在 static 中，导致 ACL 用错路由而 302 到 admin。
+     */
+    public static function clearStaticUrlPathCache(): void
+    {
+        self::$url_paths = [];
+    }
+
     public function getUrlPath(string $url = ''): string
     {
         if ($url) {

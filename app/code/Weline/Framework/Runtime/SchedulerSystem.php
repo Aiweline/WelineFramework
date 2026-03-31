@@ -93,4 +93,44 @@ class SchedulerSystem
         ];
         $eventsManager->dispatch('Weline_Framework::scheduler::wait', $eventData);
     }
+
+    /**
+     * 让出控制权给其他 Fiber（I/O 让步）
+     *
+     * 在长连接场景中，每次发送数据后调用此方法让出控制权，
+     * 使 Worker 可以处理其他请求，避免一个长连接独占整个 Worker。
+     *
+     * WLS 下挂起当前 Fiber 并注册 0 延迟定时器，下一轮事件循环自动 resume；
+     * FPM/CLI 下无操作（因为没有其他 Fiber 需要处理）。
+     */
+    public static function yield(): void
+    {
+        if (!self::$schedulerActive || !\Fiber::getCurrent()) {
+            return;
+        }
+
+        self::dispatchWait('yield', []);
+        \Fiber::suspend();
+    }
+
+    /**
+     * 让出控制权并注册延迟定时器（用于限速场景）
+     *
+     * @param int $milliseconds 延迟毫秒数
+     */
+    public static function yieldDelay(int $milliseconds): void
+    {
+        if ($milliseconds <= 0) {
+            self::yield();
+            return;
+        }
+
+        if (!self::$schedulerActive || !\Fiber::getCurrent()) {
+            \usleep($milliseconds * 1000);
+            return;
+        }
+
+        self::dispatchWait('yield_delay', ['milliseconds' => $milliseconds]);
+        \Fiber::suspend();
+    }
 }
