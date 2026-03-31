@@ -82,15 +82,39 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
-    public function testDoesNotMatchProtectedFrontendApiRoute(): void
+    public function testMatchesGuestFrontendRouteWithoutAclByControllerClass(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();
 
-        $this->assertFalse($matcher->matches($this->createRequestMock(
-            'api/weshop/rest/v1/order/list',
-            'Order',
-            'getList',
-            'WeShop\\Order\\Api\\Rest\\V1\\Order'
+        $this->assertTrue($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'api/rest/v1/weshop/checkout/methods',
+            'Checkout',
+            'postMethods',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Checkout'
+        )));
+    }
+
+    public function testMatchesGuestCartAddRouteWithoutAclByControllerClass(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'api/rest/v1/weshop/cart/add',
+            'Cart',
+            'postAdd',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Cart'
+        )));
+    }
+
+    public function testMatchesGuestCartMiniItemsRouteWithoutAclByControllerClass(): void
+    {
+        $matcher = new PublicApiAuthRouteMatcher();
+
+        $this->assertTrue($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'api/rest/v1/weshop/cart/mini-items',
+            'Cart',
+            'getMiniItems',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Cart'
         )));
     }
 
@@ -106,15 +130,15 @@ class PublicApiAuthRouteMatcherTest extends TestCase
         )));
     }
 
-    public function testDoesNotMatchProtectedWeShopContractFrontendApiRoute(): void
+    public function testDoesNotMatchGuestFrontendRouteWhenAclProtected(): void
     {
         $matcher = new PublicApiAuthRouteMatcher();
 
-        $this->assertFalse($matcher->matches($this->createRequestMock(
-            'api/rest/v1/weshop/order/list',
-            'Order',
+        $this->assertFalse($matcher->matchesGuestFrontendRoute($this->createRequestMock(
+            'api/rest/v1/fixture/protected/list',
+            'ProtectedFixture',
             'getList',
-            'WeShop\\Order\\Api\\Rest\\V1\\Order'
+            ProtectedFrontendApiFixture::class
         )));
     }
 
@@ -158,5 +182,14 @@ class PublicApiAuthRouteMatcherTest extends TestCase
                 };
             }
         };
+    }
+}
+
+#[\Weline\Framework\Acl\Acl('fixture/protected', 'Protected Fixture', 'ri-lock-line')]
+class ProtectedFrontendApiFixture extends \Weline\Framework\App\Controller\FrontendRestController
+{
+    public function getList(): string
+    {
+        return '';
     }
 }

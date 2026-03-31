@@ -429,7 +429,6 @@ class Processer
             } elseif (!empty($argName)) {
                 if (!isset($args[$argName])) {
                     $args[$argName] = $arg;
-                } else {
                     if (is_array($args[$argName])) {
                         $args[$argName][] = $arg;
                     } else {
@@ -626,7 +625,6 @@ class Processer
                     if ($enableLog && $stderr !== '') {
                         self::setOutput($pname, "[ERROR] start-process failed: {$stderr}" . PHP_EOL);
                     }
-                } else {
                     @\unlink($scriptPath);
                 }
             }
@@ -694,7 +692,7 @@ class Processer
                                     break;
                                 }
                             } else {
-                                \usleep(10_000);
+                                \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
                             }
                         }
                         $output = \trim($buffer);
@@ -1788,7 +1786,7 @@ class Processer
                 }
                 return true;
             }
-            \usleep(100000); // 100ms
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(100000); // 100ms
         }
         
         // 阶段3：强制终止
@@ -1860,32 +1858,30 @@ class Processer
         
         // Windows 特殊处理：taskkill /F 后进程表刷新有延迟，需要短暂等待
         if ($isWin) {
-            \usleep(500000); // 500ms 等待 Windows 进程表刷新
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(500000); // 500ms 等待 Windows 进程表刷新
         }
         
         // 阶段2：轮询等待
+        $postSignalState = self::partitionRunningPids($validPids);
+        $stillRunning = $postSignalState['running'];
+        foreach ($postSignalState['exited'] as $pid) {
+            $result['killed']++;
+            self::finalizeBatchGracefulKillPid($pid, 'exited after SIGTERM');
+        }
+
         $startTime = \microtime(true);
-        $stillRunning = $validPids;
         
-        while (\microtime(true) - $startTime < $timeout && !empty($stillRunning)) {
-            $newStillRunning = [];
-            foreach ($stillRunning as $pid) {
-                if (self::isRunningByPid($pid)) {
-                    $newStillRunning[] = $pid;
-                } else {
-                    $result['killed']++;
+        while ($timeout > 0.0 && \microtime(true) - $startTime < $timeout && !empty($stillRunning)) {
+            $runningState = self::partitionRunningPids($stillRunning);
+            foreach ($runningState['exited'] as $pid) {
+                $result['killed']++;
+                self::finalizeBatchGracefulKillPid($pid, 'exited after SIGTERM');
                     // 清理 PID 文件
-                    $pname = self::getNameByPid($pid);
-                    if ($pname !== 'unknown') {
-                        self::logLifecycleEvent('batch_kill', $pname, $pid, 'exited after SIGTERM');
-                        self::removePidFile($pname);
-                    }
-                }
             }
-            $stillRunning = $newStillRunning;
+            $stillRunning = $runningState['running'];
             
             if (!empty($stillRunning)) {
-                \usleep(100000); // 100ms
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(100000); // 100ms
             }
         }
         
@@ -1893,11 +1889,7 @@ class Processer
         foreach ($stillRunning as $pid) {
             if (self::getDriver()->killProcess($pid) || !self::isRunningByPid($pid)) {
                 $result['killed']++;
-                $pname = self::getNameByPid($pid);
-                if ($pname !== 'unknown') {
-                    self::logLifecycleEvent('batch_kill', $pname, $pid, 'force killed');
-                    self::removePidFile($pname);
-                }
+                self::finalizeBatchGracefulKillPid($pid, 'force killed');
             } else {
                 $result['remaining'][] = $pid;
             }
@@ -2316,7 +2308,7 @@ class Processer
                 break;
             }
 
-            \usleep(100_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(100_000);
         } while (\microtime(true) < $deadline);
 
         return $resolved;
@@ -2534,7 +2526,7 @@ CMD;
                 return $pid;
             }
 
-            \usleep(100_000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(100_000);
         } while (\microtime(true) < $deadline);
 
         return 0;
@@ -2842,7 +2834,7 @@ CMD;
             $output = [];
             $returnCode = 0;
             self::execute($command, $output, $returnCode);
-            \usleep(200000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(200000);
 
             $running = self::batchCheckRunning($chunk);
             foreach ($chunk as $pid) {
@@ -2924,7 +2916,45 @@ CMD;
             . \implode(' ', $pidArgs)
             . ' 1>NUL 2>NUL"';
     }
-    
+
+    /**
+     * @param int[] $pids
+     * @return array{running: int[], exited: int[]}
+     */
+    private static function partitionRunningPids(array $pids): array
+    {
+        $state = [
+            'running' => [],
+            'exited' => [],
+        ];
+
+        foreach ($pids as $pid) {
+            $pid = (int) $pid;
+            if ($pid <= 0) {
+                continue;
+            }
+
+            if (self::isRunningByPid($pid)) {
+                $state['running'][] = $pid;
+            } else {
+                $state['exited'][] = $pid;
+            }
+        }
+
+        return $state;
+    }
+
+    private static function finalizeBatchGracefulKillPid(int $pid, string $detail): void
+    {
+        $pname = self::getNameByPid($pid);
+        if ($pname === 'unknown') {
+            return;
+        }
+
+        self::logLifecycleEvent('batch_kill', $pname, $pid, $detail);
+        self::removePidFile($pname);
+    }
+
     /**
      * 批量检查多个进程的运行状态
      * 
@@ -3038,7 +3068,7 @@ CMD;
             $stillRunning = $newStillRunning;
             
             if (!empty($stillRunning)) {
-                \usleep(100000); // 100ms
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(100000); // 100ms
             }
         }
         
@@ -3172,7 +3202,7 @@ CMD;
             
             if ($pid > 0 && self::isManagedProcessRunning($pid, $processName, '', $pname)) {
                 if (self::killManagedProcess($pid, $processName, '', $pname)) {
-                    \usleep(200000);
+                    \Weline\Framework\Runtime\SchedulerSystem::usleep(200000);
                     
                     if (!self::isRunningByPid($pid)) {
                         return true;
@@ -3195,7 +3225,7 @@ CMD;
                 }
             }
             
-            \usleep(300000);
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(300000);
             
             // 验证是否全部杀死
             $pids = self::getProcessIdsByName($processName);
@@ -3230,7 +3260,7 @@ CMD;
             $pid = self::getProcessIdByPort($port);
             if ($pid <= 0) {
                 // 端口被占用但无法获取 PID，等待后重试
-                \usleep(500000);
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(500000);
                 continue;
             }
             
@@ -3243,7 +3273,7 @@ CMD;
             self::killByPid($pid, true); // skipCheck=true 因为已经校验过
             
             // 等待进程退出
-            \usleep(300000); // 300ms
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(300000); // 300ms
             
             // 验证端口是否已释放
             if (!self::isPortInUse($port)) {
@@ -3251,7 +3281,7 @@ CMD;
             }
             
             // 未释放，等待更长时间后重试
-            \usleep(200000); // 200ms
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(200000); // 200ms
         }
         
         // 最后一次检查
