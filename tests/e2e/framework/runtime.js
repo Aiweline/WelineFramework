@@ -236,12 +236,83 @@ function buildTargetAreaUrl(pathKey, route = '', options = {}) {
   return buildTargetUrl(joinPath(basePath, route), options);
 }
 
-function buildBackendPath(route = '') {
-  return joinPath('@backend', route);
+function buildBackendPath(route = '', options = {}) {
+  // 之前统一把后台路由包在 `/@backend/...` 里，能保证代理层稳定转发，
+  // 但会让地址栏出现 `/@backend/...` 这种“测试占位符”。
+  //
+  // 这里做最小兼容：
+  // - 当 route 已经是 `admin` 系列（如 `admin` / `admin/login`）时，直接使用 `/<route>`，
+  //   代理端已有规则会把它前缀改写成真实 backend 前缀；
+  // - 其它后台路由仍保留 `@backend`，避免代理端无法推断导致转发失败。
+  const normalizedRoute = String(route ?? '').trim().replace(/^\/+|\/+$/g, '');
+  if (normalizedRoute === 'admin' || normalizedRoute.startsWith('admin/')) {
+    return joinPath(normalizedRoute);
+  }
+
+  return joinPath('@backend', normalizedRoute);
 }
 
 function buildApiPath(route = '') {
   return joinPath('@api', route);
+}
+
+/**
+ * 前端「原生模块」REST 相对路径：/{frontendApiPrefix}/{moduleRouter}/rest/v1/{...segments}
+ * 前缀来自 runtime-info.php → paths.frontend_api_prefix_path（与 app/etc env 中 area_routes.rest_frontend.prefix 一致）。
+ * WeShop ApiBridge 使用 {@link buildApiPath}（@api → .../api/rest/v1/weshop/...），勿与此混用。
+ */
+function buildFrontendModuleRestPath(moduleRouter, ...segmentsAfterV1) {
+  const runtime = getRuntimeInfo();
+  let prefix = String(runtime.paths?.frontend_api_prefix_path ?? '/api').trim();
+  prefix = prefix.replace(/^\/+|\/+$/g, '');
+  if (!prefix) {
+    prefix = 'api';
+  }
+  const router = String(moduleRouter ?? '').replace(/^\/+|\/+$/g, '');
+  if (!router) {
+    throw new Error('buildFrontendModuleRestPath: moduleRouter is required');
+  }
+  return joinPath(prefix, router, 'rest', 'v1', ...segmentsAfterV1);
+}
+
+/** @param {string} moduleName 模块名，如 WeShop_B2B（对应 app/etc/modules.php 键） */
+function getModuleFrontendRouter(moduleName) {
+  const runtime = getRuntimeInfo();
+  const row = runtime.modules?.routers?.[moduleName];
+  const r = String(row?.router ?? '').trim();
+  if (!r) {
+    throw new Error(
+      `getModuleFrontendRouter: missing router for module "${moduleName}" in E2E runtime (modules.routers).`,
+    );
+  }
+  return r;
+}
+
+/** @param {string} moduleName 模块名；REST 段与路由表一致（控制器段 + 动作段） */
+function buildFrontendModuleRestPathForModule(moduleName, ...segmentsAfterV1) {
+  return buildFrontendModuleRestPath(getModuleFrontendRouter(moduleName), ...segmentsAfterV1);
+}
+
+/** @param {string} moduleName 模块名；优先 backend_router，缺省回退 router */
+function getModuleBackendRouter(moduleName) {
+  const runtime = getRuntimeInfo();
+  const row = runtime.modules?.routers?.[moduleName];
+  const r = String(row?.backend_router ?? row?.router ?? '').trim();
+  if (!r) {
+    throw new Error(
+      `getModuleBackendRouter: missing backend_router for module "${moduleName}" in E2E runtime (modules.routers).`,
+    );
+  }
+  return r;
+}
+
+/**
+ * 后台 PC 路由片段（不含全局 backend 前缀），供 gotoBackend 第二个参数使用。
+ * 例：WeShop_B2B + credit → b2b/backend/credit
+ */
+function buildModuleBackendRoute(moduleName, ...pathSegments) {
+  const full = joinPath(getModuleBackendRouter(moduleName), 'backend', ...pathSegments);
+  return full.startsWith('/') ? full.slice(1) : full;
 }
 
 function buildBackendApiPath(route = '') {
@@ -328,10 +399,25 @@ function deriveBackendRoot(currentUrl, options = {}) {
     const runtime = getRuntimeInfo(options);
     const url = new URL(currentUrl);
     const backendPrefixPath = ensureLeadingSlash(runtime.paths.backend_prefix_path).replace(/\/+$/, '');
-    const adminIndex = url.pathname.lastIndexOf('/admin');
+    const path = url.pathname;
 
-    if (adminIndex !== -1 && url.pathname.startsWith(`${backendPrefixPath}/`)) {
-      return `${url.origin}${url.pathname.slice(0, adminIndex)}`;
+    if (!path.startsWith(`${backendPrefixPath}/`)) {
+      return getBackendRoot(options);
+    }
+
+    const afterPrefix = path.slice(backendPrefixPath.length + 1);
+    const segments = afterPrefix.split('/').filter(Boolean);
+    // /{backendKey}/admin/{currency}/{language}/...（登录后常见）
+    // lastIndexOf('/admin') 会误截成仅 /{backendKey}，导致 E2E 拼接模块路径缺货币/语言段
+    if (segments[0] === 'admin' && segments.length >= 3) {
+      const currencySeg = segments[1];
+      const languageSeg = segments[2];
+      return `${url.origin}${backendPrefixPath}/${currencySeg}/${languageSeg}`;
+    }
+
+    const adminIndex = path.lastIndexOf('/admin');
+    if (adminIndex !== -1) {
+      return `${url.origin}${path.slice(0, adminIndex)}`;
     }
   } catch (error) {
     // Fall through to the default backend root below.
@@ -372,6 +458,9 @@ async function loginAsAdmin(page, options = {}) {
         waitUntil: 'domcontentloaded',
         timeout,
         settleMs: options.settleMs || 1000,
+        // When caller forces proxy usage (e.g. PLAYWRIGHT_DISABLE_PROXY=1),
+        // ensure all internal navigations stay consistent.
+        useProxy: options.useProxy,
       });
 
       if (!(await isBackendLoginPage(page))) {
@@ -428,6 +517,9 @@ module.exports = {
   buildBackendApiUrl,
   buildBackendPath,
   buildBackendUrl,
+  buildFrontendModuleRestPath,
+  buildFrontendModuleRestPathForModule,
+  buildModuleBackendRoute,
   deriveBackendRoot,
   buildProxyUrl,
   buildThemePreviewPath,
@@ -437,6 +529,8 @@ module.exports = {
   getActiveThemeId,
   getBackendRoot,
   getBaseUrl,
+  getModuleBackendRouter,
+  getModuleFrontendRouter,
   getRuntimeInfo,
   gotoUrl,
   gotoApi,
