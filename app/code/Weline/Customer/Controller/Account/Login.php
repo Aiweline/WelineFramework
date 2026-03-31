@@ -4,17 +4,21 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
-use Weline\Framework\App\Env;
-use Weline\Framework\Event\EventsManager;
-use Weline\Framework\Http\Cookie;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\View\Template;
 use WeShop\Customer\Service\CustomerWebAuthService;
 use Weline\Customer\Model\Customer;
 use Weline\Customer\Model\CustomerToken;
+use Weline\Framework\App\Env;
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\MessageManager;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\Template;
 
 /**
- * 前端用户登录控制器
+ * Public storefront sign-in controller for classic customer accounts and the
+ * WeShop customer bridge. AJAX requests keep the JSON contract while normal
+ * form posts fall back to redirects so early submits do not leak credentials
+ * into the URL.
  */
 class Login extends \Weline\Framework\App\Controller\FrontendController
 {
@@ -23,50 +27,50 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
     protected ?string $layoutType = 'account_auth';
 
     public function __construct(
-        Template $template
+        Template $template,
+        private readonly ?CustomerWebAuthService $customerWebAuthService = null
     ) {
         $this->template = $template;
     }
 
-    /**
-     * 显示登录页面
-     */
     public function getIndex()
     {
-        // 如果已登录，跳转到个人中心
         if ($this->isLoggedIn()) {
-            $this->redirect('/customer/account');
+            return $this->redirect('/customer/account');
         }
 
-        // 保存来源URL（referer）到session
         $referer = $this->request->getParam('referer') ?: $this->request->getReferer();
         if ($referer && !str_contains($referer, '/account/login')) {
             $this->session->getSession()->set('login_referer', $referer);
         }
 
-        // 使用主题认证布局
         $redirectUrl = trim((string) ($this->request->getParam('redirect_url') ?? $this->request->getParam('redirect') ?? ''));
         if ($redirectUrl === '' && is_string($referer) && $referer !== '') {
             $redirectUrl = $referer;
         }
 
         $this->assign('redirect_url', $redirectUrl);
-        $this->assign('title', __('鐢ㄦ埛鐧诲綍'));
+        $this->assign('title', __('Sign In'));
+
+        $this->assign('error_message', MessageManager::get_error_message());
+        $this->assign('success_message', MessageManager::get_success_message());
 
         return $this->fetch('Weline_Customer::templates/frontend/account/login.phtml');
     }
 
-    /**
-     * 处理登录请求
-     */
     public function postIndex()
     {
         if ($this->isLoggedIn()) {
-            return $this->json([
-                'success' => true,
-                'message' => __('您已登录'),
-                'redirect' => '/customer/account'
-            ]);
+            if ($this->expectsJsonResponse()) {
+                return $this->json([
+                    'success' => true,
+                    'message' => __('You are already signed in.'),
+                    'redirect' => '/customer/account',
+                ]);
+            }
+
+            $this->getMessageManager()->addWarning(__('You are already signed in.'));
+            return $this->redirect('/customer/account');
         }
 
         $username = $this->request->getBodyParam('username');
@@ -85,7 +89,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         if ($rememberDuration === null) {
             $rememberDuration = $this->request->getPost('remember_duration', 0);
         }
-        $rememberDuration = (int)$rememberDuration;
+        $rememberDuration = (int) $rememberDuration;
 
         $redirectUrl = $this->request->getBodyParam('redirect_url');
         if ($redirectUrl === null) {
@@ -93,11 +97,11 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
         $redirectUrl = $this->normalizeRedirectTarget(is_string($redirectUrl) ? $redirectUrl : '');
 
-        if (empty($username) || empty($password)) {
-            return $this->json([
-                'success' => false,
-                'message' => __('用户名和密码不能为空')
-            ]);
+        if ($username === '' || $password === '') {
+            return $this->respondFailure(
+                (string) __('Username/email and password are required.'),
+                $redirectUrl
+            );
         }
 
         try {
@@ -111,33 +115,30 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             $user->where('username', $username)->find()->fetch();
 
             if (!$user->getId()) {
-                return $this->json([
-                    'success' => false,
-                    'message' => __('用户不存在')
-                ]);
+                return $this->respondFailure(
+                    (string) __('The user does not exist.'),
+                    $redirectUrl
+                );
             }
 
-            // 检查登录尝试次数
             if ($user->getAttemptTimes() > 5) {
-                return $this->json([
-                    'success' => false,
-                    'message' => __('登录尝试次数过多，请稍后再试')
-                ]);
+                return $this->respondFailure(
+                    (string) __('Too many login attempts. Please try again later.'),
+                    $redirectUrl
+                );
             }
 
-            // 验证密码
             if (!password_verify($password, $user->getPassword())) {
                 $user->addAttemptTimes()
                     ->setAttemptIp($this->request->clientIP())
                     ->save();
-                
-                return $this->json([
-                    'success' => false,
-                    'message' => __('密码错误')
-                ]);
+
+                return $this->respondFailure(
+                    (string) __('The password is incorrect.'),
+                    $redirectUrl
+                );
             }
 
-            // 登录成功
             $this->session->login($user);
             $user->setSessionId($this->session->getSession()->getSessionId())
                 ->setLoginIp($this->request->clientIP())
@@ -145,74 +146,65 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 ->save();
             $this->syncSandboxCookie($user->isSandboxAccount());
 
-            // 处理"记住我"功能
             if ($rememberDuration > 0) {
                 $token = CustomerToken::generateToken();
                 $expireTime = time() + $rememberDuration;
-                
-                // 保存token到数据库
+
                 /** @var CustomerToken $userToken */
                 $userToken = ObjectManager::getInstance(CustomerToken::class);
-                
-                // 删除该用户的旧token
                 $userToken->builder()
                     ->where('user_id', $user->getId())
                     ->where('type', 'remember_me')
                     ->delete();
-                
-                // 创建新token
+
                 $userToken->reset()
                     ->setUserId($user->getId())
                     ->setToken($token)
                     ->setType('remember_me')
                     ->setTokenExpireTime($expireTime)
                     ->save();
-                
-                // 设置cookie
+
                 Cookie::set('w_ut', $token, $rememberDuration, ['path' => '/']);
             }
 
-            // 派发登录成功事件
             /** @var EventsManager $eventManager */
             $eventManager = ObjectManager::getInstance(EventsManager::class);
             $eventData = new \Weline\Framework\DataObject\DataObject([
                 'user' => $user,
                 'request' => $this->request,
-                'session' => $this->session
+                'session' => $this->session,
             ]);
             $eventManager->dispatch('Weline_Customer_Account_Login::login_after', $eventData);
 
-            // 获取来源URL
             $referer = $this->session->getSession()->get('login_referer');
             $this->session->getSession()->delete('login_referer');
 
-            // 确定跳转地址
-            $redirectUrl = '/customer/account';
+            $redirectTarget = '/customer/account';
             if ($referer && $this->isValidReferer($referer)) {
-                $redirectUrl = $referer;
+                $redirectTarget = $referer;
             }
 
-            return $this->json([
-                'success' => true,
-                'message' => __('登录成功'),
-                'redirect' => $redirectUrl,
-                'user' => [
-                    'user_id' => $user->getId(),
-                    'username' => $user->getUsername(),
-                    'email' => $user->getEmail(),
-                    'is_sandbox' => $user->isSandboxAccount(),
-                ],
-            ]);
-
+            return $this->respondSuccess(
+                (string) __('Login succeeded.'),
+                $redirectTarget,
+                [
+                    'user' => [
+                        'user_id' => $user->getId(),
+                        'username' => $user->getUsername(),
+                        'email' => $user->getEmail(),
+                        'is_sandbox' => $user->isSandboxAccount(),
+                    ],
+                ]
+            );
         } catch (\Exception $e) {
-            // 记录异常日志
             if (defined('DEV') && DEV) {
-                w_log_error('登录异常: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+                w_log_error('Login error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
             }
-            return $this->json([
-                'success' => false,
-                'message' => __('登录失败：%{1}', [$e->getMessage()])
-            ]);
+
+            return $this->respondFailure(
+                (string) __('Login failed: %{1}', [$e->getMessage()]),
+                $redirectUrl
+            );
         }
     }
 
@@ -232,15 +224,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             return null;
         }
 
-        try {
-            /** @var CustomerWebAuthService $customerWebAuthService */
-            $customerWebAuthService = ObjectManager::getInstance(CustomerWebAuthService::class);
-        } catch (\Throwable $throwable) {
-            throw new \RuntimeException(
-                (string) __('WeShop login bridge is unavailable: %{1}', [$throwable->getMessage()]),
-                previous: $throwable
-            );
-        }
+        $customerWebAuthService = $this->resolveCustomerWebAuthService();
 
         $effectiveRedirect = $redirectUrl;
         if ($effectiveRedirect === '') {
@@ -263,31 +247,54 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
                 ? 'customer/account/challenge?challenge_token=' . rawurlencode($challengeToken)
                 : 'customer/account/login';
 
-            return $this->json([
-                'success' => true,
-                'status' => 'challenge_required',
-                'requires_challenge' => true,
-                'message' => __('Please complete two-factor verification to finish sign in.'),
-                'redirect' => $this->formatClientRedirect($challengePath),
-            ]);
+            return $this->respondChallenge(
+                (string) __('Please complete two-factor verification to finish sign in.'),
+                $challengePath
+            );
         }
 
-        return $this->json([
-            'success' => true,
-            'status' => 'authenticated',
-            'message' => __('Login succeeded.'),
-            'redirect' => $this->formatClientRedirect((string) ($result['redirect_url'] ?? $effectiveRedirect)),
-        ]);
+        return $this->respondSuccess(
+            (string) __('Login succeeded.'),
+            (string) ($result['redirect_url'] ?? $effectiveRedirect),
+            ['status' => 'authenticated']
+        );
+    }
+
+    private function resolveCustomerWebAuthService(): CustomerWebAuthService
+    {
+        if ($this->customerWebAuthService instanceof CustomerWebAuthService) {
+            return $this->customerWebAuthService;
+        }
+
+        try {
+            /** @var CustomerWebAuthService $customerWebAuthService */
+            $customerWebAuthService = ObjectManager::getInstance(CustomerWebAuthService::class);
+        } catch (\Throwable $throwable) {
+            throw new \RuntimeException(
+                (string) __('WeShop login bridge is unavailable: %{1}', [$throwable->getMessage()]),
+                previous: $throwable
+            );
+        }
+
+        return $customerWebAuthService;
     }
 
     private function getStoredLoginReferer(): string
     {
+        if (!isset($this->session)) {
+            return '';
+        }
+
         $referer = $this->session->getSession()->get('login_referer');
         return is_string($referer) ? trim($referer) : '';
     }
 
     private function clearStoredLoginReferer(): void
     {
+        if (!isset($this->session)) {
+            return;
+        }
+
         $this->session->getSession()->delete('login_referer');
     }
 
@@ -337,7 +344,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
             return '/customer/account';
         }
 
-        if ($this->isValidReferer($redirectUrl) && str_contains($redirectUrl, '://')) {
+        if (str_contains($redirectUrl, '://') && $this->isValidReferer($redirectUrl)) {
             return $redirectUrl;
         }
 
@@ -349,19 +356,81 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         return '/' . $normalized;
     }
 
-    /**
-     * 验证referer是否有效
-     */
-    private function isValidReferer(string $referer): bool
+    private function buildLoginPageUrl(string $redirectUrl = ''): string
     {
-        // 只允许站内跳转
-        $baseUrl = Env::getInstance()->getBaseUrl();
-        return str_starts_with($referer, $baseUrl) || str_starts_with($referer, '/');
+        $target = $this->normalizeRedirectTarget($redirectUrl);
+        if ($target === '') {
+            return '/customer/account/login';
+        }
+
+        return '/customer/account/login?redirect_url=' . rawurlencode($target);
     }
 
-    /**
-     * 返回JSON响应
-     */
+    private function expectsJsonResponse(): bool
+    {
+        if ($this->request->isAjax()) {
+            return true;
+        }
+
+        $acceptHeader = strtolower((string) ($this->request->getHeader('Accept') ?? ''));
+        return str_contains($acceptHeader, 'application/json');
+    }
+
+    private function respondSuccess(string $message, string $redirectUrl, array $extra = []): string
+    {
+        $formattedRedirect = $this->formatClientRedirect($redirectUrl);
+        if ($this->expectsJsonResponse()) {
+            return $this->json(array_merge([
+                'success' => true,
+                'message' => $message,
+                'redirect' => $formattedRedirect,
+            ], $extra));
+        }
+
+        if ($message !== '') {
+            $this->getMessageManager()->addSuccess($message);
+        }
+
+        return $this->redirect($formattedRedirect);
+    }
+
+    private function respondChallenge(string $message, string $challengePath): string
+    {
+        $formattedRedirect = $this->formatClientRedirect($challengePath);
+        if ($this->expectsJsonResponse()) {
+            return $this->json([
+                'success' => true,
+                'status' => 'challenge_required',
+                'requires_challenge' => true,
+                'message' => $message,
+                'redirect' => $formattedRedirect,
+            ]);
+        }
+
+        $this->getMessageManager()->addWarning($message);
+        return $this->redirect($formattedRedirect);
+    }
+
+    private function respondFailure(string $message, string $redirectUrl = ''): string
+    {
+        if ($this->expectsJsonResponse()) {
+            return $this->json([
+                'success' => false,
+                'message' => $message,
+            ]);
+        }
+
+        $this->getMessageManager()->addError($message);
+        return $this->redirect($this->buildLoginPageUrl($redirectUrl));
+    }
+
+    private function isValidReferer(string $referer): bool
+    {
+        $baseUrl = (string) (Env::getInstance()->getBaseUrl() ?? '');
+        return str_starts_with($referer, '/')
+            || ($baseUrl !== '' && str_starts_with($referer, $baseUrl));
+    }
+
     private function json(array $data): string
     {
         header('Content-Type: application/json');

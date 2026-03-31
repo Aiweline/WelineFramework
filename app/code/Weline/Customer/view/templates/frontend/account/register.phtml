@@ -1,81 +1,490 @@
 <?php
+$themeTemplate = null;
+try {
+    $themeContext = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\ThemeContextService::class);
+    $theme = $themeContext->resolveTheme('frontend');
+    if ($theme && $theme->getId()) {
+        $candidate = rtrim((string)$theme->getPath(), '\\/') . DIRECTORY_SEPARATOR
+            . 'Weline' . DIRECTORY_SEPARATOR . 'Customer' . DIRECTORY_SEPARATOR . 'view' . DIRECTORY_SEPARATOR
+            . 'templates' . DIRECTORY_SEPARATOR . 'frontend' . DIRECTORY_SEPARATOR . 'account' . DIRECTORY_SEPARATOR
+            . 'register.phtml';
+        if (is_file($candidate) && realpath($candidate) !== __FILE__) {
+            $themeTemplate = $candidate;
+        }
+    }
+} catch (\Throwable) {
+}
+
+if ($themeTemplate) {
+    include $themeTemplate;
+    return;
+}
+/**@var \Weline\Framework\View\Template $this */
 $loginUrl = (string) ($this->getData('login_url') ?? '/customer/account/login');
 ?>
-<div class="login-form-container">
-    <div class="login-header">
-        <div class="login-icon">
+<style>
+/* ========== 注册表单容器 ========== */
+.auth-form {
+    max-width: 480px;
+    width: 100%;
+    margin: 0 auto;
+    padding: var(--spacing-xl, 2rem) var(--spacing-lg, 1.5rem);
+    background: var(--color-bg-primary);
+    border-radius: var(--radius-lg, 12px);
+    box-shadow: var(--shadow-md);
+    animation: authFadeInUp 0.6s ease-out;
+}
+
+@keyframes authFadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ========== 注册头部 ========== */
+.auth-form__header {
+    text-align: center;
+    margin-bottom: var(--spacing-xl, 2rem);
+}
+
+.auth-form__icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto var(--spacing-md, 1rem);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border-radius: var(--radius-lg, 12px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
+}
+
+.auth-form__icon i {
+    font-size: 2rem;
+    color: var(--color-text-light);
+}
+
+.auth-form__title {
+    font-size: var(--font-size-xxl, 1.875rem);
+    font-weight: var(--font-weight-bold, 700);
+    color: var(--color-text-primary);
+    margin: 0 0 var(--spacing-xs, 0.25rem) 0;
+    letter-spacing: -0.5px;
+}
+
+.auth-form__subtitle {
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-text-secondary);
+    margin: 0;
+}
+
+/* ========== 表单样式 ========== */
+.auth-form__body {
+    margin-top: var(--spacing-lg, 1.5rem);
+}
+
+.auth-form__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-md, 1rem);
+}
+
+.auth-form__field {
+    margin-bottom: var(--spacing-md, 1rem);
+}
+
+.auth-form__label {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs, 0.5rem);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-semibold, 600);
+    color: var(--color-text-primary);
+    margin-bottom: var(--spacing-xs, 0.5rem);
+}
+
+.auth-form__label i {
+    color: var(--color-primary);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.auth-form__input-wrapper {
+    position: relative;
+}
+
+.auth-form__input-wrapper i {
+    position: absolute;
+    left: var(--spacing-sm, 0.75rem);
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--color-text-tertiary);
+    font-size: 1rem;
+    z-index: 1;
+    transition: color 0.3s;
+}
+
+.auth-form__input {
+    width: 100%;
+    padding: var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-sm, 0.75rem) var(--spacing-xl, 2.25rem);
+    border: 2px solid var(--color-border-default);
+    border-radius: var(--radius-md, 8px);
+    font-size: var(--font-size-base, 0.9375rem);
+    transition: all 0.3s;
+    background: var(--color-bg-primary);
+    color: var(--color-text-primary);
+}
+
+.auth-form__input:focus {
+    outline: none;
+    border-color: var(--color-border-focus);
+    box-shadow: 0 0 0 3px var(--color-accent-light);
+}
+
+.auth-form__input:focus + i,
+.auth-form__input-wrapper:focus-within i {
+    color: var(--color-primary);
+}
+
+.auth-form__input::placeholder {
+    color: var(--color-text-tertiary);
+}
+
+/* ========== 协议同意区块 ========== */
+.auth-form__terms {
+    margin: var(--spacing-md, 1rem) 0;
+    padding: var(--spacing-sm, 0.75rem);
+    background: var(--color-bg-secondary);
+    border-radius: var(--radius-md, 8px);
+    border: 1px solid var(--color-border-default);
+}
+
+.auth-form__terms-label {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--spacing-sm, 0.75rem);
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-text-primary);
+    cursor: pointer;
+}
+
+.auth-form__terms-checkbox {
+    margin-top: 0.2rem;
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+}
+
+.auth-form__terms-link {
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: var(--font-weight-medium, 500);
+    transition: color 0.3s;
+}
+
+.auth-form__terms-link:hover {
+    color: var(--color-link-hover);
+    text-decoration: underline;
+}
+
+/* ========== 提交按钮 ========== */
+.auth-form__submit {
+    width: 100%;
+    padding: var(--spacing-sm, 0.75rem) var(--spacing-md, 1rem);
+    background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+    border: 2px solid var(--color-primary-border);
+    border-radius: var(--radius-md, 8px);
+    color: var(--color-text-primary);
+    font-size: var(--font-size-base, 1rem);
+    font-weight: var(--font-weight-semibold, 600);
+    cursor: pointer;
+    transition: all 0.3s;
+    box-shadow: 0 4px 15px rgba(240, 193, 75, 0.4);
+    position: relative;
+    overflow: hidden;
+}
+
+.auth-form__submit::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.auth-form__submit:hover::before {
+    width: 300px;
+    height: 300px;
+}
+
+.auth-form__submit:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(240, 193, 75, 0.5);
+}
+
+.auth-form__submit:active {
+    transform: translateY(0);
+}
+
+.auth-form__submit:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* ========== 页脚链接 ========== */
+.auth-form__footer {
+    margin-top: var(--spacing-lg, 1.5rem);
+    padding-top: var(--spacing-md, 1rem);
+    border-top: 1px solid var(--color-border-default);
+    text-align: center;
+    font-size: var(--font-size-sm, 0.875rem);
+    color: var(--color-text-secondary);
+}
+
+.auth-form__footer-link {
+    color: var(--color-link);
+    text-decoration: none;
+    font-weight: var(--font-weight-semibold, 600);
+    transition: color 0.3s;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs, 0.25rem);
+}
+
+.auth-form__footer-link:hover {
+    color: var(--color-link-hover);
+    text-decoration: underline;
+}
+
+/* ========== 输入框焦点效果 ========== */
+.auth-form__input-wrapper--focused {
+    transform: translateY(-2px);
+}
+
+.auth-form__input-wrapper--focused i {
+    color: var(--color-primary);
+    transform: translateY(-50%) scale(1.1);
+}
+
+/* ========== 响应式设计 ========== */
+@media (max-width: 640px) {
+    .auth-form {
+        padding: var(--spacing-lg, 1.5rem) var(--spacing-md, 1rem);
+        margin: var(--spacing-sm, 0.5rem);
+        border-radius: var(--radius-md, 8px);
+    }
+
+    .auth-form__title {
+        font-size: var(--font-size-xl, 1.5rem);
+    }
+
+    .auth-form__icon {
+        width: 56px;
+        height: 56px;
+    }
+
+    .auth-form__icon i {
+        font-size: 1.75rem;
+    }
+
+    .auth-form__row {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+
+<div class="auth-form">
+    <header class="auth-form__header">
+        <div class="auth-form__icon">
             <i class="fas fa-user-plus"></i>
         </div>
-        <h1 class="login-title"><?= __('Create Account') ?></h1>
-        <p class="login-subtitle"><?= __('Create your WeShop account with your email address.') ?></p>
-    </div>
+        <h1 class="auth-form__title"><lang>创建账户</lang></h1>
+        <p class="auth-form__subtitle"><lang>使用邮箱注册您的账户</lang></p>
+    </header>
 
-    <form action="/customer/account/register" method="post" class="login-form">
+    <form action="/customer/account/register" method="post" class="auth-form__body">
         <?= $this->getFormKey('/customer/account/register') ?>
 
-        <div class="row g-3">
-            <div class="col-6">
-                <div class="form-group-enhanced">
-                    <label for="firstname"><i class="fas fa-id-card"></i><?= __('First Name') ?></label>
-                    <div class="form-input-wrapper">
-                        <i class="fas fa-user"></i>
-                        <input type="text" id="firstname" name="firstname" required autocomplete="given-name" placeholder="<?= __('Ada') ?>" />
-                    </div>
+        <div class="auth-form__row">
+            <div class="auth-form__field">
+                <label class="auth-form__label" for="firstname">
+                    <i class="fas fa-id-card"></i>
+                    <lang>名</lang>
+                </label>
+                <div class="auth-form__input-wrapper">
+                    <i class="fas fa-user"></i>
+                    <input
+                        class="auth-form__input"
+                        type="text"
+                        id="firstname"
+                        name="firstname"
+                        required
+                        autocomplete="given-name"
+                        placeholder="<lang>请输入名</lang>"
+                    />
                 </div>
             </div>
-            <div class="col-6">
-                <div class="form-group-enhanced">
-                    <label for="lastname"><i class="fas fa-id-card"></i><?= __('Last Name') ?></label>
-                    <div class="form-input-wrapper">
-                        <i class="fas fa-user"></i>
-                        <input type="text" id="lastname" name="lastname" required autocomplete="family-name" placeholder="<?= __('Lovelace') ?>" />
-                    </div>
+            <div class="auth-form__field">
+                <label class="auth-form__label" for="lastname">
+                    <i class="fas fa-id-card"></i>
+                    <lang>姓</lang>
+                </label>
+                <div class="auth-form__input-wrapper">
+                    <i class="fas fa-user"></i>
+                    <input
+                        class="auth-form__input"
+                        type="text"
+                        id="lastname"
+                        name="lastname"
+                        required
+                        autocomplete="family-name"
+                        placeholder="<lang>请输入姓</lang>"
+                    />
                 </div>
             </div>
         </div>
 
-        <div class="form-group-enhanced">
-            <label for="email"><i class="fas fa-envelope"></i><?= __('Email Address') ?></label>
-            <div class="form-input-wrapper">
+        <div class="auth-form__field">
+            <label class="auth-form__label" for="email">
                 <i class="fas fa-envelope"></i>
-                <input type="email" id="email" name="email" required autocomplete="email" placeholder="<?= __('you@example.com') ?>" />
+                <lang>电子邮箱</lang>
+            </label>
+            <div class="auth-form__input-wrapper">
+                <i class="fas fa-at"></i>
+                <input
+                    class="auth-form__input"
+                    type="email"
+                    id="email"
+                    name="email"
+                    required
+                    autocomplete="email"
+                    placeholder="<lang>请输入邮箱地址</lang>"
+                />
             </div>
         </div>
 
-        <div class="form-group-enhanced">
-            <label for="password"><i class="fas fa-lock"></i><?= __('Password') ?></label>
-            <div class="form-input-wrapper">
+        <div class="auth-form__field">
+            <label class="auth-form__label" for="password">
+                <i class="fas fa-lock"></i>
+                <lang>密码</lang>
+            </label>
+            <div class="auth-form__input-wrapper">
                 <i class="fas fa-key"></i>
-                <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password" placeholder="<?= __('At least 8 characters with letters and numbers') ?>" />
+                <input
+                    class="auth-form__input"
+                    type="password"
+                    id="password"
+                    name="password"
+                    required
+                    minlength="8"
+                    autocomplete="new-password"
+                    placeholder="<lang>至少8位，包含字母和数字</lang>"
+                />
             </div>
         </div>
 
-        <div class="form-group-enhanced">
-            <label for="confirm_password"><i class="fas fa-check-double"></i><?= __('Confirm Password') ?></label>
-            <div class="form-input-wrapper">
+        <div class="auth-form__field">
+            <label class="auth-form__label" for="confirm_password">
                 <i class="fas fa-check-double"></i>
-                <input type="password" id="confirm_password" name="confirm_password" required autocomplete="new-password" placeholder="<?= __('Re-enter your password') ?>" />
+                <lang>确认密码</lang>
+            </label>
+            <div class="auth-form__input-wrapper">
+                <i class="fas fa-check-double"></i>
+                <input
+                    class="auth-form__input"
+                    type="password"
+                    id="confirm_password"
+                    name="confirm_password"
+                    required
+                    autocomplete="new-password"
+                    placeholder="<lang>请再次输入密码</lang>"
+                />
             </div>
         </div>
 
-        <div class="remember-section">
-            <label class="d-flex align-items-start gap-2" for="agree_terms">
-                <input type="checkbox" id="agree_terms" name="agree_terms" value="1" required style="margin-top: 0.2rem;" />
-                <span><?= __('I agree to the terms of service and privacy policy.') ?></span>
+        <div class="auth-form__terms">
+            <label class="auth-form__terms-label">
+                <input
+                    type="checkbox"
+                    class="auth-form__terms-checkbox"
+                    id="agree_terms"
+                    name="agree_terms"
+                    value="1"
+                    required
+                />
+                <span>
+                    <lang>我已阅读并同意</lang>
+                    <a href="/terms" class="auth-form__terms-link"><lang>服务条款</lang></a>
+                    <lang>和</lang>
+                    <a href="/privacy" class="auth-form__terms-link"><lang>隐私政策</lang></a>
+                </span>
             </label>
         </div>
 
-        <button type="submit" class="btn-login">
-            <?= __('Create Account') ?>
+        <button type="submit" class="auth-form__submit">
+            <i class="fas fa-user-plus me-2"></i>
+            <lang>创建账户</lang>
         </button>
     </form>
 
-    <div class="login-footer">
-        <p>
-            <?= __('Already have an account?') ?>
-            <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>">
-                <i class="fas fa-sign-in-alt me-1"></i><?= __('Sign in') ?>
-            </a>
-        </p>
-    </div>
+    <footer class="auth-form__footer">
+        <lang>已有账户？</lang>
+        <a href="<?= htmlspecialchars($loginUrl, ENT_QUOTES) ?>" class="auth-form__footer-link">
+            <i class="fas fa-sign-in-alt"></i>
+            <lang>立即登录</lang>
+        </a>
+    </footer>
+    <div id="register-form-error" class="alert alert-danger d-none" role="alert"></div>
 </div>
+
+<script>
+(function() {
+    'use strict';
+
+    $(document).ready(function() {
+        var $form = $('form[action="/customer/account/register"]');
+        var $password = $('#password');
+        var $confirmPassword = $('#confirm_password');
+
+        function toggleInputFocus() {
+            $('.auth-form__input').on('focus', function() {
+                $(this).closest('.auth-form__input-wrapper').addClass('auth-form__input-wrapper--focused');
+            }).on('blur', function() {
+                $(this).closest('.auth-form__input-wrapper').removeClass('auth-form__input-wrapper--focused');
+            });
+        }
+
+        toggleInputFocus();
+
+        $form.on('submit', function(e) {
+            var password = $password.val();
+            var confirmPassword = $confirmPassword.val();
+
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                $('#register-form-error').text('<lang>两次输入的密码不一致</lang>').removeClass('d-none');
+                $confirmPassword.focus();
+                return false;
+            }
+
+            if (password.length < 8) {
+                e.preventDefault();
+                $('#register-form-error').text('<lang>密码长度至少为8位</lang>').removeClass('d-none');
+                $password.focus();
+                return false;
+            }
+        });
+    });
+})();
+</script>
