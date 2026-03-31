@@ -5,7 +5,7 @@
  */
 ?>
 <!DOCTYPE html>
-<html class="light" lang="<?= $this->getLocale() ?>" data-theme="motor">
+<html class="light" lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-theme="motor">
 <head>
     <meta charset="utf-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
@@ -63,14 +63,141 @@
       }
     </style>
 
-    <!-- Hook: head-before -->
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
-    <theme:css>Weline_Theme::theme/frontend/assets/css/motor.css</theme:css>
-
-    <!-- Hook: head-after -->
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::default::head-after</w:hook>
+    <theme:css>Weline_Theme::theme/frontend/assets/css/motor.css</theme:css>
+
+    <style>
+    /* ========================================
+       Motor Theme - 布局样式
+       ======================================== */
+
+    /* 基础重置和全局样式 */
+    * {
+        box-sizing: border-box;
+    }
+
+    html {
+        height: 100%;
+    }
+
+    body {
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+        color: #111;
+        background-color: #fff;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* 主内容区域 */
+    .main-content {
+        width: 100%;
+        max-width: 1400px;
+        margin: 0 auto;
+        padding: 0;
+        background-color: #fff;
+        flex: 1 0 auto;
+        min-height: 0;
+    }
+
+    /* 响应式容器 */
+    @media (max-width: 1400px) {
+        .main-content {
+            padding: 0 1rem;
+        }
+    }
+
+    @media (max-width: 1024px) {
+        .main-content {
+            padding: 0 0.75rem;
+        }
+    }
+
+    @media (max-width: 768px) {
+        .main-content {
+            padding: 0 0.5rem;
+        }
+    }
+
+    /* 内容区域样式 */
+    .main-content > * {
+        width: 100%;
+    }
+
+    /* 平滑滚动 */
+    html {
+        scroll-behavior: smooth;
+    }
+
+    /* 链接样式 */
+    a {
+        color: #007185;
+        text-decoration: none;
+        transition: color 0.2s ease, text-decoration 0.2s ease;
+    }
+
+    a:hover {
+        color: #c45500;
+        text-decoration: underline;
+    }
+
+    /* 按钮基础样式 */
+    button {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    /* 输入框基础样式 */
+    input, textarea, select {
+        font-family: inherit;
+        font-size: inherit;
+    }
+
+    /* 清除默认样式 */
+    ul, ol {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    /* 图片响应式 */
+    img {
+        max-width: 100%;
+        height: auto;
+    }
+
+    /* 工具类 */
+    .clearfix::after {
+        content: "";
+        display: table;
+        clear: both;
+    }
+
+    .hidden {
+        display: none !important;
+    }
+
+    .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border-width: 0;
+    }
+    </style>
 </head>
 <body class="font-display bg-background-light dark:bg-background-dark text-text-primary-light dark:text-text-primary-dark">
     <!-- Hook: body-start -->
@@ -85,18 +212,20 @@
                 <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
 
                 <!-- Header -->
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default"/>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
 
                 <!-- Hook: header-after -->
                 <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
             </if>
 
             <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
-            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            <if condition="meta.showBreadcrumb !== false">
+              <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
+            </if>
             <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
 
             <!-- Main Content -->
-            <main class="flex-1">
+            <main class="flex-1" id="main-content" data-layout="main_content">
                 <!-- Hook: content-before -->
                 <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
                 <w:hook>Weline_Theme::frontend::layouts::default::content-before</w:hook>
@@ -113,7 +242,7 @@
                 <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
 
                 <!-- Footer -->
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
+                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop"/>
 
                 <!-- Hook: footer-after -->
                 <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
@@ -126,6 +255,57 @@
     <w:hook>Weline_Theme::frontend::layouts::default::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 
+    <!-- Weline.Api 同步回退（确保 request 立即可用） -->
     <theme:js>Weline_Theme::theme/frontend/assets/js/motor.js</theme:js>
+
+<script>
+(function() {
+    'use strict';
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    function init() {
+        initSmoothScroll();
+        initExternalLinks();
+    }
+
+    function initSmoothScroll() {
+        document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
+            anchor.addEventListener('click', function(e) {
+                const href = this.getAttribute('href');
+                if (href === '#' || href === '#!') {
+                    e.preventDefault();
+                    return;
+                }
+
+                const target = document.querySelector(href);
+                if (target) {
+                    e.preventDefault();
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    }
+
+    function initExternalLinks() {
+        document.querySelectorAll('a[href^="http"]').forEach(function(link) {
+            const hostname = window.location.hostname;
+            const linkHostname = new URL(link.href).hostname;
+
+            if (linkHostname !== hostname) {
+                link.setAttribute('target', '_blank');
+                link.setAttribute('rel', 'noopener noreferrer');
+            }
+        });
+    }
+})();
+</script>
 </body>
 </html>
