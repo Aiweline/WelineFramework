@@ -2,6 +2,7 @@
 Success,Success
 "Order Management","Order Management"
 "Order ID is required.","Order ID is required."
+"Invalid order status.","Invalid order status."
 "Order status updated.","Order status updated."
 "Order status update failed.","Order status update failed."
 "Order not found.","Order not found."

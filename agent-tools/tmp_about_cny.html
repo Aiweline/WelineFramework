@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang='en'>
+
+<head>
+
+    <meta charset='utf-8'/>
+    <title>网站维护中...</title>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <meta content='Premium Multipurpose Frontend & WelineFramework' name='description'/>
+    <meta content='秋枫雁飞(aiweline)' name='author'/>
+    
+    <link rel='shortcut icon' href='/Weline/Frontend/view/statics/img/favicon.png'>
+
+    
+    <link href='/Weline/Frontend/view/statics/assets/css/bootstrap.min.css' id='bootstrap-style' rel='stylesheet' type='text/css'/>
+    
+    <link href='/Weline/Frontend/view/statics/assets/css/icons.min.css' rel='stylesheet' type='text/css'/>
+    
+    <link href='/Weline/Frontend/view/statics/assets/css/app.min.css' id='app-style' rel='stylesheet' type='text/css'/>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    
+    <script src="/Weline/I18n/view/statics/js/i18n.js"></script>
+    <style>
+        /* 维护页 Logo 自适应：PC 最大高度 200，手机再收缩一点 */
+        .auth-logo {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* PC 端（含平板横屏等大屏）最大高度 200px */
+        @media (min-width: 769px) {
+            .auth-logo {
+                max-height: 200px;
+            }
+        }
+
+        /* 手机端再缩小一些，避免过大占屏 */
+        @media (max-width: 768px) {
+            .auth-logo {
+                max-height: 120px;
+            }
+        }
+
+        /* 版心容器 - 用于右上角hook定位 */
+        .maintenance-wrapper {
+            max-width: 1140px;
+            margin: 0 auto;
+            position: relative;
+            width: 100%;
+            min-height: 1px; /* 确保容器有最小高度 */
+        }
+        
+        /* 右上角语言选择器容器 - 固定定位 */
+        .maintenance-header {
+            position: fixed;
+            top: 20px;
+            right: 40px;
+            z-index: 9999; /* 保证在页面所有内容之上 */
+        }
+        
+        /* 语言选择器样式 - Bootstrap适配 */
+        .maintenance-language-switcher {
+            position: relative;
+        }
+        
+        .maintenance-language-switcher .language-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            color: #212529;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.875rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover {
+            background: #f8f9fa;
+            border-color: #0d6efd;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-1 {
+            display: none;
+        }
+        
+        .maintenance-language-switcher .language-switcher .action-line-2 {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .maintenance-language-switcher .language-switcher .current-language {
+            font-weight: 500;
+            min-width: 30px;
+            text-align: center;
+        }
+        
+        .maintenance-language-switcher .language-options {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 8px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 0.375rem;
+            min-width: 150px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.3s ease;
+            z-index: 10000; /* 高于其他内容，避免被遮挡 */
+        }
+        
+        .maintenance-language-switcher .language-switcher:hover .language-options,
+        .maintenance-language-switcher .language-switcher:focus .language-options {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        
+        .maintenance-language-switcher .language-option {
+            display: block;
+            padding: 10px 16px;
+            color: #212529;
+            text-decoration: none;
+            transition: background 0.2s ease;
+            border-bottom: 1px solid #dee2e6;
+        }
+        
+        .maintenance-language-switcher .language-option:last-child {
+            border-bottom: none;
+        }
+        
+        .maintenance-language-switcher .language-option:hover {
+            background: #f8f9fa;
+        }
+        
+        .maintenance-language-switcher .language-option.active {
+            background: #e7f1ff;
+            color: #0d6efd;
+        }
+        
+        .maintenance-language-switcher .language-option .fas.fa-check {
+            float: right;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .maintenance-language-switcher .language-option.active .fas.fa-check {
+            opacity: 1;
+        }
+        
+        @media (max-width: 768px) {
+            .maintenance-header {
+                top: 10px;
+                right: 20px; /* 往版心内侧一点，避免贴边 */
+            }
+            .maintenance-language-switcher .language-switcher {
+                padding: 6px 12px;
+                font-size: 0.75rem;
+            }
+            /* 手机端下拉列表向左展开，避免被屏幕边缘遮挡 */
+            .maintenance-language-switcher .language-options {
+                left: 0;
+                right: auto;
+                transform: translate(-100%, -10px); /* 向左偏移100%，向上偏移10px */
+                max-width: calc(100vw - 40px);
+                min-width: 180px;
+            }
+            
+            /* 手机端展开时的动画效果 */
+            .maintenance-language-switcher .language-switcher:hover .language-options,
+            .maintenance-language-switcher .language-switcher:focus .language-options {
+                transform: translate(-100%, 0); /* 向左偏移100%，垂直方向归位 */
+            }
+        }
+    </style>
+
+</head>
+
+<body>
+
+<div class='py-5'>
+    
+    <div class='maintenance-wrapper'>
+        
+        <div class='maintenance-header'>
+            <div class='maintenance-language-switcher'>
+                <!-- Hook: header-language-switcher | 模块: Weline_I18n | 文件: hooks/header-language-switcher.phtml -->
+<div class="language-switcher" data-i18n-switcher="true" role="button" tabindex="0" aria-label="切换语言" data-hook-source="Weline_I18n" data-hook-file="hooks/header-language-switcher.phtml">
+    <span class="action-line-1">语言</span>
+    <span class="action-line-2">
+        <i class="fas fa-globe" aria-hidden="true"></i>
+        <span class="current-language">
+            ZH        </span>
+        <i class="fas fa-chevron-down" aria-hidden="true"></i>
+    </span>
+    <div class="language-options" role="menu" aria-label="语言选项">
+                                <a href="#" 
+               class="language-option active" 
+               data-language-option="true"
+               data-lang="zh_Hans_CN" 
+               role="menuitem">
+                <span>中文（简体，中国）</span>
+                <i class="fas fa-check" aria-hidden="true"></i>
+            </a>
+            </div>
+</div>
+
+<!-- /Hook: header-language-switcher | 模块: Weline_I18n -->            </div>
+        </div>
+
+        <div class='container'>
+        <div class='row justify-content-center'>
+            <div class='col-md-8 col-lg-6 col-xl-5'>
+                <div class='text-center mt-sm-5 mb-4'>
+                    <a href="http://127.0.0.1:9981/about.html" class=''>
+                                                <img src='/Weline/Frontend/view/statics/assets/images/logo-dark.png' alt='logo'
+                             class='auth-logo logo-dark mx-auto'>
+                        <img src='/Weline/Frontend/view/statics/assets/images/logo-light.png' alt='logo'
+                             class='auth-logo logo-light mx-auto'>
+                    </a>
+                    <h1 class='mt-3'>
+                        网站维护
+                    </h1>
+
+                    <div class='mt-5'>
+                        <div class='mb-4'>
+                            <i class='ri-tools-fill display-3'></i>
+                        </div>
+                        <p>
+                            请稍等片刻...
+                        </p>
+
+                        <div class='mt-4 pt-2'>
+                            <a href="http://127.0.0.1:9981/CNY/zh_Hans_CN/" class='btn btn-primary'>
+                                返回首页重试
+                            </a>
+                            <button type="button" class='btn btn-secondary ms-2' onclick="location.reload()">
+                                刷新
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </div>
+        
+
+        <div class='row mt-4'>
+            <div class='col-md-4'>
+                <div class='text-center'>
+                    <div class='card-body'>
+                        <div class='avatar-sm mx-auto mb-4'>
+                            <div class='avatar-title rounded-circle'>
+                                <i class='ri-broadcast-line font-size-24'></i>
+                            </div>
+                        </div>
+                        <h5 class='font-size-15 text-uppercase'>
+                            为什么网站会处于维护模式？
+                        </h5>
+                        <p class='mb-0'>
+                            网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class='col-md-4'>
+                <div class='text-center'>
+                    <div class='card-body'>
+                        <div class='avatar-sm mx-auto mb-4'>
+                            <div class='avatar-title rounded-circle'>
+                                <i class='ri-time-line font-size-24'></i>
+                            </div>
+                        </div>
+                        <h5 class='font-size-15 text-uppercase'>
+                            多久能够恢复？
+                        </h5>
+                        <p class='mb-0'>
+                            大部分的网站升级活动都只有几分钟甚至几秒钟的时间。
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class='col-md-4'>
+                <div class='text-center'>
+                    <div class='card-body'>
+                        <div class='avatar-sm mx-auto mb-4'>
+                            <div class='avatar-title rounded-circle'>
+                                <i class='ri-mail-line font-size-24'></i>
+                            </div>
+                        </div>
+                        <h5 class='font-size-15 text-uppercase'>
+                            需要帮助吗？
+                        </h5>
+                        <p class='mb-0'>
+                            如果你长期看到这个页面，对网站存在疑惑，请联系：
+                            <a
+                                    href="mailto:aiweline@qq.com"
+                                    class="text-decoration-underline">aiweline@qq.com</a></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+
+        </div>
+        
+
+    </div>
+    
+
+</div>
+
+
+
+<script src="/Weline/Frontend/view/statics/assets/libs/jquery/jquery.min.js"></script>
+<script src="/Weline/Frontend/view/statics/assets/libs/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/Weline/Frontend/view/statics/assets/libs/metismenu/metisMenu.min.js"></script>
+<script src="/Weline/Frontend/view/statics/assets/libs/simplebar/simplebar.min.js"></script>
+<script src="/Weline/Frontend/view/statics/assets/libs/node-waves/waves.min.js"></script>
+
+</body>
+</html>

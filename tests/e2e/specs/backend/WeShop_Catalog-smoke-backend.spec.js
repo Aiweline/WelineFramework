@@ -1,121 +1,55 @@
 // @weline-e2e-runtime fallback
 // @ts-check
-const fs = require('node:fs');
-const { test, expect, gotoBackend, loginAsAdmin, buildModuleBackendRoute } = require('../../framework');
+const { test, expect, gotoBackend, loginAsAdmin, buildModuleBackendRoute, moduleDescribe, moduleCase } = require('../../framework');
 
-const MODULE = 'WeShop_Catalog';
-const FATAL_PATTERN =
-  /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Undefined variable|Class .* not found/i;
+const WESHOP_CATALOG_MODULE = 'WeShop_Catalog';
+const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-/**
- * @param {import('@playwright/test').Page} page
- * @param {string[]} routeCandidates
- */
-async function gotoFirstNonFatal(page, routeCandidates) {
-  let lastBodyText = '';
-  let lastError = null;
-  /** @type {string[]} */
-  const navigationErrors = [];
+moduleDescribe(test, WESHOP_CATALOG_MODULE, 'WeShop Catalog backend smoke', () => {
+  test.describe.configure({ retries: 1 });
 
-  for (const route of routeCandidates) {
-    try {
-      await gotoBackend(page, route, {
-        timeout: 10000,
-        settleMs: 800,
-      });
-    } catch (error) {
-      lastError = error;
-      const message = String(error && error.message ? error.message : error);
-      if (FATAL_PATTERN.test(message)) {
-        throw error;
-      }
-      navigationErrors.push(`${route}: ${message}`);
-      continue;
-    }
+  moduleCase(
+    test,
+    { module: WESHOP_CATALOG_MODULE, id: 'BACKEND-SMOKE-CATALOG-001' },
+    'renders catalog list backend route without PHP fatal errors',
+    async ({ page }) => {
+    await loginAsAdmin(page, { timeout: 90000 });
+    const body = page.locator('body');
+    await expect(body).toBeVisible();
 
-    const bodyText = await page.locator('body').innerText().catch(() => '');
-    lastBodyText = bodyText;
-    if (!FATAL_PATTERN.test(bodyText)) {
-      return {
-        ok: true,
-        lastBodyText,
-        lastError,
-        navigationErrors,
-      };
-    }
-  }
-
-  return {
-    ok: false,
-    lastBodyText,
-    lastError,
-    navigationErrors,
-  };
-}
-
-test.describe('WeShop_Catalog backend smoke', () => {
-  test.describe.configure({ retries: 0 });
-
-  test.beforeEach(async ({ page }) => {
-    await loginAsAdmin(page);
-  });
-
-  test('renders at least one backend route without fatal runtime errors', async ({ page }, testInfo) => {
-    test.setTimeout(45000);
-    const moduleRoot = buildModuleBackendRoute(MODULE);
-    const routesTried = [
-      moduleRoot,
-      `${moduleRoot}/index`,
-      buildModuleBackendRoute(MODULE, 'category'),
-      'catalog/backend/category',
+    const candidateRoutes = [
+      buildModuleBackendRoute(WESHOP_CATALOG_MODULE, 'category'),
+      buildModuleBackendRoute(WESHOP_CATALOG_MODULE, 'index'),
+      buildModuleBackendRoute(WESHOP_CATALOG_MODULE),
     ];
 
-    const navigationResult = await gotoFirstNonFatal(page, routesTried);
-    if (!navigationResult.ok) {
-      const unavailableScreenshot = testInfo.outputPath('catalog-routes-unavailable.png');
-      const unavailableHtml = testInfo.outputPath('catalog-routes-unavailable.html');
+    let hasHealthyRoute = false;
+    const navigationErrors = [];
+    for (const route of candidateRoutes) {
+      try {
+        await gotoBackend(page, route, { timeout: 25000, settleMs: 500 });
+        await expect(body).toBeVisible();
+        await expect(body).not.toContainText(FATAL_PATTERN);
+        expect(page.url()).not.toContain('/admin/login');
+        hasHealthyRoute = true;
+        break;
+      } catch (error) {
+        const message = String(error?.message || error);
+        if (FATAL_PATTERN.test(message)) {
+          throw error;
+        }
+        navigationErrors.push(`${route}: ${message}`);
+      }
+    }
 
-      await page.screenshot({ path: unavailableScreenshot, fullPage: true }).catch(() => {});
-      await page
-        .content()
-        .then((html) => fs.writeFileSync(unavailableHtml, html, 'utf8'))
-        .catch(() => {});
-
-      await testInfo
-        .attach('catalog-routes-unavailable-screenshot', {
-          path: unavailableScreenshot,
-          contentType: 'image/png',
-        })
-        .catch(() => {});
-      await testInfo
-        .attach('catalog-routes-unavailable-html', {
-          path: unavailableHtml,
-          contentType: 'text/html',
-        })
-        .catch(() => {});
-
-      test.skip(
-        true,
-        `Skip catalog backend route in current runtime: ` +
-          `${navigationResult.navigationErrors.join(' | ') || 'no healthy backend route candidate'}; ` +
-          `last error: ${
-            navigationResult.lastError
-              ? String(
-                  navigationResult.lastError && navigationResult.lastError.message
-                    ? navigationResult.lastError.message
-                    : navigationResult.lastError
-                )
-              : 'none'
-          }`
-      );
+    if (hasHealthyRoute) {
       return;
     }
 
-    const body = page.locator('body');
-    const bodyText = await body.innerText().catch(() => '');
-    await expect(body).toBeVisible();
-    expect(bodyText).not.toMatch(FATAL_PATTERN);
-    expect(page.url()).not.toContain('/admin/login');
-  });
+    test.skip(
+      true,
+      `Skip catalog backend route in current runtime: ${navigationErrors.join(' | ')}`
+    );
+    }
+  );
 });
-

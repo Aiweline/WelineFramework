@@ -94,7 +94,7 @@ $extraClass = $meta['class'] ?? '';
                     
                     <!-- 页面主内容 -->
                     <main class="backend-main-content <?= htmlspecialchars($extraClass) ?>" id="main-content" data-layout="main_content">
-                        <?php echo $this->fetch('theme/backend/partials/layout/content.phtml'); ?>
+                        <?php echo $this->fetch('Weline_Theme::theme/backend/partials/layout/content.phtml'); ?>
                     </main>
                     
                     <w:hook>Weline_Theme::backend::layouts::default::content-after</w:hook>
