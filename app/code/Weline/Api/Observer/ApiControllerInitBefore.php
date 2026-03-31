@@ -187,6 +187,11 @@ class ApiControllerInitBefore implements ObserverInterface
             return;
         }
 
+        if ($this->publicApiAuthRouteMatcher->matchesGuestFrontendRoute($this->request)) {
+            $this->validateFrontendApi($event, false);
+            return;
+        }
+
         // 1. 婵☆偀鍋撻柡灞诲劜濡叉悂宕ラ敂鑳閻庣懓鑻崣蹇涘礂椤掆偓缁辨垿骞掗妷銉ョ稉闁挎稑鐗婂Λ顥l闁挎稑濂旂粭澶愭閳ь剛鎲版担鐑橆仮鐟滅増娲╃槐?
         if ($this->apiSecurityService->isPublicApi($this->request)) {
             // 1.1 婵☆偀鍋撻柡灞诲劜濡叉悂宕ラ敃鈧€垫﹢宕ラ悰绁噊kie闁挎稑鐗嗛崣鏇烆嚕閳ь剟骞掗妷銉ョ稉濞戞挸绉撮崢鎴犳媼閸涘﹥鍎悽顖ｆ瘎ookie闁?
@@ -326,7 +331,7 @@ class ApiControllerInitBefore implements ObserverInterface
      * 1. 闁告挸绉堕鐞抏ssion閻犱降鍊涢惁澶愭晬閸粎鍠橀柛蹇撶墳缁?
      * 2. API Token閻犱降鍊涢惁澶愭晬閸繍妲甸梺顐㈩檧缁?
      */
-    private function validateFrontendApi(Event &$event): void
+    private function validateFrontendApi(Event &$event, bool $requireAuthentication = true): void
     {
         $isSessionAuthenticated = false;
         $user = null;
@@ -366,6 +371,9 @@ class ApiControllerInitBefore implements ObserverInterface
         if (!$isSessionAuthenticated) {
             $token = $this->getTokenFromRequest();
             if (empty($token)) {
+                if (!$requireAuthentication) {
+                    return;
+                }
                 // 閻犲鍟抽惁顖炴晬濮樻剚鍞剁憸鐗堟oken闁兼儳鍢茶ぐ鍥ㄥ緞鏉堫偉袝
                 w_log_warning('Frontend API: Token not found in request. URL: ' . $this->request->getUri(), [], 'api');
                 $this->returnError(401, __('Missing authentication token.'));
