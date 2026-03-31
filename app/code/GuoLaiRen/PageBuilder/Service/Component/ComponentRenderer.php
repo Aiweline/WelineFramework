@@ -324,12 +324,18 @@ class ComponentRenderer
             if ($definition === null) {
                 return null;
             }
-            $themeModel = ObjectManager::getInstance(WelineTheme::class);
-            $theme = clone $themeModel;
-            $theme->clearData()->clearQuery()->load($welineThemeId);
-            if (!$theme->getId()) {
-                return null;
+
+            $theme = null;
+            // 仅在非 PageBuilder 虚拟主题时加载 WelineTheme
+            if ($definition->type !== 'virtual_theme_component') {
+                $themeModel = ObjectManager::getInstance(WelineTheme::class);
+                $theme = clone $themeModel;
+                $theme->clearData()->clearQuery()->load($welineThemeId);
+                if (!$theme->getId()) {
+                    return null;
+                }
             }
+
             $renderer = ObjectManager::getInstance(ThemeComponentRenderer::class);
             $isPreview = (bool) ($options['is_preview'] ?? false);
             $instanceConfig = array_merge($config, [

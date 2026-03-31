@@ -16,6 +16,24 @@ namespace GuoLaiRen\PageBuilder\Service\Template;
 class TemplatePathResolver
 {
     /**
+     * 防止 styleCode 被构造为路径穿越/任意目录拼接。
+     * 允许目录名字符：字母数字下划线与短横线，且首字符不得为空。
+     */
+    private function sanitizeStyleCode(string $styleCode): string
+    {
+        $styleCode = \trim($styleCode);
+        if ($styleCode === '') {
+            throw new \InvalidArgumentException((string) __('无效的样式代码'));
+        }
+        // 例如：default / tpmst / _shared / sattaking / fintech-hub
+        if (!\preg_match('/^[A-Za-z0-9_][A-Za-z0-9_-]*$/', $styleCode)) {
+            throw new \InvalidArgumentException((string) __('无效的样式代码'));
+        }
+
+        return $styleCode;
+    }
+
+    /**
      * 模板基础路径（相对于 BP）
      */
     private const BASE_PATH = 'app/code/GuoLaiRen/PageBuilder/view/templates/style';
@@ -56,6 +74,7 @@ class TemplatePathResolver
      */
     public function getTemplatePath(string $styleCode): string
     {
+        $styleCode = $this->sanitizeStyleCode($styleCode);
         $cacheKey = "template:{$styleCode}";
         if (!isset(self::$pathCache[$cacheKey])) {
             self::$pathCache[$cacheKey] = $this->getBasePath() . '/' . $styleCode;

@@ -1002,6 +1002,60 @@ body:has(.ai-workshop-modal.show) .modal-backdrop { z-index: 200009 !important; 
 let componentData = null;
 let currentStyleCode = '<?= htmlspecialchars($styleCode) ?>';
 let currentEditingComponent = null;
+const componentPanelApiBaseUrl = '<?= htmlspecialchars($this->getBackendUrl('pagebuilder/backend/visual/api/component/list'), ENT_QUOTES, 'UTF-8') ?>';
+const componentPanelDefaultLayoutCode = '<?= htmlspecialchars($layoutCode) ?>';
+const componentPanelDefaultPageType = '<?= htmlspecialchars((string)$pageType) ?>';
+const componentPanelBlogLayoutTypes = <?= json_encode([
+    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG,
+    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY,
+    \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST,
+], JSON_UNESCAPED_UNICODE) ?>;
+
+function getCurrentComponentPanelStyleCode() {
+    if (typeof window.getCurrentVisualStyleCode === 'function') {
+        const visualStyleCode = window.getCurrentVisualStyleCode();
+        if (visualStyleCode) {
+            return visualStyleCode;
+        }
+    }
+    const styleSelect = document.getElementById('style');
+    return styleSelect ? (styleSelect.value || currentStyleCode || 'default') : (window.currentStyle || currentStyleCode || 'default');
+}
+
+function getCurrentComponentPanelPageType() {
+    if (typeof window.getCurrentVisualPageType === 'function') {
+        const visualPageType = window.getCurrentVisualPageType();
+        if (visualPageType) {
+            return visualPageType;
+        }
+    }
+    return window.visualPageType || componentPanelDefaultPageType || '';
+}
+
+function resolveComponentPanelLayoutCode(pageType) {
+    if (pageType && componentPanelBlogLayoutTypes.includes(pageType)) {
+        return 'blog';
+    }
+    return componentPanelDefaultLayoutCode || 'default';
+}
+
+function buildComponentPanelApiUrl() {
+    const params = new URLSearchParams();
+    const pageType = getCurrentComponentPanelPageType();
+    currentStyleCode = getCurrentComponentPanelStyleCode();
+    params.set('style_code', currentStyleCode || 'default');
+    params.set('layout_code', resolveComponentPanelLayoutCode(pageType));
+    if (pageType) {
+        params.set('page_type', pageType);
+    }
+    params.set('group_by_region', 'true');
+    params.set('include_preview', '1');
+    params.set('include_compatible', '1');
+    if (typeof window.visualWelineThemeId === 'number' && window.visualWelineThemeId > 0) {
+        params.set('weline_theme_id', String(window.visualWelineThemeId));
+    }
+    return componentPanelApiBaseUrl + '?' + params.toString();
+}
 
 // 区域配置（默认配置，可被 API 返回的数据覆盖）
 const defaultRegionConfig = {
@@ -1128,7 +1182,8 @@ function createStreamFinishGuard() {
 
 // 初始化组件面板
 async function initComponentPanel() {
-    const apiUrl = '<?= htmlspecialchars($componentsApiUrl ?? '', ENT_QUOTES, 'UTF-8') ?>';
+    currentStyleCode = getCurrentComponentPanelStyleCode();
+    const apiUrl = buildComponentPanelApiUrl();
     console.log('[组件面板] 开始加载组件，API URL:', apiUrl);
     
     try {
@@ -1654,19 +1709,31 @@ function setupDropZones(doc) {
                 
                 // 检查区域匹配
                 if (data.region !== targetRegion) {
-                    alert('<?= __('此组件只能放置在') ?> ' + regionConfig[data.region].label);
+                    if (typeof BackendToast !== 'undefined') {
+                        BackendToast.warning('<?= __('此组件只能放置在') ?> ' + regionConfig[data.region].label);
+                    } else {
+                        console.warn('<?= __('此组件只能放置在') ?> ' + regionConfig[data.region].label);
+                    }
                     return;
                 }
                 
                 // 检查唯一性
                 const isMultiple = zone.getAttribute('data-multiple') === 'true';
                 if (!isMultiple && zone.querySelectorAll('.tpmst-component-wrapper').length > 0) {
-                    if (!confirm('<?= __('此区域只能放置一个组件，是否替换现有组件？') ?>')) {
+                    if (typeof BackendConfirm === 'undefined') {
+                        console.warn('BackendConfirm is missing');
                         return;
                     }
+                    BackendConfirm.show('<?= __('此区域只能放置一个组件，是否替换现有组件？') ?>').then(function (confirmed) {
+                        if (!confirmed) {
+                            return;
+                        }
+                        addComponentToRegion(data, targetRegion, zone);
+                    });
+                    return;
                 }
                 
-                // 添加组件
+                // 添加组件（无需替换确认）
                 addComponentToRegion(data, targetRegion, zone);
             } catch (err) {
                 console.error('Drop error:', err);
@@ -1887,11 +1954,17 @@ function editComponent(instanceId) {
 
 // 删除组件
 function removeComponent(instanceId, regionCode) {
-    if (!confirm('<?= __('确定要移除此组件吗？') ?>')) {
+    if (typeof BackendConfirm === 'undefined') {
+        console.warn('BackendConfirm is missing');
         return;
     }
-    
-    // TODO: 调用API移除
+    BackendConfirm.show('<?= __('确定要移除此组件吗？') ?>').then(function (confirmed) {
+        if (!confirmed) {
+            return;
+        }
+        
+        // TODO: 调用API移除
+    });
 }
 
 // 打开组件配置弹窗
@@ -2072,6 +2145,14 @@ function checkUnsavedAiComponent() {
 
 // 当前面板状态
 let _aiWorkshop = { step: 1, params: null, result: null, eventSource: null };
+
+/** 关闭已存在的 EventSource，确保同时只有一个活跃连接，避免三重奏重连 */
+function closeExistingEventSource() {
+    if (_aiWorkshop.eventSource) {
+        try { _aiWorkshop.eventSource.close(); } catch (e) {}
+        _aiWorkshop.eventSource = null;
+    }
+}
 
 /**
  * 删除 AI 组件
@@ -3264,6 +3345,7 @@ async function generateComponentWithAgent(params) {
         let result = null;
 
         await new Promise((resolve, reject) => {
+            closeExistingEventSource();
             const eventSource = new EventSource(streamUrl);
             _aiWorkshop.eventSource = eventSource;
             const guard = createStreamFinishGuard();
@@ -3781,6 +3863,7 @@ async function _workshopRefine() {
 
         let streamResult = null;
         await new Promise((resolve, reject) => {
+            closeExistingEventSource();
             const eventSource = new EventSource(streamUrl);
             _aiWorkshop.eventSource = eventSource;
             const guard = createStreamFinishGuard();
@@ -3918,7 +4001,11 @@ body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,'Segoe U
 // 打开导入 JSON 预览弹窗
 function openImportJsonDialog() {
     if (typeof Swal === 'undefined') {
-        alert('<?= __('SweetAlert2 未加载') ?>');
+        if (typeof BackendToast !== 'undefined') {
+            BackendToast.warning('<?= __('SweetAlert2 未加载') ?>');
+        } else {
+            console.warn('<?= __('SweetAlert2 未加载') ?>');
+        }
         return;
     }
     
@@ -4254,11 +4341,12 @@ async function generateComponentWithAi(params) {
         const streamUrl = baseUrl + '?params=' + encodeURIComponent(paramsBase64)
             + '&name=' + encodeURIComponent(name)
             + '&description=' + encodeURIComponent(description);
-        
+
         let result = null;
         let totalChars = 0;
-        
+
         await new Promise((resolve, reject) => {
+            closeExistingEventSource();
             const eventSource = new EventSource(streamUrl);
             _aiWorkshop.eventSource = eventSource;
             let lastErrorMessage = '';
@@ -5470,6 +5558,8 @@ async function refineComponentWithAi(adjustmentPrompt) {
 }
 
 // 页面加载时初始化
+window.refreshComponentPanelForCurrentPageType = initComponentPanel;
+
 document.addEventListener('DOMContentLoaded', function() {
     initComponentPanel();
     // 注意：未保存AI组件的检查已移至 openVisualConfig() 函数中
