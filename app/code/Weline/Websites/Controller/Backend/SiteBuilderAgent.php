@@ -102,23 +102,24 @@ class SiteBuilderAgent extends BackendController
         $this->assign('last_event_id', $this->getEventStreamService()->getLatestEventId($session->getId(), $adminId));
         $this->assign('domain_purchase_state', $this->getDomainPurchaseWorkbenchService()->buildViewState($session));
         $this->assign('stage_options', $this->getStageOptions());
-        $this->assign('state_json_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/state-json', ['public_id' => $session->getPublicId()]));
+        $this->assign('state_json_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/state-json', ['public_id' => $session->getPublicId()]));
         $this->assign('back_url', $this->getHubEntryUrl($session->getProviderCode(), $this->isFakeModeRequested()));
-        $this->assign('merge_scope_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/merge-scope'));
-        $this->assign('replace_scope_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/replace-scope'));
-        $this->assign('set_stage_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/set-stage'));
-        $this->assign('append_message_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/append-message'));
-        $this->assign('start_domain_purchase_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/start-domain-purchase'));
-        $this->assign('domain_purchase_sse_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/domain-purchase-sse'));
-        $this->assign('generate_virtual_theme_sse_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/generate-virtual-theme-sse'));
-        $this->assign('save_virtual_theme_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/save-virtual-theme'));
-        $this->assign('save_page_type_layout_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/save-page-type-layout'));
-        $this->assign('save_virtual_component_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/save-virtual-component'));
-        $this->assign('stream_sse_path', 'websites/backend/site-builder-agent/stream-sse');
+        // 工作区 AJAX/SSE 一律 path-only，避免 E2E 代理下绝对 URL 指向上游导致 Cookie 丢失（adminId=0 → 参数无效）
+        $this->assign('merge_scope_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/merge-scope'));
+        $this->assign('replace_scope_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/replace-scope'));
+        $this->assign('set_stage_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/set-stage'));
+        $this->assign('append_message_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/append-message'));
+        $this->assign('start_domain_purchase_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/start-domain-purchase'));
+        $this->assign('domain_purchase_sse_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/domain-purchase-sse'));
+        $this->assign('generate_virtual_theme_sse_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/generate-virtual-theme-sse'));
+        $this->assign('save_virtual_theme_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/save-virtual-theme'));
+        $this->assign('save_page_type_layout_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/save-page-type-layout'));
+        $this->assign('save_virtual_component_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/save-virtual-component'));
+        $this->assign('stream_sse_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/stream-sse'));
         $this->assign('preview_full_url', (string)($scope['preview_full_url'] ?? $session->getPreviewUrl()));
         $this->assign('visual_preview_url', (string)($scope['visual_preview_url'] ?? ''));
         $this->assign('visual_edit_url', (string)($scope['visual_edit_url'] ?? ''));
-        $this->assign('pagebuilder_handoff_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/pagebuilder-handoff', [
+        $this->assign('pagebuilder_handoff_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/pagebuilder-handoff', [
             'public_id' => $session->getPublicId(),
         ]));
         $this->assign('provider_native_url', (string)($providerConfig['native_entry_url'] ?? ''));
@@ -1823,7 +1824,7 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderEntryUrl(Url $urlHelper, string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => $urlHelper->getBackendUrl('pagebuilder/backend/aiSiteAgent/index', ['legacy' => 1]),
+            'pagebuilder' => $urlHelper->getBackendUrl('pagebuilder/backend/ai-site-agent/index', ['legacy' => 1]),
             'websites_default' => $this->getHubEntryUrl('websites_default'),
             default => $this->getHubEntryUrl($providerCode),
         };
@@ -2396,7 +2397,7 @@ class SiteBuilderAgent extends BackendController
 
         return [
             'public_id' => $nativePublicId,
-            'workspace_url' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/aiSiteAgent/workspace', ['public_id' => $nativePublicId]),
+            'workspace_url' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $nativePublicId]),
             'stage' => \method_exists($nativeSession, 'getStage') ? (string)$nativeSession->getStage() : $handoffStage,
         ];
     }
@@ -2717,7 +2718,7 @@ class SiteBuilderAgent extends BackendController
         $mirror = [
             'pagebuilder_workspace_public_id' => $publicId,
             'pagebuilder_workspace_url' => $publicId !== ''
-                ? $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/aiSiteAgent/workspace', ['public_id' => $publicId])
+                ? $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $publicId])
                 : '',
             'pagebuilder_handoff_stage' => (string)($nativeState['stage'] ?? ''),
             'provider_handoff_mode' => self::PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE,
@@ -3235,7 +3236,7 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderNativeEntryUrl(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/aiSiteAgent/index', ['legacy' => 1]),
+            'pagebuilder' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/index', ['legacy' => 1]),
             'websites_default' => $this->getHubEntryUrl('websites_default', $this->isFakeModeRequested()),
             default => $this->getHubEntryUrl($providerCode, $this->isFakeModeRequested()),
         };
