@@ -389,36 +389,116 @@ class Template extends DataObject
             ]);
             $eventsManager->dispatch('Weline_Framework_Template::after_compile', $eventData);
             $repContent = $eventData->getData('content');
-            
-            // 将替换后的文件写入定义的缓存文件中
-            file_put_contents($comFileName, $repContent);
+
+            // Embed content hash in compiled file for cross-platform reliable cache detection
+            $contentHash = md5_file($tplFile) . '-' . filesize($tplFile);
+            $hashHeader = "<?php /* hash:{$contentHash} */ ?>\n";
+            $compiledContent = $hashHeader . $repContent;
+
+            // Ensure compiled template directory exists before writing file.
+            $compiledDir = dirname($comFileName);
+            if (!is_dir($compiledDir)) {
+                if (!mkdir($compiledDir, 0770, true) && !is_dir($compiledDir)) {
+                    throw new Exception(__('无法创建模板编译目录：%{1}', $compiledDir));
+                }
+            }
+
+            // Write compiled file with hash header
+            file_put_contents($comFileName, $compiledContent);
+
+            // Also update TemplateCacheManager for enhanced caching
+            try {
+                $cacheManager = TemplateCacheManager::getInstance();
+                $cacheManager->writeCache($tplFile, $repContent);
+            } catch (\Throwable) {
+                // Non-critical - continue without enhanced cache
+            }
         }
-        
+
         return $comFileName;
     }
 
+    /**
+     * Determine if compiled template needs recompilation
+     *
+     * Uses multi-factor validation for maximum accuracy:
+     * 1. Content hash (MD5 + size) - primary check, cross-platform reliable
+     * 2. Mtime fallback - for rapid dev iteration
+     * 3. Force flag - for explicit recompile requests
+     *
+     * @param string $compiledFile Path to compiled template
+     * @param string $templateFile Path to source template
+     * @param bool $isDev Whether in development mode
+     * @param mixed $forceRecompileInDev Force recompile in dev (true/1/'1'/[hash])
+     * @return bool True if needs recompilation
+     */
     public static function shouldRecompileCompiledTemplate(
         string $compiledFile,
         string $templateFile,
-        bool $isDev,
+        bool $isDev = false,
         mixed $forceRecompileInDev = false
-    ): bool
-    {
+    ): bool {
+        // Factor 1: Compiled file doesn't exist
         if (!file_exists($compiledFile)) {
             return true;
         }
 
+        // Factor 2: Try TemplateCacheManager for content-based validation (fastest path)
+        try {
+            $cacheManager = TemplateCacheManager::getInstance();
+            $cachedFile = $cacheManager->getCachedFile($templateFile, $isDev);
+            if ($cachedFile !== null && is_file($cachedFile)) {
+                // Cache hit - no recompile needed
+                return false;
+            }
+        } catch (\Throwable) {
+            // CacheManager unavailable, fall through to mtime check
+        }
+
+        // Factor 3: Content hash validation (precise, cross-platform)
+        $currentHash = md5_file($templateFile) . '-' . filesize($templateFile);
+
+        // Check for embedded hash in compiled file (our new format)
+        $compiledContent = @file_get_contents($compiledFile);
+        if ($compiledContent !== false && str_starts_with($compiledContent, "<?php /* hash:")) {
+            // Extract hash from compiled file header
+            if (preg_match('/^\<\?php \/\* hash:([a-f0-9]+-\d+) \*\//', $compiledContent, $matches)) {
+                $embeddedHash = $matches[1];
+                if ($embeddedHash === $currentHash) {
+                    // Content hash matches - cache is valid
+                    return false;
+                }
+                // Content changed - needs recompile
+                return true;
+            }
+        }
+
+        // Factor 4: Mtime fallback (for backward compatibility and dev rapid iteration)
+        // In dev mode, mtime check allows quick turnaround for file changes
         if (filemtime($compiledFile) < filemtime($templateFile)) {
             return true;
         }
 
+        // Factor 5: Production mode - content hash is authoritative
         if (!$isDev) {
+            // Production: mtime passed but content might differ
+            // Trust mtime only if we don't have content hash mismatch above
             return false;
         }
 
-        return $forceRecompileInDev === true
-            || $forceRecompileInDev === 1
-            || $forceRecompileInDev === '1';
+        // Factor 6: Explicit force recompile in dev mode
+        if ($forceRecompileInDev !== false) {
+            // Can be: true, 1, '1', or specific hash string to match
+            if ($forceRecompileInDev === true || $forceRecompileInDev === 1 || $forceRecompileInDev === '1') {
+                return true;
+            }
+            // If it's a hash string, only recompile if hash differs
+            if (is_string($forceRecompileInDev) && $forceRecompileInDev !== $currentHash) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -475,6 +555,9 @@ class Template extends DataObject
 
     public function ob_file(string $filename, array $dictionary = []): string
     {
+        // WLS swaps the request instance per incoming request. Refresh the legacy
+        // `$this->request` reference so older templates using that property stay correct.
+        $this->request = ObjectManager::getInstance(Request::class);
         ob_start();
         try {
             if ($dictionary) {
@@ -539,6 +622,14 @@ class Template extends DataObject
     public function getBackendUrl(string $path, array|bool $params = [], bool $merge_query = false): string
     {
         return $this->getUrlObject()->getBackendUrl($path, $params, $merge_query);
+    }
+
+    /**
+     * 后台 URL 的路径部分（不含 scheme/host/port），表单 action / 站内链接应优先使用，避免代理端口与直连端口不一致导致 POST 丢失。
+     */
+    public function getBackendUrlPath(string $path = '', array $params = [], bool $merge_query = false): string
+    {
+        return $this->getUrlObject()->getBackendUrlPath($path, $params, $merge_query);
     }
 
     public function getBackendApi(string $path, array|bool $params = [], bool $merge_query = false): string

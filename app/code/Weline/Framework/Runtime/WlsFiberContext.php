@@ -19,6 +19,7 @@ class WlsFiberContext
     private mixed $sseConnection;
     private bool $sseEnabled;
     private bool $sseHeadersSent;
+    private mixed $sseWriteCallback = null;
 
     private array $serverVars;
     private array $getVars;
@@ -42,6 +43,7 @@ class WlsFiberContext
         $ctx->sseConnection = SseContext::getConnection();
         $ctx->sseEnabled = SseContext::isSseEnabled();
         $ctx->sseHeadersSent = SseContext::isHeadersSent();
+        $ctx->sseWriteCallback = SseContext::getWriteCallback();
 
         $ctx->serverVars = $_SERVER;
         $ctx->getVars = $_GET;
@@ -64,6 +66,11 @@ class WlsFiberContext
     public function restore(): void
     {
         SseContext::setConnection($this->sseConnection);
+        if (\is_callable($this->sseWriteCallback)) {
+            SseContext::setWriteCallback($this->sseWriteCallback);
+        } else {
+            SseContext::clearWriteCallback();
+        }
         if ($this->sseEnabled) {
             SseContext::enableSse();
         }
