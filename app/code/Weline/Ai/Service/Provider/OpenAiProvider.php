@@ -100,7 +100,8 @@ class OpenAiProvider implements ProviderInterface
         $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
-        if (!SseContext::isSseEnabled()) {
+        $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
+        if ($shouldRestoreExecutionTimeLimit) {
             if ($timeout > 0) {
                 $timeLimit = $timeout + 10;
                 @set_time_limit($timeLimit);
@@ -108,7 +109,8 @@ class OpenAiProvider implements ProviderInterface
                 @set_time_limit(0);
             }
         }
-        $requestData = [
+        try {
+            $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
@@ -169,19 +171,24 @@ class OpenAiProvider implements ProviderInterface
             'finish_reason' => $finishReason,
         ];
 
-        // 捕获推理/思考链内容（DeepSeek reasoning_content 等）
-        if (!empty($message['reasoning_content'])) {
-            $result['reasoning_content'] = $message['reasoning_content'];
-        }
+            // 捕获推理/思考链内容（DeepSeek reasoning_content 等）
+            if (!empty($message['reasoning_content'])) {
+                $result['reasoning_content'] = $message['reasoning_content'];
+            }
 
-        // 如果有 tool_calls，附加到结果中
-        if (!empty($toolCalls)) {
-            $result['tool_calls'] = $toolCalls;
-            // 保留原始 message 用于构建后续消息（agent 需要完整的 assistant message）
-            $result['assistant_message'] = $message;
-        }
+            // 如果有 tool_calls，附加到结果中
+            if (!empty($toolCalls)) {
+                $result['tool_calls'] = $toolCalls;
+                // 保留原始 message 用于构建后续消息（agent 需要完整的 assistant message）
+                $result['assistant_message'] = $message;
+            }
 
-        return $result;
+            return $result;
+        } finally {
+            if ($shouldRestoreExecutionTimeLimit) {
+                @set_time_limit(0);
+            }
+        }
     }
 
     /**
@@ -515,7 +522,8 @@ class OpenAiProvider implements ProviderInterface
         $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
         
         // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
-        if (!SseContext::isSseEnabled()) {
+        $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
+        if ($shouldRestoreExecutionTimeLimit) {
             if ($timeout > 0) {
                 $timeLimit = $timeout + 10;
                 @set_time_limit($timeLimit);
@@ -523,7 +531,8 @@ class OpenAiProvider implements ProviderInterface
                 @set_time_limit(0);
             }
         }
-        $requestData = [
+        try {
+            $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
@@ -595,11 +604,16 @@ class OpenAiProvider implements ProviderInterface
             'usage' => $totalTokens,
         ];
 
-        if (!empty($fullReasoning)) {
-            $result['reasoning_content'] = $fullReasoning;
-        }
+            if (!empty($fullReasoning)) {
+                $result['reasoning_content'] = $fullReasoning;
+            }
 
-        return $result;
+            return $result;
+        } finally {
+            if ($shouldRestoreExecutionTimeLimit) {
+                @set_time_limit(0);
+            }
+        }
     }
 
     /**
