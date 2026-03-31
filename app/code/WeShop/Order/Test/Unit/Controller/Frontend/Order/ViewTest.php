@@ -9,6 +9,7 @@ use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Order\Controller\Frontend\Order\View;
 use WeShop\Order\Service\OrderDetailPageDataService;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\MessageManager;
 
 class ViewTest extends TestCase
 {
@@ -69,6 +70,86 @@ class ViewTest extends TestCase
         $controller->expects($this->once())->method('renderPage')->willReturn('detail');
 
         $this->assertSame('detail', $controller->index());
+    }
+
+    public function testIndexRedirectsToOrderListWhenPageDataBuildFails(): void
+    {
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->expects($this->once())
+            ->method('getUserId')
+            ->willReturn(9);
+
+        $pageDataService = $this->createMock(OrderDetailPageDataService::class);
+        $pageDataService->expects($this->once())
+            ->method('build')
+            ->with(9, 404)
+            ->willThrowException(new \RuntimeException('Order not found.'));
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['id', null, 404],
+        ]);
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())
+            ->method('addError')
+            ->with('Order not found.');
+
+        $controller = $this->getMockBuilder(View::class)
+            ->setConstructorArgs([$customerContext, $pageDataService])
+            ->onlyMethods(['assign', 'redirect', 'renderPage', 'getMessageManager'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('getMessageManager')
+            ->willReturn($messageManager);
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('weshop/order/list');
+        $controller->expects($this->never())->method('assign');
+        $controller->expects($this->never())->method('renderPage');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+        $this->assertSame('', $controller->index());
+    }
+
+    public function testIndexRedirectsToOrderListWhenUnexpectedExceptionOccurs(): void
+    {
+        $customerContext = $this->createMock(CustomerContextInterface::class);
+        $customerContext->expects($this->once())
+            ->method('getUserId')
+            ->willReturn(9);
+
+        $pageDataService = $this->createMock(OrderDetailPageDataService::class);
+        $pageDataService->expects($this->once())
+            ->method('build')
+            ->with(9, 405)
+            ->willThrowException(new \Exception('Unexpected failure.'));
+
+        $request = $this->createMock(Request::class);
+        $request->method('getParam')->willReturnMap([
+            ['id', null, 405],
+        ]);
+
+        $messageManager = $this->createMock(MessageManager::class);
+        $messageManager->expects($this->once())
+            ->method('addError')
+            ->with('Failed to load order details.');
+
+        $controller = $this->getMockBuilder(View::class)
+            ->setConstructorArgs([$customerContext, $pageDataService])
+            ->onlyMethods(['assign', 'redirect', 'renderPage', 'getMessageManager'])
+            ->getMock();
+        $controller->expects($this->once())
+            ->method('getMessageManager')
+            ->willReturn($messageManager);
+        $controller->expects($this->once())
+            ->method('redirect')
+            ->with('weshop/order/list');
+        $controller->expects($this->never())->method('assign');
+        $controller->expects($this->never())->method('renderPage');
+
+        $this->setProtectedProperty($controller, 'request', $request);
+        $this->assertSame('', $controller->index());
     }
 
     public function testRenderPageUsesModuleQualifiedOrderViewTemplate(): void

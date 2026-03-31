@@ -1,0 +1,510 @@
+<?php
+/**
+ * WeShop Order Backend - Order Detail Template
+ * @var \Weline\Framework\View\Template $this
+ */
+use WeShop\Order\Service\OrderService;
+
+$order = (array) ($this->getData('order') ?? []);
+$items = (array) ($this->getData('items') ?? []);
+$statusOptions = (array) ($this->getData('statusOptions') ?? []);
+$orderIndexUrl = (string) ($this->getData('orderIndexUrl') ?? '');
+$updateStatusUrl = (string) ($this->getData('updateStatusUrl') ?? '');
+
+$orderId = (int) ($order['order_id'] ?? 0);
+$incrementId = htmlspecialchars((string) ($order['increment_id'] ?? ''));
+$status = (string) ($order['status'] ?? 'pending');
+$statusLabel = htmlspecialchars((string) ($order['status_label'] ?? ucfirst($status)));
+$statusBadgeClass = (string) ($order['status_badge_class'] ?? 'secondary');
+$total = (float) ($order['total'] ?? 0);
+$createdAt = htmlspecialchars((string) ($order['created_at'] ?? ''));
+$updatedAt = htmlspecialchars((string) ($order['updated_at'] ?? ''));
+$customerId = (int) ($order['customer_id'] ?? 0);
+$paymentStatus = htmlspecialchars((string) ($order['payment_status'] ?? 'pending'));
+?>
+<style>
+    .weshop-order-detail-header {
+        background: linear-gradient(135deg, var(--backend-color-primary) 0%, var(--backend-color-primary-dark, #2980b9) 100%);
+        border-radius: 10px;
+        color: white;
+    }
+    .weshop-order-detail-header .order-id {
+        font-size: 2rem;
+        font-weight: 700;
+        font-family: monospace;
+    }
+    .weshop-order-detail-header .order-total {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    .weshop-order-detail-card {
+        border: 1px solid var(--backend-color-border-default);
+        border-radius: 8px;
+        transition: box-shadow 0.2s;
+    }
+    .weshop-order-detail-card:hover {
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .weshop-order-detail-card .card-header {
+        background: var(--backend-color-bg-secondary);
+        font-weight: 600;
+        border-bottom: 2px solid var(--backend-color-border-default);
+        padding: 12px 20px;
+    }
+    .weshop-order-detail-card .card-body {
+        padding: 20px;
+    }
+
+    .order-info-item {
+        display: flex;
+        justify-content: space-between;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--backend-color-border-light);
+    }
+    .order-info-item:last-child {
+        border-bottom: none;
+    }
+    .order-info-label {
+        font-weight: 500;
+        color: var(--backend-color-text-secondary);
+    }
+    .order-info-value {
+        font-weight: 600;
+        color: var(--backend-color-text-primary);
+        text-align: right;
+    }
+
+    .order-status-badge {
+        padding: 5px 12px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: capitalize;
+    }
+    .order-status-pending { background: #fff3cd; color: #856404; }
+    .order-status-processing { background: #cce5ff; color: #004085; }
+    .order-status-paid { background: #d4edda; color: #155724; }
+    .order-status-fulfilled { background: #d1ecf1; color: #0c5460; }
+    .order-status-completed { background: #d4edda; color: #27ae60; }
+    .order-status-cancelled { background: #f8d7da; color: #721c24; }
+    .order-status-refunded { background: #e2e3e5; color: #383d41; }
+
+    .order-items-table {
+        margin: 0;
+    }
+    .order-items-table thead th {
+        background: var(--backend-color-bg-secondary);
+        font-weight: 600;
+        border-bottom: 2px solid var(--backend-color-border-default);
+    }
+    .order-items-table tbody tr:hover {
+        background: var(--backend-color-bg-secondary);
+    }
+    .order-items-table td {
+        vertical-align: middle;
+    }
+    .order-item-image {
+        width: 60px;
+        height: 60px;
+        object-fit: cover;
+        border-radius: 6px;
+        background: var(--backend-color-bg-secondary);
+    }
+    .order-item-name {
+        font-weight: 600;
+    }
+    .order-item-sku {
+        font-size: 0.8rem;
+        color: var(--backend-color-text-secondary);
+    }
+    .order-item-price, .order-item-qty, .order-item-total {
+        text-align: right;
+        font-weight: 600;
+    }
+    .order-item-total {
+        color: var(--backend-color-primary);
+        font-size: 1.1rem;
+    }
+
+    .order-summary-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-bottom: 1px dashed var(--backend-color-border-light);
+    }
+    .order-summary-row:last-child {
+        border-bottom: none;
+        padding-top: 12px;
+        margin-top: 4px;
+        border-top: 2px solid var(--backend-color-border-default);
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+    .order-summary-label {
+        color: var(--backend-color-text-secondary);
+    }
+    .order-summary-value {
+        font-weight: 600;
+    }
+    .order-summary-total {
+        color: var(--backend-color-primary);
+    }
+
+    .weshop-order-action-btn {
+        min-width: 120px;
+    }
+
+    .weshop-order-offcanvas-wide {
+        width: 600px !important;
+        max-width: 90vw;
+    }
+
+    .timeline-item {
+        position: relative;
+        padding-left: 30px;
+        padding-bottom: 20px;
+        border-left: 2px solid var(--backend-color-border-default);
+        margin-left: 10px;
+    }
+    .timeline-item:last-child {
+        border-left: none;
+    }
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--backend-color-primary);
+    }
+    .timeline-time {
+        font-size: 0.8rem;
+        color: var(--backend-color-text-secondary);
+    }
+    .timeline-title {
+        font-weight: 600;
+        margin-top: 4px;
+    }
+</style>
+
+<!-- start page title -->
+<div class='row'>
+    <div class='col-12'>
+        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
+            <h4 class='mb-sm-0'>
+                <lang>订单详情</lang>
+            </h4>
+
+            <div class='page-title-right'>
+                <ol class='breadcrumb m-0'>
+                    <li class='breadcrumb-item'><a href='javascript: void(0);'>
+                            <lang>WeShop</lang>
+                        </a></li>
+                    <li class='breadcrumb-item'>
+                        <a href="<?= $orderIndexUrl ?>">
+                            <lang>订单管理</lang>
+                        </a>
+                    </li>
+                    <li class='breadcrumb-item active'>
+                        <lang>订单详情</lang>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- end page title -->
+
+<!-- start page message -->
+<div class='row'>
+    <template>Weline_Component::message.phtml</template>
+</div>
+<!-- end message -->
+
+<!-- order header -->
+<div class='row mb-4'>
+    <div class='col-12'>
+        <div class='card border-0 shadow-sm weshop-order-detail-header'>
+            <div class='card-body py-4'>
+                <div class='row align-items-center'>
+                    <div class='col-md-8'>
+                        <div class='d-flex align-items-center gap-3'>
+                            <div>
+                                <div class='text-white-50 small'><lang>订单号</lang></div>
+                                <div class='order-id'>#<?= $incrementId ?: $orderId ?></div>
+                            </div>
+                            <div class='vr' style='height: 50px; opacity: 0.3;'></div>
+                            <div>
+                                <div class='text-white-50 small'><lang>订单状态</lang></div>
+                                <span class='order-status-badge order-status-<?= $status ?>'>
+                                    <?= $statusLabel ?>
+                                </span>
+                            </div>
+                            <div class='vr' style='height: 50px; opacity: 0.3;'></div>
+                            <div>
+                                <div class='text-white-50 small'><lang>支付状态</lang></div>
+                                <span class='order-status-badge order-status-<?= $paymentStatus ?>'>
+                                    <?= ucfirst($paymentStatus) ?>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class='col-md-4 text-md-end mt-3 mt-md-0'>
+                        <div class='text-white-50 small'><lang>订单总额</lang></div>
+                        <div class='order-total'><?= $this->formatPrice($total) ?></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class='row'>
+    <!-- Left column: Order Info & Items -->
+    <div class='col-lg-8'>
+        <!-- Order Items -->
+        <div class='card mb-4 weshop-order-detail-card'>
+            <div class='card-header'>
+                <i class='mdi mdi-package-variant-closed me-2'></i>
+                <lang>订单商品</lang>
+            </div>
+            <div class='card-body p-0'>
+                <?php if (empty($items)): ?>
+                    <div class='text-center text-muted py-5'>
+                        <i class='mdi mdi-package-outline' style='font-size: 48px;'></i>
+                        <p class='mt-3'><lang>暂无商品信息</lang></p>
+                    </div>
+                <?php else: ?>
+                    <div class='table-responsive'>
+                        <table class='table table-bordered mb-0 order-items-table'>
+                            <thead>
+                                <tr>
+                                    <th width='80'><lang>商品图片</lang></th>
+                                    <th><lang>商品信息</lang></th>
+                                    <th width='100' class='text-end'><lang>单价</lang></th>
+                                    <th width='80' class='text-end'><lang>数量</lang></th>
+                                    <th width='120' class='text-end'><lang>小计</lang></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($items as $item): ?>
+                                    <?php
+                                    $itemName = htmlspecialchars((string) ($item['product_name'] ?? ''));
+                                    $itemSku = htmlspecialchars((string) ($item['product_sku'] ?? ''));
+                                    $itemPrice = (float) ($item['price'] ?? 0);
+                                    $itemQty = (int) ($item['quantity'] ?? 0);
+                                    $itemTotal = (float) ($item['total'] ?? 0);
+                                    ?>
+                                    <tr>
+                                        <td class='text-center'>
+                                            <div class='order-item-image mx-auto d-flex align-items-center justify-content-center'>
+                                                <i class='mdi mdi-image text-muted' style='font-size: 24px;'></i>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class='order-item-name'><?= $itemName ?></div>
+                                            <div class='order-item-sku'>
+                                                <lang>SKU</lang>: <?= $itemSku ?: '-' ?>
+                                            </div>
+                                        </td>
+                                        <td class='text-end order-item-price'>
+                                            <?= $this->formatPrice($itemPrice) ?>
+                                        </td>
+                                        <td class='text-end order-item-qty'>
+                                            &times;<?= $itemQty ?>
+                                        </td>
+                                        <td class='text-end order-item-total'>
+                                            <?= $this->formatPrice($itemTotal) ?>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right column: Order Details, Summary & Actions -->
+    <div class='col-lg-4'>
+        <!-- Order Information -->
+        <div class='card mb-4 weshop-order-detail-card'>
+            <div class='card-header'>
+                <i class='mdi mdi-information-outline me-2'></i>
+                <lang>订单信息</lang>
+            </div>
+            <div class='card-body'>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>订单ID</lang></span>
+                    <span class='order-info-value'><?= $orderId ?></span>
+                </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>客户ID</lang></span>
+                    <span class='order-info-value'><?= $customerId ?></span>
+                </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>创建时间</lang></span>
+                    <span class='order-info-value'><?= $createdAt ?: '-' ?></span>
+                </div>
+                <div class='order-info-item'>
+                    <span class='order-info-label'><lang>更新时间</lang></span>
+                    <span class='order-info-value'><?= $updatedAt ?: '-' ?></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Order Summary -->
+        <div class='card mb-4 weshop-order-detail-card'>
+            <div class='card-header'>
+                <i class='mdi mdi-calculator me-2'></i>
+                <lang>金额汇总</lang>
+            </div>
+            <div class='card-body'>
+                <?php
+                $subtotal = (float) ($order['subtotal'] ?? $total);
+                $shipping = (float) ($order['shipping_amount'] ?? 0);
+                $tax = (float) ($order['tax_amount'] ?? 0);
+                $discount = (float) ($order['discount_amount'] ?? 0);
+                ?>
+                <div class='order-summary-row'>
+                    <span class='order-summary-label'><lang>商品小计</lang></span>
+                    <span class='order-summary-value'><?= $this->formatPrice($subtotal) ?></span>
+                </div>
+                <div class='order-summary-row'>
+                    <span class='order-summary-label'><lang>运费</lang></span>
+                    <span class='order-summary-value'><?= $this->formatPrice($shipping) ?></span>
+                </div>
+                <div class='order-summary-row'>
+                    <span class='order-summary-label'><lang>税费</lang></span>
+                    <span class='order-summary-value'><?= $this->formatPrice($tax) ?></span>
+                </div>
+                <?php if ($discount > 0): ?>
+                    <div class='order-summary-row'>
+                        <span class='order-summary-label'><lang>折扣</lang></span>
+                        <span class='order-summary-value text-danger'>-<?= $this->formatPrice($discount) ?></span>
+                    </div>
+                <?php endif; ?>
+                <div class='order-summary-row'>
+                    <span class='order-summary-label'><lang>订单总额</lang></span>
+                    <span class='order-summary-value order-summary-total'><?= $this->formatPrice($total) ?></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class='card weshop-order-detail-card'>
+            <div class='card-header'>
+                <i class='mdi mdi-cog me-2'></i>
+                <lang>订单操作</lang>
+            </div>
+            <div class='card-body'>
+                <div class='d-grid gap-2'>
+                    <!-- Status Update Button -->
+                    <?php if ($status !== OrderService::STATUS_COMPLETED && $status !== OrderService::STATUS_CANCELLED): ?>
+                        <block class='Weline\Component\Block\OffCanvas'
+                               template='Weline_Component::off-canvas.phtml'
+                               cache='0'
+                               id='orderStatusOffcanvas'
+                               action="*/backend/order/update-status"
+                               submit-button-text='@lang(保存状态)'
+                               flush='1'
+                               target-button-text='@lang(更新状态)'
+                               target-button-class='btn btn-primary w-100'
+                               title='@lang(更新订单状态)'
+                               save="1"
+                               close-button-show='1'
+                               close-button-text='@lang(关闭)'
+                               direction='right'
+                               class-names='weshop-order-offcanvas-wide'
+                               off-canvas-body-style=''/>
+                    <?php endif; ?>
+
+                    <!-- Cancel Button -->
+                    <?php if ($status !== OrderService::STATUS_COMPLETED && $status !== OrderService::STATUS_CANCELLED): ?>
+                        <button class='btn btn-outline-danger'
+                                w-delete="<?= $this->getBackendUrl('*/backend/order/cancel') ?>"
+                                w-params='{"id": <?= $orderId ?>}'
+                                w-msg="<?= __('确定要取消此订单吗？此操作不可恢复。') ?>"
+                                w-method="post">
+                            <i class='mdi mdi-close-circle-outline me-1'></i>
+                            <lang>取消订单</lang>
+                        </button>
+                    <?php endif; ?>
+
+                    <!-- Print Invoice -->
+                    <a href="<?= $this->getBackendUrl('*/backend/order/invoice', ['id' => $orderId]) ?>"
+                       class='btn btn-outline-secondary'
+                       target='_blank'>
+                        <i class='mdi mdi-printer me-1'></i>
+                        <lang>打印订单</lang>
+                    </a>
+
+                    <!-- Back to List -->
+                    <a href="<?= $orderIndexUrl ?>" class='btn btn-light'>
+                        <i class='mdi mdi-arrow-left me-1'></i>
+                        <lang>返回订单列表</lang>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<js:part name="w-delete"/>
+
+<script>
+(function() {
+    'use strict';
+
+    var WeShopOrderDetail = {
+        updateStatusUrl: '<?= $updateStatusUrl ?>',
+        orderId: <?= $orderId ?>,
+
+        init: function() {
+            var self = this;
+
+            // Handle status update offcanvas
+            var offcanvasEl = document.getElementById('orderStatusOffcanvas');
+            if (offcanvasEl) {
+                offcanvasEl.addEventListener('show.bs.offcanvas', function(event) {
+                    var form = offcanvasEl.querySelector('form');
+                    if (form) {
+                        // Add hidden order_id field if not exists
+                        var orderIdInput = form.querySelector('input[name="id"]');
+                        if (!orderIdInput) {
+                            orderIdInput = document.createElement('input');
+                            orderIdInput.type = 'hidden';
+                            orderIdInput.name = 'id';
+                            orderIdInput.value = self.orderId;
+                            form.appendChild(orderIdInput);
+                        } else {
+                            orderIdInput.value = self.orderId;
+                        }
+
+                        // Add redirect back URL
+                        var redirectInput = form.querySelector('input[name="back_url"]');
+                        if (!redirectInput) {
+                            redirectInput = document.createElement('input');
+                            redirectInput.type = 'hidden';
+                            redirectInput.name = 'back_url';
+                            form.appendChild(redirectInput);
+                        }
+                        // Keep redirect as relative path to pass backend safe URL checks.
+                        redirectInput.value = window.location.pathname + window.location.search + window.location.hash;
+                    }
+                });
+            }
+        }
+    };
+
+    window.WeShopOrderDetail = WeShopOrderDetail;
+
+    document.addEventListener('DOMContentLoaded', function() {
+        WeShopOrderDetail.init();
+    });
+})();
+</script>

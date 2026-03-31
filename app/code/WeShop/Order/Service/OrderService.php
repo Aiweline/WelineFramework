@@ -6,6 +6,7 @@ namespace WeShop\Order\Service;
 
 use WeShop\Order\Model\Order;
 use WeShop\Order\Model\OrderItem;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
 class OrderService
@@ -321,6 +322,12 @@ class OrderService
         }
 
         $order->save();
+
+        ObjectManager::getInstance(EventsManager::class)->dispatch('WeShop_Order::cancelled', [
+            'order' => $order,
+            'order_id' => $orderId,
+            'customer_id' => $customerId,
+        ]);
 
         return true;
     }
