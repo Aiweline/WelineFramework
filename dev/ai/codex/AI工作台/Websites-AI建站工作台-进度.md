@@ -1,8 +1,8 @@
 # Websites AI建站工作台进度
 
-- 最后更新：2026-03-22 14:16
-- 当前状态：epic_2_completed
-- 当前阶段：核心持久化模型与服务已落地
+- 最后更新：2026-03-28 15:45
+- 当前状态：epic_8_completed
+- 当前阶段：Epic 8 完成，全部 Epic 已收尾
 
 ## 里程碑状态
 
@@ -14,10 +14,12 @@
 | 任务拆解 | 已完成 | 已拆到可实施 Epic 级别 |
 | Epic 1 扩展契约与 registry | 已完成 | provider/theme source contract 与 registry 已落地 |
 | 核心持久化模型 | 已完成 | session / message / artifact / event 与服务层已落地 |
-| 工作台 UI / SSE | 未开始 | 等 Epic 3 |
-| Theme 真实接入 | 未开始 | 等 Epic 6 |
-| PageBuilder provider 接入 | 未开始 | 等 Epic 9 |
-| e2e 自动化 | 未开始 | 等 Epic 10 |
+| Epic 3 工作台壳与 API | 已完成 | 三阶段 UI + getStageInfo + getDomainLifecycleStatus API |
+| Epic 4 域名流程 | 已完成 | RecommendDomainsTool + ConfirmDomainPurchaseTool |
+| Epic 5 页面生成 | 已完成 | WelineThemeSource + GeneratePageDraftTool |
+| Epic 6 完成预览 | 已完成 | PreviewWebsiteTool + DomainLifecycleBridge 状态条 |
+| PageBuilder provider 接入 | 已完成 | PageBuilderProvider + PageBuilderProviderTest |
+| **Epic 8 测试与硬化** | **已完成** | 全部 Tool 有 UT，DB 测试受环境限制 |
 
 ## Epic 1 完成情况
 

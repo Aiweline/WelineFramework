@@ -10,6 +10,14 @@
 3. 同时命中多个场景时，只保留最相关的 1~3 个技能。
 4. 若命中技能正文继续引用其他技能或 reference，再按需读取。
 
+## 全局入口技能
+
+| 技能 | 说明 |
+|---|---|
+| weline-framework-core | 框架核心开发，Guardrails 硬约束，开发工作流 |
+| weline-framework-runtime | WLS 运行时、进程、Session Server、状态管理 |
+| weline-framework-skill-router | 混合任务路由，根据关键词跳转对应技能 |
+
 ## 常驻
 
 | 场景/关键词 | 技能 | 路径 |
