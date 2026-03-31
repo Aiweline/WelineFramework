@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace WeShop\Analytics\Observer;
 
+use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Event\Observer;
 use WeShop\Analytics\Service\PixelDispatcher;
 
 /**
  * 订单支付像素观察者
  */
-class OrderPaidPixel extends Observer implements ObserverInterface
+class OrderPaidPixel implements ObserverInterface
 {
     public function __construct(
         private readonly PixelDispatcher $pixelDispatcher
@@ -21,12 +21,12 @@ class OrderPaidPixel extends Observer implements ObserverInterface
     /**
      * @inheritDoc
      */
-    public function execute(): void
+    public function execute(Event &$event): void
     {
-        $eventData = $this->getEvent()->getData();
-        $order = $eventData['order'] ?? null;
+        $eventData = $event->getData();
+        $order = is_array($eventData) ? ($eventData['order'] ?? null) : null;
 
-        if (!$order) {
+        if (!$order || !is_object($order) || !method_exists($order, 'getData')) {
             return;
         }
 
