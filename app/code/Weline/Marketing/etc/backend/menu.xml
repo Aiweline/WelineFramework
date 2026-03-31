@@ -5,16 +5,16 @@
     
     <!-- 营销规则 - 归入业务运营 > 营销管理 -->
     <menu source="Weline_Marketing::rule_list" name="rule_list" title="营销规则" 
-         action="marketing/backend/rule" parent="Weline_Backend::marketing_group"
+         action="weline_marketing/backend/rule" parent="Weline_Backend::marketing_group"
          icon="mdi mdi-clipboard-list-outline" order="10"/>
     
     <!-- 优惠券管理 -->
     <menu source="Weline_Marketing::coupon_list" name="coupon_list" title="优惠券管理" 
-         action="marketing/backend/coupon" parent="Weline_Backend::marketing_group"
+         action="weline_marketing/backend/coupon" parent="Weline_Backend::marketing_group"
          icon="mdi mdi-ticket-percent-outline" order="20"/>
     
     <!-- 促销活动 -->
     <menu source="Weline_Marketing::campaign_list" name="campaign_list" title="促销活动" 
-         action="marketing/backend/campaign" parent="Weline_Backend::marketing_group"
+         action="weline_marketing/backend/campaign" parent="Weline_Backend::marketing_group"
          icon="mdi mdi-bullhorn-outline" order="30"/>
 </menus>
