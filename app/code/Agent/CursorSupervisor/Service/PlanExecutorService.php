@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Agent\CursorSupervisor\Service;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Service\WlsErrorConsumerService;
 
 /**
  * 计划执行器服务
@@ -82,6 +83,33 @@ class PlanExecutorService
             $this->watchdog->setRunTests($this->runTests);
         }
         return $this->watchdog;
+    }
+    
+    /**
+     * 规则：每个需求开始前，先消费所有积压的 WLS 错误
+     * 消费完才允许加载新任务
+     */
+    private function consumeWlsErrorsFirst(): void
+    {
+        $consumer = ObjectManager::getInstance(WlsErrorConsumerService::class);
+        $result = $consumer->consumeAllBlocking();
+        
+        if ($result['total_claimed'] > 0) {
+            $this->log('📋 WLS错误消费结果:');
+            $this->log("   消费轮次: {$result['loops']}");
+            $this->log("   申领任务: {$result['total_claimed']}");
+            $this->log("   成功修复: {$result['total_fixed']}");
+            $this->log("   修复失败: {$result['total_failed']}");
+            
+            if ($result['total_fixed'] > 0) {
+                $this->log("✅ WLS错误已全部修复，可以开始新需求");
+            }
+            if ($result['total_failed'] > 0) {
+                $this->log("⚠️  {$result['total_failed']} 个 WLS 错误修复失败，请检查日志");
+            }
+        } else {
+            $this->log('📋 当前无积压 WLS 错误任务');
+        }
     }
     
     /**
@@ -308,6 +336,9 @@ class PlanExecutorService
         
         // 更新计划状态为 running
         $this->updatePlanStatus($plan['file'], 'running');
+        
+        // 先消费掉所有积压的 WLS 错误（规则：每个需求开始前必须先修复旧错误）
+        $this->consumeWlsErrorsFirst();
         
         // 清空当前任务池
         $this->getTaskPool()->load();

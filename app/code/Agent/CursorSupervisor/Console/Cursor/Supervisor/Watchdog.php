@@ -60,9 +60,9 @@ class Watchdog extends CommandAbstract
         // 获取选项
         $verbose = isset($args['v']) || isset($args['verbose']) || isset($data['v']) || isset($data['verbose']);
         $interval = (int) ($args['interval'] ?? $args['i'] ?? $data['interval'] ?? $data['i'] ?? 500);
-        $docSync = !isset($args['no-doc-sync']) && !isset($data['no-doc-sync']);
+        $docSync = self::resolveDocSyncOption($args, $data);
         $docInterval = (int) ($args['doc-interval'] ?? $data['doc-interval'] ?? 5);
-        $autoTrigger = !isset($args['no-auto-trigger']) && !isset($data['no-auto-trigger']);
+        $autoTrigger = self::resolveAutoTriggerOption($args, $data);
         
         $this->log('🐕 Watchdog 子进程启动');
         $this->log('📂 监控路径: ' . implode(', ', $watchPaths));
@@ -90,6 +90,38 @@ class Watchdog extends CommandAbstract
         }
         
         return null;
+    }
+
+    /**
+     * 解析文档同步开关，兼容 --doc-sync 与 --no-doc-sync
+     */
+    public static function resolveDocSyncOption(array $args = [], array $data = []): bool
+    {
+        if (isset($args['doc-sync']) || isset($data['doc-sync'])) {
+            return true;
+        }
+
+        if (isset($args['no-doc-sync']) || isset($data['no-doc-sync'])) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * 解析自动触发开关，兼容 --auto-trigger 与 --no-auto-trigger
+     */
+    public static function resolveAutoTriggerOption(array $args = [], array $data = []): bool
+    {
+        if (isset($args['auto-trigger']) || isset($data['auto-trigger'])) {
+            return true;
+        }
+
+        if (isset($args['no-auto-trigger']) || isset($data['no-auto-trigger'])) {
+            return false;
+        }
+
+        return true;
     }
     
     private function log(string $message): void
