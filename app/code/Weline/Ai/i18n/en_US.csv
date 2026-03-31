@@ -211,7 +211,7 @@ API密钥已删除,"The API key has been deleted."
 个人设置,"Personal Settings"
 AI聊天,"AI Chat"
 消息内容不能为空,"The message content cannot be empty."
-生成失败：%1,"Generation failed: %1"
+生成失败：%1,生成失败：%1
 聊天历史已清空,"Chat history has been cleared."
 AI助手工具,"AI Assistant Tool"
 多种AI模型,"Multiple AI models"
