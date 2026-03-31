@@ -1,0 +1,140 @@
+<?php
+/**
+ * 片段：Head - Motor Theme
+ * 页面头部区域（meta标签、CSS、JS初始化等）
+ * Motor 主题覆盖版本
+ */
+$meta = $this->getData('meta') ?? [];
+$layout = $this->getData('layout') ?? [];
+$themeData = $this->getData('theme') ?? [];
+
+$frontendBaseUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
+?>
+<!-- Base URL 设置：所有相对链接将基于此路径 -->
+<base href="<?= htmlspecialchars($frontendBaseUrl) ?>">
+<!-- Favicon Hook: 允许其他模块通过 hook 提供自定义 favicon -->
+<w:hook>Weline_Theme::frontend::partials::head::favicon<else/>
+<link rel="icon" type="image/svg+xml" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Shortcut Icon" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+<link rel="Bookmark" href="@static(Weline_Theme::theme/frontend/assets/img/favicon.svg)">
+</w:hook>
+
+<w:block class='Weline\Frontend\Block\Header\Base' template='Weline_Frontend::header/base.phtml'/>
+
+<css>Weline_Frontend::/libs/loading/loading.css</css>
+<css>Weline_Frontend::/libs/font-awesome-4.7.0/css/font-awesome.min.css</css>
+<css>Weline_Frontend::libs/bootstrap-5.1.3-dist/css/bootstrap.min.css</css>
+<js>Weline_Frontend::/libs/jquery/3.6.0/jquery.js</js>
+
+<script>
+    window.WelineApiConfig = window.WelineApiConfig || {};
+    window.WelineApiConfig.workerUrl = window.WelineApiConfig.workerUrl || '@static(Weline_Frontend::js/weline-api-worker.js)';
+    window.WelineApiConfig.baseUrl = window.WelineApiConfig.baseUrl || window.location.origin;
+    window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
+</script>
+
+<?php
+// 注意：jQuery 由 Weline_Frontend 模块通过 asset 系统加载，主题不应重复加载 ?>
+
+<?php
+$area = $themeData['area'] ?? 'frontend';
+$welineThemeColorMode = $themeData['colorMode'] ?? 'default';
+$layoutType = $themeData['layoutType'] ?? null;
+$layoutOption = $themeData['layoutOption'] ?? null;
+$theme = $themeData['theme'] ?? null;
+
+$isDev = defined('DEV') && DEV;
+$baseUrl = $this->request->getBaseUrl();
+
+if ($isDev) {
+    $modulesConfigUrl = '/Weline/Frontend/view/statics/base/weline.modules.js';
+    $modulesBaseUrl = '/Weline/Frontend/view/statics/js/weline-api';
+} else {
+    $modulesConfigUrl = '/static/Weline/Frontend/base/weline.modules.js';
+    $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
+}
+
+$currentLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+$currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+$siteName = $this->getData('site_name') ?? __('Weline Framework');
+$pageTitle = $meta['title'] ?? $this->getData('title') ?? __('欢迎使用WelineFramework框架！');
+$pageDescription = $meta['description'] ?? __('Weline Framework - 现代化的PHP框架');
+$pageKeywords = $meta['keywords'] ?? __('Weline, Framework, PHP');
+
+$envConfig = [
+    'WELINE_ENV' => DEV ? 'DEV' : 'PROD',
+    'DEV' => DEV,
+    'PROD' => !DEV,
+];
+
+$themeConfigPayload = [
+    'env' => $envConfig,
+    'baseUrl' => $baseUrl,
+    'modulesConfigUrl' => $modulesConfigUrl,
+    'modulesBaseUrl' => $modulesBaseUrl,
+    'currentLang' => $currentLang,
+    'currentCurrency' => $currentCurrency,
+    'debug' => DEV,
+    'site' => [
+        'name' => $siteName,
+        'title' => $pageTitle,
+        'description' => $pageDescription,
+        'keywords' => $pageKeywords,
+    ],
+    'theme' => [
+        'area' => $area,
+        'colorMode' => $welineThemeColorMode,
+        'layoutType' => $layoutType,
+        'layoutOption' => $layoutOption,
+    ],
+];
+
+$this->setData('themeConfigPayload', json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE));
+$this->setData('envConfig', $envConfig);
+?>
+<!-- Theme配置：使用data-no-extract标记，不会被提取到外部JS文件 -->
+<script data-no-extract="true">
+    (function() {
+        if (!window.__WelineThemeConfig) {
+            window.__WelineThemeConfig = {};
+        }
+        const themeConfig = <?= json_encode($themeConfigPayload, JSON_UNESCAPED_UNICODE) ?>;
+        Object.assign(window.__WelineThemeConfig, themeConfig);
+
+        if (window.__WelineThemeConfig.modulesConfigUrl) {
+            window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
+        }
+    })();
+</script>
+<!-- 主题JS -->
+<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
+<?php
+if (!empty($layoutType) && !empty($layoutOption) && $theme && $theme->getId()) {
+    $assetsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\LayoutAssetsManager::class);
+    try {
+        $assetsManager->ensureLayoutCssGenerated($area, $layoutType, $layoutOption, $theme);
+        $cssUrl = $assetsManager->getCssUrl($area, $layoutType, $layoutOption, $theme, $this);
+        ?>
+<link href="<?= htmlspecialchars($cssUrl) ?>" rel="stylesheet" type="text/css"/>
+<?php
+    } catch (\Exception $e) {
+        if (defined('DEV') && DEV) {
+            try {
+                $logger = \Weline\Framework\App\Env::getInstance()->getLogger();
+                if ($logger) {
+                    $logger->error('Motor Theme Head: failed to resolve layout css url', [
+                        'layoutType' => $layoutType,
+                        'layoutOption' => $layoutOption,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            } catch (\Exception $logError) {
+            }
+        }
+    }
+}
+?>
+<script src="<?= $isDev ? '/Weline/Frontend/view/statics/js/weline-api-fallback.js' : '/static/Weline/Frontend/js/weline-api-fallback.js' ?>"></script>
+<theme:js>Weline_Theme::theme/frontend/assets/js/theme.js</theme:js>
+<!-- Hook: 允许其他模块在 head 中注入 JS 模块声明 -->
+<w:hook>Weline_Theme::frontend::partials::head::module-declarations</w:hook>

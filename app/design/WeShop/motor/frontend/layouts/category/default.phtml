@@ -4,12 +4,17 @@
  * 摩托车主题商品列表布局（对应 Theme/view/theme/frontend/layouts/category 结构）
  */
 $this->setLayout('base');
-$category = $this->getData('category') ?? [];
-$products = $this->getData('products') ?? [];
-$filters = $this->getData('filters') ?? [];
-$appliedFilters = $this->getData('applied_filters') ?? [];
-$clearAllUrl = $this->getData('clear_all_url') ?? $this->getUrl('catalog/category/view', ['id' => $category['category_id'] ?? 0]);
-$pagination = $this->getData('pagination') ?? '';
+$requestCategory = $this->request->getData('category') ?? [];
+$category = is_array($requestCategory) && !empty($requestCategory['category_id'])
+    ? $requestCategory
+    : ($this->getData('category') ?? []);
+$products = $this->request->getData('products') ?? $this->getData('products') ?? [];
+$filters = $this->request->getData('filters') ?? $this->getData('filters') ?? [];
+$appliedFilters = $this->request->getData('applied_filters') ?? $this->getData('applied_filters') ?? [];
+$clearAllUrl = $this->request->getData('clear_all_url')
+    ?? $this->getData('clear_all_url')
+    ?? $this->getUrl('catalog/category/view', ['id' => $category['category_id'] ?? 0]);
+$pagination = $this->request->getData('pagination') ?? $this->getData('pagination') ?? '';
 $sortOptions = $this->getData('sort_options') ?? [];
 $currentSort = $this->getData('current_sort') ?? 'position';
 $viewMode = $this->getData('view_mode') ?? 'grid';
