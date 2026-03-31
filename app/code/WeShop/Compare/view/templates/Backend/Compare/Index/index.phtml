@@ -1,0 +1,162 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$compareItems = $this->getData('compare_items') ?? [];
+$summary = $this->getData('summary') ?? [];
+$filters = $this->getData('filters') ?? [];
+$pagination = $this->getData('pagination') ?? [];
+$compareIndexUrl = (string) ($this->getData('compareIndexUrl') ?? $this->getBackendUrl('*/backend/compare'));
+$compareDeleteUrl = (string) ($this->getData('compareDeleteUrl') ?? $this->getBackendUrl('*/backend/compare/delete'));
+$currentPage = max(1, (int) ($pagination['page'] ?? 1));
+$pageCount = max(1, (int) ($pagination['page_count'] ?? 1));
+$totalCompares = max(0, (int) ($pagination['total'] ?? 0));
+$editingId = max(0, (int) ($this->getData('editing_id') ?? 0));
+?>
+
+<div class="container-fluid py-3">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
+        <div>
+            <h1 class="h3 mb-1"><?= __('Compare Management') ?></h1>
+            <p class="text-muted mb-0"><?= __('Review and manage customer product comparison records.') ?></p>
+        </div>
+        <div class="text-muted small">
+            <?= htmlspecialchars(sprintf(
+                __('Page %d of %d, %d compare records found'),
+                $currentPage,
+                $pageCount,
+                $totalCompares
+            ), ENT_QUOTES) ?>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Total Compare Records') ?></div>
+                    <div class="display-6"><?= (int) ($summary['total'] ?? $totalCompares) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Unique Customers') ?></div>
+                    <div class="display-6 text-primary"><?= count(array_unique(array_column($compareItems, 'customer_id'))) ?></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-1"><?= __('Unique Products') ?></div>
+                    <div class="display-6 text-success"><?= count(array_unique(array_column($compareItems, 'product_id'))) ?></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-12">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <form method="get" action="<?= $compareIndexUrl ?>" class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label"><?= __('Customer ID') ?></label>
+                            <input type="number" name="customer_id" class="form-control" value="<?= htmlspecialchars((string) ($filters['customer_id'] ?? ''), ENT_QUOTES) ?>">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label"><?= __('Product ID') ?></label>
+                            <input type="number" name="product_id" class="form-control" value="<?= htmlspecialchars((string) ($filters['product_id'] ?? ''), ENT_QUOTES) ?>">
+                        </div>
+                        <div class="col-12 d-flex gap-2">
+                            <button type="submit" class="btn btn-outline-primary"><?= __('Apply Filters') ?></button>
+                            <a href="<?= $compareIndexUrl ?>" class="btn btn-outline-secondary"><?= __('Reset') ?></a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <?php if ($compareItems): ?>
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead>
+                                <tr>
+                                    <th><?= __('Compare ID') ?></th>
+                                    <th><?= __('Customer') ?></th>
+                                    <th><?= __('Product') ?></th>
+                                    <th><?= __('SKU') ?></th>
+                                    <th><?= __('Added At') ?></th>
+                                    <th class="text-end"><?= __('Actions') ?></th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <?php foreach ($compareItems as $item): ?>
+                                    <tr class="<?= $item['compare_id'] === $editingId ? 'table-primary' : '' ?>">
+                                        <td><?= (int) $item['compare_id'] ?></td>
+                                        <td>
+                                            <div class="fw-semibold"><?= htmlspecialchars((string) ($item['customer_name'] ?? ''), ENT_QUOTES) ?></div>
+                                            <small class="text-muted"><?= __('ID: %1', (int) ($item['customer_id'] ?? 0)) ?></small>
+                                            <?php if (!empty($item['customer_email'])): ?>
+                                                <div><small class="text-muted"><?= htmlspecialchars((string) $item['customer_email'], ENT_QUOTES) ?></small></div>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <div class="fw-semibold"><?= htmlspecialchars((string) ($item['product_name'] ?? ''), ENT_QUOTES) ?></div>
+                                            <small class="text-muted"><?= __('ID: %1', (int) ($item['product_id'] ?? 0)) ?></small>
+                                        </td>
+                                        <td>
+                                            <code class="small"><?= htmlspecialchars((string) ($item['product_sku'] ?? '-'), ENT_QUOTES) ?></code>
+                                        </td>
+                                        <td><?= htmlspecialchars((string) ($item['created_at'] ?? ''), ENT_QUOTES) ?></td>
+                                        <td class="text-end">
+                                            <button type="button"
+                                                    class="btn btn-sm btn-outline-danger w-delete"
+                                                    data-url="<?= $compareDeleteUrl ?>?id=<?= (int) ($item['compare_id'] ?? 0) ?>"
+                                                    data-item-name="<?= htmlspecialchars((string) __('Compare Record #%1', (int) ($item['compare_id'] ?? 0)), ENT_QUOTES) ?>">
+                                                <i class="mdi mdi-delete-outline me-1"></i><?= __('Delete') ?>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <?php if ($pageCount > 1): ?>
+                            <nav aria-label="<?= __('Compare pagination') ?>" class="mt-4">
+                                <ul class="pagination justify-content-center mb-0">
+                                    <li class="page-item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
+                                        <a class="page-link" href="<?= $compareIndexUrl ?>?page=<?= $currentPage - 1 ?><?= !empty($filters['customer_id']) ? '&customer_id=' . urlencode((string) $filters['customer_id']) : '' ?><?= !empty($filters['product_id']) ? '&product_id=' . urlencode((string) $filters['product_id']) : '' ?>">
+                                            <?= __('Previous') ?>
+                                        </a>
+                                    </li>
+                                    <?php for ($i = max(1, $currentPage - 2); $i <= min($pageCount, $currentPage + 2); $i++): ?>
+                                        <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
+                                            <a class="page-link" href="<?= $compareIndexUrl ?>?page=<?= $i ?><?= !empty($filters['customer_id']) ? '&customer_id=' . urlencode((string) $filters['customer_id']) : '' ?><?= !empty($filters['product_id']) ? '&product_id=' . urlencode((string) $filters['product_id']) : '' ?>">
+                                                <?= $i ?>
+                                            </a>
+                                        </li>
+                                    <?php endfor; ?>
+                                    <li class="page-item <?= $currentPage >= $pageCount ? 'disabled' : '' ?>">
+                                        <a class="page-link" href="<?= $compareIndexUrl ?>?page=<?= $currentPage + 1 ?><?= !empty($filters['customer_id']) ? '&customer_id=' . urlencode((string) $filters['customer_id']) : '' ?><?= !empty($filters['product_id']) ? '&product_id=' . urlencode((string) $filters['product_id']) : '' ?>">
+                                            <?= __('Next') ?>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </nav>
+                        <?php endif; ?>
+
+                    <?php else: ?>
+                        <div class="text-center py-5">
+                            <i class="mdi mdi-compare display-1 text-muted mb-3"></i>
+                            <h2 class="h5 mb-2"><?= __('No compare records found.') ?></h2>
+                            <p class="text-muted mb-0"><?= __('No customers have added products to compare yet, or adjust filters to find existing records.') ?></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
