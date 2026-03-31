@@ -45,40 +45,40 @@ $tax = $this->getData('tax') ?? 0;
         </if>
 
         <!-- ========== CART CONTENT 主内容区域 ========== -->
-        <div class="weline-main-content">
+        <div class="cart-page__main">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>WeShop_Cart::frontend::layouts::cart::content-before</w:hook>
             
             <main class="cart-page <?= htmlspecialchars($meta['class'] ?? '') ?>" id="cart-page" data-layout="cart">
-                <div class="cart-page-wrapper">
+                <div class="cart-page__container">
                     <!-- 页面标题 -->
-                    <div class="cart-page-header">
+                    <div class="cart-page__header">
                         <w:hook>WeShop_Cart::frontend::cart::header-before</w:hook>
-                        <h1 class="cart-page-title"><lang>Shopping Cart</lang></h1>
+                        <h1 class="cart-page__title"><?= __('Shopping Cart') ?></h1>
                         <if condition="cartCount > 0">
-                            <p class="cart-item-count"><lang>%1 items in your cart</lang><?= $cartCount ?></p>
+                            <p class="cart-page__count"><?= __('%1 items in your cart', $cartCount) ?></p>
                         </if>
                         <w:hook>WeShop_Cart::frontend::cart::header-after</w:hook>
                     </div>
                     
                     <if condition="cartCount > 0">
-                        <div class="cart-container">
+                        <div class="cart-page__grid">
                             <!-- ========== LEFT: 商品列表区域 ========== -->
                             <div class="cart-items-section">
                                 <w:hook>WeShop_Cart::frontend::cart::items-before</w:hook>
                                 
-                                <div class="cart-items-list"
+                                <div class="cart-items-section__list"
                                      data-wslot="cart-items-list" 
                                      data-wslot-name="购物车商品列表"
                                      data-wslot-multiple="false">
                                     
                                     <!-- 商品列表头部 -->
-                                    <div class="cart-items-header">
-                                        <div class="cart-header-product"><lang>Product</lang></div>
-                                        <div class="cart-header-price"><lang>Price</lang></div>
-                                        <div class="cart-header-qty"><lang>Quantity</lang></div>
-                                        <div class="cart-header-total"><lang>Total</lang></div>
-                                        <div class="cart-header-actions"></div>
+                                    <div class="cart-items-section__header">
+                                        <div class="cart-items-section__header-product"><?= __('Product') ?></div>
+                                        <div class="cart-items-section__header-price"><?= __('Price') ?></div>
+                                        <div class="cart-items-section__header-qty"><?= __('Quantity') ?></div>
+                                        <div class="cart-items-section__header-total"><?= __('Total') ?></div>
+                                        <div class="cart-items-section__header-actions"></div>
                                     </div>
                                     
                                     <!-- 商品列表 -->
@@ -88,55 +88,55 @@ $tax = $this->getData('tax') ?? 0;
                                                 <w:hook>WeShop_Cart::frontend::cart::item-before</w:hook>
                                                 
                                                 <!-- 商品图片和信息 -->
-                                                <div class="cart-item-product">
-                                                    <div class="cart-item-image">
+                                                <div class="cart-item__product">
+                                                    <div class="cart-item__image">
                                                         <if condition="item.image">
                                                             <img src="{{item.image}}" alt="{{item.name}}" loading="lazy"/>
                                                         <else/>
-                                                            <div class="cart-item-placeholder">
+                                                            <div class="cart-item__placeholder">
                                                                 <span class="material-symbols-outlined">image</span>
                                                             </div>
                                                         </if>
                                                     </div>
-                                                    <div class="cart-item-info">
-                                                        <a href="#" class="cart-item-name">{{item.name}}</a>
+                                                    <div class="cart-item__info">
+                                                        <a href="#" class="cart-item__name">{{item.name}}</a>
                                                         <if condition="item.option">
-                                                            <div class="cart-item-options">{{item.option}}</div>
+                                                            <div class="cart-item__options">{{item.option}}</div>
                                                         </if>
                                                         <if condition="item.seller">
-                                                            <div class="cart-item-seller"><lang>Sold by</lang>: {{item.seller}}</div>
+                                                            <div class="cart-item__seller"><?= __('Sold by') ?>: {{item.seller}}</div>
                                                         </if>
                                                         <if condition="item.stock_status == 'in_stock'">
-                                                            <span class="stock-status in-stock"><lang>In Stock</lang></span>
+                                                            <span class="cart-item__status cart-item__status--in-stock"><?= __('In Stock') ?></span>
                                                         <else/>
-                                                            <span class="stock-status out-of-stock"><lang>Out of Stock</lang></span>
+                                                            <span class="cart-item__status cart-item__status--out-of-stock"><?= __('Out of Stock') ?></span>
                                                         </if>
                                                     </div>
                                                 </div>
                                                 
                                                 <!-- 价格 -->
-                                                <div class="cart-item-price">
+                                                <div class="cart-item__price">
                                                     <if condition="item.original_price > item.price">
-                                                        <span class="original-price"><?= $this->formatPrice($item['original_price'] ?? 0) ?></span>
+                                                        <span class="cart-item__original-price"><?= $this->formatPrice($item['original_price'] ?? 0) ?></span>
                                                     </if>
-                                                    <span class="current-price"><?= $this->formatPrice($item['price'] ?? 0) ?></span>
+                                                    <span class="cart-item__current-price"><?= $this->formatPrice($item['price'] ?? 0) ?></span>
                                                 </div>
                                                 
                                                 <!-- 数量控制 -->
-                                                <div class="cart-item-qty">
+                                                <div class="cart-item__qty">
                                                     <div class="qty-control">
-                                                        <button type="button" class="qty-btn qty-decrease" 
+                                                        <button type="button" class="qty-control__btn qty-control__btn--decrease" 
                                                                 data-action="decrease-qty" 
                                                                 data-item-id="{{item.item_id}}">
                                                             <span class="material-symbols-outlined">remove</span>
                                                         </button>
-                                                        <input type="number" class="qty-input" 
+                                                        <input type="number" class="qty-control__input" 
                                                                value="{{item.qty}}" 
                                                                min="1" 
                                                                max="{{item.stock_qty}}"
                                                                data-item-id="{{item.item_id}}"
                                                                data-action="update-qty"/>
-                                                        <button type="button" class="qty-btn qty-increase" 
+                                                        <button type="button" class="qty-control__btn qty-control__btn--increase" 
                                                                 data-action="increase-qty" 
                                                                 data-item-id="{{item.item_id}}">
                                                             <span class="material-symbols-outlined">add</span>
@@ -145,22 +145,22 @@ $tax = $this->getData('tax') ?? 0;
                                                 </div>
                                                 
                                                 <!-- 小计 -->
-                                                <div class="cart-item-total">
-                                                    <span class="item-total"><?= $this->formatPrice(($item['price'] ?? 0) * ($item['qty'] ?? 1)) ?></span>
+                                                <div class="cart-item__total">
+                                                    <span class="cart-item__total-price"><?= $this->formatPrice(($item['price'] ?? 0) * ($item['qty'] ?? 1)) ?></span>
                                                 </div>
                                                 
                                                 <!-- 操作按钮 -->
-                                                <div class="cart-item-actions">
-                                                    <button type="button" class="action-btn save-for-later" 
+                                                <div class="cart-item__actions">
+                                                    <button type="button" class="cart-item__action-btn cart-item__action-btn--save" 
                                                             data-action="save-for-later" 
                                                             data-item-id="{{item.item_id}}"
-                                                            title="<lang>Save for later</lang>">
+                                                            title="<?= __('Save for later') ?>">
                                                         <span class="material-symbols-outlined">bookmark_border</span>
                                                     </button>
-                                                    <button type="button" class="action-btn remove-item" 
+                                                    <button type="button" class="cart-item__action-btn cart-item__action-btn--remove" 
                                                             data-action="remove-item" 
                                                             data-item-id="{{item.item_id}}"
-                                                            title="<lang>Remove</lang>">
+                                                            title="<?= __('Remove') ?>">
                                                         <span class="material-symbols-outlined">delete_outline</span>
                                                     </button>
                                                 </div>
@@ -174,11 +174,11 @@ $tax = $this->getData('tax') ?? 0;
                                 <w:hook>WeShop_Cart::frontend::cart::items-after</w:hook>
                                 
                                 <!-- 继续购物按钮 -->
-                                <div class="cart-continue-shopping">
+                                <div class="cart-continue">
                                     <w:hook>WeShop_Cart::frontend::cart::continue-shopping<else/>
-                                        <a href="<?= $this->getUrl('/') ?>" class="continue-shopping-btn">
+                                        <a href="<?= $this->getUrl('/') ?>" class="cart-continue__btn">
                                             <span class="material-symbols-outlined">arrow_back</span>
-                                            <lang>Continue Shopping</lang>
+                                            <?= __('Continue Shopping') ?>
                                         </a>
                                     </w:hook>
                                 </div>
@@ -194,29 +194,29 @@ $tax = $this->getData('tax') ?? 0;
                                      data-wslot-multiple="true"
                                      data-wslot-accept="summary,coupon,shipping,payment">
                                     
-                                    <h2 class="summary-title"><lang>Order Summary</lang></h2>
+                                    <h2 class="cart-summary-card__title"><?= __('Order Summary') ?></h2>
                                     
                                     <!-- 优惠券输入框插槽 -->
-                                    <div class="coupon-section"
+                                    <div class="cart-coupon"
                                          data-wslot="cart-coupon" 
                                          data-wslot-name="优惠券输入"
                                          data-wslot-multiple="false"
                                          data-wslot-accept="coupon">
                                         <w:hook>WeShop_Cart::frontend::cart::coupon-input<else/>
-                                            <div class="coupon-input-wrapper">
+                                            <div class="cart-coupon__wrapper">
                                                 <input type="text" 
                                                        id="coupon-code" 
-                                                       class="coupon-input" 
-                                                       placeholder="<lang>Enter coupon code</lang>"/>
-                                                <button type="button" class="coupon-apply-btn" data-action="apply-coupon">
-                                                    <lang>Apply</lang>
+                                                       class="cart-coupon__input" 
+                                                       placeholder="<?= __('Enter coupon code') ?>"/>
+                                                <button type="button" class="cart-coupon__btn" data-action="apply-coupon">
+                                                    <?= __('Apply') ?>
                                                 </button>
                                             </div>
                                         </w:hook>
                                     </div>
                                     
                                     <!-- 配送方式选择插槽 -->
-                                    <div class="shipping-section"
+                                    <div class="cart-shipping"
                                          data-wslot="cart-shipping" 
                                          data-wslot-name="配送方式"
                                          data-wslot-multiple="false"
@@ -225,51 +225,51 @@ $tax = $this->getData('tax') ?? 0;
                                     </div>
                                     
                                     <!-- 价格明细 -->
-                                    <div class="summary-details">
-                                        <div class="summary-row">
-                                            <span class="summary-label"><lang>Subtotal</lang></span>
-                                            <span class="summary-value" data-summary-subtotal><?= $this->formatPrice($cartTotal) ?></span>
+                                    <div class="cart-summary-card__details">
+                                        <div class="cart-summary-card__row">
+                                            <span class="cart-summary-card__label"><?= __('Subtotal') ?></span>
+                                            <span class="cart-summary-card__value" data-summary-subtotal><?= $this->formatPrice($cartTotal) ?></span>
                                         </div>
                                         
                                         <!-- 折扣显示插槽 -->
                                         <w:hook>WeShop_Cart::frontend::cart::discount-display</w:hook>
                                         
-                                        <div class="summary-row">
-                                            <span class="summary-label"><lang>Shipping</lang></span>
-                                            <span class="summary-value" data-summary-shipping>
+                                        <div class="cart-summary-card__row">
+                                            <span class="cart-summary-card__label"><?= __('Shipping') ?></span>
+                                            <span class="cart-summary-card__value" data-summary-shipping>
                                                 <if condition="shipping > 0">
                                                     <?= $this->formatPrice($shipping) ?>
                                                 <else/>
-                                                    <lang>Calculated at checkout</lang>
+                                                    <?= __('Calculated at checkout') ?>
                                                 </if>
                                             </span>
                                         </div>
                                         
-                                        <div class="summary-row">
-                                            <span class="summary-label"><lang>Tax</lang></span>
-                                            <span class="summary-value" data-summary-tax>
+                                        <div class="cart-summary-card__row">
+                                            <span class="cart-summary-card__label"><?= __('Tax') ?></span>
+                                            <span class="cart-summary-card__value" data-summary-tax>
                                                 <if condition="tax > 0">
                                                     <?= $this->formatPrice($tax) ?>
                                                 <else/>
-                                                    <lang>Calculated at checkout</lang>
+                                                    <?= __('Calculated at checkout') ?>
                                                 </if>
                                             </span>
                                         </div>
                                         
-                                        <div class="summary-row summary-total">
-                                            <span class="summary-label"><lang>Total</lang></span>
-                                            <span class="summary-value" data-summary-total><?= $this->formatPrice($cartTotal + $shipping + $tax) ?></span>
+                                        <div class="cart-summary-card__row cart-summary-card__row--total">
+                                            <span class="cart-summary-card__label"><?= __('Total') ?></span>
+                                            <span class="cart-summary-card__value" data-summary-total><?= $this->formatPrice($cartTotal + $shipping + $tax) ?></span>
                                         </div>
                                     </div>
                                     
                                     <!-- 结算按钮 -->
-                                    <div class="checkout-actions">
-                                        <a href="<?= $this->getUrl('checkout') ?>" class="checkout-btn primary-btn">
-                                            <lang>Proceed to Checkout</lang>
+                                    <div class="cart-summary-card__actions">
+                                        <a href="<?= $this->getUrl('checkout') ?>" class="cart-summary-card__checkout-btn">
+                                            <?= __('Proceed to Checkout') ?>
                                         </a>
                                         
                                         <!-- 其他支付方式插槽 -->
-                                        <div class="express-checkout"
+                                        <div class="cart-express-checkout"
                                              data-wslot="cart-express-checkout" 
                                              data-wslot-name="快捷支付"
                                              data-wslot-multiple="true"
@@ -279,15 +279,15 @@ $tax = $this->getData('tax') ?? 0;
                                     </div>
                                     
                                     <!-- 安全保障信息 -->
-                                    <div class="security-badges">
+                                    <div class="cart-security">
                                         <w:hook>WeShop_Cart::frontend::cart::security-badges<else/>
-                                            <div class="security-item">
+                                            <div class="cart-security__item">
                                                 <span class="material-symbols-outlined">verified_user</span>
-                                                <span><lang>Secure Checkout</lang></span>
+                                                <span><?= __('Secure Checkout') ?></span>
                                             </div>
-                                            <div class="security-item">
+                                            <div class="cart-security__item">
                                                 <span class="material-symbols-outlined">local_shipping</span>
-                                                <span><lang>Free Returns</lang></span>
+                                                <span><?= __('Free Returns') ?></span>
                                             </div>
                                         </w:hook>
                                     </div>
@@ -308,13 +308,13 @@ $tax = $this->getData('tax') ?? 0;
                         <!-- 空购物车状态 -->
                         <div class="cart-empty">
                             <w:hook>WeShop_Cart::frontend::cart::empty<else/>
-                                <div class="empty-cart-icon">
+                                <div class="cart-empty__icon">
                                     <span class="material-symbols-outlined">shopping_cart</span>
                                 </div>
-                                <h2 class="empty-cart-title"><lang>Your cart is empty</lang></h2>
-                                <p class="empty-cart-message"><lang>Looks like you haven't added anything to your cart yet.</lang></p>
-                                <a href="<?= $this->getUrl('/') ?>" class="start-shopping-btn primary-btn">
-                                    <lang>Start Shopping</lang>
+                                <h2 class="cart-empty__title"><?= __('Your cart is empty') ?></h2>
+                                <p class="cart-empty__message"><?= __('Looks like you haven\'t added anything to your cart yet.') ?></p>
+                                <a href="<?= $this->getUrl('/') ?>" class="cart-empty__btn">
+                                    <?= __('Start Shopping') ?>
                                 </a>
                             </w:hook>
                         </div>
@@ -341,10 +341,10 @@ $tax = $this->getData('tax') ?? 0;
     <script>
     window.__WelineCartConfig = <?= json_encode([
         'api' => [
-            'updateItem' => $this->getUrl('cart/update'),
-            'removeItem' => $this->getUrl('cart/remove'),
+            'updateItem' => '/api123/api/rest/v1/weshop/cart',
+            'removeItem' => '/api123/api/rest/v1/weshop/cart/remove',
             'applyCoupon' => $this->getUrl('cart/coupon/apply'),
-            'miniCartItems' => $this->getUrl('cart/api/mini-items'),
+            'miniCartItems' => '/api123/api/rest/v1/weshop/cart/mini-items',
         ],
         'cart' => [
             'count' => $cartCount,
@@ -356,92 +356,93 @@ $tax = $this->getData('tax') ?? 0;
     <style>
     /* ========================================
        购物车页面样式 - Sidebar 布局
+       使用主题变量和 BEM 命名规范
        ======================================== */
     
     /* 页面包裹器 */
-    .weline-page-wrapper {
+    .cart-page-wrapper {
         display: flex;
         flex-direction: column;
         min-height: 100vh;
     }
     
-    .weline-main-content {
+    .cart-page__main {
         flex: 1;
-        background-color: var(--bg-secondary, #f5f5f5);
+        background-color: var(--color-bg-secondary);
     }
     
     /* 购物车页面 */
     .cart-page {
         width: 100%;
-        padding: 2rem 0;
+        padding: var(--spacing-xl) 0;
     }
     
-    .cart-page-wrapper {
-        max-width: 1280px;
+    .cart-page__container {
+        max-width: var(--spacing-container-max-width);
         margin: 0 auto;
-        padding: 0 1.5rem;
+        padding: 0 var(--spacing-lg);
     }
     
     /* 页面标题 */
-    .cart-page-header {
-        margin-bottom: 2rem;
+    .cart-page__header {
+        margin-bottom: var(--spacing-xl);
     }
     
-    .cart-page-title {
+    .cart-page__title {
         font-size: 1.75rem;
         font-weight: 700;
-        color: var(--text-primary, #1a1a1a);
-        margin: 0 0 0.5rem;
+        color: var(--color-text-dark);
+        margin: 0 0 var(--spacing-xs);
     }
     
-    .cart-item-count {
-        color: var(--text-secondary, #666);
+    .cart-page__count {
+        color: var(--color-text-secondary);
         font-size: 0.875rem;
         margin: 0;
     }
     
     /* 主容器 - Grid 布局 */
-    .cart-container {
+    .cart-page__grid {
         display: grid;
         grid-template-columns: 1fr 380px;
-        gap: 2rem;
+        gap: var(--spacing-xl);
         align-items: start;
     }
     
     /* ========== 商品列表区域 ========== */
     .cart-items-section {
-        background: var(--bg-primary, #fff);
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        background: var(--color-bg-primary);
+        border-radius: var(--border-radius-xl);
+        box-shadow: var(--shadow-card);
         overflow: hidden;
     }
     
-    .cart-items-list {
+    .cart-items-section__list {
         padding: 0;
     }
     
     /* 列表头部 */
-    .cart-items-header {
+    .cart-items-section__header {
         display: grid;
         grid-template-columns: 2fr 1fr 140px 1fr 80px;
-        gap: 1rem;
-        padding: 1rem 1.5rem;
-        background: var(--bg-secondary, #f9fafb);
-        border-bottom: 1px solid var(--border-color, #e5e7eb);
+        gap: var(--spacing-md);
+        padding: var(--spacing-md) var(--spacing-lg);
+        background: var(--color-bg-secondary);
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
         font-size: 0.75rem;
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.05em;
-        color: var(--text-secondary, #666);
+        color: var(--color-text-secondary);
     }
     
     /* 商品项 */
     .cart-item {
         display: grid;
         grid-template-columns: 2fr 1fr 140px 1fr 80px;
-        gap: 1rem;
-        padding: 1.5rem;
-        border-bottom: 1px solid var(--border-color, #e5e7eb);
+        gap: var(--spacing-md);
+        padding: var(--spacing-lg);
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
         align-items: center;
     }
     
@@ -449,98 +450,99 @@ $tax = $this->getData('tax') ?? 0;
         border-bottom: none;
     }
     
-    .cart-item-product {
+    .cart-item__product {
         display: flex;
-        gap: 1rem;
+        gap: var(--spacing-md);
         align-items: flex-start;
     }
     
-    .cart-item-image {
+    .cart-item__image {
         width: 80px;
         height: 80px;
         flex-shrink: 0;
-        border-radius: 8px;
+        border-radius: var(--border-radius-lg);
         overflow: hidden;
-        background: var(--bg-secondary, #f5f5f5);
+        background: var(--color-bg-secondary);
     }
     
-    .cart-item-image img {
+    .cart-item__image img {
         width: 100%;
         height: 100%;
         object-fit: cover;
     }
     
-    .cart-item-placeholder {
+    .cart-item__placeholder {
         width: 100%;
         height: 100%;
         display: flex;
         align-items: center;
         justify-content: center;
-        color: var(--text-muted, #999);
+        color: var(--color-text-tertiary);
     }
     
-    .cart-item-info {
+    .cart-item__info {
         flex: 1;
         min-width: 0;
     }
     
-    .cart-item-name {
+    .cart-item__name {
         font-weight: 600;
-        color: var(--text-primary, #1a1a1a);
+        color: var(--color-text-dark);
         text-decoration: none;
         display: block;
-        margin-bottom: 0.25rem;
+        margin-bottom: var(--spacing-xs);
         line-height: 1.4;
     }
     
-    .cart-item-name:hover {
-        color: var(--primary, #3b82f6);
+    .cart-item__name:hover {
+        color: var(--color-accent);
     }
     
-    .cart-item-options,
-    .cart-item-seller {
+    .cart-item__options,
+    .cart-item__seller {
         font-size: 0.8rem;
-        color: var(--text-secondary, #666);
-        margin-bottom: 0.25rem;
+        color: var(--color-text-secondary);
+        margin-bottom: var(--spacing-xs);
     }
     
-    .stock-status {
+    .cart-item__status {
         font-size: 0.75rem;
         font-weight: 500;
         padding: 0.125rem 0.5rem;
-        border-radius: 4px;
+        border-radius: var(--border-radius-sm);
         display: inline-block;
     }
     
-    .stock-status.in-stock {
-        background: #dcfce7;
-        color: #166534;
+    .cart-item__status--in-stock {
+        background: var(--color-success);
+        background: color-mix(in srgb, var(--color-success) 15%, transparent);
+        color: var(--color-success);
     }
     
-    .stock-status.out-of-stock {
-        background: #fee2e2;
-        color: #991b1b;
+    .cart-item__status--out-of-stock {
+        background: var(--color-error-light);
+        color: var(--color-error-hover);
     }
     
     /* 价格 */
-    .cart-item-price {
+    .cart-item__price {
         text-align: center;
     }
     
-    .original-price {
+    .cart-item__original-price {
         text-decoration: line-through;
-        color: var(--text-muted, #999);
+        color: var(--color-text-tertiary);
         font-size: 0.8rem;
         display: block;
     }
     
-    .current-price {
+    .cart-item__current-price {
         font-weight: 600;
-        color: var(--text-primary, #1a1a1a);
+        color: var(--color-text-dark);
     }
     
     /* 数量控制 */
-    .cart-item-qty {
+    .cart-item__qty {
         display: flex;
         justify-content: center;
     }
@@ -548,12 +550,12 @@ $tax = $this->getData('tax') ?? 0;
     .qty-control {
         display: flex;
         align-items: center;
-        border: 1px solid var(--border-color, #e5e7eb);
-        border-radius: 8px;
+        border: var(--border-input);
+        border-radius: var(--border-radius-lg);
         overflow: hidden;
     }
     
-    .qty-btn {
+    .qty-control__btn {
         width: 36px;
         height: 36px;
         display: flex;
@@ -562,100 +564,101 @@ $tax = $this->getData('tax') ?? 0;
         background: transparent;
         border: none;
         cursor: pointer;
-        color: var(--text-secondary, #666);
+        color: var(--color-text-secondary);
         transition: all 0.2s;
     }
     
-    .qty-btn:hover {
-        background: var(--bg-secondary, #f5f5f5);
-        color: var(--primary, #3b82f6);
+    .qty-control__btn:hover {
+        background: var(--color-bg-secondary);
+        color: var(--color-accent);
     }
     
-    .qty-btn .material-symbols-outlined {
+    .qty-control__btn .material-symbols-outlined {
         font-size: 18px;
     }
     
-    .qty-input {
+    .qty-control__input {
         width: 50px;
         height: 36px;
         text-align: center;
         border: none;
-        border-left: 1px solid var(--border-color, #e5e7eb);
-        border-right: 1px solid var(--border-color, #e5e7eb);
+        border-left: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
+        border-right: var(--border-width-thin) var(--border-style-solid) var(--color-border-default);
         font-size: 0.875rem;
         font-weight: 500;
         -moz-appearance: textfield;
     }
     
-    .qty-input::-webkit-outer-spin-button,
-    .qty-input::-webkit-inner-spin-button {
+    .qty-control__input::-webkit-outer-spin-button,
+    .qty-control__input::-webkit-inner-spin-button {
         -webkit-appearance: none;
+        appearance: none;
         margin: 0;
     }
     
     /* 小计 */
-    .cart-item-total {
+    .cart-item__total {
         text-align: center;
     }
     
-    .item-total {
+    .cart-item__total-price {
         font-weight: 700;
         font-size: 1rem;
-        color: var(--text-primary, #1a1a1a);
+        color: var(--color-text-dark);
     }
     
     /* 操作按钮 */
-    .cart-item-actions {
+    .cart-item__actions {
         display: flex;
-        gap: 0.5rem;
+        gap: var(--spacing-sm);
         justify-content: center;
     }
     
-    .action-btn {
+    .cart-item__action-btn {
         width: 36px;
         height: 36px;
         display: flex;
         align-items: center;
         justify-content: center;
         background: transparent;
-        border: 1px solid transparent;
-        border-radius: 8px;
+        border: var(--border-width-thin) var(--border-style-solid) transparent;
+        border-radius: var(--border-radius-lg);
         cursor: pointer;
-        color: var(--text-secondary, #666);
+        color: var(--color-text-secondary);
         transition: all 0.2s;
     }
     
-    .action-btn:hover {
-        background: var(--bg-secondary, #f5f5f5);
+    .cart-item__action-btn:hover {
+        background: var(--color-bg-secondary);
     }
     
-    .action-btn.remove-item:hover {
-        color: #dc2626;
-        background: #fee2e2;
+    .cart-item__action-btn--remove:hover {
+        color: var(--color-error);
+        background: var(--color-error-light);
     }
     
-    .action-btn .material-symbols-outlined {
+    .cart-item__action-btn .material-symbols-outlined {
         font-size: 20px;
     }
     
     /* 继续购物 */
-    .cart-continue-shopping {
-        padding: 1.5rem;
-        border-top: 1px solid var(--border-color, #e5e7eb);
+    .cart-continue {
+        padding: var(--spacing-lg);
+        border-top: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
     }
     
-    .continue-shopping-btn {
+    .cart-continue__btn {
         display: inline-flex;
         align-items: center;
-        gap: 0.5rem;
-        color: var(--primary, #3b82f6);
+        gap: var(--spacing-sm);
+        color: var(--color-accent);
         text-decoration: none;
         font-weight: 500;
         transition: all 0.2s;
     }
     
-    .continue-shopping-btn:hover {
-        gap: 0.75rem;
+    .cart-continue__btn:hover {
+        gap: calc(var(--spacing-sm) + 0.25rem);
     }
     
     /* ========== 订单摘要侧边栏 ========== */
@@ -665,210 +668,218 @@ $tax = $this->getData('tax') ?? 0;
     }
     
     .cart-summary-card {
-        background: var(--bg-primary, #fff);
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-        padding: 1.5rem;
+        background: var(--color-bg-primary);
+        border-radius: var(--border-radius-xl);
+        box-shadow: var(--shadow-card);
+        padding: var(--spacing-lg);
     }
     
-    .summary-title {
+    .cart-summary-card__title {
         font-size: 1.125rem;
         font-weight: 700;
-        color: var(--text-primary, #1a1a1a);
-        margin: 0 0 1.5rem;
-        padding-bottom: 1rem;
-        border-bottom: 1px solid var(--border-color, #e5e7eb);
+        color: var(--color-text-dark);
+        margin: 0 0 var(--spacing-lg);
+        padding-bottom: var(--spacing-md);
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
     }
     
     /* 优惠券 */
-    .coupon-section {
-        margin-bottom: 1.5rem;
+    .cart-coupon {
+        margin-bottom: var(--spacing-lg);
     }
     
-    .coupon-input-wrapper {
+    .cart-coupon__wrapper {
         display: flex;
-        gap: 0.5rem;
+        gap: var(--spacing-sm);
     }
     
-    .coupon-input {
+    .cart-coupon__input {
         flex: 1;
         padding: 0.75rem 1rem;
-        border: 1px solid var(--border-color, #e5e7eb);
-        border-radius: 8px;
+        border: var(--border-input);
+        border-radius: var(--border-radius-lg);
         font-size: 0.875rem;
     }
     
-    .coupon-input:focus {
+    .cart-coupon__input:focus {
         outline: none;
-        border-color: var(--primary, #3b82f6);
-        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        border-color: var(--color-accent);
+        box-shadow: 0 0 0 3px var(--color-accent-light);
     }
     
-    .coupon-apply-btn {
+    .cart-coupon__btn {
         padding: 0.75rem 1.25rem;
-        background: var(--bg-secondary, #f5f5f5);
-        border: 1px solid var(--border-color, #e5e7eb);
-        border-radius: 8px;
+        background: var(--color-bg-secondary);
+        border: var(--border-input);
+        border-radius: var(--border-radius-lg);
         font-weight: 500;
         cursor: pointer;
         transition: all 0.2s;
     }
     
-    .coupon-apply-btn:hover {
-        background: var(--bg-tertiary, #e5e7eb);
+    .cart-coupon__btn:hover {
+        background: var(--color-bg-tertiary);
     }
     
     /* 配送方式 */
-    .shipping-section {
-        margin-bottom: 1.5rem;
+    .cart-shipping {
+        margin-bottom: var(--spacing-lg);
     }
     
     /* 价格明细 */
-    .summary-details {
-        margin-bottom: 1.5rem;
+    .cart-summary-card__details {
+        margin-bottom: var(--spacing-lg);
     }
     
-    .summary-row {
+    .cart-summary-card__row {
         display: flex;
         justify-content: space-between;
         align-items: center;
         padding: 0.75rem 0;
-        border-bottom: 1px solid var(--border-color, #e5e7eb);
+        border-bottom: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
     }
     
-    .summary-row:last-child {
+    .cart-summary-card__row:last-child {
         border-bottom: none;
     }
     
-    .summary-label {
-        color: var(--text-secondary, #666);
+    .cart-summary-card__label {
+        color: var(--color-text-secondary);
         font-size: 0.875rem;
     }
     
-    .summary-value {
+    .cart-summary-card__value {
         font-weight: 500;
-        color: var(--text-primary, #1a1a1a);
+        color: var(--color-text-dark);
     }
     
-    .summary-total {
-        padding-top: 1rem;
-        margin-top: 0.5rem;
-        border-top: 2px solid var(--text-primary, #1a1a1a);
+    .cart-summary-card__row--total {
+        padding-top: var(--spacing-md);
+        margin-top: var(--spacing-xs);
+        border-top: var(--border-width-medium) var(--border-style-solid) var(--color-text-dark);
         border-bottom: none;
     }
     
-    .summary-total .summary-label {
+    .cart-summary-card__row--total .cart-summary-card__label {
         font-size: 1rem;
         font-weight: 600;
-        color: var(--text-primary, #1a1a1a);
+        color: var(--color-text-dark);
     }
     
-    .summary-total .summary-value {
+    .cart-summary-card__row--total .cart-summary-card__value {
         font-size: 1.25rem;
         font-weight: 700;
-        color: var(--primary, #3b82f6);
+        color: var(--color-accent);
     }
     
     /* 结算按钮 */
-    .checkout-actions {
-        margin-bottom: 1.5rem;
+    .cart-summary-card__actions {
+        margin-bottom: var(--spacing-lg);
     }
     
-    .checkout-btn {
+    .cart-summary-card__checkout-btn {
         display: flex;
         align-items: center;
         justify-content: center;
         width: 100%;
-        padding: 1rem;
+        padding: var(--spacing-md);
         font-size: 1rem;
         font-weight: 600;
         text-decoration: none;
-        border-radius: 10px;
+        border-radius: var(--border-radius-lg);
         transition: all 0.2s;
+        background: var(--color-accent);
+        color: var(--color-text-light);
+        box-shadow: 0 4px 12px color-mix(in srgb, var(--color-accent) 25%, transparent);
     }
     
-    .primary-btn {
-        background: var(--primary, #3b82f6);
-        color: white;
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-    }
-    
-    .primary-btn:hover {
-        background: var(--primary-dark, #2563eb);
+    .cart-summary-card__checkout-btn:hover {
+        background: var(--color-accent-hover);
         transform: translateY(-1px);
-        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.3);
+        box-shadow: 0 6px 16px color-mix(in srgb, var(--color-accent) 30%, transparent);
     }
     
     /* 快捷支付 */
-    .express-checkout {
-        margin-top: 1rem;
+    .cart-express-checkout {
+        margin-top: var(--spacing-md);
     }
     
     /* 安全保障 */
-    .security-badges {
+    .cart-security {
         display: flex;
         flex-wrap: wrap;
-        gap: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid var(--border-color, #e5e7eb);
+        gap: var(--spacing-md);
+        padding-top: var(--spacing-md);
+        border-top: var(--border-width-thin) var(--border-style-solid) var(--color-border-light);
     }
     
-    .security-item {
+    .cart-security__item {
         display: flex;
         align-items: center;
-        gap: 0.5rem;
+        gap: var(--spacing-xs);
         font-size: 0.75rem;
-        color: var(--text-secondary, #666);
+        color: var(--color-text-secondary);
     }
     
-    .security-item .material-symbols-outlined {
+    .cart-security__item .material-symbols-outlined {
         font-size: 18px;
-        color: var(--success, #22c55e);
+        color: var(--color-success);
     }
     
     /* 侧边栏扩展区域 */
     .cart-sidebar-extra {
-        margin-top: 1.5rem;
+        margin-top: var(--spacing-lg);
     }
     
     /* ========== 空购物车状态 ========== */
     .cart-empty {
         text-align: center;
-        padding: 4rem 2rem;
-        background: var(--bg-primary, #fff);
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        padding: var(--spacing-3xl) var(--spacing-lg);
+        background: var(--color-bg-primary);
+        border-radius: var(--border-radius-xl);
+        box-shadow: var(--shadow-card);
     }
     
-    .empty-cart-icon {
-        margin-bottom: 1.5rem;
+    .cart-empty__icon {
+        margin-bottom: var(--spacing-lg);
     }
     
-    .empty-cart-icon .material-symbols-outlined {
+    .cart-empty__icon .material-symbols-outlined {
         font-size: 80px;
-        color: var(--text-muted, #ccc);
+        color: var(--color-text-tertiary);
     }
     
-    .empty-cart-title {
+    .cart-empty__title {
         font-size: 1.5rem;
         font-weight: 700;
-        color: var(--text-primary, #1a1a1a);
-        margin: 0 0 0.5rem;
+        color: var(--color-text-dark);
+        margin: 0 0 var(--spacing-xs);
     }
     
-    .empty-cart-message {
-        color: var(--text-secondary, #666);
-        margin: 0 0 2rem;
+    .cart-empty__message {
+        color: var(--color-text-secondary);
+        margin: 0 0 var(--spacing-xl);
     }
     
-    .start-shopping-btn {
+    .cart-empty__btn {
         display: inline-flex;
-        padding: 1rem 2rem;
+        padding: var(--spacing-md) var(--spacing-xl);
+        background: var(--color-accent);
+        color: var(--color-text-light);
+        text-decoration: none;
+        border-radius: var(--border-radius-lg);
+        font-weight: 600;
+        transition: all 0.2s;
+    }
+    
+    .cart-empty__btn:hover {
+        background: var(--color-accent-hover);
+        transform: translateY(-1px);
     }
     
     /* ========== 响应式布局 ========== */
     @media (max-width: 1024px) {
-        .cart-container {
+        .cart-page__grid {
             grid-template-columns: 1fr;
         }
         
@@ -879,41 +890,41 @@ $tax = $this->getData('tax') ?? 0;
     }
     
     @media (max-width: 768px) {
-        .cart-items-header {
+        .cart-items-section__header {
             display: none;
         }
         
         .cart-item {
             grid-template-columns: 1fr;
-            gap: 1rem;
+            gap: var(--spacing-md);
         }
         
-        .cart-item-product {
+        .cart-item__product {
             order: 1;
         }
         
-        .cart-item-price {
+        .cart-item__price {
             order: 2;
             text-align: left;
         }
         
-        .cart-item-qty {
+        .cart-item__qty {
             order: 3;
             justify-content: flex-start;
         }
         
-        .cart-item-total {
+        .cart-item__total {
             order: 4;
             text-align: left;
         }
         
-        .cart-item-actions {
+        .cart-item__actions {
             order: 5;
             justify-content: flex-start;
         }
         
-        .cart-page-wrapper {
-            padding: 0 1rem;
+        .cart-page__container {
+            padding: 0 var(--spacing-md);
         }
     }
     </style>
