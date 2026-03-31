@@ -38,9 +38,39 @@ alwaysApply: false
 - `variables/_*.css` 放 token，`colors/_*.css` 放整套色盘覆盖
   - 两类文件都要补 `@meta.name` 和 `@meta.description`
   - CSS 优先使用主题变量；新增颜色先落变量或色盘，不要直接散落到组件
-- `assets/css/theme.css` 和 `assets/js/theme.js` 只放 area 级公共资源
-  - 强绑定单个 layout / partial / widget、且需要被布局资源收集器提取的 `<style>` / `<script>` 可以保留内联
-  - 同一段样式或脚本如果会跨文件复用，就上提到 `assets/` 或公共 partial
+- `assets/css/theme.css` 和 `assets/js/theme.js` 只放 area 级公共资源（跨多个页面共享的样式）
+- **【强制】布局特定的 CSS/JS 写到被复写的内容模板中，禁止写到 layouts 目录**
+
+### 主题复写模板路径规则
+
+**原则：把源模块路径中的 `app\code\{Vendor}\{Module}\view` 替换为 `app\design\{ThemeName}\{Vendor}\{Module}\view`**
+
+#### 1. 复写模块的模板文件（templates、hooks、components 等）
+
+源路径：`app\code\{Vendor}\{Module}\view\templates\{area}\{path}\{file}.phtml`
+复写路径：`app\design\{ThemeName}\{Vendor}\{Module}\view\templates\{area}\{path}\{file}.phtml`
+
+示例：
+- 源：`Weline_Customer::templates/frontend/account/login.phtml`
+- 源路径：`app\code\Weline\Customer\view\templates\frontend\account\login.phtml`
+- 复写：`app\design\WeShop\motor\Weline\Customer\view\templates\frontend\account\login.phtml`
+- 规则：`str_replace(APP_CODE_PATH, $themePath, $modulePath)` = `str_replace('app\code\', 'app\design\WeShop\motor\', 'app\code\Weline\Customer\...')`
+
+#### 2. 复写默认主题的模板文件（layouts、partials、widgets 等）
+
+源路径：`app\code\Weline\Theme\view\theme\{area}\{type}\{file}.phtml`
+复写路径：`app\design\{ThemeName}\{area}\{type}\{file}.phtml`
+
+示例：
+- 源：`Weline_Theme::theme/frontend/layouts/account_auth/default.phtml`
+- 源路径：`app\code\Weline\Theme\view\theme\frontend\layouts\account_auth\default.phtml`
+- 复写：`app\design\WeShop\motor\frontend\layouts\account_auth\default.phtml`
+
+**禁止在 layouts 目录下写 CSS/JS**
+**禁止把布局特定的样式写到 theme.css 或 theme.js，这会导致所有页面都加载不需要的样式**
+
+- 主题系统会自动从模板中提取 `<style>` 和 `<script>` 标签，生成独立的布局 CSS/JS 文件
+- 同一段样式或脚本如果会跨文件复用（被 3 个以上布局共享），才上提到 `assets/`
 - `config/modules.json` 只负责 JS 模块路径和别名
   - 主题布局、色盘、partials、variables、scope 配置走 `ThemeConfigManager` / `ConfigLoader` / `ThemeData`
   - 不要再新增或继续文档化 `theme.json`
@@ -96,3 +126,4 @@ alwaysApply: false
 - 在任意自定义标签属性里写 `<?=` / `<?php`
 - 能用静态标签却堆一整段 `<?php` 做字符串拼接
 - 沿用旧 README 里的 layout 名称、partial 清单或目录结构覆盖真实实现
+- **在 `.phtml` 里写 `declare(strict_types=1)`** → 框架编译时 hash 注释在前，导致 `E_COMPILE_ERROR` 崩溃 WLS Worker（见 global-constraints）
