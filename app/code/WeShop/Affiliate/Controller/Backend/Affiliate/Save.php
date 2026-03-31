@@ -16,7 +16,11 @@ class Save extends BaseController
 
     public function post(): string
     {
-        $backUrl = (string) $this->request->getParam('back_url', $this->getBackendUrl('*/backend/affiliate'));
+        $defaultBackUrl = $this->_url->getBackendUrl('*/backend/affiliate');
+        $backUrl = (string) $this->request->getParam('back_url', $defaultBackUrl);
+        if (trim($backUrl) === '') {
+            $backUrl = $defaultBackUrl;
+        }
 
         try {
             $affiliate = $this->affiliateService->saveAffiliate([
@@ -27,7 +31,10 @@ class Save extends BaseController
             ]);
 
             $this->getMessageManager()->addSuccess(__('Affiliate saved.'));
-            $this->redirect($this->getBackendUrl('*/backend/affiliate', ['id' => $affiliate->getId()]));
+            if ((int) $affiliate->getId() > 0) {
+                $backUrl = str_replace('{id}', (string) $affiliate->getId(), $backUrl);
+            }
+            $this->redirect($backUrl);
             return '';
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage() ?: __('Affiliate save failed.'));
