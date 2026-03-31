@@ -42,6 +42,23 @@
 获取记录成功,获取记录成功
 "获取记录失败: %{1}","获取记录失败: %{1}"
 "DataTable Comprehensive Test","DataTable Comprehensive Test"
+"Demo Route Layout","Demo Route Layout"
+"This entry page stays on blank layout by design. The options below change how backend demo and compatibility routes open.","This entry page stays on blank layout by design. The options below change how backend demo and compatibility routes open."
+"Attribute Inheritance Verification","Attribute Inheritance Verification"
+"Verification Page Layout","Verification Page Layout"
+"Check this focused compatibility page inside different backend layout shells without changing the verification logic itself.","Check this focused compatibility page inside different backend layout shells without changing the verification logic itself."
+"Tag verification completed.","Tag verification completed."
+"Demo Page Layout","Demo Page Layout"
+"Use these layout variants to confirm the backend-hosted demo page still behaves correctly outside the blank compatibility entry.","Use these layout variants to confirm the backend-hosted demo page still behaves correctly outside the blank compatibility entry."
+"DataTable Backend Dashboard","DataTable Backend Dashboard"
+"Backend Layouts","Backend Layouts"
+"Switch the backend shell here to validate the admin dashboard and related DataTable pages under different layout variants.","Switch the backend shell here to validate the admin dashboard and related DataTable pages under different layout variants."
+"DataTable Documentation","DataTable Documentation"
+"Documentation Layout","Documentation Layout"
+"Use the same document page in different backend shells to verify spacing, navigation, and long-form content behavior.","Use the same document page in different backend shells to verify spacing, navigation, and long-form content behavior."
+"DataTable Tag Verification","DataTable Tag Verification"
+"Verification Layout","Verification Layout"
+"Validate the tag verification report inside the same backend layout variants used by the dashboard and demo routes.","Validate the tag verification report inside the same backend layout variants used by the dashboard and demo routes."
 %{1}标签必须指定%{2}属性或位于d-table标签内！,%{1}标签必须指定%{2}属性或位于d-table标签内！
 "Demo form record loading only supports single-model records.","Demo form record loading only supports single-model records."
 "Record does not exist.","Record does not exist."
@@ -183,6 +200,7 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 列顺序已更新,列顺序已更新
 加载数据失败,加载数据失败
 "加载数据失败: %{1}","加载数据失败: %{1}"
+输入,输入
 请输入过滤器名称,请输入过滤器名称
 过滤器保存成功,过滤器保存成功
 配置保存成功,配置保存成功
@@ -231,47 +249,32 @@ d-table标签必须指定scope属性！,d-table标签必须指定scope属性！
 收起,收起
 网络错误：%{1},网络错误：%{1}
 配置已保存,配置已保存
-DataTable,DataTable
-Test,Test
-Comprehensive,Comprehensive
-"Exercise DataTable core capabilities including tables, forms, field types, multi-model queries, filters, sorting, and CRUD flows.","Exercise DataTable core capabilities including tables, forms, field types, multi-model queries, filters, sorting, and CRUD flows."
-"Feature Overview","Feature Overview"
-"Core Features","Core Features"
-"Tag registration","Tag registration"
-"Table rendering","Table rendering"
-"Form support","Form support"
-"Field type coverage","Field type coverage"
-"Multi-model queries","Multi-model queries"
-"Advanced Features","Advanced Features"
-"Attribute inheritance","Attribute inheritance"
-"Context management","Context management"
-"Auto generation","Auto generation"
-"Field validation","Field validation"
-"JavaScript integration","JavaScript integration"
-"Feature Tests","Feature Tests"
-"Use the links below to exercise each DataTable capability.","Use the links below to exercise each DataTable capability."
+"Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404.","Blank-layout backend entry for the repaired DataTable demo suite. Use this page to seed demo data, jump into direct demo routes, and verify compatibility routes that previously returned 404."
+"Back To Dashboard","Back To Dashboard"
+"Open Documentation","Open Documentation"
+"Open Tag Verification","Open Tag Verification"
+"Open Frontend Demo","Open Frontend Demo"
+"Init Demo Data","Init Demo Data"
+"Clear Demo Data","Clear Demo Data"
+"Scenario Coverage","Scenario Coverage"
+"routes available","routes available"
+"direct demos","direct demos"
+"compatibility routes","compatibility routes"
+"Model Coverage","Model Coverage"
+"demo models","demo models"
+"Documentation Coverage","Documentation Coverage"
+"documents linked from backend","documents linked from backend"
 Other,Other
-"Open Test","Open Test"
-"Basic Features","Basic Features"
-"Basic Table","Basic Table"
-Form,Form
-"Filter Search","Filter Search"
-"Sorting Pagination","Sorting Pagination"
-"Field Types","Field Types"
-"Multi-model Query","Multi-model Query"
-"Auto Generation","Auto Generation"
-Inheritance,Inheritance
-CRUD,CRUD
-"Tag Verification","Tag Verification"
-"Verify that the DataTable tag system components are wired correctly.","Verify that the DataTable tag system components are wired correctly."
-"Start Verification","Start Verification"
-"Verification Results","Verification Results"
-"Usage Examples","Usage Examples"
-"Reference snippets for common DataTable usage patterns.","Reference snippets for common DataTable usage patterns."
-"Table with Filters","Table with Filters"
-"Test Data","Test Data"
-"Available Models","Available Models"
-"Test Scopes","Test Scopes"
-Verifying...,Verifying...
-"Verification failed:","Verification failed:"
-"Run Again","Run Again"
+"These routes render working DataTable demo pages directly in the backend.","These routes render working DataTable demo pages directly in the backend."
+"These routes exist to repair legacy menu links and old bookmarks without keeping the broken standalone templates.","These routes exist to repair legacy menu links and old bookmarks without keeping the broken standalone templates."
+"Demo Model Relations","Demo Model Relations"
+"The demo service now exposes a fuller relation set so backend routes can seed user, order, product, profile, and address data together.","The demo service now exposes a fuller relation set so backend routes can seed user, order, product, profile, and address data together."
+"Verification Output","Verification Output"
+"Run the backend verification route here and inspect the JSON output for taglib regressions.","Run the backend verification route here and inspect the JSON output for taglib regressions."
+"Run Tag Verification","Run Tag Verification"
+"No verification run yet.","No verification run yet."
+"This backend route focuses on the inherited table attributes and scope generation checks that were previously hidden inside the broken legacy template set.","This backend route focuses on the inherited table attributes and scope generation checks that were previously hidden inside the broken legacy template set."
+Back,Back
+"Open Full Tag Report","Open Full Tag Report"
+"Run Verification","Run Verification"
+"Run Now","Run Now"
