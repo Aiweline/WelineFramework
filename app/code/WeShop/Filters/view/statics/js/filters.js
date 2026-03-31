@@ -39,8 +39,8 @@
                 renderProducts: null,
                 renderPagination: null,
                 
-                // 保留的 URL 参数
-                reservedParams: ['page', 'limit', 'sort', 'order'],
+                // 保留的 URL 参数（这些属于路由/分页/排序，不应被识别为筛选维度）
+                reservedParams: ['id', 'handle', 'q', 'page', 'page_size', 'limit', 'sort', 'order'],
             }, options);
             
             this.currentFilters = {};
@@ -496,8 +496,8 @@
             const container = document.querySelector(this.options.productContainer);
             if (!container) return;
             
-            const grid = container.querySelector('.products-grid');
-            const countEl = container.querySelector('.products-count');
+            const grid = container.querySelector('.products-grid, #product-grid, .category-products-grid');
+            const countEl = container.querySelector('.products-count, .filter-result-count');
             const total = (this.lastPaginationTotal !== undefined && this.lastPaginationTotal !== null) ? this.lastPaginationTotal : products.length;
             
             if (countEl) {
@@ -549,7 +549,7 @@
          * 获取产品链接基础路径（与当前页同源，用于 /product/{handle}）
          */
         getProductBasePath() {
-            const firstLink = document.querySelector('.category-products .product-card a[href*="/product/"], .product-list-container .product-card a[href*="/product/"]');
+            const firstLink = document.querySelector('.category-products .product-card a[href*="/product/"], .product-list-container .product-card a[href*="/product/"], .category-products-grid .product-card a[href*="/product/"]');
             if (firstLink && firstLink.href) {
                 try {
                     const u = new URL(firstLink.href);

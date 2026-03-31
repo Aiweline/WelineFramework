@@ -65,21 +65,21 @@ class BrandFilterProvider extends AbstractFilterProvider
         $mode = $config['config_data']['mode'] ?? $this->mode;
         
         if ($mode === self::MODE_MODULE) {
-            return $this->getModuleBrandOptions($productIds, $appliedFilters);
+            return $this->getModuleBrandOptions($categoryId, $productIds, $appliedFilters);
         }
         
-        return $this->getEavBrandOptions($productIds, $appliedFilters);
+        return $this->getEavBrandOptions($categoryId, $productIds, $appliedFilters);
     }
     
     /**
      * 获取EAV属性品牌选项
      */
-    private function getEavBrandOptions(array $productIds, array $appliedFilters): array
+    private function getEavBrandOptions(int $categoryId, array $productIds, array $appliedFilters): array
     {
         try {
             $info = $this->getProductAttributeInfo($this->attributeCode);
             if (!$info || !($info['attribute_id'] ?? 0)) {
-                return [];
+                return $this->getSearchBackedOptionsFallback($categoryId, $appliedFilters);
             }
             $brandValues = $this->getProductEavValues(
                 (int)$info['attribute_id'],
@@ -94,7 +94,8 @@ class BrandFilterProvider extends AbstractFilterProvider
             if (!empty($info['has_option'])) {
                 $optionLabels = $this->getOptionLabelsByAttributeId((int)$info['attribute_id'], array_keys($brandCounts));
                 foreach ($brandCounts as $value => $count) {
-                    $label = $optionLabels[$value] ?? $value;
+                    $labelInfo = $optionLabels[$value] ?? null;
+                    $label = $labelInfo ? ($labelInfo['value'] ?: $labelInfo['code']) : (string)$value;
                     $options[] = $this->buildOption(
                         (string)$value,
                         $label,
@@ -121,18 +122,18 @@ class BrandFilterProvider extends AbstractFilterProvider
             
             return $options;
         } catch (\Throwable $e) {
-            return [];
+            return $this->getSearchBackedOptionsFallback($categoryId, $appliedFilters);
         }
     }
     
     /**
      * 获取模块品牌选项（预留扩展）
      */
-    private function getModuleBrandOptions(array $productIds, array $appliedFilters): array
+    private function getModuleBrandOptions(int $categoryId, array $productIds, array $appliedFilters): array
     {
         // 如果有独立的品牌模块，在这里实现
         // 目前回退到EAV模式
-        return $this->getEavBrandOptions($productIds, $appliedFilters);
+        return $this->getEavBrandOptions($categoryId, $productIds, $appliedFilters);
     }
     
     /**
