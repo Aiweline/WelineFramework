@@ -114,4 +114,28 @@ test.describe('Theme frontend preview integration', () => {
 
     await livePage.close();
   });
+
+  test('explicit preview URL always renders selected theme homepage layout (regression)', async ({ page }) => {
+    const activeTheme = getActiveTheme('frontend');
+    test.skip(!activeTheme, 'No active frontend theme found in runtime info.');
+
+    await gotoThemePreview(page, {
+      themeId: activeTheme.id,
+      pageType: 'homepage',
+      previewMode: 'live',
+    }, {
+      waitUntil: 'domcontentloaded',
+      timeout: 60000,
+    });
+
+    await expect(page.locator('[data-wslot="homepage-hero"]')).toHaveCount(1);
+    await expect(page.locator('#motor-welcome-modal')).toHaveCount(1);
+    await expect(page.locator('#orphan-widgets-warning')).toHaveCount(0);
+
+    const assets = await page.evaluate(() => Array.from(document.querySelectorAll('link[href], script[src]'))
+      .map(node => node.getAttribute('href') || node.getAttribute('src') || '')
+      .filter(url => url.includes('/view/theme/') || url.includes('/layouts/')));
+    expect(assets.length).toBeGreaterThan(0);
+    expect(assets.some(url => url.includes(`frontend_theme_id=${activeTheme.id}`))).toBeTruthy();
+  });
 });

@@ -4,31 +4,30 @@ declare(strict_types=1);
 
 namespace WeShop\Customer\Controller\Backend\Customer;
 
-use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Customer\Model\Customer;
+use Weline\Admin\Controller\BaseController;
 
 /**
  * 客户详情管理后台控制器
  */
-class View extends BackendController
+class View extends BaseController
 {
     /**
      * 客户详情页
      */
-    public function index()
+    public function index(): string
     {
-        $customerId = $this->getRequest()->getParam('id');
+        $customerId = (int) $this->getRequest()->getParam('id', 0);
 
         /** @var Customer $customerModel */
-        $customerModel = ObjectManager::getInstance(Customer::class);
+        $customerModel = \Weline\Framework\Manager\ObjectManager::getInstance(Customer::class);
 
         // 获取客户信息
         $customer = $customerModel->clear()->find($customerId);
 
         if (!$customer->getId()) {
             $this->getResponse()->setHttpResponseCode(404);
-            $this->assign('error_message', __('客户不存在或已被删除'));
+            $this->assign('error_message', (string) __('Customer not found or has been deleted.'));
             return $this->fetch('customer/view');
         }
 
@@ -41,21 +40,21 @@ class View extends BackendController
     /**
      * 编辑客户
      */
-    public function edit()
+    public function edit(): string
     {
-        $customerId = $this->getRequest()->getParam('customer_id');
+        $customerId = (int) $this->getRequest()->getParam('customer_id', 0);
 
         /** @var Customer $customerModel */
-        $customerModel = ObjectManager::getInstance(Customer::class);
+        $customerModel = \Weline\Framework\Manager\ObjectManager::getInstance(Customer::class);
 
         // 获取客户信息
         $customer = $customerModel->clear()->find($customerId);
 
         if (!$customer->getId()) {
-            return $this->json([
+            return $this->fetchJson([
                 'status' => 404,
-                'message' => __('客户不存在'),
-                'title' => __('错误')
+                'message' => (string) __('Customer not found.'),
+                'title' => (string) __('Error')
             ]);
         }
 
@@ -66,10 +65,10 @@ class View extends BackendController
             $customer->setData($data);
             $customer->save();
 
-            return $this->json([
+            return $this->fetchJson([
                 'status' => 200,
-                'message' => __('客户信息已更新'),
-                'title' => __('成功')
+                'message' => (string) __('Customer information has been updated.'),
+                'title' => (string) __('Success')
             ]);
         }
 
@@ -82,89 +81,89 @@ class View extends BackendController
     /**
      * 禁用客户
      */
-    public function disable()
+    public function disable(): string
     {
-        $customerId = $this->getRequest()->getParam('customer_id');
+        $customerId = (int) $this->getRequest()->getParam('customer_id', 0);
 
         /** @var Customer $customerModel */
-        $customerModel = ObjectManager::getInstance(Customer::class);
+        $customerModel = \Weline\Framework\Manager\ObjectManager::getInstance(Customer::class);
 
         $customer = $customerModel->clear()->find($customerId);
 
         if (!$customer->getId()) {
-            return $this->json([
+            return $this->fetchJson([
                 'status' => 404,
-                'message' => __('客户不存在'),
-                'title' => __('错误')
+                'message' => (string) __('Customer not found.'),
+                'title' => (string) __('Error')
             ]);
         }
 
         $customer->setData('is_active', 0);
         $customer->save();
 
-        return $this->json([
+        return $this->fetchJson([
             'status' => 200,
-            'message' => __('客户已禁用'),
-            'title' => __('成功')
+            'message' => (string) __('Customer has been disabled.'),
+            'title' => (string) __('Success')
         ]);
     }
 
     /**
      * 启用客户
      */
-    public function enable()
+    public function enable(): string
     {
-        $customerId = $this->getRequest()->getParam('customer_id');
+        $customerId = (int) $this->getRequest()->getParam('customer_id', 0);
 
         /** @var Customer $customerModel */
-        $customerModel = ObjectManager::getInstance(Customer::class);
+        $customerModel = \Weline\Framework\Manager\ObjectManager::getInstance(Customer::class);
 
         $customer = $customerModel->clear()->find($customerId);
 
         if (!$customer->getId()) {
-            return $this->json([
+            return $this->fetchJson([
                 'status' => 404,
-                'message' => __('客户不存在'),
-                'title' => __('错误')
+                'message' => (string) __('Customer not found.'),
+                'title' => (string) __('Error')
             ]);
         }
 
         $customer->setData('is_active', 1);
         $customer->save();
 
-        return $this->json([
+        return $this->fetchJson([
             'status' => 200,
-            'message' => __('客户已启用'),
-            'title' => __('成功')
+            'message' => (string) __('Customer has been enabled.'),
+            'title' => (string) __('Success')
         ]);
     }
 
     /**
      * 删除客户
      */
-    public function delete()
+    public function delete(): string
     {
-        $customerId = $this->getRequest()->getParam('customer_id');
+        $customerId = (int) $this->getRequest()->getParam('customer_id', 0);
 
         /** @var Customer $customerModel */
-        $customerModel = ObjectManager::getInstance(Customer::class);
+        $customerModel = \Weline\Framework\Manager\ObjectManager::getInstance(Customer::class);
 
         $customer = $customerModel->clear()->find($customerId);
 
         if (!$customer->getId()) {
-            return $this->json([
+            return $this->fetchJson([
                 'status' => 404,
-                'message' => __('客户不存在'),
-                'title' => __('错误')
+                'message' => (string) __('Customer not found.'),
+                'title' => (string) __('Error')
             ]);
         }
 
         $customer->delete();
 
-        return $this->json([
+        return $this->fetchJson([
             'status' => 200,
-            'message' => __('客户已删除'),
-            'title' => __('成功')
+            'message' => (string) __('Customer has been deleted.'),
+            'title' => (string) __('Success')
         ]);
     }
 }

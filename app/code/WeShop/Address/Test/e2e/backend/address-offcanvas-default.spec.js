@@ -1,7 +1,7 @@
 // @weline-e2e-runtime fallback
 // @weline-e2e-transport direct
 // @ts-check
-const { test, expect, gotoBackend, loginAsAdmin, buildModuleBackendRoute } = require('../../../../../../../tests/e2e/framework');
+const { test, expect, gotoBackend, loginAsAdmin, buildModuleBackendRoute, getRuntimeInfo } = require('../../../../../../../tests/e2e/framework');
 
 const MODULE = 'WeShop_Address';
 const CUSTOMER_ID = '1';
@@ -24,7 +24,21 @@ function makePayload(tag, isDefault) {
 }
 
 async function openIndex(page) {
-  await gotoBackend(page, buildModuleBackendRoute(MODULE, 'address'), { timeout: 90000, settleMs: 1000 });
+  // buildModuleBackendRoute returns 'address/backend/address'; gotoBackend prepends @backend literally.
+  // Use direct URL construction with the real prefix to avoid @backend not being substituted.
+  const runtime = getRuntimeInfo();
+  const backendPrefix = runtime.routes.backend;
+  const route = buildModuleBackendRoute(MODULE, 'address');
+  const targetUrl = `${runtime.proxy.origin}/${backendPrefix}/${route}`;
+  await page.goto(targetUrl, { timeout: 90000, waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(2000);
+
+  // Check for PHP fatal before proceeding
+  const bodyText = await page.locator('body').innerText().catch(() => '');
+  const hasFatal = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Class .* not found/i.test(bodyText);
+  if (hasFatal) {
+    throw new Error('PHP fatal on address list page: ' + bodyText.substring(0, 200));
+  }
   await expect(page.locator('#address-table')).toBeVisible({ timeout: 20000 });
 }
 
@@ -121,6 +135,8 @@ test.describe('WeShop Address backend offcanvas/default', () => {
     const payload = makePayload(`${Date.now()}-${Math.floor(Math.random() * 1000)}`, true);
     await openOffcanvas(page);
     await fillAndSubmit(page, payload);
+    // Wait for offcanvas close animation to start before asserting hidden
+    await page.waitForTimeout(1000);
     await expect(page.locator('.offcanvas.show')).toBeHidden({ timeout: 15000 });
   });
 
@@ -132,7 +148,20 @@ test.describe('WeShop Address backend offcanvas/default', () => {
     await saveByRequest(page, defaultPayload);
     await saveByRequest(page, targetPayload);
 
-    await openIndex(page);
+    // openIndex navigates to the list; reload to force DataTable to re-fetch with new rows
+    const runtime = getRuntimeInfo();
+    const backendPrefix = runtime.routes.backend;
+    const route = buildModuleBackendRoute(MODULE, 'address');
+    const targetUrl = `${runtime.proxy.origin}/${backendPrefix}/${route}`;
+    await page.goto(targetUrl, { timeout: 90000, waitUntil: 'domcontentloaded' });
+    const bodyText = await page.locator('body').innerText().catch(() => '');
+    const hasFatal = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Class .* not found/i.test(bodyText);
+    if (hasFatal) {
+      throw new Error('PHP fatal on address list page: ' + bodyText.substring(0, 200));
+    }
+    // Wait for DataTable to finish loading (serverSide AJAX completes)
+    await expect(page.locator('#address-table')).toBeVisible({ timeout: 20000 });
+    await page.waitForTimeout(3000);
     const targetRow = page.locator('#address-table tbody tr', { hasText: targetPayload.contact_name }).first();
     await expect(targetRow).toBeVisible({ timeout: 20000 });
 

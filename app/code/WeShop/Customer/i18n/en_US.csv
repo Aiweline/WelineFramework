@@ -1,12 +1,12 @@
-﻿客户管理,客户管理
-客户不存在或已被删除,"Customer does not exist or has been deleted"
-客户不存在,"Customer not found"
-错误,错误
-客户信息已更新,"Customer information has been updated"
-成功,Success
-客户已禁用,客户已禁用
-客户已启用,客户已启用
-客户已删除,客户已删除
+﻿"Customer Management","Customer Management"
+"Customer not found or has been deleted.","Customer not found or has been deleted."
+"Customer not found.","Customer not found."
+Error,Error
+"Customer information has been updated.","Customer information has been updated."
+Success,Success
+"Customer has been disabled.","Customer has been disabled."
+"Customer has been enabled.","Customer has been enabled."
+"Customer has been deleted.","Customer has been deleted."
 "The login challenge token is missing.","The login challenge token is missing."
 "The login challenge is invalid or has expired.","The login challenge is invalid or has expired."
 "Two-Factor Verification","Two-Factor Verification"
@@ -133,6 +133,7 @@ ID,ID
 请输入客户名称或邮箱回车搜索,"Enter customer name or email to search"
 "店铺 > 客户管理 > 客户详情","Store > Customer Management > Customer Details"
 客户详情,"Customer Details"
+客户不存在,"Customer not found"
 该客户可能已被删除或不存在,"This customer may have been deleted or does not exist"
 返回客户列表,"Return to Customer List"
 账户状态,"Account Status"

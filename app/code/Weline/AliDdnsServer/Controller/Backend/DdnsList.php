@@ -32,8 +32,9 @@ class DdnsList extends \Weline\Framework\App\Controller\BackendController
     #[Acl('Weline_AliDdnsServer::ddnslist', '动态域名列表', '', '动态域名解析列表','Weline_AliDdnsServer::manager')]
     function index()
     {
-        if($search= $this->request->getGet('search')){
-            $this->ddnsDomains->where('concat (host_name,domain) like "%'.$search.'%"');
+        $search = $this->request->getGet('search');
+        if ($search !== '' && $search !== null) {
+            $this->ddnsDomains->where('concat(host_name,domain)', "%{$search}%", 'like');
         }
         $items = $this->ddnsDomains->pagination()->select()->fetchArray();
         $this->assign('items',$items);

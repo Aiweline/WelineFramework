@@ -77,6 +77,30 @@ function ensureLegacyTplDirs() {
 }
 
 ensureLegacyTplDirs();
+
+// 动态端口支持：proxy-server.js 端口被占用时自动换端口，端口号写入 .active-proxy-port 文件
+const ACTIVE_PORT_FILE = path.join(__dirname, '.active-proxy-port');
+function resolveProxyOrigin(runtimeInfo) {
+  try {
+    if (fs.existsSync(ACTIVE_PORT_FILE)) {
+      const content = fs.readFileSync(ACTIVE_PORT_FILE, 'utf8').trim();
+      const match = content.match(/^PORT=(\d+)$/);
+      if (match) {
+        const dynamicPort = match[1];
+        const parsed = new URL(runtimeInfo.proxy.origin);
+        const dynamicOrigin = `${parsed.protocol}//${parsed.hostname}:${dynamicPort}`;
+        console.log(`[playwright] using dynamic proxy port from ${ACTIVE_PORT_FILE}: ${dynamicPort}`);
+        return dynamicOrigin;
+      }
+    }
+  } catch (error) {
+    console.warn(`[playwright] failed to read dynamic proxy port: ${error.message}`);
+  }
+  return runtimeInfo.proxy.origin;
+}
+
+const runtimeInfo = getRuntimeInfo({ refresh: true });
+const baseURL = resolveProxyOrigin(runtimeInfo);
 const moduleFilter = process.env.MODULE_FILTER || process.argv.find(arg => arg.startsWith('--module='))?.split('=')[1];
 const explicitTestFiles = (() => {
   const raw = process.env.PLAYWRIGHT_TEST_FILES;
@@ -96,8 +120,6 @@ const explicitTestFiles = (() => {
     return null;
   }
 })();
-const runtimeInfo = getRuntimeInfo({ refresh: true });
-const baseURL = runtimeInfo.proxy.origin;
 const configuredWorkers = Number(process.env.PLAYWRIGHT_WORKERS || 1);
 // 后台 loginAsAdmin 会跑 PHP session bootstrap + 多次导航，30s 级超时必炸（beforeEach 被整体掐断）。
 // 默认 120s；若环境显式设得更短，则至少抬到 90s，避免本地/CI 误配 PLAYWRIGHT_TEST_TIMEOUT。
@@ -147,12 +169,25 @@ try {
 
       if (moduleFilter) {
         const moduleTests = result.modules[moduleFilter];
-        if (moduleTests && moduleTests.test_files) {
+        if (moduleTests && moduleTests.test_files && moduleTests.test_files.length > 0) {
           filesToUse = moduleTests.test_files;
           console.log(`[playwright] module filter "${moduleFilter}" matched ${moduleTests.test_files.length} files`);
-      } else {
-        console.warn(`[playwright] module "${moduleFilter}" has no collected test files`);
-        filesToUse = [];
+        } else {
+          // Module has no dedicated test/e2e dir; fall back to shared specs matching module name
+          // Match module name (e.g. WeShop_Catalog) in paths like:
+          //   WeShop_Catalog-smoke-backend.spec.js  (underscore in filename)
+          //   /WeShop_Catalog-smoke-backend.spec.js (underscore after dir sep)
+          // Only escape dots, keep underscores as literal chars in the module name
+          const escapedModule = moduleFilter.replace(/\./g, '[/\\\\]');
+          const regex = new RegExp(`(?:^|[/\\\\])${escapedModule}(?:$|[-./\\\\])`, 'i');
+          const matchedShared = result.all_test_files.filter(f => regex.test(f));
+          if (matchedShared.length > 0) {
+            filesToUse = matchedShared;
+            console.log(`[playwright] module "${moduleFilter}" no dedicated tests, matched ${matchedShared.length} shared specs`);
+          } else {
+            console.warn(`[playwright] module "${moduleFilter}" has no collected test files`);
+            filesToUse = [];
+          }
         }
       }
 
@@ -209,12 +244,12 @@ module.exports = defineConfig({
           },
         ],
       ],
-  // 默认复用已存在的 e2e 代理（3999），避免 CI/并行任务下「端口已被占用」导致 Playwright 直接异常退出。
+  // 默认复用已存在的 e2e 代理；如果端口被占用，proxy-server.js 会自动换到下一个可用端口。
   // 需要强制独占启动新代理时设置：PLAYWRIGHT_FORCE_NEW_PROXY=1
   webServer: process.env.PLAYWRIGHT_DISABLE_PROXY === '1' ? undefined : {
     command: 'node framework/proxy-server.js',
     cwd: __dirname,
-    // 仅表示「代理已监听」；上游可达性见响应 JSON（proxy-server.js），避免 503 卡死 webServer 等待。
+    // baseURL 已动态解析（从 .active-proxy-port 读取实际端口），所以这里直接用。
     url: `${baseURL}/.well-known/weline-e2e/health`,
     reuseExistingServer: process.env.PLAYWRIGHT_FORCE_NEW_PROXY !== '1',
     timeout: Number(process.env.PLAYWRIGHT_WEBSERVER_TIMEOUT_MS || 180000),

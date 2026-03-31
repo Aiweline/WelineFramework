@@ -11,6 +11,11 @@ use Weline\Taglib\TaglibInterface;
 
 class Pixel implements TaglibInterface
 {
+    private static function escapeScriptBreakout(mixed $pixelCode): string
+    {
+        $code = (string)($pixelCode ?? '');
+        return str_ireplace('</script>', '<\/script>', $code);
+    }
 
     /**
      * @inheritDoc
@@ -112,7 +117,7 @@ class Pixel implements TaglibInterface
                 $output .= '$__event = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Weline\\Framework\\Event\\EventsManager::class);' . "\n";
                 $output .= '$__event->dispatch(\'Weline_Visitor::taglib_pixel\', $__data);' . "\n";
                 $output .= 'if (!$__pixel_enabled || empty($__data->getData(\'enable\'))) { return \'\'; }' . "\n";
-                $output .= '$__tp->assign(\'pixel_code\', $__data->getData(\'pixel_code\'));' . "\n";
+                $output .= '$__tp->assign(\'pixel_code\', \\Weline\\Visitor\\Taglib\\Pixel::escapeScriptBreakout($__data->getData(\'pixel_code\')));' . "\n";
                 $output .= '$__js = $__tp->fetch(\'Weline_Visitor::taglib/js/pixel.phtml\');' . "\n";
                 $output .= 'echo str_replace(\'{:name}\', htmlspecialchars($__pixel_name, ENT_QUOTES, \'UTF-8\'), $__js);' . "\n";
                 $output .= '?>';
@@ -147,7 +152,7 @@ class Pixel implements TaglibInterface
                 $output .= '$__event = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Weline\\Framework\\Event\\EventsManager::class);' . "\n";
                 $output .= '$__event->dispatch(\'Weline_Visitor::taglib_pixel\', $__data);' . "\n";
                 $output .= 'if (!' . $enabledCheck . ' || empty($__data->getData(\'enable\'))) { return \'\'; }' . "\n";
-                $output .= '$__tp->assign(\'pixel_code\', $__data->getData(\'pixel_code\'));' . "\n";
+                $output .= '$__tp->assign(\'pixel_code\', \\Weline\\Visitor\\Taglib\\Pixel::escapeScriptBreakout($__data->getData(\'pixel_code\')));' . "\n";
                 $output .= '$__js = $__tp->fetch(\'Weline_Visitor::taglib/js/pixel.phtml\');' . "\n";
                 $output .= 'echo str_replace(\'{:name}\', htmlspecialchars($__pixel_name, ENT_QUOTES, \'UTF-8\'), $__js);' . "\n";
                 $output .= '?>';
@@ -168,7 +173,7 @@ class Pixel implements TaglibInterface
                 return '';
             }
             
-            $tp->assign('pixel_code', $data->getData('pixel_code'));
+            $tp->assign('pixel_code', self::escapeScriptBreakout($data->getData('pixel_code')));
             $js = $tp->fetch('Weline_Visitor::taglib/js/pixel.phtml');
             // 确保 $name 不为 null，避免 str_replace 的弃用警告
             $name = $name ?? '';

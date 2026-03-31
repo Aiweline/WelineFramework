@@ -99,22 +99,43 @@ await gotoThemePreview(page, { pageType: 'homepage' });
 ## 运行测试
 
 ```bash
-cd tests/e2e
-npx playwright test
+php bin/w e2e:run
 ```
 
 只跑某个用例：
 
 ```bash
-cd tests/e2e
-npx playwright test app/code/Weline/Theme/test/e2e/frontend/theme-override.spec.js --project=chromium --workers=1
+php bin/w e2e:run specs/backend/WeShop_Cart-smoke-backend.spec.js --project=chromium --workers=1
 ```
 
 列出当前收集结果：
 
 ```bash
-cd tests/e2e
-npx playwright test --list
+php bin/w e2e:run --list
+```
+
+按模块：
+
+```bash
+php bin/w e2e:run --module=WeShop_Cart --project=chromium
+```
+
+按用例标题关键词：
+
+```bash
+php bin/w e2e:run --module=WeShop_Cart --case="remove item" --project=chromium
+```
+
+按用例 ID（推荐）：
+
+```bash
+php bin/w e2e:run --module=WeShop_Cart --case-id=BACKEND-SMOKE-001 --project=chromium
+```
+
+列出可用模块：
+
+```bash
+php bin/w e2e:run --list-modules
 ```
 
 ## 编写模块用例
@@ -132,14 +153,24 @@ app/code/Vendor/Module/
 示例：
 
 ```js
-const { test, expect, gotoBackend, loginAsAdmin } = require('../../../../../../../tests/e2e/framework');
+const { test, expect, gotoBackend, loginAsAdmin, moduleDescribe, moduleCase } = require('../../../../../../../tests/e2e/framework');
 
-test('admin page renders', async ({ page }) => {
+const MODULE = 'Vendor_Module';
+
+moduleDescribe(test, MODULE, 'backend smoke', () => {
+  moduleCase(test, { module: MODULE, id: 'BACKEND-SMOKE-001' }, 'admin page renders', async ({ page }) => {
   await loginAsAdmin(page);
   await gotoBackend(page, 'system/cache');
   await expect(page.locator('body')).toContainText('Cache');
+  });
 });
 ```
+
+推荐规则：
+
+- `moduleDescribe(test, 'Vendor_Module', 'suite title', () => {})`
+- `moduleCase(test, { module: 'Vendor_Module', id: 'CASE-ID' }, 'case title', async () => {})`
+- 标题会自动带上 `[module:Vendor_Module] [case:CASE-ID]`，命令可用 `--module` / `--case-id` 精准筛选
 
 ## 故障排查
 

@@ -25,6 +25,10 @@ use Weline\Framework\Runtime\SchedulerSystem;
 #[Acl('GuoLaiRen_PageBuilder::ai_site_agent', 'AI 建站工作台', 'mdi-robot-outline', 'PageBuilder AI 建站会话与流水线', 'Weline_Backend::page_builder_group')]
 class AiSiteAgent extends BaseController
 {
+    private const PARAMS_PUBLIC_ID = ['public_id'];
+    private const PARAMS_OPERATION_SSE = ['public_id', 'execution_token'];
+    private const PARAMS_REGENERATE = ['public_id', 'page_type'];
+
     private readonly AiSiteAgentSessionService $sessionService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
     private readonly AiSiteProfileGenerationService $profileGenerationService;
@@ -265,11 +269,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         $error = '';
         $scopePatch = $this->getRequestJsonObject('scope_patch', $error);
@@ -293,11 +297,11 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
         if ($adminId <= 0 || $publicId === '' || $pageType === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_REGENERATE);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         return $this->fetchJson($this->startOperation(
             $session,
@@ -315,11 +319,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
         if (empty($state['can_publish'])) {
@@ -343,11 +347,11 @@ class AiSiteAgent extends BaseController
         $requestedPageId = (int)$this->getRequestBodyValue('preview_page_id', 0);
         $requestedPageType = \trim((string)$this->getRequestBodyValue('preview_page_type', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
@@ -394,11 +398,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
 
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
@@ -439,13 +443,13 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
         if ($adminId <= 0 || $publicId === '') {
-            $sse->sendError(__('参数无效'));
+            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
             $sse->complete(['success' => false]);
             return;
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $sse->sendError(__('会话不存在或无权访问'));
+            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID, 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -478,13 +482,13 @@ class AiSiteAgent extends BaseController
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
         if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
-            $sse->sendError((string)__('参数无效'));
+            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_OPERATION_SSE);
             $sse->complete(['success' => false]);
             return;
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $sse->sendError((string)__('会话不存在或无权访问'));
+            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_OPERATION_SSE, 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -493,7 +497,7 @@ class AiSiteAgent extends BaseController
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
         if ($operation === '' || (string)($activeOperation['execution_token'] ?? '') !== $executionToken) {
-            $sse->sendError((string)__('未找到待执行的工作区操作'));
+            $this->sendSseContractError($sse, 'OPERATION_NOT_FOUND', (string)__('未找到待执行的工作区操作'), self::PARAMS_OPERATION_SSE, 404);
             $sse->complete(['success' => false]);
             return;
         }
@@ -1054,11 +1058,11 @@ class AiSiteAgent extends BaseController
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
         }
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
         }
         $jsonKey = $merge ? 'scope_patch' : 'scope';
         $error = '';
@@ -1080,6 +1084,39 @@ class AiSiteAgent extends BaseController
     private function buildOperationStreamUrl(string $publicId, string $executionToken): string
     {
         return $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId, 'execution_token' => $executionToken]);
+    }
+
+    /**
+     * @param list<string> $requiredParams
+     * @param array<string, mixed> $extra
+     */
+    private function jsonError(string $code, string $message, array $requiredParams = [], array $extra = []): string
+    {
+        return $this->fetchJson(\array_replace([
+            'success' => false,
+            'code' => $code,
+            'message' => $message,
+            'required_params' => $requiredParams,
+        ], $extra));
+    }
+
+    /**
+     * @param list<string> $requiredParams
+     */
+    private function sendSseContractError(
+        SseWriter $sse,
+        string $code,
+        string $message,
+        array $requiredParams = [],
+        int $httpCode = 400
+    ): void {
+        $sse->sendEvent('error', [
+            'success' => false,
+            'code' => $code,
+            'message' => $message,
+            'required_params' => $requiredParams,
+            'http_code' => $httpCode,
+        ]);
     }
 
     /**

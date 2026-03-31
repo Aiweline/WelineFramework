@@ -4,19 +4,18 @@ declare(strict_types=1);
 
 namespace WeShop\Customer\Controller\Backend\Customer;
 
-use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Manager\ObjectManager;
 use WeShop\Customer\Model\Customer;
+use Weline\Admin\Controller\BaseController;
 
 /**
  * 客户管理后台控制器
  */
-class Index extends BackendController
+class Index extends BaseController
 {
-    public function index()
+    public function index(): string
     {
         /** @var Customer $customerModel */
-        $customerModel = ObjectManager::getInstance(Customer::class);
+        $customerModel = \Weline\Framework\Manager\ObjectManager::getInstance(Customer::class);
 
         // 获取客户统计数据
         $totalCount = $customerModel->clear()->count();
@@ -33,12 +32,13 @@ class Index extends BackendController
 
         // 获取客户列表
         $search = trim((string) $this->getRequest()->getGet('search', ''));
-        $page = (int) $this->getRequest()->getGet('page', 1);
+        $page = max(1, (int) $this->getRequest()->getGet('page', 1));
         $pageSize = 20;
 
         $query = $customerModel->clear()->select();
 
-        if ($search) {
+        if ($search !== '') {
+            $search = htmlspecialchars($search, ENT_QUOTES, 'UTF-8');
             $query = $query->where(Customer::schema_fields_EMAIL, '%' . $search . '%', 'LIKE')
                 ->where(Customer::schema_fields_FIRST_NAME, '%' . $search . '%', 'LIKE', 'OR')
                 ->where(Customer::schema_fields_LAST_NAME, '%' . $search . '%', 'LIKE', 'OR');
@@ -50,7 +50,7 @@ class Index extends BackendController
 
         // 获取分页HTML
         $paginationQuery = $customerModel->clear()->select();
-        if ($search) {
+        if ($search !== '') {
             $paginationQuery = $paginationQuery->where(Customer::schema_fields_EMAIL, '%' . $search . '%', 'LIKE')
                 ->where(Customer::schema_fields_FIRST_NAME, '%' . $search . '%', 'LIKE', 'OR')
                 ->where(Customer::schema_fields_LAST_NAME, '%' . $search . '%', 'LIKE', 'OR');
@@ -60,7 +60,7 @@ class Index extends BackendController
             ->fetch()
             ->getPaginationHtml();
 
-        $this->assign('title', __('客户管理'));
+        $this->assign('title', (string) __('Customer Management'));
         $this->assign('total_count', $totalCount);
         $this->assign('active_count', $activeCount);
         $this->assign('inactive_count', $inactiveCount);
