@@ -22,6 +22,13 @@ class Add extends FrontendController
 
     public function index(): string
     {
+        if (!$this->isPostRequest()) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('Invalid request method.'),
+            ]);
+        }
+
         $customerId = (int) ($this->customerContext->getUserId() ?? 0);
         if ($customerId <= 0) {
             if ($this->shouldReturnJson()) {
@@ -73,7 +80,12 @@ class Add extends FrontendController
 
     protected function shouldReturnJson(): bool
     {
-        return $this->request->isAjax() || strtoupper((string) $this->request->getMethod()) === 'POST';
+        return $this->request->isAjax();
+    }
+
+    protected function isPostRequest(): bool
+    {
+        return strtoupper((string) $this->request->getMethod()) === 'POST';
     }
 
     protected function readProductId(): int
