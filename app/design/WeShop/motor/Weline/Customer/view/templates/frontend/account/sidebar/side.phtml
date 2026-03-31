@@ -1,0 +1,101 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Customer\Model\Customer $user */
+$avatar = $user->getAvatar();
+$username = $user->getUsername();
+$email = $user->getEmail();
+$avatarInitial = strtoupper(mb_substr($username, 0, 1));
+?>
+<div class="motor-account-sidebar">
+    <header class="motor-account-sidebar__header">
+        <div class="motor-account-sidebar__avatar">
+            <?php if ($avatar): ?>
+                <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                <div class="motor-account-sidebar__avatar-fallback" style="display:none"><?= htmlspecialchars($avatarInitial) ?></div>
+            <?php else: ?>
+                <div class="motor-account-sidebar__avatar-fallback"><?= htmlspecialchars($avatarInitial) ?></div>
+            <?php endif; ?>
+        </div>
+
+        <div class="motor-account-sidebar__meta">
+            <div class="motor-account-sidebar__badge">
+                <i class="fa fa-motorcycle"></i>
+                <lang>Motor 会员</lang>
+            </div>
+            <h3 class="motor-account-sidebar__username"><?= htmlspecialchars($username) ?></h3>
+            <?php if ($email): ?>
+                <p class="motor-account-sidebar__email"><?= htmlspecialchars($email) ?></p>
+            <?php endif; ?>
+            <p class="motor-account-sidebar__subtext"><lang>资料、密码与登录状态都可以在这里快速管理。</lang></p>
+        </div>
+    </header>
+
+    <nav class="motor-account-sidebar__nav">
+        <a class="motor-account-sidebar__link motor-account-sidebar__link--active" href="#overview" data-section="overview">
+            <span class="motor-account-sidebar__link-label">
+                <i class="fa fa-dashboard"></i>
+                <span class="motor-account-sidebar__link-text">
+                    <strong><lang>总览</lang></strong>
+                    <span><lang>快速查看账号状态</lang></span>
+                </span>
+            </span>
+            <span class="motor-account-sidebar__link-arrow">
+                <i class="fa fa-angle-right"></i>
+            </span>
+        </a>
+
+        <a class="motor-account-sidebar__link" href="#profile" data-section="profile">
+            <span class="motor-account-sidebar__link-label">
+                <i class="fa fa-user"></i>
+                <span class="motor-account-sidebar__link-text">
+                    <strong><lang>个人资料</lang></strong>
+                    <span><lang>头像与基础资料</lang></span>
+                </span>
+            </span>
+            <span class="motor-account-sidebar__link-arrow">
+                <i class="fa fa-angle-right"></i>
+            </span>
+        </a>
+
+        <a class="motor-account-sidebar__link" href="#security" data-section="security">
+            <span class="motor-account-sidebar__link-label">
+                <i class="fa fa-lock"></i>
+                <span class="motor-account-sidebar__link-text">
+                    <strong><lang>安全设置</lang></strong>
+                    <span><lang>修改登录密码</lang></span>
+                </span>
+            </span>
+            <span class="motor-account-sidebar__link-arrow">
+                <i class="fa fa-angle-right"></i>
+            </span>
+        </a>
+
+        <a class="motor-account-sidebar__link" href="#login-info" data-section="login-info">
+            <span class="motor-account-sidebar__link-label">
+                <i class="fa fa-clock-o"></i>
+                <span class="motor-account-sidebar__link-text">
+                    <strong><lang>登录信息</lang></strong>
+                    <span><lang>查看最近会话状态</lang></span>
+                </span>
+            </span>
+            <span class="motor-account-sidebar__link-arrow">
+                <i class="fa fa-angle-right"></i>
+            </span>
+        </a>
+
+        <hook>account.sidebar</hook>
+
+        <a class="motor-account-sidebar__link motor-account-sidebar__link--logout" href="/customer/account/logout">
+            <span class="motor-account-sidebar__link-label">
+                <i class="fa fa-sign-out"></i>
+                <span class="motor-account-sidebar__link-text">
+                    <strong><lang>退出登录</lang></strong>
+                    <span><lang>离开当前账户</lang></span>
+                </span>
+            </span>
+            <span class="motor-account-sidebar__link-arrow">
+                <i class="fa fa-angle-right"></i>
+            </span>
+        </a>
+    </nav>
+</div>
