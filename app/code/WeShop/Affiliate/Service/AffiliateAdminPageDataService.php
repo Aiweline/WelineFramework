@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace WeShop\Affiliate\Service;
 
 use WeShop\Affiliate\Model\Affiliate;
+use Weline\Framework\Manager\ObjectManager;
 
 class AffiliateAdminPageDataService
 {
@@ -22,13 +23,54 @@ class AffiliateAdminPageDataService
         $result = $this->affiliateService->getAffiliateList($page, $pageSize, $sanitizedFilters);
         $editingRecord = $editingId ? $this->affiliateService->getAffiliateRecord($editingId) : null;
         $statusOptions = $this->affiliateService->getStatusOptions();
+        $summary = $this->getSummary();
 
         return [
             'affiliateRecords' => array_map(fn (array $record): array => $this->normalizeRecord($record, $statusOptions), $result['items'] ?? []),
             'filters' => $sanitizedFilters,
             'pagination' => $result['pagination'] ?? [],
             'statusOptions' => $statusOptions,
+            'summary' => $summary,
             'editingRecord' => $editingRecord ? $this->normalizeModel($editingRecord, $statusOptions) : $this->getEmptyRecord($statusOptions),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function getSummary(): array
+    {
+        /** @var Affiliate $affiliate */
+        $affiliate = ObjectManager::getInstance(Affiliate::class);
+
+        $totalResult = $affiliate->clear()->select()->fetch();
+        $total = is_array($totalResult) ? count($totalResult) : 0;
+
+        $activeResult = $affiliate->clear()
+            ->where(Affiliate::schema_fields_STATUS, AffiliateService::STATUS_ACTIVE)
+            ->select()
+            ->fetchArray();
+        $active = is_array($activeResult) ? count($activeResult) : 0;
+
+        $disabledResult = $affiliate->clear()
+            ->where(Affiliate::schema_fields_STATUS, AffiliateService::STATUS_DISABLED)
+            ->select()
+            ->fetchArray();
+        $disabled = is_array($disabledResult) ? count($disabledResult) : 0;
+
+        $commissionResult = $affiliate->clear()
+            ->select('SUM(' . Affiliate::schema_fields_TOTAL_COMMISSION . ') as total_commission')
+            ->fetchArray();
+        $totalCommission = 0.0;
+        if (is_array($commissionResult) && isset($commissionResult[0]['total_commission'])) {
+            $totalCommission = (float) $commissionResult[0]['total_commission'];
+        }
+
+        return [
+            'total' => $total,
+            'active' => $active,
+            'disabled' => $disabled,
+            'total_commission' => $totalCommission,
         ];
     }
 
@@ -58,6 +100,8 @@ class AffiliateAdminPageDataService
     private function normalizeModel(Affiliate $affiliate, array $statusOptions): array
     {
         $status = (string) ($affiliate->getData(Affiliate::schema_fields_STATUS) ?? '');
+        $referralCode = (string) ($affiliate->getData(Affiliate::schema_fields_REFERRAL_CODE) ?? '');
+        $referralLink = $referralCode !== '' ? $this->affiliateService->getReferralBasePath() . '?ref=' . rawurlencode($referralCode) : '';
 
         $totalCommission = (float) ($affiliate->getData(Affiliate::schema_fields_TOTAL_COMMISSION) ?? 0.0);
         $paidCommission = (float) ($affiliate->getData(Affiliate::schema_fields_PAID_COMMISSION) ?? 0.0);
@@ -66,13 +110,16 @@ class AffiliateAdminPageDataService
         return [
             'affiliate_id' => (int) $affiliate->getId(),
             'customer_id' => (int) ($affiliate->getData(Affiliate::schema_fields_CUSTOMER_ID) ?? 0),
-            'referral_code' => (string) ($affiliate->getData(Affiliate::schema_fields_REFERRAL_CODE) ?? ''),
+            'referral_code' => $referralCode,
+            'referral_link' => $referralLink,
             'commission_rate' => (float) ($affiliate->getData(Affiliate::schema_fields_COMMISSION_RATE) ?? 0.0),
             'total_commission' => $totalCommission,
             'paid_commission' => $paidCommission,
             'pending_commission' => $pendingCommission,
             'status' => $status,
             'status_label' => $statusOptions[$status] ?? $status,
+            'created_at' => (string) ($affiliate->getData(Affiliate::schema_fields_CREATED_AT) ?? ''),
+            'updated_at' => (string) ($affiliate->getData(Affiliate::schema_fields_UPDATED_AT) ?? ''),
         ];
     }
 
