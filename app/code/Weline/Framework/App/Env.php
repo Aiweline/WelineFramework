@@ -420,15 +420,24 @@ class Env extends DataObject
             }
             return $module_env[$name] ?? null;
         }
-        $module = Env::getInstance()->getModuleInfo($module);
+        $moduleInfo = Env::getInstance()->getModuleInfo($module);
+        if (!is_array($moduleInfo)) {
+            return empty($name) ? [] : null;
+        }
+        $moduleBasePath = $moduleInfo['base_path'] ?? null;
+        $moduleName = $moduleInfo['name'] ?? $module;
+        if (!is_string($moduleBasePath) || '' === $moduleBasePath) {
+            self::$module_configs[$moduleName] = [];
+            return empty($name) ? [] : null;
+        }
         $local_env = [];
-        if (is_file($module['base_path'] . 'etc' . DS . 'env.php')) {
-            $local_env = include $module['base_path'] . 'etc' . DS . 'env.php';
+        if (is_file($moduleBasePath . 'etc' . DS . 'env.php')) {
+            $local_env = include $moduleBasePath . 'etc' . DS . 'env.php';
             if (!is_array($local_env)) {
                 return [];
             }
         }
-        self::$module_configs[$module['name']] = $local_env;
+        self::$module_configs[$moduleName] = $local_env;
         if (empty($name)) {
             return $local_env;
         }

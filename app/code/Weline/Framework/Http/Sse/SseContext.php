@@ -78,6 +78,22 @@ class SseContext
     {
         self::$writeCallback = $callback;
     }
+
+    /**
+     * 获取当前写入回调（供 WLS Fiber 上下文快照恢复使用）
+     */
+    public static function getWriteCallback(): mixed
+    {
+        return self::$writeCallback;
+    }
+
+    /**
+     * 清理当前写入回调，避免不同请求/Fiber 之间串用
+     */
+    public static function clearWriteCallback(): void
+    {
+        self::$writeCallback = null;
+    }
     
     /**
      * 启用 SSE 模式
@@ -112,10 +128,14 @@ class SseContext
     }
     
     /**
-     * 写入数据到连接
-     * 
+     * 写入数据到连接（WLS 优化版）
+     *
+     * 在 WLS 模式下，如果 socket 缓冲区已满，立即返回 false 让调用者重试。
+     * 调用者应该在循环中再次调用 write()，而不是立即等待。
+     * 这样可以避免阻塞 Worker，让 Worker 处理其他请求后再重试。
+     *
      * @param string $data 要写入的数据
-     * @return bool 是否成功
+     * @return bool 是否成功写入（false 表示缓冲区满需要重试）
      */
     public static function write(string $data): bool
     {
@@ -124,46 +144,33 @@ class SseContext
             (self::$writeCallback)($data);
             return true;
         }
-        
+
         // WLS 模式：直接写入连接
         if (self::$connection !== null && \is_resource(self::$connection)) {
-            $totalWritten = 0;
-            $dataLen = \strlen($data);
-            $maxRetries = 10;
-            $retries = 0;
-            
-            // 循环写入确保完整发送
-            while ($totalWritten < $dataLen && $retries < $maxRetries) {
-                $remaining = \substr($data, $totalWritten);
-                $result = @\fwrite(self::$connection, $remaining);
-                
-                if ($result === false) {
-                    return false;  // 写入失败，不 fallback 到 echo
-                }
-                
-                if ($result === 0) {
-                    // 暂时无法写入，等待一下
-                    SchedulerSystem::usleep(1000);
-                    $retries++;
-                    continue;
-                }
-                
-                $totalWritten += $result;
-                $retries = 0;  // 重置重试计数
+            $result = @\fwrite(self::$connection, $data);
+
+            if ($result === false) {
+                return false;  // 写入失败
             }
-            
+
+            if ($result === 0) {
+                // 缓冲区满，立即返回 false 让调用者在下一轮重试
+                // 不要在 Fiber 内部等待，以免阻塞 Worker
+                return false;
+            }
+
             // 刷新 socket 缓冲区
             @\fflush(self::$connection);
-            return $totalWritten >= $dataLen;
+            return $result > 0;
         }
-        
+
         // FPM/CLI 模式：使用 PHP 标准输出
         echo $data;
         if (\ob_get_level() > 0) {
             \ob_flush();
         }
         \flush();
-        
+
         return true;
     }
     
@@ -176,14 +183,80 @@ class SseContext
             // 非 WLS 模式，检查 PHP 连接状态
             return \connection_status() === CONNECTION_NORMAL;
         }
-        
+
         if (!\is_resource(self::$connection)) {
             return false;
         }
-        
+
         // 检查连接是否已关闭
         $meta = @\stream_get_meta_data(self::$connection);
         return $meta !== false && !($meta['eof'] ?? false) && !($meta['timed_out'] ?? false);
+    }
+
+    /**
+     * 非阻塞写入（协作式）
+     *
+     * 在 WLS 模式下，如果 socket 缓冲区已满，立即返回 false 而非阻塞等待。
+     * 调用方可以使用 SchedulerSystem::yield() 让出控制权后重试。
+     *
+     * @param string $data 要写入的数据
+     * @return bool 是否成功写入（false 表示缓冲区满，需要让步后重试）
+     */
+    public static function writeNonBlocking(string $data): bool
+    {
+        if (self::$writeCallback !== null) {
+            (self::$writeCallback)($data);
+            return true;
+        }
+
+        if (self::$connection !== null && \is_resource(self::$connection)) {
+            $result = @\fwrite(self::$connection, $data);
+
+            if ($result === false) {
+                return false;
+            }
+
+            if ($result === 0) {
+                // 缓冲区满，需要让步后重试
+                return false;
+            }
+
+            @\fflush(self::$connection);
+            return $result > 0;
+        }
+
+        // FPM/CLI 模式：直接输出
+        echo $data;
+        if (\ob_get_level() > 0) {
+            \ob_flush();
+        }
+        \flush();
+
+        return true;
+    }
+
+    /**
+     * 检查连接是否可写（不阻塞）
+     *
+     * @return bool 是否可写
+     */
+    public static function isWritable(): bool
+    {
+        if (self::$connection === null || !\is_resource(self::$connection)) {
+            return false;
+        }
+
+        $meta = @\stream_get_meta_data(self::$connection);
+        if ($meta === false) {
+            return false;
+        }
+
+        // EOF 或超时都视为不可写
+        if (($meta['eof'] ?? false) || ($meta['timed_out'] ?? false)) {
+            return false;
+        }
+
+        return true;
     }
     
     /**
