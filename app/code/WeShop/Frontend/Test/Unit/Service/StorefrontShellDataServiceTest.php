@@ -10,18 +10,19 @@ use WeShop\Cart\Service\CartService;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Frontend\Service\StorefrontShellDataService;
 use WeShop\Store\Model\Store;
+use WeShop\Store\Service\StoreContextService;
 
 class StorefrontShellDataServiceTest extends TestCase
 {
     public function testBuildReturnsConfiguredStoreAndCartSummaryForLoggedInCustomer(): void
     {
-        $store = $this->createMock(Store::class);
-        $store->expects($this->once())
-            ->method('getEnabledStores')
-            ->willReturn([[
+        $storeContextService = $this->createMock(StoreContextService::class);
+        $storeContextService->expects($this->once())
+            ->method('getCurrentStore')
+            ->willReturn([
                 Store::schema_fields_NAME => 'Global Hub',
                 Store::schema_fields_CURRENCY => 'eur',
-            ]]);
+            ]);
 
         $customerContext = $this->createMock(CustomerContextInterface::class);
         $customerContext->expects($this->once())
@@ -43,7 +44,7 @@ class StorefrontShellDataServiceTest extends TestCase
                 ],
             ]);
 
-        $service = new StorefrontShellDataService($store, $customerContext, $cartService);
+        $service = new StorefrontShellDataService($storeContextService, $customerContext, $cartService);
         $result = $service->build();
 
         $this->assertSame('Global Hub', $result['store_name']);
@@ -54,10 +55,10 @@ class StorefrontShellDataServiceTest extends TestCase
 
     public function testBuildFallsBackToDefaultsForGuestWithoutEnabledStore(): void
     {
-        $store = $this->createMock(Store::class);
-        $store->expects($this->once())
-            ->method('getEnabledStores')
-            ->willReturn([]);
+        $storeContextService = $this->createMock(StoreContextService::class);
+        $storeContextService->expects($this->once())
+            ->method('getCurrentStore')
+            ->willReturn(null);
 
         $customerContext = $this->createMock(CustomerContextInterface::class);
         $customerContext->expects($this->once())
@@ -67,7 +68,7 @@ class StorefrontShellDataServiceTest extends TestCase
         $cartService = $this->createMock(CartService::class);
         $cartService->expects($this->never())->method('getCartItems');
 
-        $service = new StorefrontShellDataService($store, $customerContext, $cartService);
+        $service = new StorefrontShellDataService($storeContextService, $customerContext, $cartService);
         $result = $service->build();
 
         $this->assertSame('WeShop', $result['store_name']);
