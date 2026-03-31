@@ -41,10 +41,7 @@ class ApiControllerInitBeforeTest extends TestCase
         ObjectManager::setInstance(Request::class, $request);
 
         $apiSecurityService = $this->createMock(ApiSecurityService::class);
-        $apiSecurityService->expects($this->once())
-            ->method('isPublicApi')
-            ->with($request)
-            ->willReturn(false);
+        $apiSecurityService->expects($this->never())->method('isPublicApi');
 
         $legacyTokenService = $this->createMock(TokenService::class);
         $legacyTokenService->expects($this->once())
@@ -214,6 +211,62 @@ class ApiControllerInitBeforeTest extends TestCase
             'Challenge',
             'postVerify',
             'WeShop\\Auth\\Api\\Rest\\V1\\Auth\\Challenge'
+        );
+        ObjectManager::setInstance(Request::class, $request);
+
+        $apiSecurityService = $this->createMock(ApiSecurityService::class);
+        $apiSecurityService->expects($this->never())->method('isPublicApi');
+
+        $observer = new ApiControllerInitBefore(
+            $request,
+            $apiSecurityService,
+            $this->createMock(IpWhitelistService::class),
+            $this->createMock(UserAgentRestrictionService::class),
+            $this->createMock(TokenService::class),
+            new PublicApiAuthRouteMatcher()
+        );
+
+        $event = new Event(['data' => []]);
+        $observer->execute($event);
+
+        $this->assertTrue(true);
+    }
+
+    public function testExecuteAllowsPublicFrontendApiWithoutAclByControllerClass(): void
+    {
+        $request = $this->createRequestMock(
+            'api/rest/v1/weshop/checkout/methods',
+            'Checkout',
+            'postMethods',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Checkout'
+        );
+        ObjectManager::setInstance(Request::class, $request);
+
+        $apiSecurityService = $this->createMock(ApiSecurityService::class);
+        $apiSecurityService->expects($this->never())->method('isPublicApi');
+
+        $observer = new ApiControllerInitBefore(
+            $request,
+            $apiSecurityService,
+            $this->createMock(IpWhitelistService::class),
+            $this->createMock(UserAgentRestrictionService::class),
+            $this->createMock(TokenService::class),
+            new PublicApiAuthRouteMatcher()
+        );
+
+        $event = new Event(['data' => []]);
+        $observer->execute($event);
+
+        $this->assertTrue(true);
+    }
+
+    public function testExecuteAllowsGuestCartApiWithoutTokenWhenMatcherMarksItPublic(): void
+    {
+        $request = $this->createRequestMock(
+            'api/rest/v1/weshop/cart/mini-items',
+            'Cart',
+            'getMiniItems',
+            'WeShop\\ApiBridge\\Api\\Rest\\V1\\Weshop\\Cart'
         );
         ObjectManager::setInstance(Request::class, $request);
 
