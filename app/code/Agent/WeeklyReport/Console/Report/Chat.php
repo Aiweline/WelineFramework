@@ -13,7 +13,7 @@ use Agent\CursorBase\Service\CursorAiService;
 use Weline\Framework\Console\CommandAbstract;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Manager\ObjectManager;
-
+use Weline\Framework\Runtime\SchedulerSystem;
 /**
  * 周报交互式命令
  * 
@@ -124,7 +124,7 @@ class Chat extends CommandAbstract
             $input = $this->readInput();
 
             if ($input === false || $input === null) {
-                usleep(100000);
+                SchedulerSyste::yieldDelay(100);
                 continue;
             }
 
