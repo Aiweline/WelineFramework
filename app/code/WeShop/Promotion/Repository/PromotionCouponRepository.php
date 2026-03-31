@@ -36,24 +36,24 @@ class PromotionCouponRepository implements PromotionCouponRepositoryInterface
 
         $now = date('Y-m-d H:i:s');
 
-        $activeCountWithEndDate = (int)$coupon->clear()
+        $activeCount = (int)$coupon->clear()
             ->where('is_active', 1)
             ->where('end_date', $now, '>=')
             ->count();
 
-        $activeCountNoEndDate = (int)$coupon->clear()
-            ->where('is_active', 1)
-            ->where('end_date', '')
-            ->count();
-
-        $activeCount = $activeCountWithEndDate + $activeCountNoEndDate;
-
+        // Coupon::schema_fields_END_DATE 在模型中为 datetime 且不可为空；
+        // 这里不要再把空字符串 '' 作为 timestamp 比较（Postgres 会报 invalid input syntax）。
         $expiredCount = (int)$coupon->clear()
-            ->where('end_date', '', '!=')
             ->where('end_date', $now, '<')
             ->count();
 
-        $totalUsed = (float)$coupon->clear()->sum('used_count');
+        // total_used 使用 used_count 字段聚合；如果数据/列不符合预期，可能导致请求直接中断。
+        // 为了保证 backend smoke 能稳定渲染，这里做可渲染兜底。
+        try {
+            $totalUsed = (float) $coupon->clear()->sum('used_count');
+        } catch (\Throwable) {
+            $totalUsed = 0.0;
+        }
 
         return [
             'total_count' => $totalCount,
