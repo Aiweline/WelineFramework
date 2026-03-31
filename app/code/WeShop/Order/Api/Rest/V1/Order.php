@@ -133,7 +133,19 @@ class Order extends FrontendRestController
 
     protected function fetchJson(array $data): string
     {
-        return (string) ($this->fetch($data, self::fetch_JSON) ?: '');
+        $response = $this->request->getResponse();
+        $httpCode = match ((int) ($data['code'] ?? 200)) {
+            401 => 401,
+            404 => 404,
+            403 => 403,
+            default => 200,
+        };
+        $response->setHttpResponseCode($httpCode);
+        $response->setHeader('Content-Type', 'application/json; charset=utf-8');
+
+        $json = \json_encode($data, JSON_UNESCAPED_UNICODE);
+
+        return $json === false ? '{}' : $json;
     }
 
     private function getCustomerContext(): CustomerContextInterface
