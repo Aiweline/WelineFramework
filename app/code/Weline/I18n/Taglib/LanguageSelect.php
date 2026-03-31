@@ -474,9 +474,88 @@ HTML;
     var searchInput = document.getElementById(componentId + '_search');
     var fieldInput = document.getElementById(fieldId);
     var inputsContainer = isMultiple ? document.getElementById(fieldId + '_inputs') : null;
+    var floatingApi = null;
 
     if (!wrapper || !fieldInput || !tags) {
         return;
+    }
+
+    if (!window.WelineSmartDropdown) {
+        window.WelineSmartDropdown = (function () {
+            function compute(anchorRect, panelRect, cfg) {
+                var margin = cfg.margin || 8;
+                var gap = cfg.gap || 4;
+                var viewportWidth = window.innerWidth || document.documentElement.clientWidth || 1200;
+                var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 900;
+                var panelWidth = Math.max(cfg.minWidth || 0, panelRect.width || anchorRect.width);
+                var panelHeight = panelRect.height || 0;
+                var spaceBottom = viewportHeight - anchorRect.bottom - margin;
+                var spaceTop = anchorRect.top - margin;
+                var openUp = spaceBottom < Math.min(cfg.preferredHeight || 260, panelHeight) && spaceTop > spaceBottom;
+                var top = openUp ? (anchorRect.top - panelHeight - gap) : (anchorRect.bottom + gap);
+
+                if (top < margin) {
+                    top = margin;
+                }
+                if (top + panelHeight > viewportHeight - margin) {
+                    top = Math.max(margin, viewportHeight - margin - panelHeight);
+                }
+
+                var left = anchorRect.left;
+                if (left + panelWidth > viewportWidth - margin) {
+                    left = Math.max(margin, viewportWidth - margin - panelWidth);
+                }
+                if (left < margin) {
+                    left = margin;
+                }
+
+                return { top: top, left: left, width: panelWidth, maxHeight: Math.max(160, viewportHeight - margin * 2), openUp: openUp };
+            }
+
+            return {
+                mount: function (anchor, panel, config) {
+                    if (!anchor || !panel) {
+                        return null;
+                    }
+                    var cfg = config || {};
+                    if (!panel.__welineOriginalParent) {
+                        panel.__welineOriginalParent = panel.parentNode || null;
+                        panel.__welineOriginalNext = panel.nextSibling || null;
+                    }
+                    panel.style.position = 'fixed';
+                    panel.style.zIndex = String(cfg.zIndex || 4000);
+                    panel.style.left = '0px';
+                    panel.style.top = '0px';
+                    panel.style.minWidth = Math.max(cfg.minWidth || 0, Math.round(anchor.getBoundingClientRect().width)) + 'px';
+                    panel.style.maxWidth = 'calc(100vw - 16px)';
+                    document.body.appendChild(panel);
+                    panel.style.display = 'block';
+
+                    var rect = anchor.getBoundingClientRect();
+                    var panelRect = panel.getBoundingClientRect();
+                    var next = compute(rect, panelRect, cfg);
+                    panel.style.left = Math.round(next.left) + 'px';
+                    panel.style.top = Math.round(next.top) + 'px';
+                    panel.style.width = Math.round(next.width) + 'px';
+                    panel.style.maxHeight = Math.round(next.maxHeight) + 'px';
+                    panel.setAttribute('data-placement', next.openUp ? 'top' : 'bottom');
+                    return next;
+                },
+                unmount: function (panel) {
+                    if (!panel) {
+                        return;
+                    }
+                    panel.style.display = 'none';
+                    if (panel.__welineOriginalParent) {
+                        if (panel.__welineOriginalNext && panel.__welineOriginalNext.parentNode === panel.__welineOriginalParent) {
+                            panel.__welineOriginalParent.insertBefore(panel, panel.__welineOriginalNext);
+                        } else {
+                            panel.__welineOriginalParent.appendChild(panel);
+                        }
+                    }
+                }
+            };
+        })();
     }
 
     function escapeHtml(text) {
@@ -777,7 +856,12 @@ HTML;
         if (displayOnly || !dropdown) {
             return;
         }
-        dropdown.style.display = 'block';
+        floatingApi = window.WelineSmartDropdown.mount(trigger, dropdown, {
+            minWidth: trigger ? trigger.offsetWidth : 0,
+            preferredHeight: 320,
+            zIndex: 4200,
+            gap: 4
+        });
         renderList(searchInput ? searchInput.value : '');
         if (searchInput) {
             window.setTimeout(function () {
@@ -786,21 +870,38 @@ HTML;
         }
         document.addEventListener('click', handleOutsideClick);
         document.addEventListener('keydown', handleEscape);
+        window.addEventListener('resize', handleViewportChange);
+        window.addEventListener('scroll', handleViewportChange, true);
     }
 
     function closeDropdown() {
         if (!dropdown) {
             return;
         }
-        dropdown.style.display = 'none';
+        window.WelineSmartDropdown.unmount(dropdown);
+        floatingApi = null;
         document.removeEventListener('click', handleOutsideClick);
         document.removeEventListener('keydown', handleEscape);
+        window.removeEventListener('resize', handleViewportChange);
+        window.removeEventListener('scroll', handleViewportChange, true);
     }
 
     function handleOutsideClick(event) {
-        if (!wrapper.contains(event.target)) {
+        if (!wrapper.contains(event.target) && (!dropdown || !dropdown.contains(event.target))) {
             closeDropdown();
         }
+    }
+
+    function handleViewportChange() {
+        if (!dropdown || dropdown.style.display !== 'block') {
+            return;
+        }
+        floatingApi = window.WelineSmartDropdown.mount(trigger, dropdown, {
+            minWidth: trigger ? trigger.offsetWidth : 0,
+            preferredHeight: 320,
+            zIndex: 4200,
+            gap: 4
+        });
     }
 
     function handleEscape(event) {
