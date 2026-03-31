@@ -11,6 +11,16 @@ async function expectNoRuntimeError(page) {
 
 test.describe('WeShop customer public auth routes', () => {
   test('public login, register, forgot-password, and challenge routes stay reachable', async ({ page }) => {
+    await gotoFrontend(page, '/weshop/customer/account/login', {
+      waitUntil: 'domcontentloaded',
+      timeout: 30000,
+      settleMs: 800,
+    });
+
+    await expect(page).toHaveURL(/weshop\/customer\/account\/login|customer\/account\/login/i, { timeout: 15000 });
+    await expect(page.locator('body')).toBeVisible({ timeout: 15000 });
+    await expectNoRuntimeError(page);
+
     await gotoFrontend(page, '/customer/account/login', {
       waitUntil: 'domcontentloaded',
       timeout: 30000,
@@ -50,5 +60,26 @@ test.describe('WeShop customer public auth routes', () => {
     await expect(page.locator('body')).toBeVisible({ timeout: 15000 });
     await expectNoRuntimeError(page);
     expect(/customer\/account\/login|customer\/account\/challenge/i.test(page.url())).toBeTruthy();
+  });
+
+  test('account auth pages expose stable host container and slot', async ({ page }) => {
+    const paths = [
+      '/customer/account/login',
+      '/customer/account/register',
+      '/customer/account/forgot-password',
+    ];
+
+    for (const path of paths) {
+      await gotoFrontend(page, path, {
+        waitUntil: 'domcontentloaded',
+        timeout: 30000,
+        settleMs: 800,
+      });
+
+      await expect(page.locator('body')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('[data-layout="account_auth_content"]')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('[data-wslot="account-auth-main"]')).toHaveCount(1, { timeout: 15000 });
+      await expectNoRuntimeError(page);
+    }
   });
 });

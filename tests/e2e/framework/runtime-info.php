@@ -237,7 +237,7 @@ function readJsonFile(string $path): ?array
     return null;
 }
 
-function isReachableEndpoint(string $host, int $port): bool
+function isReachableEndpoint(string $host, int $port, float $timeoutSeconds = 2.0): bool
 {
     if ($port <= 0) {
         return false;
@@ -245,13 +245,30 @@ function isReachableEndpoint(string $host, int $port): bool
 
     $errno = 0;
     $error = '';
-    $socket = @\fsockopen(normalizeHost($host), $port, $errno, $error, 0.75);
+    $socket = @\fsockopen(normalizeHost($host), $port, $errno, $error, $timeoutSeconds);
     if (!\is_resource($socket)) {
         return false;
     }
 
     \fclose($socket);
     return true;
+}
+
+/**
+ * Windows / busy-loop 场景下单次探测可能误判；短重试降低 E2E worker 与 PHP 子进程之间的抖动。
+ */
+function isReachableEndpointWithRetry(string $host, int $port, int $attempts = 5, float $timeoutSeconds = 2.0): bool
+{
+    for ($i = 0; $i < $attempts; $i++) {
+        if (isReachableEndpoint($host, $port, $timeoutSeconds)) {
+            return true;
+        }
+        if ($i < $attempts - 1) {
+            \usleep(200000);
+        }
+    }
+
+    return false;
 }
 
 function resolveInstancePort(array $instance): int
@@ -413,6 +430,15 @@ $instance = findPreferredInstance($rootDir, $instanceName) ?? findLatestUsableIn
 $config = findPreferredConfig($rootDir, $instanceName) ?? findLatestConfig($rootDir);
 
 $overrideOrigin = \trim((string)(\getenv('PLAYWRIGHT_TARGET_ORIGIN') ?: ''));
+if ($overrideOrigin === '') {
+    $e2eTargetFile = $rootDir . DIRECTORY_SEPARATOR . 'tests' . DIRECTORY_SEPARATOR . 'e2e' . DIRECTORY_SEPARATOR . '.weline-e2e-target-origin';
+    if (\is_file($e2eTargetFile)) {
+        $fromFile = \trim((string)@\file_get_contents($e2eTargetFile));
+        if ($fromFile !== '') {
+            $overrideOrigin = $fromFile;
+        }
+    }
+}
 $targetSource = 'fallback';
 $targetScheme = 'http';
 $targetHost = '127.0.0.1';
@@ -430,7 +456,7 @@ if ($overrideOrigin !== '') {
         $targetHost = normalizeHost((string)$parsed['host']);
         $targetPort = (int)($parsed['port'] ?? ($targetScheme === 'https' ? 443 : 80));
         $targetSource = 'override';
-        $targetReachable = isReachableEndpoint($targetHost, $targetPort);
+        $targetReachable = isReachableEndpointWithRetry($targetHost, $targetPort);
     }
 } else {
     $instanceScheme = $instance && !empty($instance['ssl_enabled']) ? 'https' : 'http';
@@ -439,18 +465,20 @@ if ($overrideOrigin !== '') {
     if ($instancePort <= 0) {
         $instancePort = $instanceScheme === 'https' ? 443 : 80;
     }
-    $instanceReachable = $instance !== null && isReachableEndpoint($instanceHost, $instancePort);
+    $instanceReachable = $instance !== null && isReachableEndpointWithRetry($instanceHost, $instancePort);
 
     $configTarget = \is_array($config) ? resolveConfigTarget($config) : null;
-    $configReachable = $configTarget !== null && isReachableEndpoint($configTarget['host'], $configTarget['port']);
-    $cliReachable = isReachableEndpoint($cliHost, $cliPort);
+    $configReachable = $configTarget !== null && isReachableEndpointWithRetry($configTarget['host'], $configTarget['port']);
+    $cliReachable = isReachableEndpointWithRetry($cliHost, $cliPort);
 
-    if ($instance !== null && $instanceReachable) {
+    // 当 var/server/instances 下存在可用实例元数据时，始终使用该实例推导的 origin。
+    // 避免因端口探测瞬时失败而回落到 cli_server，导致 Playwright 主进程与 worker 之间 target_origin 不一致（https:443 ↔ http:9981）。
+    if ($instance !== null) {
         $targetScheme = $instanceScheme;
         $targetHost = $instanceHost;
         $targetPort = $instancePort;
-        $targetSource = 'wls_instance';
-        $targetReachable = true;
+        $targetSource = $instanceReachable ? 'wls_instance' : 'wls_instance_unreachable';
+        $targetReachable = $instanceReachable;
     } elseif ($configTarget !== null && $configReachable) {
         $targetScheme = $configTarget['scheme'];
         $targetHost = $configTarget['host'];
@@ -469,12 +497,6 @@ if ($overrideOrigin !== '') {
         $targetPort = $configTarget['port'];
         $targetSource = 'wls_config_unreachable';
         $targetReachable = false;
-    } elseif ($instance !== null) {
-        $targetScheme = $instanceScheme;
-        $targetHost = $instanceHost;
-        $targetPort = $instancePort;
-        $targetSource = 'wls_instance_unreachable';
-        $targetReachable = false;
     } else {
         $targetScheme = $cliScheme;
         $targetHost = $cliHost;
@@ -482,6 +504,15 @@ if ($overrideOrigin !== '') {
         $targetSource = 'cli_server';
         $targetReachable = false;
     }
+}
+
+// Primary discovery points at WLS/HTTPS that is not listening (common local dev): use reachable PHP cli_server from app/etc/env.php if up.
+if (!$targetReachable && isReachableEndpoint($cliHost, $cliPort)) {
+    $targetScheme = $cliScheme;
+    $targetHost = $cliHost;
+    $targetPort = $cliPort;
+    $targetSource = 'cli_server_fallback';
+    $targetReachable = true;
 }
 
 $areaRoutes = (array)(($env['router'] ?? [])['area_routes'] ?? []);
@@ -500,6 +531,38 @@ if ($proxyScheme === '') {
 }
 
 $themes = readActiveThemes($env);
+
+/**
+ * 从 app/etc/modules.php 收集各模块前台/后台路由键（与模块 register 生成结果一致）。
+ *
+ * @return array<string, array{router: string, backend_router: string}>
+ */
+function collectModuleRouters(string $rootDir): array
+{
+    $modulesFile = $rootDir . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'modules.php';
+    if (!\is_file($modulesFile)) {
+        return [];
+    }
+    /** @var mixed $list */
+    $list = require $modulesFile;
+    if (!\is_array($list)) {
+        return [];
+    }
+    $out = [];
+    foreach ($list as $name => $meta) {
+        if (!\is_string($name) || $name === '' || !\is_array($meta)) {
+            continue;
+        }
+        $out[$name] = [
+            'router' => (string)($meta['router'] ?? ''),
+            'backend_router' => (string)($meta['backend_router'] ?? ''),
+        ];
+    }
+
+    return $out;
+}
+
+$moduleRouters = collectModuleRouters($rootDir);
 
 $data = [
     'generated_at' => \date('c'),
@@ -539,6 +602,9 @@ $data = [
         'key_path' => $proxyKeyPath,
     ],
     'themes' => $themes,
+    'modules' => [
+        'routers' => $moduleRouters,
+    ],
 ];
 
 echo \json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
