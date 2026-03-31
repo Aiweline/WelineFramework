@@ -18,7 +18,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_public_id', columns: ['public_id'], comment: '对外令牌')]
 #[Index(name: 'idx_admin_user', columns: ['admin_user_id'], comment: '后台用户')]
 #[Index(name: 'idx_website', columns: ['website_id'], comment: '站点')]
-#[Index(name: 'idx_theme', columns: ['weline_theme_id'], comment: 'Weline 主题层(含虚拟部件)')]
+#[Index(name: 'idx_virtual_theme', columns: ['virtual_theme_id'], comment: 'PageBuilder 虚拟主题')]
 class AiSiteAgentSession extends Model
 {
     public const schema_table = 'guolairen_page_builder_ai_site_agent_session';
@@ -50,8 +50,8 @@ class AiSiteAgentSession extends Model
     #[Col(type: 'int', nullable: false, default: 0, comment: '关联站点ID，0 表示未绑定')]
     public const schema_fields_WEBSITE_ID = 'website_id';
 
-    #[Col(type: 'int', nullable: false, default: 0, comment: 'Weline 主题层 ID（虚拟部件挂载在该主题下），0 表示未创建')]
-    public const schema_fields_WELINE_THEME_ID = 'weline_theme_id';
+    #[Col(type: 'int', nullable: false, default: 0, comment: 'PageBuilder 虚拟主题 ID，0 表示未创建')]
+    public const schema_fields_VIRTUAL_THEME_ID = 'virtual_theme_id';
 
     #[Col(type: 'varchar', length: 64, nullable: false, default: self::STAGE_BRIEF, comment: '当前流程阶段')]
     public const schema_fields_STAGE = 'stage';
@@ -88,9 +88,14 @@ class AiSiteAgentSession extends Model
         return (int) ($this->getData(self::schema_fields_WEBSITE_ID) ?: 0);
     }
 
-    public function getWelineThemeId(): int
+    public function getVirtualThemeId(): int
     {
-        return (int) ($this->getData(self::schema_fields_WELINE_THEME_ID) ?: 0);
+        return (int) ($this->getData(self::schema_fields_VIRTUAL_THEME_ID) ?: 0);
+    }
+
+    public function setVirtualThemeId(int $themeId): static
+    {
+        return $this->setData(self::schema_fields_VIRTUAL_THEME_ID, $themeId);
     }
 
     public function getStage(): string

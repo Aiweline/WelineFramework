@@ -42,10 +42,10 @@ $pageTreeApiUrl = $this->getBackendUrl('*/backend/visual/api/page_tree/get');
             $page = $this->getData('page');
             $layoutCode = 'default';
             if ($page) {
-                $layoutCode = $page->getData('layout') ?: (in_array($page->getData('type'), [\GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST]) ? 'blog' : 'default');
+                $layoutCode = $page->getData('layout') ?: (in_array($page->getData('type'), [\GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_CATEGORY, \GuoLaiRen\PageBuilder\Model\Page::TYPE_BLOG_LIST], true) ? 'blog' : 'default');
             }
             $this->assign('layout_code', $layoutCode);
-            $this->assign('visual_weline_theme_id', (int) ($this->getData('visual_weline_theme_id') ?: 0));
+            $this->assign('visual_weline_theme_id', (int)($this->getData('visual_weline_theme_id') ?: 0));
             ?>
             <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
         </div>
@@ -53,8 +53,63 @@ $pageTreeApiUrl = $this->getBackendUrl('*/backend/visual/api/page_tree/get');
 </div>
 <script>
 (function() {
-    var pageTreeApiUrl = <?= json_encode($pageTreeApiUrl, JSON_UNESCAPED_SLASHES) ?>;
-    function loadPageTree(pageId) {
+    var pageTreeApiUrl = <?= json_encode($pageTreeApiUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+
+    function escapeHtml(value) {
+        return String(value || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    function updateTreeSelection(identity) {
+        var container = document.getElementById('pageTreeContainer');
+        if (!container) return;
+        container.querySelectorAll('.ve-page-tree-item').forEach(function(el) {
+            if (window.visualIsVirtualMode) {
+                el.classList.toggle('active', (el.getAttribute('data-page-type') || '') === String(identity || ''));
+                return;
+            }
+            var pageId = parseInt(el.getAttribute('data-page-id'), 10);
+            el.classList.toggle('active', pageId === parseInt(identity, 10));
+        });
+    }
+
+    function renderVirtualPageTree() {
+        var container = document.getElementById('pageTreeContainer');
+        if (!container) return;
+        var treeData = window.visualPageTreeData || {};
+        var pageTypes = Object.keys(treeData);
+        if (!pageTypes.length) {
+            container.innerHTML = '<div class="text-muted small"><?= __("暂无页面") ?></div>';
+            return;
+        }
+        var activePageType = typeof window.getCurrentVisualPageType === 'function'
+            ? window.getCurrentVisualPageType()
+            : (window.visualPageType || '');
+        var html = '';
+        pageTypes.forEach(function(pageType) {
+            var pageInfo = treeData[pageType] || {};
+            var title = pageInfo.title || pageInfo.handle || pageType;
+            var activeClass = activePageType === pageType ? ' active' : '';
+            html += '<a href="#" class="ve-page-tree-item' + activeClass + '" data-page-type="' + escapeHtml(pageType) + '">' + escapeHtml(title) + '</a>';
+        });
+        container.innerHTML = html;
+        container.querySelectorAll('.ve-page-tree-item').forEach(function(el) {
+            el.addEventListener('click', function(event) {
+                event.preventDefault();
+                var pageType = this.getAttribute('data-page-type') || '';
+                if (!pageType) return;
+                if (typeof window.switchVirtualVisualPage === 'function') {
+                    window.switchVirtualVisualPage(pageType);
+                }
+            });
+        });
+    }
+
+    function loadRealPageTree(pageId) {
         var container = document.getElementById('pageTreeContainer');
         if (!container) return;
         container.innerHTML = '<div class="text-muted small"><?= __("加载中...") ?></div>';
@@ -62,8 +117,10 @@ $pageTreeApiUrl = $this->getBackendUrl('*/backend/visual/api/page_tree/get');
             container.innerHTML = '<div class="text-muted small"><?= __("请先打开页面") ?></div>';
             return;
         }
-        fetch(pageTreeApiUrl + '?page_id=' + encodeURIComponent(String(pageId)), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function(r) { return r.json(); })
+        fetch(pageTreeApiUrl + '?page_id=' + encodeURIComponent(String(pageId)), {
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function(response) { return response.json(); })
             .then(function(data) {
                 if (!data.success || !data.list || !data.list.length) {
                     container.innerHTML = '<div class="text-muted small"><?= __("暂无子页面") ?></div>';
@@ -71,23 +128,29 @@ $pageTreeApiUrl = $this->getBackendUrl('*/backend/visual/api/page_tree/get');
                 }
                 var html = '';
                 for (var i = 0; i < data.list.length; i++) {
-                    var p = data.list[i];
-                    var title = (p.title || p.handle || ('#' + p.page_id)).replace(/</g, '&lt;');
-                    var currentId = (window.visualPageId || window.pageId || 0);
-                    var activeClass = (currentId && parseInt(p.page_id, 10) === parseInt(currentId, 10)) ? ' active' : '';
-                    html += '<a href="#" class="ve-page-tree-item' + activeClass + '" data-page-id="' + parseInt(p.page_id, 10) + '">' + title + '</a>';
+                    var page = data.list[i];
+                    var title = escapeHtml(page.title || page.handle || ('#' + page.page_id));
+                    var currentId = window.visualPageId || window.pageId || 0;
+                    var activeClass = currentId && parseInt(page.page_id, 10) === parseInt(currentId, 10) ? ' active' : '';
+                    html += '<a href="#" class="ve-page-tree-item' + activeClass + '" data-page-id="' + parseInt(page.page_id, 10) + '">' + title + '</a>';
                 }
                 container.innerHTML = html;
                 container.querySelectorAll('.ve-page-tree-item').forEach(function(el) {
-                    el.addEventListener('click', function(e) {
-                        e.preventDefault();
+                    el.addEventListener('click', function(event) {
+                        event.preventDefault();
                         var id = parseInt(this.getAttribute('data-page-id'), 10);
                         if (!id) return;
                         window.visualPageId = id;
-                        if (typeof window.pageId !== 'undefined') window.pageId = id;
-                        if (typeof window.refreshPreview === 'function') window.refreshPreview();
-                        container.querySelectorAll('.ve-page-tree-item').forEach(function(x) { x.classList.remove('active'); });
-                        this.classList.add('active');
+                        if (typeof window.pageId !== 'undefined') {
+                            window.pageId = id;
+                        }
+                        if (typeof window.refreshPreview === 'function') {
+                            window.refreshPreview();
+                        }
+                        if (typeof window.refreshComponentPanelForCurrentPageType === 'function') {
+                            window.refreshComponentPanelForCurrentPageType();
+                        }
+                        updateTreeSelection(id);
                     });
                 });
             })
@@ -95,26 +158,37 @@ $pageTreeApiUrl = $this->getBackendUrl('*/backend/visual/api/page_tree/get');
                 container.innerHTML = '<div class="text-danger small"><?= __("加载失败") ?></div>';
             });
     }
+
     window.visualEditorLoadPageTree = function(pageId) {
-        loadPageTree(pageId || window.visualPageId || window.pageId || 0);
+        if (window.visualIsVirtualMode) {
+            renderVirtualPageTree();
+            return;
+        }
+        loadRealPageTree(pageId || window.visualPageId || window.pageId || 0);
     };
-    window.visualEditorSelectPageInTree = function(pageId) {
-        var container = document.getElementById('pageTreeContainer');
-        if (!container) return;
-        container.querySelectorAll('.ve-page-tree-item').forEach(function(el) {
-            var id = parseInt(el.getAttribute('data-page-id'), 10);
-            if (id === parseInt(pageId, 10)) el.classList.add('active');
-            else el.classList.remove('active');
-        });
+
+    window.visualEditorSelectPageInTree = function(identity) {
+        updateTreeSelection(identity);
     };
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function() {
-            var pid = window.visualPageId || window.pageId || 0;
-            if (pid) loadPageTree(pid);
+            if (window.visualIsVirtualMode) {
+                renderVirtualPageTree();
+                return;
+            }
+            var pageId = window.visualPageId || window.pageId || 0;
+            if (pageId) {
+                loadRealPageTree(pageId);
+            }
         });
+    } else if (window.visualIsVirtualMode) {
+        renderVirtualPageTree();
     } else {
-        var pid = window.visualPageId || window.pageId || 0;
-        if (pid) loadPageTree(pid);
+        var pageId = window.visualPageId || window.pageId || 0;
+        if (pageId) {
+            loadRealPageTree(pageId);
+        }
     }
 })();
 </script>

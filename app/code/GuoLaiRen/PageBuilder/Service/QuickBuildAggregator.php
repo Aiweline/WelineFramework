@@ -76,7 +76,7 @@ class QuickBuildAggregator
     }
 
     /**
-     * 查询配置订单列表（通过统一查询器调用 Saas getOrders）
+     * 查询配置订单列表（通过统一查询器调用 Websites getOrders）
      */
     public function queryProvisioningOrders(array $filter = []): array
     {
@@ -96,14 +96,14 @@ class QuickBuildAggregator
 
     public function getDomainLifecycleStatus(string $domain): array
     {
-        return $this->queryService->execute('saas', 'getDomainLifecycleStatus', [
+        return $this->queryService->execute('websites', 'getDomainLifecycleStatus', [
             'domain' => $domain,
         ]);
     }
 
     public function processLifecycleOrder(int $orderId): array
     {
-        return $this->queryService->execute('saas', 'processOrder', [
+        return $this->queryService->execute('websites', 'processOrder', [
             'order_id' => $orderId,
         ]);
     }
@@ -113,7 +113,7 @@ class QuickBuildAggregator
      */
     public function repairLifecycleOrder(string $domain, int $accountId, array $options = []): array
     {
-        return $this->queryService->execute('saas', 'startPurchasedLifecycle', \array_merge($options, [
+        return $this->queryService->execute('websites', 'startPurchasedLifecycle', \array_merge($options, [
             'domain' => $domain,
             'registrar_account_id' => $accountId,
         ]));

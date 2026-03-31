@@ -24,7 +24,10 @@ class PageBuilderProviderTest extends TestCase
 
         $this->assertStringContainsString('websites/backend/site-builder-agent/pagebuilder-handoff', $config['native_entry_url']);
         $this->assertStringContainsString('public_id=websites-workspace-001', $config['native_entry_url']);
-        $this->assertSame($config['native_entry_url'], $this->findToolUrl($config['tools'], 'resume_legacy_workspace'));
+        $this->assertSame($config['native_entry_url'], $this->findToolUrl($config['tools'], 'open_pagebuilder_workspace'));
+        $this->assertSame('prepare', $config['initial_stage']);
+        $this->assertSame('pagebuilder_native_workspace', $config['scope']['provider_handoff_mode'] ?? '');
+        $this->assertSame('pagebuilder_native', $config['scope']['provider_authority'] ?? '');
     }
 
     public function testUsesNativePageBuilderWorkspaceWhenLinkedWorkspaceExists(): void
@@ -39,9 +42,34 @@ class PageBuilderProviderTest extends TestCase
             []
         );
 
-        $this->assertStringContainsString('pagebuilder/backend/aiSiteAgent/workspace', $config['native_entry_url']);
+        $this->assertStringContainsString('pagebuilder/backend/ai-site-agent/workspace', $config['native_entry_url']);
         $this->assertStringContainsString('public_id=pagebuilder-native-001', $config['native_entry_url']);
-        $this->assertSame($config['native_entry_url'], $this->findToolUrl($config['tools'], 'resume_legacy_workspace'));
+        $this->assertSame($config['native_entry_url'], $this->findToolUrl($config['tools'], 'open_pagebuilder_workspace'));
+        $this->assertSame('generate', $config['initial_stage']);
+    }
+
+    public function testPrefersExplicitNativeWorkspaceUrlWhenAlreadyMirrored(): void
+    {
+        $provider = new PageBuilderProvider($this->createUrlMock());
+
+        $config = $provider->getWorkbenchConfig(
+            ['public_id' => 'websites-workspace-001'],
+            7,
+            [
+                'pagebuilder_workspace_url' => 'https://backend.test/pagebuilder/backend/ai-site-agent/workspace?public_id=pagebuilder-native-002',
+                'draft_website_id' => 88,
+                'preview_page_id' => 321,
+            ],
+            [],
+            []
+        );
+
+        $this->assertSame(
+            'https://backend.test/pagebuilder/backend/ai-site-agent/workspace?public_id=pagebuilder-native-002',
+            $config['native_entry_url']
+        );
+        $this->assertSame('generate', $config['initial_stage']);
+        $this->assertStringContainsString('preview/full?visual_editor=1', (string)($config['stage_guides']['generate']['ai_recommendation'] ?? ''));
     }
 
     private function createUrlMock(): Url
