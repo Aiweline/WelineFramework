@@ -68,4 +68,35 @@ class GiftCardAdminPageDataServiceTest extends TestCase
         $this->assertSame('active', $data['editingRecord']['status']);
         $this->assertSame(100.0, $data['summary']['total_amount']);
     }
+
+    public function testGetPageDataReturnsEmptyEditingRecordWhenNoEditingId(): void
+    {
+        $giftCardService = new class() extends GiftCardService {
+            public function getGiftCardList(int $page = 1, int $pageSize = 20, array $filters = []): array
+            {
+                return ['items' => [], 'pagination' => []];
+            }
+
+            public function getGiftCardSummary(): array
+            {
+                return [
+                    'total' => 0,
+                    self::STATUS_ACTIVE => 0,
+                    self::STATUS_REDEEMED => 0,
+                    self::STATUS_EXPIRED => 0,
+                    self::STATUS_DISABLED => 0,
+                    'total_balance' => 0.0,
+                    'total_amount' => 0.0,
+                ];
+            }
+        };
+
+        $service = new GiftCardAdminPageDataService($giftCardService);
+        $data = $service->getPageData();
+
+        $this->assertSame(0, $data['editingRecord']['card_id']);
+        $this->assertSame('', $data['editingRecord']['card_number']);
+        $this->assertSame(0.0, $data['editingRecord']['amount']);
+        $this->assertSame('active', $data['editingRecord']['status']);
+    }
 }
