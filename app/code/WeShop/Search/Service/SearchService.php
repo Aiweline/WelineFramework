@@ -168,6 +168,37 @@ class SearchService
      */
     private function getFacetProviders(int $categoryId): array
     {
+        $providers = $this->getBaseFacetProviders($categoryId);
+        try {
+            $metadata = $this->getDynamicFilterableAttributeMetadata('product');
+        } catch (\Throwable) {
+            $metadata = [];
+        }
+
+        $sortOrder = 200;
+        foreach ($metadata as $attributeCode => $data) {
+            $providerCode = 'attr_' . $attributeCode;
+            if (isset($providers[$providerCode])) {
+                continue;
+            }
+
+            $provider = EavAttributeFilterProvider::create($attributeCode, (string) ($data['attribute']['name'] ?? $attributeCode), $sortOrder++);
+            if (!empty($data['attribute']['is_swatch'])) {
+                $provider->setDisplayType('swatch');
+            }
+            $providers[$provider->getCode()] = $provider;
+        }
+
+        uasort($providers, static fn ($left, $right): int => $left->getSortOrder() <=> $right->getSortOrder());
+
+        return array_values($providers);
+    }
+
+    /**
+     * @return array<string, object>
+     */
+    protected function getBaseFacetProviders(int $categoryId): array
+    {
         $registry = ObjectManager::getInstance(FilterRegistry::class);
         $providers = [];
 
@@ -190,24 +221,15 @@ class SearchService
             $providers[$provider->getCode()] = $provider;
         }
 
-        $metadata = ObjectManager::getInstance(AttributeFilterService::class)->getFilterableAttributeMetadata('product');
-        $sortOrder = 200;
-        foreach ($metadata as $attributeCode => $data) {
-            $providerCode = 'attr_' . $attributeCode;
-            if (isset($providers[$providerCode])) {
-                continue;
-            }
+        return $providers;
+    }
 
-            $provider = EavAttributeFilterProvider::create($attributeCode, (string) ($data['attribute']['name'] ?? $attributeCode), $sortOrder++);
-            if (!empty($data['attribute']['is_swatch'])) {
-                $provider->setDisplayType('swatch');
-            }
-            $providers[$provider->getCode()] = $provider;
-        }
-
-        uasort($providers, static fn ($left, $right): int => $left->getSortOrder() <=> $right->getSortOrder());
-
-        return array_values($providers);
+    /**
+     * @return array<string, array<string, mixed>>
+     */
+    protected function getDynamicFilterableAttributeMetadata(string $entityCode): array
+    {
+        return ObjectManager::getInstance(AttributeFilterService::class)->getFilterableAttributeMetadata($entityCode);
     }
 
     /**
