@@ -1,4 +1,9 @@
-﻿"Tracking Management","Tracking Management"
+﻿"Shipment Management","Shipment Management"
+"Shipment ID is required.","Shipment ID is required."
+"Shipment not found.","Shipment not found."
+"Shipment Tracking","Shipment Tracking"
+"Failed to load shipment tracking.","Failed to load shipment tracking."
+"Tracking Management","Tracking Management"
 "Tracking saved.",物流事件已保存。
 "Tracking save failed.",物流事件保存失败。
 订单ID不能为空,订单ID不能为空
@@ -31,3 +36,36 @@ Actions,操作
 Edit,编辑
 "No tracking events found.",暂无物流事件。
 "Create the first tracking event to start the logistics timeline.",请先创建第一条物流事件以启动物流时间线。
+WeShop,WeShop
+Logistics,Logistics
+Shipments,Shipments
+"Total Shipments","Total Shipments"
+Shipped,Shipped
+"Filter Shipments","Filter Shipments"
+"Enter order ID","Enter order ID"
+"Enter tracking number","Enter tracking number"
+"All Carriers","All Carriers"
+"All Statuses","All Statuses"
+"Shipment List","Shipment List"
+Export,Export
+"No shipments found","No shipments found"
+"Shipment ID","Shipment ID"
+"Items Count","Items Count"
+"Shipped At","Shipped At"
+"Delivered At","Delivered At"
+Track,Track
+View,View
+Previous,Previous
+Next,Next
+"Page %{1} of %{2}","Page %{1} of %{2}"
+Tracking,Tracking
+"Shipment Information","Shipment Information"
+Copy,Copy
+"Current Status","Current Status"
+"Estimated Delivery","Estimated Delivery"
+"Tracking Timeline","Tracking Timeline"
+"No tracking information available","No tracking information available"
+"Status Update","Status Update"
+"Detailed Records","Detailed Records"
+Time,Time
+"Tracking number copied!","Tracking number copied!"
