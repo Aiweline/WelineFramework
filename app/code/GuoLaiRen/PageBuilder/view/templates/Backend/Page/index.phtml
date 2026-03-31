@@ -1890,7 +1890,27 @@ document.addEventListener('DOMContentLoaded', function() {
                 } catch (err) {
                     console.error('<?= __("复制失败") ?>:', err);
                     // 最后降级方案：提示用户手动复制
-                    prompt('<?= __("请手动复制以下链接") ?>:', url);
+                    const escapedUrl = String(url)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                    
+                    if (typeof BackendConfirm !== 'undefined') {
+                        const confirmHtml = `
+                            <div class="mb-2"><?= __("请手动复制以下链接") ?></div>
+                            <textarea class="form-control" readonly style="height: 90px; font-family: monospace;">${escapedUrl}</textarea>
+                        `;
+                        BackendConfirm.show(confirmHtml, {
+                            title: '<?= __("复制失败") ?>',
+                            confirmText: '<?= __("关闭") ?>',
+                            cancelText: '<?= __("关闭") ?>',
+                            type: 'warning'
+                        });
+                    } else {
+                        showToast('error', '<?= __("复制失败") ?>', '<?= __("请手动复制以下链接") ?>: ' + url);
+                    }
                 } finally {
                     document.body.removeChild(textArea);
                 }
@@ -1989,7 +2009,27 @@ document.addEventListener('DOMContentLoaded', function() {
                     }
                 } catch (err) {
                     console.error('<?= __("复制失败") ?>:', err);
-                    prompt('<?= __("请手动复制以下链接") ?>:', url);
+                    const escapedUrl = String(url)
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#39;');
+                    
+                    if (typeof BackendConfirm !== 'undefined') {
+                        const confirmHtml = `
+                            <div class="mb-2"><?= __("请手动复制以下链接") ?></div>
+                            <textarea class="form-control" readonly style="height: 90px; font-family: monospace;">${escapedUrl}</textarea>
+                        `;
+                        BackendConfirm.show(confirmHtml, {
+                            title: '<?= __("复制失败") ?>',
+                            confirmText: '<?= __("关闭") ?>',
+                            cancelText: '<?= __("关闭") ?>',
+                            type: 'warning'
+                        });
+                    } else {
+                        showToast('error', '<?= __("复制失败") ?>', '<?= __("请手动复制以下链接") ?>: ' + url);
+                    }
                 } finally {
                     document.body.removeChild(textArea);
                 }
@@ -2680,7 +2720,7 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// 处理删除确认表单 - 使用 BackendConfirm 替代 confirm()
+// 处理删除确认表单 - 使用 BackendConfirm
 document.querySelectorAll('.delete-confirm-form').forEach(form => {
     form.addEventListener('submit', function(e) {
         e.preventDefault();
