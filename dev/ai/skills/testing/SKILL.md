@@ -123,22 +123,32 @@ tests/unit/specs/
 ### 运行命令
 
 ```bash
-cd tests/e2e
-
-# 运行所有 E2E 测试
-npx playwright test --headed
+# 推荐：统一使用框架命令（无需 cd）
+php bin/w e2e:run
 
 # 有界面运行（可视化默认）
-npx playwright test --headed
+php bin/w e2e:run --project=chromium
 
 # UI 模式
-npx playwright test --ui --headed
+php bin/w e2e:run --ui --project=chromium
 
 # 按模块运行
-npx playwright test --headed --module=Vendor_Module
+php bin/w e2e:run --module=Vendor_Module --project=chromium
 
-# 收集测试（扫描所有模块的 E2E 测试）
-node collect-tests.js
+# 跑单文件
+php bin/w e2e:run specs/backend/WeShop_Cart-smoke-backend.spec.js --project=chromium
+
+# 按用例标题关键词
+php bin/w e2e:run --module=WeShop_Cart --case="remove item" --project=chromium
+
+# 按用例 ID（推荐）
+php bin/w e2e:run --module=WeShop_Cart --case-id=CART-REMOVE-001 --project=chromium
+
+# 列可用模块
+php bin/w e2e:run --list-modules
+
+# 强制刷新测试收集映射
+php bin/w e2e:run --refresh-collection --list-modules
 ```
 
 ### E2E Framework 封装
@@ -146,7 +156,11 @@ node collect-tests.js
 `tests/e2e/framework/index.js` 提供统一入口：
 
 ```javascript
-const { gotoFrontend, gotoBackend, gotoApi, loginAsAdmin, getRuntimeInfo } = require('./framework');
+const {
+  test, expect,
+  gotoFrontend, gotoBackend, gotoApi, loginAsAdmin, getRuntimeInfo,
+  moduleDescribe, moduleCase
+} = require('./framework');
 
 // 跳转前台
 await gotoFrontend(page, '/');
@@ -162,6 +176,16 @@ await loginAsAdmin(page);
 
 // 获取运行时信息
 const runtimeInfo = getRuntimeInfo();
+
+// 推荐写法：模块 + 用例标签
+const MODULE = 'Vendor_Module';
+moduleDescribe(test, MODULE, 'backend smoke', () => {
+  moduleCase(test, { module: MODULE, id: 'BACKEND-SMOKE-001' }, 'admin page renders', async ({ page }) => {
+    await loginAsAdmin(page);
+    await gotoBackend(page, 'dashboard');
+    await expect(page.locator('body')).toBeVisible();
+  });
+});
 ```
 
 ### 统一代理
@@ -183,11 +207,18 @@ E2E 测试默认通过本地统一代理（通常是 `https://localhost:3999`，
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `MODULE_FILTER` | - | 按模块过滤测试 |
-| `PLAYWRIGHT_TEST_FILES` | - | 指定测试文件 JSON |
 | `PLAYWRIGHT_WORKERS` | 1 | 并行 worker 数 |
 | `PLAYWRIGHT_TEST_TIMEOUT` | 90000 | 测试超时（ms） |
 | `PLAYWRIGHT_EXPECT_TIMEOUT` | 10000 | expect 超时（ms） |
 | `PLAYWRIGHT_DISABLE_PROXY` | - | 设为 1 禁用代理 |
+| `PLAYWRIGHT_HEADLESS` | 0 | 设为 1 强制无界面模式 |
+
+### 用例书写规范（新增）
+
+- 新用例必须优先采用 `moduleDescribe/moduleCase`，确保标题携带 `[module:*]` 和 `[case:*]`
+- `--case-id` 依赖 `[case:ID]` 标签；未迁移历史用例可先用 `--case` 关键词过滤
+- 用例 ID 推荐格式：`DOMAIN-SCENE-###`（如 `CART-REMOVE-001`）
+- 一个用例只验证一个可见行为，失败信息必须可定位（页面、接口、关键断言）
 
 ---
 
@@ -265,7 +296,7 @@ php bin/w phpunit:run -b Vendor_Module
 php bin/w http:req admin/dashboard -b
 
 # E2E 测试
-cd tests/e2e && npx playwright test --headed
+php bin/w e2e:run --module=Vendor_Module --project=chromium
 
 # 前端单元测试
 cd tests/unit && npm test

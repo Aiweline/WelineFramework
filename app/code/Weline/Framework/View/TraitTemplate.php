@@ -14,14 +14,13 @@ namespace Weline\Framework\View;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
+use Weline\Framework\App\State;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Data\HtmlInterface;
-use Weline\Theme\Service\PreviewTokenService;
-use Weline\Theme\Service\ThemeResourceGateway;
 
 trait TraitTemplate
 {
@@ -317,15 +316,11 @@ trait TraitTemplate
                     [$themeArea, $themeRelativePath] = array_pad(explode('/', $t_f, 2), 2, '');
                     $themeArea = strtolower(trim((string)$themeArea)) === 'backend' ? 'backend' : 'frontend';
 
-                    /** @var ThemeResourceGateway $themeResourceGateway */
-                    $themeResourceGateway = ObjectManager::getInstance(ThemeResourceGateway::class);
-                    $data = $themeResourceGateway->buildThemeAssetUrl(
-                        $module_name,
-                        $themeArea,
-                        $themeRelativePath,
-                        null,
-                        false
-                    );
+                    $data = $this->resolveThemeAssetUrlByEvent($module_name, $themeArea, $themeRelativePath);
+                    if ($data === '') {
+                        // 回退：无 Theme 模块监听时，使用模块默认静态目录 URL。
+                        $data = $this->fetchTagSourceFile(DataInterface::dir_type_STATICS, $module_name . '::' . $themeRelativePath);
+                    }
                 } else {
                     // 模板文件：返回文件路径
                     $data = $this->viewCache->get($cache_key);
@@ -388,18 +383,10 @@ trait TraitTemplate
      */
     private function getStaticResourceVersion(): ?string
     {
-        // 1. 检查预览模式
-        try {
-            $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
-            if ($previewTokenService->isPreviewMode()) {
-                $token = $previewTokenService->getTokenFromRequest();
-                if ($token) {
-                    // 使用 token 的前 8 位作为版本号
-                    return 'preview_' . substr($token, 0, 8);
-                }
-            }
-        } catch (\Throwable $e) {
-            // PreviewTokenService 不可用时忽略
+        // 1. 通过事件询问外部模块（如 Theme）是否处于预览模式，以及对应 token。
+        $previewToken = $this->resolvePreviewTokenByEvent();
+        if ($previewToken !== '') {
+            return 'preview_' . substr($previewToken, 0, 8);
         }
         
         // 2. 读取系统配置的静态版本号
@@ -409,6 +396,32 @@ trait TraitTemplate
         }
         
         return null;
+    }
+
+    private function resolveThemeAssetUrlByEvent(string $moduleName, string $area, string $relativePath): string
+    {
+        $eventData = new DataObject([
+            'module_name' => $moduleName,
+            'area' => $area,
+            'relative_path' => $relativePath,
+            'url' => '',
+        ]);
+        $this->eventsManager->dispatch('Weline_Framework_View::resolve_theme_asset_url', $eventData);
+        $url = trim((string)$eventData->getData('url'));
+        return $url;
+    }
+
+    private function resolvePreviewTokenByEvent(): string
+    {
+        $eventData = new DataObject([
+            'is_preview' => false,
+            'preview_token' => '',
+        ]);
+        $this->eventsManager->dispatch('Weline_Framework_View::resolve_preview_token', $eventData);
+        if (!$eventData->getData('is_preview')) {
+            return '';
+        }
+        return trim((string)$eventData->getData('preview_token'));
     }
 
     /**
@@ -621,7 +634,7 @@ trait TraitTemplate
      */
     protected function fetchFile(string $filename): mixed
     {
-        $cache_key = $filename . Cookie::getLangLocal();
+        $cache_key = $filename . State::getLangLocal() . '|' . $this->resolveThemeCacheKeyForFetchFile($filename);
         $skipCache = isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache');
         if (!$skipCache) {
             $cache_filename = $this->viewCache->get($cache_key);
@@ -638,5 +651,23 @@ trait TraitTemplate
         $event_filename = $fileData->getData('filename');
         $this->viewCache->set($cache_key, $event_filename);
         return $event_filename;
+    }
+
+    private function resolveThemeCacheKeyForFetchFile(string $filename): string
+    {
+        $path = str_replace('\\', '/', $filename);
+        $area = str_contains($path, '/backend/') ? 'backend' : 'frontend';
+        $baseKey = 'area:' . $area;
+
+        // 交由外部模块（如 Theme）通过事件回填主题/预览相关后缀，Framework 自身不感知具体实现。
+        $eventData = new DataObject([
+            'filename' => $filename,
+            'area' => $area,
+            'suffix' => '',
+        ]);
+        $this->eventsManager->dispatch('Weline_Framework_View::resolve_theme_cache_suffix', $eventData);
+        $suffix = trim((string)$eventData->getData('suffix'));
+
+        return $suffix === '' ? $baseKey : ($baseKey . '|' . $suffix);
     }
 }

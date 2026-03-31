@@ -1,14 +1,18 @@
 // @weline-e2e-runtime fallback
 // @ts-check
-const { test, expect, gotoBackend, loginAsAdmin, buildModuleBackendRoute } = require('../../framework');
+const { test, expect, gotoBackend, loginAsAdmin, buildModuleBackendRoute, moduleDescribe, moduleCase } = require('../../framework');
 
 const WESHOP_CART_MODULE = 'WeShop_Cart';
 const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found/i;
 
-test.describe('WeShop Cart backend smoke', () => {
+moduleDescribe(test, WESHOP_CART_MODULE, 'WeShop Cart backend smoke', () => {
   test.describe.configure({ retries: 1 });
 
-  test('renders at least one cart backend route without PHP fatal errors', async ({ page }) => {
+  moduleCase(
+    test,
+    { module: WESHOP_CART_MODULE, id: 'BACKEND-SMOKE-001' },
+    'renders at least one cart backend route without PHP fatal errors',
+    async ({ page }) => {
     await loginAsAdmin(page, { timeout: 90000 });
     const body = page.locator('body');
     await expect(body).toBeVisible();
@@ -46,5 +50,6 @@ test.describe('WeShop Cart backend smoke', () => {
       true,
       `Skip cart backend route in current runtime: ${navigationErrors.join(' | ')}`
     );
-  });
+    }
+  );
 });

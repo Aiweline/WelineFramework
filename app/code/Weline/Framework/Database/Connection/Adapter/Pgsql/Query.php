@@ -2012,14 +2012,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     {
         // 🔧 修复：PostgreSQL 参数名必须是字母数字下划线，不能包含特殊字符
         // 转换 SQL 中的所有参数名，确保符合 PostgreSQL 要求
+        // 处理顺序：先移除特殊字符，再检查数字开头（与 normalizeParameterArray 完全一致）
         return preg_replace_callback('/:([a-zA-Z0-9_]+)/', function($matches) {
             $paramName = $matches[1];
+            // 先移除所有非字母数字下划线的字符
+            $paramName = preg_replace('/[^a-zA-Z0-9_]/', '_', $paramName);
             // 如果参数名以数字开头，添加 'p' 前缀
             if (preg_match('/^[0-9]/', $paramName)) {
                 return ':p' . $paramName;
             }
-            // 移除所有非字母数字下划线的字符
-            $paramName = preg_replace('/[^a-zA-Z0-9_]/', '_', $paramName);
             return ':' . $paramName;
         }, $sql);
     }
@@ -2054,6 +2055,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         
         return $convertedParams;
     }
+
+    /**
+     * 精确替换 SQL 占位符，避免 :param1 误替换到 :param10。
+     */
+    protected function replaceSqlPlaceholder(string $sql, string $from, string $to): string
+    {
+        $pattern = '/(?<![A-Za-z0-9_])' . preg_quote($from, '/') . '(?![A-Za-z0-9_])/';
+        return (string)preg_replace($pattern, $to, $sql);
+    }
     
     
     /**
@@ -2070,35 +2080,25 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $sql = $this->normalizeSql($sql);
         
         // 🔧 修复：规范化参数数组（确保参数名符合 PostgreSQL 要求）
-        // 先规范化参数数组，然后根据规范化后的参数名更新 SQL
-        $originalBoundValues = $this->bound_values;
         $this->bound_values = $this->normalizeParameterArray($this->bound_values);
         
-        // 🔧 修复：如果参数名被规范化了，需要更新 SQL 中的参数名
-        if ($originalBoundValues !== $this->bound_values && !empty($originalBoundValues)) {
-            // 创建参数名映射
-            $paramMapping = [];
-            foreach ($originalBoundValues as $oldParam => $value) {
-                $oldParamClean = str_starts_with($oldParam, ':') ? substr($oldParam, 1) : $oldParam;
-                $oldParamClean = preg_replace('/[^a-zA-Z0-9_]/', '_', $oldParamClean);
-                if (preg_match('/^[0-9]/', $oldParamClean)) {
-                    $oldParamClean = 'p' . $oldParamClean;
-                }
-                $newParam = ':' . $oldParamClean;
-                if (isset($this->bound_values[$newParam])) {
-                    $paramMapping[$oldParam] = $newParam;
-                }
-            }
-            // 更新 SQL 中的参数名
-            foreach ($paramMapping as $oldParam => $newParam) {
-                if ($oldParam !== $newParam) {
-                    $sql = str_replace($oldParam, $newParam, $sql);
+        // 🔧 修复：强制更新 SQL 中的参数名以匹配规范化后的 bound_values
+        // 问题原因：原条件判断可能在某些情况下（如重复调用）跳过更新
+        // 解决方案：直接用 bound_values 的键来替换 SQL 中的参数名
+        if (!empty($this->bound_values)) {
+            foreach ($this->bound_values as $newParam => $value) {
+                // 如果 bound_values 的键以 ':p' 开头（添加了 p 前缀），说明原参数以数字开头
+                // 需要将 SQL 中的原始形式（去掉 p 前缀）替换为新形式
+                if (str_starts_with($newParam, ':p') && strlen($newParam) > 2) {
+                    $originalParam = ':' . substr($newParam, 2);
+                    $sql = $this->replaceSqlPlaceholder($sql, $originalParam, $newParam);
                 }
             }
         }
         
-        // 🔧 修复：转换参数名（PostgreSQL 要求参数名必须以字母开头）
-        $sql = $this->normalizeParameterNames($sql);
+        // ⚠️ 不再调用 normalizeParameterNames（避免双重规范化）
+        // normalizeParameterArray 已将 bound_values 规范化；
+        // preparePgsql/bindValue 的手动映射 + 单词边界替换已确保 SQL 与 bound_values 一致
         
         // 保持对象状态一致：后续回退到 exec() 时，SQL 占位符必须与 bound_values 键一致
         $this->sql = $sql;
@@ -2137,10 +2137,17 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
      */
     protected function execPgsql(string $sql): int|false
     {
-        // 🔧 修复：规范化 SQL（反引号、数据库名、MySQL 函数转换）
+        // 🔧 修复：规范化 SQL 和 bound_values，确保参数名一致
+        // 批量插入时 SQL 末尾有分号，需要先规范化
+        $this->bound_values = $this->normalizeParameterArray($this->bound_values);
+        foreach ($this->bound_values as $newParam => $value) {
+            if (str_starts_with($newParam, ':p') && strlen($newParam) > 2) {
+                $originalParam = ':' . substr($newParam, 2);
+                $sql = $this->replaceSqlPlaceholder($sql, $originalParam, $newParam);
+            }
+        }
         $sql = $this->normalizeSql($sql);
         
-        // 🔧 修复：execPgsql 内部已经规范化 SQL，这里直接调用原始 PDO exec
         return $this->getLink()->exec($sql);
     }
     
@@ -2228,6 +2235,14 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 if ($hasMultipleCommands) {
                     // 多个命令，即使有 RETURNING 也不能使用 prepare/execute
                     // 使用 exec() 执行，但无法获取 RETURNING 结果
+                    // 🔧 修复：规范化 SQL 和 bound_values，确保参数名一致后再调用 getSqlWithBounds
+                    $this->bound_values = $this->normalizeParameterArray($this->bound_values);
+                    foreach ($this->bound_values as $newParam => $value) {
+                        if (str_starts_with($newParam, ':p') && strlen($newParam) > 2) {
+                            $originalParam = ':' . substr($newParam, 2);
+                            $this->sql = $this->replaceSqlPlaceholder($this->sql, $originalParam, $newParam);
+                        }
+                    }
                     $sqlWithBounds = $this->getSqlWithBounds($this->sql);
                     $result = $this->execPgsql($sqlWithBounds);
                     if ($result === false) {

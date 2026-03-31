@@ -155,6 +155,9 @@ class TemplateCacheManager
      */
     public function writeCache(string $sourceFile, string $compiledContent): string
     {
+        // Cache directory may be removed by cache clear during long-running process.
+        $this->ensureCacheDir();
+
         $cacheKey = $this->getCacheKey($sourceFile);
         $sourceHash = substr($cacheKey, 0, 32);
         $sourceMtime = filemtime($sourceFile);
@@ -338,6 +341,9 @@ class TemplateCacheManager
      */
     public function isBeingCompiled(string $sourceFile): bool
     {
+        // Ensure root exists before probing lock file.
+        $this->ensureCacheDir();
+
         $cacheKey = $this->getCacheKey($sourceFile);
         $sourceHash = substr($cacheKey, 0, 32);
         $lockFile = $this->cacheRoot . DS . $sourceHash . '.lock';

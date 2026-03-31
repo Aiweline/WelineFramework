@@ -357,6 +357,9 @@ $quickBuildRegistrarDisplay = '';
     --site-workbench-accent-subtle: var(--backend-color-primary-bg-subtle, rgba(37, 99, 235, 0.12));
     --site-workbench-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
     color: var(--site-workbench-text);
+    background: var(--backend-color-bg-body, #f8fafc);
+    border-radius: var(--backend-border-radius-lg, 12px);
+    padding: 0.25rem 0;
 }
 
 [data-theme="dark"] .site-workbench-page,
@@ -377,6 +380,19 @@ body[data-topbar="dark"] .site-workbench-page {
 
 .site-workbench-page .text-muted {
     color: var(--site-workbench-text-muted) !important;
+}
+
+/* 兼容 backend 暗色模式下 Bootstrap 默认浅色背景 */
+.site-workbench-page .alert-light {
+    color: var(--site-workbench-text) !important;
+    background: var(--site-workbench-surface-soft) !important;
+    border-color: var(--site-workbench-border) !important;
+}
+
+.site-workbench-page .modal-content {
+    color: var(--site-workbench-text);
+    background: var(--site-workbench-surface-strong);
+    border: 1px solid var(--site-workbench-border);
 }
 
 .site-workbench-page .form-label,
