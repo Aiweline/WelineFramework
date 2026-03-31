@@ -1,7 +1,9 @@
 # Websites AI建站工作台任务拆解
 
-- 状态：not_started
+- 状态：completed
 - 执行原则：TDD first, SOLID first
+- 完成日期：2026-03-28
+- 实际状态追踪：见 `Websites-AI建站工作台-进度.md`
 
 ## Epic 0. 规划与兼容入口
 
