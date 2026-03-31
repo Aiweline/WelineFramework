@@ -82,16 +82,13 @@ class Index extends BackendController
 
         /** @var WelineTheme $activeQuery */
         $activeQuery = ObjectManager::getInstance(WelineTheme::class);
-        $activeQuery->load(WelineTheme::schema_fields_IS_ACTIVE_FRONTEND, 1);
-        $activeFrontend = $activeQuery->getId() ? $activeQuery->getId() : null;
-        $activeQuery->clearQuery();
-        $activeQuery->load(WelineTheme::schema_fields_IS_ACTIVE_BACKEND, 1);
-        $activeBackend = $activeQuery->getId() ? $activeQuery->getId() : null;
+        $activeFrontend = $this->safeLoadActiveThemeId($activeQuery, WelineTheme::schema_fields_IS_ACTIVE_FRONTEND);
+        $activeBackend = $this->safeLoadActiveThemeId($activeQuery, WelineTheme::schema_fields_IS_ACTIVE_BACKEND);
         if (!$activeFrontend && !$activeBackend) {
-            $activeQuery->clearQuery();
-            $activeQuery->load(WelineTheme::schema_fields_IS_ACTIVE, 1);
-            if ($activeQuery->getId()) {
-                $activeFrontend = $activeBackend = $activeQuery->getId();
+            $fallbackActive = $this->safeLoadActiveThemeId($activeQuery, WelineTheme::schema_fields_IS_ACTIVE);
+            if ($fallbackActive) {
+                $activeFrontend = $fallbackActive;
+                $activeBackend = $fallbackActive;
             }
         }
         
@@ -241,26 +238,19 @@ class Index extends BackendController
 
         try {
             if ($area === 'frontend') {
-                $theme->clearQuery();
-                $theme->where(WelineTheme::schema_fields_IS_ACTIVE_FRONTEND, 1)
-                    ->update([WelineTheme::schema_fields_IS_ACTIVE_FRONTEND => 0])->fetch();
-                $theme->clearQuery();
-                $theme->where(WelineTheme::schema_fields_ID, $themeId)
-                    ->update([WelineTheme::schema_fields_IS_ACTIVE_FRONTEND => 1])->fetch();
-                $theme->_cache->delete('theme_frontend');
+                if ($this->safeToggleAreaThemeActivation($theme, (int)$themeId, WelineTheme::schema_fields_IS_ACTIVE_FRONTEND)) {
+                    $theme->_cache->delete('theme_frontend');
+                } else {
+                    $this->activateThemeFallback($theme, (int)$themeId);
+                }
             } elseif ($area === 'backend') {
-                $theme->clearQuery();
-                $theme->where(WelineTheme::schema_fields_IS_ACTIVE_BACKEND, 1)
-                    ->update([WelineTheme::schema_fields_IS_ACTIVE_BACKEND => 0])->fetch();
-                $theme->clearQuery();
-                $theme->where(WelineTheme::schema_fields_ID, $themeId)
-                    ->update([WelineTheme::schema_fields_IS_ACTIVE_BACKEND => 1])->fetch();
-                $theme->_cache->delete('theme_backend');
+                if ($this->safeToggleAreaThemeActivation($theme, (int)$themeId, WelineTheme::schema_fields_IS_ACTIVE_BACKEND)) {
+                    $theme->_cache->delete('theme_backend');
+                } else {
+                    $this->activateThemeFallback($theme, (int)$themeId);
+                }
             } else {
-                $theme->clearQuery();
-                $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)->update(['is_active' => 0])->fetch();
-                $theme->clearQuery();
-                $theme->where(WelineTheme::schema_fields_ID, $themeId)->update(['is_active' => 1])->fetch();
+                $this->activateThemeFallback($theme, (int)$themeId);
             }
             $theme->_cache->delete('theme');
             $theme->_cache->delete('theme_parent_' . $themeId);
@@ -367,6 +357,117 @@ class Index extends BackendController
     }
 
     /**
+     * 并发批量生成所有主题的预览图片（SSE：实时输出进度）
+     *
+     * POST /theme/backend/index/postGenerateAllPreviewsConcurrent
+     */
+    public function postGenerateAllPreviewsConcurrent(): void
+    {
+        $sse = new SseWriter();
+        $concurrency = (int)$this->request->getPost('concurrency', ThemePreviewGenerator::DEFAULT_CONCURRENCY);
+        $concurrency = max(1, min($concurrency, 8));
+
+        try {
+            /** @var WelineTheme $themeModel */
+            $themeModel = ObjectManager::getInstance(WelineTheme::class);
+            $themes = $themeModel->select()->fetch()->getItems();
+
+            // 构建任务列表
+            $tasks = [];
+            foreach ($themes as $theme) {
+                $themeId = is_object($theme) ? $theme->getId() : ($theme['id'] ?? 0);
+                if (!$themeId) {
+                    continue;
+                }
+                $tasks[] = [
+                    'theme' => $theme,
+                    'area' => 'frontend',
+                    'force' => true,
+                ];
+                $tasks[] = [
+                    'theme' => $theme,
+                    'area' => 'backend',
+                    'force' => true,
+                ];
+            }
+
+            $total = count($tasks);
+            $sse->start();
+            $sse->sendEvent('start', [
+                'message' => __('开始并发批量生成预览图（并发数：%{1}）...', [$concurrency]),
+                'total' => $total,
+                'concurrency' => $concurrency,
+            ]);
+
+            $result = ThemePreviewGenerator::generatePreviewImagesBatch(
+                $tasks,
+                $concurrency,
+                function(int $completed, int $total, string $message) use ($sse) {
+                    if ($sse->isAlive()) {
+                        $sse->sendEvent('progress', [
+                            'progress' => $total > 0 ? (($completed / $total) * 100) : 0,
+                            'current' => $completed,
+                            'total' => $total,
+                            'message' => $message,
+                        ]);
+                    }
+                }
+            );
+
+            // 保存成功的预览图路径到数据库
+            $themeModelFresh = ObjectManager::getInstance(WelineTheme::class);
+            foreach ($result['results'] as $item) {
+                if ($item['success'] && !empty($item['path'])) {
+                    try {
+                        $themeObj = clone $themeModelFresh;
+                        $themeObj->load($item['theme_id']);
+                        if ($item['area'] === 'backend') {
+                            $themeObj->setBackendPreviewImage($item['path']);
+                        } else {
+                            $themeObj->setFrontendPreviewImage($item['path'])
+                                ->setPreviewImage($item['path']);
+                        }
+                        $themeObj->save();
+                    } catch (\Throwable $e) {
+                        // 保存失败不影响整体结果
+                    }
+                }
+            }
+
+            if ($result['failed'] > 0) {
+                $sse->complete([
+                    'message' => __('部分预览图生成失败'),
+                    'data' => [
+                        'success' => $result['success'],
+                        'failed' => $result['failed'],
+                        'total' => $total,
+                    ],
+                ]);
+                return;
+            }
+
+            $sse->complete([
+                'message' => __('所有预览图生成成功'),
+                'data' => [
+                    'success' => $result['success'],
+                    'failed' => $result['failed'],
+                    'total' => $total,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            try {
+                if (!$sse->isStarted()) {
+                    $sse->start();
+                }
+                $sse->sendError($e->getMessage(), 500);
+                $sse->close();
+            } catch (\Throwable) {
+                // ignore
+            }
+        }
+    }
+
+    /**
      * 批量生成所有主题的预览图片（AJAX调用）
      */
     public function postGenerateAllPreviews()
@@ -446,131 +547,103 @@ class Index extends BackendController
     }
 
     /**
-     * 批量生成所有主题预览图（SSE：实时输出进度）
+     * 批量生成所有主题预览图（SSE：实时输出进度，支持并发）
      *
      * POST /theme/backend/index/postGenerateAllPreviewsSse
      */
     public function postGenerateAllPreviewsSse(): void
     {
         $sse = new SseWriter();
+        $concurrency = (int)$this->request->getPost('concurrency', ThemePreviewGenerator::DEFAULT_CONCURRENCY);
+        $concurrency = max(1, min($concurrency, 8));
 
         try {
             $themeModel = ObjectManager::getInstance(WelineTheme::class);
             $themes = $themeModel->select()->fetch()->getItems();
 
-            $total = count($themes);
-            $sse->start();
-            $sse->sendEvent('start', [
-                'message' => __('开始批量生成预览图...'),
-                'total' => $total,
-            ]);
-
-            $success = 0;
-            $failed = 0;
-            $messages = [];
-
-            $index = 0;
+            // 构建任务列表
+            $tasks = [];
             foreach ($themes as $theme) {
-                $index++;
-
-                if (!$sse->isAlive()) {
-                    // 客户端断开：停止继续生成
-                    break;
-                }
-
                 $themeId = is_object($theme) ? $theme->getId() : ($theme['id'] ?? 0);
-                $themeName = is_object($theme) ? $theme->getName() : ($theme['name'] ?? 'Unknown');
-
                 if (!$themeId) {
                     continue;
                 }
+                $tasks[] = [
+                    'theme' => $theme,
+                    'area' => 'frontend',
+                    'force' => true,
+                ];
+                $tasks[] = [
+                    'theme' => $theme,
+                    'area' => 'backend',
+                    'force' => true,
+                ];
+            }
 
-                $progress = $total > 0 ? (($index / $total) * 100) : 0;
-                $sse->sendEvent('progress', [
-                    'progress' => $progress,
-                    'current' => $index,
-                    'total' => $total,
-                    'message' => __('正在处理主题：%{1}', [$themeName]),
-                ]);
+            $total = count($tasks);
+            $sse->start();
+            $sse->sendEvent('start', [
+                'message' => __('开始并发批量生成预览图（并发数：%{1}）...', [$concurrency]),
+                'total' => $total,
+                'concurrency' => $concurrency,
+            ]);
 
-                $themeOk = false;
-
-                // frontend
-                try {
-                    $sse->sendEvent('chunk', [
-                        'content' => __(" - %{1} [frontend] 开始生成\n", [$themeName]),
-                    ]);
-                    $result1 = ThemePreviewGenerator::generatePreviewImage($theme, 'frontend', true);
-                    if ($result1) {
-                        $relativePath1 = ThemePreviewGenerator::normalizePreviewRelativePath($result1);
-                        $themeObj1 = clone $themeModel;
-                        $themeObj1->load($themeId);
-                        $this->persistThemePreviewImage($themeObj1, 'frontend', $relativePath1);
-
-                        $sse->sendEvent('chunk', [
-                            'content' => __("   - frontend OK: %{1}\n", [$relativePath1]),
+            $result = ThemePreviewGenerator::generatePreviewImagesBatch(
+                $tasks,
+                $concurrency,
+                function(int $completed, int $total, string $message) use ($sse) {
+                    if ($sse->isAlive()) {
+                        $sse->sendEvent('progress', [
+                            'progress' => $total > 0 ? (($completed / $total) * 100) : 0,
+                            'current' => $completed,
+                            'total' => $total,
+                            'message' => $message,
                         ]);
-                        $themeOk = true;
                     }
-                } catch (\Exception $e) {
-                    $failedMsg = __('%{1} [frontend] 生成失败：%{2}', [$themeName, $e->getMessage()]);
-                    $messages[] = $failedMsg;
-                    $sse->sendEvent('warning', ['message' => $failedMsg]);
-                    $sse->sendEvent('chunk', ['content' => __("   - frontend ERROR\n", [])]);
                 }
+            );
 
-                // backend
-                try {
-                    $sse->sendEvent('chunk', [
-                        'content' => __(" - %{1} [backend] 开始生成\n", [$themeName]),
-                    ]);
-                    $result2 = ThemePreviewGenerator::generatePreviewImage($theme, 'backend', true);
-                    if ($result2) {
-                        $relativePath2 = ThemePreviewGenerator::normalizePreviewRelativePath($result2);
-                        $themeObj2 = clone $themeModel;
-                        $themeObj2->load($themeId);
-                        $this->persistThemePreviewImage($themeObj2, 'backend', $relativePath2);
-
-                        $sse->sendEvent('chunk', [
-                            'content' => __("   - backend OK: %{1}\n", [$relativePath2]),
-                        ]);
-                        $themeOk = true;
+            // 保存成功的预览图路径到数据库
+            $themeModelFresh = ObjectManager::getInstance(WelineTheme::class);
+            foreach ($result['results'] as $item) {
+                if ($item['success'] && !empty($item['path'])) {
+                    try {
+                        $themeObj = clone $themeModelFresh;
+                        $themeObj->load($item['theme_id']);
+                        if ($item['area'] === 'backend') {
+                            $themeObj->setBackendPreviewImage($item['path']);
+                        } else {
+                            $themeObj->setFrontendPreviewImage($item['path'])
+                                ->setPreviewImage($item['path']);
+                        }
+                        $themeObj->save();
+                    } catch (\Throwable) {
+                        // 保存失败不影响整体结果
                     }
-                } catch (\Exception $e) {
-                    $failedMsg = __('%{1} [backend] 生成失败：%{2}', [$themeName, $e->getMessage()]);
-                    $messages[] = $failedMsg;
-                    $sse->sendEvent('warning', ['message' => $failedMsg]);
-                    $sse->sendEvent('chunk', ['content' => __("   - backend ERROR\n", [])]);
-                }
-
-                if ($themeOk) {
-                    $success++;
-                } else {
-                    $failed++;
                 }
             }
 
-            $result = [
-                'total' => $total,
-                'success' => $success,
-                'failed' => $failed,
-                'messages' => $messages,
-            ];
-
-            if ($failed > 0) {
+            if ($result['failed'] > 0) {
                 $sse->complete([
                     'message' => __('部分预览图生成失败'),
-                    'data' => $result,
+                    'data' => [
+                        'success' => $result['success'],
+                        'failed' => $result['failed'],
+                        'total' => $total,
+                    ],
                 ]);
                 return;
             }
 
             $sse->complete([
                 'message' => __('所有预览图生成成功'),
-                'data' => $result,
+                'data' => [
+                    'success' => $result['success'],
+                    'failed' => $result['failed'],
+                    'total' => $total,
+                ],
             ]);
         } catch (\Throwable $e) {
-            // SSE 已可能部分输出：尽量用 error 事件结尾
             try {
                 if (!$sse->isStarted()) {
                     $sse->start();
@@ -578,7 +651,7 @@ class Index extends BackendController
                 $sse->sendError($e->getMessage(), 500);
                 $sse->close();
             } catch (\Throwable) {
-                // ignore: 避免 SSE 发送二次异常打断
+                // ignore
             }
         }
     }
@@ -596,8 +669,30 @@ class Index extends BackendController
             $theme->setFrontendPreviewImage($relativePath)
                 ->setPreviewImage($relativePath);
         }
+        try {
+            $theme->save();
+        } catch (\Throwable $throwable) {
+            if (!$this->isMissingThemePreviewFieldError($throwable, WelineTheme::schema_fields_PREVIEW_IMAGE)) {
+                throw $throwable;
+            }
 
-        $theme->save();
+            // 兼容旧库：若缺少 preview_image 列，移除该字段后重试保存。
+            $theme->unsetData(WelineTheme::schema_fields_PREVIEW_IMAGE)
+                ->unsetModelData(WelineTheme::schema_fields_PREVIEW_IMAGE);
+            $theme->save();
+        }
+    }
+
+    private function isMissingThemePreviewFieldError(\Throwable $throwable, string $field): bool
+    {
+        $message = strtolower($throwable->getMessage());
+        if (!str_contains($message, strtolower($field))) {
+            return false;
+        }
+
+        return str_contains($message, 'undefined column')
+            || str_contains($message, 'does not exist')
+            || str_contains($message, 'column');
     }
 
     /**
@@ -846,6 +941,60 @@ class Index extends BackendController
             ];
         }
         return $result;
+    }
+
+    private function safeLoadActiveThemeId(WelineTheme $theme, string $field): ?int
+    {
+        $theme->clearData()->clearQuery();
+        try {
+            $theme->load($field, 1);
+            return $theme->getId() ? (int)$theme->getId() : null;
+        } catch (\Throwable $throwable) {
+            if ($this->isMissingThemeActivationFieldError($throwable, $field)) {
+                return null;
+            }
+            throw $throwable;
+        }
+    }
+
+    private function isMissingThemeActivationFieldError(\Throwable $throwable, string $field): bool
+    {
+        $message = strtolower($throwable->getMessage());
+        if (!str_contains($message, strtolower($field))) {
+            return false;
+        }
+
+        return str_contains($message, 'undefined column')
+            || str_contains($message, 'does not exist')
+            || str_contains($message, 'column');
+    }
+
+    private function safeToggleAreaThemeActivation(WelineTheme $theme, int $themeId, string $field): bool
+    {
+        try {
+            $theme->clearQuery();
+            $theme->where($field, 1)
+                ->update([$field => 0])->fetch();
+            $theme->clearQuery();
+            $theme->where(WelineTheme::schema_fields_ID, $themeId)
+                ->update([$field => 1])->fetch();
+            return true;
+        } catch (\Throwable $throwable) {
+            if ($this->isMissingThemeActivationFieldError($throwable, $field)) {
+                return false;
+            }
+            throw $throwable;
+        }
+    }
+
+    private function activateThemeFallback(WelineTheme $theme, int $themeId): void
+    {
+        $theme->clearQuery();
+        $theme->where(WelineTheme::schema_fields_IS_ACTIVE, 1)
+            ->update([WelineTheme::schema_fields_IS_ACTIVE => 0])->fetch();
+        $theme->clearQuery();
+        $theme->where(WelineTheme::schema_fields_ID, $themeId)
+            ->update([WelineTheme::schema_fields_IS_ACTIVE => 1])->fetch();
     }
 
     private function themeSupportsArea(WelineTheme $theme, string $area): bool

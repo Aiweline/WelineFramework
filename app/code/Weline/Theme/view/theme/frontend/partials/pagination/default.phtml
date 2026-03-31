@@ -1,19 +1,19 @@
 <?php
 /**
- * 片段：Pagination
- * 
- * 分页导航
- * 字段
- * @meta.name {default="Pagination分页片段",name="Pagination分页片段",description="Pagination分页片段，用于描述片段的名称"}
- * @meta.description {default="分页导航",name="分页导航",description="分页导航，用于描述片段的用途"}
- * @param.currentPage {default=1,name="当前页码",description="当前页码，用于设置当前页码"}
- * @param.totalPages {default=1,name="总页数",description="总页数，用于设置总页数"}
- * @param.baseUrl {default="",name="基础URL",description="基础URL，用于设置分页链接的基础URL"}
- * @param.pageParam {default="page",name="页码参数名",description="页码参数名，用于设置URL中页码参数的名称"}
- * @param.showFirstLast {default=true,name="是否显示首页/末页",description="是否显示首页/末页按钮，用于控制首页/末页按钮的显示"}
- * @param.showPrevNext {default=true,name="是否显示上一页/下一页",description="是否显示上一页/下一页按钮，用于控制上一页/下一页按钮的显示"}
- * @param.maxVisible {default=5,name="最大可见页码数",description="最大可见页码数，用于设置同时显示的页码数量"}
- * @param.class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
+ * 片段：分页导航
+ *
+ * 通用分页导航组件，支持首页/末页、上一页/下一页、页码省略
+ *
+ * @meta.name {default="分页导航",name="分页导航",description="通用分页导航组件"}
+ * @meta.description {default="通用分页导航组件，支持首页/末页、上一页/下一页、页码省略等功能，使用主题CSS变量"}
+ * @param.currentPage {default=1,name="当前页码",description="当前页码"}
+ * @param.totalPages {default=1,name="总页数",description="总页数"}
+ * @param.baseUrl {default="",name="基础URL",description="分页链接的基础URL"}
+ * @param.pageParam {default="page",name="页码参数名",description="URL中页码参数的名称"}
+ * @param.showFirstLast {default=true,type=bool,name="显示首页/末页",description="是否显示首页/末页按钮"}
+ * @param.showPrevNext {default=true,type=bool,name="显示上一页/下一页",description="是否显示上一页/下一页按钮"}
+ * @param.maxVisible {default=5,name="最大可见页码数",description="同时显示的页码数量"}
+ * @param.class {default="",name="额外CSS类",description="额外的CSS类名"}
  */
 
 // 读取ThemeData的该模板文件的元数据配置信息并填充到模板数据中
@@ -22,66 +22,197 @@ foreach ($metaParams as $key => $value) {
     $this->setData("meta.{$key}", $value);
 }
 
-$currentPage = (int)($this->getData("meta.currentPage") ?? 1);
-$totalPages = (int)($this->getData("meta.totalPages") ?? 1);
-$baseUrl = $this->getData("meta.baseUrl") ?? '';
-$pageParam = $this->getData("meta.pageParam") ?? 'page';
-$showFirstLast = $this->getData("meta.showFirstLast") ?? true;
-$showPrevNext = $this->getData("meta.showPrevNext") ?? true;
-$maxVisible = (int)($this->getData("meta.maxVisible") ?? 5);
-$class = $this->getData("meta.class") ?? '';
+$currentPage = (int)($this->getData('meta.currentPage') ?? 1);
+$totalPages = (int)($this->getData('meta.totalPages') ?? 1);
+$baseUrl = $this->getData('meta.baseUrl') ?? '';
+$pageParam = $this->getData('meta.pageParam') ?? 'page';
+$showFirstLast = (bool)($this->getData('meta.showFirstLast') ?? true);
+$showPrevNext = (bool)($this->getData('meta.showPrevNext') ?? true);
+$maxVisible = (int)($this->getData('meta.maxVisible') ?? 5);
+$class = $this->getData('meta.class') ?? '';
 
-// 构建CSS类
-$paginationClass = 'pagination';
-if ($class) {
-    $paginationClass .= ' ' . htmlspecialchars($class);
-}
+$uniqueId = uniqid('pagination-');
 
-// 构建URL函数
-$buildUrl = function($page) use ($baseUrl, $pageParam) {
-    $url = $baseUrl;
-    $separator = strpos($url, '?') !== false ? '&' : '?';
-    return $url . $separator . $pageParam . '=' . $page;
+$buildUrl = static function(int $page) use ($baseUrl, $pageParam): string {
+    $separator = strpos($baseUrl, '?') !== false ? '&' : '?';
+    return $baseUrl . $separator . $pageParam . '=' . $page;
 };
 
-// 计算显示的页码范围
-$startPage = max(1, $currentPage - floor($maxVisible / 2));
+$startPage = max(1, $currentPage - (int) floor($maxVisible / 2));
 $endPage = min($totalPages, $startPage + $maxVisible - 1);
 if ($endPage - $startPage < $maxVisible - 1) {
     $startPage = max(1, $endPage - $maxVisible + 1);
 }
 ?>
-<nav class="<?= $paginationClass ?>" aria-label="pagination">
-    <ul class="pagination-list">
+<?php if ($totalPages > 1): ?>
+<nav class="pagination-partial<?= $class ? ' ' . htmlspecialchars($class) : '' ?>" id="<?= $uniqueId ?>" aria-label="@lang{分页导航}">
+    <ul class="pagination-partial__list">
         <?php if ($showFirstLast && $currentPage > 1): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl(1) ?>"><?= __('首页') ?></a>
+            <li class="pagination-partial__item">
+                <a class="pagination-partial__link pagination-partial__link--first" href="<?= $buildUrl(1) ?>" aria-label="@lang{首页}">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M12 4L8 8l4 4M4 4v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </a>
             </li>
         <?php endif; ?>
-        
+
         <?php if ($showPrevNext && $currentPage > 1): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl($currentPage - 1) ?>"><?= __('上一页') ?></a>
+            <li class="pagination-partial__item">
+                <a class="pagination-partial__link pagination-partial__link--prev" href="<?= $buildUrl($currentPage - 1) ?>" aria-label="@lang{上一页}">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M10 4L6 8l4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span class="pagination-partial__link-text">@lang{上一页}</span>
+                </a>
             </li>
         <?php endif; ?>
-        
+
+        <?php if ($startPage > 1): ?>
+            <li class="pagination-partial__item">
+                <a class="pagination-partial__link" href="<?= $buildUrl(1) ?>">1</a>
+            </li>
+            <?php if ($startPage > 2): ?>
+                <li class="pagination-partial__item pagination-partial__item--ellipsis">
+                    <span class="pagination-partial__ellipsis">...</span>
+                </li>
+            <?php endif; ?>
+        <?php endif; ?>
+
         <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-            <li class="page-item <?= $i === $currentPage ? 'active' : '' ?>">
-                <a class="page-link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+            <li class="pagination-partial__item<?= $i === $currentPage ? ' pagination-partial__item--active' : '' ?>">
+                <?php if ($i === $currentPage): ?>
+                    <span class="pagination-partial__current" aria-current="page"><?= $i ?></span>
+                <?php else: ?>
+                    <a class="pagination-partial__link" href="<?= $buildUrl($i) ?>"><?= $i ?></a>
+                <?php endif; ?>
             </li>
         <?php endfor; ?>
-        
-        <?php if ($showPrevNext && $currentPage < $totalPages): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl($currentPage + 1) ?>"><?= __('下一页') ?></a>
+
+        <?php if ($endPage < $totalPages): ?>
+            <?php if ($endPage < $totalPages - 1): ?>
+                <li class="pagination-partial__item pagination-partial__item--ellipsis">
+                    <span class="pagination-partial__ellipsis">...</span>
+                </li>
+            <?php endif; ?>
+            <li class="pagination-partial__item">
+                <a class="pagination-partial__link" href="<?= $buildUrl($totalPages) ?>"><?= $totalPages ?></a>
             </li>
         <?php endif; ?>
-        
+
+        <?php if ($showPrevNext && $currentPage < $totalPages): ?>
+            <li class="pagination-partial__item">
+                <a class="pagination-partial__link pagination-partial__link--next" href="<?= $buildUrl($currentPage + 1) ?>" aria-label="@lang{下一页}">
+                    <span class="pagination-partial__link-text">@lang{下一页}</span>
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </a>
+            </li>
+        <?php endif; ?>
+
         <?php if ($showFirstLast && $currentPage < $totalPages): ?>
-            <li class="page-item">
-                <a class="page-link" href="<?= $buildUrl($totalPages) ?>"><?= __('末页') ?></a>
+            <li class="pagination-partial__item">
+                <a class="pagination-partial__link pagination-partial__link--last" href="<?= $buildUrl($totalPages) ?>" aria-label="@lang{末页}">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M4 4l4 4-4 4M12 4v8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </a>
             </li>
         <?php endif; ?>
     </ul>
 </nav>
+
+<style>
+.pagination-partial {
+    display: flex;
+    justify-content: center;
+    padding: var(--spacing-4, 1rem) 0;
+}
+
+.pagination-partial__list {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-1, 0.25rem);
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.pagination-partial__link,
+.pagination-partial__current {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--pagination-item-size, 40px);
+    height: var(--pagination-item-size, 40px);
+    padding: 0 var(--pagination-item-padding, 0.75rem);
+    color: var(--color-text-primary);
+    text-decoration: none;
+    border: 1px solid var(--color-border-light);
+    border-radius: var(--radius-md, 8px);
+    background-color: var(--color-bg-primary);
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: var(--font-weight-medium, 500);
+    transition: all 0.2s ease;
+}
+
+.pagination-partial__link:hover {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+    background-color: var(--color-accent-light);
+}
+
+.pagination-partial__item--active .pagination-partial__current,
+.pagination-partial__item--active .pagination-partial__link {
+    background-color: var(--color-accent);
+    border-color: var(--color-accent);
+    color: var(--color-text-light);
+    cursor: default;
+}
+
+.pagination-partial__link--prev,
+.pagination-partial__link--next {
+    gap: var(--spacing-1, 0.25rem);
+}
+
+.pagination-partial__link-text {
+    display: none;
+}
+
+.pagination-partial__item--ellipsis .pagination-partial__ellipsis {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: var(--pagination-item-size, 40px);
+    height: var(--pagination-item-size, 40px);
+    color: var(--color-text-tertiary);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.pagination-partial__link--first,
+.pagination-partial__link--last {
+    color: var(--color-text-secondary);
+}
+
+@media (max-width: 576px) {
+    .pagination-partial__link-text {
+        display: inline;
+    }
+
+    .pagination-partial__link--first,
+    .pagination-partial__link--last {
+        display: none;
+    }
+
+    .pagination-partial__link,
+    .pagination-partial__current {
+        min-width: var(--pagination-item-size-mobile, 36px);
+        height: var(--pagination-item-size-mobile, 36px);
+        padding: 0 var(--spacing-2, 0.5rem);
+        font-size: var(--font-size-xs, 0.8rem);
+    }
+}
+</style>
+<?php endif; ?>
 

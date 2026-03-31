@@ -1,20 +1,22 @@
 <?php
 /**
- * 布局：产品页 - 详情页布局
+ * 布局：商品详情页
  *
- * 产品详情页布局，包含产品图片、信息、详情等区域
- * 支持 widget slot 系统，允许通过后台可视化编辑器配置各个区域的部件
- * 
- * 字段
- * @meta.name {default="产品详情页布局",name="产品详情页布局",description="产品详情页布局，用于描述布局的名称"}
- * @meta.description {default="产品详情页布局，包含产品图片、信息、详情等区域",name="产品详情页布局描述",description="产品详情页布局，包含产品图片、信息、详情等区域，用于描述布局的用途"}
+ * 电商商品详情页布局，包含产品图片画廊、产品信息、详情标签、相关产品推荐等区域
+ * 支持右侧固定边栏、标签页切换、相关产品轮播等功能
+ *
+ * @meta.name {default="商品详情页布局",name="商品详情页布局",description="电商商品详情页布局，包含产品图片、信息、详情标签和推荐区域"}
+ * @meta.description {default="商品详情页布局，包含产品图片画廊、产品信息、规格标签、详情标签页、相关产品推荐，支持右侧固定边栏和响应式设计",name="商品详情页布局",description="商品详情页布局，包含产品图片画廊、产品信息、规格标签、详情标签页、相关产品推荐，支持右侧固定边栏和响应式设计"}
+ * @meta.category {default="catalog",name="商品详情",description="布局所属分类"}
  * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录"}
- * @param title {default="产品详情",name="页面标题",description="页面标题，用于设置页面标题"}
+ * @param title {default="商品详情",name="页面标题",description="页面标题，用于设置页面标题"}
  * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），用于设置页面内容"}
  * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
  * @param showSidebar {default=true,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
+ * @param showRelatedProducts {default=true,name="是否显示相关产品",description="是否显示相关产品推荐区域"}
+ * @param showTabs {default=true,name="是否显示详情标签",description="是否显示产品详情标签区域"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
  * @param layout.leftsider {default=0,option={0:不显示,1:显示},name="显示左侧栏",description="是否显示左侧栏，用于控制布局结构"}
  * @param layout.rightsider {default=1,option={0:不显示,1:显示},name="显示右侧栏",description="是否显示右侧栏，用于控制布局结构"}
@@ -25,6 +27,16 @@
  */
 $meta = $this->getData('meta') ?? [];
 $colors = $this->getData('colors') ?? [];
+
+// 新增参数
+$showSidebar = $meta['showSidebar'] ?? $this->getData('showSidebar') ?? true;
+$showRelatedProducts = $meta['showRelatedProducts'] ?? $this->getData('showRelatedProducts') ?? true;
+$showTabs = $meta['showTabs'] ?? $this->getData('showTabs') ?? true;
+
+$meta['showSidebar'] = $showSidebar;
+$meta['showRelatedProducts'] = $showRelatedProducts;
+$meta['showTabs'] = $showTabs;
+$this->assign('meta', $meta);
 ?>
 <!DOCTYPE html>
 <html lang="{{htmlLang}}" data-local="{{lang_local}}" data-lang="{{lang}}">
@@ -63,32 +75,36 @@ $colors = $this->getData('colors') ?? [];
         <div class="weline-main-content">
             <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::product::content-before</w:hook>
-            
-            <!-- ========== 产品页主体区域 ========== -->
-            <main class="product-detail-main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-detail-main" data-layout="product">
-                <div class="container">
-                    <div class="product-detail-wrapper">
+
+            <!-- ========== 商品详情页主体区域 ========== -->
+            <main class="product-detail-layout__main <?= htmlspecialchars($meta['class'] ?? '') ?>" id="product-detail-main" data-layout="product-detail">
+                <div class="product-detail-layout__container">
+                    <div class="product-detail-layout__wrapper">
                         <!-- ========== 产品主内容区域 ========== -->
                         <w:slot id="product-main"
                                 name="产品主内容区域"
                                 accept="product-gallery,product-info,product-options,add-to-cart"
                                 multiple="true"
                                 position="content"
-                                class="product-detail-content">
+                                class="product-detail-layout__main-content">
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-before</w:hook>
                             <w:hook>WeShop_Product::frontend::layouts::product::main-content<else/>
                                 <if condition="meta.content">
                                     {{meta.content}}
                                 <else/>
-                                    <div class="slot-placeholder" data-placeholder="product-main">
-                                        <span class="placeholder-icon">📦</span>
-                                        <span class="placeholder-text">产品主内容区域 - 控制器渲染产品信息</span>
+                                    <div class="product-detail-layout__placeholder" data-placeholder="product-main">
+                                        <div class="product-detail-layout__placeholder-icon">
+                                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M3 7V5C3 3.89543 3.89543 3 5 3H19C20.1046 3 21 3.89543 21 5V7M3 7V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V7M3 7H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                            </svg>
+                                        </div>
+                                        <span class="product-detail-layout__placeholder-text"><lang>产品主内容区域 - 控制器渲染产品信息</lang></span>
                                     </div>
                                 </if>
                             </w:hook>
                             <w:hook>Weline_Theme::frontend::layouts::product::main-content-after</w:hook>
                         </w:slot>
-                        
+
                         <!-- ========== 产品侧边栏区域 ========== -->
                         <if condition="meta.showSidebar">
                             <w:slot id="product-sidebar"
@@ -97,11 +113,15 @@ $colors = $this->getData('colors') ?? [];
                                     multiple="true"
                                     position="sidebar"
                                     wrapper="aside"
-                                    class="product-detail-sidebar">
+                                    class="product-detail-layout__sidebar">
                                 <w:hook>Weline_Theme::frontend::layouts::product::sidebar-before</w:hook>
-                                <div class="slot-placeholder" data-placeholder="product-sidebar">
-                                    <span class="placeholder-icon">📌</span>
-                                    <span class="placeholder-text">侧边栏区域 - 拖拽推荐部件到此处</span>
+                                <div class="product-detail-layout__placeholder" data-placeholder="product-sidebar">
+                                    <div class="product-detail-layout__placeholder-icon">
+                                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                    <span class="product-detail-layout__placeholder-text"><lang>侧边栏区域 - 拖拽推荐部件到此处</lang></span>
                                 </div>
                                 <w:hook>Weline_Theme::frontend::layouts::product::sidebar-after</w:hook>
                             </w:slot>
@@ -109,45 +129,57 @@ $colors = $this->getData('colors') ?? [];
                     </div>
                 </div>
             </main>
-            
+
             <!-- ========== 产品详情标签区域 ========== -->
-            <w:slot id="product-tabs"
-                    name="产品详情标签区域"
-                    accept="product-description,product-specs,product-reviews,product-qa"
-                    multiple="true"
-                    position="content"
-                    wrapper="section"
-                    class="product-tabs-section">
-                <w:hook>Weline_Theme::frontend::layouts::product::tabs-before</w:hook>
-                <div class="container">
-                    <w:hook>WeShop_Product::frontend::layouts::product::tabs-content<else/>
-                        <div class="slot-placeholder" data-placeholder="product-tabs">
-                            <span class="placeholder-icon">📋</span>
-                            <span class="placeholder-text">产品详情标签区域 - 拖拽详情/评价/问答部件到此处</span>
-                        </div>
-                    </w:hook>
-                </div>
-                <w:hook>Weline_Theme::frontend::layouts::product::tabs-after</w:hook>
-            </w:slot>
-            
-            <!-- ========== 相关产品推荐区域 ========== -->
-            <w:slot id="product-related"
-                    name="相关产品推荐"
-                    accept="related-products,you-may-like,recently-viewed,cross-sell,up-sell,product-carousel"
-                    multiple="true"
-                    position="content"
-                    wrapper="section"
-                    class="product-related-section">
-                <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
-                <div class="container">
-                    <div class="slot-placeholder" data-placeholder="product-related">
-                        <span class="placeholder-icon">🛍️</span>
-                        <span class="placeholder-text">相关产品推荐区域 - 拖拽推荐部件到此处</span>
+            <if condition="meta.showTabs">
+                <w:slot id="product-tabs"
+                        name="产品详情标签区域"
+                        accept="product-description,product-specs,product-reviews,product-qa"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="product-detail-layout__tabs">
+                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-before</w:hook>
+                    <div class="product-detail-layout__tabs-container">
+                        <w:hook>WeShop_Product::frontend::layouts::product::tabs-content<else/>
+                            <div class="product-detail-layout__placeholder" data-placeholder="product-tabs">
+                                <div class="product-detail-layout__placeholder-icon">
+                                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </div>
+                                <span class="product-detail-layout__placeholder-text"><lang>产品详情标签区域 - 拖拽详情/评价/问答部件到此处</lang></span>
+                            </div>
+                        </w:hook>
                     </div>
-                </div>
-                <w:hook>Weline_Theme::frontend::layouts::product::related-after</w:hook>
-            </w:slot>
-            
+                    <w:hook>Weline_Theme::frontend::layouts::product::tabs-after</w:hook>
+                </w:slot>
+            </if>
+
+            <!-- ========== 相关产品推荐区域 ========== -->
+            <if condition="meta.showRelatedProducts">
+                <w:slot id="product-related"
+                        name="相关产品推荐"
+                        accept="related-products,you-may-like,recently-viewed,cross-sell,up-sell,product-carousel"
+                        multiple="true"
+                        position="content"
+                        wrapper="section"
+                        class="product-detail-layout__related">
+                    <w:hook>Weline_Theme::frontend::layouts::product::related-before</w:hook>
+                    <div class="product-detail-layout__related-container">
+                        <div class="product-detail-layout__placeholder" data-placeholder="product-related">
+                            <div class="product-detail-layout__placeholder-icon">
+                                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </div>
+                            <span class="product-detail-layout__placeholder-text"><lang>相关产品推荐区域 - 拖拽推荐部件到此处</lang></span>
+                        </div>
+                    </div>
+                    <w:hook>Weline_Theme::frontend::layouts::product::related-after</w:hook>
+                </w:slot>
+            </if>
+
             <w:hook>Weline_Theme::frontend::layouts::product::content-after</w:hook>
             <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
         </div>
@@ -170,62 +202,130 @@ $colors = $this->getData('colors') ?? [];
     
     <style>
     /* ========================================
-       产品详情页布局样式
+       商品详情页布局样式
+       BEM 命名规范，使用主题 CSS 变量
        ======================================== */
-    .product-detail-main {
-        padding: 2rem 0;
+
+    /* ---- 页面主体 ---- */
+    .product-detail-layout__main {
+        padding: var(--spacing-4, 2rem) 0;
     }
-    
-    .product-detail-wrapper {
+
+    .product-detail-layout__container {
+        width: 100%;
+        max-width: var(--layout-max-width, 1600px);
+        margin: 0 auto;
+        padding: 0 var(--spacing-4, 1.5rem);
+    }
+
+    .product-detail-layout__wrapper {
         display: flex;
-        gap: 2rem;
+        gap: var(--spacing-6, 2rem);
         flex-wrap: wrap;
     }
-    
-    .product-detail-content {
+
+    /* ---- 主内容区域 ---- */
+    .product-detail-layout__main-content {
         flex: 1;
         min-width: 0;
     }
-    
-    .product-detail-sidebar {
-        width: 300px;
+
+    /* ---- 侧边栏 ---- */
+    .product-detail-layout__sidebar {
+        width: var(--sidebar-width, 320px);
         flex-shrink: 0;
+        position: sticky;
+        top: calc(var(--header-height, 70px) + var(--spacing-4, 1rem));
+        max-height: calc(100vh - var(--header-height, 70px) - var(--spacing-8, 4rem));
+        overflow-y: auto;
+        overscroll-behavior: contain;
     }
-    
-    .product-tabs-section {
-        padding: 2rem 0;
-        background: var(--color-bg-secondary, #f8f9fa);
+
+    /* ---- 详情标签区域 ---- */
+    .product-detail-layout__tabs {
+        padding: var(--spacing-6, 2rem) 0;
+        background-color: var(--color-bg-secondary);
     }
-    
-    .product-related-section {
-        padding: 2rem 0;
+
+    .product-detail-layout__tabs-container {
+        width: 100%;
+        max-width: var(--layout-max-width, 1600px);
+        margin: 0 auto;
+        padding: 0 var(--spacing-4, 1.5rem);
     }
-    
-    /* 编辑模式样式由 editor-mode.css 统一管理 */
-    
-    /* 响应式设计 */
+
+    /* ---- 相关产品区域 ---- */
+    .product-detail-layout__related {
+        padding: var(--spacing-6, 2rem) 0;
+    }
+
+    .product-detail-layout__related-container {
+        width: 100%;
+        max-width: var(--layout-max-width, 1600px);
+        margin: 0 auto;
+        padding: 0 var(--spacing-4, 1.5rem);
+    }
+
+    /* ---- 占位符 ---- */
+    .product-detail-layout__placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: var(--spacing-4, 1rem);
+        padding: var(--spacing-8, 4rem) var(--spacing-4, 1.5rem);
+        text-align: center;
+        color: var(--color-text-tertiary);
+    }
+
+    .product-detail-layout__placeholder-icon {
+        color: var(--color-text-disabled);
+    }
+
+    .product-detail-layout__placeholder-text {
+        font-size: var(--font-size-sm, 0.875rem);
+    }
+
+    /* ---- 编辑模式样式由 editor-mode.css 统一管理 ---- */
+
+    /* ---- 响应式设计 ---- */
     @media (max-width: 992px) {
-        .product-detail-wrapper {
+        .product-detail-layout__wrapper {
             flex-direction: column;
         }
-        
-        .product-detail-sidebar {
+
+        .product-detail-layout__sidebar {
             width: 100%;
+            position: static;
+            max-height: none;
         }
     }
-    
+
     @media (max-width: 768px) {
-        .product-detail-main {
-            padding: 1rem 0;
+        .product-detail-layout__main {
+            padding: var(--spacing-3, 1rem) 0;
         }
-        
-        .product-tabs-section,
-        .product-related-section {
-            padding: 1.5rem 0;
+
+        .product-detail-layout__container {
+            padding: 0 var(--spacing-3, 0.75rem);
+        }
+
+        .product-detail-layout__wrapper {
+            gap: var(--spacing-4, 1rem);
+        }
+
+        .product-detail-layout__tabs,
+        .product-detail-layout__related {
+            padding: var(--spacing-5, 1.5rem) 0;
+        }
+
+        .product-detail-layout__tabs-container,
+        .product-detail-layout__related-container {
+            padding: 0 var(--spacing-3, 0.75rem);
         }
     }
     </style>
-    
+
     <!-- 编辑模式脚本由 ThemeEditor 控制器注入 -->
 </body>
 </html>

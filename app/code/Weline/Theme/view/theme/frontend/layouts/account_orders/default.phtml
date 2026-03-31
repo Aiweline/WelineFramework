@@ -25,26 +25,94 @@
 </head>
 <body>
     @template(Weline_Frontend::templates/public/header.phtml)
-    
-    <div class="account-orders <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-orders" data-layout="account_orders">
-        <aside class="account-sidebar">
+
+    <div class="account-orders {{meta.class}}" id="account-orders" data-layout="account_orders">
+        <aside class="account-orders__sidebar">
             @template(Weline_Customer::templates/frontend/account/sidebar/side.phtml)
         </aside>
-        
-        <main class="account-orders-content" id="account-orders-content" data-layout="account_orders_content">
-            <if condition="meta.filters">
-                <div class="orders-filters">
-                    {{meta.filters}}
+
+        <main class="account-orders__main" id="account-orders-content" data-layout="account_orders_content">
+            <div class="account-orders__container">
+                <if condition="meta.filters">
+                    <div class="account-orders__filters">
+                        {{meta.filters}}
+                    </div>
+                </if>
+
+                <div class="account-orders__list">
+                    {{meta.content}}
                 </div>
-            </if>
-            
-            <div class="orders-list">
-                {{meta.content}}
             </div>
         </main>
     </div>
-    
+
     @template(Weline_Frontend::templates/public/footer.phtml)
 </body>
 </html>
+
+<style>
+.account-orders {
+    --ao-sidebar-width: 280px;
+    --ao-content-max-width: 1200px;
+    --ao-gutter: var(--spacing-lg, 2rem);
+    --ao-border-radius: var(--border-radius-xl, 1rem);
+    --ao-transition: var(--transition-base, 0.2s ease);
+
+    display: flex;
+    min-height: calc(100vh - 80px);
+    background: var(--color-bg-secondary);
+}
+
+.account-orders__sidebar {
+    width: var(--ao-sidebar-width);
+    flex-shrink: 0;
+    background: var(--color-bg-primary);
+    border-right: 1px solid var(--color-border-light);
+    padding: var(--ao-gutter);
+    position: sticky;
+    top: 80px;
+    height: calc(100vh - 80px);
+    overflow-y: auto;
+}
+
+.account-orders__main {
+    flex: 1;
+    padding: var(--ao-gutter);
+    display: flex;
+    justify-content: center;
+}
+
+.account-orders__container {
+    width: 100%;
+    max-width: var(--ao-content-max-width);
+}
+
+.account-orders__filters {
+    margin-bottom: var(--spacing-lg, 1.5rem);
+}
+
+.account-orders__list {
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .account-orders {
+        flex-direction: column;
+        min-height: auto;
+    }
+
+    .account-orders__sidebar {
+        width: 100%;
+        height: auto;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--color-border-light);
+        padding: var(--spacing-md, 1rem);
+    }
+
+    .account-orders__main {
+        padding: var(--spacing-md, 1rem);
+    }
+}
+</style>
 
