@@ -51,7 +51,12 @@ class ThemePathResolver implements ThemePathResolverInterface
         try {
             /** @var \Weline\Theme\Service\ThemeDirectoryResolver $directoryResolver */
             $directoryResolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemeDirectoryResolver::class);
-            return $directoryResolver->resolveThemeTemplatePath($modulePath, $theme);
+            $resolved = $directoryResolver->resolveThemeTemplatePath($modulePath, $theme);
+            // 仅当解析结果与输入不同且文件真实存在时才采用；否则回退到继承链 + buildThemePath
+            // （避免 ThemeDirectoryResolver 在部分环境下 is_file 未命中时仍返回原始 Weline_Theme 路径，导致 design 主题布局不生效）
+            if ($resolved !== $modulePath && is_file($resolved)) {
+                return $resolved;
+            }
         } catch (\Throwable $throwable) {
         }
 
