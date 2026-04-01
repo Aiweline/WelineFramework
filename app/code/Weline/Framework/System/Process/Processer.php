@@ -66,6 +66,11 @@ class Processer
      * 保守取 200 以确保不会过长
      */
     public const PROCESS_NAME_MAX_LENGTH = 200;
+
+    /**
+     * PowerShell 5.x 对无 BOM 的 .ps1 常按系统 ANSI 解码；BP/参数含中文时会导致 Start-Process 路径错误、PID 回传为空。
+     */
+    private const WINDOWS_PS1_UTF8_BOM = "\xEF\xBB\xBF";
     
     /*----------------------------------------进程名规范化区域------------------------------------------*/
     
@@ -734,6 +739,107 @@ class Processer
         }
         
         return 0;
+    }
+
+    /**
+     * Windows：用 PowerShell Start-Process，且 ArgumentList 为字符串数组，避免「整段命令行」经 ANSI/控制台编码后损坏（中文 BP、中文参数等），导致 PID 回传为空。
+     *
+     * @param list<string> $argv [php.exe 路径, 脚本绝对路径, ...脚本 argv]
+     * @param string       $cwd  WorkingDirectory（一般为 BP）
+     * @param string       $pnameForRegistry 与 {@see create()} 相同语义的命令行（须含 --name=），用于 setPid/日志
+     */
+    public static function createWindowsDetachedPhpArgv(
+        array $argv,
+        string $cwd,
+        string $pnameForRegistry,
+        ?bool $enableLog = null
+    ): int {
+        if (!IS_WIN || \count($argv) < 2) {
+            return 0;
+        }
+
+        $disabledFunctions = \array_map('trim', \explode(',', \ini_get('disable_functions') ?: ''));
+        if (!\function_exists('proc_open') || \in_array('proc_open', $disabledFunctions, true)) {
+            return 0;
+        }
+
+        if ($enableLog === null) {
+            $enableLog = self::isLogEnabled();
+        }
+
+        $processInfo = self::ensureProcessName($pnameForRegistry);
+        $pname = $processInfo['command'];
+
+        $scriptPath = self::writeWindowsStartScriptArgv($argv, $cwd);
+        if ($scriptPath === null) {
+            return 0;
+        }
+
+        $nullDevice = 'NUL';
+        if ($enableLog) {
+            self::setOutput(
+                $pname,
+                PHP_EOL . '--- Process started at ' . \date('Y-m-d H:i:s') . " (Windows argv Start-Process)\n" . $pname . PHP_EOL,
+                true
+            );
+        }
+
+        $descriptorspec = [
+            0 => ['file', $nullDevice, 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $lastError = null;
+        \set_error_handler(static function ($type, $msg) use (&$lastError): bool {
+            $lastError = $msg;
+
+            return true;
+        });
+        try {
+            $psProcess = \proc_open(
+                self::buildWindowsPowerShellProcOpenCommand($scriptPath),
+                $descriptorspec,
+                $psPipes,
+                $cwd,
+                null,
+                ['bypass_shell' => true]
+            );
+        } finally {
+            \restore_error_handler();
+        }
+
+        $pid = 0;
+        if (\is_resource($psProcess)) {
+            $output = '';
+            $stderr = '';
+            if (isset($psPipes[1])) {
+                $output = \trim((string) \stream_get_contents($psPipes[1]));
+                $output = \preg_replace('/^\xEF\xBB\xBF/', '', $output) ?? $output;
+                @\fclose($psPipes[1]);
+            }
+            if (isset($psPipes[2])) {
+                $stderr = \trim((string) \stream_get_contents($psPipes[2]));
+                @\fclose($psPipes[2]);
+            }
+            @\proc_close($psProcess);
+            @\unlink($scriptPath);
+
+            if ($output !== '' && \ctype_digit($output) && (int) $output > 0) {
+                $pid = (int) $output;
+                $pid = self::setPid($pname, $pid);
+            }
+
+            if ($enableLog && $stderr !== '') {
+                self::setOutput($pname, "[ERROR] start-process(argv) failed: {$stderr}" . PHP_EOL);
+            }
+        }
+
+        if ($enableLog && $lastError !== null) {
+            self::setOutput($pname, "[ERROR] proc_open(powershell argv) failed: {$lastError}" . PHP_EOL);
+        }
+
+        return $pid;
     }
 
     /**
@@ -2228,7 +2334,7 @@ class Processer
         $scriptPath = $tmpBase . '.ps1';
         @\unlink($tmpBase);
 
-        if (@\file_put_contents($scriptPath, $script) === false) {
+        if (@\file_put_contents($scriptPath, self::WINDOWS_PS1_UTF8_BOM . $script) === false) {
             @\unlink($scriptPath);
             return null;
         }
@@ -2398,14 +2504,97 @@ class Processer
         return 0;
     }
 
+    /**
+     * PowerShell 单引号字符串字面量（值内单引号加倍）。
+     */
+    private static function toPowerShellSingleQuoted(string $value): string
+    {
+        return "'" . \str_replace("'", "''", $value) . "'";
+    }
+
+    /**
+     * 生成使用 Start-Process -ArgumentList @(...) 的启动脚本（UTF-8 BOM），供 {@see createWindowsDetachedPhpArgv} 使用。
+     *
+     * @param list<string> $argv
+     */
+    private static function writeWindowsStartScriptArgv(array $argv, string $workingDir): ?string
+    {
+        if (\count($argv) < 2) {
+            return null;
+        }
+
+        $argLines = [];
+        for ($i = 1, $n = \count($argv); $i < $n; $i++) {
+            $argLines[] = '    ' . self::toPowerShellSingleQuoted((string) $argv[$i]);
+        }
+        $argListBody = \implode(",\n", $argLines);
+
+        $template = <<<'POWERSHELL'
+$ErrorActionPreference = 'Stop'
+$phpExe = __PHP__
+$wd = __WD__
+$argList = @(
+__ARGS__
+)
+try {
+    Set-Location -LiteralPath $wd -ErrorAction Stop
+} catch {
+    [Console]::Error.WriteLine("Failed to set working directory: $($_.Exception.Message)")
+    exit 1
+}
+$startArgs = @{
+    FilePath = $phpExe
+    WindowStyle = 'Hidden'
+    PassThru = $true
+    ErrorAction = 'Stop'
+    ArgumentList = $argList
+}
+try {
+    $p = Start-Process @startArgs
+    [Console]::Out.WriteLine([string]$p.Id)
+} catch {
+    [Console]::Error.WriteLine($_.Exception.Message)
+    exit 1
+}
+POWERSHELL;
+
+        $script = \str_replace(
+            ['__PHP__', '__WD__', '__ARGS__'],
+            [self::toPowerShellSingleQuoted((string) $argv[0]), self::toPowerShellSingleQuoted($workingDir), $argListBody],
+            $template
+        );
+
+        $tmpBase = \tempnam(\sys_get_temp_dir(), 'weline-start-argv-');
+        if ($tmpBase === false || $tmpBase === '') {
+            return null;
+        }
+
+        $scriptPath = $tmpBase . '.ps1';
+        @\unlink($tmpBase);
+
+        if (@\file_put_contents($scriptPath, self::WINDOWS_PS1_UTF8_BOM . $script) === false) {
+            @\unlink($scriptPath);
+
+            return null;
+        }
+
+        return $scriptPath;
+    }
+
     private static function writeWindowsStartScript(string $phpBinary, string $arguments, string $workingDir): ?string
     {
         $template = <<<'POWERSHELL'
 $ErrorActionPreference = 'Stop'
 $arguments = '__ARGUMENTS__'
+$wd = '__WORKING_DIR__'
+try {
+    Set-Location -LiteralPath $wd -ErrorAction Stop
+} catch {
+    [Console]::Error.WriteLine("Failed to set working directory: $($_.Exception.Message)")
+    exit 1
+}
 $startArgs = @{
     FilePath = '__PHP_BINARY__'
-    WorkingDirectory = '__WORKING_DIR__'
     WindowStyle = 'Hidden'
     PassThru = $true
     ErrorAction = 'Stop'
@@ -2440,7 +2629,7 @@ POWERSHELL;
         $scriptPath = $tmpBase . '.ps1';
         @\unlink($tmpBase);
 
-        if (@\file_put_contents($scriptPath, $script) === false) {
+        if (@\file_put_contents($scriptPath, self::WINDOWS_PS1_UTF8_BOM . $script) === false) {
             @\unlink($scriptPath);
             return null;
         }
