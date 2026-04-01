@@ -3652,14 +3652,18 @@ PHP;
         
         // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
         if ($pid <= 0) {
+            // 渐进式轮询：快速探测 -> 逐步放缓（10ms -> 20ms -> 50ms -> 100ms）
+            $pollIntervals = [10_000, 20_000, 50_000, 100_000];
             $maxWait = $frontend ? 3000 : 500;
-            $waitStep = 100;
             $waited = 0;
-            
+            $pollIndex = 0;
+
             while ($waited < $maxWait) {
-                SchedulerSystem::usleep($waitStep * 1000);
-                $waited += $waitStep;
-                
+                $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
+                SchedulerSystem::usleep($sleepUs);
+                $waited += ($sleepUs / 1000);
+                $pollIndex++;
+
                 $pid = Processer::getProcessIdByPort($dispatcherPort);
                 if ($pid > 0) {
                     Processer::setPid($processName, $pid);
@@ -3756,16 +3760,18 @@ PHP;
         // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
         // Windows 前台模式下 Processer::create 通常返回 0，需要等待并检测端口
         if ($pid <= 0) {
-            // 等待进程启动并绑定端口
-            // SSL Worker 需要更长的启动时间（加载框架、证书等）
-            $maxWait = $frontend ? 3000 : 2000; // 后台模式等待 2 秒，前台模式 3 秒
-            $waitStep = 100; // 每次检测间隔 100ms
+            // 渐进式轮询：快速探测 -> 逐步放缓（10ms -> 20ms -> 50ms -> 100ms）
+            $pollIntervals = [10_000, 20_000, 50_000, 100_000];
+            $maxWait = $frontend ? 3000 : 2000;
             $waited = 0;
-            
+            $pollIndex = 0;
+
             while ($waited < $maxWait) {
-                SchedulerSystem::usleep($waitStep * 1000);
-                $waited += $waitStep;
-                
+                $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
+                SchedulerSystem::usleep($sleepUs);
+                $waited += ($sleepUs / 1000);
+                $pollIndex++;
+
                 $detectedPid = Processer::getProcessIdByPort($port);
                 if ($detectedPid > 0) {
                     Processer::setPid($processName, $detectedPid);
@@ -3842,16 +3848,18 @@ PHP;
         // 前端模式或后台模式：如果 PID 获取失败，通过端口检测
         // Windows 前台模式下 Processer::create 通常返回 0，需要等待并检测端口
         if ($pid <= 0) {
-            // 等待进程启动并绑定端口
-            // SSL Worker 需要更长的启动时间（加载框架、证书等）
-            $maxWait = $frontend ? 3000 : 2000; // 后台模式等待 2 秒，前台模式 3 秒
-            $waitStep = 100; // 每次检测间隔 100ms
+            // 渐进式轮询：快速探测 -> 逐步放缓（10ms -> 20ms -> 50ms -> 100ms）
+            $pollIntervals = [10_000, 20_000, 50_000, 100_000];
+            $maxWait = $frontend ? 3000 : 2000;
             $waited = 0;
-            
+            $pollIndex = 0;
+
             while ($waited < $maxWait) {
-                SchedulerSystem::usleep($waitStep * 1000);
-                $waited += $waitStep;
-                
+                $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
+                SchedulerSystem::usleep($sleepUs);
+                $waited += ($sleepUs / 1000);
+                $pollIndex++;
+
                 $detectedPid = Processer::getProcessIdByPort($port);
                 if ($detectedPid > 0) {
                     Processer::setPid($processName, $detectedPid);
