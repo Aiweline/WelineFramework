@@ -654,9 +654,12 @@ class SharedStateServiceManager
             $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
             $memoryPortExplicit = \array_key_exists('memory_server_port', $config)
                 || \array_key_exists('port', $memoryConfig);
-            $port = (int) ($config['memory_server_port'] ?? $memoryConfig['port'] ?? 19971);
+
+            // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+            $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
+            $port = (int) ($config['memory_server_port'] ?? $memoryConfig['port'] ?? $defaultPort);
             if ($port <= 0) {
-                $port = 19971;
+                $port = $defaultPort;
             }
 
             $tokenFileName = \trim((string) (
@@ -697,15 +700,17 @@ class SharedStateServiceManager
             || \array_key_exists('port', $wlsSession)
             || \array_key_exists('server_port', $sessionConfig);
 
+        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
         $port = (int) (
             $config['session_server_port']
             ?? $wlsServer['port']
             ?? $wlsSession['port']
             ?? $sessionConfig['server_port']
-            ?? 19970
+            ?? $defaultPort
         );
         if ($port <= 0) {
-            $port = 19970;
+            $port = $defaultPort;
         }
 
         $tokenFileName = \trim((string) (
