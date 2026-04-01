@@ -425,7 +425,7 @@ class Start extends CommandAbstract
         $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
         $this->printer->note(__('Worker基础端口: %{1}', [$workerBasePort]));
         try {
-            $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart);
+            $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart, $frontend);
             $this->printer->note(__('共享状态运行时: %{1}', [$sharedStateRuntime]));
         } catch (\RuntimeException $exception) {
             $this->printer->note(__('共享状态运行时解析失败: %{1}', [$exception->getMessage()]));
@@ -1053,8 +1053,9 @@ class Start extends CommandAbstract
                 ->init($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend)
                 ->setWorkerPids($workerPids)
                 ->run();
-        } catch (\RuntimeException $e) {
-            // HTTP 重定向端口被占用或其他启动错误
+        } catch (\Throwable $e) {
+            // 启动中途失败时，强制清理当前实例已拉起的子进程，避免半启动残留。
+            $this->cleanupFailedStartupProcesses($instanceName, (int) ($config['worker_count'] ?? 0));
             $this->printer->error(__('服务器启动失败'));
             $this->printer->error($e->getMessage());
             $this->printer->note(__(''));
@@ -1064,6 +1065,59 @@ class Start extends CommandAbstract
             $this->printer->note(__(''));
             throw $e;
         }
+    }
+
+    /**
+     * 启动失败后清理当前实例的残留进程与索引。
+     */
+    protected function cleanupFailedStartupProcesses(string $instanceName, int $workerCount = 0): void
+    {
+        $workerCount = $workerCount > 0 ? $workerCount : 16;
+        $scopedWorkerPrefix = MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName) . '-';
+        $scopedMaintenancePrefix = MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName) . '-';
+        $prefixes = [
+            MasterProcess::getMasterProcessName($instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-session', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-memory', $instanceName),
+            MasterProcess::buildScopedProcessName('weline-wls-redirect', $instanceName),
+            $scopedWorkerPrefix,
+            $scopedMaintenancePrefix,
+            MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName,
+            'weline-wls-dispatcher-' . $instanceName,
+            'weline-wls-session-' . $instanceName,
+            'weline-wls-memory-' . $instanceName,
+            'weline-wls-redirect-' . $instanceName,
+            'weline-wls-worker-' . $instanceName . '-',
+            'weline-wls-maintenance-' . $instanceName . '-',
+            'weline-master-' . $instanceName . '-worker-',
+        ];
+
+        foreach (\array_unique($prefixes) as $prefix) {
+            if ($prefix !== '') {
+                Processer::killByProcessNamePrefix($prefix);
+            }
+        }
+
+        Processer::removePidFile('--name=' . MasterProcess::getMasterProcessName($instanceName));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-session', $instanceName));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-memory', $instanceName));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-redirect', $instanceName));
+        Processer::removePidFile('--name=weline-wls-dispatcher-' . $instanceName);
+        Processer::removePidFile('--name=weline-wls-session-' . $instanceName);
+        Processer::removePidFile('--name=weline-wls-memory-' . $instanceName);
+        Processer::removePidFile('--name=weline-wls-redirect-' . $instanceName);
+
+        for ($i = 1; $i <= $workerCount; $i++) {
+            Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName, $i));
+            Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-maintenance', $instanceName, $i));
+            Processer::removePidFile('--name=weline-wls-worker-' . $instanceName . '-' . $i);
+            Processer::removePidFile('--name=weline-wls-maintenance-' . $instanceName . '-' . $i);
+            Processer::removePidFile('--name=weline-master-' . $instanceName . '-worker-' . $i);
+        }
+
+        Processer::cleanupStalePidFiles();
     }
 
     protected function configureMasterRuntime(
@@ -1089,14 +1143,14 @@ class Start extends CommandAbstract
             ->setWorkerPort($workerPort);
     }
 
-    protected function resolveSharedStateRuntimeConfig(string $instanceName, array $config, bool $forceRestart = false): array
+    protected function resolveSharedStateRuntimeConfig(string $instanceName, array $config, bool $forceRestart = false, bool $frontend = false): array
     {
         $envConfig = Env::getInstance()->getConfig();
         if (!\is_array($envConfig)) {
             $envConfig = [];
         }
 
-        return $this->createSharedStateServiceManager()->ensureRuntime($instanceName, $config, $envConfig);
+        return $this->createSharedStateServiceManager()->ensureRuntime($instanceName, $config, $envConfig, $frontend);
     }
 
     protected function createSharedStateServiceManager(): SharedStateServiceManager
@@ -2508,9 +2562,13 @@ class Start extends CommandAbstract
         // getData() 直接读文件（< 1ms），isRunningByPid() 用 tasklist 精确匹配（10-50ms）
         
         // 检查 Dispatcher PID
-        $dispatcherProcessName = '--name=weline-wls-dispatcher-' . $instanceName;
+        $dispatcherProcessName = '--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName);
         $dispatcherPid = (int) Processer::getData($dispatcherProcessName, 'pid');
         if ($dispatcherPid > 0 && Processer::isRunningByPid($dispatcherPid)) {
+            return true;
+        }
+        $dispatcherPidLegacy = (int) Processer::getData('--name=weline-wls-dispatcher-' . $instanceName, 'pid');
+        if ($dispatcherPidLegacy > 0 && Processer::isRunningByPid($dispatcherPidLegacy)) {
             return true;
         }
         
@@ -2520,9 +2578,15 @@ class Start extends CommandAbstract
         // - 旧前缀：weline-master-{instanceName}-worker-{id}
         for ($i = 1; $i <= $count; $i++) {
             // 优先检查新前缀
-            $workerProcessNameNew = '--name=weline-wls-worker-' . $instanceName . '-' . $i;
+            $workerProcessNameNew = '--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName, $i);
             $workerPid = (int) Processer::getData($workerProcessNameNew, 'pid');
             if ($workerPid > 0 && Processer::isRunningByPid($workerPid)) {
+                return true;
+            }
+
+            $workerProcessNameLegacy = '--name=weline-wls-worker-' . $instanceName . '-' . $i;
+            $workerPidLegacy = (int) Processer::getData($workerProcessNameLegacy, 'pid');
+            if ($workerPidLegacy > 0 && Processer::isRunningByPid($workerPidLegacy)) {
                 return true;
             }
             
@@ -2673,12 +2737,13 @@ class Start extends CommandAbstract
 
         // 三次仍杀不死：存在逃逸 Master 在不断拉起子进程，从 var/process 按 Master 前缀找并杀
         $this->printer->warning(__('端口 %{1} 经 %{2} 次仍占用，按 Master 前缀清理逃逸进程...', [$port, $maxAttempts]));
-        $masterPrefix = MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName;
+        $masterPrefix = MasterProcess::buildScopedProcessName(MasterProcess::MASTER_PROCESS_NAME_PREFIX, $instanceName);
         $pnamesInProcessDir = Processer::getProcessNamesByPrefix($masterPrefix);
         if (\count($pnamesInProcessDir) > 0) {
             $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
         }
         $killed = Processer::killByProcessNamePrefix($masterPrefix);
+        $killed += Processer::killByProcessNamePrefix(MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName);
         if ($killed > 0) {
             $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
         }
@@ -2763,12 +2828,13 @@ class Start extends CommandAbstract
 
         // 三轮仍杀不死：从 var/process 按 Master 前缀找并杀逃逸 Master 后再试
         $this->printer->warning(__('端口经 %{1} 轮仍占用，按 Master 前缀清理逃逸进程...', [$maxAttempts]));
-        $masterPrefix = MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName;
+        $masterPrefix = MasterProcess::buildScopedProcessName(MasterProcess::MASTER_PROCESS_NAME_PREFIX, $instanceName);
         $pnamesInProcessDir = Processer::getProcessNamesByPrefix($masterPrefix);
         if (\count($pnamesInProcessDir) > 0) {
             $this->printer->note(__('  从 var/process 发现 %{1} 个匹配 Master，正在按前缀杀死', [\count($pnamesInProcessDir)]));
         }
         $killed = Processer::killByProcessNamePrefix($masterPrefix);
+        $killed += Processer::killByProcessNamePrefix(MasterProcess::MASTER_PROCESS_NAME_PREFIX . $instanceName);
         if ($killed > 0) {
             $this->printer->note(__('  已按前缀清理 %{1} 个逃逸 Master 进程', [$killed]));
         }
@@ -3570,7 +3636,7 @@ PHP;
         }
         
         // 统一进程名
-        $processName = 'weline-wls-dispatcher-' . $instanceName;
+        $processName = MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $instanceName);
         
         // 使用进程管理器统一创建进程
         // 参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>
@@ -3672,7 +3738,7 @@ PHP;
     {
         // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
         // 使用新前缀：weline-wls-worker-{instanceName}-{id}
-        $processName = 'weline-wls-worker-' . $instanceName . '-' . $workerId;
+        $processName = MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName, $workerId);
         $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
         if ($sslCert && $sslKey) {
             $command .= " \"{$sslCert}\" \"{$sslKey}\"";
@@ -3731,7 +3797,7 @@ PHP;
             
             // 进程名包含实例名和 Worker ID
             // 使用新前缀：weline-wls-worker-{instanceName}-{id}
-            $processName = 'weline-wls-worker-' . $instanceName . '-' . $workerId;
+            $processName = MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName, $workerId);
             $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
             if ($sslCert && $sslKey) {
                 $command .= " \"{$sslCert}\" \"{$sslKey}\"";
@@ -3759,7 +3825,7 @@ PHP;
     {
         // 进程名包含实例名和 Worker ID，便于多 Master 架构下识别和管理
         // 使用新前缀：weline-wls-worker-{instanceName}-{id}
-        $processName = 'weline-wls-worker-' . $instanceName . '-' . $workerId;
+        $processName = MasterProcess::buildScopedProcessName('weline-wls-worker', $instanceName, $workerId);
         $command = "\"{$phpBinary}\" \"{$workerScript}\" {$host} {$port} {$workerId} {$instanceName}";
         if ($sslCert && $sslKey) {
             $command .= " \"{$sslCert}\" \"{$sslKey}\"";
