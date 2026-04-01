@@ -12,6 +12,7 @@ use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
 use Weline\Server\Shared\Client\SharedStateClient;
+use Weline\Server\Shared\Connection\ConnectionPoolManager;
 
 class SharedStateServiceManager
 {
@@ -26,14 +27,14 @@ class SharedStateServiceManager
      *   memory: array<string, mixed>
      * }
      */
-    public function ensureRuntime(string $requesterInstanceName, array $config, array $envConfig = []): array
+    public function ensureRuntime(string $requesterInstanceName, array $config, array $envConfig = [], bool $frontend = false): array
     {
         $runtime = [
-            'session' => $this->ensure(ControlMessage::ROLE_SESSION_SERVER, $config, $envConfig, $requesterInstanceName),
+            'session' => $this->ensure(ControlMessage::ROLE_SESSION_SERVER, $config, $envConfig, $requesterInstanceName, $frontend),
         ];
 
         if ($this->isMemoryEnabled($config, $envConfig)) {
-            $runtime['memory'] = $this->ensure(ControlMessage::ROLE_MEMORY_SERVER, $config, $envConfig, $requesterInstanceName);
+            $runtime['memory'] = $this->ensure(ControlMessage::ROLE_MEMORY_SERVER, $config, $envConfig, $requesterInstanceName, $frontend);
         } else {
             $runtime['memory'] = $this->buildRoleDefinition(
                 ControlMessage::ROLE_MEMORY_SERVER,
@@ -59,11 +60,12 @@ class SharedStateServiceManager
         string $role,
         array $config = [],
         array $envConfig = [],
-        string $requesterInstanceName = 'system'
+        string $requesterInstanceName = 'system',
+        bool $frontend = false
     ): array {
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
-        return $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName): array {
+        return $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend): array {
             $probe = $this->probeDefinition($definition);
             if ((bool) ($probe['healthy'] ?? false)) {
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
@@ -81,9 +83,16 @@ class SharedStateServiceManager
 
             if ((bool) ($probe['reusable_but_unhealthy'] ?? false)) {
                 $this->forceStopReusedService($definition, \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []);
+                if (\defined('IS_WIN') && IS_WIN) {
+                    // Windows 上强制杀进程后端口进入 TIME_WAIT，过短间隔内子进程 bind 可能失败。
+                    SchedulerSystem::usleep(500_000);
+                }
             }
 
-            $this->launchSharedServiceProcess($definition, $requesterInstanceName);
+            $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, $frontend);
+            if ($pid <= 0) {
+                throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
+            }
 
             return $this->waitUntilServiceReady($definition);
         });
@@ -98,9 +107,10 @@ class SharedStateServiceManager
         string $role,
         array $config = [],
         array $envConfig = [],
-        string $requesterInstanceName = 'system'
+        string $requesterInstanceName = 'system',
+        bool $frontend = false
     ): array {
-        return $this->restart($role, $config, $envConfig, $requesterInstanceName);
+        return $this->restart($role, $config, $envConfig, $requesterInstanceName, $frontend);
     }
 
     /**
@@ -112,13 +122,20 @@ class SharedStateServiceManager
         string $role,
         array $config = [],
         array $envConfig = [],
-        string $requesterInstanceName = 'system'
+        string $requesterInstanceName = 'system',
+        bool $frontend = false
     ): array {
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
-        return $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName): array {
+        return $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend): array {
             $this->forceStopReusedService($definition, []);
-            $this->launchSharedServiceProcess($definition, $requesterInstanceName);
+            if (\defined('IS_WIN') && IS_WIN) {
+                SchedulerSystem::usleep(500_000);
+            }
+            $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, $frontend);
+            if ($pid <= 0) {
+                throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
+            }
 
             return $this->waitUntilServiceReady($definition);
         });
@@ -380,11 +397,21 @@ class SharedStateServiceManager
             $pollMs = self::DEFAULT_ENSURE_POLL_INTERVAL_MS;
         }
 
+        ConnectionPoolManager::discardPool(
+            (string) $definition['host'],
+            (int) $definition['port'],
+            (string) ($definition['token_file_name'] ?? '')
+        );
+
         $deadline = \microtime(true) + $timeoutSec;
         $startedAt = \date('c');
+        $firstPoll = true;
 
         while (\microtime(true) < $deadline) {
-            SchedulerSystem::usleep($pollMs * 1000);
+            // 首轮略加长，给 Windows 下 PowerShell 拉起 PHP 子进程留出时间。
+            $sleepUs = $firstPoll ? \max($pollMs * 1000, 400_000) : ($pollMs * 1000);
+            $firstPoll = false;
+            SchedulerSystem::usleep($sleepUs);
             $probe = $this->probeDefinition($definition);
             if (!((bool) ($probe['healthy'] ?? false))) {
                 continue;
@@ -403,10 +430,12 @@ class SharedStateServiceManager
 
         throw new \RuntimeException(
             \sprintf(
-                'Shared %s service failed to become ready on %s:%d.',
+                'Shared %s service failed to become ready on %s:%d. 请查看进程日志（进程名 %s）与 %s；若需释放共享侧车可执行 php bin/w server:shared:stop 后重试。',
                 $this->displayNameForRole((string) $definition['role']),
                 (string) $definition['host'],
-                (int) $definition['port']
+                (int) $definition['port'],
+                (string) ($definition['process_name'] ?? ''),
+                $this->formatSharedTokenFilePathForMessage((string) ($definition['token_file_name'] ?? ''))
             )
         );
     }
@@ -501,16 +530,78 @@ class SharedStateServiceManager
     /**
      * @param array<string, mixed> $definition
      */
-    protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName): int
+    protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName, bool $frontend = false): int
     {
         $command = $this->buildLaunchCommand($definition, $requesterInstanceName);
-        $cmd = $command->build();
+        $cmdLineForRegistry = $command->build();
         $processName = $command->getProcessName();
-        if ($processName !== null) {
-            $cmd .= ' --name=' . \escapeshellarg($processName);
+        if ($processName !== null && $processName !== '') {
+            $cmdLineForRegistry .= ' --name=' . \escapeshellarg($processName);
         }
 
-        return Processer::create($cmd, block: false, foreground: false);
+        // Windows：优先用 Start-Process -ArgumentList 数组拉起 PHP，避免中文 BP 下「整段命令行」编码损坏导致 PID=0。
+        // 与 Framework Processer 需同版本部署；旧版无 createWindowsDetachedPhpArgv 时回退 create()。
+        if (\defined('IS_WIN') && IS_WIN && \method_exists(Processer::class, 'createWindowsDetachedPhpArgv')) {
+            $argv = \array_merge(
+                [PHP_BINARY, $command->getAbsoluteScript()],
+                \array_map(static fn (mixed $a): string => (string) $a, $command->arguments)
+            );
+            if ($processName !== null && $processName !== '') {
+                $argv[] = '--name=' . $processName;
+            }
+            if ($frontend) {
+                $argv[] = '--frontend';
+            }
+            $pid = Processer::createWindowsDetachedPhpArgv(
+                $argv,
+                $command->getWorkingDir(),
+                $cmdLineForRegistry,
+                true
+            );
+            if ($pid > 0) {
+                return $pid;
+            }
+        }
+
+        // enableLog=true：失败原因写入 Processer 进程日志。
+        if ($frontend) {
+            $cmdLineForRegistry .= ' --frontend';
+        }
+        return Processer::create($cmdLineForRegistry, block: false, foreground: $frontend, enableLog: true);
+    }
+
+    /**
+     * 共享侧车子进程未获得 PID 时的可读错误（避免空等 ensure 超时）。
+     */
+    private function buildSharedSpawnFailureMessage(array $definition): string
+    {
+        $role = (string) $definition['role'];
+        $host = (string) $definition['host'];
+        $port = (int) $definition['port'];
+        $proc = (string) ($definition['process_name'] ?? '');
+        $token = (string) ($definition['token_file_name'] ?? '');
+
+        return \sprintf(
+            '无法拉起共享 %s 子进程（Processer::create 返回 PID=0），目标 %s:%d，进程名 %s。请检查 PowerShell 执行策略、杀毒软件拦截、以及 Processer 为该进程名生成的日志；BP=%s',
+            $this->displayNameForRole($role),
+            $host,
+            $port,
+            $proc,
+            BP
+        ) . ($token !== '' ? '；token 文件应为 ' . $this->formatSharedTokenFilePathForMessage($token) : '');
+    }
+
+    /**
+     * 与 SessionServer / PooledConnection 一致：BP/var/session/{token_file_name}
+     */
+    private function formatSharedTokenFilePathForMessage(string $tokenFileName): string
+    {
+        $tokenFileName = \trim($tokenFileName);
+        if ($tokenFileName === '') {
+            $tokenFileName = 'session_server.token';
+        }
+
+        return Env::VAR_DIR . 'session' . \DIRECTORY_SEPARATOR . $tokenFileName;
     }
 
     /**
@@ -558,6 +649,8 @@ class SharedStateServiceManager
 
         if ($role === ControlMessage::ROLE_MEMORY_SERVER) {
             $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
+            $memoryPortExplicit = \array_key_exists('memory_server_port', $config)
+                || \array_key_exists('port', $memoryConfig);
             $port = (int) ($config['memory_server_port'] ?? $memoryConfig['port'] ?? 19971);
             if ($port <= 0) {
                 $port = 19971;
@@ -572,14 +665,21 @@ class SharedStateServiceManager
                 $tokenFileName = 'memory_server.token';
             }
 
+            $port = $this->resolveSharedServicePort(
+                $role,
+                $port,
+                $tokenFileName,
+                $memoryPortExplicit
+            );
+
             return [
                 'role' => $role,
                 'display_name' => 'Memory Service',
                 'host' => '127.0.0.1',
                 'port' => $port,
                 'token_file_name' => $tokenFileName,
-                'process_name' => MemoryServerProvider::PROCESS_NAME_PREFIX . '-shared-' . $port,
-                'service_instance_name' => 'shared-memory-' . $port,
+                'process_name' => MemoryServerProvider::PROCESS_NAME_PREFIX . '-' . MasterProcess::getProjectScopeToken() . '-shared-' . $port,
+                'service_instance_name' => 'shared-memory-' . MasterProcess::getProjectScopeToken() . '-' . $port,
                 'requester_instance_name' => $requesterInstanceName,
                 'ensure_timeout_sec' => $ensureTimeoutSec,
                 'ensure_poll_interval_ms' => $ensurePollIntervalMs,
@@ -589,6 +689,10 @@ class SharedStateServiceManager
         $sessionConfig = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
         $wlsSession = \is_array($wlsConfig['session'] ?? null) ? $wlsConfig['session'] : [];
         $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
+        $sessionPortExplicit = \array_key_exists('session_server_port', $config)
+            || \array_key_exists('port', $wlsServer)
+            || \array_key_exists('port', $wlsSession)
+            || \array_key_exists('server_port', $sessionConfig);
 
         $port = (int) (
             $config['session_server_port']
@@ -611,14 +715,21 @@ class SharedStateServiceManager
             $tokenFileName = 'session_server.token';
         }
 
+        $port = $this->resolveSharedServicePort(
+            $role,
+            $port,
+            $tokenFileName,
+            $sessionPortExplicit
+        );
+
         return [
             'role' => $role,
             'display_name' => 'Session Server',
             'host' => '127.0.0.1',
             'port' => $port,
             'token_file_name' => $tokenFileName,
-            'process_name' => SessionServerProvider::PROCESS_NAME_PREFIX . '-shared-' . $port,
-            'service_instance_name' => 'shared-session-' . $port,
+            'process_name' => SessionServerProvider::PROCESS_NAME_PREFIX . '-' . MasterProcess::getProjectScopeToken() . '-shared-' . $port,
+            'service_instance_name' => 'shared-session-' . MasterProcess::getProjectScopeToken() . '-' . $port,
             'requester_instance_name' => $requesterInstanceName,
             'ensure_timeout_sec' => $ensureTimeoutSec,
             'ensure_poll_interval_ms' => $ensurePollIntervalMs,
@@ -787,5 +898,83 @@ class SharedStateServiceManager
         return $this->normalizeRoleName($role) === ControlMessage::ROLE_MEMORY_SERVER
             ? 'Memory Service'
             : 'Session Server';
+    }
+
+    private function resolveSharedServicePort(
+        string $role,
+        int $preferredPort,
+        string $tokenFileName,
+        bool $explicitConfigured
+    ): int {
+        if ($preferredPort <= 0) {
+            $preferredPort = $this->defaultPortForRole($role);
+        }
+
+        if ($explicitConfigured) {
+            return $preferredPort;
+        }
+
+        $runtime = $this->readRuntimeFile($role);
+        $runtimePort = (int) ($runtime['port'] ?? 0);
+        if ($runtimePort > 0 && $this->isPortCandidateReusable($role, $runtimePort, $tokenFileName)) {
+            return $runtimePort;
+        }
+
+        if ($this->isPortCandidateReusable($role, $preferredPort, $tokenFileName)) {
+            return $preferredPort;
+        }
+
+        $start = \max(1025, $preferredPort + 1);
+        $limit = 512;
+        $port = $start;
+        for ($i = 0; $i < $limit; $i++, $port++) {
+            if ($port > 65535) {
+                break;
+            }
+
+            if ($this->isPortCandidateReusable($role, $port, $tokenFileName)) {
+                return $port;
+            }
+        }
+
+        return $preferredPort;
+    }
+
+    private function isPortCandidateReusable(string $role, int $port, string $tokenFileName): bool
+    {
+        if ($port <= 0) {
+            return false;
+        }
+
+        if (!Processer::isPortInUse($port)) {
+            return true;
+        }
+
+        $inspection = $this->inspectRunningSharedService(
+            [
+                'role' => $this->normalizeRoleName($role),
+                'port' => $port,
+            ],
+            $tokenFileName
+        );
+
+        return (bool) ($inspection['reusable'] ?? false) && $this->isInspectionOwnedByCurrentProject($inspection);
+    }
+
+    /**
+     * 仅复用带当前项目作用域标识的共享服务，避免跨项目误复用/误停服。
+     *
+     * @param array<string, mixed> $inspection
+     */
+    private function isInspectionOwnedByCurrentProject(array $inspection): bool
+    {
+        $scope = MasterProcess::getProjectScopeToken();
+        $instanceName = (string) ($inspection['instance_name'] ?? '');
+        $processName = (string) ($inspection['process_name'] ?? '');
+        if ($scope === '') {
+            return false;
+        }
+
+        return \str_contains($instanceName, '-' . $scope . '-') || \str_contains($processName, '-' . $scope . '-');
     }
 }
