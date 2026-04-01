@@ -421,8 +421,10 @@ class Start extends CommandAbstract
         if ($isLinux && $count > 1 && !$noDispatcher) {
             $dispatcherEnabled = true;
         }
-        
-        $workerBasePort = (int) ($config['worker_base_port'] ?? 10000);
+
+        // Worker 基础端口：默认 10000 + 项目偏移量，确保多项目不冲突
+        $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
+        $workerBasePort = (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort);
         $this->printer->note(__('Worker基础端口: %{1}', [$workerBasePort]));
         try {
             $sharedStateRuntime = $this->resolveSharedStateRuntimeConfig($instanceName, $config, $forceRestart, $frontend);
@@ -1558,7 +1560,7 @@ class Start extends CommandAbstract
             'hot_reload' => false,  // 默认关闭，可通过 wls.hot_reload=true 或 --hot-reload 启用
             'ssl_cert' => '',  // SSL 证书路径
             'ssl_key' => '',   // SSL 私钥路径
-            'worker_base_port' => 10000,  // Dispatcher 模式下 Worker 内网端口基数（实际端口 = base + 外网端口）
+            'worker_base_port' => 10000 + MasterProcess::getProjectPortOffset(),  // Dispatcher 模式下 Worker 内网端口基数 + 项目偏移
             'source' => __('默认值'),
         ];
         
