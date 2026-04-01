@@ -405,13 +405,16 @@ class SharedStateServiceManager
 
         $deadline = \microtime(true) + $timeoutSec;
         $startedAt = \date('c');
-        $firstPoll = true;
+
+        // 渐进式轮询：快速探测 -> 逐步放缓（50ms -> 100ms -> 150ms -> 200ms）
+        $pollIntervals = [50_000, 100_000, 150_000, 200_000];
+        $pollIndex = 0;
 
         while (\microtime(true) < $deadline) {
-            // 首轮略加长，给 Windows 下 PowerShell 拉起 PHP 子进程留出时间。
-            $sleepUs = $firstPoll ? \max($pollMs * 1000, 400_000) : ($pollMs * 1000);
-            $firstPoll = false;
+            $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
             SchedulerSystem::usleep($sleepUs);
+            $pollIndex++;
+
             $probe = $this->probeDefinition($definition);
             if (!((bool) ($probe['healthy'] ?? false))) {
                 continue;
