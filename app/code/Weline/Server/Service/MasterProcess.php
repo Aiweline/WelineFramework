@@ -30,6 +30,7 @@ use Weline\Server\Service\LongRunningPhpRuntime;
 
 class MasterProcess
 {
+    private static ?string $projectScopeToken = null;
     /**
      * 运行模式常量
      */
@@ -230,11 +231,17 @@ class MasterProcess
             $this->registerMasterPid();
 
             // 初始化控制端口：
-            // 1) 优先使用 server.control_port
-            // 2) 未配置时采用 main_port + 10000（例如 443 -> 10443）
+            // 1) 优先使用 server.control_port（手动配置）
+            // 2) 未配置时采用 main_port + 10000 + project_offset（自动隔离）
             // 3) 不进行范围扫描，避免主动占用其他端口
             $configuredControlPort = (int) (Env::get('server.control_port', 0) ?? 0);
-            $preferredControlPort = $configuredControlPort > 0 ? $configuredControlPort : ($this->mainPort + 10000);
+            if ($configuredControlPort > 0) {
+                $preferredControlPort = $configuredControlPort;
+            } else {
+                // 自动分配：基础端口 + 项目偏移量，确保多项目不冲突
+                $projectOffset = self::getProjectPortOffset();
+                $preferredControlPort = $this->mainPort + 10000 + $projectOffset;
+            }
             $this->controlPort = $preferredControlPort;
             if ($this->controlPort <= 0 || $this->controlPort > 65535) {
                 throw new \RuntimeException(
@@ -666,7 +673,84 @@ class MasterProcess
      */
     public static function getMasterProcessName(string $instanceName): string
     {
-        return self::MASTER_PROCESS_NAME_PREFIX . $instanceName;
+        return self::buildScopedProcessName(self::MASTER_PROCESS_NAME_PREFIX, $instanceName);
+    }
+
+    /**
+     * 返回当前项目的稳定作用域标识。
+     * 用于在同机多项目时避免进程名冲突。
+     */
+    public static function getProjectScopeToken(): string
+    {
+        if (self::$projectScopeToken !== null) {
+            return self::$projectScopeToken;
+        }
+
+        $basePath = \str_replace('\\', '/', \rtrim((string) BP, "\\/"));
+        $hash = \substr(\sha1(\strtolower($basePath)), 0, 8);
+        self::$projectScopeToken = 'p' . $hash;
+
+        return self::$projectScopeToken;
+    }
+
+    /**
+     * 获取项目级端口偏移量（用于多项目部署时避免端口冲突）。
+     *
+     * 基于项目路径哈希计算偏移量，确保同一服务器上不同项目的端口不重叠。
+     * 偏移范围：0-9999（每个项目占用约 10000 个端口）
+     *
+     * @return int 端口偏移量（0-9999）
+     */
+    public static function getProjectPortOffset(): int
+    {
+        static $offset = null;
+        if ($offset !== null) {
+            return $offset;
+        }
+
+        // 优先使用环境变量配置（手动指定偏移量）
+        $envOffset = (int) (Env::get('server.project_port_offset', 0) ?? 0);
+        if ($envOffset > 0 && $envOffset < 60000) {
+            $offset = $envOffset;
+            return $offset;
+        }
+
+        // 基于项目路径哈希自动计算偏移量
+        $basePath = \str_replace('\\', '/', \rtrim((string) BP, "\\/"));
+        $hash = \sha1(\strtolower($basePath));
+
+        // 取哈希的前 4 个字节转为整数，模 10000 得到偏移量
+        $hashInt = \hexdec(\substr($hash, 0, 8));
+        $offset = ($hashInt % 10000);
+
+        return $offset;
+    }
+
+    /**
+     * 实例名附加项目作用域，避免跨项目重名。
+     */
+    public static function getScopedInstanceName(string $instanceName): string
+    {
+        $instanceName = \trim($instanceName);
+        if ($instanceName === '') {
+            $instanceName = 'default';
+        }
+
+        return $instanceName . '-' . self::getProjectScopeToken();
+    }
+
+    /**
+     * 生成带项目作用域的进程名。
+     */
+    public static function buildScopedProcessName(string $prefix, string $instanceName, ?int $slot = null): string
+    {
+        $prefix = \rtrim($prefix, '-');
+        $name = $prefix . '-' . self::getScopedInstanceName($instanceName);
+        if ($slot !== null) {
+            $name .= '-' . $slot;
+        }
+
+        return $name;
     }
 
     /**
