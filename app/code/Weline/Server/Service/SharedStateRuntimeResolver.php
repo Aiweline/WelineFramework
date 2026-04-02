@@ -43,7 +43,13 @@ class SharedStateRuntimeResolver
 
         $sessionPort = (int) ($config['port'] ?? $config['server_port'] ?? $config['session_server_port'] ?? $wlsServer['port'] ?? $session['port']);
         if ($sessionPort <= 0) {
-            $sessionPort = 19970;
+            // 尝试探测实际运行的 Session Server,而不是使用硬编码端口
+            $probe = (new SharedStateServiceManager())->probe('session_server', [], $envConfig);
+            $sessionPort = (int) ($probe['runtime']['port'] ?? 0);
+            // 如果探测失败,使用项目偏移量计算默认端口
+            if ($sessionPort <= 0) {
+                $sessionPort = 19970 + MasterProcess::getProjectPortOffset();
+            }
         }
 
         $sessionToken = \trim((string) (
@@ -63,7 +69,13 @@ class SharedStateRuntimeResolver
 
         $memoryPort = (int) ($config['port'] ?? $config['memory_port'] ?? $config['memory_server_port'] ?? $memory['port']);
         if ($memoryPort <= 0) {
-            $memoryPort = 19971;
+            // 尝试探测实际运行的 Memory Server,而不是使用硬编码端口
+            $probe = (new SharedStateServiceManager())->probe('memory_server', [], $envConfig);
+            $memoryPort = (int) ($probe['runtime']['port'] ?? 0);
+            // 如果探测失败,使用项目偏移量计算默认端口
+            if ($memoryPort <= 0) {
+                $memoryPort = 19971 + MasterProcess::getProjectPortOffset();
+            }
         }
 
         $memoryToken = \trim((string) (
@@ -120,7 +132,7 @@ class SharedStateRuntimeResolver
 
         return [
             'host' => (string) ($wlsServer['host'] ?? $wlsSession['host'] ?? $session['server_host'] ?? '127.0.0.1'),
-            'port' => (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $session['server_port'] ?? 19970),
+            'port' => (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $session['server_port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
             'token_file_name' => (string) ($wlsServer['token_file_name'] ?? $wlsSession['token_file_name'] ?? 'session_server.token'),
         ];
     }
@@ -137,7 +149,7 @@ class SharedStateRuntimeResolver
 
         return [
             'host' => (string) ($memory['host'] ?? '127.0.0.1'),
-            'port' => (int) ($memory['port'] ?? 19971),
+            'port' => (int) ($memory['port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'token_file_name' => (string) ($memory['token_file_name'] ?? 'memory_server.token'),
         ];
     }
