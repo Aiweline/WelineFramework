@@ -50,7 +50,7 @@ $worker->count = $count;
 $worker->name = 'BenchmarkServer';
 
 // 设置日志
-Worker::$logFile = $baseDir . '/var/log/benchmark_server.log';
+Worker::$logFile = $baseDir . '/var/log/wls/benchmark_server.log';
 Worker::$pidFile = $baseDir . '/var/run/benchmark_server.pid';
 
 // 请求计数器

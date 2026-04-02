@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -78,7 +79,7 @@ class SessionServerProvider extends AbstractServiceProvider
         $script = $scriptDir . DS . 'session_server.php';
 
         $port = $this->getPort($instanceId, $context);
-        $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName;
+        $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
         $tokenFileName = $this->getTokenFileName($context);
 
         $arguments = [
@@ -107,11 +108,13 @@ class SessionServerProvider extends AbstractServiceProvider
         $wlsSession = ($context->envConfig['wls'] ?? [])['session'] ?? [];
         $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
 
+        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
         return (int) (
             $wlsSession['port']
             ?? $wlsServer['port']
             ?? $context->envConfig['session']['server_port']
-            ?? 19970
+            ?? $defaultPort
         );
     }
 

@@ -761,8 +761,25 @@ class SharedStateServiceManager
         }
 
         try {
-            if (!\flock($handle, LOCK_EX)) {
-                throw new \RuntimeException('Unable to lock shared-state runtime.');
+            // 使用非阻塞锁 + 超时重试，避免多项目启动时无限等待
+            $lockTimeout = 60.0; // 60 秒超时
+            $deadline = \microtime(true) + $lockTimeout;
+            $locked = false;
+
+            while (\microtime(true) < $deadline) {
+                if (\flock($handle, LOCK_EX | LOCK_NB)) {
+                    $locked = true;
+                    break;
+                }
+                // 等待 100ms 后重试
+                \usleep(100_000);
+            }
+
+            if (!$locked) {
+                throw new \RuntimeException(
+                    "Unable to acquire shared-state lock for {$role} within {$lockTimeout}s. " .
+                    "Another project may be starting the shared service. Please wait and retry."
+                );
             }
 
             return $callback();

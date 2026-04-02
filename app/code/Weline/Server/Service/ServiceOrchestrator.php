@@ -748,6 +748,7 @@ class ServiceOrchestrator
             Provider\DispatcherProvider::class,
             Provider\HttpRedirectProvider::class,
             Provider\MaintenanceWorkerProvider::class,
+            Provider\GatewayProvider::class,
         ];
         foreach ($fallbackProviders as $className) {
             if (!\class_exists($className)) {
@@ -5634,8 +5635,9 @@ class ServiceOrchestrator
         }
 
         if (!empty($workerPorts)) {
+            $timestamp = date('Y-m-d H:i:s');
             $this->controlServer->sendTo($dispatcherInstance->ipcClientId, ControlMessage::addWorker($workerPorts));
-            WlsLogger::info_("[Orchestrator] 发送 Worker 端口列表给 Dispatcher#{$dispatcherInstance->instanceId}: " . \implode(', ', $workerPorts));
+            WlsLogger::info_("[IPC-Send] {$timestamp} → Dispatcher#{$dispatcherInstance->instanceId} (clientId={$dispatcherInstance->ipcClientId}) ADD_WORKER (初始化) ports=" . \implode(',', $workerPorts));
         }
     }
 
@@ -5650,11 +5652,12 @@ class ServiceOrchestrator
         }
 
         $addWorkerMsg = ControlMessage::addWorker([$workerInstance->port]);
+        $timestamp = date('Y-m-d H:i:s');
 
         foreach ($dispatchers as $dispatcher) {
             if ($dispatcher->ipcClientId !== null && $this->controlServer !== null) {
                 $this->controlServer->sendTo($dispatcher->ipcClientId, $addWorkerMsg);
-                WlsLogger::debug_("[Orchestrator] 通知 Dispatcher#{$dispatcher->instanceId} 添加 Worker 端口 {$workerInstance->port}");
+                WlsLogger::info_("[IPC-Send] {$timestamp} → Dispatcher#{$dispatcher->instanceId} (clientId={$dispatcher->ipcClientId}) ADD_WORKER port={$workerInstance->port}");
             }
         }
     }
@@ -5671,11 +5674,14 @@ class ServiceOrchestrator
             return;
         }
         $msg = ControlMessage::setWorkerPool($ports);
+        $timestamp = date('Y-m-d H:i:s');
+        $portsStr = \implode(',', $ports);
+
         foreach ($dispatchers as $dispatcher) {
             if ($dispatcher->ipcClientId !== null) {
                 $this->controlServer->sendTo($dispatcher->ipcClientId, $msg);
                 WlsLogger::info_(
-                    "[Orchestrator] Dispatcher#{$dispatcher->instanceId} SET_WORKER_POOL: " . \implode(',', $ports)
+                    "[IPC-Send] {$timestamp} → Dispatcher#{$dispatcher->instanceId} (clientId={$dispatcher->ipcClientId}) SET_WORKER_POOL: {$portsStr}"
                 );
             }
         }
