@@ -66,6 +66,18 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
+    public function routingCacheClear(string $instanceName, float $timeout = 0.8): array
+    {
+        return $this->commandAsync(
+            $instanceName,
+            ControlMessage::ACTION_ROUTING_CACHE_CLEAR,
+            '',
+            [],
+            $timeout,
+            'Routing cache clear queued'
+        );
+    }
+
     public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array
     {
         return $this->command($instanceName, ControlMessage::ACTION_STATUS, '', [], $timeout);
