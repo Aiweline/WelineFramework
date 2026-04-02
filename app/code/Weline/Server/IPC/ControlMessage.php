@@ -198,6 +198,9 @@ class ControlMessage
     /** CLI → Master：应用反向代理配置 */
     public const ACTION_PROXY_APPLY = 'proxy_apply';
 
+    /** CLI → Master：清除 Dispatcher 路由缓存 */
+    public const ACTION_ROUTING_CACHE_CLEAR = 'routing_cache_clear';
+
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';
 
@@ -215,6 +218,15 @@ class ControlMessage
 
     /** Worker → Master：Fiber 池统计上报 */
     public const TYPE_FIBER_POOL_STATS = 'fiber_pool_stats';
+
+    /** Master → Worker/Dispatcher：健康检查 ping */
+    public const TYPE_PING = 'ping';
+
+    /** Worker/Dispatcher → Master：健康检查 pong 响应 */
+    public const TYPE_PONG = 'pong';
+
+    /** Master → Dispatcher：清除路由缓存 */
+    public const TYPE_ROUTING_CACHE_CLEAR = 'routing_cache_clear';
 
     // ========== Gateway 反向代理消息类型 ==========
 
@@ -642,6 +654,41 @@ class ControlMessage
         $data = ['type' => self::TYPE_SECURITY_UNBLOCK, 'clear_all' => $clearAll];
         if ($ip !== null && $ip !== '') {
             $data['ip'] = $ip;
+        }
+        return self::encode($data);
+    }
+
+    /**
+     * 构建 ping 消息（Master → Worker/Dispatcher）
+     *
+     * @param float $timestamp 发送时间戳（用于计算 RTT）
+     */
+    public static function ping(float $timestamp = 0.0): string
+    {
+        if ($timestamp === 0.0) {
+            $timestamp = \microtime(true);
+        }
+        return self::encode([
+            'type' => self::TYPE_PING,
+            'timestamp' => $timestamp,
+        ]);
+    }
+
+    /**
+     * 构建 pong 消息（Worker/Dispatcher → Master）
+     *
+     * @param float $pingTimestamp 原始 ping 消息的时间戳
+     * @param array $stats 可选的进程状态信息
+     */
+    public static function pong(float $pingTimestamp, array $stats = []): string
+    {
+        $data = [
+            'type' => self::TYPE_PONG,
+            'ping_timestamp' => $pingTimestamp,
+            'pong_timestamp' => \microtime(true),
+        ];
+        if (!empty($stats)) {
+            $data['stats'] = $stats;
         }
         return self::encode($data);
     }

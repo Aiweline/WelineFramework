@@ -25,6 +25,9 @@ class ControlClient
     /** 读缓冲区 */
     private string $buffer = '';
 
+    /** 读缓冲区最大大小（2MB），防止内存泄漏 */
+    private int $maxBufferSize = 2097152;
+
     /** Master 地址 */
     private string $host = '127.0.0.1';
 
@@ -208,15 +211,70 @@ class ControlClient
         if (empty($payload)) {
             return '';
         }
+
+        // 内存压力检测：避免在内存不足时序列化大型数组
+        static $memoryLimit = null;
+        if ($memoryLimit === null) {
+            $memoryLimit = $this->getMemoryLimit();
+        }
+
+        if ($memoryLimit > 0) {
+            $memoryUsage = \memory_get_usage(true);
+            if ($memoryUsage > ($memoryLimit * 0.8)) {
+                return ' [payload skipped: memory pressure]';
+            }
+        }
+
         $parts = [];
         foreach ($payload as $k => $v) {
             if (\is_array($v)) {
-                $parts[] = "{$k}=" . \json_encode($v, JSON_UNESCAPED_UNICODE);
+                // 限制数组序列化大小：最多 1KB
+                $encoded = @\json_encode($v, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+                if ($encoded === false || \strlen($encoded) > 1024) {
+                    $parts[] = "{$k}=[array:" . \count($v) . " items]";
+                } else {
+                    $parts[] = "{$k}={$encoded}";
+                }
             } else {
-                $parts[] = "{$k}={$v}";
+                // 限制标量值长度：最多 256 字符
+                $strVal = (string)$v;
+                if (\strlen($strVal) > 256) {
+                    $parts[] = "{$k}=" . \substr($strVal, 0, 256) . '...';
+                } else {
+                    $parts[] = "{$k}={$strVal}";
+                }
             }
         }
         return ' ' . \implode(' ', $parts);
+    }
+
+    /**
+     * 获取 PHP 内存限制（字节）
+     */
+    private function getMemoryLimit(): int
+    {
+        $memoryLimit = \ini_get('memory_limit');
+        if ($memoryLimit === false || $memoryLimit === '' || $memoryLimit === '-1') {
+            return 0;
+        }
+
+        $memoryLimit = \trim($memoryLimit);
+        $last = \strtolower($memoryLimit[\strlen($memoryLimit) - 1]);
+        $value = (int)$memoryLimit;
+
+        switch ($last) {
+            case 'g':
+                $value *= 1024 * 1024 * 1024;
+                break;
+            case 'm':
+                $value *= 1024 * 1024;
+                break;
+            case 'k':
+                $value *= 1024;
+                break;
+        }
+
+        return $value;
     }
 
     /**
@@ -406,12 +464,12 @@ class ControlClient
         $write = [];
         $except = [];
         $changed = @\stream_select($read, $write, $except, 0, 0);
-        
+
         // 没有数据可读，直接返回（不是断开）
         if ($changed === 0) {
             return [];
         }
-        
+
         $data = @\fread($this->socket, 65536);
 
         // 连接断开判断：
@@ -422,9 +480,18 @@ class ControlClient
             $this->handleDisconnect();
             return [];
         }
-        
+
         // 没有数据但也没断开（非阻塞模式正常情况）
         if ($data === '') {
+            return [];
+        }
+
+        // 防止缓冲区无限增长：检查大小限制
+        if (\strlen($this->buffer) + \strlen($data) > $this->maxBufferSize) {
+            $this->ipcLog("[IPC-{$this->selfTag}] ERROR: Buffer overflow detected, clearing buffer (size: " . \strlen($this->buffer) . " bytes)");
+            $this->buffer = '';
+            // 断开连接，触发重连
+            $this->handleDisconnect();
             return [];
         }
 
@@ -448,7 +515,7 @@ class ControlClient
                     $this->receivedShutdown = true;
                     $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: SHUTDOWN 收到停止命令，准备退出...");
                     break;
-                    
+
                 case ControlMessage::TYPE_DRAIN:
                     $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: DRAIN 收到排水命令，停止接收新请求...");
                     break;

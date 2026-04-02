@@ -156,28 +156,65 @@ class Scale extends CommandAbstract
         $action = $enable ? 'Enabling' : 'Disabling';
         $printer->printing("{$action} auto-scaling...");
 
-        // TODO: 实现配置更新逻辑
-        // 当前简化实现：提示用户手动修改配置文件
+        // 读取当前配置
+        $envFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
+        if (!\is_file($envFile)) {
+            $printer->error("Configuration file not found: {$envFile}");
+            return;
+        }
 
-        $printer->warning('Auto-scaling configuration is not yet implemented via CLI.');
-        $printer->printing('Please manually edit app/etc/env.php:');
-        $printer->printing('');
-        $printer->printing("'wls' => [");
-        $printer->printing("    'scaling' => [");
-        $printer->printing("        'enabled' => " . ($enable ? 'true' : 'false') . ',');
+        $config = include $envFile;
+        if (!\is_array($config)) {
+            $printer->error("Invalid configuration file format");
+            return;
+        }
 
+        // 更新配置
+        if (!isset($config['wls'])) {
+            $config['wls'] = [];
+        }
+        if (!isset($config['wls']['scaling'])) {
+            $config['wls']['scaling'] = [];
+        }
+
+        $config['wls']['scaling']['enabled'] = $enable;
         if ($min !== null) {
-            $printer->printing("        'min_workers' => {$min},");
+            $config['wls']['scaling']['min_workers'] = (int)$min;
         }
-
         if ($max !== null) {
-            $printer->printing("        'max_workers' => {$max},");
+            $config['wls']['scaling']['max_workers'] = (int)$max;
         }
 
-        $printer->printing("    ],");
-        $printer->printing("],");
+        // 备份原配置
+        $backupFile = $envFile . '.backup.' . \date('YmdHis');
+        if (!\copy($envFile, $backupFile)) {
+            $printer->error("Failed to create backup: {$backupFile}");
+            return;
+        }
+
+        // 写入新配置
+        $configContent = "<?php\nreturn " . \var_export($config, true) . ";\n";
+        if (@\file_put_contents($envFile, $configContent, LOCK_EX) === false) {
+            $printer->error("Failed to write configuration file");
+            // 恢复备份
+            @\copy($backupFile, $envFile);
+            return;
+        }
+
+        $printer->success("Auto-scaling configuration updated successfully");
+        $printer->printing("Backup saved to: {$backupFile}");
         $printer->printing('');
-        $printer->printing('Then reload the server: php bin/w server:reload');
+        $printer->printing('Configuration:');
+        $printer->printing("  Enabled: " . ($enable ? 'true' : 'false'));
+        if ($min !== null) {
+            $printer->printing("  Min workers: {$min}");
+        }
+        if ($max !== null) {
+            $printer->printing("  Max workers: {$max}");
+        }
+        $printer->printing('');
+        $printer->warning('Note: Configuration changes will take effect after server reload');
+        $printer->printing('Run: php bin/w server:reload');
     }
 
     /**
