@@ -811,7 +811,9 @@ SQL;
     /** @inheritDoc */
     public function getTableComment(string $table): string
     {
-        [$schema, $tableName] = $this->parseSchemaTable($table);
+        // 先将逻辑表名转换为物理表名（添加前缀和 schema）
+        $formattedTable = $this->formatTableName($table);
+        [$schema, $tableName] = $this->parseSchemaTable($formattedTable);
         if ($tableName === '') {
             return '';
         }
@@ -829,7 +831,9 @@ SQL;
     /** @inheritDoc */
     public function getTableColumns(string $table): array
     {
-        [$schema, $tableName] = $this->parseSchemaTable($table);
+        // 先将逻辑表名转换为物理表名（添加前缀和 schema）
+        $formattedTable = $this->formatTableName($table);
+        [$schema, $tableName] = $this->parseSchemaTable($formattedTable);
         if ($tableName === '') {
             return [];
         }
@@ -951,7 +955,9 @@ SQL;
     /** @inheritDoc */
     public function getTableIndexes(string $table): array
     {
-        [$schema, $tableName] = $this->parseSchemaTable($table);
+        // 先将逻辑表名转换为物理表名（添加前缀和 schema）
+        $formattedTable = $this->formatTableName($table);
+        [$schema, $tableName] = $this->parseSchemaTable($formattedTable);
         if ($tableName === '') {
             return [];
         }
@@ -998,7 +1004,9 @@ SQL;
     /** @inheritDoc */
     public function getTableForeignKeys(string $table): array
     {
-        [$schema, $tableName] = $this->parseSchemaTable($table);
+        // 先将逻辑表名转换为物理表名（添加前缀和 schema）
+        $formattedTable = $this->formatTableName($table);
+        [$schema, $tableName] = $this->parseSchemaTable($formattedTable);
         if ($tableName === '') {
             return [];
         }
