@@ -242,19 +242,19 @@ class FieldBackupServiceTest extends TestCore
             // 使用 Query API 删除测试相关的备份数据
             $query->clearQuery()
                 ->table('weline_framework_field_backup')
-                ->where('table_name', 'like', '%test_field_backup_table%')
+                ->where('table_name', '%test_field_backup_table%', 'like')
                 ->delete()
                 ->fetch();
 
             $query->clearQuery()
                 ->table('weline_framework_field_definition_backup')
-                ->where('table_name', 'like', '%test_field_backup_table%')
+                ->where('table_name', '%test_field_backup_table%', 'like')
                 ->delete()
                 ->fetch();
 
             $query->clearQuery()
                 ->table('weline_framework_field_backup_conflict')
-                ->where('table_name', 'like', '%test_field_backup_table%')
+                ->where('table_name', '%test_field_backup_table%', 'like')
                 ->delete()
                 ->fetch();
         } catch (\Exception $e) {
