@@ -434,8 +434,14 @@ class Start extends CommandAbstract
             $this->printer->error($exception->getMessage());
             return;
         }
-        $sessionServerPort = (int) ($sharedStateRuntime['session']['port'] ?? 19970);
-        $memoryServerPort = (int) ($sharedStateRuntime['memory']['port'] ?? 19971);
+        $sessionServerPort = (int) ($sharedStateRuntime['session']['port'] ?? 0);
+        if ($sessionServerPort <= 0) {
+            $sessionServerPort = 19970 + MasterProcess::getProjectPortOffset();
+        }
+        $memoryServerPort = (int) ($sharedStateRuntime['memory']['port'] ?? 0);
+        if ($memoryServerPort <= 0) {
+            $memoryServerPort = 19971 + MasterProcess::getProjectPortOffset();
+        }
         $config['session_server_port'] = $sessionServerPort;
         $config['session_server_token_file_name'] = (string) ($sharedStateRuntime['session']['token_file_name'] ?? 'session_server.token');
         $config['memory_server_port'] = $memoryServerPort;
@@ -821,9 +827,9 @@ class Start extends CommandAbstract
             'dispatcher_enabled' => $dispatcherEnabled,
             'worker_port' => $workerPort,
             'worker_base_port' => $workerBasePort,
-            'session_server_port' => (int) ($data['session_server_port'] ?? 19970),
+            'session_server_port' => (int) ($data['session_server_port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
             'session_server_token_file_name' => (string) ($data['session_server_token_file_name'] ?? 'session_server.token'),
-            'memory_server_port' => (int) ($data['memory_server_port'] ?? 19971),
+            'memory_server_port' => (int) ($data['memory_server_port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'memory_server_token_file_name' => (string) ($data['memory_server_token_file_name'] ?? 'memory_server.token'),
             'daemon' => true,
         ];
@@ -1598,11 +1604,12 @@ class Start extends CommandAbstract
             $config['source'] = __('env.wls');
         }
 
-        // 如果 env 配置中的 host 是 127.0.0.1，恢复为项目唯一域名（避免多项目 SSL 证书冲突）
-        if (($config['host'] ?? '') === '127.0.0.1') {
+        // 如果 env 配置中的 host 是 127.0.0.1 或旧格式域名，恢复为项目唯一域名（避免多项目 SSL 证书冲突）
+        $envHost = $config['host'] ?? '';
+        if ($envHost === '127.0.0.1' || \preg_match('/^weline-p[0-9a-f]{8}\.local$/i', $envHost)) {
             $config['host'] = $this->getDefaultHost();
             // 同时清理 ssl_domain，让它使用新的 host
-            if (($config['ssl_domain'] ?? '') === '127.0.0.1' || ($config['ssl_domain'] ?? '') === 'localhost') {
+            if (($config['ssl_domain'] ?? '') === '127.0.0.1' || ($config['ssl_domain'] ?? '') === 'localhost' || \preg_match('/^weline-p[0-9a-f]{8}\.local$/i', $config['ssl_domain'] ?? '')) {
                 unset($config['ssl_domain']);
             }
         }
@@ -3219,9 +3226,9 @@ class Start extends CommandAbstract
             'worker_port' => $workerPort ?: $port,  // Worker 实际监听的端口（Dispatcher 模式下为内网端口）
             'worker_ports' => $this->buildPersistedWorkerPorts($workerPort ?: $port, $count, $useDirectMode),
             'worker_base_port' => $workerBasePort,   // Worker 基础端口（用于计算各 Worker 端口）
-            'session_server_port' => (int) ($sharedStateRuntime['session']['port'] ?? 19970),
+            'session_server_port' => (int) ($sharedStateRuntime['session']['port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
             'session_server_token_file_name' => (string) ($sharedStateRuntime['session']['token_file_name'] ?? 'session_server.token'),
-            'memory_server_port' => (int) ($sharedStateRuntime['memory']['port'] ?? 19971),
+            'memory_server_port' => (int) ($sharedStateRuntime['memory']['port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'memory_server_token_file_name' => (string) ($sharedStateRuntime['memory']['token_file_name'] ?? 'memory_server.token'),
             'shared_state' => $sharedStateRuntime,
             // HTTP 重定向端口（HTTPS 模式下用于 HTTP→HTTPS 跳转）
