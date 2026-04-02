@@ -90,7 +90,7 @@ final class SessionBackendFactory
             case 'wls':
                 $defaultConfig = $wlsConfig['wls_server'] ?? [];
                 $defaultConfig['host'] = $defaultConfig['host'] ?? '127.0.0.1';
-                $defaultConfig['port'] = $defaultConfig['port'] ?? 19970;
+                $defaultConfig['port'] = $defaultConfig['port'] ?? (19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset());
                 break;
 
             case 'redis':
