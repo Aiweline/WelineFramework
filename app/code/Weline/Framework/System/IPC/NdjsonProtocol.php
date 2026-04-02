@@ -21,7 +21,16 @@ final class NdjsonProtocol
      */
     public static function encode(array $data): string
     {
-        return \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
+        $json = @\json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR, 512);
+        if ($json === false) {
+            // 编码失败，返回错误消息
+            $json = \json_encode(['type' => 'error', 'message' => 'json_encode failed']);
+        }
+        // 限制单条消息最大 1MB
+        if (\strlen($json) > 1048576) {
+            $json = \json_encode(['type' => 'error', 'message' => 'message too large']);
+        }
+        return $json . "\n";
     }
 
     /**
@@ -37,7 +46,12 @@ final class NdjsonProtocol
             return null;
         }
 
-        $data = \json_decode($line, true);
+        // 防止超大消息导致内存溢出（限制 1MB）
+        if (\strlen($line) > 1048576) {
+            return null;
+        }
+
+        $data = @\json_decode($line, true, 512, JSON_BIGINT_AS_STRING);
         if (!\is_array($data)) {
             return null;
         }
@@ -74,8 +88,26 @@ final class NdjsonProtocol
     {
         $messages = [];
 
+        // 防止缓冲区无限增长（限制 2MB）
+        if (\strlen($buffer) > 2097152) {
+            // 记录错误但不清空 buffer，让调用方决定如何处理
+            if (\function_exists('error_log')) {
+                @\error_log('[NdjsonProtocol] Buffer overflow: ' . \strlen($buffer) . ' bytes, clearing');
+            }
+            $buffer = '';
+            return $messages;
+        }
+
         $lastNewline = \strrpos($buffer, "\n");
         if ($lastNewline === false) {
+            // 没有完整消息，但检查半包是否过大
+            if (\strlen($buffer) > 1048576) {
+                // 半包超过 1MB，可能是恶意数据或协议错误
+                if (\function_exists('error_log')) {
+                    @\error_log('[NdjsonProtocol] Incomplete message too large: ' . \strlen($buffer) . ' bytes, discarding');
+                }
+                $buffer = '';
+            }
             return $messages;
         }
 
