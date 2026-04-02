@@ -324,51 +324,56 @@ SQL;
     /** @inheritDoc 方言：PostgreSQL 使用 CASCADE 自动清理依赖 */
     public function dropTableIfExists(string $table): void
     {
-        $quoted = $this->quoteTable(str_replace(['`', '"'], '', $table));
-        $this->query("DROP TABLE IF EXISTS {$quoted} CASCADE")->fetch();
+        // 使用 formatTableName 来处理表名（会自动添加前缀和 schema）
+        $formattedTable = $this->formatTableName($table);
+        $this->query("DROP TABLE IF EXISTS {$formattedTable} CASCADE")->fetch();
     }
 
     public function tableExist(string $table_name): bool
     {
         try {
-            // 清理表名，移除引号
-            $table_name = str_replace(['`', '"'], '', $table_name);
-            $dbName = $this->configProvider->getDatabase();
+            // 使用 formatTableName 来处理表名（会自动添加前缀和 schema）
+            $formattedTableName = $this->formatTableName($table_name);
+
+            // 从格式化后的表名中提取 schema 和 table
+            // 格式: "schema"."table"
+            $formattedTableName = str_replace(['"'], '', $formattedTableName);
+
             $schema = 'public';
             $table = $table_name;
-            
-            if (str_contains($table_name, '.')) {
-                $parts = explode('.', $table_name, 2);
-                $firstPart = $parts[0];
-                
-                // 如果第一部分是数据库名，移除它，使用 public schema
-                if ($firstPart === $dbName) {
-                    $table = $parts[1] ?? $parts[0];
+
+            if (str_contains($formattedTableName, '.')) {
+                $parts = explode('.', $formattedTableName, 2);
+                $schema = $parts[0];
+                $table = $parts[1] ?? $parts[0];
+            } else {
+                $table = $formattedTableName;
+                // 如果没有 schema，使用 current_schema()
+                try {
+                    $currentSchema = $this->getLink()->query('SELECT current_schema()')->fetchColumn();
+                    $schema = $currentSchema ?: 'public';
+                } catch (\Throwable $e) {
                     $schema = 'public';
-                } else {
-                    // 第一部分是 schema 名
-                    $schema = $firstPart;
-                    $table = $parts[1] ?? $parts[0];
                 }
             }
-            
+
             // 使用 prepared statement 避免 SQL 注入，并确保不会报错
             $sql = "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = :schema AND table_name = :table)";
             $stmt = $this->getLink()->prepare($sql);
             if ($stmt === false) {
                 return false;
             }
-            
+
             // 使用 @ 抑制可能的警告，然后检查执行结果
             $executed = @$stmt->execute([
                 ':schema' => $schema,
                 ':table' => $table
             ]);
-            
+
             if (!$executed) {
                 return false;
             }
-            
+
             $result = $stmt->fetch(\PDO::FETCH_ASSOC);
             return (bool)($result['exists'] ?? false);
         } catch (\Exception $exception) {
