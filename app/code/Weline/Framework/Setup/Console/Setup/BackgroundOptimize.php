@@ -22,6 +22,11 @@ class BackgroundOptimize extends CommandAbstract
 {
     public function execute(array $args = [], array $data = [])
     {
+        // 初始化 WLS 日志进程标签（避免显示 [Unknown]）
+        if (class_exists('Weline\\Server\\Log\\WlsLogger')) {
+            \Weline\Server\Log\WlsLogger::getInstance()->setProcessTag('Setup:BgOptimize');
+        }
+
         $startTime = microtime(true);
         $logFile = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'background_optimize.log';
 
