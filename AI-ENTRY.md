@@ -49,9 +49,20 @@ php bin/w server:reload|restart -r # WLS lifecycle
 
 ## ⚠️ Constraints
 
-**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit`
+**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit` | Write detailed fix reports to root directory
 
-**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + `setup:upgrade`
+**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + `setup:upgrade` | Write fix reports in module's doc/ directory | Update module README with test status
+
+## 📝 Documentation Rules
+
+**Fix Reports:** Write in module directory (e.g., `app/code/Weline/Framework/Setup/Db/doc/FIXES.md`), NOT root directory
+
+**Update Docs:** After fixing bugs, update:
+1. Module README with test status
+2. Architecture docs if design changed
+3. API docs if interface changed
+
+**NO Detailed Process Reports:** Only update requirements and architecture docs, not step-by-step fix logs
 
 ## 👥 Multi-Agent Workflow
 
