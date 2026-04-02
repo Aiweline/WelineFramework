@@ -36,7 +36,7 @@ class WlsLogService
         ?string $processTag = null,
         ?string $configuredPath = null
     ): string {
-        return self::getLogDir($instanceName, $processTag, $configuredPath) . 'wls.log';
+        return self::getLogDir($instanceName, $processTag, $configuredPath) . 'wls-' . \date('Y-m-d') . '.log';
     }
 
     public static function getErrorLogFile(
@@ -44,7 +44,7 @@ class WlsLogService
         ?string $processTag = null,
         ?string $configuredPath = null
     ): string {
-        return self::getLogDir($instanceName, $processTag, $configuredPath) . 'error.log';
+        return self::getLogDir($instanceName, $processTag, $configuredPath) . 'error-' . \date('Y-m-d') . '.log';
     }
 
     public static function getCrashLogFile(
@@ -52,7 +52,7 @@ class WlsLogService
         ?string $processTag = null,
         ?string $configuredPath = null
     ): string {
-        return self::getLogDir($instanceName, $processTag, $configuredPath) . 'crash.log';
+        return self::getLogDir($instanceName, $processTag, $configuredPath) . 'crash-' . \date('Y-m-d') . '.log';
     }
 
     public static function getWorkerLogFile(

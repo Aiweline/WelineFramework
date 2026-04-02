@@ -15,6 +15,8 @@ class LogConfig
         'rotate' => 'daily',
         'max_files' => 7,
         'max_size' => 52428800,
+        // 生产环境默认禁用 DEBUG 日志
+        'production_level' => LogLevel::INFO,
     ];
 
     private static ?array $configCache = null;
@@ -46,22 +48,37 @@ class LogConfig
 
     public static function getMainLogFile(?string $instanceName = null, ?string $processTag = null): string
     {
-        return self::getLogDir($instanceName, $processTag) . 'wls.log';
+        return self::getLogDir($instanceName, $processTag) . 'wls-' . \date('Y-m-d') . '.log';
     }
 
     public static function getErrorLogFile(?string $instanceName = null, ?string $processTag = null): string
     {
-        return self::getLogDir($instanceName, $processTag) . 'error.log';
+        return self::getLogDir($instanceName, $processTag) . 'error-' . \date('Y-m-d') . '.log';
     }
 
     public static function getCrashLogFile(?string $instanceName = null, ?string $processTag = null): string
     {
-        return self::getLogDir($instanceName, $processTag) . 'crash.log';
+        return self::getLogDir($instanceName, $processTag) . 'crash-' . \date('Y-m-d') . '.log';
     }
 
     public static function getMinLevel(): string
     {
-        return (string)self::getValue('level', LogLevel::INFO);
+        $configLevel = (string)self::getValue('level', LogLevel::INFO);
+
+        // 生产环境强制最低 INFO 级别（除非显式配置）
+        if (!self::isDevMode()) {
+            $productionLevel = (string)self::getValue('production_level', LogLevel::INFO);
+
+            // 如果配置的级别低于生产环境最低级别，使用生产环境级别
+            $configPriority = LogLevel::getPriority($configLevel);
+            $productionPriority = LogLevel::getPriority($productionLevel);
+
+            if ($configPriority < $productionPriority) {
+                return $productionLevel;
+            }
+        }
+
+        return $configLevel;
     }
 
     public static function isEnabled(): bool

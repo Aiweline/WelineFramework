@@ -105,7 +105,7 @@ class Process
             }
         }
         $file_name = str_replace(':', '-', $pname);
-        $path = Env::VAR_DIR . 'cron' . DS . $file_name . '.log';
+        $path = Env::VAR_DIR . 'log' . DS . 'cron' . DS . $file_name . '.log';
         if (!is_file($path)) {
             if (!is_dir(dirname($path))) {
                 mkdir(dirname($path), 0777, true);
@@ -140,7 +140,7 @@ class Process
             return;
         }
         $base = \basename($path, '.log');
-        $histDir = Env::VAR_DIR . 'cron' . DS . 'history' . DS . $base;
+        $histDir = Env::VAR_DIR . 'log' . DS . 'cron' . DS . 'history' . DS . $base;
         if (!\is_dir($histDir) && !@\mkdir($histDir, 0777, true)) {
             // 无法建目录时仍尝试删除，避免阻塞调度
             for ($i = 0; $i < 3; $i++) {
