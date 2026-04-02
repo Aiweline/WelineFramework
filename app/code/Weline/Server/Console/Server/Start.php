@@ -1912,12 +1912,12 @@ class Start extends CommandAbstract
         
         return null;
     }
-    
+
     /**
      * 获取默认监听地址
      *
      * 为避免多项目 SSL 证书冲突，使用项目唯一的本地域名。
-     * 格式：weline-p{项目哈希前8位}.local
+     * 格式：p{项目哈希前8位}.weline.local
      *
      * @return string
      */
@@ -1928,8 +1928,8 @@ class Start extends CommandAbstract
         $hash = \sha1(\strtolower($basePath));
         $shortHash = \substr($hash, 0, 8);
 
-        // 生成项目唯一域名
-        return "weline-p{$shortHash}.local";
+        // 生成项目唯一域名（子域名格式更符合 DNS 规范）
+        return "p{$shortHash}.weline.local";
     }
 
     /**
