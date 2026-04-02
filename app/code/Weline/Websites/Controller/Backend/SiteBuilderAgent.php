@@ -88,6 +88,11 @@ class SiteBuilderAgent extends BackendController
         $scope = \is_array($providerConfig['scope'] ?? null) ? $providerConfig['scope'] : [];
         $currentStage = $this->normalizeJourneyStage($session->getCurrentStage());
 
+        // 检测 next_step 参数，用于触发可视化主题编辑器
+        $nextStep = \trim((string)$this->request->getGet('next_step', ''));
+        $this->assign('next_step', $nextStep);
+        $this->assign('auto_show_page_type_selector', $nextStep === 'virtual_theme_edit');
+
         $this->assign('title', __('AI 建站工作区'));
         $this->assign('session', $session);
         $this->assign('provider_context', $this->extractProviderContext($providerConfig));
@@ -1099,6 +1104,8 @@ class SiteBuilderAgent extends BackendController
 
         $adminId = $this->getAdminId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $streamMode = \trim((string)$this->request->getGet('stream_mode', 'batch')); // 'batch' 或 'progressive'
+
         if ($adminId <= 0 || $publicId === '') {
             $sse->sendError((string)__('参数无效'));
             $sse->complete(['success' => false]);
@@ -1123,6 +1130,13 @@ class SiteBuilderAgent extends BackendController
             ];
         }
 
+        // 渐进式流式生成模式
+        if ($streamMode === 'progressive') {
+            $this->handleProgressiveGeneration($sse, $session, $adminId, $publicId, $selectedPageTypes, $scope);
+            return;
+        }
+
+        // 原有批量生成模式
         $sse->sendEvent('start', ['message' => (string)__('正在根据简报自动生成虚拟主题...')]);
         $sse->sendEvent('progress', ['message' => (string)__('解析简报与页面类型')]);
 
@@ -3559,5 +3573,250 @@ class SiteBuilderAgent extends BackendController
         }
 
         return $normalized;
+    }
+
+    /**
+     * 渐进式流式生成虚拟主题（首页先生成，其他页面依次生成）
+     *
+     * @param array<int, string> $selectedPageTypes
+     * @param array<string, mixed> $scope
+     */
+    private function handleProgressiveGeneration(
+        SseWriter $sse,
+        AiSiteBuilderSession $session,
+        int $adminId,
+        string $publicId,
+        array $selectedPageTypes,
+        array $scope
+    ): void {
+        $sse->sendEvent('start', ['message' => (string)__('开始渐进式生成虚拟主题...')]);
+
+        // 确保首页在第一位
+        $homePageIndex = \array_search('home_page', $selectedPageTypes, true);
+        if ($homePageIndex !== false && $homePageIndex !== 0) {
+            unset($selectedPageTypes[$homePageIndex]);
+            \array_unshift($selectedPageTypes, 'home_page');
+        }
+
+        $totalPages = \count($selectedPageTypes);
+        $currentPage = 0;
+        $sharedHeaderFooter = null;
+        $welineThemeId = 0;
+
+        foreach ($selectedPageTypes as $pageType) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType === '') {
+                continue;
+            }
+
+            $currentPage++;
+            $isHomePage = $pageType === 'home_page';
+
+            $sse->sendEvent('progress', [
+                'page_type' => $pageType,
+                'status' => 'generating',
+                'message' => (string)__('正在生成 %{page_type}...', ['page_type' => $pageType]),
+                'progress' => ($currentPage / $totalPages) * 100,
+            ]);
+
+            // 生成页面布局
+            $layoutResult = $this->generateSinglePageLayout(
+                $session,
+                $adminId,
+                $pageType,
+                $scope,
+                $isHomePage ? null : $sharedHeaderFooter
+            );
+
+            if (!$layoutResult['success']) {
+                $sse->sendEvent('error', [
+                    'page_type' => $pageType,
+                    'message' => $layoutResult['message'] ?? (string)__('生成失败'),
+                ]);
+                continue;
+            }
+
+            $layout = $layoutResult['layout'];
+
+            // 首页生成后，保存 Header/Footer 供其他页面复用
+            if ($isHomePage) {
+                $sharedHeaderFooter = [
+                    'header' => $layout['regions']['header'] ?? [],
+                    'footer' => $layout['regions']['footer'] ?? [],
+                ];
+
+                // 创建虚拟主题记录
+                $saveThemeResult = $this->getVirtualThemeWorkbenchService()->saveVirtualThemeByPublicId($publicId, $adminId, [
+                    'weline_theme_id' => (int)($scope['weline_theme_id'] ?? 0),
+                    'virtual_theme_name' => (string)($layoutResult['theme_name'] ?? 'ai-site-' . $session->getId()),
+                    'theme_style_direction' => (string)($scope['theme_style_direction'] ?? 'modern'),
+                    'theme_color_scheme' => (string)($scope['theme_color_scheme'] ?? 'default'),
+                    'page_types' => $selectedPageTypes,
+                    'page_type_layouts' => [$pageType => $layout],
+                ]);
+
+                if (!empty($saveThemeResult['success'])) {
+                    $welineThemeId = (int)($saveThemeResult['data']['weline_theme_id'] ?? 0);
+                }
+            }
+
+            // 保存页面布局
+            $this->getVirtualThemeWorkbenchService()->savePageTypeLayoutByPublicId($publicId, $adminId, $pageType, $layout);
+
+            // 标记页面已生成
+            $this->markPageTypeGenerated($session->getId(), $adminId, $pageType);
+
+            // 生成可视化编辑 URL
+            $visualEditUrl = $this->getUrlHelper()->getBackendUrlPath('pagebuilder/backend/page/virtual-edit', [
+                'public_id' => $publicId,
+                'page_type' => $pageType,
+            ]);
+
+            $sse->sendEvent('page_generated', [
+                'page_type' => $pageType,
+                'layout' => $layout,
+                'visual_edit_url' => $visualEditUrl,
+                'weline_theme_id' => $welineThemeId,
+            ]);
+
+            $sse->maybeHeartbeat();
+            SchedulerSystem::yieldDelay(500);
+        }
+
+        $this->getSessionService()->mergeScope($session->getId(), $adminId, [
+            'virtual_theme_auto_generated' => 1,
+            'virtual_theme_generated_at' => $this->now(),
+        ]);
+
+        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $session;
+        $fresh = $this->refreshPageBuilderMirrorSession($fresh, $adminId);
+        $this->syncSessionStructuredFields($fresh, $adminId);
+        $fresh = $this->getSessionService()->loadById($session->getId(), $adminId) ?? $fresh;
+        $this->syncSessionArtifacts($fresh, $adminId);
+
+        $sse->complete([
+            'success' => true,
+            'message' => (string)__('所有页面生成完成'),
+            'total_pages' => $totalPages,
+        ]);
+    }
+
+    /**
+     * 生成单个页面布局
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed>|null $sharedHeaderFooter
+     * @return array{success:bool,message?:string,layout?:array<string,mixed>,theme_name?:string}
+     */
+    private function generateSinglePageLayout(
+        AiSiteBuilderSession $session,
+        int $adminId,
+        string $pageType,
+        array $scope,
+        ?array $sharedHeaderFooter
+    ): array {
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''));
+        $title = \trim((string)($scope['site_title'] ?? ''));
+
+        $layout = [
+            'page_type' => $pageType,
+            'regions' => [
+                'header' => $sharedHeaderFooter['header'] ?? ['locked' => true, 'components' => []],
+                'content' => ['locked' => false, 'components' => []],
+                'footer' => $sharedHeaderFooter['footer'] ?? ['locked' => true, 'components' => []],
+            ],
+            'components' => [],
+        ];
+
+        // 如果是首页且没有共享 Header/Footer，生成它们
+        if ($sharedHeaderFooter === null) {
+            $layout['regions']['header'] = [
+                'locked' => true,
+                'components' => [
+                    [
+                        'code' => 'header/default',
+                        'title' => (string)__('网站头部'),
+                        'config' => ['site_title' => $title],
+                    ],
+                ],
+            ];
+            $layout['regions']['footer'] = [
+                'locked' => true,
+                'components' => [
+                    [
+                        'code' => 'footer/default',
+                        'title' => (string)__('网站底部'),
+                        'config' => ['site_title' => $title],
+                    ],
+                ],
+            ];
+        }
+
+        // 生成内容区组件
+        $layout['regions']['content']['components'] = [
+            [
+                'code' => "content/{$pageType}",
+                'title' => $this->getPageTypeTitle($pageType),
+                'description' => $brief,
+                'config' => [],
+            ],
+        ];
+
+        $themeName = 'ai-site-' . $session->getId();
+
+        return [
+            'success' => true,
+            'layout' => $layout,
+            'theme_name' => $themeName,
+        ];
+    }
+
+    /**
+     * 标记页面类型已生成
+     */
+    private function markPageTypeGenerated(int $sessionId, int $adminId, string $pageType): void
+    {
+        $session = $this->getSessionService()->loadById($sessionId, $adminId);
+        if ($session === null) {
+            return;
+        }
+
+        $scope = $session->getScopeArray();
+        $generatedPageTypes = $scope['generated_page_types'] ?? [];
+        if (!\is_array($generatedPageTypes)) {
+            $generatedPageTypes = [];
+        }
+
+        $generatedPageTypes[$pageType] = [
+            'generated_at' => $this->now(),
+            'status' => 'completed',
+        ];
+
+        $this->getSessionService()->mergeScope($sessionId, $adminId, [
+            'generated_page_types' => $generatedPageTypes,
+        ]);
+    }
+
+    /**
+     * 获取页面类型标题
+     */
+    private function getPageTypeTitle(string $pageType): string
+    {
+        $titles = [
+            'home_page' => (string)__('首页'),
+            'about_page' => (string)__('关于我们'),
+            'contact_page' => (string)__('联系我们'),
+            'privacy_policy' => (string)__('隐私政策'),
+            'terms_of_service' => (string)__('服务条款'),
+            'refund_policy' => (string)__('退款政策'),
+            'shipping_policy' => (string)__('配送政策'),
+            'cookie_policy' => (string)__('Cookie政策'),
+            'blog_list' => (string)__('博客列表'),
+            'blog_category' => (string)__('博客分类'),
+            'blog_post' => (string)__('博客文章'),
+            'custom_page' => (string)__('自定义页面'),
+        ];
+
+        return $titles[$pageType] ?? $pageType;
     }
 }

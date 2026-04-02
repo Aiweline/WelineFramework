@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\HealthCheckResult;
 use Weline\Server\Service\Contract\ServiceCommand;
@@ -69,7 +70,7 @@ class WorkerProvider extends AbstractServiceProvider
             : $scriptDir . DS . 'worker.php';
 
         $port = $this->getPort($instanceId, $context);
-        $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName . '-' . $instanceId;
+        $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
 
         // 安全：Dispatcher 模式下 Worker 仅监听 127.0.0.1，不暴露内网端口
         // 仅主端口（-p 指定或默认 80/443）通过 Dispatcher/Redirect 对外，Worker 端口只供本机 Dispatcher 连接
@@ -187,12 +188,14 @@ class WorkerProvider extends AbstractServiceProvider
 
         $host = (string) ($wlsServer['host'] ?? $wlsSession['host'] ?? '127.0.0.1');
         $host = \trim($host) !== '' ? $host : '127.0.0.1';
-        $port = (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $context->envConfig['session']['server_port'] ?? 19970);
+        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
+        $port = (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $context->envConfig['session']['server_port'] ?? $defaultPort);
         $tokenFileName = (string) ($wlsServer['token_file_name'] ?? $wlsSession['token_file_name'] ?? 'session_server.token');
 
         return [
             'host' => $host,
-            'port' => $port > 0 ? $port : 19970,
+            'port' => $port > 0 ? $port : $defaultPort,
             'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'session_server.token',
         ];
     }
@@ -208,7 +211,9 @@ class WorkerProvider extends AbstractServiceProvider
 
         $host = (string) ($memory['host'] ?? '127.0.0.1');
         $host = \trim($host) !== '' ? $host : '127.0.0.1';
-        $port = (int) ($memory['port'] ?? 19971);
+        // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
+        $port = (int) ($memory['port'] ?? $defaultPort);
         $tokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
 
         return [

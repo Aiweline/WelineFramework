@@ -76,12 +76,12 @@ class Handle implements RegisterInterface
         switch ($param['type']) {
             case DataInterface::type_API:
                 $path = '';
-                if (in_array(DataInterfaceAlias::type_api_REST_FRONTEND, $param['area'], true)) {
-                    $path = self::path_fronted_API;
-                    $param['area'] = DataInterfaceAlias::type_api_REST_FRONTEND;
-                } elseif (in_array(DataInterfaceAlias::type_api_BACKEND, $param['area'], true)) {
+                if (in_array(DataInterfaceAlias::type_api_BACKEND, $param['area'], true)) {
                     $path = self::path_backend_API;
                     $param['area'] = DataInterfaceAlias::type_api_BACKEND;
+                } elseif (in_array(DataInterfaceAlias::type_api_REST_FRONTEND, $param['area'], true)) {
+                    $path = self::path_fronted_API;
+                    $param['area'] = DataInterfaceAlias::type_api_REST_FRONTEND;
                 } else {
                     $param['area'] = self::path_fronted_API;
                 }
@@ -109,12 +109,14 @@ class Handle implements RegisterInterface
                 break;
             case DataInterface::type_PC:
                 $path = '';
-                if (in_array(DataInterfaceAlias::type_pc_FRONTEND, $param['area'], true)) {
-                    $path = self::path_frontend_PC;
-                    $param['area'] = DataInterfaceAlias::type_pc_FRONTEND;
-                } elseif (in_array(DataInterfaceAlias::type_pc_BACKEND, $param['area'], true)) {
+                // 继承链上若同时出现 Frontend/Backend 基类标记，优先写入后台路由表，
+                // 避免误注册到 frontend_pc（裸 /admin 等会走前台匹配）。
+                if (in_array(DataInterfaceAlias::type_pc_BACKEND, $param['area'], true)) {
                     $path = self::path_backend_PC;
                     $param['area'] = DataInterfaceAlias::type_pc_BACKEND;
+                } elseif (in_array(DataInterfaceAlias::type_pc_FRONTEND, $param['area'], true)) {
+                    $path = self::path_frontend_PC;
+                    $param['area'] = DataInterfaceAlias::type_pc_FRONTEND;
                 }
                 $routers = [];
                 if ($path) {

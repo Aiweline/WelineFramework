@@ -42,7 +42,9 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         try {
             $serviceOptions = $this->buildServiceOptions($config);
             $host = (string) ($this->runtime['host'] ?? '127.0.0.1');
-            $port = (int) ($this->runtime['port'] ?? 19971);
+            // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+            $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
+            $port = (int) ($this->runtime['port'] ?? $defaultPort);
 
             $this->sharedMemoryService = $sharedMemoryService ?? $this->createSharedMemoryService($host, $port, $serviceOptions);
             $this->cacheMemoryService = $cacheMemoryService ?? $this->createCacheMemoryService($this->sharedMemoryService);

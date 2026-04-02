@@ -238,6 +238,39 @@ class AiSiteAgent extends BaseController
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_stream', 'AI 建站事件流', 'mdi-access-point', '订阅 AI 建站会话事件流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getStreamSse(): void { $this->handleStreamSse(); }
 
+    /**
+     * 测试 SSE 短轮询（无需认证）
+     *
+     * 用于验证 SSE 短轮询机制是否正常工作
+     * 警告：仅用于测试，生产环境应删除此方法
+     */
+    public function getTestSse(): void
+    {
+        $sse = new SseWriter();
+        $sse->start();
+
+        $sse->sendEvent('start', ['message' => 'Test SSE connection started']);
+        $sse->sendEvent('test', ['timestamp' => time(), 'message' => 'This is a test event']);
+
+        // 短轮询：只轮询 3 次（3 秒）
+        $maxPolls = 3;
+        $pollInterval = 1000;  // 1 秒
+
+        for ($i = 0; $i < $maxPolls; $i++) {
+            if (!$sse->isAlive()) {
+                break;
+            }
+
+            $sse->sendEvent('poll', ['count' => $i + 1, 'timestamp' => time()]);
+
+            if ($i < $maxPolls - 1) {
+                SchedulerSystem::yieldDelay($pollInterval);
+            }
+        }
+
+        $sse->complete(['success' => true, 'message' => 'Test complete, please reconnect']);
+    }
+
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_stream', 'AI 建站操作 SSE', 'mdi-access-point-network', '执行构建/重建/发布操作流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getOperationSse(): void { $this->handleOperationSse(); }
 
@@ -437,38 +470,88 @@ class AiSiteAgent extends BaseController
 
     private function handleStreamSse(): void
     {
-        $sse = new SseWriter();
-        $sse->start();
+        // 先验证认证和参数，避免启动 SSE 后再发现认证失败
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
-        if ($adminId <= 0 || $publicId === '') {
-            $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_PUBLIC_ID);
-            $sse->complete(['success' => false]);
+
+        // 认证失败：返回 HTTP 401，不启动 SSE
+        if ($adminId <= 0) {
+            $this->response->setHttpResponseCode(401);
+            $this->response->setHeader('Content-Type', 'application/json');
+            $this->response->setBody(\json_encode([
+                'error' => 'UNAUTHORIZED',
+                'message' => (string)__('未登录或登录已过期'),
+            ], JSON_UNESCAPED_UNICODE));
             return;
         }
+
+        // 参数无效：返回 HTTP 400，不启动 SSE
+        if ($publicId === '') {
+            $this->response->setHttpResponseCode(400);
+            $this->response->setHeader('Content-Type', 'application/json');
+            $this->response->setBody(\json_encode([
+                'error' => 'INVALID_PARAMS',
+                'message' => (string)__('参数无效'),
+                'param' => self::PARAMS_PUBLIC_ID,
+            ], JSON_UNESCAPED_UNICODE));
+            return;
+        }
+
+        // 会话不存在：返回 HTTP 404，不启动 SSE
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID, 404);
-            $sse->complete(['success' => false]);
+            $this->response->setHttpResponseCode(404);
+            $this->response->setHeader('Content-Type', 'application/json');
+            $this->response->setBody(\json_encode([
+                'error' => 'SESSION_NOT_FOUND',
+                'message' => (string)__('会话不存在或无权访问'),
+                'param' => self::PARAMS_PUBLIC_ID,
+            ], JSON_UNESCAPED_UNICODE));
             return;
         }
+
+        // 验证通过，启动 SSE
+        $sse = new SseWriter();
+        $sse->start();
         $sse->sendEvent('start', ['message' => __('已连接 PageBuilder 工作区事件流')]);
         $sse->sendEvent('snapshot', $this->buildWorkspaceState($session, $adminId, 40, true));
-        $deadline = \time() + 900;
-        while (\time() < $deadline && $sse->isAlive()) {
-            $newEvents = $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80);
-            foreach ($newEvents as $event) {
-                $eventId = (int)($event['event_id'] ?? 0);
-                if ($eventId > $lastEventId) {
-                    $lastEventId = $eventId;
-                }
-                $sse->sendEvent('log', $event);
+
+        // 关键优化：短轮询模式，立即返回，不占用 Worker
+        // 客户端应该使用短轮询（每 2-3 秒重连一次）而不是长连接
+        // 这样可以避免 SSE 连接长时间占用 Worker
+
+        // 只轮询 3 次（约 3 秒），然后立即断开，让客户端重连
+        $maxPolls = 3;
+        $pollInterval = 1000;  // 1 秒
+
+        for ($i = 0; $i < $maxPolls; $i++) {
+            // 检查连接是否还活着
+            if (!$sse->isAlive()) {
+                break;
             }
-            $sse->maybeHeartbeat();
-            SchedulerSystem::yieldDelay(2000);
+
+            $newEvents = $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80);
+
+            if (!empty($newEvents)) {
+                foreach ($newEvents as $event) {
+                    $eventId = (int)($event['event_id'] ?? 0);
+                    if ($eventId > $lastEventId) {
+                        $lastEventId = $eventId;
+                    }
+                    $sse->sendEvent('log', $event);
+                }
+            }
+
+            // 最后一次轮询后不需要等待
+            if ($i < $maxPolls - 1) {
+                SchedulerSystem::yieldDelay($pollInterval);
+            }
         }
-        $sse->complete(['success' => true, 'message' => __('事件流已结束，可重新连接继续监听'), 'last_event_id' => $lastEventId]);
+
+        // 立即断开连接，让客户端重连
+        // 这样 Worker 最多只被占用 3 秒，而不是 60 秒
+        $sse->complete(['success' => true, 'message' => __('请重新连接继续监听'), 'last_event_id' => $lastEventId]);
     }
 
     private function handleOperationSse(): void

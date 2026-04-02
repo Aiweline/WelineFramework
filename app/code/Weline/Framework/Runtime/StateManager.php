@@ -709,5 +709,120 @@ class StateManager
                 \Weline\Framework\Manager\MessageManager::resetRequestState();
             }
         });
+
+        // ========== 16. PageBuilder 模块状态污染 ==========
+
+        // PageBuilder Controller 权限缓存 - 不同用户的权限不能共享
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Controller\Backend\Page::class, 'userPermissionsCache', null);
+
+        // PageBuilder Router 路由缓存 - 每个请求的路由可能不同
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Controller\Router::class, 'handleCache', []);
+
+        // GlrDownloadRegistry - 下载注册表是请求级状态
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::class, 'entries', []);
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::class, 'stateHooked', false);
+
+        // Layout 模型缓存 - 布局配置可能在请求间变化
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Model\Layout::class, 'layoutsCache', null);
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Model\Layout::class, 'layoutConfigCache', []);
+
+        // Style 模型扫描状态 - 样式扫描时间戳是请求级状态
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Model\Style::class, 'lastScanTime', null);
+
+        // AI 组件注册表缓存 - 组件可能动态变化
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::class, 'componentCache', []);
+
+        // 组件解析器缓存 - 组件文件可能变化
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::class, 'componentCache', []);
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::class, 'componentFilesCache', []);
+
+        // 插槽验证器缓存 - 组件 JSON 缓存是请求级
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\Component\SlotValidator::class, 'componentJsonCache', []);
+
+        // 布局装配器缓存 - 组件文件缓存是请求级
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\LayoutAssembler::class, 'componentFilesCache', []);
+
+        // 页面渲染服务缓存 - 组件文件缓存是请求级
+        self::registerStaticReset(\GuoLaiRen\PageBuilder\Service\PageRenderService::class, 'componentFilesCache', []);
+
+        // PageBuilder 单例实例清理 - 这些单例持有请求级状态
+        self::registerResetCallback('pagebuilder_singletons', function () {
+            $singletonClasses = [
+                \GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::class,
+                \GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer::class,
+                \GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::class,
+                \GuoLaiRen\PageBuilder\Service\Component\SlotValidator::class,
+                \GuoLaiRen\PageBuilder\Service\ComponentValidator::class,
+                \GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer::class,
+            ];
+
+            foreach ($singletonClasses as $class) {
+                if (\class_exists($class, false)) {
+                    \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+                }
+            }
+        });
+
+        // ========== 17. Theme 模块状态污染 ==========
+
+        // LayoutDependencyTracker 依赖缓存 - 布局依赖关系可能变化
+        self::registerStaticReset(\Weline\Theme\Helper\LayoutDependencyTracker::class, 'dependencyCache', []);
+
+        // ========== 18. VirtualTheme 虚拟主题状态污染（已知问题）==========
+
+        // VirtualThemeRequestInterceptor 的 Session 上下文必须在非 AI 路由下清除
+        // 这个已经在 Observer 中实现了路由隔离，但为保险起见，每请求结束也清理一次
+        self::registerResetCallback('virtual_theme_context', function () {
+            // 清理 ObjectManager 中缓存的 VirtualThemeRequestInterceptor 实例
+            if (\class_exists(\GuoLaiRen\PageBuilder\Observer\VirtualThemeRequestInterceptor::class, false)) {
+                \Weline\Framework\Manager\ObjectManager::removeInstance(
+                    \GuoLaiRen\PageBuilder\Observer\VirtualThemeRequestInterceptor::class
+                );
+            }
+
+            // 清理 VirtualThemeContextService 实例
+            if (\class_exists(\GuoLaiRen\PageBuilder\Service\VirtualThemeContextService::class, false)) {
+                \Weline\Framework\Manager\ObjectManager::removeInstance(
+                    \GuoLaiRen\PageBuilder\Service\VirtualThemeContextService::class
+                );
+            }
+        });
+
+        // ========== 19. Debug 模块状态污染 ==========
+
+        // Debug::$panelInjected - 调试面板注入标志是请求级状态
+        self::registerStaticReset(\Weline\Framework\App\Debug::class, 'panelInjected', false);
+
+        // ========== 20. ObjectManager 缓存污染 ==========
+
+        // ObjectManager 的某些缓存是进程级的（reflections, methodParamsMetadata 等），
+        // 但 $instances 和 $origin_instances 必须在每个请求后清理特定的请求级实例
+        // 这个已经通过各个 removeInstance 回调处理了，不需要额外重置
+
+        // ========== 21. SSE 上下文状态污染 ==========
+
+        // SseContext 的所有静态变量都是请求级状态，已在 registerFrameworkResets 中注册
+        // 这里确保 reset() 方法被调用
+        // （已在第 456-460 行注册）
+
+        // ========== 22. Url 解析递归保护标志 ==========
+
+        // Url::$parsingInProgress - 递归保护标志，异常中断可能残留 true
+        // 已在 registerFrameworkResets 中通过 Url::registerStateResets() 注册
+        // （已在第 409 行注册）
+
+        // ========== 23. Admin 模块状态污染 ==========
+
+        // MenuUrlValidator 白名单缓存 - 菜单白名单可能动态变化
+        self::registerStaticReset(\Weline\Admin\Helper\MenuUrlValidator::class, 'whitelistCache', null);
+
+        // ========== 24. 其他模块的静态变量污染 ==========
+
+        // 在开发模式下自动检测未注册的静态变量
+        self::registerResetCallback('scan_static_pollution', function () {
+            if (\class_exists(\Weline\Framework\Runtime\StatePollutionDetector::class, false)) {
+                \Weline\Framework\Runtime\StatePollutionDetector::autoDetect();
+            }
+        });
     }
 }

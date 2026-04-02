@@ -33,6 +33,9 @@ class PooledConnection implements PooledConnectionInterface
             return true;
         }
 
+        $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+        $this->log("[CONN-START] {$timestamp} Attempting connect to {$this->host}:{$this->port}");
+
         $errno = 0;
         $errstr = '';
         // Linux: 使用 context 明确超时，避免 default_socket_timeout 或系统行为导致长时间阻塞
@@ -54,8 +57,9 @@ class PooledConnection implements PooledConnectionInterface
             $ctx
         );
         if (!$socket) {
+            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
             if ($this->logConnectFailure) {
-                $this->log("Connect failed: {$errstr} ({$errno})");
+                $this->log("[CONN-FAIL] {$timestamp} Connect failed: {$errstr} ({$errno})");
             }
             return false;
         }
@@ -72,9 +76,14 @@ class PooledConnection implements PooledConnectionInterface
         $this->authenticated = false;
 
         if (!$this->authenticate()) {
+            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+            $this->log("[CONN-AUTH-FAIL] {$timestamp} Authentication failed");
             $this->close();
             return false;
         }
+
+        $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+        $this->log("[CONN-OK] {$timestamp} Connected and authenticated");
         return true;
     }
 
@@ -106,11 +115,32 @@ class PooledConnection implements PooledConnectionInterface
         if (!$this->isConnected()) {
             return null;
         }
-        $start = \microtime(true);
+        $deadline = \microtime(true) + $this->timeout;
+
         while (true) {
-            if (\microtime(true) - $start > $this->timeout) {
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0) {
                 return null;
             }
+
+            // 使用 stream_select 等待数据，避免 CPU 空转
+            $read = [$this->socket];
+            $write = null;
+            $except = null;
+            $timeoutSec = (int)$remaining;
+            $timeoutUsec = (int)(($remaining - $timeoutSec) * 1000000);
+
+            $ready = @\stream_select($read, $write, $except, $timeoutSec, $timeoutUsec);
+            if ($ready === false) {
+                $this->close();
+                return null;
+            }
+            if ($ready === 0) {
+                // 超时
+                return null;
+            }
+
+            // 有数据可读
             $chunk = @\fread($this->socket, 65536);
             if ($chunk === false) {
                 $this->close();
@@ -121,7 +151,7 @@ class PooledConnection implements PooledConnectionInterface
                     $this->close();
                     return null;
                 }
-                SchedulerSystem::usleep(1000);
+                // stream_select 说有数据但 fread 返回空，可能是信号中断，继续等待
                 continue;
             }
             $this->buffer .= $chunk;
@@ -146,6 +176,8 @@ class PooledConnection implements PooledConnectionInterface
     public function close(): void
     {
         if ($this->socket !== null) {
+            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+            $this->log("[CONN-CLOSE] {$timestamp} Closing connection to {$this->host}:{$this->port}");
             @\fclose($this->socket);
             $this->socket = null;
         }

@@ -1133,8 +1133,13 @@ class Stop extends CommandAbstract
             Processer::removePidFile('--name=weline-wls-worker-' . $name . '-' . $i);
             Processer::removePidFile('--name=weline-master-' . $name . '-worker-' . $i);
         }
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-session', $name));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name));
+        Processer::removePidFile('--name=' . MasterProcess::buildScopedProcessName('weline-wls-memory', $name));
         Processer::removePidFile('--name=weline-wls-dispatcher-' . $name);
         Processer::removePidFile('--name=weline-wls-session-' . $name);
+        Processer::removePidFile('--name=weline-wls-memory-' . $name);
         Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name);
         
         // Global stale pid pruning is intentionally excluded from the stop hot path.
@@ -1201,6 +1206,10 @@ class Stop extends CommandAbstract
     {
         $processNames = [
             MasterProcess::getMasterProcessName($name),
+            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
+            MasterProcess::buildScopedProcessName('weline-wls-session', $name),
+            MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
+            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
             'weline-wls-dispatcher-' . $name,
             'weline-wls-session-' . $name,
             'weline-wls-memory-' . $name,
@@ -1222,6 +1231,11 @@ class Stop extends CommandAbstract
     {
         $prefixes = [
             MasterProcess::getMasterProcessName($name),
+            MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
+            MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
+            MasterProcess::buildScopedProcessName('weline-wls-session', $name),
+            MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
+            MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
             'weline-wls-dispatcher-' . $name,
             'weline-wls-worker-' . $name . '-',
             'weline-master-' . $name . '-worker-',
