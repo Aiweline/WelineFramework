@@ -31,9 +31,13 @@ final class SessionClient
      */
     public function __construct(
         string $host = '127.0.0.1',
-        int $port = 19970,
+        int $port = 0,
         array $options = []
     ) {
+        // 如果端口为 0，使用项目偏移量计算默认端口
+        if ($port <= 0) {
+            $port = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        }
         $this->stateClient = new SharedStateClient($host, $port, [
             'connect_timeout' => (float)($options['connect_timeout'] ?? 1.0),
             'timeout' => (float)($options['timeout'] ?? 2.0),
@@ -200,6 +204,92 @@ final class SessionClient
         $response = $this->sendRequest($request);
 
         return $response !== null && SessionProtocol::isSuccess($response);
+    }
+
+    /**
+     * 批量获取多个键（MGET）
+     *
+     * @param string $sessionId Session ID
+     * @param array $keys 键名数组
+     * @return array 键值对数组，不存在的键不包含在结果中
+     */
+    public function mget(string $sessionId, array $keys): array
+    {
+        if (empty($keys)) {
+            return [];
+        }
+
+        $request = SessionProtocol::buildMget($sessionId, $keys);
+        $response = $this->sendRequest($request);
+
+        if ($response === null || !SessionProtocol::isSuccess($response)) {
+            return [];
+        }
+
+        return SessionProtocol::getData($response) ?? [];
+    }
+
+    /**
+     * 批量设置多个键（MSET）
+     *
+     * @param string $sessionId Session ID
+     * @param array $kv 键值对数组
+     * @param int $ttl TTL（秒）
+     * @return bool 是否成功
+     */
+    public function mset(string $sessionId, array $kv, int $ttl = 3600): bool
+    {
+        if (empty($kv)) {
+            return true;
+        }
+
+        $request = SessionProtocol::buildMset($sessionId, $kv, $ttl);
+        $response = $this->sendRequest($request);
+
+        return $response !== null && SessionProtocol::isSuccess($response);
+    }
+
+    /**
+     * 批量获取多个 Session 的指定键
+     *
+     * 便利方法：一次性获取多个 Session 的同一个键
+     *
+     * @param array $sessionIds Session ID 数组
+     * @param string $key 键名
+     * @return array [sessionId => value] 映射
+     */
+    public function multiSessionGet(array $sessionIds, string $key): array
+    {
+        $result = [];
+        foreach ($sessionIds as $sessionId) {
+            $value = $this->get($sessionId, $key);
+            if ($value !== null) {
+                $result[$sessionId] = $value;
+            }
+        }
+        return $result;
+    }
+
+    /**
+     * 批量设置多个 Session 的同一个键
+     *
+     * 便利方法：一次性为多个 Session 设置相同的键值
+     *
+     * @param array $sessionIds Session ID 数组
+     * @param string $key 键名
+     * @param mixed $value 值
+     * @param int $ttl TTL（秒）
+     * @return int 成功设置的数量
+     */
+    public function multiSessionSet(array $sessionIds, string $key, mixed $value, int $ttl = 3600): int
+    {
+        $successCount = 0;
+        foreach ($sessionIds as $sessionId) {
+            if ($this->set($sessionId, $key, $value, $ttl)) {
+                $successCount++;
+            }
+        }
+        return $successCount;
     }
 
     /**
