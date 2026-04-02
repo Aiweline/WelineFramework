@@ -49,9 +49,11 @@ class Transaction extends BackendController
             $query->where(PaymentTransaction::schema_fields_METHOD_CODE, $methodCode);
         }
         
-        $total = $query->count();
+        // Clone query for count to avoid breaking the main query chain
+        $countQuery = clone $query;
+        $total = $countQuery->count();
         $totalPages = (int)ceil($total / $limit);
-        
+
         $transactions = $query->order(PaymentTransaction::schema_fields_CREATED_AT, 'DESC')
             ->limit($limit, ($page - 1) * $limit)
             ->fetch();
