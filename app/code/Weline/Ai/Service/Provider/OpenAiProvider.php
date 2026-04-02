@@ -579,13 +579,14 @@ class OpenAiProvider implements ProviderInterface
             $requestData,
             function($chunk) use ($callback, &$fullContent) {
                 $fullContent .= $chunk;
-                $callback($chunk);
+                // CRITICAL-FIX-2026-04-02: Propagate callback return value for SSE abort signal
+                return $callback($chunk);
             },
             $proxyInfo,
             $timeout,
             $reasoningCallback ? function($chunk) use ($reasoningCallback, &$fullReasoning) {
                 $fullReasoning .= $chunk;
-                $reasoningCallback($chunk);
+                return $reasoningCallback($chunk);
             } : null
         );
 
@@ -868,43 +869,51 @@ class OpenAiProvider implements ProviderInterface
                     return -1; // 返回 -1 会中断 curl_exec
                 }
             }
-            
+
             // 累积原始响应（限制大小，仅用于错误诊断）
             if (strlen($rawResponseBuffer) < 4096) {
                 $rawResponseBuffer .= $data;
             }
-            
+
             $lines = explode("\n", $data);
-            
+
             foreach ($lines as $line) {
                 $line = trim($line);
-                
+
                 if (empty($line) || !str_starts_with($line, 'data: ')) {
                     continue;
                 }
-                
+
                 $jsonData = substr($line, 6);
-                
+
                 if ($jsonData === '[DONE]') {
                     continue;
                 }
-                
+
                 $chunk = json_decode($jsonData, true);
                 $delta = $chunk['choices'][0]['delta'] ?? [];
-                
+
                 // 处理推理/思考内容（DeepSeek reasoning_content）
                 if (!empty($delta['reasoning_content']) && $reasoningCallback) {
                     $hasValidChunk = true;
-                    $reasoningCallback($delta['reasoning_content']);
+                    $result = $reasoningCallback($delta['reasoning_content']);
+                    // CRITICAL-FIX-2026-04-02: Abort curl on SSE disconnect (return -1 stops CURLOPT_WRITEFUNCTION)
+                    if ($result === false) {
+                        return -1;
+                    }
                 }
-                
+
                 // 处理正文内容
                 if (isset($delta['content'])) {
                     $hasValidChunk = true;
-                    $callback($delta['content']);
+                    $result = $callback($delta['content']);
+                    // CRITICAL-FIX-2026-04-02: Abort curl on SSE disconnect (return -1 stops CURLOPT_WRITEFUNCTION)
+                    if ($result === false) {
+                        return -1;
+                    }
                 }
             }
-            
+
             return strlen($data);
         });
 
