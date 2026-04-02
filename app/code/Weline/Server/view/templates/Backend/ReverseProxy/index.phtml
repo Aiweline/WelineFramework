@@ -1,0 +1,206 @@
+<?php
+/**
+ * 反向代理配置 - 列表页
+ */
+use Weline\Server\Model\ReverseProxy;
+
+$proxies = $this->getData('proxies') ?? [];
+$stats = $this->getData('stats') ?? ['total' => 0, 'active' => 0, 'inactive' => 0];
+?>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2><i class="bi bi-arrow-left-right"></i> <lang>反向代理配置</lang></h2>
+            <p class="text-muted"><lang>配置 WLS Gateway 的域名路由规则</lang></p>
+        </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><lang>总规则数</lang></h5>
+                    <h2><?php echo $stats['total']; ?></h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><lang>启用</lang></h5>
+                    <h2 class="text-success"><?php echo $stats['active']; ?></h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title"><lang>禁用</lang></h5>
+                    <h2 class="text-secondary"><?php echo $stats['inactive']; ?></h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 操作按钮 -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy/edit'); ?>" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> <lang>新建规则</lang>
+            </a>
+            <button type="button" class="btn btn-success" onclick="applyConfig()">
+                <i class="bi bi-check-circle"></i> <lang>应用配置</lang>
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise"></i> <lang>刷新</lang>
+            </button>
+        </div>
+    </div>
+
+    <!-- 数据表格 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th><lang>域名</lang></th>
+                                <th><lang>后端地址</lang></th>
+                                <th><lang>优先级</lang></th>
+                                <th><lang>状态</lang></th>
+                                <th><lang>操作</lang></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($proxies)): ?>
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">
+                                        <lang>暂无代理规则</lang>
+                                    </td>
+                                </tr>
+                            <?php else: ?>
+                                <?php foreach ($proxies as $proxy): ?>
+                                    <tr>
+                                        <td>
+                                            <strong><?php echo htmlspecialchars($proxy[ReverseProxy::schema_fields_DOMAIN]); ?></strong>
+                                            <?php if (!empty($proxy[ReverseProxy::schema_fields_DESCRIPTION])): ?>
+                                                <br><small class="text-muted"><?php echo htmlspecialchars($proxy[ReverseProxy::schema_fields_DESCRIPTION]); ?></small>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php echo htmlspecialchars($proxy[ReverseProxy::schema_fields_BACKEND_HOST]); ?>:<?php echo $proxy[ReverseProxy::schema_fields_BACKEND_PORT]; ?>
+                                            <?php if ($proxy[ReverseProxy::schema_fields_BACKEND_SSL]): ?>
+                                                <span class="badge bg-success">SSL</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo $proxy[ReverseProxy::schema_fields_PRIORITY]; ?></td>
+                                        <td>
+                                            <?php if ($proxy[ReverseProxy::schema_fields_STATUS] === ReverseProxy::STATUS_ACTIVE): ?>
+                                                <span class="badge bg-success"><lang>启用</lang></span>
+                                            <?php else: ?>
+                                                <span class="badge bg-secondary"><lang>禁用</lang></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy/edit', ['proxy_id' => $proxy[ReverseProxy::schema_fields_ID]]); ?>" class="btn btn-sm btn-primary">
+                                                <i class="bi bi-pencil"></i> <lang>编辑</lang>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-info" onclick="testConnection(<?php echo $proxy[ReverseProxy::schema_fields_ID]; ?>, '<?php echo htmlspecialchars($proxy[ReverseProxy::schema_fields_BACKEND_HOST]); ?>', <?php echo $proxy[ReverseProxy::schema_fields_BACKEND_PORT]; ?>, <?php echo $proxy[ReverseProxy::schema_fields_BACKEND_SSL] ? 'true' : 'false'; ?>)">
+                                                <i class="bi bi-plug"></i> <lang>测试</lang>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-warning" onclick="toggleStatus(<?php echo $proxy[ReverseProxy::schema_fields_ID]; ?>, '<?php echo $proxy[ReverseProxy::schema_fields_STATUS] === ReverseProxy::STATUS_ACTIVE ? ReverseProxy::STATUS_INACTIVE : ReverseProxy::STATUS_ACTIVE; ?>')">
+                                                <i class="bi bi-toggle-on"></i> <?php echo $proxy[ReverseProxy::schema_fields_STATUS] === ReverseProxy::STATUS_ACTIVE ? '<lang>禁用</lang>' : '<lang>启用</lang>'; ?>
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-danger" onclick="deleteProxy(<?php echo $proxy[ReverseProxy::schema_fields_ID]; ?>)">
+                                                <i class="bi bi-trash"></i> <lang>删除</lang>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function applyConfig() {
+    if (!confirm('<?php echo __('确定要应用配置到 Gateway 吗？'); ?>')) {
+        return;
+    }
+
+    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/apply'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('<?php echo __('应用失败'); ?>: ' + data.message);
+        }
+    })
+    .catch(err => alert('<?php echo __('请求失败'); ?>: ' + err));
+}
+
+function toggleStatus(proxyId, status) {
+    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/toggle-status'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({proxy_id: proxyId, status: status})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('<?php echo __('操作失败'); ?>: ' + data.message);
+        }
+    });
+}
+
+function deleteProxy(proxyId) {
+    if (!confirm('<?php echo __('确定要删除此规则吗？'); ?>')) {
+        return;
+    }
+
+    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/delete'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({proxy_id: proxyId})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('<?php echo __('删除失败'); ?>: ' + data.message);
+        }
+    });
+}
+
+function testConnection(proxyId, host, port, ssl) {
+    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/test-connection'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({backend_host: host, backend_port: port, backend_ssl: ssl})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?php echo __('连接成功'); ?> (' + data.latency_ms + 'ms)');
+        } else {
+            alert('<?php echo __('连接失败'); ?>: ' + data.message);
+        }
+    });
+}
+</script>
