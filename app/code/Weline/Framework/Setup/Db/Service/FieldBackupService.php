@@ -307,28 +307,23 @@ class FieldBackupService
      */
     private function ensureBackupTableExists(): void
     {
-        try {
-            $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackup::class);
-            $conflictModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackupConflict::class);
-            $definitionModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldDefinitionBackup::class);
-            $setup = ObjectManager::make(\Weline\Framework\Setup\Db\ModelSetup::class);
-            // 正确传递构造参数数组给 Context（模块名 + 模块版本）
-            $context = ObjectManager::make(
-                \Weline\Framework\Setup\Data\Context::class,
-                ['module_name' => 'Weline_Framework', 'module_version' => '1.0.0']
-            );
-            $setup->putModel($backupModel);
-            $backupModel->install($setup, $context);
-            // 冲突记录表也一起初始化
-            $setup->putModel($conflictModel);
-            $conflictModel->install($setup, $context);
-            // 字段定义备份表也一并初始化
-            $setup->putModel($definitionModel);
-            $definitionModel->install($setup, $context);
-        } catch (\Exception $e) {
-            // 如果表已存在或其他错误，忽略
-            // 实际使用时，应该在框架初始化时确保这个表存在
-        }
+        $backupModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackup::class);
+        $conflictModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldBackupConflict::class);
+        $definitionModel = ObjectManager::getInstance(\Weline\Framework\Setup\Model\FieldDefinitionBackup::class);
+        $setup = ObjectManager::make(\Weline\Framework\Setup\Db\ModelSetup::class);
+        // 正确传递构造参数数组给 Context（模块名 + 模块版本）
+        $context = ObjectManager::make(
+            \Weline\Framework\Setup\Data\Context::class,
+            ['module_name' => 'Weline_Framework', 'module_version' => '1.0.0']
+        );
+        $setup->putModel($backupModel);
+        $backupModel->install($setup, $context);
+        // 冲突记录表也一起初始化
+        $setup->putModel($conflictModel);
+        $conflictModel->install($setup, $context);
+        // 字段定义备份表也一并初始化
+        $setup->putModel($definitionModel);
+        $definitionModel->install($setup, $context);
     }
 
     /**
