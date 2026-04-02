@@ -440,16 +440,58 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
                         <iframe
                             id="site-builder-visual-preview-frame"
                             title="<?= htmlspecialchars((string)__('站点可视化预览'), ENT_QUOTES, 'UTF-8') ?>"
-                            src="<?= htmlspecialchars($previewFrameUrl, ENT_QUOTES, 'UTF-8') ?>"
+                            data-src="<?= htmlspecialchars($previewFrameUrl, ENT_QUOTES, 'UTF-8') ?>"
                             loading="lazy"
                             referrerpolicy="no-referrer"
                         ></iframe>
+                        <script>
+                        // 延迟加载预览 iframe，避免与 SSE 连接竞争资源
+                        (function() {
+                            var frame = document.getElementById('site-builder-visual-preview-frame');
+                            if (frame && frame.dataset.src) {
+                                // 延迟 2 秒加载，确保 SSE 和其他关键资源先完成
+                                setTimeout(function() {
+                                    frame.src = frame.dataset.src;
+                                }, 2000);
+                            }
+                        })();
+                        </script>
                     </div>
                 <?php } else { ?>
                     <div class="wb-empty mt-3"><lang>当前还没有可预览地址，先完成前置步骤后会自动可用。</lang></div>
                 <?php } ?>
             </div>
         </details>
+
+        <!-- 页面类型确认弹窗 -->
+        <div class="modal fade" id="site-builder-page-type-confirm-modal" tabindex="-1" role="dialog" aria-labelledby="site-builder-page-type-confirm-modal-title" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="site-builder-page-type-confirm-modal-title"><lang>确认页面类型并生成虚拟主题</lang></h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted mb-3">
+                            <lang>请选择要生成的页面类型（默认全部选中），确认后将自动生成虚拟主题和页面布局。</lang>
+                        </p>
+                        <div class="wb-page-type-grid" id="site-builder-modal-page-types">
+                            <!-- 动态生成页面类型选择器 -->
+                        </div>
+                        <div class="alert alert-info mt-3 mb-0">
+                            <i class="mdi mdi-information-outline me-1"></i>
+                            <lang>生成后可在可视化编辑器中继续调整页面内容和布局。</lang>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
+                        <button type="button" class="btn btn-primary" id="site-builder-confirm-generate-theme">
+                            <lang>确认并生成虚拟主题</lang>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <details class="mt-3" id="site-builder-summary-details">
             <summary class="wb-summary-link"><lang>站点简报</lang></summary>
@@ -1087,6 +1129,8 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 <script>
 (function () {
     'use strict';
+
+    console.log('[PageBuilder] JavaScript 开始执行');
 
     var publicId = <?= json_encode($publicId, JSON_THROW_ON_ERROR) ?>;
     var providerCode = <?= json_encode((string)($provider_context['code'] ?? ''), JSON_THROW_ON_ERROR) ?>;
@@ -2371,33 +2415,8 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     var saveVirtualThemeBtn = document.getElementById('site-builder-save-virtual-theme');
     if (saveVirtualThemeBtn) {
         saveVirtualThemeBtn.addEventListener('click', function () {
-            if (!saveVirtualThemeUrl) {
-                toast('error', messages.virtualThemeSaveFailed);
-                return;
-            }
-            var payload = {
-                public_id: publicId,
-                weline_theme_id: document.getElementById('site-builder-weline-theme-id') ? document.getElementById('site-builder-weline-theme-id').value : '',
-                virtual_theme_name: document.getElementById('site-builder-virtual-theme-name') ? document.getElementById('site-builder-virtual-theme-name').value : '',
-                theme_style_direction: document.getElementById('site-builder-theme-style-direction') ? document.getElementById('site-builder-theme-style-direction').value : '',
-                theme_color_scheme: document.getElementById('site-builder-theme-color-scheme') ? document.getElementById('site-builder-theme-color-scheme').value : '',
-                page_types: JSON.stringify(getSelectedPageTypes()),
-                page_type_layouts: JSON.stringify({})
-            };
-            postForm(saveVirtualThemeUrl, payload).then(function (data) {
-                if (data && data.success) {
-                    var themeIdInput = document.getElementById('site-builder-weline-theme-id');
-                    if (themeIdInput && data.data && data.data.weline_theme_id) {
-                        themeIdInput.value = String(data.data.weline_theme_id);
-                    }
-                    toast('success', data.message || messages.virtualThemeSaved);
-                    window.location.reload();
-                    return;
-                }
-                toast('error', (data && data.message) ? data.message : messages.virtualThemeSaveFailed);
-            }).catch(function () {
-                toast('error', messages.networkError);
-            });
+            // 修改：先显示页面类型确认弹窗，而不是直接保存
+            showPageTypeConfirmModal();
         });
     }
 
@@ -2855,14 +2874,18 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         }
     }
 
-    if (currentStageCode === 'generate' && (!virtualThemeAutoGenerated || virtualThemeSeedEmpty)) {
-        startVirtualThemeAiGeneration();
-    }
+    // 注释掉自动触发虚拟主题生成的逻辑，改为通过弹窗确认
+    // if (currentStageCode === 'generate' && (!virtualThemeAutoGenerated || virtualThemeSeedEmpty)) {
+    //     startVirtualThemeAiGeneration();
+    // }
 
     // ========== 可视化主题编辑器 ==========
     var nextStep = <?= json_encode($this->getData('next_step') ?? '', JSON_UNESCAPED_UNICODE) ?>;
     var autoShowPageTypeSelector = <?= $this->getData('auto_show_page_type_selector') ? 'true' : 'false' ?>;
     var virtualThemeAutoGenerated = <?= !empty($scope['virtual_theme_auto_generated']) ? 'true' : 'false' ?>;
+
+    // 定义所有页面类型（从 PHP 传递到 JavaScript）
+    var allPageTypes = <?= json_encode($allPageTypes, JSON_UNESCAPED_UNICODE) ?>;
 
     // 页面类型生成状态管理
     var generatedPageTypes = <?= json_encode($scope['generated_page_types'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
@@ -2878,13 +2901,25 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     });
 
     // 自动弹出页面类型选择弹窗的条件：
-    // 1. 有 next_step=virtual_theme_edit 参数
-    // 2. 或者虚拟主题未生成
-    var shouldShowModal = (autoShowPageTypeSelector && nextStep === 'virtual_theme_edit') || !virtualThemeAutoGenerated;
+    // 1. 有 next_step=virtual_theme_edit 参数（明确的用户意图）
+    // 2. 当前在 generate 阶段且虚拟主题未生成（首次进入）
+    var shouldShowModal = (autoShowPageTypeSelector && nextStep === 'virtual_theme_edit')
+                       || (currentStageCode === 'generate' && !virtualThemeAutoGenerated);
+
+    // 调试日志
+    console.log('[PageBuilder] 弹窗触发条件检查:', {
+        autoShowPageTypeSelector: autoShowPageTypeSelector,
+        nextStep: nextStep,
+        currentStageCode: currentStageCode,
+        virtualThemeAutoGenerated: virtualThemeAutoGenerated,
+        shouldShowModal: shouldShowModal
+    });
 
     if (shouldShowModal) {
         setTimeout(function() {
-            showPageTypeSelectorModal();
+            console.log('[PageBuilder] 准备显示页面类型确认弹窗');
+            // 修改：统一使用新的页面类型确认弹窗
+            showPageTypeConfirmModal();
         }, 500);
     }
 
@@ -2945,6 +2980,118 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         return labels[pageType] || pageType;
     }
 
+    // ========== 页面类型确认弹窗控制 ==========
+
+    /**
+     * 显示页面类型确认弹窗
+     * 同步当前选中的页面类型到弹窗
+     */
+    function showPageTypeConfirmModal() {
+        console.log('[PageBuilder] showPageTypeConfirmModal 被调用');
+
+        var modal = document.getElementById('site-builder-page-type-confirm-modal');
+        if (!modal) {
+            console.error('[PageBuilder] 页面类型确认弹窗未找到: site-builder-page-type-confirm-modal');
+            return;
+        }
+        console.log('[PageBuilder] 找到弹窗元素:', modal);
+
+        // 同步当前选中的页面类型到弹窗
+        var currentSelected = getSelectedPageTypes();
+        console.log('[PageBuilder] 当前选中的页面类型:', currentSelected);
+
+        var modalContainer = document.getElementById('site-builder-modal-page-types');
+        if (!modalContainer) {
+            console.error('[PageBuilder] 弹窗页面类型容器未找到: site-builder-modal-page-types');
+            return;
+        }
+        console.log('[PageBuilder] 找到容器元素:', modalContainer);
+
+        modalContainer.innerHTML = '';
+
+        allPageTypes.forEach(function(pageType) {
+            var isChecked = currentSelected.indexOf(pageType) !== -1;
+            var chip = document.createElement('label');
+            chip.className = 'wb-page-type-chip' + (isChecked ? ' is-checked' : '');
+
+            var checkbox = document.createElement('input');
+            checkbox.className = 'site-builder-modal-page-type-check';
+            checkbox.type = 'checkbox';
+            checkbox.value = pageType;
+            checkbox.checked = isChecked;
+
+            // 添加复选框变更事件
+            checkbox.addEventListener('change', function() {
+                chip.classList.toggle('is-checked', this.checked);
+            });
+
+            var span = document.createElement('span');
+            span.textContent = getPageTypeLabel(pageType);
+
+            chip.appendChild(checkbox);
+            chip.appendChild(span);
+            modalContainer.appendChild(chip);
+        });
+
+        console.log('[PageBuilder] 页面类型选择器已生成，共', allPageTypes.length, '个类型');
+
+        // 显示弹窗
+        console.log('[PageBuilder] 准备显示弹窗...');
+        var bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+        console.log('[PageBuilder] 弹窗已调用 show()');
+    }
+
+    /**
+     * 确认并生成虚拟主题
+     */
+    document.addEventListener('DOMContentLoaded', function() {
+        var confirmBtn = document.getElementById('site-builder-confirm-generate-theme');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function() {
+                // 获取弹窗中选中的页面类型
+                var selectedTypes = [];
+                document.querySelectorAll('.site-builder-modal-page-type-check:checked').forEach(function(checkbox) {
+                    selectedTypes.push(checkbox.value);
+                });
+
+                if (selectedTypes.length === 0) {
+                    if (typeof FrontendToast !== 'undefined') {
+                        FrontendToast.warning('<?= __('请至少选择一个页面类型') ?>');
+                    } else {
+                        alert('<?= __('请至少选择一个页面类型') ?>');
+                    }
+                    return;
+                }
+
+                // 同步回源选择器
+                document.querySelectorAll('.site-builder-page-type-check').forEach(function(checkbox) {
+                    checkbox.checked = selectedTypes.indexOf(checkbox.value) !== -1;
+                    var label = checkbox.closest('.wb-page-type-chip');
+                    if (label) {
+                        label.classList.toggle('is-checked', checkbox.checked);
+                    }
+                });
+
+                // 关闭弹窗
+                var modal = document.getElementById('site-builder-page-type-confirm-modal');
+                if (modal) {
+                    var bsModal = bootstrap.Modal.getInstance(modal);
+                    if (bsModal) {
+                        bsModal.hide();
+                    }
+                }
+
+                // 保存页面类型到 scope 并触发生成
+                var scopePatch = { page_types: selectedTypes };
+                applyScopeThenMaybeStage(scopePatch, null, function() {
+                    // scope 保存成功后，启动虚拟主题生成
+                    startVirtualThemeAiGeneration();
+                });
+            });
+        }
+    });
+
     function startProgressiveGeneration() {
         var selectedTypes = [];
         var checkboxes = document.querySelectorAll('#pageTypeSelectorModal input[type="checkbox"]:checked');
@@ -2975,50 +3122,192 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         updatePageTypeSwitcher();
 
         // 启动 SSE 流式生成
-        var sseUrl = '<?= $generate_virtual_theme_sse_url ?>?public_id=<?= urlencode($publicId) ?>&stream_mode=progressive';
-        var eventSource = new EventSource(sseUrl);
+        // 添加时间戳参数避免缓存问题，并确保独立连接
+        var sseBaseUrl = '<?= $generate_virtual_theme_sse_url ?>?public_id=<?= urlencode($publicId) ?>&stream_mode=progressive';
+        var sseUrl = sseBaseUrl + '&_ts=' + Date.now();
 
-        eventSource.addEventListener('page_generated', function(e) {
-            var data = JSON.parse(e.data);
-            var pageType = data.page_type;
+        // SSE 连接管理
+        var eventSource = null;
+        var sseReconnectCount = 0;
+        var maxReconnectAttempts = 3;
+        var sseLastEventTime = Date.now();
+        var sseHeartbeatInterval = null;
+        var sseConnectionTimeout = 15000; // 15秒超时（缩短以更快释放连接槽）
+        var generatedPages = {}; // 记录已生成的页面，避免重复处理
+        var isGenerationComplete = false; // 标记生成是否完成
 
-            if (pageTypeStates[pageType]) {
-                pageTypeStates[pageType].generated = true;
-                pageTypeStates[pageType].generating = false;
-                pageTypeStates[pageType].visualEditUrl = data.visual_edit_url;
+        function initEventSource() {
+            if (eventSource) {
+                try { eventSource.close(); } catch(e) {}
             }
 
-            // 首页生成完成后，立即显示编辑器
-            if (pageType === 'home_page') {
-                currentEditingPageType = 'home_page';
-                showVisualEditor(data.visual_edit_url);
-            }
+            eventSource = new EventSource(sseUrl);
+            sseLastEventTime = Date.now();
 
-            updatePageTypeSwitcher();
-            terminal.log('<?= __('页面 %{page_type} 生成完成') ?>'.replace('%{page_type}', getPageTypeLabel(pageType)), 'success');
-        });
+            eventSource.addEventListener('page_generated', function(e) {
+                sseLastEventTime = Date.now();
+                var data = JSON.parse(e.data);
+                var pageType = data.page_type;
 
-        eventSource.addEventListener('progress', function(e) {
-            var data = JSON.parse(e.data);
-            terminal.log(data.message || '', 'info');
-        });
+                // 避免重复处理同一页面
+                if (generatedPages[pageType]) return;
+                generatedPages[pageType] = true;
 
-        eventSource.addEventListener('error', function(e) {
-            var data = e.data ? JSON.parse(e.data) : {};
-            terminal.log(data.message || '<?= __('生成过程中发生错误') ?>', 'error');
-        });
+                if (pageTypeStates[pageType]) {
+                    pageTypeStates[pageType].generated = true;
+                    pageTypeStates[pageType].generating = false;
+                    pageTypeStates[pageType].visualEditUrl = data.visual_edit_url;
+                }
 
-        eventSource.addEventListener('done', function(e) {
-            eventSource.close();
-            terminal.log('<?= __('所有页面生成完成') ?>', 'success');
-        });
+                // 首页生成完成后，立即显示编辑器
+                if (pageType === 'home_page') {
+                    currentEditingPageType = 'home_page';
+                    showVisualEditor(data.visual_edit_url);
+                }
+
+                updatePageTypeSwitcher();
+                terminal.log('<?= __('页面 %{page_type} 生成完成') ?>'.replace('%{page_type}', getPageTypeLabel(pageType)), 'success');
+            });
+
+            eventSource.addEventListener('progress', function(e) {
+                sseLastEventTime = Date.now();
+                var data = JSON.parse(e.data);
+                terminal.log(data.message || '', 'info');
+            });
+
+            eventSource.addEventListener('error', function(e) {
+                sseLastEventTime = Date.now();
+                var data = e.data ? JSON.parse(e.data) : {};
+                terminal.log(data.message || '<?= __('生成过程中发生错误') ?>', 'error');
+            });
+
+            eventSource.addEventListener('done', function(e) {
+                sseLastEventTime = Date.now();
+                isGenerationComplete = true;
+                // 立即关闭 SSE 连接释放资源
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+                clearInterval(sseHeartbeatInterval);
+                sseHeartbeatInterval = null;
+                terminal.log('<?= __('所有页面生成完成') ?>', 'success');
+                // 延迟加载 iframe，确保 SSE 连接已释放
+                setTimeout(function() {
+                    if (currentEditingPageType && pageTypeStates[currentEditingPageType]) {
+                        showVisualEditor(pageTypeStates[currentEditingPageType].visualEditUrl);
+                    }
+                }, 100);
+            });
+
+            // 连接打开事件
+            eventSource.onopen = function() {
+                sseLastEventTime = Date.now();
+                sseReconnectCount = 0; // 重置重连计数
+                terminal.log('<?= __('SSE连接已建立') ?>', 'info');
+            };
+
+            // 连接错误处理 - 自动重连
+            eventSource.onerror = function(e) {
+                terminal.log('<?= __('SSE连接异常，准备重连...') ?>', 'warning');
+
+                if (sseReconnectCount < maxReconnectAttempts) {
+                    sseReconnectCount++;
+                    var delay = Math.min(1000 * sseReconnectCount, 5000); // 递增延迟，最大5秒
+                    terminal.log('<?= __('第%{count}次重连，等待%{delay}ms') ?>'.replace('%{count}', sseReconnectCount).replace('%{delay}', delay), 'info');
+
+                    setTimeout(function() {
+                        // 更新 URL 避免缓存
+                        sseUrl = sseBaseUrl + '&_ts=' + Date.now() + '&_reconnect=' + sseReconnectCount;
+                        initEventSource();
+                    }, delay);
+                } else {
+                    terminal.log('<?= __('SSE重连次数超过限制，请刷新页面重试') ?>', 'error');
+                    clearInterval(sseHeartbeatInterval);
+                    // 标记所有正在生成的页面为失败
+                    Object.keys(pageTypeStates).forEach(function(pt) {
+                        if (pageTypeStates[pt].generating) {
+                            pageTypeStates[pt].generating = false;
+                        }
+                    });
+                    updatePageTypeSwitcher();
+                }
+            };
+
+            // 心跳检测 - 防止连接僵死
+            if (sseHeartbeatInterval) clearInterval(sseHeartbeatInterval);
+            sseHeartbeatInterval = setInterval(function() {
+                var now = Date.now();
+                var elapsed = now - sseLastEventTime;
+                if (elapsed > sseConnectionTimeout) {
+                    terminal.log('<?= __('SSE连接超时，正在重新连接...') ?>', 'warning');
+                    if (eventSource) {
+                        eventSource.close();
+                    }
+                    // 触发重连
+                    if (sseReconnectCount < maxReconnectAttempts) {
+                        sseReconnectCount++;
+                        sseUrl = sseBaseUrl + '&_ts=' + Date.now() + '&_reconnect=' + sseReconnectCount;
+                        initEventSource();
+                    }
+                }
+            }, 10000); // 每10秒检查一次
+        }
+
+        // 初始化连接
+        initEventSource();
     }
 
-    function showVisualEditor(url) {
-        if (visualEditorFrame && visualEditorContainer) {
-            visualEditorFrame.src = url;
-            visualEditorContainer.style.display = 'block';
+    // iframe 加载状态管理
+    var iframeLoadRetries = 0;
+    var maxIframeRetries = 3;
+    var iframeLoadTimeout = null;
+
+    // iframe 加载完成回调
+    window.visualEditorFrameLoaded = function() {
+        if (iframeLoadTimeout) {
+            clearTimeout(iframeLoadTimeout);
+            iframeLoadTimeout = null;
         }
+        iframeLoadRetries = 0; // 重置重试计数
+    };
+
+    function showVisualEditor(url) {
+        if (!visualEditorFrame || !visualEditorContainer) return;
+
+        // 清除之前的加载超时
+        if (iframeLoadTimeout) {
+            clearTimeout(iframeLoadTimeout);
+            iframeLoadTimeout = null;
+        }
+
+        // 重置 iframe 加载重试计数
+        if (url !== visualEditorFrame.getAttribute('data-current-url')) {
+            iframeLoadRetries = 0;
+            visualEditorFrame.setAttribute('data-current-url', url);
+        }
+
+        visualEditorContainer.style.display = 'block';
+
+        // 延迟加载 iframe，确保其他资源已加载完成
+        setTimeout(function() {
+            visualEditorFrame.src = url;
+
+            // 设置加载超时检测
+            iframeLoadTimeout = setTimeout(function() {
+                if (iframeLoadRetries < maxIframeRetries) {
+                    iframeLoadRetries++;
+                    terminal.log('<?= __('编辑器加载超时，正在重试%{count}/%{max}...') ?>'.replace('%{count}', iframeLoadRetries).replace('%{max}', maxIframeRetries), 'warning');
+                    // 重新加载
+                    visualEditorFrame.src = 'about:blank';
+                    setTimeout(function() {
+                        visualEditorFrame.src = url;
+                    }, 500);
+                } else {
+                    terminal.log('<?= __('编辑器加载失败，请刷新页面重试') ?>', 'error');
+                }
+            }, 10000); // 10秒加载超时
+        }, iframeLoadRetries * 500); // 递增延迟，避免并发冲击
     }
 
     function switchPageType(pageType) {
@@ -3066,6 +3355,73 @@ body[data-topbar="dark"] .site-builder-workspace-page {
             container.appendChild(btn);
         });
     }
+
+    // 全局资源加载错误处理和重试机制
+    (function setupResourceLoadRetry() {
+        // 记录失败资源的重试次数
+        var resourceRetryCount = {};
+        var maxResourceRetries = 3;
+
+        // 监听资源加载错误
+        window.addEventListener('error', function(e) {
+            var target = e.target;
+            // 检查是否是资源加载错误（script, link, img, iframe）
+            if (target && (target.tagName === 'SCRIPT' || target.tagName === 'LINK' || target.tagName === 'IMG' || target.tagName === 'IFRAME')) {
+                var src = target.src || target.href;
+                if (!src) return;
+
+                var retryKey = target.tagName + ':' + src;
+                var currentRetries = resourceRetryCount[retryKey] || 0;
+
+                if (currentRetries < maxResourceRetries) {
+                    resourceRetryCount[retryKey] = currentRetries + 1;
+                    console.warn('[Resource Retry] ' + target.tagName + ' load failed, retrying ' + resourceRetryCount[retryKey] + '/' + maxResourceRetries + ': ' + src);
+
+                    // 延迟重试
+                    setTimeout(function() {
+                        if (target.tagName === 'LINK') {
+                            // 对于 CSS，创建新的 link 元素
+                            var newLink = document.createElement('link');
+                            newLink.rel = target.rel;
+                            newLink.type = target.type;
+                            newLink.href = src + (src.indexOf('?') >= 0 ? '&' : '?') + '_retry=' + resourceRetryCount[retryKey];
+                            if (target.parentNode) {
+                                target.parentNode.insertBefore(newLink, target.nextSibling);
+                            }
+                        } else if (target.tagName === 'SCRIPT') {
+                            // 对于 JS，创建新的 script 元素
+                            var newScript = document.createElement('script');
+                            newScript.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + '_retry=' + resourceRetryCount[retryKey];
+                            newScript.async = target.async;
+                            newScript.defer = target.defer;
+                            if (target.parentNode) {
+                                target.parentNode.insertBefore(newScript, target.nextSibling);
+                            }
+                        } else if (target.tagName === 'IMG') {
+                            // 对于图片，直接修改 src
+                            target.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + '_retry=' + resourceRetryCount[retryKey];
+                            return; // 不阻止默认行为，让浏览器重新加载
+                        } else if (target.tagName === 'IFRAME') {
+                            // 对于 iframe，直接修改 src
+                            target.src = src + (src.indexOf('?') >= 0 ? '&' : '?') + '_retry=' + resourceRetryCount[retryKey];
+                            return;
+                        }
+                    }, 1000 * resourceRetryCount[retryKey]); // 递增延迟
+
+                    // 阻止默认错误处理
+                    e.preventDefault();
+                    e.stopPropagation();
+                } else {
+                    console.error('[Resource Failed] ' + target.tagName + ' failed after ' + maxResourceRetries + ' retries: ' + src);
+                }
+            }
+        }, true); // 使用捕获阶段
+
+        // 定期清理重试计数，避免内存泄漏
+        setInterval(function() {
+            resourceRetryCount = {};
+        }, 300000); // 每5分钟清理一次
+    })();
 })();
 </script>
 
@@ -3151,7 +3507,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         </div>
     </div>
     <div class="card-body p-0">
-        <iframe id="visualEditorFrame" style="width:100%; height:800px; border:none;"></iframe>
+        <iframe id="visualEditorFrame" style="width:100%; height:800px; border:none;" onload="if(window.visualEditorFrameLoaded) window.visualEditorFrameLoaded();"></iframe>
     </div>
 </div>
 
