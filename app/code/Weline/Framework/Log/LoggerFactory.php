@@ -145,19 +145,19 @@ class LoggerFactory
      */
     private static function createFpmLogger(string $channel, array $config): FpmLogger
     {
-        // 处理器
-        $handler = self::createHandler($config);
-        
+        // 处理器（传递 channel 以支持子目录）
+        $handler = self::createHandler($config, $channel);
+
         // 格式化器
         $formatter = new LogFormatter([
             'include_process_id' => $config['include_process_id'] ?? false,
             'include_memory' => $config['include_memory'] ?? false,
             'include_trace' => $config['include_trace'] ?? true,
         ]);
-        
+
         // 过滤器
         $filter = LogFilter::getInstance();
-        
+
         return new FpmLogger($channel, $handler, $formatter, $filter);
     }
 
@@ -195,11 +195,11 @@ class LoggerFactory
     /**
      * 创建日志处理器
      */
-    private static function createHandler(array $config): Handler\HandlerInterface
+    private static function createHandler(array $config, string $channel = 'app'): Handler\HandlerInterface
     {
-        $logPath = self::getLogPath($config);
+        $logPath = self::getLogPath($config, $channel);
         $rotate = $config['rotate'] ?? [];
-        
+
         // 如果配置了轮转，使用轮转处理器
         if (!empty($rotate) && ($rotate['strategy'] ?? 'none') !== 'none') {
             return new RotatingFileHandler($logPath, [
@@ -208,25 +208,70 @@ class LoggerFactory
                 'max_size' => $rotate['max_size'] ?? 52428800,
             ]);
         }
-        
+
         return new FileHandler($logPath);
     }
 
     /**
-     * 获取日志路径
+     * 获取日志路径（支持按通道分目录）
+     *
+     * 通道目录映射规则：
+     * - app: var/log/app.log (默认)
+     * - 规范通道（cron/sql/exception/wls 等）: var/log/{channel}/{channel}.log
+     * - 其他非规范通道: var/log/other/{channel}.log（统一放入 other 目录）
      */
-    private static function getLogPath(array $config): string
+    private static function getLogPath(array $config, string $channel = 'app'): string
     {
-        $path = $config['path'] ?? 'var/log';
-        
+        $basePath = $config['path'] ?? 'var/log';
+
         // 如果是相对路径，加上项目根目录
-        if (!str_starts_with($path, '/') && !preg_match('/^[A-Z]:/i', $path)) {
+        if (!str_starts_with($basePath, '/') && !preg_match('/^[A-Z]:/i', $basePath)) {
             if (defined('BP')) {
-                $path = BP . $path;
+                $basePath = BP . $basePath;
             }
         }
-        
-        return rtrim($path, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+
+        $basePath = rtrim($basePath, DIRECTORY_SEPARATOR);
+
+        // 规范通道列表（这些通道可以有独立目录）
+        $standardChannels = [
+            'cron',
+            'sql',
+            'exception',
+            'auth',
+            'payment',
+            'api',
+            'wls',
+            'session',
+            'php_error',
+        ];
+
+        // 默认通道直接写入 var/log/app.log
+        if ($channel === 'app') {
+            return $basePath . DIRECTORY_SEPARATOR;
+        }
+
+        // 规范通道：var/log/{channel}/
+        if (in_array($channel, $standardChannels, true)) {
+            $channelPath = $basePath . DIRECTORY_SEPARATOR . $channel . DIRECTORY_SEPARATOR;
+
+            // 确保目录存在
+            if (!is_dir($channelPath)) {
+                @mkdir($channelPath, 0755, true);
+            }
+
+            return $channelPath;
+        }
+
+        // 非规范通道：统一放入 var/log/other/{channel}.log
+        $otherPath = $basePath . DIRECTORY_SEPARATOR . 'other' . DIRECTORY_SEPARATOR;
+
+        // 确保 other 目录存在
+        if (!is_dir($otherPath)) {
+            @mkdir($otherPath, 0755, true);
+        }
+
+        return $otherPath;
     }
 
     /**
