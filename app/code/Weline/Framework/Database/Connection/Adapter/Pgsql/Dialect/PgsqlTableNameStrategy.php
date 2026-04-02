@@ -9,28 +9,60 @@ use Weline\Framework\Database\Connection\Api\Sql\Dialect\TableNameStrategyInterf
 
 class PgsqlTableNameStrategy implements TableNameStrategyInterface
 {
+    private ?string $runtimeSchema = null;
+
     public function __construct(
         private readonly IdentifierFormatterInterface $identifierFormatter,
         private readonly string $tablePrefix = '',
-        private readonly string $defaultSchema = 'public'
+        private readonly string $defaultSchema = 'public',
+        private ?\PDO $pdo = null
     ) {
+    }
+
+    /**
+     * 设置 PDO 连接（用于动态获取 current_schema）
+     */
+    public function setPdo(\PDO $pdo): void
+    {
+        $this->pdo = $pdo;
+    }
+
+    /**
+     * 获取运行时 schema（优先使用 current_schema()）
+     */
+    private function getRuntimeSchema(): string
+    {
+        if ($this->runtimeSchema !== null) {
+            return $this->runtimeSchema;
+        }
+
+        if ($this->pdo !== null) {
+            try {
+                $this->runtimeSchema = $this->pdo->query('SELECT current_schema()')->fetchColumn() ?: $this->defaultSchema;
+                return $this->runtimeSchema;
+            } catch (\Throwable $e) {
+                // 查询失败，使用默认值
+            }
+        }
+
+        return $this->defaultSchema;
     }
 
     public function resolve(string $logicalName, string $defaultSchema = ''): string
     {
         // 去除所有引号（反引号和双引号）
         $logicalName = trim($logicalName, '`"');
-        
-        // PostgreSQL 始终使用 public schema，忽略传入的数据库名
-        $schema = $this->defaultSchema;
+
+        // 使用运行时 schema（动态获取 current_schema）
+        $schema = $this->getRuntimeSchema();
 
         // 如果表名包含点号，检查第一部分
         if (str_contains($logicalName, '.')) {
             [$firstPart, $tablePart] = explode('.', $logicalName, 2);
             $firstPart = trim($firstPart, '`"');
-            
+
             // 如果第一部分是已知的 schema（如 public, information_schema 等），使用它
-            // 否则，第一部分可能是数据库名，忽略它，使用 public schema
+            // 否则，第一部分可能是数据库名，忽略它，使用运行时 schema
             if (in_array(strtolower($firstPart), ['public', 'information_schema', 'pg_catalog', 'pg_toast'])) {
                 $schema = $firstPart;
                 $logicalName = $tablePart;

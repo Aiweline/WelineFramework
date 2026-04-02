@@ -788,10 +788,16 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             throw new DbException(__('表名格式错误：%{1}', [$table]));
         }
 
-        // 处理数据库名 -> schema 转换：如果首段是当前 db_name，则替换为 public
-        $dbName = $this->db_name ?? 'public';
+        // 处理数据库名 -> schema 转换：如果首段是当前 db_name，则使用 current_schema()
+        $dbName = $this->db_name ?? '';
         if (count($parts) >= 2 && $parts[0] === $dbName) {
-            $parts[0] = 'public';
+            // 使用 current_schema() 而不是硬编码 'public'
+            try {
+                $currentSchema = $this->getLink()->query('SELECT current_schema()')->fetchColumn();
+                $parts[0] = $currentSchema ?: 'public';
+            } catch (\Throwable $e) {
+                $parts[0] = 'public';
+            }
         }
 
         // 最多保留 schema.table 两段，多余的视为表名一部分，取最后两段
