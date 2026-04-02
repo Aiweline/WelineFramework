@@ -133,6 +133,11 @@ class VirtualTheme extends Model
         return (bool) ($this->getData(self::schema_fields_IS_ACTIVE) ?: false);
     }
 
+    public function getIsActive(): int
+    {
+        return (int) ($this->getData(self::schema_fields_IS_ACTIVE) ?: 0);
+    }
+
     public function setIsActive(bool $isActive): static
     {
         return $this->setData(self::schema_fields_IS_ACTIVE, $isActive ? 1 : 0);

@@ -196,7 +196,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
      */
     private function startSingleWorker(ServerConfig $config, string $workerScript, int $port, int $workerId): int
     {
-        $processName = 'weline-wls-worker-' . $config->instanceName . '-' . $workerId;
+        $processName = \Weline\Server\Service\MasterProcess::buildScopedProcessName('weline-wls-worker', $config->instanceName, $workerId);
         
         // 构建命令
         $command = "\"{$config->phpBinary}\" \"{$workerScript}\" {$config->host} {$port} {$workerId} {$config->instanceName}";
@@ -255,7 +255,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
         }
         
         // 统一进程名
-        $processName = 'weline-wls-dispatcher-' . $config->instanceName;
+        $processName = \Weline\Server\Service\MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $config->instanceName);
         
         // 构建命令（参数格式: <host> <port> <worker_base_port> <worker_count> <instance_name>）
         $command = "\"{$config->phpBinary}\" \"{$dispatcherScript}\" {$config->host} {$config->port} {$config->workerBasePort} {$config->workerCount} {$config->instanceName}";
@@ -306,7 +306,7 @@ class WindowsDispatcherStrategy implements ServerStrategyInterface
             return 0;
         }
         
-        $processName = 'weline-wls-redirect-' . $config->instanceName;
+        $processName = \Weline\Server\Service\MasterProcess::buildScopedProcessName('weline-wls-redirect', $config->instanceName);
         
         $command = "\"{$config->phpBinary}\" \"{$script}\" {$config->host} {$config->httpRedirectPort} {$config->port} {$config->instanceName}";
         $command .= " --name={$processName}";

@@ -102,7 +102,7 @@ class ServiceContext
 
     /**
      * 获取 Worker 基础端口
-     * 
+     *
      * 优先级：运行态字段 > envConfig
      */
     public function getWorkerBasePort(): int
@@ -111,7 +111,9 @@ class ServiceContext
         if ($this->workerBasePort !== null) {
             return $this->workerBasePort;
         }
-        return (int) (($this->envConfig['wls'] ?? [])['worker_base_port'] ?? 10443);
+        // 默认端口 10000 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 10000 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        return (int) (($this->envConfig['wls'] ?? [])['worker_base_port'] ?? $defaultPort);
     }
 
     /**

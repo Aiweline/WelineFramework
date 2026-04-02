@@ -9,7 +9,7 @@ use Weline\Framework\Console\CommandAbstract;
  * server:wls_error_scan - WLS 错误扫描命令
  *
  * 职责：
- * 1. 扫描 var/log 下的 wls.log / exception.log / error.log / php_error.log
+ * 1. 扫描 var/log/wls 下的 wls.log / exception.log / error.log / php_error.log
  * 2. 匹配 Fatal/ParseError/E_COMPILE_ERROR/TypeError/PDOException 等关键错误
  * 3. 与上次记录去重（hash 签名，缓存于 var/cache/wls_error_last_signature.json）
  * 4. 命中新错误时：
@@ -112,7 +112,7 @@ class WlsErrorScanner extends CommandAbstract
 
     private function getLogDir(): string
     {
-        return BP . '/var/log';
+        return BP . '/var/log/wls';
     }
 
     private function getSignatureCachePath(): string
