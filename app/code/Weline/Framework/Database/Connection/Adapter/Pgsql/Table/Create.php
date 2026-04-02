@@ -448,7 +448,8 @@ class Create extends AbstractTable implements CreateInterface
             
             // 检查表是否已存在
             // 从表名中提取 schema 和表名（去除双引号）
-            $schemaName = 'public';
+            // 使用 current_schema() 获取当前 schema，而不是硬编码 'public'
+            $schemaName = $pdo->query('SELECT current_schema()')->fetchColumn() ?: 'public';
             $tableName = '';
             if (str_contains($this->table, '.')) {
                 $parts = explode('.', $this->table);
