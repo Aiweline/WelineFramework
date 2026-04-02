@@ -204,7 +204,7 @@ return [
             'slow_request_threshold_ms' => 500,
             // 是否输出 X-WLS-Performance-* 头
             'response_headers_enabled' => true,
-            // 是否写入 var/log/wls_timing.log
+            // 是否写入 var/log/wls/timing.log
             'file_log_enabled' => true,
             // 是否写 debug 级性能摘要/明细日志
             'debug_log_enabled' => true,
@@ -216,8 +216,8 @@ return [
             'request_log_enabled' => null,
             // 错误日志开关；null 表示沿用现有 DEV 判断
             'error_log_enabled' => null,
-            'runtime_log_file' => 'var/log/wls.log',
-            'timing_log_file' => 'var/log/wls_timing.log',
+            'runtime_log_file' => 'var/log/wls/runtime.log',
+            'timing_log_file' => 'var/log/wls/timing.log',
         ],
         'worker_count' => 'auto',
         'mode' => 'io',
@@ -253,10 +253,12 @@ return [
         'log' => [
             'enabled' => true,
             'path' => 'var/log/wls/',
-            'level' => 'INFO',
-            'stdout' => 'auto',
-            'rotate' => 'daily',
-            'max_files' => 7,
+            'level' => 'DEBUG',              // 开发环境日志级别：DEBUG, INFO, NOTICE, WARNING, ERROR, FATAL
+            'production_level' => 'INFO',    // 生产环境强制最低级别（deploy=prod 时生效）
+            'stdout' => 'auto',              // 控制台输出：auto（前台=true，后台=false）, true, false
+            'rotate' => 'daily',             // 日志轮转策略：daily（按日期分割）
+            'max_files' => 7,                // 保留最近 N 天的日志文件（自动清理过期日志）
+            'max_size' => 52428800,          // 单个日志文件最大大小（字节，默认 50MB）
         ],
         // Session Server 与 Worker 侧 Session 客户端（原 session.drivers.wls）
         'session' => [
@@ -270,6 +272,22 @@ return [
                 'host' => '127.0.0.1',
                 'port' => 19970,
             ],
+        ],
+        // Fiber 调度器配置
+        'fiber' => [
+            'heartbeat_timeout' => 60,       // Fiber 心跳超时（秒），超时未续约则强制回收
+                                             // 建议：短连接 30s，长连接 120s（配合客户端 30-60s 心跳）
+            'idle_ttl' => 0,                 // 非长连接 Fiber 闲置超时（秒），0=禁用
+            'max_active' => 0,               // 最大活跃 Fiber 数，0=无限制
+        ],
+        // Worker 自动扩缩容配置
+        'scaling' => [
+            'enabled' => false,              // 是否启用自动扩缩容
+            'min_workers' => 2,              // 最小 Worker 数
+            'max_workers' => 8,              // 最大 Worker 数
+            'scale_up_threshold' => 0.8,     // 扩容阈值（CPU/内存/队列）
+            'scale_down_threshold' => 0.3,   // 缩容阈值
+            'cooldown_sec' => 60,            // 扩缩容冷却时间（秒）
         ],
         // 多实例：命名实例覆盖默认 wls.*（含 health_allow_remote 等）
         // 'servers' => [ 'api' => [ 'port' => 8443, 'health_allow_remote' => true ], ],
