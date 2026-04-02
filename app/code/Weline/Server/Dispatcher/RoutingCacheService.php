@@ -91,6 +91,10 @@ class RoutingCacheService
     
     /**
      * 统计信息
+     *
+     * PHP 8.4 优化：类型化数组结构提升访问性能
+     *
+     * @var array{sni_hits: int, sni_misses: int, ip_hits: int, ip_misses: int, conn_hits: int, conn_misses: int, total_routes: int}
      */
     private array $stats = [
         'sni_hits' => 0,
@@ -320,19 +324,25 @@ class RoutingCacheService
         if ($headerEnd === false) {
             return null;
         }
-        
+
         $headers = \substr($response, 0, $headerEnd);
-        
+
+        // 检查是否是重定向响应（3xx 状态码）
+        // 重定向响应不应该被缓存，因为它是临时状态，不代表正常的路由关系
+        if (\preg_match('/^HTTP\/\d\.\d\s+3\d{2}\s+/i', $headers)) {
+            return null;
+        }
+
         // 查找 X-Weline-Route-Hint 头
         if (!\preg_match('/^X-Weline-Route-Hint:\s*(.+)$/mi', $headers, $matches)) {
             return null;
         }
-        
+
         $hint = \trim($matches[1]);
         $parts = \explode(',', $hint);
-        
+
         $routeInfo = ['port' => 0, 'sni' => $sni, 'ttl' => $this->defaultTtl];
-        
+
         foreach ($parts as $part) {
             $part = \trim($part);
             if (\str_starts_with($part, 'port=')) {
@@ -343,22 +353,22 @@ class RoutingCacheService
                 $routeInfo['ttl'] = (int) \substr($part, 4);
             }
         }
-        
+
         if ($routeInfo['port'] <= 0) {
             return null;
         }
-        
+
         // 缓存学习到的路由信息
         if (!empty($routeInfo['sni'])) {
             $this->cacheSniRoute($routeInfo['sni'], $routeInfo['port'], $routeInfo['ttl']);
         }
-        
+
         if (!empty($clientIp)) {
             $this->cacheIpRoute($clientIp, $routeInfo['port'], $routeInfo['sni'], $routeInfo['ttl']);
         }
-        
+
         $this->cacheConnectionRoute($connId, $routeInfo['port'], $routeInfo['sni']);
-        
+
         return $routeInfo;
     }
     
@@ -396,6 +406,27 @@ class RoutingCacheService
     public function removeConnection(int $connId): void
     {
         unset($this->connectionCache[$connId]);
+    }
+
+    /**
+     * 清除指定 IP 和 SNI 的路由缓存
+     * 用于在检测到错误路由（如重定向循环）时清除缓存
+     *
+     * @param string $clientIp 客户端 IP
+     * @param string $sni SNI 主机名
+     */
+    public function purgeRouteCache(string $clientIp, string $sni = ''): void
+    {
+        // 清除 IP 缓存
+        if (!empty($clientIp)) {
+            unset($this->ipCache[$clientIp]);
+        }
+
+        // 清除 SNI 缓存
+        if (!empty($sni)) {
+            $sni = \strtolower($sni);
+            unset($this->sniCache[$sni]);
+        }
     }
     
     /**
