@@ -884,8 +884,17 @@ $pageReadonlyLocales = $pageDefaultLocale !== '' ? [$pageDefaultLocale] : [];
 
                     <!-- 操作按钮组 -->
                     <div class="d-flex flex-wrap gap-2">
-                        <button type="button" 
-                                class="btn btn-success btn-sm flex-fill" 
+                        <?php if ($isEdit && $page && $page->getId()): ?>
+                        <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
+                            <a class="btn btn-info btn-sm flex-fill"
+                               href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $page->getId() ?>"
+                               title="<?= __('可视化编辑器') ?>">
+                                <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
+                            </a>
+                        </acl>
+                        <?php endif; ?>
+                        <button type="button"
+                                class="btn btn-success btn-sm flex-fill"
                                 onclick="publishPage()"
                                 id="publishPageBtn"
                                 title="<?= __('将状态设置为"已发布"并保存') ?>">

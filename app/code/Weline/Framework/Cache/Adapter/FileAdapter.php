@@ -38,7 +38,11 @@ class FileAdapter implements CacheAdapterInterface
         $this->cachePath = rtrim($basePath, DS) . DS . $identity . DS;
 
         if (!is_dir($this->cachePath)) {
-            mkdir($this->cachePath, 0775, true);
+            $parentDir = dirname($this->cachePath);
+            if (!is_dir($parentDir)) {
+                @mkdir($parentDir, 0775, true);
+            }
+            @mkdir($this->cachePath, 0775, true);
         }
     }
 

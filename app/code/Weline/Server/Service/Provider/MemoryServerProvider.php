@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -71,7 +72,7 @@ class MemoryServerProvider extends AbstractServiceProvider
         $script = $scriptDir . DS . 'session_server.php';
 
         $port = $this->getPort($instanceId, $context);
-        $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName;
+        $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
         $tokenFileName = $this->getTokenFileName($context);
 
         $arguments = [
@@ -99,7 +100,9 @@ class MemoryServerProvider extends AbstractServiceProvider
     public function getPort(int $instanceId, ServiceContext $context): ?int
     {
         $ms = ($context->envConfig['wls'] ?? [])['memory_service'] ?? [];
-        return (int) ($ms['port'] ?? 19971);
+        // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
+        return (int) ($ms['port'] ?? $defaultPort);
     }
 
     private function getTokenFileName(ServiceContext $context): string

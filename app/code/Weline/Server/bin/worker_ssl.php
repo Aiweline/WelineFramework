@@ -15,6 +15,9 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
+// 设置内存限制为 256M（推荐值）
+@\ini_set('memory_limit', '256M');
+
 // 获取参数
 $host = $argv[1] ?? '127.0.0.1';
 $port = (int) ($argv[2] ?? 9981);
@@ -2125,42 +2128,11 @@ while (true) {
             }
         }
 
-        // 设置 SSE 上下文（让控制器可以直接写入连接）
-        \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
-        \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
         $longLivedDetection = $longLivedProtocolResolver->detect($rawRequest);
         $isLongLivedProtocolRequest = $longLivedDetection['is_long_lived'] ?? false;
         $requestProtocol = (string)($longLivedDetection['protocol'] ?? 'http');
         $isSseProtocolRequest = ($requestProtocol === 'sse');
-        if ($isSseProtocolRequest) {
-            \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
-                static function (string $data) use (
-                    $connId,
-                    $conn,
-                    &$connections,
-                    &$requestBuffers,
-                    &$connectionLastActivity,
-                    &$requestLogged,
-                    &$writeBuffers,
-                    &$writableConnections,
-                    &$pendingClose
-                ): void {
-                    enqueueSseWriteAndAwaitDrain(
-                        $connId,
-                        $conn,
-                        $data,
-                        $connections,
-                        $requestBuffers,
-                        $connectionLastActivity,
-                        $requestLogged,
-                        $writeBuffers,
-                        $writableConnections,
-                        $pendingClose
-                    );
-                }
-            );
-        }
-        
+
         // 诊断：进入 handleRequest 前打点（若此后无「即将写回响应」则说明 handleRequest 阻塞）
         $uriForLog = '/';
         if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $m)) {
@@ -2181,8 +2153,44 @@ while (true) {
                 $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
                 $requestCount, &$activeRequests, &$connections, $startTime,
                 $originToken, $originTokenValidationEnabled, $originTokenHeader, $originTokenAllowLocal,
-                $WLS_UOPZ_EXIT_GUARD
+                $WLS_UOPZ_EXIT_GUARD,
+                $fiberConn, $fiberConnId, $isSseProtocolRequest,
+                &$requestBuffers, &$connectionLastActivity, &$requestLogged,
+                &$writeBuffers, &$writableConnections, &$pendingClose
             ) {
+                // 在 Fiber 内部设置 SSE 上下文，确保每个 Fiber 有独立的连接上下文
+                \Weline\Framework\Http\Sse\SseContext::setConnection($fiberConn);
+                \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
+
+                if ($isSseProtocolRequest) {
+                    \Weline\Framework\Http\Sse\SseContext::setWriteCallback(
+                        static function (string $data) use (
+                            $fiberConnId,
+                            $fiberConn,
+                            &$connections,
+                            &$requestBuffers,
+                            &$connectionLastActivity,
+                            &$requestLogged,
+                            &$writeBuffers,
+                            &$writableConnections,
+                            &$pendingClose
+                        ): void {
+                            enqueueSseWriteAndAwaitDrain(
+                                $fiberConnId,
+                                $fiberConn,
+                                $data,
+                                $connections,
+                                $requestBuffers,
+                                $connectionLastActivity,
+                                $requestLogged,
+                                $writeBuffers,
+                                $writableConnections,
+                                $pendingClose
+                            );
+                        }
+                    );
+                }
+
                 try {
                     return handleRequest(
                         $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,

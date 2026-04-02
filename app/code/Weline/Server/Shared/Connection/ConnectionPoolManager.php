@@ -29,6 +29,19 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         return self::$instances[$key];
     }
 
+    /**
+     * 丢弃指定 host:port:token 的连接池（关闭套接字并移除单例），用于共享侧车冷启动探测前清理陈旧状态。
+     */
+    public static function discardPool(string $host, int $port, string $tokenFileName = ''): void
+    {
+        $key = $host . ':' . $port . ':' . $tokenFileName;
+        if (!isset(self::$instances[$key])) {
+            return;
+        }
+        self::$instances[$key]->shutdown();
+        unset(self::$instances[$key]);
+    }
+
     private function __construct(
         private readonly string $host,
         private readonly int $port,
@@ -37,8 +50,9 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $minIdle = \max(1, (int)($this->options['min_idle'] ?? 1));
         for ($i = 0; $i < $minIdle; $i++) {
             $conn = $this->createConnection();
-            $conn->connect();
-            $this->pool[] = ['conn' => $conn, 'busy' => false, 'last_used' => \microtime(true)];
+            if ($conn->connect()) {
+                $this->pool[] = ['conn' => $conn, 'busy' => false, 'last_used' => \microtime(true)];
+            }
         }
     }
 
@@ -46,6 +60,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     {
         $deadline = \microtime(true) + $timeoutSec;
         $maxSize = \max(1, (int)($this->options['max_size'] ?? 8));
+        $retryCount = 0;
 
         while (\microtime(true) <= $deadline) {
             foreach ($this->pool as $idx => $item) {
@@ -68,7 +83,8 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                     return $conn;
                 }
             }
-            SchedulerSystem::usleep(1000);
+            $retryCount++;
+            SchedulerSystem::usleep(100);
         }
 
         return null;
@@ -140,6 +156,14 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             $tokenFilePath,
             (bool)($this->options['log_connect_fail'] ?? true)
         );
+    }
+
+    private function log(string $message): void
+    {
+        if (\PHP_SAPI !== 'cli' && \PHP_SAPI !== 'phpdbg') {
+            return;
+        }
+        \Weline\Server\Log\WlsLogger::info_('[ConnectionPool] ' . $message);
     }
 
     private static function normalizeOptions(array $options): array

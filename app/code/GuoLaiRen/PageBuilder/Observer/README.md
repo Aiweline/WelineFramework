@@ -2,40 +2,30 @@
 
 ## VirtualThemeRequestInterceptor
 
-虚拟主题请求拦截器，负责在路由处理前检测虚拟主题请求并注入虚拟主题上下文。
+PageBuilder AI 建站虚拟主题请求拦截器。
 
-### 功能
+### Responsibilities
 
-1. 监听 `Weline_Framework_Router::route_before` 事件
-2. 检测虚拟主题请求（`virtual_theme_id` 参数或 Session 中的虚拟主题上下文）
-3. 加载虚拟主题数据
-4. 注入虚拟主题上下文到 Request，伪装成普通主题预览
-5. 持久化虚拟主题上下文到 Session
+1. 监听 `Weline_Framework_Router::route_before`
+2. 优先读取显式 `virtual_theme_id`
+3. 仅在 `pagebuilder`、`ai-site-agent`、`site-builder-agent` 相关路由下复用已持久化上下文
+4. 将上下文写入 `pagebuilder_virtual_theme_context`
+5. 向当前请求注入 `virtual_theme_id`、`pagebuilder_virtual_theme_id`、`virtual_theme_path`、`theme_component_area`
 
-### 优先级
+### Guardrails
 
-- URL 参数 > Session
-- 虚拟主题请求 > 普通主题预览
+- 不注入 `preview_theme`
+- 不注入 `frontend_theme_id`
+- 不把 PageBuilder 虚拟主题 ID 伪装成 `Weline/Theme` 主题 ID
 
-### 使用场景
+### Notes
 
-- AI 建站预览：用户在 AI 建站工作区预览虚拟主题
-- 虚拟主题编辑：用户在 PageBuilder 中编辑虚拟主题
+- `VirtualThemeContextService` 负责上下文归一化、持久化和清理
+- Request 注入只服务于 PageBuilder 自己的预览、编辑和组件渲染链路
+- 非 PageBuilder 路由会清理已存虚拟主题上下文，避免串用
 
-### 技术实现
-
-- 事件优先级：sort=5（早于 ACL 检查 sort=1）
-- 伪装策略：设置 `preview_theme`, `preview_area`, `frontend_theme_id` 等参数
-- 特殊标记：`is_virtual_theme=1`, `virtual_theme_path` 供其他模块识别
-
-### 测试
+### Tests
 
 ```bash
-php bin/w phpunit:run --module=GuoLaiRen_PageBuilder --filter=VirtualThemeRequestInterceptorTest
+php vendor/bin/phpunit app/code/GuoLaiRen/PageBuilder/test/Unit/Observer/VirtualThemeRequestInterceptorTest.php
 ```
-
-所有测试用例：
-- ✔ Execute with no virtual theme id
-- ✔ Execute with virtual theme id from url
-- ✔ Execute with virtual theme id from session
-- ✔ Execute with invalid virtual theme id
