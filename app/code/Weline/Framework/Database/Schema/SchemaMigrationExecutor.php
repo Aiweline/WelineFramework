@@ -165,7 +165,8 @@ final class SchemaMigrationExecutor
 
     private function buildDdl(ConnectorInterface $connector, SchemaDiffOp $op): string
     {
-        $table = $connector->quoteTable($op->tableName);
+        // 使用 formatTableName 将逻辑表名转换为物理表名（添加前缀和 schema）
+        $table = $connector->formatTableName($op->tableName);
         switch ($op->kind) {
             case SchemaDiffOp::KIND_CREATE_TABLE:
                 return ''; // 使用 createTableViaAdapter，由适配器处理方言
@@ -208,7 +209,8 @@ final class SchemaMigrationExecutor
 
     private function buildRollbackDdl(ConnectorInterface $connector, SchemaDiffOp $op): string
     {
-        $table = $connector->quoteTable($op->tableName);
+        // 使用 formatTableName 将逻辑表名转换为物理表名（添加前缀和 schema）
+        $table = $connector->formatTableName($op->tableName);
         switch ($op->kind) {
             case SchemaDiffOp::KIND_CREATE_TABLE:
                 return "DROP TABLE IF EXISTS {$table}";
