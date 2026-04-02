@@ -622,7 +622,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 throw $e;
             }
             // 环境检测本身出错，记录警告但不阻断升级
-            w_log_warning(__('环境依赖检测出错: %{1}', [$e->getMessage()]), [], 'env_check.log');
+            w_log_warning(__('环境依赖检测出错: %{1}', [$e->getMessage()]), [], 'setup/env_check.log');
             $this->printing->warning(__('环境依赖检测出错：%{1}，继续执行升级...', [$e->getMessage()]));
         }
     }
@@ -1124,12 +1124,12 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 // 在开发环境下，致命错误必须中断系统更新
                 if (defined('DEV') && DEV) {
                     $this->printing->error(__('注册表更新失败（致命错误）: %{1}', [$errorMessage]));
-                    w_log_error(__('注册表更新失败（致命错误）: %{1}', [$errorMessage]), [], 'registry_update.log');
+                    w_log_error(__('注册表更新失败（致命错误）: %{1}', [$errorMessage]), [], 'setup/registry_update.log');
                     throw $e; // 重新抛出异常，中断系统更新
                 }
             }
             // 注册表更新失败不影响系统更新，只记录错误日志
-            w_log_warning(__('注册表更新失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
+            w_log_warning(__('注册表更新失败: %{1}', [$e->getMessage()]), [], 'setup/registry_update.log');
             $this->printing->warning(__('注册表更新失败：%{1}，但将继续执行。', [$e->getMessage()]));
         }
         
@@ -1153,7 +1153,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
                 }
             } catch (\Exception $e) {
                 // 标签收集失败不影响系统更新，只记录警告
-                w_log_warning(__('标签注册表收集失败: %{1}', [$e->getMessage()]), [], 'registry_update.log');
+                w_log_warning(__('标签注册表收集失败: %{1}', [$e->getMessage()]), [], 'setup/registry_update.log');
                 $this->printing->warning(__('标签注册表收集时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
             }
         }
@@ -2326,7 +2326,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
             $this->printing->success(__('✓ modules.json 已生成: %{1}', [$jsonFile]));
         } catch (\Exception $e) {
             // 生成失败不影响系统升级，只记录警告
-            w_log_warning(__('生成 modules.json 失败: %{1}', [$e->getMessage()]), [], 'modules_json.log');
+            w_log_warning(__('生成 modules.json 失败: %{1}', [$e->getMessage()]), [], 'setup/modules_json.log');
             $this->printing->warning(__('生成 modules.json 时发生错误：%{1}，但将继续执行。', [$e->getMessage()]));
         }
     }

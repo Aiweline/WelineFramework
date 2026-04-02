@@ -23,8 +23,8 @@ class BackgroundOptimize extends CommandAbstract
     public function execute(array $args = [], array $data = [])
     {
         $startTime = microtime(true);
-        $logFile = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'setup_background_optimize.log';
-        
+        $logFile = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'background_optimize.log';
+
         $this->log($logFile, '====== 开始后台优化任务 ======');
         $this->log($logFile, '开始时间: ' . date('Y-m-d H:i:s'));
         
@@ -67,7 +67,7 @@ class BackgroundOptimize extends CommandAbstract
             $this->log($logFile, '');
             
             // 记录到错误日志
-            w_log_error('后台优化任务失败: ' . $e->getMessage(), [], 'setup_background_optimize.log');
+            w_log_error('后台优化任务失败: ' . $e->getMessage(), [], 'setup/background_optimize.log');
             
             $this->printer->error(__('后台优化任务失败: %{1}', [$e->getMessage()]));
         }
