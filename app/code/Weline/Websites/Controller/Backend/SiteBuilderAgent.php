@@ -1416,8 +1416,13 @@ class SiteBuilderAgent extends BackendController
 
         $deadline = \time() + 900;
         $sessionId = $session->getId();
+        // 缓存会话验证，避免每次轮询都查数据库
+        $sessionValidated = true;
         while (\time() < $deadline && $sse->isAlive()) {
-            $events = $this->getEventStreamService()->listEventsAfterId($sessionId, $adminId, $lastEventId, 80);
+            $events = $this->getEventStreamService()->listEventsAfterId($sessionId, $adminId, $lastEventId, 80, $sessionValidated);
+            // 首次查询后，后续轮询跳过会话验证（连接已建立，会话不会突然失效）
+            $sessionValidated = false;
+
             foreach ($events as $event) {
                 $eventId = (int)($event['event_id'] ?? 0);
                 if ($eventId > $lastEventId) {
@@ -1427,7 +1432,8 @@ class SiteBuilderAgent extends BackendController
             }
 
             $sse->maybeHeartbeat();
-            SchedulerSystem::yieldDelay(2000);
+            // 降低轮询频率：2秒 → 5秒，减少数据库压力
+            SchedulerSystem::yieldDelay(5000);
         }
 
         $sse->complete([

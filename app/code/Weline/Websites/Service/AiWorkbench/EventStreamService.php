@@ -68,9 +68,10 @@ class EventStreamService
      *   create_time:string
      * }>
      */
-    public function listEventsAfterId(int $sessionId, int $adminUserId, int $afterEventId, int $limit = 100): array
+    public function listEventsAfterId(int $sessionId, int $adminUserId, int $afterEventId, int $limit = 100, bool $skipSessionValidation = false): array
     {
-        if ($this->sessionService->loadById($sessionId, $adminUserId) === null) {
+        // 跳过会话验证以减少数据库查询（SSE 长连接场景下，首次验证后无需重复验证）
+        if (!$skipSessionValidation && $this->sessionService->loadById($sessionId, $adminUserId) === null) {
             return [];
         }
 

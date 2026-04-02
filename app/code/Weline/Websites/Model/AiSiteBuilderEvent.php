@@ -11,6 +11,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 
 #[Table(comment: 'Websites AI建站工作台事件流')]
 #[Index(name: 'idx_ai_site_builder_event_session_id', columns: ['session_id', 'create_time'], comment: '按会话拉取事件')]
+#[Index(name: 'idx_ai_site_builder_event_session_id_id', columns: ['session_id', 'ai_site_builder_event_id'], comment: 'SSE 增量查询优化')]
 class AiSiteBuilderEvent extends Model
 {
     public const schema_table = 'weline_websites_ai_site_builder_event';
