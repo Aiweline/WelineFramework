@@ -1014,7 +1014,22 @@ class Url implements UrlInterface
         // 使用 Env::getAreaByRoutePrefix() 动态识别区域
         // 支持通过 URL 首段匹配 area_routes 配置
         $matchedArea = Env::getAreaByRoutePrefix($area);
-        
+
+        // 诊断日志：记录区域匹配结果和调用栈
+        if (str_contains($url, 'ai-site-agent') || $area === 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8' || str_contains($url, 'pagebuilder/backend')) {
+            $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
+            $caller = '';
+            foreach ($backtrace as $trace) {
+                if (isset($trace['class']) && isset($trace['function'])) {
+                    $caller .= $trace['class'] . '::' . $trace['function'] . ' -> ';
+                }
+            }
+            file_put_contents(BP . 'var/log/url_parser_debug.log',
+                date('[Y-m-d H:i:s] ') . '[Url::parser] Area matching | url=' . $url . ' | first_segment=' . $area . ' | matched_area=' . ($matchedArea ?? 'null') . ' | caller=' . rtrim($caller, ' -> ') . PHP_EOL,
+                FILE_APPEND
+            );
+        }
+
         if ($matchedArea !== null) {
             // 匹配到配置的区域前缀
             switch ($matchedArea) {
@@ -1046,44 +1061,22 @@ class Url implements UrlInterface
                     $uri = '/' . implode('/', $splits);
                     $has_area = true;
                     self::$parserServer['REQUEST_URI'] = $uri;
+
+                    // 诊断日志：记录后台 URL 解析
+                    if (str_contains($uri, 'ai-site-agent')) {
+                        w_log_warning('[Url::parser] Backend URL detected | uri=' . $uri . ' | area=backend | backendKey=' . $area);
+                    }
                     break;
             }
         } else {
-            // 未匹配到配置的区域前缀，检查路径中是否有 "admin" 段
-            // 只支持 /网站码/admin/login 格式的后台访问
-            // 
-            // 安全修复（2026-02-28）：移除了对 URL 中 "backend" 段的检测
-            // 问题：之前的逻辑会将任何包含 "backend" 段的 URL（如 /acl/backend/acl/role）
-            //       视为后台请求，导致安全漏洞——用户可以绕过正确的后台入口（需要 backendKey）
-            //       直接访问后台控制器
-            // 修复：后台请求必须通过以下方式之一访问：
-            //       1. 使用配置的 backendKey 作为 URL 首段（由上方 Env::getAreaByRoutePrefix() 处理）
-            //       2. 使用 /网站码/admin/xxx 格式（由下方 adminSegmentIndex 逻辑处理）
-            //       如果 URL 中仅包含 "backend" 字符串但首段不是有效的 backendKey，
-            //       则视为前台请求并返回 404
-            $adminSegmentIndex = null;
-            foreach ($splits as $idx => $seg) {
-                if ($seg === 'admin' && $adminSegmentIndex === null) {
-                    $adminSegmentIndex = $idx;
-                    break;
-                }
-            }
-            
-            if ($adminSegmentIndex !== null && $adminSegmentIndex > 0) {
-                // 带网站码的后台 URL：/网站码/admin/login
-                self::$parserServer['WELINE_AREA'] = 'backend';
-                self::$parserServer['WELINE_AREA_ROUTE'] = implode('/', array_slice($splits, 0, $adminSegmentIndex));
-                $uri = '/' . implode('/', array_slice($splits, $adminSegmentIndex));
-                $has_area = true;
-                self::$parserServer['REQUEST_URI'] = $uri;
-            } else {
-                // 默认：前端区域
-                // 注意：如果 URL 包含 "backend" 但没有通过正确的后台入口访问，
-                //       将被路由到前台，最终返回 404
-                self::$parserServer['WELINE_AREA'] = 'frontend';
-                self::$parserServer['WELINE_AREA_ROUTE'] = '';
-                $uri = '/' . implode('/', $splits);
-            }
+            // 未匹配到配置的区域前缀
+            // 后台请求必须通过配置的 backendKey 作为 URL 首段访问
+            // 不再通过 URL 中的 "admin" 或 "backend" 段来判断区域，避免安全漏洞
+
+            // 默认：前端区域
+            self::$parserServer['WELINE_AREA'] = 'frontend';
+            self::$parserServer['WELINE_AREA_ROUTE'] = '';
+            $uri = '/' . implode('/', $splits);
         }
         }
         $data['has_area'] = $has_area;

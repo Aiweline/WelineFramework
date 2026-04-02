@@ -18,6 +18,7 @@ class Website extends Model
     /** 默认网站代码，底层禁止删除 */
     public const CODE_DEFAULT = 'default';
 
+    public const use_main_db_master = true;
     public const schema_table = 'weline_websites_website';
     public const schema_primary_key = 'website_id';
 

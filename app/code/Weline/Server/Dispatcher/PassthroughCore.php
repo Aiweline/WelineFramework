@@ -239,15 +239,9 @@ class PassthroughCore
         $this->workerCount = 0; // 由 workerPorts 长度决定
         $this->routingCache = RoutingCacheService::getInstance();
 
-        // 启动期兜底：先按连续端口预热一个临时池，避免控制消息延迟时出现 0/0。
-        // 后续 Master 的 add_worker / set_worker_pool 会覆盖为权威池。
-        if ($workerCount > 0 && $workerBasePort > 0) {
-            $seedPorts = [];
-            for ($i = 1; $i <= $workerCount; $i++) {
-                $seedPorts[] = $workerBasePort + $i;
-            }
-            $this->setWorkerPorts($seedPorts);
-        }
+        // 不再使用临时种子端口池，完全依赖 Master 通过 IPC 发送的权威端口列表。
+        // 这确保了多项目部署时不会出现跨项目的 Worker 端口干扰。
+        // 启动期间如果 workerPorts 为空，Dispatcher 会进入自旋等待（spinWaitForWorkerPorts）。
     }
     
     /**

@@ -505,6 +505,7 @@ Weline/Server/
 
 ## 🔗 相关文档
 
+- [WLS 实例隔离机制（核验版）](doc/WLS实例隔离机制.md)
 - [Weline Framework 官方文档](https://weline.cc/docs)
 
 ## 📄 许可证

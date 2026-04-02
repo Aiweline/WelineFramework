@@ -123,6 +123,23 @@ class PreviewContextServiceTest extends TestCase
         $this->assertSame('pv_6_raw_token', $context['preview_token']);
     }
 
+    public function testVirtualThemeIdIsIgnoredByThemePreviewContext(): void
+    {
+        $service = $this->createService(
+            [
+                'virtual_theme_id' => 321,
+                'editor_area' => 'frontend',
+            ],
+            null
+        );
+
+        $context = $service->getCurrentContext();
+
+        $this->assertSame(0, $context['frontend_theme_id']);
+        $this->assertSame(0, $context['backend_theme_id']);
+        $this->assertSame(PreviewContextService::SHELL_THEME_EDITOR, $context['shell']);
+    }
+
     /**
      * @param array<string, mixed> $requestParams
      * @param array<string, mixed>|null $tokenData

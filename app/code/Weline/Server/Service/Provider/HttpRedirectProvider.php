@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -88,7 +89,7 @@ class HttpRedirectProvider extends AbstractServiceProvider
             $arguments[] = '--frontend';
         }
 
-        $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName;
+        $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
 
         return new ServiceCommand(
             script: $script,

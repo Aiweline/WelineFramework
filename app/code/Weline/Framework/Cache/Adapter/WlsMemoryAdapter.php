@@ -16,6 +16,10 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
      */
     private static array $stats = [];
 
+    /** 进程内缓存（减少网络请求） */
+    private array $localCache = [];
+    private int $localCacheMaxSize = 100;
+
     private string $identity;
     private int $maxItems;
     private int $maxMemory;
@@ -26,6 +30,7 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         $this->identity = $identity;
         $this->maxItems = (int) ($config['max_items'] ?? 10000);
         $this->maxMemory = (int) ($config['max_memory'] ?? 67108864);
+        $this->localCacheMaxSize = (int) ($config['local_cache_size'] ?? 100);
         $this->config = $config;
         $this->initBucket();
     }
@@ -39,13 +44,21 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
     public function get(string $key): mixed
     {
+        // 先查本地缓存
+        if (array_key_exists($key, $this->localCache)) {
+            self::$stats[$this->identity]['hits']++;
+            return $this->localCache[$key];
+        }
+
+        // 本地缓存未命中，查共享内存
         $value = $this->memoryFacade()->getCache($this->identity, $key);
         if ($value === null) {
             self::$stats[$this->identity]['misses']++;
-
             return null;
         }
 
+        // 写入本地缓存
+        $this->setLocalCache($key, $value);
         self::$stats[$this->identity]['hits']++;
 
         return $value;
@@ -53,17 +66,42 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
     public function set(string $key, mixed $value, int $ttl = 0): bool
     {
-        return $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl);
+        $result = $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl);
+        if ($result) {
+            // 同步更新本地缓存
+            $this->setLocalCache($key, $value);
+        }
+        return $result;
     }
 
     public function delete(string $key): bool
     {
+        unset($this->localCache[$key]);
         return $this->memoryFacade()->deleteCache($this->identity, $key);
     }
 
     public function clear(): bool
     {
+        $this->localCache = [];
         return $this->memoryFacade()->clearCache($this->identity);
+    }
+
+    /**
+     * 设置本地缓存（LRU淘汰）
+     */
+    private function setLocalCache(string $key, mixed $value): void
+    {
+        // 如果已存在，先删除（实现LRU）
+        if (isset($this->localCache[$key])) {
+            unset($this->localCache[$key]);
+        }
+
+        // 如果超过大小限制，删除最旧的
+        if (count($this->localCache) >= $this->localCacheMaxSize) {
+            array_shift($this->localCache);
+        }
+
+        $this->localCache[$key] = $value;
     }
 
     public function has(string $key): bool

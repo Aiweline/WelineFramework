@@ -36,16 +36,24 @@ class AiSitePublishService
         );
 
         if ($virtualThemeId > 0) {
+            // 重新加载虚拟主题
             $theme = clone $this->virtualThemeModel;
             $theme->clearData()->clearQuery()->load($virtualThemeId);
-            if ($theme->getId()) {
+
+            if ($theme->getId() > 0) {
+                // 获取并更新配置
                 $config = $theme->getConfig();
                 $config['published_at'] = \date('Y-m-d H:i:s');
                 $config['materialized_pages_by_type'] = $materialized['pagebuilder_pages_by_type'] ?? [];
-                $theme->setWebsiteId($websiteId)
-                    ->setIsActive(true)
-                    ->setConfig($config)
-                    ->save();
+
+                // 使用 Model 的 query builder 执行 UPDATE
+                $theme->clearQuery()
+                    ->where(VirtualTheme::schema_fields_ID, $virtualThemeId)
+                    ->update([
+                        VirtualTheme::schema_fields_WEBSITE_ID => $websiteId,
+                        VirtualTheme::schema_fields_IS_ACTIVE => 1,
+                        VirtualTheme::schema_fields_CONFIG => json_encode($config, JSON_UNESCAPED_UNICODE),
+                    ]);
             }
         }
 
