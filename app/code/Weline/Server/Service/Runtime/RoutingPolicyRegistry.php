@@ -66,8 +66,10 @@ class RoutingPolicyRegistry
     public static function getSessionEndpoint(): array
     {
         $host = (string)(self::$policy['endpoints']['session']['host'] ?? '127.0.0.1');
-        $port = (int)(self::$policy['endpoints']['session']['port'] ?? 19970);
-        return ['host' => $host, 'port' => $port > 0 ? $port : 19970];
+        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        $port = (int)(self::$policy['endpoints']['session']['port'] ?? $defaultPort);
+        return ['host' => $host, 'port' => $port > 0 ? $port : $defaultPort];
     }
 
     /**
@@ -78,8 +80,10 @@ class RoutingPolicyRegistry
     public static function getMemoryEndpoint(): array
     {
         $host = (string)(self::$policy['endpoints']['memory']['host'] ?? '127.0.0.1');
-        $port = (int)(self::$policy['endpoints']['memory']['port'] ?? 19971);
-        return ['host' => $host, 'port' => $port > 0 ? $port : 19971];
+        // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19971 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        $port = (int)(self::$policy['endpoints']['memory']['port'] ?? $defaultPort);
+        return ['host' => $host, 'port' => $port > 0 ? $port : $defaultPort];
     }
 
     /**

@@ -265,9 +265,12 @@ class WlsRuntime implements RuntimeInterface
                 RequestLifecycleTrace::recordSpan('url_parser', $timing['url_parser_ms'], 'framework');
             }
             
-            // WLS 模式：URL 解析后 $_SERVER 已被正确填充，重新调用 Router.__init() 刷新缓存键
-            // 必须在此时调用，因为此时 WELINE_* 等关键变量已由 Url::parser() 设置到 $_SERVER
+            // WLS：StateManager::reset() 会在请求结束时 removeInstance(Router\Core)，bootstrap 里缓存的
+            // $this->router 会变成指向已脱离 ObjectManager 的孤儿实例；若继续对其 __init/start，
+            // 会出现 request_area / is_backend 与当前 $_SERVER 不一致（误判后台、命中错误路由缓存）。
+            // 每请求必须从 OM 取当前 Router 单例再初始化。
             $routerInitStart = \microtime(true);
+            $this->router = ObjectManager::getInstance(Router::class);
             $this->router->__init();
             $routerInitEnd = \microtime(true);
             $timing['router_init_ms'] = \round(($routerInitEnd - $routerInitStart) * 1000, 2);
@@ -554,6 +557,16 @@ class WlsRuntime implements RuntimeInterface
         if (isset($parse['area']) && $parse['area'] !== '') {
             $_SERVER['WELINE_AREA'] = $parse['area'];
             RequestContext::area($parse['area']);
+
+            // 诊断日志：记录 WELINE_AREA 设置
+            $originalUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
+            if (str_contains($originalUri, 'ai-site-agent')) {
+                error_log('[WlsRuntime::processUrlParse] Setting WELINE_AREA | '
+                    . 'area=' . $parse['area'] . ' | '
+                    . 'REQUEST_URI=' . ($_SERVER['REQUEST_URI'] ?? '(empty)') . ' | '
+                    . 'ORIGINAL_URI=' . $originalUri
+                );
+            }
         }
 
         // 合并后确保 WELINE_FULL_REQUEST_URI 有效（防御 parser 未设置或覆盖）

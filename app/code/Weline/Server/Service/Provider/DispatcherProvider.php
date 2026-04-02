@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Framework\App\Env;
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -65,7 +66,7 @@ class DispatcherProvider extends AbstractServiceProvider
         $script = $scriptDir . DS . 'dispatcher.php';
 
         $port = $this->getPort($instanceId, $context);
-        $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName;
+        $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName);
 
         $workerCount = $context->getWorkerCount();
         if ($workerCount === 'auto') {

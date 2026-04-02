@@ -260,7 +260,7 @@ class Start extends CommandAbstract
             if (IS_WIN && !\extension_loaded('event') && !$isMasterOnly && !$daemon) {
                 $this->printWindowsEventHttpsWarning();
             }
-            
+
             $sslResult = $this->ensureSslCertificate($instanceName, $config);
             if (!$sslResult['success']) {
                 $this->printer->error($sslResult['message']);
@@ -442,22 +442,9 @@ class Start extends CommandAbstract
         $config['memory_server_token_file_name'] = (string) ($sharedStateRuntime['memory']['token_file_name'] ?? 'memory_server.token');
         $config['shared_state'] = $sharedStateRuntime;
         $this->printSharedStateRuntimeSummary($instanceName, $sharedStateRuntime);
-        
-        // 计算 Worker 端口
-        // - Dispatcher 模式：Worker 监听内网高端口，Dispatcher 监听主端口
-        // - 直连模式（--direct）：所有 Worker 直接监听主端口（SO_REUSEPORT，仅非 Linux）
-        // - 独立端口模式（--no-dispatcher）：每个 Worker 使用独立端口，需智能分配
+
+        // Worker 端口计算移至端口冲突检测之后（第 534-540 行），避免重复计算
         $useDirectMode = !$dispatcherEnabled && $supportsReusePort && $directMode && !$isLinux;
-        if ($dispatcherEnabled) {
-            // Dispatcher 模式：Worker 使用内网高端口
-            $workerPort = $workerBasePort + $port;
-        } elseif ($useDirectMode) {
-            // 直连模式：所有 Worker 复用主端口
-            $workerPort = $port;
-        } else {
-            // 独立端口模式：Worker 使用独立端口（从 workerBasePort 开始）
-            $workerPort = $workerBasePort + $port;
-        }
         // Dispatcher 只做 TCP 透传和流量控制，不做 SSL 握手
         // SSL 握手始终由 Worker 处理（无论是否使用 Dispatcher）
         $workerSslEnabled = $sslEnabled;
@@ -722,22 +709,32 @@ class Start extends CommandAbstract
         // 同步 daemon 标志到 config（$daemon 已根据 --frontend 参数覆盖，
         // 但 $config['daemon'] 仍是 env 默认值 true，导致 MasterProcess::log() 跳过控制台输出）
         $config['daemon'] = $daemon;
-        
+
+        // 将 .local 域名转换为 127.0.0.1 用于实际监听
+        // 域名仅用于 SSL 证书，实际监听使用 IP 避免 PHP DNS 解析问题
+        $listenHost = $host;
+        if (str_ends_with($host, '.local')) {
+            $listenHost = '127.0.0.1';
+        }
+
         if ($daemon) {
-            $this->startMasterInBackground($instanceName, $sslEnabled, $host, $port);
+            $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port);
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
             // 打印成功结束语
             $this->printGoodbye(true, __('服务器正在后台启动，请使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
             return;
         }
-        
+
         // 前台运行：Master 将占用当前终端
         $this->printer->note(__('Master 进程启动中，将管理所有 Worker 和 Dispatcher...'));
         if (\function_exists('flush')) {
             @\flush();
         }
-        
+
+        // 前台模式也使用 listenHost
+        $config['host'] = $listenHost;
+
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
         $this->runMasterProcess($instanceName, $config, $workerScript, [], $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend);
     }
@@ -813,7 +810,9 @@ class Start extends CommandAbstract
         $workerScript = $this->ensureWorkerScript($sslEnabled);
         $port = (int)($data['port'] ?? 443);
         $workerPort = (int)($data['worker_port'] ?? $port);
-        $workerBasePort = (int)($data['worker_base_port'] ?? 10000);
+        // 默认端口 10000 + 项目偏移量，确保多项目不冲突
+        $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
+        $workerBasePort = (int)($data['worker_base_port'] ?? $defaultWorkerBasePort);
         $workerCount = (int)($data['count'] ?? 1);
         $config = [
             'host' => (string)($data['host'] ?? '127.0.0.1'),
@@ -1552,7 +1551,7 @@ class Start extends CommandAbstract
     {
         // 默认配置（文件监听默认关闭，避免频繁触发热重载导致 Worker 不断重启）
         $defaults = [
-            'host' => '127.0.0.1',
+            'host' => $this->getDefaultHost(),  // 使用项目唯一域名，避免多项目 SSL 证书冲突
             'port' => self::DEFAULT_PORT,
             'worker_count' => 'auto',
             'mode' => 'io',
@@ -1570,6 +1569,9 @@ class Start extends CommandAbstract
         // 优先级：命令行参数 > env 配置 > 已保存实例配置 > 默认值
         $savedConfig = $this->loadSavedInstanceConfig($instanceName);
         if ($savedConfig) {
+            // 移除已保存配置中的 worker_base_port，强制使用带项目偏移的默认值
+            // 这确保了多项目部署时端口不会冲突（旧配置文件可能包含不带偏移的端口）
+            unset($savedConfig['worker_base_port']);
             $config = \array_merge($config, $savedConfig);
             $config['source'] = __('已保存实例配置 (%{1})', [$instanceName]);
         }
@@ -1581,6 +1583,8 @@ class Start extends CommandAbstract
         // 2. 多实例：wls.servers[实例名]
         if ($instanceName !== 'default' && isset($wlsServers[$instanceName]) && \is_array($wlsServers[$instanceName])) {
             $instanceConfig = $wlsServers[$instanceName];
+            // 移除 env 配置中的 worker_base_port，强制使用带项目偏移的默认值
+            unset($instanceConfig['worker_base_port']);
             $config = \array_merge($config, $instanceConfig);
             $config['source'] = __('env.wls.servers.%{1}', [$instanceName]);
         }
@@ -1588,9 +1592,21 @@ class Start extends CommandAbstract
         elseif (isset($envConfig['wls']) && \is_array($envConfig['wls'])) {
             $baseWls = $envConfig['wls'];
             unset($baseWls['servers'], $baseWls['log'], $baseWls['session']);
+            // 移除 env 配置中的 worker_base_port，强制使用带项目偏移的默认值
+            unset($baseWls['worker_base_port']);
             $config = \array_merge($config, $baseWls);
             $config['source'] = __('env.wls');
         }
+
+        // 如果 env 配置中的 host 是 127.0.0.1，恢复为项目唯一域名（避免多项目 SSL 证书冲突）
+        if (($config['host'] ?? '') === '127.0.0.1') {
+            $config['host'] = $this->getDefaultHost();
+            // 同时清理 ssl_domain，让它使用新的 host
+            if (($config['ssl_domain'] ?? '') === '127.0.0.1' || ($config['ssl_domain'] ?? '') === 'localhost') {
+                unset($config['ssl_domain']);
+            }
+        }
+
         // wls.https = false 时也禁用 HTTPS（与 --no-ssl 一致，供生成地址等使用）
         if (isset($config['https']) && $config['https'] === false) {
             $config['no_ssl'] = true;
@@ -1654,12 +1670,19 @@ class Start extends CommandAbstract
             if ($autoSsl) {
                 $config['ssl_cert'] = $autoSsl['cert'];
                 $config['ssl_key'] = $autoSsl['key'];
-                $config['ssl_domain'] = $autoSsl['domain'] ?? '';
+                $autoDomain = $autoSsl['domain'] ?? '';
+                // 如果自动检测的域名是 127.0.0.1 或 localhost，不使用它（让后续逻辑使用项目唯一域名）
+                if ($autoDomain !== '127.0.0.1' && $autoDomain !== 'localhost') {
+                    $config['ssl_domain'] = $autoDomain;
+                }
             }
         }
         
         // 确保本地域名（0.0.0.0/127.0.0.1/localhost）有自签证书
         $this->ensureLocalSelfSignedCertificates();
+
+        // 自动配置 hosts 文件（将项目域名映射到 127.0.0.1）
+        $this->ensureHostsFileConfigured($config['host'] ?? '127.0.0.1');
 
         // 生成多域名证书映射文件（用于 SNI 支持）
         $this->generateCertificateMap();
@@ -1749,18 +1772,9 @@ class Start extends CommandAbstract
         }
         
         // 2. 确定域名
-        $domain = $config['ssl_domain'] ?? '';
-        if (empty($domain)) {
-            // 0.0.0.0 是监听所有网卡的绑定地址，不是真实域名，归一化为 localhost
-            if ($host === '127.0.0.1' || $host === '::1' || $host === '0.0.0.0') {
-                $domain = 'localhost';
-            } elseif (\filter_var($host, FILTER_VALIDATE_IP)) {
-                $domain = $host;
-            } else {
-                $domain = $host;
-            }
-        }
-        
+        // 优先使用 host（项目唯一域名），忽略可能来自旧配置的 ssl_domain
+        $domain = $host;
+
         // 3. 使用 SslCertificateService 自动获取或生成证书
         $this->printer->note(__('正在为 %{1} 准备 SSL 证书...', [$domain]));
         
@@ -1899,6 +1913,67 @@ class Start extends CommandAbstract
         return null;
     }
     
+    /**
+     * 获取默认监听地址
+     *
+     * 为避免多项目 SSL 证书冲突，使用项目唯一的本地域名。
+     * 格式：weline-p{项目哈希前8位}.local
+     *
+     * @return string
+     */
+    protected function getDefaultHost(): string
+    {
+        // 计算项目哈希（与 getProjectPortOffset 使用相同算法）
+        $basePath = \str_replace('\\', '/', \rtrim((string) BP, "\\/"));
+        $hash = \sha1(\strtolower($basePath));
+        $shortHash = \substr($hash, 0, 8);
+
+        // 生成项目唯一域名
+        return "weline-p{$shortHash}.local";
+    }
+
+    /**
+     * 确保 hosts 文件已配置项目域名
+     *
+     * @param string $host 域名
+     */
+    protected function ensureHostsFileConfigured(string $host): void
+    {
+        // 只处理 .local 域名
+        if (!str_ends_with($host, '.local')) {
+            return;
+        }
+
+        // 跳过 localhost
+        if ($host === 'localhost') {
+            return;
+        }
+
+        $result = \Weline\Server\Service\HostsFileManager::addDomain($host);
+
+        if ($result['success']) {
+            if (!($result['already_exists'] ?? false)) {
+                $this->printer->note(__('已将 %{1} 添加到 hosts 文件', [$host]));
+            }
+        } elseif ($result['needs_admin'] ?? false) {
+            $this->printer->warning(__('无法自动配置 hosts 文件（需要管理员权限）'));
+            $this->printer->note(__('请手动添加以下内容到 hosts 文件：'));
+            $this->printer->note("  127.0.0.1 {$host}");
+
+            if (PHP_OS_FAMILY === 'Windows') {
+                $this->printer->note(__('Windows hosts 文件位置：'));
+                $this->printer->note('  C:\Windows\System32\drivers\etc\hosts');
+                $this->printer->note(__('或以管理员身份运行 PowerShell 执行：'));
+                $this->printer->note('  ' . ($result['command'] ?? ''));
+            } else {
+                $this->printer->note(__('Linux/Mac 执行：'));
+                $this->printer->note('  ' . ($result['command'] ?? ''));
+            }
+        } else {
+            $this->printer->warning(__('配置 hosts 文件失败: %{1}', [$result['message'] ?? '未知错误']));
+        }
+    }
+
     /**
      * 确保 0.0.0.0、127.0.0.1、localhost 三个本地域名都有自签证书。
      * 仅在证书目录不存在或证书无效时才生成，避免重复生成。
@@ -4663,12 +4738,14 @@ PHP;
         if ($sslEnabled) {
             $strategyRedirect = ($strategyMainPort === 443) ? 80 : 0;
         }
+        // 默认端口 10000 + 项目偏移量，确保多项目不冲突
+        $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
         $serverConfig = new ServerConfig([
             'instance_name' => $instanceName,
             'host' => $config['host'] ?? '127.0.0.1',
             'port' => $strategyMainPort,
             'worker_count' => (int) ($config['worker_count'] ?? 4),
-            'worker_base_port' => (int) ($config['worker_base_port'] ?? 10443),
+            'worker_base_port' => (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort),
             'ssl_cert' => $sslCert,
             'ssl_key' => $sslKey,
             'frontend' => $frontend,

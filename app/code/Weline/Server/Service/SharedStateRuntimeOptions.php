@@ -185,16 +185,18 @@ class SharedStateRuntimeOptions
         );
         $host = \trim($host) !== '' ? \trim($host) : '127.0.0.1';
 
+        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
         $port = (int) (
             $args['session-port']
             ?? $instanceSession['port']
             ?? $wlsServer['port']
             ?? $wlsSession['port']
             ?? $envSession['server_port']
-            ?? 19970
+            ?? $defaultPort
         );
         if ($port <= 0) {
-            $port = 19970;
+            $port = $defaultPort;
         }
 
         $tokenFileName = (string) (
@@ -236,14 +238,16 @@ class SharedStateRuntimeOptions
         );
         $host = \trim($host) !== '' ? \trim($host) : '127.0.0.1';
 
+        // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+        $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
         $port = (int) (
             $args['memory-port']
             ?? $instanceMemory['port']
             ?? $memoryConfig['port']
-            ?? 19971
+            ?? $defaultPort
         );
         if ($port <= 0) {
-            $port = 19971;
+            $port = $defaultPort;
         }
 
         $tokenFileName = (string) (

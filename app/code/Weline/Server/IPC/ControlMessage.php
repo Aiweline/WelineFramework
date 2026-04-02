@@ -148,6 +148,7 @@ class ControlMessage
     public const ROLE_MAINTENANCE = 'maintenance';
     public const ROLE_SESSION_SERVER = 'session_server';
     public const ROLE_MEMORY_SERVER = 'memory_server';
+    public const ROLE_GATEWAY = 'gateway';
 
     // ========== 重载类型 ==========
 
@@ -188,6 +189,15 @@ class ControlMessage
     /** 立即释放各 Worker 上闲置的 Fiber */
     public const ACTION_FIBER_RELEASE_IDLE = 'fiber_release_idle';
 
+    /** CLI → Master：手动扩缩容 Worker */
+    public const ACTION_SCALE_WORKERS = 'scale_workers';
+
+    /** CLI → Master：查询扩缩容状态 */
+    public const ACTION_SCALING_STATUS = 'scaling_status';
+
+    /** CLI → Master：应用反向代理配置 */
+    public const ACTION_PROXY_APPLY = 'proxy_apply';
+
     /** Master → Worker：热重载 SSL 证书映射（不重启进程） */
     public const TYPE_SSL_CERT_RELOAD = 'ssl_cert_reload';
 
@@ -206,6 +216,17 @@ class ControlMessage
     /** Worker → Master：Fiber 池统计上报 */
     public const TYPE_FIBER_POOL_STATS = 'fiber_pool_stats';
 
+    // ========== Gateway 反向代理消息类型 ==========
+
+    /** Master → Gateway：添加反向代理路由 */
+    public const TYPE_PROXY_ADD_ROUTE = 'proxy_add_route';
+
+    /** Master → Gateway：移除反向代理路由 */
+    public const TYPE_PROXY_REMOVE_ROUTE = 'proxy_remove_route';
+
+    /** Master → Gateway：重载所有反向代理路由 */
+    public const TYPE_PROXY_RELOAD = 'proxy_reload';
+
     /** Worker → Master：长连接饱和上报（主动） */
     public const TYPE_WORKER_SATURATION = 'worker_saturation';
 
@@ -217,6 +238,20 @@ class ControlMessage
 
     /** Worker → Master：已应用维护信号 */
     public const TYPE_MAINTENANCE_MODE_ACK = 'maintenance_mode_ack';
+
+    // ========== Worker 扩缩容消息类型 ==========
+
+    /** CLI/Master → Master：扩缩容命令（设置目标 Worker 数） */
+    public const TYPE_SCALE_WORKERS = 'scale_workers';
+
+    /** Master → CLI：扩缩容完成响应 */
+    public const TYPE_WORKER_SCALED = 'worker_scaled';
+
+    /** Worker → Master：负载指标上报（CPU、内存、请求队列、响应时间） */
+    public const TYPE_LOAD_REPORT = 'load_report';
+
+    /** Master → Worker：优雅关闭（等待请求处理完成后退出） */
+    public const TYPE_GRACEFUL_SHUTDOWN = 'graceful_shutdown';
 
     // ========== 复活优先级 ==========
 
@@ -958,6 +993,149 @@ class ControlMessage
             'reload_type' => $reloadType,
             'targets'     => $targets,
             'expires_at'  => $expiresAt,
+        ]);
+    }
+
+    // ========== Worker 扩缩容消息工厂方法 ==========
+
+    /**
+     * 构建 scale_workers 消息（CLI/Master → Master）
+     *
+     * @param int $targetWorkers 目标 Worker 数量
+     * @param array $options 可选参数：['auto' => bool, 'min' => int, 'max' => int]
+     */
+    public static function scaleWorkers(int $targetWorkers, array $options = []): string
+    {
+        return self::encode([
+            'type'           => self::TYPE_SCALE_WORKERS,
+            'target_workers' => $targetWorkers,
+            'options'        => $options,
+        ]);
+    }
+
+    /**
+     * 构建 worker_scaled 消息（Master → CLI）
+     *
+     * @param bool $success 是否成功
+     * @param int $currentWorkers 当前 Worker 数量
+     * @param int $targetWorkers 目标 Worker 数量
+     * @param array $addedPids 新增的 Worker PID 列表
+     * @param array $removedPids 移除的 Worker PID 列表
+     * @param string $message 消息
+     */
+    public static function workerScaled(
+        bool $success,
+        int $currentWorkers,
+        int $targetWorkers,
+        array $addedPids = [],
+        array $removedPids = [],
+        string $message = ''
+    ): string {
+        return self::encode([
+            'type'            => self::TYPE_WORKER_SCALED,
+            'success'         => $success,
+            'current_workers' => $currentWorkers,
+            'target_workers'  => $targetWorkers,
+            'added_pids'      => $addedPids,
+            'removed_pids'    => $removedPids,
+            'message'         => $message,
+        ]);
+    }
+
+    /**
+     * 构建 load_report 消息（Worker → Master）
+     *
+     * @param int $workerId Worker ID
+     * @param float $cpuUsage CPU 使用率（0-100）
+     * @param int $memoryUsage 内存使用量（字节）
+     * @param int $queueLength 请求队列长度
+     * @param float $avgResponseTime 平均响应时间（毫秒）
+     * @param int $activeConnections 活跃连接数
+     */
+    public static function loadReport(
+        int $workerId,
+        float $cpuUsage,
+        int $memoryUsage,
+        int $queueLength,
+        float $avgResponseTime,
+        int $activeConnections
+    ): string {
+        return self::encode([
+            'type'                => self::TYPE_LOAD_REPORT,
+            'worker_id'           => $workerId,
+            'cpu_usage'           => $cpuUsage,
+            'memory_usage'        => $memoryUsage,
+            'queue_length'        => $queueLength,
+            'avg_response_time'   => $avgResponseTime,
+            'active_connections'  => $activeConnections,
+            'timestamp'           => \microtime(true),
+        ]);
+    }
+
+    /**
+     * 构建 graceful_shutdown 消息（Master → Worker）
+     *
+     * @param int $timeoutSec 超时时间（秒），超时后强制 kill
+     */
+    public static function gracefulShutdown(int $timeoutSec = 30): string
+    {
+        return self::encode([
+            'type'        => self::TYPE_GRACEFUL_SHUTDOWN,
+            'timeout_sec' => $timeoutSec,
+        ]);
+    }
+
+    // ========== Gateway 反向代理消息工厂方法 ==========
+
+    /**
+     * 构建 proxy_add_route 消息（Master → Gateway）
+     *
+     * @param string $domain 域名
+     * @param string $backendHost 后端主机
+     * @param int $backendPort 后端端口
+     * @param bool $backendSsl 后端是否使用SSL
+     * @param int $priority 优先级
+     */
+    public static function proxyAddRoute(
+        string $domain,
+        string $backendHost,
+        int $backendPort,
+        bool $backendSsl = true,
+        int $priority = 0
+    ): string {
+        return self::encode([
+            'type'         => self::TYPE_PROXY_ADD_ROUTE,
+            'domain'       => $domain,
+            'backend_host' => $backendHost,
+            'backend_port' => $backendPort,
+            'backend_ssl'  => $backendSsl,
+            'priority'     => $priority,
+        ]);
+    }
+
+    /**
+     * 构建 proxy_remove_route 消息（Master → Gateway）
+     *
+     * @param string $domain 域名
+     */
+    public static function proxyRemoveRoute(string $domain): string
+    {
+        return self::encode([
+            'type'   => self::TYPE_PROXY_REMOVE_ROUTE,
+            'domain' => $domain,
+        ]);
+    }
+
+    /**
+     * 构建 proxy_reload 消息（Master → Gateway）
+     *
+     * @param array $routes 路由数组 [['domain' => ..., 'backend_host' => ..., 'backend_port' => ..., 'backend_ssl' => ..., 'priority' => ...], ...]
+     */
+    public static function proxyReload(array $routes): string
+    {
+        return self::encode([
+            'type'   => self::TYPE_PROXY_RELOAD,
+            'routes' => $routes,
         ]);
     }
 }

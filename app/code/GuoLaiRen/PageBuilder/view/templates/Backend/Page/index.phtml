@@ -281,7 +281,7 @@ $quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_C
                                                     <span><?= __('编辑') ?></span>
                                                 </a>
                                             </acl>
-                                            
+
                                             <!-- 更多操作下拉菜单 -->
                                             <div class="dropdown">
                                                 <button type="button" 
@@ -608,12 +608,12 @@ $quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_C
                                                                         <i class="mdi mdi-pencil me-1"></i><?= __('编辑') ?>
                                                                     </a>
                                                                 </acl>
-                                                                
+
                                                                 <!-- 更多操作下拉菜单 -->
-                                                                <div class="btn-group" role="group">
-                                                                    <button type="button" 
+                                                                <div class="dropdown">
+                                                                    <button type="button"
                                                                             class="btn btn-sm text-info dropdown-toggle d-inline-flex align-items-center"
-                                                                            data-bs-toggle="dropdown" 
+                                                                            data-bs-toggle="dropdown"
                                                                             aria-expanded="false"
                                                                             style="min-width: 85px; white-space: nowrap;">
                                                                         <i class="mdi mdi-dots-horizontal me-1 text-info"></i><?= __('更多操作') ?>
@@ -1252,7 +1252,7 @@ $quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_C
     background: var(--backend-color-card-bg, #fff);
     border: 1px solid var(--backend-color-border-default, #dee2e6) !important;
     border-radius: var(--backend-border-radius-lg, 12px) !important;
-    overflow: hidden;
+    overflow: visible;
     transition: all 0.3s ease;
 }
 
@@ -1500,12 +1500,17 @@ $quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_C
 }
 
 /* ========== 下拉菜单适配 ========== */
+.dropdown {
+    position: relative;
+}
+
 .dropdown-menu {
     background: var(--backend-color-card-bg, #fff);
     border: 1px solid var(--backend-color-border-default, #dee2e6);
     border-radius: var(--backend-border-radius-md, 8px);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     padding: 8px;
+    z-index: 1050;
 }
 
 .dropdown-item {
@@ -2726,7 +2731,7 @@ document.querySelectorAll('.delete-confirm-form').forEach(form => {
         e.preventDefault();
         const message = this.dataset.confirmMessage || '<?= __('确定要执行此操作吗？') ?>';
         const formElement = this;
-        
+
         BackendConfirm.show(message, {
             title: '<?= __('确认删除') ?>',
             confirmText: '<?= __('确认删除') ?>',
@@ -2738,5 +2743,49 @@ document.querySelectorAll('.delete-confirm-form').forEach(form => {
             }
         });
     });
+});
+
+// 初始化所有 Bootstrap Dropdown
+document.addEventListener('DOMContentLoaded', function() {
+    // 等待 Bootstrap 加载完成
+    function initDropdowns() {
+        const dropdownElementList = document.querySelectorAll('[data-bs-toggle="dropdown"]');
+
+        if (typeof bootstrap === 'undefined' || !bootstrap.Dropdown) {
+            console.error('Bootstrap Dropdown not found. Please ensure Bootstrap JS is loaded.');
+            return;
+        }
+
+        dropdownElementList.forEach(function(dropdownToggleEl) {
+            // 确保没有重复初始化
+            if (!dropdownToggleEl._dropdownInitialized) {
+                try {
+                    new bootstrap.Dropdown(dropdownToggleEl, {
+                        autoClose: true,
+                        boundary: 'viewport'
+                    });
+                    dropdownToggleEl._dropdownInitialized = true;
+                } catch (e) {
+                    console.error('Failed to initialize dropdown:', e);
+                }
+            }
+
+            // 添加点击事件，阻止事件冒泡
+            dropdownToggleEl.addEventListener('click', function(e) {
+                e.stopPropagation();
+                e.preventDefault();
+            }, { once: false });
+        });
+
+        console.log('Initialized ' + dropdownElementList.length + ' dropdowns');
+    }
+
+    // 立即尝试初始化
+    if (typeof bootstrap !== 'undefined') {
+        initDropdowns();
+    } else {
+        // 如果 Bootstrap 还未加载，等待一下
+        setTimeout(initDropdowns, 100);
+    }
 });
 </script>
