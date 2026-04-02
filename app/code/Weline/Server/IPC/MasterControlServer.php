@@ -59,6 +59,8 @@ class MasterControlServer
      *   'peer_name' => string,      // 对端地址
      *   'message_count' => int,     // 已接收消息数
      *   'last_message_type' => string, // 最近一条消息类型
+     *   'last_pong_time' => float|null, // 最近一次 pong 响应时间戳
+     *   'launch_id' => string,      // 启动 ID（用于唯一标识实例）
      * ]
      */
     private array $clients = [];
@@ -433,6 +435,11 @@ class MasterControlServer
                 $this->clients[$clientId]['state'] = self::STATE_DRAINING;
             }
 
+            // 内部处理 pong 消息（健康检查响应）
+            if ($type === ControlMessage::TYPE_PONG) {
+                $this->clients[$clientId]['last_pong_time'] = $msg['pong_timestamp'] ?? \microtime(true);
+            }
+
             // 内部处理 exited 消息（子进程即将退出，提前从列表移除）
             if ($type === ControlMessage::TYPE_EXITED) {
                 $this->ipcLog("[IPC-Master] {$tag} 即将退出");
@@ -592,8 +599,17 @@ class MasterControlServer
 
         $sent = $this->writeFully($socket, $message);
         if (!$sent) {
-            $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: type={$type}");
-            if (@\feof($socket)) {
+            // CRITICAL-FIX-2026-04-02: PHP 8.1+ socket_last_error() requires Socket object, not resource
+            // WLS uses stream_socket_* (returns resource), so use stream_get_meta_data() instead
+            $meta = @\stream_get_meta_data($socket);
+            $errno = $meta['timed_out'] ? 110 : (@\feof($socket) ? 32 : 0);
+            $errstr = $errno > 0 ? ($errno === 110 ? 'timeout' : 'connection closed') : 'unknown';
+            $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: type={$type}, errno={$errno}, error={$errstr}");
+
+            // 区分临时错误和永久错误
+            // EPIPE(32), ECONNRESET(104), ETIMEDOUT(110), ECONNABORTED(103)
+            $permanentErrors = [32, 103, 104, 110];
+            if (@\feof($socket) || \in_array($errno, $permanentErrors, true)) {
                 $this->removeClient($clientId);
             }
         }
@@ -719,6 +735,32 @@ class MasterControlServer
             }
         }
         return false;
+    }
+
+    /**
+     * 发送消息给指定 launch_id 的实例
+     */
+    public function sendToInstance(string $launchId, string $message): bool
+    {
+        foreach ($this->clients as $clientId => $client) {
+            if (($client['launch_id'] ?? '') === $launchId) {
+                return $this->sendTo($clientId, $message);
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取指定 launch_id 实例的最近 pong 时间戳
+     */
+    public function getLastPongTime(string $launchId): ?float
+    {
+        foreach ($this->clients as $client) {
+            if (($client['launch_id'] ?? '') === $launchId) {
+                return $client['last_pong_time'] ?? null;
+            }
+        }
+        return null;
     }
 
     /**
