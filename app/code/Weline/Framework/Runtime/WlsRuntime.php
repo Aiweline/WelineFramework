@@ -142,7 +142,7 @@ class WlsRuntime implements RuntimeInterface
         
         $this->requestCount++;
         
-        // 性能统计：仅当请求耗时 > 1 秒时写入 var/log/wls_timing.log，便于定位 TTFB 瓶颈
+        // 性能统计：仅当请求耗时 > 1 秒时写入 var/log/wls/timing.log，便于定位 TTFB 瓶颈
         $t0 = \microtime(true);
         $timing = [
             'uri' => '',
@@ -558,15 +558,7 @@ class WlsRuntime implements RuntimeInterface
             $_SERVER['WELINE_AREA'] = $parse['area'];
             RequestContext::area($parse['area']);
 
-            // 诊断日志：记录 WELINE_AREA 设置
-            $originalUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
-            if (str_contains($originalUri, 'ai-site-agent')) {
-                error_log('[WlsRuntime::processUrlParse] Setting WELINE_AREA | '
-                    . 'area=' . $parse['area'] . ' | '
-                    . 'REQUEST_URI=' . ($_SERVER['REQUEST_URI'] ?? '(empty)') . ' | '
-                    . 'ORIGINAL_URI=' . $originalUri
-                );
-            }
+            // 诊断日志：记录 WELINE_AREA 设置（已移除临时调试代码）
         }
 
         // 合并后确保 WELINE_FULL_REQUEST_URI 有效（防御 parser 未设置或覆盖）
@@ -928,8 +920,8 @@ class WlsRuntime implements RuntimeInterface
             'log_all_in_dev' => true,
             'request_log_enabled' => null,
             'error_log_enabled' => null,
-            'runtime_log_file' => 'var/log/wls.log',
-            'timing_log_file' => 'var/log/wls_timing.log',
+            'runtime_log_file' => 'var/log/wls/runtime.log',
+            'timing_log_file' => 'var/log/wls/timing.log',
         ], $performanceConfig);
 
         return $this->performanceConfig;
@@ -968,7 +960,7 @@ class WlsRuntime implements RuntimeInterface
     private function resolveLogPath(string $path): string
     {
         if ($path === '') {
-            $path = 'var/log/wls.log';
+            $path = 'var/log/wls/runtime.log';
         }
 
         if (\str_starts_with($path, '/') || \preg_match('/^[A-Za-z]:[\\\\\\/]/', $path)) {
