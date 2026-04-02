@@ -22,6 +22,9 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
+// 设置内存限制为 256M（推荐值）
+@\ini_set('memory_limit', '256M');
+
 // 获取参数
 $host = $argv[1] ?? '127.0.0.1';
 $port = (int) ($argv[2] ?? 9981);
@@ -1436,8 +1439,6 @@ while (true) {
             continue;
         }
         
-        // 设置 SSE 上下文（让控制器可以直接写入连接）
-        \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
         $longLivedDetection = $longLivedProtocolResolver->detect($rawRequest);
         $isLongLived = ($longLivedDetection['is_long_lived'] ?? false) === true;
         if ($isLongLived) {
@@ -1472,7 +1473,7 @@ while (true) {
         $fiberConn = $conn;
         $fiberRawRequest = $rawRequest;
         $handleStartTime = \microtime(true);
-        
+
         $requestFiber = new \Fiber(function () use (
             $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
             $requestCount, &$activeRequests, &$connections, $startTime,
@@ -1481,6 +1482,10 @@ while (true) {
             &$connectionLastActivity, &$requestBuffers, &$requestLogged,
             $ipcClient, &$fiberResults, $WLS_UOPZ_EXIT_GUARD
         ) {
+            // 在 Fiber 内部设置 SSE 上下文，确保每个 Fiber 有独立的连接上下文
+            // 这样可以避免多个并发请求互相覆盖连接
+            \Weline\Framework\Http\Sse\SseContext::setConnection($fiberConn);
+
             try {
                 return handleRequest(
                     $fiberRawRequest, $runtime, $runtimeError, $instanceName, $workerId, $port,
@@ -1501,9 +1506,9 @@ while (true) {
                 throw $e;
             }
         });
-        
+
         $fiberScheduler->registerFiber();
-        
+
         try {
             $requestFiber->start();
         } catch (\Weline\Framework\Runtime\RequestExitException) {
