@@ -1,0 +1,212 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    WLS (Weline Long-running Server) Architecture               ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Process Model (Cross-platform)                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Linux Direct Mode:
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          Master Process (PID 1000)                        │
+│  Role: Process mgmt, hot reload, SSL cert mgmt, orphan detection         │
+└────┬─────────────────────────────────────────────────────────────────────┘
+     │
+     ├─▶ Worker-1 (PID 1001) ──┐
+     ├─▶ Worker-2 (PID 1002)   ├─▶ Handle HTTP requests
+     ├─▶ Worker-N (PID 100N) ──┘
+     │
+     ├─▶ SessionServer (PID 1101) ──▶ Shared Session storage
+     ├─▶ MemoryServer (PID 1102)  ──▶ Shared memory cache
+     └─▶ MaintenanceWorker (PID 1103) ──▶ Cron tasks, cleanup
+
+Windows Dispatcher Mode:
+┌──────────────────────────────────────────────────────────────────────────┐
+│                          Master Process (PID 2000)                        │
+│  Role: Config mgmt, SSL cert, monitoring                                 │
+└────┬─────────────────────────────────────────────────────────────────────┘
+     │
+     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│                       Dispatcher Process (PID 2001)                       │
+│  Role: Receive HTTP, dispatch to Workers, aggregate responses            │
+└────┬─────────────────────────────────────────────────────────────────────┘
+     │
+     ├─▶ Worker-1 (PID 2002) ──┐
+     ├─▶ Worker-2 (PID 2003)   ├─▶ Handle business logic
+     ├─▶ Worker-N (PID 200N) ──┘
+     │
+     ├─▶ SessionServer (PID 2101)
+     ├─▶ MemoryServer (PID 2102)
+     └─▶ MaintenanceWorker (PID 2103)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ IPC Architecture (NDJSON over TCP)                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Master (127.0.0.1:control_port)
+   │
+   │ ControlMessage Protocol (NDJSON format)
+   │
+   ├─▶ register        Child process registration (role, pid, processKind, moduleCode)
+   ├─▶ heartbeat       Keepalive (every 30s)
+   ├─▶ reload          Hot reload code
+   ├─▶ restart         Restart process
+   ├─▶ stop            Stop process
+   ├─▶ ssl_cert_reload SSL cert reload (supports domains param)
+   ├─▶ config_update   Config update
+   └─▶ status          Status query
+
+Message format examples:
+{"action":"register","role":"worker","pid":1001,"process_kind":"framework"}
+{"action":"heartbeat","pid":1001,"timestamp":1234567890}
+{"action":"ssl_cert_reload","domains":["example.com","www.example.com"]}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Process Identity                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+ProcessKind enum:
+  • FRAMEWORK  → Framework-level processes (Worker, SessionServer, MemoryServer, etc.)
+  • MODULE     → Module-level processes (e.g. Weline_Payment gateway)
+
+Process naming convention:
+  • Framework: weline-wls-{role}  (e.g. weline-wls-worker-1)
+  • Module: weline-{moduleCode}-{name}  (e.g. weline-payment-gateway)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ State Management (StateManager)                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Problem: In long-running Workers, static properties pollute across requests
+
+Solution:
+┌────────────────────────────────────────────────────────────────────────┐
+│ class MyService {                                                       │
+│     private static array $cache = [];  ← Request-level state           │
+│                                                                         │
+│     public function __construct(StateManager $stateManager) {          │
+│         $stateManager->registerState(self::class, 'cache', []);        │
+│     }                                                                   │
+│ }                                                                       │
+└────────────────────────────────────────────────────────────────────────┘
+
+After each request, StateManager auto-resets all registered static properties
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Hot Reload Mechanism                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Code changes (business logic, Controller, Model):
+  php bin/w server:reload
+  → Master sends reload message to all Workers
+  → Worker finishes current request then exits
+  → Master auto-spawns new Worker (loads new code)
+
+Master/Dispatcher/startup param changes:
+  php bin/w server:restart -r
+  → Stop all processes
+  → Restart Master
+  → Master spawns all child processes
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Shared Services Architecture                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+SessionServer (TCP)
+  ├─▶ Listen port: session_port
+  ├─▶ Protocol: NDJSON
+  ├─▶ Operations: get/set/delete/gc
+  └─▶ Storage: In-memory HashMap
+
+MemoryServer (TCP)
+  ├─▶ Listen port: memory_port
+  ├─▶ Protocol: NDJSON
+  ├─▶ Operations: get/set/delete/clear
+  └─▶ Storage: In-memory HashMap + TTL
+
+ConnectionPoolManager
+  ├─▶ Database connection pool (reuse connections)
+  ├─▶ Redis connection pool
+  └─▶ Other external service connection pools
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Orphan Detection (OrphanGuard)                                               │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Problem: Master crashes, child processes become orphans and keep running
+
+Solution:
+┌────────────────────────────────────────────────────────────────────────┐
+│ On child process startup:                                              │
+│   1. Record Master PID                                                  │
+│   2. Start background thread, check Master alive every 5s              │
+│   3. If Master not exists → Child self-terminates                      │
+└────────────────────────────────────────────────────────────────────────┘
+
+Implementation:
+  • Framework\System\IPC\OrphanGuard (generic base class)
+  • Server\IPC\MasterOrphanGuard (WLS implementation)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ SSL Certificate Dynamic Loading                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Flow:
+  1. Database stores certificates (domain → cert/key)
+  2. Worker loads from DB to memory on startup
+  3. After adding/updating cert, call Master API:
+     POST /wls/ssl/reload?domains[]=example.com
+  4. Master broadcasts ssl_cert_reload message to all Workers
+  5. Worker clears specified domain cache, reloads from DB
+
+Negative cache clearing:
+  • Global reload: Clear all cache + reload mapping table
+  • Targeted reload: Clear only specified domains' negative cache + memory cache
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Service Providers                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+All WLS child processes extend AbstractServiceProvider:
+
+WorkerProvider          → HTTP Worker (handle requests)
+DispatcherProvider      → Windows Dispatcher (request distribution)
+SessionServerProvider   → Session shared service
+MemoryServerProvider    → Memory cache service
+MaintenanceWorkerProvider → Cron tasks (cleanup, stats)
+HttpRedirectProvider    → HTTP redirect service
+
+Each Provider implements:
+  • start()           → Start service
+  • stop()            → Stop service
+  • reload()          → Hot reload
+  • getProcessKind()  → Return ProcessKind::FRAMEWORK
+  • getModuleCode()   → Return '' (framework-level)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Critical Constraints                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+NEVER use blocking functions:
+  ✗ sleep() / usleep()  → Blocks Worker, impacts throughput
+  ✗ die() / exit()      → Kills Worker process
+  ✓ SchedulerSystem     → Async scheduling
+
+Static properties MUST be registered:
+  ✗ private static $cache = [];  → Cross-request pollution
+  ✓ $stateManager->registerState(self::class, 'cache', []);
+
+Code changes MUST reload:
+  ✗ Direct access (uses old code)
+  ✓ php bin/w server:reload
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Related Files                                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+• Framework\System\IPC\*           → Generic IPC infrastructure
+• Server\Service\MasterProcess     → Master main process
+• Server\Service\Provider\*        → Service providers
+• Server\Strategy\*                → Platform strategies (Linux/Windows)
+• Server\Shared\*                  → Shared state management
