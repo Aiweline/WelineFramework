@@ -20,7 +20,7 @@ if (PHP_SAPI !== 'cli') {
 $normalizeArgValue = static fn(string $value): string => \trim($value, " \t\n\r\0\x0B\"'");
 
 $host = $normalizeArgValue((string)($argv[1] ?? '127.0.0.1'));
-$port = (int)($argv[2] ?? 19970);
+$port = (int)($argv[2] ?? 0);
 $instanceName = $normalizeArgValue((string)($argv[3] ?? 'default'));
 
 $processName = '';
