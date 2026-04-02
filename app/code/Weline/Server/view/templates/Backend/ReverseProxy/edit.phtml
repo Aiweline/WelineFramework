@@ -1,0 +1,193 @@
+<?php
+/**
+ * 反向代理配置 - 编辑页
+ */
+use Weline\Server\Model\ReverseProxy;
+
+$proxy = $this->getData('proxy');
+$isEdit = $proxy && $proxy->getData(ReverseProxy::schema_fields_ID);
+$proxyId = $isEdit ? $proxy->getData(ReverseProxy::schema_fields_ID) : 0;
+?>
+
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>
+                <i class="bi bi-arrow-left-right"></i>
+                <?php echo $isEdit ? '<lang>编辑代理规则</lang>' : '<lang>新建代理规则</lang>'; ?>
+            </h2>
+            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy'); ?>" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> <lang>返回列表</lang>
+            </a>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <form id="proxyForm">
+                        <input type="hidden" name="proxy_id" value="<?php echo $proxyId; ?>">
+
+                        <!-- 域名 -->
+                        <div class="mb-3">
+                            <label for="domain" class="form-label"><lang>域名</lang> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="domain" name="domain"
+                                   value="<?php echo $isEdit ? htmlspecialchars($proxy->getData(ReverseProxy::schema_fields_DOMAIN)) : ''; ?>"
+                                   placeholder="example.com 或 *.example.com" required>
+                            <small class="form-text text-muted"><lang>支持通配符，如 *.example.com</lang></small>
+                        </div>
+
+                        <!-- 后端主机 -->
+                        <div class="mb-3">
+                            <label for="backend_host" class="form-label"><lang>后端主机</lang> <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="backend_host" name="backend_host"
+                                   value="<?php echo $isEdit ? htmlspecialchars($proxy->getData(ReverseProxy::schema_fields_BACKEND_HOST)) : '127.0.0.1'; ?>"
+                                   placeholder="127.0.0.1" required>
+                        </div>
+
+                        <!-- 后端端口 -->
+                        <div class="mb-3">
+                            <label for="backend_port" class="form-label"><lang>后端端口</lang> <span class="text-danger">*</span></label>
+                            <input type="number" class="form-control" id="backend_port" name="backend_port"
+                                   value="<?php echo $isEdit ? $proxy->getData(ReverseProxy::schema_fields_BACKEND_PORT) : '10443'; ?>"
+                                   min="1" max="65535" required>
+                        </div>
+
+                        <!-- 后端SSL -->
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="backend_ssl" name="backend_ssl" value="1"
+                                   <?php echo (!$isEdit || $proxy->getData(ReverseProxy::schema_fields_BACKEND_SSL)) ? 'checked' : ''; ?>>
+                            <label class="form-check-label" for="backend_ssl">
+                                <lang>后端使用 SSL</lang>
+                            </label>
+                        </div>
+
+                        <!-- 优先级 -->
+                        <div class="mb-3">
+                            <label for="priority" class="form-label"><lang>优先级</lang></label>
+                            <input type="number" class="form-control" id="priority" name="priority"
+                                   value="<?php echo $isEdit ? $proxy->getData(ReverseProxy::schema_fields_PRIORITY) : '0'; ?>">
+                            <small class="form-text text-muted"><lang>数字越大优先级越高</lang></small>
+                        </div>
+
+                        <!-- 状态 -->
+                        <div class="mb-3">
+                            <label for="status" class="form-label"><lang>状态</lang></label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="<?php echo ReverseProxy::STATUS_ACTIVE; ?>"
+                                        <?php echo (!$isEdit || $proxy->getData(ReverseProxy::schema_fields_STATUS) === ReverseProxy::STATUS_ACTIVE) ? 'selected' : ''; ?>>
+                                    <lang>启用</lang>
+                                </option>
+                                <option value="<?php echo ReverseProxy::STATUS_INACTIVE; ?>"
+                                        <?php echo ($isEdit && $proxy->getData(ReverseProxy::schema_fields_STATUS) === ReverseProxy::STATUS_INACTIVE) ? 'selected' : ''; ?>>
+                                    <lang>禁用</lang>
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- 描述 -->
+                        <div class="mb-3">
+                            <label for="description" class="form-label"><lang>描述</lang></label>
+                            <textarea class="form-control" id="description" name="description" rows="3"><?php echo $isEdit ? htmlspecialchars($proxy->getData(ReverseProxy::schema_fields_DESCRIPTION)) : ''; ?></textarea>
+                        </div>
+
+                        <!-- 按钮 -->
+                        <div class="mb-3">
+                            <button type="button" class="btn btn-primary" onclick="saveProxy()">
+                                <i class="bi bi-save"></i> <lang>保存</lang>
+                            </button>
+                            <button type="button" class="btn btn-info" onclick="testConnection()">
+                                <i class="bi bi-plug"></i> <lang>测试连接</lang>
+                            </button>
+                            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy'); ?>" class="btn btn-secondary">
+                                <lang>取消</lang>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- 帮助信息 -->
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-info-circle"></i> <lang>帮助信息</lang>
+                </div>
+                <div class="card-body">
+                    <h6><lang>域名格式</lang></h6>
+                    <ul>
+                        <li><code>example.com</code> - <lang>精确匹配</lang></li>
+                        <li><code>*.example.com</code> - <lang>通配符匹配</lang></li>
+                    </ul>
+
+                    <h6><lang>优先级规则</lang></h6>
+                    <p><lang>精确匹配 > 通配符匹配 > 默认后端</lang></p>
+                    <p><lang>同类型匹配按优先级数字排序（降序）</lang></p>
+
+                    <h6><lang>后端配置</lang></h6>
+                    <p><lang>后端主机通常为 127.0.0.1</lang></p>
+                    <p><lang>后端端口为项目实际监听端口</lang></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function saveProxy() {
+    const form = document.getElementById('proxyForm');
+    const formData = new FormData(form);
+    const data = {};
+
+    formData.forEach((value, key) => {
+        if (key === 'backend_ssl') {
+            data[key] = document.getElementById('backend_ssl').checked ? 1 : 0;
+        } else {
+            data[key] = value;
+        }
+    });
+
+    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/save'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            window.location.href = '<?php echo $this->getUrl('*/backend/reverse-proxy'); ?>';
+        } else {
+            alert('<?php echo __('保存失败'); ?>: ' + data.message);
+        }
+    })
+    .catch(err => alert('<?php echo __('请求失败'); ?>: ' + err));
+}
+
+function testConnection() {
+    const host = document.getElementById('backend_host').value;
+    const port = document.getElementById('backend_port').value;
+    const ssl = document.getElementById('backend_ssl').checked;
+
+    if (!host || !port) {
+        alert('<?php echo __('请先填写后端主机和端口'); ?>');
+        return;
+    }
+
+    fetch('<?php echo $this->getUrl('*/backend/reverse-proxy/test-connection'); ?>', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({backend_host: host, backend_port: port, backend_ssl: ssl})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('<?php echo __('连接成功'); ?> (' + data.latency_ms + 'ms)');
+        } else {
+            alert('<?php echo __('连接失败'); ?>: ' + data.message);
+        }
+    });
+}
+</script>
