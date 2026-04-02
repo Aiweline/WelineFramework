@@ -124,9 +124,10 @@ class FixSequence extends CommandAbstract
         $sequenceName = "{$tableName}_{$primaryKey}_seq";
 
         // 检查序列是否存在
-        $seqCheckSql = "SELECT 1 FROM pg_sequences WHERE schemaname = 'public' AND sequencename = :seq_name";
+        $currentSchema = $pdo->query('SELECT current_schema()')->fetchColumn() ?: 'public';
+        $seqCheckSql = "SELECT 1 FROM pg_sequences WHERE schemaname = :schema AND sequencename = :seq_name";
         $seqStmt = $pdo->prepare($seqCheckSql);
-        $seqStmt->execute(['seq_name' => $sequenceName]);
+        $seqStmt->execute(['schema' => $currentSchema, 'seq_name' => $sequenceName]);
         
         if (!$seqStmt->fetch()) {
             $this->printer->warning(__('序列 %{1} 不存在，跳过', [$sequenceName]));
@@ -155,8 +156,10 @@ class FixSequence extends CommandAbstract
         $this->printer->note(__('正在查找所有需要修复的序列...'));
 
         // 获取所有以 m_ 开头的表
-        $sql = "SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename LIKE 'm_%'";
-        $stmt = $pdo->query($sql);
+        $currentSchema = $pdo->query('SELECT current_schema()')->fetchColumn() ?: 'public';
+        $sql = "SELECT tablename FROM pg_tables WHERE schemaname = :schema AND tablename LIKE 'm_%'";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute(['schema' => $currentSchema]);
         $tables = $stmt->fetchAll(\PDO::FETCH_COLUMN);
 
         if (empty($tables)) {
