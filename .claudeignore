@@ -1,0 +1,30 @@
+# Dependencies and generated files
+vendor/
+generated/
+node_modules/
+
+# Static assets and cache
+pub/static/
+pub/media/
+var/cache/
+var/log/
+var/session/
+var/page_cache/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.log
+*.tmp
+*.swp
+*~
+
+# Large binary files
+*.zip
+*.tar.gz
+*.sql
+*.dump
