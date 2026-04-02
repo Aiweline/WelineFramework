@@ -698,6 +698,36 @@ foreach ($guidedSteps as $i => $s) {
     </div>
 </div>
 
+<!-- 页面类型确认弹窗 -->
+<div class="modal fade" id="pb-ai-page-type-confirm-modal" tabindex="-1" role="dialog" aria-labelledby="pb-ai-page-type-confirm-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pb-ai-page-type-confirm-modal-title"><?= htmlspecialchars((string)__('确认页面类型并生成虚拟主题'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3">
+                    <?= htmlspecialchars((string)__('请选择要生成的页面类型（默认全部选中），确认后将自动生成虚拟主题和页面布局。'), ENT_QUOTES, 'UTF-8') ?>
+                </p>
+                <div class="d-flex flex-wrap gap-2" id="pb-ai-modal-page-types">
+                    <!-- 动态生成页面类型选择器 -->
+                </div>
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= htmlspecialchars((string)__('生成后可在可视化编辑器中继续调整页面内容和布局。'), ENT_QUOTES, 'UTF-8') ?>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" class="btn btn-primary" id="pb-ai-confirm-generate-theme">
+                    <?= htmlspecialchars((string)__('确认并生成虚拟主题'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <?php endif; ?>
 
 <script>
@@ -987,25 +1017,140 @@ foreach ($guidedSteps as $i => $s) {
                 toast('warning', messages.noPageType);
                 return;
             }
-            runVTBtn.disabled = true;
+            // 显示页面类型确认弹窗
+            showPageTypeConfirmModal();
+        });
+    }
+
+    // 页面类型确认弹窗逻辑
+    function showPageTypeConfirmModal() {
+        var modal = document.getElementById('pb-ai-page-type-confirm-modal');
+        if (!modal) {
+            console.error('[PageBuilder] 页面类型确认弹窗未找到');
+            return;
+        }
+
+        // 同步当前选中的页面类型到弹窗
+        var currentSelected = selectedPageTypes();
+        var modalContainer = document.getElementById('pb-ai-modal-page-types');
+        if (!modalContainer) {
+            console.error('[PageBuilder] 弹窗页面类型容器未找到');
+            return;
+        }
+
+        modalContainer.innerHTML = '';
+
+        // 生成页面类型选择器
+        var allTypes = <?= json_encode(array_keys($pageTypeLabels), JSON_UNESCAPED_UNICODE) ?>;
+        var allLabels = <?= json_encode($pageTypeLabels, JSON_UNESCAPED_UNICODE) ?>;
+
+        allTypes.forEach(function(pageType) {
+            var isChecked = currentSelected.indexOf(pageType) !== -1;
+            var label = document.createElement('label');
+            label.className = 'form-check-label border rounded-pill px-3 py-2 mb-0' + (isChecked ? ' bg-primary text-white' : ' bg-light');
+            label.style.cursor = 'pointer';
+
+            var checkbox = document.createElement('input');
+            checkbox.className = 'form-check-input me-2 pb-ai-modal-page-type-check';
+            checkbox.type = 'checkbox';
+            checkbox.value = pageType;
+            checkbox.checked = isChecked;
+
+            // 添加复选框变更事件
+            checkbox.addEventListener('change', function() {
+                if (this.checked) {
+                    label.classList.add('bg-primary', 'text-white');
+                    label.classList.remove('bg-light');
+                } else {
+                    label.classList.remove('bg-primary', 'text-white');
+                    label.classList.add('bg-light');
+                }
+            });
+
+            var span = document.createElement('span');
+            span.textContent = allLabels[pageType] || pageType;
+
+            label.appendChild(checkbox);
+            label.appendChild(span);
+            modalContainer.appendChild(label);
+        });
+
+        // 显示弹窗
+        var bsModal = new bootstrap.Modal(modal);
+        bsModal.show();
+    }
+
+    // 确认并生成虚拟主题
+    var confirmBtn = document.getElementById('pb-ai-confirm-generate-theme');
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function() {
+            // 获取弹窗中选中的页面类型
+            var selectedTypes = [];
+            document.querySelectorAll('.pb-ai-modal-page-type-check:checked').forEach(function(checkbox) {
+                selectedTypes.push(checkbox.value);
+            });
+
+            if (selectedTypes.length === 0) {
+                toast('warning', messages.noPageType);
+                return;
+            }
+
+            // 同步回源选择器
+            document.querySelectorAll('.pb-ai-page-type-check').forEach(function(checkbox) {
+                checkbox.checked = selectedTypes.indexOf(checkbox.value) !== -1;
+            });
+
+            // 关闭弹窗
+            var modal = document.getElementById('pb-ai-page-type-confirm-modal');
+            if (modal) {
+                var bsModal = bootstrap.Modal.getInstance(modal);
+                if (bsModal) {
+                    bsModal.hide();
+                }
+            }
+
+            // 禁用按钮
+            if (runVTBtn) {
+                runVTBtn.disabled = true;
+            }
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+            }
+
+            // 启动 SSE 流式生成
             postForm(runVirtualThemeUrl, {
                 public_id: publicId,
                 scope_patch: JSON.stringify(buildVirtualThemePatch())
             }).then(function (data) {
                 if (!data || !data.success) {
-                    runVTBtn.disabled = false;
+                    if (runVTBtn) {
+                        runVTBtn.disabled = false;
+                    }
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                    }
                     toast('error', (data && data.message) ? String(data.message) : messages.networkError);
                     return;
                 }
                 toast('success', messages.orchestrated);
+
+                // 启动 SSE 流式监听
                 if (window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
                     if (window.PbAiOperationRunner.startFromResponse(data)) {
+                        // SSE 流已启动，监听完成后会自动刷新页面
                         return;
                     }
                 }
+
+                // 如果 SSE 启动失败，直接刷新页面
                 window.location.reload();
             }).catch(function () {
-                runVTBtn.disabled = false;
+                if (runVTBtn) {
+                    runVTBtn.disabled = false;
+                }
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                }
                 toast('error', messages.networkError);
             });
         });
@@ -1352,6 +1497,44 @@ foreach ($guidedSteps as $i => $s) {
                     lastServerError += ' [' + payload.required_params.join(', ') + ']';
                 }
             }
+        });
+
+        source.addEventListener('progress', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || !payload.message) {
+                return;
+            }
+
+            // 实时更新预览 iframe（如果存在）
+            var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
+            if (previewFrame && payload.page_type && payload.progress_percent >= 100) {
+                // 页面生成完成，刷新预览
+                window.setTimeout(function() {
+                    if (previewFrame.src) {
+                        previewFrame.src = previewFrame.src;
+                    }
+                }, 500);
+            }
+        });
+
+        source.addEventListener('page_generated', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || !payload.page_type) {
+                return;
+            }
+
+            // 页面生成完成，实时刷新预览
+            var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
+            if (previewFrame && previewFrame.src) {
+                window.setTimeout(function() {
+                    // 刷新 iframe 以显示新生成的页面
+                    previewFrame.src = previewFrame.src;
+                }, 800);
+            }
+
+            // 显示页面生成完成的提示
+            var pageLabel = payload.page_label || payload.page_type;
+            toast('success', <?= \json_encode((string)__('页面已生成：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + pageLabel);
         });
 
         source.addEventListener('done', function (event) {
