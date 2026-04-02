@@ -1,6 +1,6 @@
 # README for AI Assistants
 
-**If you are an AI assistant (Claude, GPT, Gemini, etc.) working on this codebase:**
+**If you are an AI assistant (Claude, GPT, Gemini, Cursor, etc.) working on this codebase:**
 
 👉 **START HERE:** Read `AI-ENTRY.md` first.
 
@@ -8,11 +8,13 @@
 - Mandatory reading order
 - Token optimization strategy
 - Architecture quick reference
-- Critical constraints
+- Critical constraints (including WLS test instance isolation)
 - Multi-agent workflow
 - Learning path for new AIs
 
 **Do NOT skip this step.** Reading `AI-ENTRY.md` will save you 60-80% tokens and 5-10x time.
+
+⚠️ **CRITICAL:** Default WLS port 9501 is PRODUCTION. Always start dedicated test instance with unique name (`php bin/w server:start -p 9502+ -n ai-test-{unique-id}`) for AI testing sessions. **MUST stop test instance after testing** (`php bin/w server:stop -n ai-test-{unique-id}`).
 
 ---
 
