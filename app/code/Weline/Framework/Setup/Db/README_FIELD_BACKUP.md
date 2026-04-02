@@ -4,6 +4,13 @@
 
 框架层提供了字段级别的备份和恢复机制，遵循SOLID原则，专门处理字段删除前的数据备份和字段添加后的数据恢复。
 
+## 测试状态
+
+✅ **单元测试**: FieldBackupServiceTest (3/3 通过)
+- testBackupFieldData_WithData - 有数据的字段备份
+- testBackupFieldData_EmptyTable - 空表字段备份（仅备份定义）
+- testRestoreFieldData_Success - 字段数据恢复
+
 ## 架构设计
 
 ### 核心组件
