@@ -1215,6 +1215,8 @@ foreach ($guidedSteps as $i => $s) {
     var seenEventIdMap = Object.create(null);
     var recentSignalMap = Object.create(null);
     var suppressTransportErrorUntil = 0;
+    var hasActiveOperation = false;
+    var lastActivityTime = Date.now();
 
     if (!terminal || !streamBaseUrl || !publicId) {
         return;
@@ -1291,6 +1293,12 @@ foreach ($guidedSteps as $i => $s) {
             return;
         }
         reconnectAttempts++;
+
+        // 动态调整重连延迟：
+        // - 长连接模式下，正常断开后立即重连（500ms）
+        // - 错误断开时延迟重连（2 秒）
+        var reconnectDelay = 500;
+
         reconnectTimer = window.setTimeout(function () {
             reconnectTimer = null;
             if (terminal.isRunning()) {
@@ -1302,7 +1310,7 @@ foreach ($guidedSteps as $i => $s) {
             }
             terminal.setUrl(nextUrl);
             terminal.start(nextUrl);
-        }, 1500);
+        }, reconnectDelay);
     }
 
     terminal.on('snapshot', function (event) {
@@ -1317,6 +1325,15 @@ foreach ($guidedSteps as $i => $s) {
             }
             rememberEventId(eventId);
         });
+
+        // 检查是否有活动操作
+        if (data.active_operation && typeof data.active_operation === 'object') {
+            var opStatus = String(data.active_operation.status || '');
+            hasActiveOperation = (opStatus === 'queued' || opStatus === 'running');
+            if (hasActiveOperation) {
+                lastActivityTime = Date.now();
+            }
+        }
     });
 
     terminal.on('log', function (event) {
@@ -1333,6 +1350,17 @@ foreach ($guidedSteps as $i => $s) {
         }
         rememberEventId(eventId);
         terminal.log(formatWorkspaceLog(entry), entry.level || 'info');
+
+        // 检测到新事件，标记为有活动
+        lastActivityTime = Date.now();
+
+        // 检查事件类型，判断是否有活动操作
+        var eventType = String(entry.event_type || '');
+        if (eventType === 'operation_started' || eventType === 'operation_progress') {
+            hasActiveOperation = true;
+        } else if (eventType === 'operation_completed' || eventType === 'operation_failed') {
+            hasActiveOperation = false;
+        }
     });
 
     terminal.on('done', function (event) {
@@ -1367,7 +1395,19 @@ foreach ($guidedSteps as $i => $s) {
                 return;
             }
         }
-        scheduleReconnect();
+        // 错误时延迟 2 秒重连
+        reconnectTimer = window.setTimeout(function () {
+            reconnectTimer = null;
+            if (terminal.isRunning()) {
+                return;
+            }
+            var nextUrl = buildWorkspaceStreamUrl();
+            if (!nextUrl) {
+                return;
+            }
+            terminal.setUrl(nextUrl);
+            terminal.start(nextUrl);
+        }, 2000);
     });
 
     var initialStreamUrl = buildWorkspaceStreamUrl();

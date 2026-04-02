@@ -514,21 +514,25 @@ class AiSiteAgent extends BaseController
             return;
         }
 
-        // 验证通过，启动 SSE
+        // 验证通过，启动 SSE 长连接
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+
         $sse = new SseWriter();
         $sse->start();
         $sse->sendEvent('start', ['message' => __('已连接 PageBuilder 工作区事件流')]);
         $sse->sendEvent('snapshot', $this->buildWorkspaceState($session, $adminId, 40, true));
 
-        // 关键优化：短轮询模式，立即返回，不占用 Worker
-        // 客户端应该使用短轮询（每 2-3 秒重连一次）而不是长连接
-        // 这样可以避免 SSE 连接长时间占用 Worker
+        // 使用 Fiber 协程支持长连接模式
+        // 每秒轮询一次新事件，30 秒后主动断开让客户端重连（探活续约）
+        $maxDuration = 30;  // 最大连接时长 30 秒
+        $pollInterval = 1000;  // 每秒轮询一次
+        $startTime = \time();
+        $loopCount = 0;
 
-        // 只轮询 3 次（约 3 秒），然后立即断开，让客户端重连
-        $maxPolls = 3;
-        $pollInterval = 1000;  // 1 秒
+        while ((\time() - $startTime) < $maxDuration) {
+            $loopCount++;
 
-        for ($i = 0; $i < $maxPolls; $i++) {
             // 检查连接是否还活着
             if (!$sse->isAlive()) {
                 break;
@@ -546,15 +550,12 @@ class AiSiteAgent extends BaseController
                 }
             }
 
-            // 最后一次轮询后不需要等待
-            if ($i < $maxPolls - 1) {
-                SchedulerSystem::yieldDelay($pollInterval);
-            }
+            // 使用协程延迟，不阻塞 Worker
+            SchedulerSystem::yieldDelay($pollInterval);
         }
 
-        // 立即断开连接，让客户端重连
-        // 这样 Worker 最多只被占用 3 秒，而不是 60 秒
-        $sse->complete(['success' => true, 'message' => __('请重新连接继续监听'), 'last_event_id' => $lastEventId]);
+        // 30 秒探活时间到，静默断开让客户端自动重连（不显示消息）
+        $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
     }
 
     private function handleOperationSse(): void
