@@ -189,7 +189,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
      */
     private function startSingleWorker(ServerConfig $config, string $workerScript, int $port, int $workerId): int
     {
-        $processName = 'weline-wls-worker-' . $config->instanceName . '-' . $workerId;
+        $processName = \Weline\Server\Service\MasterProcess::buildScopedProcessName('weline-wls-worker', $config->instanceName, $workerId);
         
         // 构建命令
         $command = "\"{$config->phpBinary}\" \"{$workerScript}\" {$config->host} {$port} {$workerId} {$config->instanceName}";
@@ -230,7 +230,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
             return 0;
         }
         
-        $processName = 'weline-wls-redirect-' . $config->instanceName;
+        $processName = \Weline\Server\Service\MasterProcess::buildScopedProcessName('weline-wls-redirect', $config->instanceName);
         $command = "\"{$config->phpBinary}\" \"{$script}\" {$config->host} {$config->httpRedirectPort} {$config->port} {$config->instanceName}";
         $command .= " --name={$processName}";
         
@@ -355,7 +355,7 @@ class LinuxDirectStrategy implements ServerStrategyInterface
         $this->log(__('Worker 进程已停止 (%{1} 个)', [\count($workerPids)]));
         
         // 停止 HTTP 重定向 Worker
-        $httpRedirectName = 'weline-wls-redirect-' . $instanceName;
+        $httpRedirectName = \Weline\Server\Service\MasterProcess::buildScopedProcessName('weline-wls-redirect', $instanceName);
         $httpRedirectPid = Processer::getPid($httpRedirectName);
         if ($httpRedirectPid > 0) {
             Processer::killByPid($httpRedirectPid);

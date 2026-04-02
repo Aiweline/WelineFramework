@@ -129,24 +129,15 @@ class Core
             $this->cache = $this->frameworkCacheManager->pool('router');
         }
 
-        // 每次新请求都需要重新获取请求级数据
-        // 无需判断 WLS_MODE，通过请求 ID 变化来检测新请求
-        if (empty($this->request_area) || $isNewRequest) {
-            $this->request_area = $this->request->getRequestArea();
-        }
-
-        if (empty($this->area_router) || $isNewRequest) {
-            $this->area_router = $this->request->getAreaRouter();
-        }
-        
-        if (empty($this->is_backend) || $isNewRequest) {
-            // 优先使用全局变量 WELINE_IS_BACKEND
-            if (isset($_SERVER['WELINE_IS_BACKEND'])) {
-                $this->is_backend = (bool)$_SERVER['WELINE_IS_BACKEND'];
-            } else {
-                // 回退到旧的判断方式
-                $this->is_backend = is_int(strpos(strtolower($this->request_area), \Weline\Framework\Router\DataInterface::area_BACKEND));
-            }
+        // 每次 __init 都必须与当前请求的 $_SERVER / Request 对齐（WLS 下单例 Router 跨请求复用）。
+        // 禁止用 empty(is_backend) 等短路：上一请求 is_backend=true 时若误判为同请求会沿用旧值，
+        // 导致未带后台区域 key 的 URL 仍走后台 processUrl / 路由逻辑。
+        $this->request_area = $this->request->getRequestArea();
+        $this->area_router = (string) $this->request->getAreaRouter();
+        if (isset($_SERVER['WELINE_IS_BACKEND'])) {
+            $this->is_backend = (bool) $_SERVER['WELINE_IS_BACKEND'];
+        } else {
+            $this->is_backend = is_int(strpos(strtolower($this->request_area), \Weline\Framework\Router\DataInterface::area_BACKEND));
         }
         
         $this->routerGeneratedGetParams = [];
@@ -305,9 +296,25 @@ class Core
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan('controller_chain::router_before_start', (microtime(true) - $t0) * 1000, 'controller');
         }
-        
+
         # 获取URL
         $this->url = $url = $this->processUrl();
+
+        // 诊断日志：记录路由开始时的关键状态
+        $originalUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
+        if (str_contains($originalUri, 'ai-site-agent')) {
+            file_put_contents(BP . 'var/log/router_debug.log',
+                date('[Y-m-d H:i:s] ') . '[Router::start] ai-site-agent request | '
+                . 'REQUEST_URI=' . ($_SERVER['REQUEST_URI'] ?? '(empty)') . ' | '
+                . 'WELINE_AREA=' . ($_SERVER['WELINE_AREA'] ?? '(empty)') . ' | '
+                . 'WELINE_IS_BACKEND=' . (($_SERVER['WELINE_IS_BACKEND'] ?? false) ? 'true' : 'false') . ' | '
+                . 'is_backend=' . ($this->is_backend ? 'true' : 'false') . ' | '
+                . 'request_area=' . ($this->request_area ?? '(empty)') . ' | '
+                . 'area_router=' . ($this->area_router ?? '(empty)') . ' | '
+                . 'processed_url=' . $url . PHP_EOL,
+                FILE_APPEND
+            );
+        }
         $hasPreviewTheme = isset($_GET['preview_theme']) && (int)$_GET['preview_theme'] > 0;
         
         

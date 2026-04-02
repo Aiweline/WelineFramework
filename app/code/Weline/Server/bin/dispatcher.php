@@ -20,10 +20,15 @@ if (PHP_SAPI !== 'cli') {
     exit('CLI only');
 }
 
+// 设置内存限制为 256M（推荐值）
+@\ini_set('memory_limit', '256M');
+
 // ========== 参数解析 ==========
 $host = $argv[1] ?? '127.0.0.1';
 $port = (int) ($argv[2] ?? 443);
-$workerBasePort = (int) ($argv[3] ?? 10443);
+// 注意：workerBasePort 应该由 Master 传入，这里的默认值仅作兜底
+// 实际端口由 Master 通过 IPC 动态通知，不依赖此默认值
+$workerBasePort = (int) ($argv[3] ?? 10000);
 $workerCount = (int) ($argv[4] ?? 2);
 $instanceName = $argv[5] ?? 'default';
 
@@ -169,6 +174,7 @@ $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
 // 配置
 $wlsConfig = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 $startupProtectionConfig = \is_array($wlsConfig['startup_protection'] ?? null) ? $wlsConfig['startup_protection'] : [];
+$dispatcherConfig = \is_array($wlsConfig['dispatcher'] ?? null) ? $wlsConfig['dispatcher'] : [];
 $dispatcher->configure([
     'sni_routing_enabled' => true,
     'learning_mode_enabled' => true,
@@ -177,6 +183,7 @@ $dispatcher->configure([
     'startup_protection_window_sec' => (float)($startupProtectionConfig['window_sec'] ?? 45.0),
     'startup_protection_ready_ratio' => (float)($startupProtectionConfig['ready_ratio'] ?? 0.0),
     'startup_protection_min_ready' => (int)($startupProtectionConfig['min_ready'] ?? 1),
+    'spin_wait_max_seconds' => (float)($dispatcherConfig['spin_wait_max_seconds'] ?? 3.0),
     'cache' => [
         'default_ttl' => 3600,
         'connection_ttl' => 120,
