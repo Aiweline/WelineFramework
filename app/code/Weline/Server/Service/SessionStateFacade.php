@@ -45,7 +45,11 @@ class SessionStateFacade implements SessionStateFacadeInterface
         try {
             $serviceOptions = $this->buildServiceOptions($config, $this->runtime);
             $host = (string) ($this->runtime['host'] ?? '127.0.0.1');
-            $port = (int) ($this->runtime['port'] ?? 19970);
+            // 使用项目偏移量计算动态端口，避免硬编码
+            $port = (int) ($this->runtime['port'] ?? 0);
+            if ($port <= 0) {
+                $port = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+            }
 
             if ($sessionMemoryService !== null) {
                 $this->sessionMemoryService = $sessionMemoryService;

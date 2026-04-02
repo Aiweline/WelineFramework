@@ -232,19 +232,70 @@ class WorkerScaler
      * 健康检查：检查 Worker 是否健康
      *
      * @param int $pid Worker PID
+     * @param float $timeoutSec IPC ping 超时时间（秒）
      * @return bool 是否健康
      */
-    public function checkHealth(int $pid): bool
+    public function checkHealth(int $pid, float $timeoutSec = 2.0): bool
     {
         // 检查进程是否存在
         if (!\posix_kill($pid, 0)) {
             return false;
         }
 
-        // TODO: 通过 IPC ping/pong 机制检查
-        // 当前简化实现：只检查进程是否存在
+        // 通过 IPC ping/pong 机制检查进程响应性
+        $instance = $this->findInstanceByPid($pid);
+        if ($instance === null) {
+            // 找不到实例信息，降级为进程存在性检查
+            return true;
+        }
 
-        return true;
+        // 获取 Master 控制服务器实例
+        $controlServer = $this->orchestrator->getControlServer();
+        if ($controlServer === null) {
+            // Master 控制服务器未启动，降级为进程存在性检查
+            return true;
+        }
+
+        // 发送 ping 消息
+        $pingTimestamp = \microtime(true);
+        $pingMsg = \Weline\Server\IPC\ControlMessage::ping($pingTimestamp);
+
+        try {
+            $sent = $controlServer->sendToInstance($instance->launchId, $pingMsg);
+            if (!$sent) {
+                return false;
+            }
+
+            // 等待 pong 响应（简化实现：检查最近的 pong 时间戳）
+            $deadline = \microtime(true) + $timeoutSec;
+            while (\microtime(true) < $deadline) {
+                $lastPong = $controlServer->getLastPongTime($instance->launchId);
+                if ($lastPong !== null && $lastPong >= $pingTimestamp) {
+                    // 收到有效的 pong 响应
+                    return true;
+                }
+                \usleep(50000); // 50ms
+            }
+
+            // 超时未收到 pong
+            return false;
+        } catch (\Throwable $e) {
+            // IPC 异常，降级为进程存在性检查
+            return true;
+        }
+    }
+
+    /**
+     * 根据 PID 查找实例
+     */
+    private function findInstanceByPid(int $pid): ?\Weline\Server\Service\ServiceInstance
+    {
+        foreach ($this->orchestrator->getInstancesByRole('worker') as $instance) {
+            if ($instance->pid === $pid) {
+                return $instance;
+            }
+        }
+        return null;
     }
 
     /**

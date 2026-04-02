@@ -237,7 +237,12 @@ class SharedStateAdminService
     {
         $runtime = $this->sharedStateServiceManager->peekRuntime($role);
         $host = (string) ($runtime['host'] ?? '127.0.0.1');
-        $port = (int) ($runtime['port'] ?? ($role === self::ROLE_MEMORY ? 19971 : 19970));
+        // 使用项目偏移量计算动态端口，避免硬编码
+        $port = (int) ($runtime['port'] ?? 0);
+        if ($port <= 0) {
+            $basePort = $role === self::ROLE_MEMORY ? 19971 : 19970;
+            $port = $basePort + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        }
         $defaultTokenFileName = (string) ($runtime['token_file_name'] ?? ($role === self::ROLE_MEMORY ? 'memory_server.token' : 'session_server.token'));
         $probeTokenFileName = null;
         $ping = false;

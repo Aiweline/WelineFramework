@@ -275,27 +275,45 @@ class MasterProcess
             $this->registerSignalHandlers();
 
             // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
+            fwrite(STDERR, "[DEBUG] 准备调用 bootstrapControlPlane\n");
             $this->orchestrator->bootstrapControlPlane($this->context);
+            fwrite(STDERR, "[DEBUG] bootstrapControlPlane 完成\n");
             $this->saveMasterInfo('bootstrapping');
+            fwrite(STDERR, "[DEBUG] saveMasterInfo 完成\n");
 
             // 启动所有服务
             $this->log(__('正在启动子进程...'));
+            fwrite(STDERR, "[DEBUG] 准备调用 startAll\n");
             $this->orchestrator->startAll($this->context);
+            fwrite(STDERR, "[DEBUG] startAll 完成\n");
             $this->log(__('子进程启动完成'));
 
             // 释放启动锁（允许其他进程检测服务器状态或重新启动）
+            fwrite(STDERR, "[DEBUG] 准备释放启动锁\n");
             $this->releaseStartupLock();
+            fwrite(STDERR, "[DEBUG] 启动锁已释放\n");
 
             // 保存 Master 信息
             $this->saveMasterInfo('running');
+            fwrite(STDERR, "[DEBUG] Master 信息已保存为 running\n");
 
             // 进入主循环
             $this->log(__('Master 进入主循环，监控子进程...'));
+            fwrite(STDERR, "[DEBUG] 准备进入 runLoop\n");
             $this->orchestrator->runLoop();
+            fwrite(STDERR, "[DEBUG] runLoop 已退出\n");
 
             $this->log(__('Master 主循环结束'));
+        } catch (\Throwable $e) {
+            fwrite(STDERR, "[DEBUG] 捕获异常: " . $e->getMessage() . "\n");
+            fwrite(STDERR, "[DEBUG] 异常堆栈: " . $e->getTraceAsString() . "\n");
+            $this->log(__('Master 启动失败: %{1}', [$e->getMessage()]));
+            WlsLogger::error_('[Master] 启动异常: ' . $e->getMessage(), ['exception' => $e]);
+            throw $e;
         } finally {
+            fwrite(STDERR, "[DEBUG] 进入 finally 块，准备注销 PID\n");
             $this->unregisterMasterPid();
+            fwrite(STDERR, "[DEBUG] PID 已注销\n");
         }
     }
     
