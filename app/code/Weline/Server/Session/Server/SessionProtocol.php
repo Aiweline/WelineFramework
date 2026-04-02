@@ -146,25 +146,81 @@ final class SessionProtocol
      */
     private static function serialize(array $message): string
     {
-        return match (self::$serializer) {
+        $shouldSample = \mt_rand(1, 100) <= 1; // 1% 采样
+        $startTime = $shouldSample ? \hrtime(true) : 0;
+
+        $result = match (self::$serializer) {
             self::SERIALIZER_MSGPACK => \msgpack_pack($message),
             self::SERIALIZER_IGBINARY => \igbinary_serialize($message),
             default => \json_encode($message, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
         };
+
+        if ($shouldSample && isset($GLOBALS['wls_metrics_collector'])) {
+            $durationUs = (\hrtime(true) - $startTime) / 1000; // 纳秒转微秒
+            $GLOBALS['wls_metrics_collector']->recordHistogram(
+                'wls_protocol_serialize_duration_us',
+                $durationUs,
+                ['serializer' => self::$serializer]
+            );
+
+            // 记录消息大小
+            $size = \strlen($result);
+            $cmd = $message['cmd'] ?? 'unknown';
+            $GLOBALS['wls_metrics_collector']->recordHistogram(
+                'wls_protocol_message_size_bytes',
+                (float)$size,
+                ['cmd' => $cmd, 'direction' => 'outbound']
+            );
+        }
+
+        return $result;
     }
-    
+
     /**
      * 反序列化消息
      */
     private static function unserialize(string $data): ?array
     {
-        $result = match (self::$serializer) {
-            self::SERIALIZER_MSGPACK => @\msgpack_unpack($data),
-            self::SERIALIZER_IGBINARY => @\igbinary_unserialize($data),
-            default => @\json_decode($data, true),
-        };
-        
-        return \is_array($result) ? $result : null;
+        $shouldSample = \mt_rand(1, 100) <= 1; // 1% 采样
+        $startTime = $shouldSample ? \hrtime(true) : 0;
+
+        try {
+            $result = match (self::$serializer) {
+                self::SERIALIZER_MSGPACK => @\msgpack_unpack($data),
+                self::SERIALIZER_IGBINARY => @\igbinary_unserialize($data),
+                default => @\json_decode($data, true),
+            };
+
+            if ($shouldSample && isset($GLOBALS['wls_metrics_collector'])) {
+                $durationUs = (\hrtime(true) - $startTime) / 1000;
+                $GLOBALS['wls_metrics_collector']->recordHistogram(
+                    'wls_protocol_serialize_duration_us',
+                    $durationUs,
+                    ['serializer' => self::$serializer]
+                );
+
+                // 记录消息大小
+                $size = \strlen($data);
+                $cmd = \is_array($result) ? ($result['cmd'] ?? 'unknown') : 'unknown';
+                $GLOBALS['wls_metrics_collector']->recordHistogram(
+                    'wls_protocol_message_size_bytes',
+                    (float)$size,
+                    ['cmd' => $cmd, 'direction' => 'inbound']
+                );
+            }
+
+            return \is_array($result) ? $result : null;
+
+        } catch (\Throwable $e) {
+            if (isset($GLOBALS['wls_metrics_collector'])) {
+                $GLOBALS['wls_metrics_collector']->incrementCounter(
+                    'wls_protocol_serialize_error_total',
+                    1,
+                    ['serializer' => self::$serializer, 'reason' => 'exception']
+                );
+            }
+            return null;
+        }
     }
 
     /**
