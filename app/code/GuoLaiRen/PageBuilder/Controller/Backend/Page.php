@@ -238,7 +238,14 @@ class Page extends BackendController
         $this->assign('parent_pages', $parentPages);
         $this->assign('child_pages', $childPages);
         $this->assign('website_map', $websiteMap);
-        $this->assign('pagination', $parentPagesResult->getPagination());
+
+        // Transform pagination data to match template expectations
+        $paginationData = $parentPagesResult->getPaginationData();
+        if (is_array($paginationData)) {
+            $paginationData['currentPage'] = $paginationData['page'] ?? 1;
+            $paginationData['totalPages'] = $paginationData['lastPage'] ?? 1;
+        }
+        $this->assign('pagination', $paginationData);
         
         // 获取可用站点列表（用于一键建站功能）
         $websitesList = $this->getAccessibleWebsites();
