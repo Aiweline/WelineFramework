@@ -1,0 +1,223 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                         HTTP Request Flow Architecture                         ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Three Request Types Comparison                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────┬────────────────────┬────────────────────┬──────────────────┐
+│ Type     │ Frontend           │ Backend            │ API              │
+├──────────┼────────────────────┼────────────────────┼──────────────────┤
+│ URL      │ /                  │ /admin             │ /rest/v1         │
+│ Entry    │ pub/index.php      │ pub/index.php      │ pub/index.php    │
+│ Ctrl     │ Controller/        │ Controller/Backend/│ Controller/Api/  │
+│ Auth     │ Optional (Session) │ Required (Admin)   │ Token/API Key    │
+│ Response │ HTML               │ HTML               │ JSON             │
+└──────────┴────────────────────┴────────────────────┴──────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Frontend Request Flow (Traditional Mode)                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+HTTP GET /catalog/product/view/id/123
+  ↓
+pub/index.php → Load Bootstrap
+  ↓
+Bootstrap::init() → Load config, init DI container, register modules, init DB
+  ↓
+Router\Core::parse($url) → Parse URL: module=catalog, controller=product, action=view, params=[id=123]
+  ↓
+Event: controller_action_predispatch (global pre-dispatch)
+  ↓
+Event: controller_action_predispatch_catalog_product_view (specific route)
+  ↓
+Router\Handle::dispatch() → Find Controller class, check ACL, instantiate (DI)
+  ↓
+Controller::execute() → Get params, load Model, business logic, set view vars, return response
+  ↓
+View::render() → Find template, render PHP, process Hooks, process Taglib, output HTML
+  ↓
+Event: controller_action_postdispatch_catalog_product_view (specific route)
+  ↓
+Event: controller_action_postdispatch (global post-dispatch)
+  ↓
+HTTP Response (HTML)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ WLS Mode Request Flow (Long-running Process)                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+HTTP GET /catalog/product/view/id/123
+  ↓
+WLS Worker (already started, in memory)
+  → Bootstrap already initialized (reused)
+  → Modules already loaded (reused)
+  → Database connection pool (reused)
+  ↓
+StateManager::reset() → Reset all registered static properties (avoid cross-request pollution)
+  ↓
+Router\Core::parse($url) → Parse URL (same as traditional mode)
+  ↓
+Events → Controller → Model → View → Response (same flow, but all objects reused from memory)
+  ↓
+HTTP Response (HTML)
+  ↓
+Worker continues waiting for next request (doesn't exit)
+
+Performance comparison:
+  Traditional mode: ~200ms per request (Bootstrap + module load + DB connect)
+  WLS mode: ~20ms per request (only business logic, others reused)
+  Performance gain: 10x
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Backend Request Flow (Requires Auth)                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+HTTP GET /admin/catalog/product/edit/id/123
+  ↓
+Router\Core::parse($url) → Detect backendKey (/admin), mark as backend request
+  ↓
+Admin\Observer\CheckAuth (pre-dispatch event)
+  1. Check Session exists
+  2. Check user logged in
+  3. Not logged in → Redirect to /admin/login
+  ↓
+Router\Handle::dispatch()
+  1. Find Controller: Weline\Catalog\Controller\Backend\Product\Edit
+  2. Check ACL permission: #[Acl('Weline_Catalog::product_edit')]
+  3. User no permission → Return 403 Forbidden
+  4. Has permission → Execute Controller
+  ↓
+Controller::execute() → Business logic (same as frontend)
+  ↓
+HTTP Response (HTML)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ API Request Flow (RESTful)                                                    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+HTTP GET /rest/v1/catalog/products?status=1&limit=10
+  ↓
+Router\Core::parse($url) → Detect /rest/v1 prefix, mark as API request
+  ↓
+Api\Observer\CheckAuth (pre-dispatch event)
+  1. Check Authorization Header
+  2. Verify Token / API Key
+  3. Invalid → Return 401 Unauthorized
+  ↓
+Controller::execute()
+  1. Get params: $status = $this->request->getParam('status')
+  2. Query data: $products = $model->where('status', $status)->fetch()
+  3. Return JSON: return $this->json(['data' => $products])
+  ↓
+HTTP Response (JSON)
+{
+  "code": 200,
+  "message": "success",
+  "data": [
+    {"product_id": 1, "sku": "ABC", "name": "Product 1"},
+    {"product_id": 2, "sku": "DEF", "name": "Product 2"}
+  ]
+}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Request Lifecycle Events                                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Global events (all requests):
+  1. controller_action_predispatch          → Pre-dispatch (global)
+  2. controller_action_predispatch_{route}  → Pre-dispatch (specific route)
+  3. [Controller execution]
+  4. controller_action_postdispatch_{route} → Post-dispatch (specific route)
+  5. controller_action_postdispatch         → Post-dispatch (global)
+
+Example: catalog/product/view
+  • controller_action_predispatch
+  • controller_action_predispatch_catalog_product_view
+  • [Execute Controller]
+  • controller_action_postdispatch_catalog_product_view
+  • controller_action_postdispatch
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Response Types                                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+HTML (frontend/backend):
+  $this->assign('product', $product);
+  return $this->fetch();  // Render template
+
+JSON (API):
+  return $this->json(['code' => 200, 'message' => 'success', 'data' => $products]);
+
+Redirect:
+  $this->messageManager->addSuccess(__('Saved successfully.'));
+  return $this->redirect($this->getBackendUrl('catalog/product'));
+
+File download:
+  return $this->download($filePath, 'filename.pdf');
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Request Debug Tool                                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+CLI simulate request (no browser needed):
+
+Frontend: php bin/w http:request /catalog/product/view/id/123
+Backend (auto-login): php bin/w http:request admin/catalog/product/edit/id/123 -b
+API: php bin/w http:request rest/v1/catalog/products -api
+
+Filter output (errors only):
+  php bin/w http:request admin -b --filter=Warning
+  php bin/w http:request admin -b --filter=Fatal
+
+Advantages:
+  • No browser needed
+  • Quick route verification
+  • View full output (including errors)
+  • Auto-handles auth (-b param)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Session Management                                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Traditional mode (file Session):
+  • Session stored in filesystem
+  • Read/write file per request
+
+WLS mode (shared Session):
+  • SessionServer process (TCP)
+  • All Workers share Session
+  • In-memory storage, higher performance
+
+Session operations:
+  $this->session->set('user_id', 123);      // Set
+  $userId = $this->session->get('user_id'); // Get
+  $this->session->delete('user_id');        // Delete
+  $this->session->clear();                  // Clear all
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Critical Constraints                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+✓ Frontend Controllers extend AbstractController
+✓ Backend Controllers extend Weline\Admin\Controller\BaseController
+✓ Backend Controllers need #[Acl] attribute (permission control)
+✓ API responses MUST return JSON format
+✗ NO direct echo/print in Controller (use return)
+✗ NO die()/exit() in WLS mode (kills Worker)
+✓ Use $this->redirect() for redirects (NO header('Location: ...'))
+✓ Use $this->json() for JSON (NO json_encode() + echo)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Related Files                                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+• pub/index.php → Web entry
+• Framework\App\Bootstrap → Application startup
+• Framework\Router\Core → Route parsing
+• Framework\Router\Handle → Route dispatch
+• Framework\App\Controller\* → Controller base classes
+• Framework\Http\Request → Request object
+• Framework\Http\Response → Response object
+• Framework\Session\* → Session management

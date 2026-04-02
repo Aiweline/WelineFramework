@@ -1,0 +1,39 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    WelineFramework Architecture Diagrams Index                 ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+This directory contains pure ASCII architecture diagrams for quick understanding
+and massive token savings.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Diagram List                                                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 01-framework-overview.txt      Global architecture (directory + modules)      │
+│ 02-wls-architecture.txt        WLS long-running server (process + IPC)        │
+│ 03-routing-system.txt          Routing system (auto-discovery + URL parsing)  │
+│ 04-orm-database.txt            ORM database (Model + Query + Schema)          │
+│ 05-event-system.txt            Event system (Event + Hook + Extends)          │
+│ 06-module-lifecycle.txt        Module lifecycle (register + install + upgrade)│
+│ 07-request-flow.txt            HTTP request flow (frontend + backend + API)   │
+│ 08-module-docs-index.txt       Module docs index (57 modules, 634 docs) ⭐    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Usage Guide                                                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • New task: Start with 01-framework-overview.txt for global view             │
+│ • WLS issues: See 02-wls-architecture.txt                                    │
+│ • Routing/Controller: See 03-routing-system.txt                              │
+│ • Model/Database: See 04-orm-database.txt                                    │
+│ • Event/Hook/Extends: See 05-event-system.txt                                │
+│ • Module development: See 06-module-lifecycle.txt                            │
+│ • HTTP debugging: See 07-request-flow.txt                                    │
+│ • ⭐ ANY module work: MUST check 08-module-docs-index.txt first              │
+│   Then read {Module}/doc/README.md (saves 80% tokens)                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+⚠️  CRITICAL RULE: Before reading source code in app/code/Weline/{Module}/,
+    ALWAYS check {Module}/doc/README.md first. See 08-module-docs-index.txt.
+
+Token savings: Architecture diagrams 2000+ → 300-500 tokens (save 75%)
+               Module docs priority saves 80% (vs reading source code)

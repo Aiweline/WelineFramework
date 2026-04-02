@@ -1,0 +1,163 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    WelineFramework Global Architecture                         ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Directory Structure                                                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+WelineFramework/
+├── app/code/Weline/              ← Framework core modules (PSR-4 autoload)
+│   ├── Framework/                ← Core infrastructure
+│   │   ├── App/                  → Application container, env config
+│   │   ├── Cache/                → Cache abstraction layer
+│   │   ├── Database/             → ORM, connection pool, query builder
+│   │   ├── Event/                → Event dispatcher
+│   │   ├── Http/                 → Request/Response/Cookie/Session
+│   │   ├── Router/               → Route parsing, controller dispatch
+│   │   ├── View/                 → Template engine, Taglib
+│   │   └── System/               → IPC, process management, scheduler
+│   ├── Server/                   ← WLS long-running service
+│   │   ├── Service/              → Master/Worker/Dispatcher
+│   │   ├── Strategy/             → Linux/Windows strategies
+│   │   └── Shared/               → Shared state, connection pool
+│   ├── Admin/                    ← Backend management
+│   ├── Theme/                    ← Theme system
+│   ├── I18n/                     ← Internationalization
+│   └── ...                       ← Other core modules
+├── app/code/{Vendor}/            ← Third-party modules (e.g. GuoLaiRen)
+├── vendor/                       ← Composer dependencies (DO NOT EDIT)
+├── generated/                    ← Auto-generated code (DO NOT EDIT)
+├── pub/                          ← Web entry point
+│   ├── index.php                 → Frontend entry
+│   └── static/                   → Static assets
+└── bin/w                         ← CLI entry
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Core Module Dependencies                                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                    ┌──────────────────┐
+                    │   Application    │  ← Application entry
+                    └────────┬─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+        ┌─────────┐    ┌─────────┐    ┌─────────┐
+        │ Router  │    │  Event  │    │  Cache  │
+        └────┬────┘    └────┬────┘    └─────────┘
+             │              │
+             ▼              ▼
+        ┌─────────┐    ┌─────────┐
+        │Controller│   │Observer │
+        └────┬────┘    └─────────┘
+             │
+             ▼
+        ┌─────────┐    ┌─────────┐    ┌─────────┐
+        │  Model  │───▶│Database │───▶│Connection│
+        └─────────┘    └─────────┘    └─────────┘
+             │
+             ▼
+        ┌─────────┐
+        │  View   │
+        └─────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Standard Module Structure                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Weline/{ModuleName}/
+├── register.php              ← Module registration (required) Register::register()
+├── etc/
+│   ├── env.php               ← Route config, module config
+│   ├── event.xml             ← Event observer bindings
+│   └── backend/
+│       └── menu.xml          ← Backend menu
+├── Model/                    ← ORM models (#[Table]/#[Col]/#[Index])
+├── Controller/               ← HTTP controllers
+│   └── Backend/              ← Backend controllers
+├── Console/                  ← CLI commands
+├── Observer/                 ← Event observers
+├── Setup/
+│   ├── Install.php           ← Install script
+│   └── Upgrade.php           ← Upgrade script (NO field alterations)
+├── view/
+│   ├── templates/            ← .phtml templates
+│   └── hooks/                ← Hook implementations
+├── i18n/
+│   ├── zh_Hans_CN.csv        ← Chinese translations
+│   └── en_US.csv             ← English translations
+├── Test/Unit/                ← PHPUnit unit tests
+├── hook.php                  ← Hook definitions
+└── extends.php               ← Extension point definitions
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Request Processing Flow (Simplified)                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+HTTP Request
+     │
+     ▼
+┌─────────┐
+│pub/index│  or  WLS Worker
+└────┬────┘
+     │
+     ▼
+┌─────────────────┐
+│ Bootstrap       │  → Load config, init container
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ Router::parse() │  → Parse URL, match Controller
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ Event: before   │  → Trigger pre-dispatch events
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ Controller::    │  → Execute business logic
+│   execute()     │
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ Model/Database  │  → Data operations (if needed)
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ View::render()  │  → Render template
+└────┬────────────┘
+     │
+     ▼
+┌─────────────────┐
+│ Event: after    │  → Trigger post-dispatch events
+└────┬────────────┘
+     │
+     ▼
+HTTP Response
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Key Design Principles                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. Modular: All features encapsulated in independent modules via register.php
+2. Convention over Configuration: Auto-discovered routing, no routes.xml
+3. Attribute-driven: Schema via #[Col], ACL via #[Acl]
+4. Event-driven: Modules decoupled via events, NO direct dependencies
+5. Dependency Injection: Constructor auto-injection
+6. PSR-4 Autoloading: Namespace maps to directory structure
+7. Long-running Optimization: WLS mode reuses processes, avoids re-init
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Related Diagrams                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+• WLS Architecture → 02-wls-architecture.txt
+• Routing System → 03-routing-system.txt
+• ORM Database → 04-orm-database.txt
+• Event System → 05-event-system.txt

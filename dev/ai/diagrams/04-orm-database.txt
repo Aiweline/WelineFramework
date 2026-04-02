@@ -1,0 +1,258 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                         ORM Database Architecture                              ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Core Principle: Attribute-driven Schema (#[Table]/#[Col]/#[Index])           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Schema change flow: Modify Model attributes → php bin/w setup:upgrade → Auto DDL
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Model Definition Example                                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│ namespace Weline\Catalog\Model;                                         │
+│                                                                         │
+│ use Weline\Framework\Database\Model;                                   │
+│ use Weline\Framework\Database\Attributes\{Table, Col, Index};          │
+│                                                                         │
+│ #[Table('catalog_product', 'Product Table')]                           │
+│ #[Index(['sku'], Index::TYPE_UNIQUE)]                                  │
+│ #[Index(['status', 'created_at'], Index::TYPE_NORMAL)]                 │
+│ class Product extends Model {                                          │
+│                                                                         │
+│     #[Col('product_id', 'int', 'PRIMARY KEY AUTO_INCREMENT')]          │
+│     public int $product_id;                                            │
+│                                                                         │
+│     #[Col('sku', 'varchar(64)', 'NOT NULL')]                           │
+│     public string $sku;                                                │
+│                                                                         │
+│     #[Col('name', 'varchar(255)', 'NOT NULL')]                         │
+│     public string $name;                                               │
+│                                                                         │
+│     #[Col('price', 'decimal(12,4)', 'DEFAULT 0.0000')]                 │
+│     public float $price;                                               │
+│                                                                         │
+│     #[Col('status', 'tinyint', 'DEFAULT 1')]                           │
+│     public int $status;                                                │
+│                                                                         │
+│     #[Col('created_at', 'timestamp', 'DEFAULT CURRENT_TIMESTAMP')]     │
+│     public string $created_at;                                         │
+│ }                                                                       │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ ORM Query Chain (MUST end with fetch/fetchArray)                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Query builder flow:
+  Model → select() → where() → order() → limit() → fetch()
+                                                    ↑
+                                            MUST call to execute
+
+Examples:
+┌────────────────────────────────────────────────────────────────────────┐
+│ // ✓ Correct: Ends with fetch()                                        │
+│ $products = $productModel                                               │
+│     ->select()                                                          │
+│     ->where('status', 1)                                                │
+│     ->order('created_at', 'DESC')                                       │
+│     ->limit(10)                                                         │
+│     ->fetch();  // Returns Model[] array                                │
+│                                                                         │
+│ // ✓ Correct: fetchArray() returns associative array                   │
+│ $data = $productModel                                                   │
+│     ->select(['product_id', 'sku', 'name'])                             │
+│     ->where('status', 1)                                                │
+│     ->fetchArray();  // Returns array[] array                           │
+│                                                                         │
+│ // ✗ Wrong: No fetch(), query won't execute                            │
+│ $products = $productModel->select()->where('status', 1);                │
+│                                                                         │
+│ // ✓ Exception: save() doesn't need fetch()                            │
+│ $product->setData('name', 'New Name')->save();                          │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Query Methods Quick Reference                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Query:
+  ->select()                      Select all fields
+  ->select(['id', 'name'])        Select specific fields
+  ->where('status', 1)            Equal condition
+  ->where('price', 100, '>')      Comparison condition
+  ->where('id', [1,2,3], 'IN')    IN condition (NO whereIn())
+  ->where('name', '%test%', 'LIKE') LIKE condition
+  ->order('created_at', 'DESC')   Order by
+  ->limit(10)                     Limit
+  ->pagination($page, $size)      Pagination (auto-calculates offset)
+  ->fetch()                       Execute and return Model[]
+  ->fetchArray()                  Execute and return array[]
+
+Find:
+  ->find($id)                     Find by primary key (returns Query, needs fetch())
+  ->find($id)->fetch()            Returns single Model or null
+
+Insert:
+  ->insert(['sku' => 'ABC', 'name' => 'Test'])->fetch()
+  ->setData('sku', 'ABC')->save()  // Auto-detects insert/update
+
+Update:
+  ->update(['status' => 0])->where('id', 1)->fetch()
+  ->load($id)->setData('status', 0)->save()
+
+Delete:
+  ->delete()->where('id', 1)->fetch()
+  ->load($id)->delete()
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Pagination Query                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│ // Page 2, 20 items per page                                            │
+│ $products = $productModel                                               │
+│     ->pagination(2, 20)  // Auto-calculates offset=20, limit=20        │
+│     ->select()                                                          │
+│     ->where('status', 1)                                                │
+│     ->fetch();                                                          │
+│                                                                         │
+│ // Get total count                                                      │
+│ $total = $productModel->where('status', 1)->count();                    │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Transaction Handling                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│ $connection = $productModel->getConnection();                          │
+│                                                                         │
+│ try {                                                                   │
+│     $connection->beginTransaction();                                    │
+│                                                                         │
+│     $product->setData('stock', $newStock)->save();                      │
+│     $order->setData('status', 'completed')->save();                     │
+│                                                                         │
+│     $connection->commit();                                              │
+│ } catch (\Exception $e) {                                               │
+│     $connection->rollBack();                                            │
+│     throw $e;                                                           │
+│ }                                                                       │
+└────────────────────────────────────────────────────────────────────────┘
+
+Note: MySQL DDL (ALTER TABLE) causes implicit commit, framework handles this
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Schema Sync Flow                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+php bin/w setup:upgrade
+     │
+     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ SchemaDiffStage                                                           │
+│   1. Scan all Model classes for #[Table]/#[Col]/#[Index] attributes      │
+│   2. Read current database schema                                         │
+│   3. Compare differences (new tables/fields, modify fields, new indexes)  │
+│   4. Generate DDL statements (CREATE TABLE, ALTER TABLE, CREATE INDEX)    │
+│   5. Execute DDL                                                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
+Supported changes:
+  ✓ Add table
+  ✓ Add field
+  ✓ Modify field type/length/default
+  ✓ Add index
+  ✗ Drop field (manual SQL required)
+  ✗ Drop index (manual SQL required)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Connection Pool Architecture (WLS Mode)                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Traditional mode (create connection per request):
+  Request → new PDO() → Query → close PDO()
+
+WLS mode (connection reuse):
+  Request-1 → ConnectionPool::get() → Query → ConnectionPool::release()
+                      ↓
+  Request-2 → Reuse connection → Query → release()
+
+ConnectionPoolManager:
+  • Maintains connection pool (max connections, idle timeout)
+  • Auto-reconnect (detects disconnection)
+  • Health check (periodic ping)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Database Adapters                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Supported databases:
+  • MySQL / MariaDB  → Framework\Database\Connection\Mysql\*
+  • PostgreSQL       → Framework\Database\Connection\Pgsql\*
+
+Adapter layers:
+┌────────────────────────────────────────────────────────────────────────┐
+│ Model (business layer)                                                  │
+│   ↓                                                                     │
+│ Query (query builder)                                                   │
+│   ↓                                                                     │
+│ QueryAst (abstract syntax tree)                                         │
+│   ↓                                                                     │
+│ Mysql\Query / Pgsql\Query (dialect conversion)                          │
+│   ↓                                                                     │
+│ PdoConnection (PDO wrapper)                                             │
+│   ↓                                                                     │
+│ PDO (PHP native)                                                        │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Critical Constraints                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+✗ NEVER manually DDL in Setup/Upgrade.php (use #[Col] attributes)
+✗ NEVER select/find/update/delete without fetch() (won't execute)
+✗ NEVER use fetchOne() (doesn't exist, use find()->fetch())
+✗ NEVER use whereIn() (doesn't exist, use where('id', [1,2], 'IN'))
+✓ Schema changes MUST run setup:upgrade
+✓ Primary key field MUST mark PRIMARY KEY AUTO_INCREMENT
+✓ Indexes use #[Index] attribute, NO manual CREATE INDEX
+✓ Transactions MUST catch exceptions and rollBack()
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Common Errors                                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Error 1: Forgot fetch()
+  $products = $model->select()->where('status', 1);  // Returns Query object
+  foreach ($products as $p) { ... }  // Error: Query not iterable
+
+Correct:
+  $products = $model->select()->where('status', 1)->fetch();
+
+Error 2: Using non-existent methods
+  $model->whereIn('id', [1,2,3]);  // Error: Method doesn't exist
+
+Correct:
+  $model->where('id', [1,2,3], 'IN');
+
+Error 3: Manually editing generated/
+  Edit generated/db/schema.php  // Will be overwritten
+
+Correct:
+  Modify Model #[Col] attributes, run setup:upgrade
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Related Files                                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+• Framework\Database\Model                → Model base class
+• Framework\Database\Query                → Query builder
+• Framework\Database\QueryAst             → Abstract syntax tree
+• Framework\Database\Connection\*         → Database connections
+• Framework\Database\Attributes\*         → #[Table]/#[Col]/#[Index]
+• Framework\Setup\SchemaDiffStage         → Schema sync

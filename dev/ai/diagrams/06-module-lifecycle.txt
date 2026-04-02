@@ -1,0 +1,259 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                         Module Lifecycle Architecture                          ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Lifecycle Stages                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Register → Install → Upgrade → Run → Uninstall
+    ↓         ↓        ↓        ↓        ↓
+register.php Install Upgrade Normal  Uninstall
+            .php    .php    usage   .php
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. Module Registration (register.php)                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Purpose: Declare module existence, register to framework
+
+Register::register(
+    'Weline_Catalog',                    // Module name
+    __DIR__,                             // Module path
+    '1.0.0',                             // Version
+    'Catalog management module',         // Description
+    ['Weline_Framework', 'Weline_Admin'] // Dependencies
+);
+
+Execution: Auto-scanned on framework startup
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 2. Module Install (Setup/Install.php)                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Purpose: First-time install (init data, config)
+
+class Install implements InstallInterface {
+    public function setup() {
+        // Insert default data
+        $this->categoryModel->insert(['name' => 'Default', 'status' => 1])->fetch();
+
+        // Init config
+        $this->configModel->insert(['path' => 'catalog/...', 'value' => '20'])->fetch();
+    }
+}
+
+Execution: php bin/w setup:upgrade (first time module detected)
+
+Constraints:
+  ✗ NO DDL in Install.php (CREATE TABLE, ALTER TABLE)
+  ✓ Only insert initial data, config
+  ✓ Schema auto-created from Model #[Table]/#[Col] attributes
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 3. Module Upgrade (Setup/Upgrade.php)                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Purpose: Version upgrade (data migration, config update)
+
+class Upgrade implements UpgradeInterface {
+    public function setup(string $oldVersion, string $newVersion) {
+        // Upgrade from 1.0.0 to 1.1.0
+        if (version_compare($oldVersion, '1.1.0', '<')) {
+            $this->migrateOldData();
+        }
+
+        // Upgrade from 1.1.0 to 1.2.0
+        if (version_compare($oldVersion, '1.2.0', '<')) {
+            $this->updateConfig();
+        }
+    }
+}
+
+Execution: php bin/w setup:upgrade (version number changed)
+
+Constraints:
+  ✗ NO field CRUD in Upgrade.php (ADD COLUMN, DROP COLUMN)
+  ✓ Only data migration, config update
+  ✓ Schema changes via Model #[Col] attributes + setup:upgrade auto-handles
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 4. Schema Auto-sync (SchemaDiffStage)                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+php bin/w setup:upgrade
+  ↓
+1. Scan all Model classes for #[Table]/#[Col]/#[Index] attributes
+  ↓
+2. Read current database schema
+  ↓
+3. Compare differences (Diff)
+  ├─ New table → CREATE TABLE
+  ├─ New field → ALTER TABLE ADD COLUMN
+  ├─ Modify field → ALTER TABLE MODIFY COLUMN
+  └─ New index → CREATE INDEX
+  ↓
+4. Execute DDL
+  ↓
+5. Update module version
+
+Example: Add new field
+1. Modify Model: #[Col('description', 'text', 'NULL')]
+                 public ?string $description;
+2. Run: php bin/w setup:upgrade
+3. Auto DDL: ALTER TABLE catalog_product ADD COLUMN description TEXT NULL;
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 5. Route Registration                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+php bin/w setup:upgrade --route
+  ↓
+1. Scan all modules' Controller/ directories
+  ↓
+2. Generate route mapping from directory structure
+   Controller/Product/View.php → catalog/product/view
+   Controller/Backend/Product/Edit.php → admin/catalog/product/edit
+  ↓
+3. Extract #[Acl] attributes (if any)
+  ↓
+4. Write to generated/router/routes.php
+
+When to run:
+  • After adding Controllers
+  • After modifying Controller paths
+  • After modifying #[Acl] attributes
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ setup:upgrade Complete Flow                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+php bin/w setup:upgrade [--route]
+  ↓
+1. Module dependency sort (topological sort) → Ensure dependencies installed first
+  ↓
+2. Schema sync (SchemaDiffStage) → Auto create/modify table structure
+  ↓
+3. Execute Install.php (first install) → Insert initial data
+  ↓
+4. Execute Upgrade.php (version upgrade) → Data migration, config update
+  ↓
+5. Route registration (if --route specified) → Generate generated/router/routes.php
+  ↓
+6. Update module version → Write to database module_version table
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Module Version Management                                                     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Version storage:
+  • Declared in register.php: '1.2.3'
+  • Recorded in database module_version table
+
+Version comparison logic:
+$declaredVersion = '1.2.0';  // Declared in register.php
+$installedVersion = '1.1.0'; // Recorded in database
+
+if ($installedVersion === null) {
+    // First install → Execute Install.php
+} elseif (version_compare($installedVersion, $declaredVersion, '<')) {
+    // Version upgrade → Execute Upgrade.php
+}
+
+Version number convention (Semantic Versioning):
+  Major.Minor.Patch
+  1.2.3
+  ↓ ↓ ↓
+  │ │ └─ Patch: Bug fixes
+  │ └─── Minor: New features (backward compatible)
+  └───── Major: Breaking changes (incompatible)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Module Dependency Management                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Dependency declaration:
+Register::register(
+    'Weline_Order',
+    __DIR__,
+    '1.0.0',
+    'Order management',
+    ['Weline_Catalog', 'Weline_Customer']  ← Dependencies
+);
+
+Dependency resolution:
+  • Topological sort: Ensure dependencies loaded first
+  • Circular dependency detection: A → B → A (error)
+  • Missing dependency detection: Dependency module not exists (error)
+
+Install order example:
+  Weline_Framework → Weline_Admin → Weline_Catalog → Weline_Order
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Module Enable/Disable                                                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Disable: php bin/w module:disable Weline_Catalog
+Enable: php bin/w module:enable Weline_Catalog
+
+Effect:
+  • Disabled: Module code not loaded, routes inactive, event observers not triggered
+  • Database tables preserved (not deleted)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Critical Constraints                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+register.php:
+  ✓ MUST exist (module entry point)
+  ✓ MUST call Register::register()
+  ✓ Version MUST follow semantic versioning
+
+Install.php:
+  ✗ NO DDL (CREATE TABLE, ALTER TABLE)
+  ✓ Only insert initial data, config
+  ✓ Can be empty (if no init data needed)
+
+Upgrade.php:
+  ✗ NO field CRUD (ADD COLUMN, DROP COLUMN, MODIFY COLUMN)
+  ✓ Only data migration, config update
+  ✓ MUST check version: version_compare($oldVersion, '1.1.0', '<')
+
+Schema changes:
+  ✗ NO manual DDL
+  ✓ Modify Model #[Col] attributes
+  ✓ Run php bin/w setup:upgrade
+
+Route changes:
+  ✓ After adding/modifying Controllers: php bin/w setup:upgrade --route
+  ✗ NO manual edit generated/router/routes.php
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Common Errors                                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Error 1: Execute ALTER TABLE in Upgrade.php
+  ✗ ALTER TABLE catalog_product ADD COLUMN description TEXT;
+  ✓ Modify Model #[Col] attribute, run setup:upgrade
+
+Error 2: Forgot to run setup:upgrade --route
+  New Controller returns 404
+  ✓ php bin/w setup:upgrade --route
+
+Error 3: Circular dependency
+  Weline_A depends on Weline_B, Weline_B depends on Weline_A
+  ✓ Redesign module dependency relationship
+
+Error 4: Version number not incremented
+  Version in register.php unchanged, Upgrade.php not executed
+  ✓ MUST increment version for each upgrade
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Related Files                                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+• Framework\Register\Register → Module registration
+• Framework\Setup\InstallInterface → Install interface
+• Framework\Setup\UpgradeInterface → Upgrade interface
+• Framework\Setup\SchemaDiffStage → Schema sync
+• Framework\Console\Setup\Upgrade → setup:upgrade command
