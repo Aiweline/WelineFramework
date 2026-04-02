@@ -1812,7 +1812,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 CASE WHEN c.column_default LIKE 'nextval%' THEN 'auto_increment' ELSE '' END AS \"Extra\",
                 '' AS \"Collation\",
                 '' AS \"Privileges\",
-                COALESCE(col_description(('{$schema}.{$table}')::regclass::oid, c.ordinal_position), '') AS \"Comment\"
+                COALESCE(col_description(('\"{$schema}\".\"{$table}\"')::regclass::oid, c.ordinal_position), '') AS \"Comment\"
             FROM information_schema.columns c
             LEFT JOIN (
                 SELECT kcu.column_name AS col_name, tc.constraint_type
