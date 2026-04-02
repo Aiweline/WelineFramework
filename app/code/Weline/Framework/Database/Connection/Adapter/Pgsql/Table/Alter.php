@@ -14,6 +14,7 @@ namespace Weline\Framework\Database\Connection\Adapter\Pgsql\Table;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Database\Connection\Api\Sql\AbstractTable;
 use Weline\Framework\Database\Connection\Api\Sql\Table\AlterInterface;
+use Weline\Framework\Database\Connection\Adapter\Pgsql\SchemaConfig;
 
 class Alter extends AbstractTable implements AlterInterface
 {
@@ -37,15 +38,18 @@ class Alter extends AbstractTable implements AlterInterface
         # 处理表名：将反引号转换为双引号，处理 schema.table 格式
         # 在 PostgreSQL 中，如果表名包含点号，第一部分可能是数据库名（需要移除）或 schema 名
         $dbName = $this->connector->getConfigProvider()->getDatabase();
-        
+
+        // 获取当前 schema，避免硬编码 'public'
+        $currentSchema =  SchemaConfig::getCurrentSchema() ?: 'public';
+
         if (str_contains($table_name, '.')) {
             $parts = explode('.', $table_name);
             $firstPart = trim($parts[0], '`"');
-            
-            // 如果第一部分是数据库名，移除它，使用 public schema
+
+            // 如果第一部分是数据库名，移除它，使用当前 schema
             if ($firstPart === $dbName) {
                 $tableName = trim($parts[1] ?? $parts[0], '`"');
-                $table_name = "public.\"{$tableName}\"";
+                $table_name = "\"{$currentSchema}\".\"{$tableName}\"";
             } else {
                 // 第一部分是 schema 名，保持原样
                 $parts = array_map(function($part) {
@@ -55,11 +59,11 @@ class Alter extends AbstractTable implements AlterInterface
                 $table_name = implode('.', $parts);
             }
         } else {
-            // 单个表名，使用 public schema
+            // 单个表名，使用当前 schema
             $tableName = trim($table_name, '`"');
-            $table_name = "public.\"{$tableName}\"";
+            $table_name = "\"{$currentSchema}\".\"{$tableName}\"";
         }
-        
+
         // 处理新表名
         if ($new_table_name) {
             if (str_contains($new_table_name, '.')) {
@@ -67,7 +71,7 @@ class Alter extends AbstractTable implements AlterInterface
                 $firstPart = trim($parts[0], '`"');
                 if ($firstPart === $dbName) {
                     $newTableName = trim($parts[1] ?? $parts[0], '`"');
-                    $new_table_name = "public.\"{$newTableName}\"";
+                    $new_table_name = "\"{$currentSchema}\".\"{$newTableName}\"";
                 } else {
                     $parts = array_map(function($part) {
                         $part = trim($part, '`"');
@@ -77,12 +81,12 @@ class Alter extends AbstractTable implements AlterInterface
                 }
             } else {
                 $newTableName = trim($new_table_name, '`"');
-                $new_table_name = "public.\"{$newTableName}\"";
+                $new_table_name = "\"{$currentSchema}\".\"{$newTableName}\"";
             }
         }
-        
+
         $this->startTable($table_name, $comment, $primary_key, $new_table_name);
-        
+
         # 确保 $this->table 使用正确的 PostgreSQL 格式
         if (str_contains($this->table, '.')) {
             $parts = explode('.', $this->table);
@@ -92,9 +96,9 @@ class Alter extends AbstractTable implements AlterInterface
             }, $parts);
             $this->table = implode('.', $parts);
         } else {
-            $this->table = "public.\"" . trim($this->table, '`"') . "\"";
+            $this->table = "\"{$currentSchema}\".\"" . trim($this->table, '`"') . "\"";
         }
-        
+
         return $this;
     }
 
