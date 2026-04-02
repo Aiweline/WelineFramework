@@ -12,6 +12,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSessionEvent;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
+use Weline\Framework\Database\Connection\Adapter\Pgsql\SchemaConfig;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -407,7 +408,8 @@ class AiSiteAgentSessionService
             'unique' => false,
         ];
         $existingCol = null;
-        foreach ($connector->getTableColumns($this->sessionModel->getTable()) as $row) {
+        $columns = $connector->getTableColumns($this->sessionModel->getTable());
+        foreach ($columns as $row) {
             if (!\is_array($row) || (string) ($row['name'] ?? '') !== $pk) {
                 continue;
             }
@@ -439,34 +441,24 @@ class AiSiteAgentSessionService
 
         // 修复序列值：确保序列值大于当前最大 ID
         try {
-            // 从带引号的表名中提取实际的表名和 schema
-            $parts = explode('.', str_replace('"', '', $quotedTable));
-            $actualTableName = end($parts);
-            $schemaName = count($parts) > 1 ? $parts[0] : 'public';
-
-            // 查询列的默认值，从中提取实际使用的序列名称
-            $colDefaultSql = "SELECT column_default FROM information_schema.columns
-                             WHERE table_schema = '{$schemaName}'
-                             AND table_name = '{$actualTableName}'
-                             AND column_name = '{$pk}'";
-            $colResult = $connector->query($colDefaultSql)->fetch();
-            $columnDefault = $colResult[0]['column_default'] ?? null;
-
-            if (!$columnDefault || !preg_match("/nextval\('([^']+)'/", $columnDefault, $matches)) {
+            // 从列信息中提取序列名
+            $columnDefault = $existingCol['default'] ?? null;
+            if (!$columnDefault || !\preg_match("/nextval\('([^']+)'/", $columnDefault, $matches)) {
                 return;
             }
 
             $sequenceName = $matches[1];
-            $fullSequenceName = "\"{$schemaName}\".\"{$sequenceName}\"";
 
-            // 获取当前最大 ID
-            $maxIdSql = "SELECT COALESCE(MAX(\"{$pk}\"), 0) as max_id FROM \"{$schemaName}\".\"{$actualTableName}\"";
-            $result = $connector->query($maxIdSql)->fetch();
-            $maxId = (int)($result[0]['max_id'] ?? 0);
+            // 获取当前最大 ID（使用 ORM）
+            $session = clone $this->sessionModel;
+            $maxIdRow = $session->clearData()->clearQuery()
+                ->select("MAX({$pk}) as max_id")
+                ->fetch();
+            $maxId = (int) ($maxIdRow['max_id'] ?? 0);
             $nextId = $maxId + 1;
 
             // 重置序列
-            $resetSeqSql = "SELECT setval('{$fullSequenceName}', {$nextId}, false)";
+            $resetSeqSql = "SELECT setval('{$sequenceName}', {$nextId}, false)";
             $connector->query($resetSeqSql)->fetch();
         } catch (\Throwable $e) {
             // 序列修复失败，静默处理
