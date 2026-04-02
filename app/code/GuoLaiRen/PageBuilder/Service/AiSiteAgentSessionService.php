@@ -48,8 +48,20 @@ class AiSiteAgentSessionService
             if (!$this->isPgsqlAiSessionPrimaryKeySerialMissing($e)) {
                 throw $e;
             }
+            echo "[DEBUG] 检测到序列问题，开始修复...\n";
             $this->repairPgsqlAiSessionPrimaryKeySerial();
-            $session->clearQuery();
+            echo "[DEBUG] 序列修复完成，重新创建会话对象并重试保存...\n";
+
+            // 重新创建一个全新的会话对象
+            $session = clone $this->sessionModel;
+            $session->clearData()->clearQuery();
+            $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $this->generatePublicId());
+            $session->setData(AiSiteAgentSession::schema_fields_ADMIN_USER_ID, $adminUserId);
+            $session->setData(AiSiteAgentSession::schema_fields_WEBSITE_ID, 0);
+            $session->setData(AiSiteAgentSession::schema_fields_VIRTUAL_THEME_ID, 0);
+            $session->setData(AiSiteAgentSession::schema_fields_STAGE, AiSiteAgentSession::STAGE_BRIEF);
+            $session->setData(AiSiteAgentSession::schema_fields_PUBLISH_STATUS, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
+            $session->setScopeArray($initialScope);
             $session->save();
         }
         return $session;
@@ -359,9 +371,11 @@ class AiSiteAgentSessionService
         $chain = $e;
         while ($chain !== null) {
             $msg = $chain->getMessage();
-            if (\str_contains($msg, '23502')
+            // 检查 NOT NULL 错误（23502）或主键冲突错误（23505）
+            if ((\str_contains($msg, '23502') || \str_contains($msg, '23505'))
                 && \str_contains($msg, 'ai_site_agent_session_id')
-                && \str_contains($msg, 'guolairen_page_builder_ai_site_agent_session')) {
+                && (\str_contains($msg, 'guolairen_page_builder_ai_site_agent_session')
+                    || \str_contains($msg, 'm_guolairen_page_builder_ai_site_agent_session'))) {
                 return true;
             }
             $chain = $chain->getPrevious();
@@ -372,6 +386,7 @@ class AiSiteAgentSessionService
     /**
      * 历史库表在 PG 上曾建成无序列的 INTEGER 主键，INSERT 省略主键时会违反 NOT NULL。
      * 与 SchemaDiff 的 MODIFY 逻辑一致：CREATE SEQUENCE + SET DEFAULT nextval。
+     * 同时修复序列值，确保序列值大于当前最大 ID。
      */
     private function repairPgsqlAiSessionPrimaryKeySerial(): void
     {
@@ -420,6 +435,41 @@ class AiSiteAgentSessionService
                 $sql .= ';';
             }
             $connector->query($sql)->fetch();
+        }
+
+        // 修复序列值：确保序列值大于当前最大 ID
+        try {
+            // 从带引号的表名中提取实际的表名和 schema
+            $parts = explode('.', str_replace('"', '', $quotedTable));
+            $actualTableName = end($parts);
+            $schemaName = count($parts) > 1 ? $parts[0] : 'public';
+
+            // 查询列的默认值，从中提取实际使用的序列名称
+            $colDefaultSql = "SELECT column_default FROM information_schema.columns
+                             WHERE table_schema = '{$schemaName}'
+                             AND table_name = '{$actualTableName}'
+                             AND column_name = '{$pk}'";
+            $colResult = $connector->query($colDefaultSql)->fetch();
+            $columnDefault = $colResult[0]['column_default'] ?? null;
+
+            if (!$columnDefault || !preg_match("/nextval\('([^']+)'/", $columnDefault, $matches)) {
+                return;
+            }
+
+            $sequenceName = $matches[1];
+            $fullSequenceName = "\"{$schemaName}\".\"{$sequenceName}\"";
+
+            // 获取当前最大 ID
+            $maxIdSql = "SELECT COALESCE(MAX(\"{$pk}\"), 0) as max_id FROM \"{$schemaName}\".\"{$actualTableName}\"";
+            $result = $connector->query($maxIdSql)->fetch();
+            $maxId = (int)($result[0]['max_id'] ?? 0);
+            $nextId = $maxId + 1;
+
+            // 重置序列
+            $resetSeqSql = "SELECT setval('{$fullSequenceName}', {$nextId}, false)";
+            $connector->query($resetSeqSql)->fetch();
+        } catch (\Throwable $e) {
+            // 序列修复失败，静默处理
         }
     }
 }
