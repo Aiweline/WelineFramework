@@ -1,0 +1,243 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                         Routing System Architecture                            ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Core Principle: Convention over Configuration (No routes.xml)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Auto-discovery: Controller directory structure → URL mapping
+After adding Controllers: php bin/w setup:upgrade --route
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ URL Parsing Rules                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Frontend URL format:
+  /{currency}/{language}/{module}/{area}/{controller}/{action}
+
+  Example: /CNY/zh_Hans_CN/catalog/product/view/id/123
+           └─┬─┘ └────┬────┘ └──┬──┘ └──┬──┘ └──┬─┘ └──┬──┘ └─┬─┘
+          currency lang   module  area  controller action params
+
+Backend URL format:
+  /{backendKey}/{currency}/{language}/{module}/{area}/{controller}/{action}
+
+  Example: /admin/CNY/zh_Hans_CN/catalog/product/edit/id/123
+           └─┬──┘ └─┬─┘ └────┬────┘ └──┬──┘ └──┬──┘ └─┬─┘ └──┬──┘ └─┬─┘
+          backend currency lang   module  area  ctrl  action params
+
+API URL format:
+  /rest/v1/{module}/{action}
+
+  Example: /rest/v1/catalog/products
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Controller Directory Mapping                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Directory structure:
+Weline/Catalog/
+└── Controller/
+    ├── Product/
+    │   ├── View.php          → /catalog/product/view
+    │   ├── List.php          → /catalog/product/list
+    │   └── Search.php        → /catalog/product/search
+    ├── Category/
+    │   └── View.php          → /catalog/category/view
+    └── Backend/              ← Backend controllers
+        └── Product/
+            ├── Index.php     → /admin/catalog/product/index
+            ├── Edit.php      → /admin/catalog/product/edit
+            └── Save.php      → /admin/catalog/product/save
+
+Mapping rule:
+  Controller/{Area}/{Controller}/{Action}.php
+       ↓         ↓         ↓          ↓
+  /{module}/{area}/{controller}/{action}
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Route Parsing Flow                                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+HTTP Request: /admin/catalog/product/edit/id/123
+     │
+     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Router\Core::parse($url)                                                  │
+│   1. Extract backendKey (admin)                                           │
+│   2. Extract currency/language (optional, use defaults)                   │
+│   3. Extract module/area/controller/action                                │
+│   4. Extract params (id=123)                                              │
+└────┬─────────────────────────────────────────────────────────────────────┘
+     │
+     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Router\Handle::dispatch()                                                 │
+│   1. Find Controller class:                                               │
+│      Weline\Catalog\Controller\Backend\Product\Edit                      │
+│   2. Check if class exists                                                │
+│   3. Check ACL permission (if #[Acl] attribute exists)                    │
+│   4. Instantiate Controller (dependency injection)                        │
+└────┬─────────────────────────────────────────────────────────────────────┘
+     │
+     ▼
+┌──────────────────────────────────────────────────────────────────────────┐
+│ Controller::execute()                                                     │
+│   → Execute business logic                                                │
+│   → Return Response or View                                               │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Controller Base Classes                                                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Frontend Controller:
+┌────────────────────────────────────────────────────────────────────────┐
+│ namespace Weline\Catalog\Controller\Product;                            │
+│                                                                         │
+│ use Weline\Framework\App\Controller\AbstractController;                │
+│                                                                         │
+│ class View extends AbstractController {                                │
+│     public function execute() {                                         │
+│         $productId = $this->request->getParam('id');                    │
+│         // Business logic                                               │
+│         return $this->fetch();  // Render template                      │
+│     }                                                                   │
+│ }                                                                       │
+└────────────────────────────────────────────────────────────────────────┘
+
+Backend Controller:
+┌────────────────────────────────────────────────────────────────────────┐
+│ namespace Weline\Catalog\Controller\Backend\Product;                   │
+│                                                                         │
+│ use Weline\Admin\Controller\BaseController;                            │
+│ use Weline\Framework\Acl\Acl;                                          │
+│                                                                         │
+│ #[Acl('Weline_Catalog::product_edit')]                                 │
+│ class Edit extends BaseController {                                    │
+│     public function execute() {                                         │
+│         // Business logic                                               │
+│         return $this->fetch();                                          │
+│     }                                                                   │
+│ }                                                                       │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ URL Generation                                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Frontend URL:
+  $this->getUrl('catalog/product/view', ['id' => 123])
+  → /CNY/zh_Hans_CN/catalog/product/view/id/123
+
+Backend URL:
+  $this->getBackendUrl('catalog/product/edit', ['id' => 123])
+  → /admin/CNY/zh_Hans_CN/catalog/product/edit/id/123
+
+API URL:
+  $this->getUrl('rest/v1/catalog/products')
+  → /rest/v1/catalog/products
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Route Configuration (etc/env.php)                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────────────────┐
+│ return [                                                                │
+│     'router' => [                                                       │
+│         'Weline_Catalog' => [                                           │
+│             'path' => 'catalog',  // URL prefix                         │
+│         ],                                                              │
+│     ],                                                                  │
+│     'backend_router' => [                                               │
+│         'Weline_Catalog' => [                                           │
+│             'path' => 'catalog',                                        │
+│         ],                                                              │
+│     ],                                                                  │
+│ ];                                                                      │
+└────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Route Cache                                                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Route mapping table cached in: generated/router/routes.php
+
+Structure:
+┌────────────────────────────────────────────────────────────────────────┐
+│ return [                                                                │
+│     'catalog/product/view' => [                                         │
+│         'class' => 'Weline\Catalog\Controller\Product\View',           │
+│         'module' => 'Weline_Catalog',                                   │
+│         'acl' => null,                                                  │
+│     ],                                                                  │
+│     'admin/catalog/product/edit' => [                                   │
+│         'class' => 'Weline\Catalog\Controller\Backend\Product\Edit',   │
+│         'module' => 'Weline_Catalog',                                   │
+│         'acl' => 'Weline_Catalog::product_edit',                        │
+│     ],                                                                  │
+│ ];                                                                      │
+└────────────────────────────────────────────────────────────────────────┘
+
+Update cache: php bin/w setup:upgrade --route
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Route Verification (Debug Tool)                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Frontend route:
+  php bin/w http:request /catalog/product/view/id/123
+
+Backend route (auto-login):
+  php bin/w http:request admin/catalog/product/edit/id/123 -b
+
+API route:
+  php bin/w http:request rest/v1/catalog/products -api
+
+Filter output:
+  php bin/w http:request admin -b --filter=Warning
+  php bin/w http:request admin -b --filter=Fatal
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 404 Handling                                                                  │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+When route not matched:
+  1. Router\Core::parse() returns null
+  2. Router\Handle::dispatch() throws 404 exception
+  3. Render 404 page (customizable template)
+
+Custom 404 page:
+  view/templates/error/404.phtml
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Redirect                                                                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Redirect within Controller:
+  return $this->redirect($this->getUrl('catalog/product/list'));
+
+Redirect with message:
+  $this->messageManager->addSuccess(__('Product saved successfully.'));
+  return $this->redirect($this->getBackendUrl('catalog/product/index'));
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Critical Constraints                                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+✗ NEVER create routes.xml (framework doesn't support it)
+✗ NEVER manually edit generated/router/routes.php (will be overwritten)
+✓ MUST run setup:upgrade --route after adding Controllers
+✓ Controller class name MUST match file name
+✓ Backend Controllers MUST extend Weline\Admin\Controller\BaseController
+✓ Use getUrl()/getBackendUrl() to generate URLs, NO hardcoding
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Related Files                                                                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+• Framework\Router\Core          → Route parsing core
+• Framework\Router\Handle        → Route dispatch handler
+• Framework\App\Controller\*     → Controller base classes
+• Admin\Controller\BaseController → Backend Controller base

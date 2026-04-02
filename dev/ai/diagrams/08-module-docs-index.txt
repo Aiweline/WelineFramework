@@ -1,0 +1,164 @@
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║                    Module Documentation Index                                  ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+
+CRITICAL: When working with ANY module, ALWAYS check its doc/ directory FIRST.
+This saves massive token consumption vs reading source code.
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Why Check Module Docs First?                                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ • Saves 80-90% tokens vs reading source code                                 │
+│ • Contains architecture diagrams, API docs, examples                         │
+│ • Documents events, hooks, extends, APIs                                     │
+│ • Includes development guides and best practices                             │
+│ • Pre-written by developers who know the module best                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Module Documentation Locations (57 modules, 634 docs)                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Core Framework:
+  Framework         → app/code/Weline/Framework/doc/README.md
+  Framework/Console → app/code/Weline/Framework/Console/doc/README.md
+  Framework/View    → app/code/Weline/Framework/View/doc/README.md
+
+Admin & Backend:
+  Admin             → app/code/Weline/Admin/doc/README.md
+  Acl               → app/code/Weline/Acl/doc/README.md
+  SystemConfig      → app/code/Weline/SystemConfig/doc/README.md
+
+Frontend & Theme:
+  Frontend          → app/code/Weline/Frontend/doc/README.md
+  Theme             → app/code/Weline/Theme/doc/README.md
+  Taglib            → app/code/Weline/Taglib/doc/README.md
+  Widget            → app/code/Weline/Widget/doc/README.md
+
+AI & Automation:
+  Ai                → app/code/Weline/Ai/doc/README.md
+  AiKnowledge       → app/code/Weline/AiKnowledge/doc/README.md
+  AutoLeadAgent     → app/code/Weline/AutoLeadAgent/doc/README.md
+  GenerativeEngineOptimization → app/code/Weline/GenerativeEngineOptimization/doc/README.md
+
+E-commerce:
+  Order             → app/code/Weline/Order/doc/README.md
+  Checkout          → app/code/Weline/Checkout/doc/README.md
+  Payment           → app/code/Weline/Payment/doc/README.md
+  Shipping          → app/code/Weline/Shipping/doc/README.md
+
+Infrastructure:
+  Async             → app/code/Weline/Async/doc/README.md
+  Queue             → app/code/Weline/Queue/doc/README.md
+  CacheManager      → app/code/Weline/CacheManager/doc/README.md
+  Cdn               → app/code/Weline/Cdn/doc/README.md
+
+Data & Content:
+  Eav               → app/code/Weline/Eav/doc/README.md
+  FileManager       → app/code/Weline/FileManager/doc/README.md
+  I18n              → app/code/Weline/I18n/doc/README.md
+  TranslationService → app/code/Weline/TranslationService/doc/README.md
+
+Other:
+  CustomerService   → app/code/Weline/CustomerService/doc/README.md
+  DeveloperWorkspace → app/code/Weline/DeveloperWorkspace/doc/README.md
+  Geo               → app/code/Weline/Geo/doc/README.md
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Common Doc Structure (per module)                                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+{Module}/doc/
+├── README.md              ← Module overview, quick start
+├── API/                   ← API documentation
+├── event/                 ← Event documentation (one file per event)
+├── hook/                  ← Hook documentation (one file per hook)
+├── extends/               ← Extension point documentation
+├── 开发/                  ← Development guides (Chinese)
+└── 用户/                  ← User manuals (Chinese)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Workflow: How to Use Module Docs                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Step 1: Identify the module you need to work with
+  Example: "Add payment method" → Payment module
+
+Step 2: Read module's doc/README.md FIRST
+  php: Read app/code/Weline/Payment/doc/README.md
+
+Step 3: Check specific subdirectories as needed
+  • Need to listen to events? → doc/event/
+  • Need to add UI hooks? → doc/hook/
+  • Need to extend classes? → doc/extends/
+  • Need API reference? → doc/API/
+
+Step 4: Only read source code if docs are insufficient
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Token Savings Example                                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Scenario: Understand Payment module architecture
+
+❌ Without docs (reading source):
+  1. Read Payment/Model/*.php (5 files × 500 tokens = 2500)
+  2. Read Payment/Controller/*.php (3 files × 400 tokens = 1200)
+  3. Read Payment/Service/*.php (4 files × 600 tokens = 2400)
+  Total: ~6100 tokens
+
+✅ With docs:
+  1. Read Payment/doc/README.md (~800 tokens)
+  2. Read Payment/doc/API/API.md (~400 tokens)
+  Total: ~1200 tokens
+
+Savings: 80% tokens, 5x faster understanding
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Quick Reference: Module → Doc Path Pattern                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Pattern: app/code/Weline/{ModuleName}/doc/README.md
+
+Examples:
+  Weline_Payment  → app/code/Weline/Payment/doc/README.md
+  Weline_Order    → app/code/Weline/Order/doc/README.md
+  Weline_Ai       → app/code/Weline/Ai/doc/README.md
+
+Special cases (multiple doc dirs):
+  Framework       → app/code/Weline/Framework/doc/README.md (main)
+                  → app/code/Weline/Framework/Console/doc/README.md (CLI)
+                  → app/code/Weline/Framework/View/doc/README.md (View)
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Integration with Framework Diagrams                                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Framework-level architecture:
+  → dev/ai/diagrams/01-framework-overview.txt
+  → dev/ai/diagrams/02-wls-architecture.txt
+  → dev/ai/diagrams/03-routing-system.txt
+  → dev/ai/diagrams/04-orm-database.txt
+  → dev/ai/diagrams/05-event-system.txt
+  → dev/ai/diagrams/06-module-lifecycle.txt
+  → dev/ai/diagrams/07-request-flow.txt
+
+Module-specific details:
+  → app/code/Weline/{Module}/doc/
+
+Combined approach:
+  1. Framework diagram for overall understanding
+  2. Module doc for specific implementation
+  3. Source code only if docs are missing
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ MANDATORY RULE                                                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Before reading ANY source code in app/code/Weline/{Module}/:
+  1. Check if {Module}/doc/ exists
+  2. If exists, read {Module}/doc/README.md FIRST
+  3. Check relevant subdirectories (event/, hook/, API/)
+  4. Only read source code if docs don't answer your question
+
+This is NOT optional. Violating this rule wastes tokens and time.

@@ -35,18 +35,20 @@ use Weline\Framework\Manager\ObjectManager;
 
 final class Connector extends Query implements ConnectorInterface
 {
+    private PgsqlTableNameStrategy $tableStrategy;
+
     public function __construct(
         private readonly ?ConfigProvider $configProvider
     ) {
         $identifierFormatter = new PgsqlIdentifierFormatter();
-        $tableStrategy = new PgsqlTableNameStrategy(
+        $this->tableStrategy = new PgsqlTableNameStrategy(
             $identifierFormatter,
             $this->configProvider->getPrefix() ?: '',
             'public'
         );
         parent::__construct(
             $identifierFormatter,
-            $tableStrategy
+            $this->tableStrategy
         );
         $this->db_name = $this->configProvider->getDatabase() ?: 'public';
     }
@@ -133,6 +135,10 @@ final class Connector extends Query implements ConnectorInterface
         );
         $this->_original_pdo = $this->link;
         $this->fromPool = true;
+
+        // 设置 PDO 到 TableNameStrategy，使其能够动态获取 current_schema
+        $this->tableStrategy->setPdo($this->link);
+
         try {
             $this->getDialect()->validateVersion((string)$this->link->getAttribute(PDO::ATTR_SERVER_VERSION));
         } catch (\Throwable $e) {
@@ -147,6 +153,10 @@ final class Connector extends Query implements ConnectorInterface
         $this->create();
         if ($this->wrappedConnection === null) {
             $this->wrappedConnection = new PdoConnection($this->link, 'pgsql');
+        }
+        // 确保 TableNameStrategy 有 PDO 引用
+        if ($this->link !== null) {
+            $this->tableStrategy->setPdo($this->link);
         }
         return $this->wrappedConnection;
     }
@@ -420,22 +430,33 @@ SQL;
         $table = str_replace(['`', '"'], '', $table);
         $field = str_replace(['`', '"'], '', $field);
         $dbName = $this->configProvider->getDatabase();
-        $schema = 'public';
-        
+        $schema = null; // 先设为null，后面根据情况确定
+
         if (str_contains($table, '.')) {
             $parts = explode('.', $table);
             $firstPart = $parts[0];
-            
-            // 如果第一部分是数据库名，移除它，使用 public schema
+
+            // 如果第一部分是数据库名，移除它，使用当前schema
             if ($firstPart === $dbName) {
                 $table = $parts[1] ?? $parts[0];
-                $schema = 'public';
+                $schema = null; // 使用当前schema
             } else {
                 // 第一部分是 schema 名
                 $schema = $firstPart;
                 $table = $parts[1] ?? $parts[0];
             }
         }
+
+        // 如果没有指定schema，使用current_schema()
+        if ($schema === null) {
+            try {
+                $currentSchema = $this->getLink()->query("SELECT current_schema()")->fetchColumn();
+                $schema = $currentSchema ?: 'public';
+            } catch (\Throwable $e) {
+                $schema = 'public'; // 回退到public
+            }
+        }
+
         $schema = str_replace("'", "''", $schema);
         $table = str_replace("'", "''", $table);
         $field = str_replace("'", "''", $field);
