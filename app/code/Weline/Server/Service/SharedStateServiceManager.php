@@ -908,7 +908,9 @@ class SharedStateServiceManager
 
     private function defaultPortForRole(string $role): int
     {
-        return $this->normalizeRoleName($role) === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970;
+        // 使用项目偏移量计算动态端口，避免硬编码
+        $basePort = $this->normalizeRoleName($role) === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970;
+        return $basePort + MasterProcess::getProjectPortOffset();
     }
 
     private function defaultTokenForRole(string $role): string
