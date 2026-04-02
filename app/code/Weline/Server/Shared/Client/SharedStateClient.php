@@ -16,9 +16,13 @@ class SharedStateClient
 
     public function __construct(
         string $host = '127.0.0.1',
-        int $port = 19970,
+        int $port = 0,
         array $options = []
     ) {
+        // 如果端口为 0，使用项目偏移量计算默认端口
+        if ($port <= 0) {
+            $port = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        }
         $this->pool = ConnectionPoolManager::getInstance($host, $port, $options);
         $this->acquireTimeout = (float)($options['acquire_timeout'] ?? $options['pool_acquire_timeout'] ?? 0.2);
     }

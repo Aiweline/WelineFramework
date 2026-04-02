@@ -16,6 +16,8 @@ class PooledConnection implements PooledConnectionInterface
     private bool $authenticated = false;
     private ?string $authToken = null;
     private int $authTokenMtime = 0;
+    private int $authTokenVersion = 0; // Token 版本号
+    private string $serviceType = ''; // 服务类型标识（Session/Memory/Cache）
 
     public function __construct(
         private readonly string $host,
@@ -23,8 +25,11 @@ class PooledConnection implements PooledConnectionInterface
         private readonly float $connectTimeout = 1.0,
         private readonly float $timeout = 2.0,
         private readonly string $tokenFilePath = '',
-        private readonly bool $logConnectFailure = true
+        private readonly bool $logConnectFailure = true,
+        ?string $serviceType = null
     ) {
+        // 根据端口自动推断服务类型
+        $this->serviceType = $serviceType ?? $this->detectServiceType($port);
     }
 
     public function connect(): bool
@@ -34,7 +39,7 @@ class PooledConnection implements PooledConnectionInterface
         }
 
         $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
-        $this->log("[CONN-START] {$timestamp} Attempting connect to {$this->host}:{$this->port}");
+        $this->log("[CONN-START] {$timestamp} Attempting connect to {$this->host}:{$this->port} ({$this->serviceType})");
 
         $errno = 0;
         $errstr = '';
@@ -59,7 +64,7 @@ class PooledConnection implements PooledConnectionInterface
         if (!$socket) {
             $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
             if ($this->logConnectFailure) {
-                $this->log("[CONN-FAIL] {$timestamp} Connect failed: {$errstr} ({$errno})");
+                $this->log("[CONN-FAIL] {$timestamp} Connect failed: {$errstr} ({$errno}) ({$this->serviceType})");
             }
             return false;
         }
@@ -77,13 +82,13 @@ class PooledConnection implements PooledConnectionInterface
 
         if (!$this->authenticate()) {
             $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
-            $this->log("[CONN-AUTH-FAIL] {$timestamp} Authentication failed");
+            $this->log("[CONN-AUTH-FAIL] {$timestamp} Authentication failed ({$this->serviceType})");
             $this->close();
             return false;
         }
 
         $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
-        $this->log("[CONN-OK] {$timestamp} Connected and authenticated");
+        $this->log("[CONN-OK] {$timestamp} Connected and authenticated ({$this->serviceType})");
         return true;
     }
 
@@ -155,6 +160,13 @@ class PooledConnection implements PooledConnectionInterface
                 continue;
             }
             $this->buffer .= $chunk;
+
+            // 防止缓冲区无限增长（限制 2MB）
+            if (\strlen($this->buffer) > 2097152) {
+                $this->close();
+                return null;
+            }
+
             $messages = SessionProtocol::extractMessages($this->buffer);
             if (!empty($messages)) {
                 return $messages[0];
@@ -187,24 +199,42 @@ class PooledConnection implements PooledConnectionInterface
 
     private function authenticate(): bool
     {
+        $authStartTime = \microtime(true);
+
         $token = $this->loadToken();
         if ($token === null) {
             $this->authenticated = true;
+            $this->recordAuthMetric($authStartTime, 'success', 'no_auth');
             return true;
         }
         if ($this->tryAuthenticateWithToken($token)) {
             $this->authenticated = true;
+            $this->recordAuthMetric($authStartTime, 'success', 'first_attempt');
             return true;
         }
 
-        // WLS 常驻进程下，服务重启会轮换 token；认证失败时强制刷新 token 后重试一次。
-        $freshToken = $this->loadToken(true);
-        if ($freshToken !== null && $freshToken !== $token && $this->tryAuthenticateWithToken($freshToken)) {
-            $this->authenticated = true;
-            return true;
+        // WLS 常驻进程下，服务重启会轮换 token；认证失败时强制刷新 token 后重试。
+        // 使用指数退避策略：10ms -> 20ms -> 50ms
+        $retryDelays = [10000, 20000, 50000]; // 微秒
+        $maxRetries = count($retryDelays);
+
+        for ($retry = 0; $retry < $maxRetries; $retry++) {
+            \usleep($retryDelays[$retry]);
+            $freshToken = $this->loadToken(true);
+
+            if ($freshToken !== null && $freshToken !== $token && $this->tryAuthenticateWithToken($freshToken)) {
+                $this->authenticated = true;
+                $this->recordAuthMetric($authStartTime, 'success', 'token_refresh_retry_' . ($retry + 1));
+                $this->incrementMetric('wls_pool_token_reload_total', ['reason' => 'auth_retry_' . ($retry + 1)]);
+                return true;
+            }
+
+            $token = $freshToken;
         }
 
         $this->authenticated = false;
+        $this->recordAuthMetric($authStartTime, 'failure', 'token_mismatch');
+        $this->incrementMetric('wls_pool_auth_failure_total', ['reason' => 'token_mismatch']);
         return false;
     }
 
@@ -225,17 +255,27 @@ class PooledConnection implements PooledConnectionInterface
         if ($this->tokenFilePath === '' || !\is_file($this->tokenFilePath)) {
             $this->authToken = null;
             $this->authTokenMtime = 0;
+            $this->authTokenVersion = 0;
             return null;
         }
         $mtime = (int)(@\filemtime($this->tokenFilePath) ?: 0);
-        $token = @\file_get_contents($this->tokenFilePath);
-        if ($token === false || $token === '') {
+        $content = @\file_get_contents($this->tokenFilePath);
+        if ($content === false || $content === '') {
             $this->authToken = null;
             $this->authTokenMtime = $mtime;
+            $this->authTokenVersion = 0;
             return null;
         }
-        $this->authToken = \trim($token);
+
+        // 解析 token:version 格式（兼容旧格式：纯 token）
+        $content = \trim($content);
+        $parts = \explode(':', $content, 2);
+        $token = $parts[0];
+        $version = isset($parts[1]) ? (int)$parts[1] : 0;
+
+        $this->authToken = $token;
         $this->authTokenMtime = $mtime;
+        $this->authTokenVersion = $version;
         return $this->authToken;
     }
 
@@ -256,5 +296,48 @@ class PooledConnection implements PooledConnectionInterface
             return;
         }
         WlsLogger::info_('[PooledConnection] ' . $message);
+    }
+
+    /**
+     * 记录认证指标
+     */
+    private function recordAuthMetric(float $startTime, string $result, string $reason): void
+    {
+        $durationMs = (\microtime(true) - $startTime) * 1000;
+
+        if (isset($GLOBALS['wls_metrics_collector'])) {
+            $GLOBALS['wls_metrics_collector']->recordHistogram(
+                'wls_pool_auth_duration_ms',
+                $durationMs,
+                ['host' => $this->host, 'port' => (string)$this->port, 'result' => $result]
+            );
+        }
+    }
+
+    /**
+     * 递增指标计数器
+     */
+    private function incrementMetric(string $name, array $labels): void
+    {
+        if (isset($GLOBALS['wls_metrics_collector'])) {
+            $GLOBALS['wls_metrics_collector']->incrementCounter(
+                $name,
+                1,
+                \array_merge(['host' => $this->host, 'port' => (string)$this->port], $labels)
+            );
+        }
+    }
+
+    /**
+     * 根据端口号推断服务类型
+     */
+    private function detectServiceType(int $port): string
+    {
+        // 根据默认端口推断服务类型
+        return match ($port) {
+            26422, 26423 => 'Session',
+            19971 => 'Memory',
+            default => "Port:{$port}",
+        };
     }
 }
