@@ -211,7 +211,10 @@ try {
     // 不再阻塞等待 Session 连接，所有 Worker 可同时启动
     // Master 会等待所有 Worker READY 后才认为启动完成
     $sessionHost = (string) ($sessionRuntime['host'] ?? '127.0.0.1');
-    $sessionPort = (int) ($sessionRuntime['port'] ?? 19970);
+    $sessionPort = (int) ($sessionRuntime['port'] ?? 0);
+    if ($sessionPort <= 0) {
+        $sessionPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+    }
     $sessionTokenFileName = (string) ($sessionRuntime['token_file_name'] ?? 'session_server.token');
     $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
         'connect_timeout' => 0.5,
@@ -541,6 +544,62 @@ WlsLogger::info_("Socket 创建成功，开始监听连接");
 
 \stream_set_blocking($socket, false);
 
+// ========== Worker 预热：确保能正常处理请求后再上报就绪 ==========
+if (!$isMaintenanceWorker) {
+    WlsLogger::info_("开始 Worker 预热...");
+    $warmupSuccess = false;
+    $warmupMaxRetries = 3;
+
+    for ($warmupAttempt = 1; $warmupAttempt <= $warmupMaxRetries; $warmupAttempt++) {
+        try {
+            // 等待 socket 就绪
+            \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
+
+            $warmupConn = @\stream_socket_client(
+                "tcp://{$host}:{$port}",
+                $errno,
+                $errstr,
+                2.0,
+                STREAM_CLIENT_CONNECT
+            );
+
+            if (!$warmupConn) {
+                WlsLogger::warning_("预热连接失败 (尝试 {$warmupAttempt}/{$warmupMaxRetries}): {$errstr}");
+                continue;
+            }
+
+            \stream_set_blocking($warmupConn, true);
+            \stream_set_timeout($warmupConn, 2);
+
+            $warmupRequest = "GET /_wls/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+            @\fwrite($warmupConn, $warmupRequest);
+
+            // 读取响应（至少读到 HTTP 状态行）
+            $warmupResponse = @\fread($warmupConn, 1024);
+            @\fclose($warmupConn);
+
+            if ($warmupResponse && \str_contains($warmupResponse, 'HTTP/1.1 200')) {
+                $warmupSuccess = true;
+                WlsLogger::info_("Worker#{$workerId} 预热成功 (尝试 {$warmupAttempt}/{$warmupMaxRetries})");
+                break;
+            } else {
+                WlsLogger::warning_("预热响应异常 (尝试 {$warmupAttempt}/{$warmupMaxRetries}): " . \substr($warmupResponse ?: '', 0, 100));
+            }
+        } catch (\Throwable $e) {
+            WlsLogger::warning_("预热异常 (尝试 {$warmupAttempt}/{$warmupMaxRetries}): " . $e->getMessage());
+        }
+
+        if ($warmupAttempt < $warmupMaxRetries) {
+            \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
+        }
+    }
+
+    if (!$warmupSuccess) {
+        WlsLogger::error_("Worker#{$workerId} 预热失败，无法正常处理请求，退出");
+        exit(1);
+    }
+}
+
 // ========== IPC 控制通道：连接 Master 并注册 + 上报就绪 ==========
 $kernel = null;
 $ipcClient = null;
@@ -587,6 +646,16 @@ if ($controlPort > 0) {
                 return;
             }
             switch ($type) {
+                case \Weline\Server\IPC\ControlMessage::TYPE_PING:
+                    // 健康检查：立即响应 pong
+                    $pingTimestamp = (float)($msg['timestamp'] ?? 0.0);
+                    $stats = [
+                        'active_fibers' => \count($activeFibers),
+                        'memory_usage' => \memory_get_usage(true),
+                    ];
+                    $ipcClient->send(\Weline\Server\IPC\ControlMessage::pong($pingTimestamp, $stats));
+                    break;
+
                 case \Weline\Server\IPC\ControlMessage::TYPE_ACK_READY:
                     // 收到 Master ACK 确认，启动完成
                     $waitingForAck = false;
@@ -762,7 +831,6 @@ if (!isset($ackTimeout)) {
 if (!isset($ipcRole)) {
     $ipcRole = \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 }
-
 $connections = [];
 $requestCount = 0;
 $activeRequests = 0; // 正在处理的请求数
@@ -1194,26 +1262,10 @@ while (true) {
         }
     }
 
-    // #region agent debug log - WLS 调度状态监控
-    static $wlsDebugLogCount = 0;
     $activeFiberCount = \count($activeFibers);
     $longLivedCount = \count($longLivedConnections);
-    $pendingTimers = $fiberScheduler->hasPendingTimers() ? 'yes' : 'no';
-    // 每 100 次主循环记录一次状态
-    if ($wlsDebugLogCount % 100 === 0) {
-        WlsLogger::info_("WLS_DEBUG: active_fibers={$activeFiberCount} long_lived={$longLivedCount} next_delay=" . ($nextDelay !== null ? \round($nextDelay * 1000, 1) . 'ms' : 'null') . " select_timeout={$selectTimeoutUsec}us pending_timers={$pendingTimers}");
-    }
-    $wlsDebugLogCount++;
-    // #endregion
 
     $changed = @\stream_select($read, $write, $except, $selectTimeoutSec, $selectTimeoutUsec);
-
-    // #region agent debug log - stream_select 结果
-    static $selectDebugLogCount = 0;
-    if ($selectDebugLogCount % 50 === 0) {
-        WlsLogger::info_("WLS_DEBUG: stream_select returned changed=" . \var_export($changed, true) . " timeout=" . ($changed === 0 ? 'yes' : 'no'));
-    }
-    $selectDebugLogCount++;
     // #endregion
 
     // 调度器 tick：处理到期定时器，resume 前恢复该 Fiber 的请求级上下文
@@ -1261,6 +1313,7 @@ while (true) {
             // Fiber 仍然挂起（可能是 resume 后再次 suspend），更新上下文快照与闲置时间
             $afData['context'] = \Weline\Framework\Runtime\WlsFiberContext::capture();
             $afData['suspended_at'] = \time();
+            $afData['last_activity'] = \time(); // 更新最后活跃时间（Fiber 有活动）
             $activeFibers[$afConnId] = $afData;
         }
     }
@@ -1277,12 +1330,32 @@ while (true) {
         $fiberReleaseIdleRequested = false;
         $releaseThreshold = $fiberIdleTtlSec > 0 ? $fiberIdleTtlSec : 0;
         $toRelease = [];
+
+        // 心跳续约机制：Fiber 需要定期续约（有活动），否则视为僵死
+        $fiberHeartbeatTimeout = 60; // 默认 60 秒无续约视为僵死
+        if (isset($envConfig['wls']['fiber']['heartbeat_timeout'])) {
+            $fiberHeartbeatTimeout = (int)$envConfig['wls']['fiber']['heartbeat_timeout'];
+        }
+
         foreach ($activeFibers as $afConnId => $afData) {
             $suspendedAt = $afData['suspended_at'] ?? $now;
-            if ($releaseThreshold === 0 || ($now - $suspendedAt) >= $releaseThreshold) {
+            $lastActivity = $afData['last_activity'] ?? $afData['handleStartTime'] ?? $now;
+            $inactiveTime = $now - $lastActivity;
+
+            // 检查心跳超时：超过阈值未续约（resume/suspend）则判定为僵死
+            if ($fiberHeartbeatTimeout > 0 && $inactiveTime >= $fiberHeartbeatTimeout) {
+                WlsLogger::warning_("Fiber 心跳超时: connId={$afConnId} inactive_time={$inactiveTime}s (超过 {$fiberHeartbeatTimeout}s 未续约)");
+                $toRelease[$afConnId] = $afData;
+                continue;
+            }
+
+            // 检查闲置：挂起时间超过阈值（仅针对非长连接）
+            $isLongLived = $afData['is_long_lived'] ?? false;
+            if (!$isLongLived && $releaseThreshold > 0 && ($now - $suspendedAt) >= $releaseThreshold) {
                 $toRelease[$afConnId] = $afData;
             }
         }
+
         foreach ($toRelease as $afConnId => $afData) {
             $fiberScheduler->cancelTimersForFiber($afData['fiber']);
             if (isset($afData['conn']) && \is_resource($afData['conn'])) {
@@ -1350,6 +1423,13 @@ while (true) {
             if (isset($longLivedConnections[$connId])) {
                 unset($longLivedConnections[$connId]);
                 WlsLogger::info_("客户端断开，长连接已清理 (connId: {$connId}, 剩余长连接数: " . \count($longLivedConnections) . ")");
+            }
+            // 客户端断开：立即清理对应的 Fiber（避免僵尸 Fiber 占用槽位）
+            if (isset($activeFibers[$connId])) {
+                $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                $fiberScheduler->unregisterFiber();
+                unset($activeFibers[$connId]);
+                WlsLogger::info_("客户端断开，Fiber 已清理 (connId: {$connId}, 剩余活跃 Fiber: " . \count($activeFibers) . ")");
             }
             // 客户端断开时递减 activeRequests（该连接有活跃请求）
             $activeRequests = \max(0, $activeRequests - 1);
@@ -1540,6 +1620,7 @@ while (true) {
                 'handleStartTime' => $handleStartTime,
                 'context' => \Weline\Framework\Runtime\WlsFiberContext::capture(),
                 'suspended_at' => \time(),
+                'last_activity' => \time(), // 最后活跃时间（初始化为挂起时间）
                 'is_long_lived' => $isLongLived,
             ];
             WlsLogger::info_("请求进入 Fiber 异步模式 (connId: {$connId})");
@@ -1908,6 +1989,75 @@ function handleRequest(
     string $originTokenHeader,
     bool $originTokenAllowLocal
 ): string {
+    // ========== 域名白名单验证（防止旧域名格式串台） ==========
+    $hostHeader = \trim((string)(getHeaderValue($rawRequest, 'Host') ?? ''));
+    if ($hostHeader !== '') {
+        // 分离域名和端口
+        $domain = $hostHeader;
+        if (\str_contains($hostHeader, ':')) {
+            [$domain, ] = \explode(':', $hostHeader, 2);
+        }
+
+        // 拒绝旧格式域名 weline-p[hash].local
+        if (\preg_match('/^weline-p[0-9a-f]{8}\.local$/i', $domain)) {
+            return "HTTP/1.1 403 Forbidden\r\n"
+                . "Content-Type: text/plain; charset=UTF-8\r\n"
+                . "Connection: close\r\n"
+                . "Content-Length: 110\r\n\r\n"
+                . "Legacy domain format is no longer supported. Please use the standard format: p[hash].weline.local";
+        }
+
+        // 允许标准格式域名 p[hash].weline.local
+        $isStandardDomain = \preg_match('/^p[0-9a-f]{8}\.weline\.local$/i', $domain);
+        // 允许本地开发域名
+        $isLocalDomain = \in_array($domain, ['127.0.0.1', 'localhost', '::1'], true);
+
+        // 检查是否为 env 配置的自定义域名
+        $isConfiguredDomain = false;
+        if (!$isStandardDomain && !$isLocalDomain) {
+            $env = [];
+            if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
+                $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
+                $env = \is_array($env) ? $env : [];
+                $wlsConfig = $env['wls'] ?? [];
+
+                // 检查主配置的 host 和 ssl_domain
+                $configuredHost = $wlsConfig['host'] ?? '';
+                $sslDomain = $wlsConfig['ssl_domain'] ?? '';
+                if (($configuredHost !== '' && \strcasecmp($configuredHost, $domain) === 0)
+                    || ($sslDomain !== '' && \strcasecmp($sslDomain, $domain) === 0)) {
+                    $isConfiguredDomain = true;
+                }
+
+                // 检查多实例配置
+                if (!$isConfiguredDomain) {
+                    $servers = $wlsConfig['servers'] ?? [];
+                    foreach ($servers as $serverConfig) {
+                        if (!\is_array($serverConfig)) {
+                            continue;
+                        }
+                        $serverHost = $serverConfig['host'] ?? '';
+                        $serverSslDomain = $serverConfig['ssl_domain'] ?? '';
+                        if (($serverHost !== '' && \strcasecmp($serverHost, $domain) === 0)
+                            || ($serverSslDomain !== '' && \strcasecmp($serverSslDomain, $domain) === 0)) {
+                            $isConfiguredDomain = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 拒绝未知域名
+        if (!$isStandardDomain && !$isLocalDomain && !$isConfiguredDomain) {
+            return "HTTP/1.1 403 Forbidden\r\n"
+                . "Content-Type: text/plain; charset=UTF-8\r\n"
+                . "Connection: close\r\n"
+                . "Content-Length: 60\r\n\r\n"
+                . "Domain not configured. Please check your server configuration.";
+        }
+    }
+
     // 解析请求 URI
     $uri = '/';
     if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $matches)) {
@@ -1917,7 +2067,7 @@ function handleRequest(
     if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
         $method = $matches[1];
     }
-    
+
     // 获取客户端 IP
     $clientIp = '127.0.0.1';
     $cfConnectingIp = getHeaderValue($rawRequest, 'CF-Connecting-IP');
