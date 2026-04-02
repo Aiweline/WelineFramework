@@ -38,7 +38,7 @@ class AiSiteAgentSessionService
         $session->setData(AiSiteAgentSession::schema_fields_PUBLIC_ID, $this->generatePublicId());
         $session->setData(AiSiteAgentSession::schema_fields_ADMIN_USER_ID, $adminUserId);
         $session->setData(AiSiteAgentSession::schema_fields_WEBSITE_ID, 0);
-        $session->setData(AiSiteAgentSession::schema_fields_WELINE_THEME_ID, 0);
+        $session->setData(AiSiteAgentSession::schema_fields_VIRTUAL_THEME_ID, 0);
         $session->setData(AiSiteAgentSession::schema_fields_STAGE, AiSiteAgentSession::STAGE_BRIEF);
         $session->setData(AiSiteAgentSession::schema_fields_PUBLISH_STATUS, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
         $session->setScopeArray($initialScope);

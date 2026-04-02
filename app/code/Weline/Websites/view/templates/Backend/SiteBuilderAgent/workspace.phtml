@@ -652,6 +652,33 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
 
 </div>
 
+<!-- 页面类型选择模态框 -->
+<div class="modal fade" id="site-builder-plan-complete-modal" tabindex="-1" aria-labelledby="site-builder-plan-complete-modal-label" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="site-builder-plan-complete-modal-label"><lang>AI 规划完成</lang></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted mb-3"><lang>请选择要生成的页面类型（默认全部选中），确认后开始生成虚拟主题。</lang></p>
+                <div class="wb-page-type-grid" id="site-builder-modal-page-types">
+                    <?php foreach ($allPageTypes as $pageType) { ?>
+                        <label class="wb-page-type-chip is-checked">
+                            <input class="site-builder-modal-page-type-check" type="checkbox" value="<?= htmlspecialchars($pageType, ENT_QUOTES, 'UTF-8') ?>" checked>
+                            <span><?= htmlspecialchars($pageType, ENT_QUOTES, 'UTF-8') ?></span>
+                        </label>
+                    <?php } ?>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
+                <button type="button" class="btn btn-primary" id="site-builder-confirm-page-types"><lang>确认并开始生成虚拟主题</lang></button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <w:scope url="@backend-url('taglib/backend/scope')" container-id="site-builder-workspace-root" event="input change click"/>
 
 <style>
@@ -666,11 +693,16 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
     --wb-accent: var(--backend-color-primary, #0f766e);
     --wb-accent-subtle: var(--backend-color-primary-bg-subtle, rgba(14, 165, 233, 0.12));
     --wb-warning: var(--backend-color-warning, #b45309);
-    --wb-warning-subtle: rgba(245, 158, 11, 0.14);
+    --wb-warning-subtle: var(--backend-color-warning-bg-subtle, var(--backend-color-primary-bg-subtle, rgba(245, 158, 11, 0.14)));
     --wb-success: var(--backend-color-success, #166534);
-    --wb-success-subtle: rgba(34, 197, 94, 0.14);
+    --wb-success-subtle: var(--backend-color-success-bg-subtle, var(--backend-color-primary-bg-subtle, rgba(34, 197, 94, 0.14)));
     --wb-danger: var(--backend-color-danger, #b91c1c);
-    --wb-danger-subtle: rgba(239, 68, 68, 0.14);
+    --wb-danger-subtle: var(--backend-color-danger-bg-subtle, var(--backend-color-primary-bg-subtle, rgba(239, 68, 68, 0.14)));
+    --wb-info: var(--backend-color-info, var(--wb-accent));
+    --wb-info-subtle: var(--backend-color-info-bg-subtle, var(--wb-accent-subtle));
+    --wb-ai-subtle: var(--backend-color-warning-bg-subtle, var(--backend-color-primary-bg-subtle, rgba(249, 115, 22, 0.14)));
+    --wb-ai-text: var(--backend-color-warning, var(--wb-warning));
+    --wb-ai-border: var(--backend-color-warning-bg-subtle, var(--wb-border));
     --wb-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
     color: var(--wb-text);
 }
@@ -686,9 +718,9 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     --wb-surface-soft: var(--backend-color-bg-secondary, rgba(30, 41, 59, 0.86));
     --wb-surface-strong: var(--backend-color-bg-primary, rgba(15, 23, 42, 0.96));
     --wb-accent-subtle: var(--backend-color-primary-bg-subtle, rgba(59, 130, 246, 0.18));
-    --wb-warning-subtle: rgba(245, 158, 11, 0.2);
-    --wb-success-subtle: rgba(34, 197, 94, 0.2);
-    --wb-danger-subtle: rgba(239, 68, 68, 0.2);
+    --wb-warning-subtle: var(--backend-color-warning-bg-subtle, rgba(245, 158, 11, 0.2));
+    --wb-success-subtle: var(--backend-color-success-bg-subtle, rgba(34, 197, 94, 0.2));
+    --wb-danger-subtle: var(--backend-color-danger-bg-subtle, rgba(239, 68, 68, 0.2));
     --wb-shadow: 0 14px 30px rgba(2, 6, 23, 0.32);
 }
 
@@ -744,8 +776,8 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 }
 
 .wb-ai-pill {
-    background: rgba(249, 115, 22, 0.14);
-    color: #c2410c;
+    background: var(--wb-ai-subtle);
+    color: var(--wb-ai-text);
 }
 
 .wb-stage-pill {
@@ -821,7 +853,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
 .wb-ai-card {
     background:
-        radial-gradient(circle at top right, rgba(249, 115, 22, 0.14), transparent 28%),
+        radial-gradient(circle at top right, var(--wb-ai-subtle), transparent 28%),
         radial-gradient(circle at bottom left, var(--wb-accent-subtle), transparent 26%),
         linear-gradient(180deg, var(--wb-surface-soft) 0%, var(--wb-surface-strong) 100%);
 }
@@ -838,12 +870,12 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     padding: .85rem .95rem;
     border-radius: 16px;
     background: var(--wb-surface);
-    border: 1px solid rgba(249, 115, 22, 0.18);
+    border: 1px solid var(--wb-ai-border);
     color: var(--wb-text);
 }
 
 .wb-ai-item i {
-    color: #ea580c;
+    color: var(--wb-ai-text);
     margin-top: .1rem;
 }
 
@@ -956,7 +988,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 .wb-domain-card {
     background:
         radial-gradient(circle at top right, var(--wb-accent-subtle), transparent 28%),
-        radial-gradient(circle at bottom left, rgba(56, 189, 248, 0.15), transparent 30%),
+        radial-gradient(circle at bottom left, var(--wb-info-subtle), transparent 30%),
         linear-gradient(180deg, var(--wb-surface-soft) 0%, var(--wb-surface) 100%);
 }
 
@@ -970,7 +1002,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 }
 
 .wb-domain-pill.is-muted {
-    background: rgba(148, 163, 184, 0.2);
+    background: var(--wb-border);
     color: var(--wb-text-muted);
 }
 
@@ -1041,7 +1073,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     min-height: 420px;
     border: 0;
     display: block;
-    background: #fff;
+    background: var(--wb-surface);
 }
 
 @media (min-width:576px) {
@@ -1149,6 +1181,10 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         ,virtualThemeAiDone: <?= json_encode((string)__('虚拟主题自动生成完成'), JSON_THROW_ON_ERROR) ?>
         ,virtualThemeAiFailed: <?= json_encode((string)__('虚拟主题自动生成失败'), JSON_THROW_ON_ERROR) ?>
         ,workspaceBusy: <?= json_encode((string)__('AI 正在处理，请等待完成后再操作。'), JSON_THROW_ON_ERROR) ?>
+        ,planCompleteModalTitle: <?= json_encode((string)__('AI 规划完成'), JSON_THROW_ON_ERROR) ?>
+        ,planCompleteModalDesc: <?= json_encode((string)__('请选择要生成的页面类型（默认全部选中），确认后开始生成虚拟主题。'), JSON_THROW_ON_ERROR) ?>
+        ,planCompleteConfirm: <?= json_encode((string)__('确认并开始生成虚拟主题'), JSON_THROW_ON_ERROR) ?>
+        ,planCompleteCancel: <?= json_encode((string)__('取消'), JSON_THROW_ON_ERROR) ?>
     };
 
     function escapeHtml(value) {
@@ -1436,6 +1472,129 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         workspaceBusy = !!flag;
         document.querySelectorAll('#site-builder-workspace-root button').forEach(function (button) {
             button.disabled = workspaceBusy;
+        });
+    }
+
+    // 页面类型选择模态框
+    var planCompleteModal = null;
+    var planCompleteModalResolve = null;
+
+    function showPageTypeSelectionModal() {
+        // 同步页面类型选择器到模态框
+        var sourceChecks = document.querySelectorAll('.site-builder-page-type-check');
+        var modalChecks = document.querySelectorAll('.site-builder-modal-page-type-check');
+        if (sourceChecks.length > 0 && modalChecks.length > 0) {
+            // 将源选择器的选中状态同步到模态框
+            var sourceChecked = {};
+            sourceChecks.forEach(function (check) {
+                if (check.checked) {
+                    sourceChecked[check.value] = true;
+                }
+            });
+            modalChecks.forEach(function (check) {
+                check.checked = !!sourceChecked[check.value];
+                // 更新 label 样式
+                var label = check.closest('label');
+                if (label) {
+                    if (check.checked) {
+                        label.classList.add('is-checked');
+                    } else {
+                        label.classList.remove('is-checked');
+                    }
+                }
+            });
+        }
+
+        // 显示模态框
+        planCompleteModal = new bootstrap.Modal(document.getElementById('site-builder-plan-complete-modal'));
+        planCompleteModal.show();
+
+        return new Promise(function (resolve) {
+            planCompleteModalResolve = resolve;
+        });
+    }
+
+    // 模态框确认按钮事件
+    document.addEventListener('DOMContentLoaded', function () {
+        var confirmBtn = document.getElementById('site-builder-confirm-page-types');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', function () {
+                // 获取选中的页面类型并同步回源选择器
+                var modalChecks = document.querySelectorAll('.site-builder-modal-page-type-check');
+                var sourceChecks = document.querySelectorAll('.site-builder-page-type-check');
+                var selectedTypes = [];
+                modalChecks.forEach(function (check) {
+                    if (check.checked) {
+                        selectedTypes.push(check.value);
+                        // 同步到源选择器
+                        sourceChecks.forEach(function (source) {
+                            if (source.value === check.value) {
+                                source.checked = true;
+                                var label = source.closest('label');
+                                if (label) {
+                                    label.classList.add('is-checked');
+                                }
+                            }
+                        });
+                    } else {
+                        // 取消选中的也要同步
+                        sourceChecks.forEach(function (source) {
+                            if (source.value === check.value) {
+                                source.checked = false;
+                                var label = source.closest('label');
+                                if (label) {
+                                    label.classList.remove('is-checked');
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // 关闭模态框
+                if (planCompleteModal) {
+                    planCompleteModal.hide();
+                    planCompleteModal = null;
+                }
+
+                // 触发下一步：自动保存简报并进入 generate 阶段生成虚拟主题
+                if (planCompleteModalResolve) {
+                    planCompleteModalResolve(selectedTypes);
+                    planCompleteModalResolve = null;
+                }
+
+                // 自动开始生成虚拟主题
+                setTimeout(function () {
+                    triggerAutoGenerateVirtualTheme();
+                }, 300);
+            });
+        }
+
+        // 模态框取消时的处理
+        var modalEl = document.getElementById('site-builder-plan-complete-modal');
+        if (modalEl) {
+            modalEl.addEventListener('hidden.bs.modal', function () {
+                if (planCompleteModalResolve) {
+                    planCompleteModalResolve(null);
+                    planCompleteModalResolve = null;
+                }
+                planCompleteModal = null;
+            });
+        }
+    });
+
+    // 自动触发生成虚拟主题（保存页面类型后）
+    function triggerAutoGenerateVirtualTheme() {
+        // 保存页面类型并切换到 generate 阶段
+        var pageTypes = getSelectedPageTypes();
+        var patch = { page_types: pageTypes };
+
+        applyScopeThenMaybeStage(
+            patch,
+            'generate',
+            messages.recommendationApplied,
+            { redirectToProviderOnGenerate: true }
+        ).catch(function (error) {
+            toast('error', error && error.message ? error.message : messages.applyRecommendationFailed);
         });
     }
 
@@ -2638,9 +2797,19 @@ body[data-topbar="dark"] .site-builder-workspace-page {
             }
             // done 表示流正常结束，重置重试计数即可，不应该触发重连
             workspaceReconnectAttempts = 0;
-            terminal.log((data.message || messages.streamDisconnected), 'done');
+            // 检查是否是 prepare 阶段结束（AI 规划完成），避免重复显示 "AI 规划完成"
+            var doneMessage = data.message || '';
+            var isPlanComplete = doneMessage.indexOf('规划完成') >= 0 || doneMessage.indexOf('plan complete') >= 0 || doneMessage.indexOf('AI 规划完成') >= 0;
+            if (!isPlanComplete) {
+                terminal.log((data.message || messages.streamDisconnected), 'done');
+            }
             sseBtn.disabled = false;
             // 不调用 scheduleWorkspaceReconnect()，done 是正常结束
+
+            // 如果是 prepare 阶段结束且当前在 prepare 阶段，显示页面类型选择模态框
+            if (isPlanComplete && currentStageCode === 'prepare') {
+                showPageTypeSelectionModal();
+            }
         });
 
         terminal.on('error', function (event) {
@@ -2689,5 +2858,300 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     if (currentStageCode === 'generate' && (!virtualThemeAutoGenerated || virtualThemeSeedEmpty)) {
         startVirtualThemeAiGeneration();
     }
+
+    // ========== 可视化主题编辑器 ==========
+    var nextStep = <?= json_encode($this->getData('next_step') ?? '', JSON_UNESCAPED_UNICODE) ?>;
+    var autoShowPageTypeSelector = <?= $this->getData('auto_show_page_type_selector') ? 'true' : 'false' ?>;
+    var virtualThemeAutoGenerated = <?= !empty($scope['virtual_theme_auto_generated']) ? 'true' : 'false' ?>;
+
+    // 页面类型生成状态管理
+    var generatedPageTypes = <?= json_encode($scope['generated_page_types'] ?? [], JSON_UNESCAPED_UNICODE) ?>;
+    var pageTypeStates = {};
+    allPageTypes.forEach(function(pageType) {
+        pageTypeStates[pageType] = {
+            value: pageType,
+            label: getPageTypeLabel(pageType),
+            generated: !!(generatedPageTypes[pageType] && generatedPageTypes[pageType].status === 'completed'),
+            generating: false,
+            visualEditUrl: ''
+        };
+    });
+
+    // 自动弹出页面类型选择弹窗的条件：
+    // 1. 有 next_step=virtual_theme_edit 参数
+    // 2. 或者虚拟主题未生成
+    var shouldShowModal = (autoShowPageTypeSelector && nextStep === 'virtual_theme_edit') || !virtualThemeAutoGenerated;
+
+    if (shouldShowModal) {
+        setTimeout(function() {
+            showPageTypeSelectorModal();
+        }, 500);
+    }
+
+    var currentEditingPageType = 'home_page';
+    var visualEditorFrame = document.getElementById('visualEditorFrame');
+    var visualEditorContainer = document.getElementById('visualEditorContainer');
+
+    function showPageTypeSelectorModal() {
+        var modal = document.getElementById('pageTypeSelectorModal');
+        if (modal) {
+            // 更新复选框状态：已生成的页面类型禁用
+            Object.keys(pageTypeStates).forEach(function(pageType) {
+                var checkbox = document.getElementById('pageType_' + pageType);
+                if (checkbox) {
+                    if (pageTypeStates[pageType].generated) {
+                        checkbox.disabled = true;
+                        checkbox.checked = false;
+                        // 添加灰色样式
+                        var label = checkbox.parentElement;
+                        if (label) {
+                            label.style.opacity = '0.5';
+                            label.style.cursor = 'not-allowed';
+                            label.title = '该页面类型已生成';
+                        }
+                    } else {
+                        checkbox.disabled = false;
+                        checkbox.checked = true;
+                        var label = checkbox.parentElement;
+                        if (label) {
+                            label.style.opacity = '1';
+                            label.style.cursor = 'pointer';
+                            label.title = '';
+                        }
+                    }
+                }
+            });
+
+            var bsModal = new bootstrap.Modal(modal);
+            bsModal.show();
+        }
+    }
+
+    function getPageTypeLabel(pageType) {
+        var labels = {
+            'home_page': '<?= __('首页') ?>',
+            'about_page': '<?= __('关于我们') ?>',
+            'contact_page': '<?= __('联系我们') ?>',
+            'privacy_policy': '<?= __('隐私政策') ?>',
+            'terms_of_service': '<?= __('服务条款') ?>',
+            'refund_policy': '<?= __('退款政策') ?>',
+            'shipping_policy': '<?= __('配送政策') ?>',
+            'cookie_policy': '<?= __('Cookie政策') ?>',
+            'blog_list': '<?= __('博客列表') ?>',
+            'blog_category': '<?= __('博客分类') ?>',
+            'blog_post': '<?= __('博客文章') ?>',
+            'custom_page': '<?= __('自定义页面') ?>'
+        };
+        return labels[pageType] || pageType;
+    }
+
+    function startProgressiveGeneration() {
+        var selectedTypes = [];
+        var checkboxes = document.querySelectorAll('#pageTypeSelectorModal input[type="checkbox"]:checked');
+        checkboxes.forEach(function(cb) {
+            selectedTypes.push(cb.value);
+        });
+
+        if (selectedTypes.length === 0) {
+            toast('warning', '<?= __('请至少选择一个页面类型') ?>');
+            return;
+        }
+
+        // 关闭弹窗
+        var modal = bootstrap.Modal.getInstance(document.getElementById('pageTypeSelectorModal'));
+        if (modal) {
+            modal.hide();
+        }
+
+        // 初始化页面状态
+        selectedTypes.forEach(function(pageType) {
+            if (pageTypeStates[pageType]) {
+                pageTypeStates[pageType].generating = true;
+                pageTypeStates[pageType].generated = false;
+            }
+        });
+
+        // 更新页面类型切换器
+        updatePageTypeSwitcher();
+
+        // 启动 SSE 流式生成
+        var sseUrl = '<?= $generate_virtual_theme_sse_url ?>?public_id=<?= urlencode($publicId) ?>&stream_mode=progressive';
+        var eventSource = new EventSource(sseUrl);
+
+        eventSource.addEventListener('page_generated', function(e) {
+            var data = JSON.parse(e.data);
+            var pageType = data.page_type;
+
+            if (pageTypeStates[pageType]) {
+                pageTypeStates[pageType].generated = true;
+                pageTypeStates[pageType].generating = false;
+                pageTypeStates[pageType].visualEditUrl = data.visual_edit_url;
+            }
+
+            // 首页生成完成后，立即显示编辑器
+            if (pageType === 'home_page') {
+                currentEditingPageType = 'home_page';
+                showVisualEditor(data.visual_edit_url);
+            }
+
+            updatePageTypeSwitcher();
+            terminal.log('<?= __('页面 %{page_type} 生成完成') ?>'.replace('%{page_type}', getPageTypeLabel(pageType)), 'success');
+        });
+
+        eventSource.addEventListener('progress', function(e) {
+            var data = JSON.parse(e.data);
+            terminal.log(data.message || '', 'info');
+        });
+
+        eventSource.addEventListener('error', function(e) {
+            var data = e.data ? JSON.parse(e.data) : {};
+            terminal.log(data.message || '<?= __('生成过程中发生错误') ?>', 'error');
+        });
+
+        eventSource.addEventListener('done', function(e) {
+            eventSource.close();
+            terminal.log('<?= __('所有页面生成完成') ?>', 'success');
+        });
+    }
+
+    function showVisualEditor(url) {
+        if (visualEditorFrame && visualEditorContainer) {
+            visualEditorFrame.src = url;
+            visualEditorContainer.style.display = 'block';
+        }
+    }
+
+    function switchPageType(pageType) {
+        var state = pageTypeStates[pageType];
+        if (!state || !state.generated) {
+            toast('warning', '<?= __('该页面尚未生成完成') ?>');
+            return;
+        }
+
+        currentEditingPageType = pageType;
+        showVisualEditor(state.visualEditUrl);
+        updatePageTypeSwitcher();
+    }
+
+    function updatePageTypeSwitcher() {
+        var container = document.getElementById('pageTypeSwitcher');
+        if (!container) return;
+
+        container.innerHTML = '';
+        Object.keys(pageTypeStates).forEach(function(pageType) {
+            var state = pageTypeStates[pageType];
+            var btn = document.createElement('button');
+            btn.className = 'btn btn-sm';
+            btn.className += (pageType === currentEditingPageType) ? ' btn-primary' : ' btn-outline-primary';
+            btn.disabled = !state.generated;
+            btn.textContent = state.label;
+
+            if (state.generating) {
+                var spinner = document.createElement('span');
+                spinner.className = 'spinner-border spinner-border-sm ms-1';
+                btn.appendChild(spinner);
+            }
+
+            if (state.generated) {
+                var badge = document.createElement('span');
+                badge.className = 'badge bg-success ms-1';
+                badge.textContent = '✓';
+                btn.appendChild(badge);
+            }
+
+            btn.addEventListener('click', function() {
+                switchPageType(pageType);
+            });
+
+            container.appendChild(btn);
+        });
+    }
 })();
 </script>
+
+<!-- 页面类型选择弹窗 -->
+<div class="modal fade" id="pageTypeSelectorModal" tabindex="-1" aria-labelledby="pageTypeSelectorModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pageTypeSelectorModalLabel"><lang>选择要生成的页面类型</lang></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="home_page" id="pageType_home_page" checked>
+                    <label class="form-check-label" for="pageType_home_page"><lang>首页</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="about_page" id="pageType_about_page" checked>
+                    <label class="form-check-label" for="pageType_about_page"><lang>关于我们</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="contact_page" id="pageType_contact_page" checked>
+                    <label class="form-check-label" for="pageType_contact_page"><lang>联系我们</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="privacy_policy" id="pageType_privacy_policy">
+                    <label class="form-check-label" for="pageType_privacy_policy"><lang>隐私政策</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="terms_of_service" id="pageType_terms_of_service">
+                    <label class="form-check-label" for="pageType_terms_of_service"><lang>服务条款</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="refund_policy" id="pageType_refund_policy">
+                    <label class="form-check-label" for="pageType_refund_policy"><lang>退款政策</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="shipping_policy" id="pageType_shipping_policy">
+                    <label class="form-check-label" for="pageType_shipping_policy"><lang>配送政策</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="cookie_policy" id="pageType_cookie_policy">
+                    <label class="form-check-label" for="pageType_cookie_policy"><lang>Cookie政策</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="blog_list" id="pageType_blog_list">
+                    <label class="form-check-label" for="pageType_blog_list"><lang>博客列表</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="blog_category" id="pageType_blog_category">
+                    <label class="form-check-label" for="pageType_blog_category"><lang>博客分类</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="blog_post" id="pageType_blog_post">
+                    <label class="form-check-label" for="pageType_blog_post"><lang>博客文章</lang></label>
+                </div>
+                <div class="form-check" style="margin-bottom: 10px;">
+                    <input class="form-check-input" type="checkbox" value="custom_page" id="pageType_custom_page">
+                    <label class="form-check-label" for="pageType_custom_page"><lang>自定义页面</lang></label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><lang>取消</lang></button>
+                <button type="button" class="btn btn-primary" onclick="startProgressiveGeneration()"><lang>确认生成</lang></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 可视化编辑器容器 -->
+<div class="card mt-3" id="visualEditorContainer" style="display:none;">
+    <div class="card-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <h5 class="mb-0"><lang>可视化编辑器</lang></h5>
+                <button type="button" class="btn btn-sm btn-outline-primary" onclick="showPageTypeSelectorModal()" title="<?= __('新增页面类型') ?>">
+                    <i class="mdi mdi-plus"></i> <lang>新增页面类型</lang>
+                </button>
+            </div>
+            <div class="btn-group" role="group" id="pageTypeSwitcher">
+                <!-- 页面类型切换按钮将通过 JS 动态生成 -->
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-0">
+        <iframe id="visualEditorFrame" style="width:100%; height:800px; border:none;"></iframe>
+    </div>
+</div>
+

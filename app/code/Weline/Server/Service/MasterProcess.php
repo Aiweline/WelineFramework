@@ -238,9 +238,10 @@ class MasterProcess
             if ($configuredControlPort > 0) {
                 $preferredControlPort = $configuredControlPort;
             } else {
-                // 自动分配：基础端口 + 项目偏移量，确保多项目不冲突
+                // 自动分配：基础端口 20000（避免与 Worker 端口 10000 冲突）+ 主端口 + 项目偏移量
+                // 确保多项目不冲突，且不与 Worker 端口范围重叠
                 $projectOffset = self::getProjectPortOffset();
-                $preferredControlPort = $this->mainPort + 10000 + $projectOffset;
+                $preferredControlPort = 20000 + $this->mainPort + $projectOffset;
             }
             $this->controlPort = $preferredControlPort;
             if ($this->controlPort <= 0 || $this->controlPort > 65535) {

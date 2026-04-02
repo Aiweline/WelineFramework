@@ -636,8 +636,13 @@ class ServerInstanceManager
     {
         $names = [
             '--name=' . MasterProcess::getMasterProcessName($name),
+            '--name=' . MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
+            '--name=' . MasterProcess::buildScopedProcessName('weline-wls-session', $name),
+            '--name=' . MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
+            '--name=' . MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
             '--name=weline-wls-dispatcher-' . $name,
             '--name=weline-wls-session-' . $name,
+            '--name=weline-wls-memory-' . $name,
             '--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
         ];
 
@@ -663,6 +668,7 @@ class ServerInstanceManager
 
         $count = (int) ($rawData['count'] ?? 0);
         for ($i = 1; $i <= $count; $i++) {
+            $names[] = '--name=' . MasterProcess::buildScopedProcessName('weline-wls-worker', $name, $i);
             $names[] = '--name=weline-wls-worker-' . $name . '-' . $i;
             $names[] = '--name=weline-master-' . $name . '-worker-' . $i;
         }
@@ -878,7 +884,9 @@ class ServerInstanceManager
         static $port = null;
         if ($port === null) {
             $envConfig = Env::getInstance()->getConfig();
-            $port = (int) ($envConfig['session']['server_port'] ?? 19970);
+            // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+            $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
+            $port = (int) ($envConfig['session']['server_port'] ?? $defaultPort);
         }
         return $port;
     }

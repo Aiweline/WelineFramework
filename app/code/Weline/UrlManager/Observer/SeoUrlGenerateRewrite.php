@@ -33,6 +33,12 @@ class SeoUrlGenerateRewrite implements ObserverInterface
             return;
         }
 
+        // 检查当前请求是否为后台请求，如果是则跳过 SEO 重写
+        // 后台 URL 不应该被 SEO 重写，因为它们有自己的路由规则
+        if (($_SERVER['WELINE_IS_BACKEND'] ?? false) || ($_SERVER['WELINE_AREA'] ?? '') === 'backend' || ($_SERVER['WELINE_AREA'] ?? '') === 'rest_backend') {
+            return;
+        }
+
         $parse = Url::parser($url);
         if (is_string($parse)) {
             return;

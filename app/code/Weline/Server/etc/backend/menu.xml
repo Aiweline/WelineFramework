@@ -65,19 +65,27 @@
               order="5"/>
         
         <!-- SSL证书管理 -->
-        <menu source="Weline_Server::ssl" 
-              name="ssl" 
-              title="SSL证书管理" 
+        <menu source="Weline_Server::ssl"
+              name="ssl"
+              title="SSL证书管理"
               action="*/backend/ssl-certificate"
-              icon="bi-shield-lock" 
+              icon="bi-shield-lock"
               order="6"/>
-        
+
+        <!-- 反向代理配置 -->
+        <menu source="Weline_Server::reverse_proxy"
+              name="reverse_proxy"
+              title="反向代理配置"
+              action="*/backend/reverse-proxy"
+              icon="bi-arrow-left-right"
+              order="6.5"/>
+
         <!-- 性能优化指南 -->
-        <menu source="Weline_Server::optimization" 
-              name="optimization" 
-              title="性能优化指南" 
+        <menu source="Weline_Server::optimization"
+              name="optimization"
+              title="性能优化指南"
               action="*/backend/optimization-guide"
-              icon="bi-lightning-charge" 
+              icon="bi-lightning-charge"
               order="7"/>
         
         <!-- API文档 -->

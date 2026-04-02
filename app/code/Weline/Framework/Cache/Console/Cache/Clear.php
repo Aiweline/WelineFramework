@@ -17,6 +17,7 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Scanner;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 
 class Clear implements \Weline\Framework\Console\CommandInterface
 {
@@ -30,6 +31,11 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     private Printing $printing;
 
+    /**
+     * @var BroadcastControlDispatchService|null
+     */
+    private ?BroadcastControlDispatchService $broadcastService = null;
+
     public function __construct(
         Scanner  $scanner,
         Printing $printing
@@ -37,6 +43,17 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     {
         $this->scanner  = $scanner;
         $this->printing = $printing;
+    }
+
+    /**
+     * 获取广播控制服务（延迟初始化，避免 CLI 场景不必要开销）
+     */
+    private function getBroadcastService(): BroadcastControlDispatchService
+    {
+        if ($this->broadcastService === null) {
+            $this->broadcastService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
+        }
+        return $this->broadcastService;
     }
 
     /**
@@ -83,6 +100,31 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         
         // 显示总体统计
         $this->printOverallSummary($totalStats);
+
+        // 向 WLS 发送缓存清理命令（进程内缓存失效，不重启 Worker）
+        $this->sendWlsCacheClearCommand();
+    }
+
+    /**
+     * 向 WLS 发送缓存清理 IPC 命令
+     */
+    private function sendWlsCacheClearCommand(): void
+    {
+        try {
+            $service = $this->getBroadcastService();
+            $result = $service->cacheClear();
+
+            if (!empty($result['success'])) {
+                $this->printing->successIcon(__('WLS 缓存清理命令已发送'));
+                if ($result['message']) {
+                    $this->printing->note($result['message']);
+                }
+            } else {
+                $this->printing->warning(__('WLS 缓存清理命令发送失败：%{1}', [$result['message'] ?? __('未知错误')]));
+            }
+        } catch (\Throwable $e) {
+            // WLS 未运行时静默忽略，不影响本地缓存清理的展示
+        }
     }
     
     /**
