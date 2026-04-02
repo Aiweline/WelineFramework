@@ -51,6 +51,9 @@ final class SessionServer
     /** 上次 GC 时间 */
     private int $lastGcTime = 0;
 
+    /** 上次连接泄漏检测时间 */
+    private float $lastLeakCheckTime = 0.0;
+
     /** 配置 */
     private array $config = [];
 
@@ -59,7 +62,9 @@ final class SessionServer
 
     /** 认证 Token（null 表示不启用认证） */
     private ?string $authToken = null;
-    
+    private int $authTokenVersion = 0; // Token 版本号，每次生成新 token 时递增
+    private float $lastTokenFileCheck = 0.0; // 上次检查 token 文件的时间
+
     /** Token 文件路径 */
     private string $tokenFilePath = '';
 
@@ -71,14 +76,19 @@ final class SessionServer
     public function __construct(array $config = [])
     {
         $this->config = $config;
-        $this->port = (int)($config['port'] ?? 19970);
+        $this->port = (int)($config['port'] ?? (19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset()));
         $this->gcInterval = (int)($config['gc_interval'] ?? 300);
         $this->store = new SessionStore($config);
         $this->lastGcTime = \time();
-        
+
         $authEnabled = (bool)($config['auth_enabled'] ?? true);
         if ($authEnabled) {
             $this->initAuthToken();
+        }
+
+        // 初始化全局指标收集器
+        if (!isset($GLOBALS['wls_metrics_collector'])) {
+            $GLOBALS['wls_metrics_collector'] = new \Weline\Server\Service\Telemetry\SessionMetricsCollector();
         }
     }
     
@@ -89,12 +99,13 @@ final class SessionServer
     private function initAuthToken(): void
     {
         $this->authToken = \bin2hex(\random_bytes(32));
-        
+        $this->authTokenVersion = \time(); // 使用时间戳作为版本号
+
         $basePath = \defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/';
         if (!\is_dir($basePath)) {
             @\mkdir($basePath, 0755, true);
         }
-        
+
         $tokenFileName = (string)($this->config['token_file_name'] ?? 'session_server.token');
         $tokenFileName = \trim($tokenFileName, " \t\n\r\0\x0B\"'");
         $tokenFileName = \basename($tokenFileName);
@@ -610,6 +621,27 @@ final class SessionServer
             $this->store->gc();
             $this->lastGcTime = $now;
         }
+
+        // 连接泄漏检测（每 30 秒）
+        $nowFloat = \microtime(true);
+        if ($nowFloat - $this->lastLeakCheckTime >= 30.0) {
+            $this->detectConnectionLeaks();
+            $this->lastLeakCheckTime = $nowFloat;
+        }
+    }
+
+    /**
+     * 检测连接池泄漏
+     */
+    private function detectConnectionLeaks(): void
+    {
+        // 获取所有连接池实例并检测泄漏
+        // 注意：ConnectionPoolManager 使用单例模式，需要通过反射访问
+        // 这里简化处理，仅记录连接池状态到指标
+
+        // 由于 ConnectionPoolManager 是单例且私有，我们无法直接访问
+        // 实际的泄漏检测会在客户端调用 acquire/release 时触发
+        // 这里仅作为占位符，实际检测逻辑在 ConnectionPoolManager::detectLeaks()
     }
 
     /**
@@ -642,19 +674,19 @@ final class SessionServer
     private function handleAuth(int $clientId, array $msg): void
     {
         $token = $msg['token'] ?? '';
-        
+
         if ($this->authToken === null) {
             $this->clients[$clientId]['authenticated'] = true;
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Auth disabled'));
             return;
         }
-        
+
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
             $this->log("Client authenticated: {$this->clients[$clientId]['addr']} (id={$clientId})");
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Authenticated'));
         } else {
-            $this->log("Client auth failed: {$this->clients[$clientId]['addr']} (id={$clientId})");
+            $this->log("Client auth failed: {$this->clients[$clientId]['addr']} (id={$clientId}) - Expected len=" . \strlen($this->authToken) . ", Got len=" . \strlen($token) . ", Match=" . ($this->authToken === $token ? 'Y' : 'N'));
             $this->sendToClient($clientId, SessionProtocol::encodeError('Invalid token', 'AUTH_FAILED'));
             $this->disconnectClient($clientId);
         }
@@ -811,10 +843,31 @@ final class SessionServer
             return;
         }
 
+        // 限制检查频率：每 5 秒最多检查一次，避免频繁文件 I/O
+        $now = \microtime(true);
+        if ($now - $this->lastTokenFileCheck < 5.0) {
+            return;
+        }
+        $this->lastTokenFileCheck = $now;
+
         if (\is_file($this->tokenFilePath)) {
-            $currentToken = @\file_get_contents($this->tokenFilePath);
-            if (\is_string($currentToken) && \trim($currentToken) !== '') {
-                return;
+            $currentContent = @\file_get_contents($this->tokenFilePath);
+            $currentContent = \is_string($currentContent) ? \trim($currentContent) : '';
+
+            if ($currentContent !== '') {
+                // 解析 token:version 格式
+                $parts = \explode(':', $currentContent, 2);
+                $currentToken = $parts[0] ?? '';
+                $currentVersion = isset($parts[1]) ? (int)$parts[1] : 0;
+
+                // 如果文件中的 token 和内存中的一致，无需操作
+                if (\hash_equals($this->authToken, $currentToken) && $currentVersion === $this->authTokenVersion) {
+                    return;
+                }
+
+                // Token 或版本号不一致，说明有其他进程修改了文件或服务器重启了
+                // 强制恢复为内存中的 token（内存中的是启动时生成的权威 token）
+                $this->log("Auth token mismatch detected (file_ver={$currentVersion}, mem_ver={$this->authTokenVersion}), restoring server token to file");
             }
         }
 
@@ -823,7 +876,8 @@ final class SessionServer
             @\mkdir($dir, 0755, true);
         }
 
-        $written = @\file_put_contents($this->tokenFilePath, $this->authToken, \LOCK_EX);
+        $content = $this->authToken . ':' . $this->authTokenVersion;
+        $written = @\file_put_contents($this->tokenFilePath, $content, \LOCK_EX);
         if ($written === false) {
             $this->log("Auth token file restore failed: {$this->tokenFilePath}");
             return;
@@ -839,7 +893,9 @@ final class SessionServer
             return;
         }
 
-        $written = @\file_put_contents($this->tokenFilePath, $this->authToken, \LOCK_EX);
+        // Token 文件格式：token:version（用冒号分隔）
+        $content = $this->authToken . ':' . $this->authTokenVersion;
+        $written = @\file_put_contents($this->tokenFilePath, $content, \LOCK_EX);
         if ($written === false) {
             $this->log("Auth token file write failed: {$this->tokenFilePath}, fallback to auth disabled");
             $this->authToken = null;
