@@ -96,6 +96,26 @@ final class SessionStore
     /** 服务启动时间 */
     private int $startTime;
 
+    /** 操作延迟采样率（10%） */
+    private int $metricsSampleRate = 10;
+
+    /** 慢操作阈值（毫秒） */
+    private array $slowOperationThresholds = [
+        'get' => 50,
+        'set' => 100,
+        'delete' => 50,
+        'destroy' => 100,
+    ];
+
+    /** 变更的 Session ID 集合（用于增量持久化） */
+    private array $changedSessionIds = [];
+
+    /** 是否启用增量持久化 */
+    private bool $incrementalPersist = true;
+
+    /** 增量持久化阈值（变更数量超过此值时使用全量持久化） */
+    private int $incrementalThreshold = 1000;
+
     /**
      * 构造函数
      *
@@ -165,15 +185,19 @@ final class SessionStore
             return false;
         }
 
+        // 检查是否是增量持久化格式
+        $isIncremental = isset($data['incremental']) && $data['incremental'] === true;
+        $sessions = $isIncremental ? ($data['data'] ?? []) : $data;
+
         $now = \time();
         $loaded = 0;
         $expired = 0;
 
-        foreach ($data as $sessionId => $entry) {
+        foreach ($sessions as $sessionId => $entry) {
             if (!isset($entry['data']) || !isset($entry['expire'])) {
                 continue;
             }
-            
+
             if ($entry['expire'] > 0 && $entry['expire'] < $now) {
                 $expired++;
                 continue;
@@ -188,7 +212,7 @@ final class SessionStore
             $loaded++;
         }
 
-        $this->log("Loaded {$loaded} sessions from file, {$expired} expired");
+        $this->log("Loaded {$loaded} sessions from file" . ($isIncremental ? ' (incremental)' : '') . ", {$expired} expired");
         return true;
     }
 
@@ -197,28 +221,52 @@ final class SessionStore
      */
     public function persistToFile(): bool
     {
+        $startTime = \microtime(true);
+
         if (!$this->dirty && \count($this->store) === 0) {
             return true;
         }
 
         if (!$this->ensurePersistDirectory()) {
+            $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'dir_error');
             return false;
         }
-        
+
+        // 决定使用增量持久化还是全量持久化
+        $useIncremental = $this->incrementalPersist
+            && !empty($this->changedSessionIds)
+            && \count($this->changedSessionIds) < $this->incrementalThreshold
+            && \count($this->changedSessionIds) < \count($this->store) * 0.5; // 变更少于50%时使用增量
+
+        $dataToPersist = $this->store;
+
+        if ($useIncremental) {
+            // 增量持久化：只序列化变更的 Session
+            $dataToPersist = [];
+            foreach ($this->changedSessionIds as $sessionId => $_) {
+                if (isset($this->store[$sessionId])) {
+                    $dataToPersist[$sessionId] = $this->store[$sessionId];
+                }
+            }
+            $this->log('Incremental persist: ' . \count($dataToPersist) . ' changed sessions');
+        }
+
         $tempPath = $this->persistPath . '.tmp.' . \getmypid() . '.' . \str_replace('.', '', \uniqid('', true));
         try {
-            $content = \serialize($this->store);
+            $content = \serialize($useIncremental ? ['incremental' => true, 'data' => $dataToPersist] : $dataToPersist);
         } catch (\Throwable $throwable) {
             $this->markPersistFailure('Failed to serialize persist payload: ' . $throwable->getMessage());
+            $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'serialize_error');
             return false;
         }
-        
+
         if (@\file_put_contents($tempPath, $content, LOCK_EX) === false) {
             @\unlink($tempPath);
             $this->markPersistFailure($this->buildLastPhpErrorMessage(
                 'Failed to write persist temp file',
                 $tempPath
             ));
+            $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'write_error');
             return false;
         }
 
@@ -234,6 +282,7 @@ final class SessionStore
                     'Failed to replace persist file',
                     $this->persistPath
                 ));
+                $this->recordPersistMetric(\microtime(true) - $startTime, 'failure', 'rename_error');
                 return false;
             }
         }
@@ -243,7 +292,9 @@ final class SessionStore
         $this->writesSinceLastPersist = 0;
         $this->nextPersistRetryAt = 0;
         $this->persistCount++;
-        $this->log('Persisted ' . \count($this->store) . ' sessions to file');
+        $this->changedSessionIds = []; // 清空变更追踪
+        $this->recordPersistMetric(\microtime(true) - $startTime, 'success', '');
+        $this->log('Persisted ' . \count($dataToPersist) . ' sessions to file' . ($useIncremental ? ' (incremental)' : ''));
         return true;
     }
 
@@ -293,7 +344,13 @@ final class SessionStore
      */
     public function get(string $sessionId, ?string $key = null): mixed
     {
+        $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
+        $startTime = $shouldSample ? \microtime(true) : 0;
+
         if (!isset($this->store[$sessionId])) {
+            if ($shouldSample) {
+                $this->recordOperationMetric('get', \microtime(true) - $startTime, 'miss');
+            }
             return $key === null ? [] : null;
         }
 
@@ -301,17 +358,22 @@ final class SessionStore
 
         if ($entry['expire'] > 0 && $entry['expire'] < \time()) {
             $this->destroy($sessionId);
+            if ($shouldSample) {
+                $this->recordOperationMetric('get', \microtime(true) - $startTime, 'expired');
+            }
             return $key === null ? [] : null;
         }
 
         // Sliding expiration: active sessions should refresh TTL on reads.
         $this->touch($sessionId);
 
-        if ($key === null) {
-            return $entry['data'];
+        $result = $key === null ? $entry['data'] : ($entry['data'][$key] ?? null);
+
+        if ($shouldSample) {
+            $this->recordOperationMetric('get', \microtime(true) - $startTime, 'hit');
         }
 
-        return $entry['data'][$key] ?? null;
+        return $result;
     }
 
     /**
@@ -333,6 +395,9 @@ final class SessionStore
      */
     public function set(string $sessionId, string $key, mixed $value, int $ttl = 0): bool
     {
+        $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
+        $startTime = $shouldSample ? \microtime(true) : 0;
+
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $expire = $ttl > 0 ? \time() + $ttl : 0;
         $now = \time();
@@ -352,7 +417,11 @@ final class SessionStore
         }
 
         $this->store[$sessionId]['data'][$key] = $value;
-        $this->markDirty();
+        $this->markDirty($sessionId);
+
+        if ($shouldSample) {
+            $this->recordOperationMetric('set', \microtime(true) - $startTime, 'success');
+        }
 
         return true;
     }
@@ -377,7 +446,7 @@ final class SessionStore
         ];
         $this->lruOrder[$sessionId] = true;
         $this->touchLru($sessionId);
-        $this->markDirty();
+        $this->markDirty($sessionId);
 
         return true;
     }
@@ -387,16 +456,29 @@ final class SessionStore
      */
     public function delete(string $sessionId, string $key): bool
     {
+        $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
+        $startTime = $shouldSample ? \microtime(true) : 0;
+
         if (!isset($this->store[$sessionId])) {
+            if ($shouldSample) {
+                $this->recordOperationMetric('delete', \microtime(true) - $startTime, 'miss');
+            }
             return false;
         }
 
         if (!isset($this->store[$sessionId]['data'][$key])) {
+            if ($shouldSample) {
+                $this->recordOperationMetric('delete', \microtime(true) - $startTime, 'key_not_found');
+            }
             return false;
         }
 
         unset($this->store[$sessionId]['data'][$key]);
-        $this->markDirty();
+        $this->markDirty($sessionId);
+
+        if ($shouldSample) {
+            $this->recordOperationMetric('delete', \microtime(true) - $startTime, 'success');
+        }
 
         return true;
     }
@@ -406,17 +488,27 @@ final class SessionStore
      */
     public function destroy(string $sessionId): bool
     {
+        $shouldSample = \mt_rand(1, 100) <= $this->metricsSampleRate;
+        $startTime = $shouldSample ? \microtime(true) : 0;
+
         if (!isset($this->store[$sessionId])) {
+            if ($shouldSample) {
+                $this->recordOperationMetric('destroy', \microtime(true) - $startTime, 'miss');
+            }
             return false;
         }
 
         unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
-        $this->markDirty();
-        
+        $this->markDirty($sessionId);
+
         $this->destroyCount++;
         if ($this->persistOnCritical && $this->destroyCount >= 10) {
             $this->destroyCount = 0;
             $this->persistToFile();
+        }
+
+        if ($shouldSample) {
+            $this->recordOperationMetric('destroy', \microtime(true) - $startTime, 'success');
         }
 
         return true;
@@ -446,7 +538,7 @@ final class SessionStore
         $this->store[$sessionId]['data'][$key] = $newValue;
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
-        $this->markDirty();
+        $this->markDirty($sessionId);
         
         return $newValue;
     }
@@ -485,7 +577,7 @@ final class SessionStore
         $this->store[$sessionId]['data'][$key] = $current;
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
-        $this->markDirty();
+        $this->markDirty($sessionId);
         
         return true;
     }
@@ -513,7 +605,7 @@ final class SessionStore
         $this->store[$sessionId]['data'][$key] = $newValue;
         $this->store[$sessionId]['atime'] = \time();
         $this->touchLru($sessionId);
-        $this->markDirty();
+        $this->markDirty($sessionId);
         
         return true;
     }
@@ -637,7 +729,7 @@ final class SessionStore
             $this->store[$sessionId]['data'][(string)$key] = $value;
         }
 
-        $this->markDirty();
+        $this->markDirty($sessionId);
         return true;
     }
 
@@ -668,6 +760,7 @@ final class SessionStore
      */
     public function gc(int $maxLifetime = 0): int
     {
+        $startTime = \microtime(true);
         $now = \time();
         $cleaned = 0;
 
@@ -682,6 +775,16 @@ final class SessionStore
             $this->gcCleanedCount += $cleaned;
             $this->markDirty();
             $this->log("GC cleaned {$cleaned} expired sessions");
+        }
+
+        // 记录 GC 耗时
+        $durationMs = (\microtime(true) - $startTime) * 1000;
+        if (isset($GLOBALS['wls_metrics_collector'])) {
+            $GLOBALS['wls_metrics_collector']->recordHistogram(
+                'wls_store_gc_duration_ms',
+                $durationMs,
+                []
+            );
         }
 
         return $cleaned;
@@ -783,7 +886,12 @@ final class SessionStore
         $lines[] = "# HELP {$prefix}persists_total Total persist operations";
         $lines[] = "# TYPE {$prefix}persists_total counter";
         $lines[] = "{$prefix}persists_total {$this->persistCount}";
-        
+
+        // 合并全局指标收集器的指标
+        if (isset($GLOBALS['wls_metrics_collector'])) {
+            $lines[] = $GLOBALS['wls_metrics_collector']->exportPrometheus();
+        }
+
         return \implode("\n", $lines) . "\n";
     }
     
@@ -809,7 +917,7 @@ final class SessionStore
 
     /**
      * LRU 淘汰（如果达到最大 Session 数）
-     * 
+     *
      * 优化策略：优先淘汰即将过期（expire - now < 10分钟）的 Session，
      * 其次淘汰最久未访问的 Session
      */
@@ -819,19 +927,21 @@ final class SessionStore
             return;
         }
 
+        $startTime = \microtime(true);
+
         $toEvict = (int)\ceil($this->maxSessions * 0.1);
         $evicted = 0;
         $now = \time();
         $expiringThreshold = $now + 600;
-        
+
         $expiringSessions = [];
         $lruSessions = [];
-        
+
         foreach ($this->lruOrder as $sessionId => $_) {
             if (!isset($this->store[$sessionId])) {
                 continue;
             }
-            
+
             $entry = $this->store[$sessionId];
             if ($entry['expire'] > 0 && $entry['expire'] < $expiringThreshold) {
                 $expiringSessions[$sessionId] = $entry['expire'];
@@ -839,9 +949,9 @@ final class SessionStore
                 $lruSessions[] = $sessionId;
             }
         }
-        
+
         \asort($expiringSessions);
-        
+
         foreach ($expiringSessions as $sessionId => $expire) {
             if ($evicted >= $toEvict) {
                 break;
@@ -849,7 +959,7 @@ final class SessionStore
             unset($this->store[$sessionId], $this->lruOrder[$sessionId]);
             $evicted++;
         }
-        
+
         foreach ($lruSessions as $sessionId) {
             if ($evicted >= $toEvict) {
                 break;
@@ -862,16 +972,33 @@ final class SessionStore
             $this->evictionCount += $evicted;
             $this->log("LRU evicted {$evicted} sessions (expiring-first strategy)");
             $this->markDirty();
+
+            // 记录淘汰耗时
+            $durationMs = (\microtime(true) - $startTime) * 1000;
+            if (isset($GLOBALS['wls_metrics_collector'])) {
+                $GLOBALS['wls_metrics_collector']->recordHistogram(
+                    'wls_store_lru_eviction_duration_ms',
+                    $durationMs,
+                    []
+                );
+            }
         }
     }
 
     /**
      * 标记数据已更改
+     *
+     * @param string|null $sessionId 变更的 Session ID（用于增量持久化）
      */
-    private function markDirty(): void
+    private function markDirty(?string $sessionId = null): void
     {
         $this->dirty = true;
         $this->writesSinceLastPersist++;
+
+        // 追踪变更的 Session ID（用于增量持久化）
+        if ($sessionId !== null && $this->incrementalPersist) {
+            $this->changedSessionIds[$sessionId] = true;
+        }
     }
 
     /**
@@ -947,5 +1074,65 @@ final class SessionStore
     {
         $this->nextPersistRetryAt = \time() + $this->persistFailureBackoffSec;
         $this->log($message . ', retry_in=' . $this->persistFailureBackoffSec . 's');
+    }
+
+    /**
+     * 记录操作指标
+     */
+    private function recordOperationMetric(string $operation, float $durationSec, string $result): void
+    {
+        $durationMs = $durationSec * 1000;
+
+        if (isset($GLOBALS['wls_metrics_collector'])) {
+            $GLOBALS['wls_metrics_collector']->recordHistogram(
+                'wls_store_operation_duration_ms',
+                $durationMs,
+                ['operation' => $operation, 'result' => $result]
+            );
+
+            // 慢操作检测
+            $threshold = $this->slowOperationThresholds[$operation] ?? 100;
+            if ($durationMs > $threshold) {
+                $GLOBALS['wls_metrics_collector']->incrementCounter(
+                    'wls_store_slow_operation_total',
+                    1,
+                    ['operation' => $operation]
+                );
+
+                $this->log(\sprintf(
+                    'Slow operation detected: %s took %.2fms (threshold: %dms)',
+                    $operation,
+                    $durationMs,
+                    $threshold
+                ));
+            }
+        }
+
+        // 更新请求计数
+        $this->incrementRequestCount($operation);
+    }
+
+    /**
+     * 记录持久化指标
+     */
+    private function recordPersistMetric(float $durationSec, string $result, string $reason): void
+    {
+        $durationMs = $durationSec * 1000;
+
+        if (isset($GLOBALS['wls_metrics_collector'])) {
+            $GLOBALS['wls_metrics_collector']->recordHistogram(
+                'wls_store_persist_duration_ms',
+                $durationMs,
+                ['result' => $result]
+            );
+
+            if ($result === 'failure') {
+                $GLOBALS['wls_metrics_collector']->incrementCounter(
+                    'wls_store_persist_failure_total',
+                    1,
+                    ['reason' => $reason]
+                );
+            }
+        }
     }
 }
