@@ -569,12 +569,21 @@ class Dispatcher
                 break;
                 
             case ControlMessage::TYPE_REMOVE_WORKER:
-                // 从负载均衡池移除端口
+                // 从负载均衡池移除端口，并关闭所有使用该 Worker 的客户端连接
                 $ports = $msg['ports'] ?? [];
+                $totalAffectedConns = 0;
                 foreach ($ports as $port) {
-                    $this->passthroughCore->removeWorkerPort((int)$port);
+                    $affectedConnIds = $this->passthroughCore->removeWorkerPort((int)$port);
+                    foreach ($affectedConnIds as $connId) {
+                        $this->closeConnection($connId, 'worker_removed');
+                        $totalAffectedConns++;
+                    }
                 }
-                $this->log('移除 Worker 端口: ' . \implode(',', $ports), 'WARN');
+                $this->log(
+                    '移除 Worker 端口: ' . \implode(',', $ports) .
+                    ', 关闭受影响的客户端连接: ' . $totalAffectedConns,
+                    'WARN'
+                );
                 break;
 
             case ControlMessage::TYPE_SET_WORKER_POOL:
