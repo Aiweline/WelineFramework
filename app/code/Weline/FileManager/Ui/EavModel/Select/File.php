@@ -57,11 +57,8 @@ class File implements EavModelInterface
         ];
 
         $res = call_user_func($func, ...$params);
-        $res = str_replace('<?php', '', $res);
-        $res = str_replace('?>', '', $res);
 
-        ob_start();
-        eval($res);
+        // FileManager::callback() 返回的是渲染后的 HTML，直接使用
         $frontendAttrs = $type->getFrontendAttrs();
         $download      = '';
         $value_str     = '';
@@ -81,7 +78,7 @@ class File implements EavModelInterface
             }
             $value_str = implode(',', $value);
         }
-        return '<label class="' . $label_class . '" for="' . $id . '">' . $title . '  ' . $download . '</label><input ' . $attrStr . '  name="' . $type->getCode() . '" value="' . $value_str . '" id="' . $id . '" ' . $frontendAttrs . ' type="text" >' . ob_get_clean();
+        return '<label class="' . $label_class . '" for="' . $id . '">' . $title . '  ' . $download . '</label><input ' . $attrStr . '  name="' . $type->getCode() . '" value="' . $value_str . '" id="' . $id . '" ' . $frontendAttrs . ' type="text" >' . $res;
     }
 
     public function getModelData(): mixed

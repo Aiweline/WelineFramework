@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service\Provider;
 
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -78,7 +79,7 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             : $scriptDir . DS . 'worker.php';
 
         $port = $this->getPort($instanceId, $context);
-        $processName = self::PROCESS_NAME_PREFIX . '-' . $context->instanceName . '-' . $instanceId;
+        $processName = MasterProcess::buildScopedProcessName(self::PROCESS_NAME_PREFIX, $context->instanceName, $instanceId);
 
         $mode = $context->mode;
         $host = ($mode === 'linux-direct')
@@ -181,20 +182,24 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
 
         $sessionHost = (string) ($wlsServer['host'] ?? $wlsSession['host'] ?? '127.0.0.1');
         $sessionHost = \trim($sessionHost) !== '' ? $sessionHost : '127.0.0.1';
-        $sessionPort = (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $context->envConfig['session']['server_port'] ?? 19970);
+        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $defaultSessionPort = 19970 + MasterProcess::getProjectPortOffset();
+        $sessionPort = (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $context->envConfig['session']['server_port'] ?? $defaultSessionPort);
         $sessionTokenFileName = (string) ($wlsServer['token_file_name'] ?? $wlsSession['token_file_name'] ?? 'session_server.token');
 
         $memoryHost = (string) ($memory['host'] ?? '127.0.0.1');
         $memoryHost = \trim($memoryHost) !== '' ? $memoryHost : '127.0.0.1';
-        $memoryPort = (int) ($memory['port'] ?? 19971);
+        // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+        $defaultMemoryPort = 19971 + MasterProcess::getProjectPortOffset();
+        $memoryPort = (int) ($memory['port'] ?? $defaultMemoryPort);
         $memoryTokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
 
         return [
             '--session-host=' . $sessionHost,
-            '--session-port=' . ($sessionPort > 0 ? $sessionPort : 19970),
+            '--session-port=' . ($sessionPort > 0 ? $sessionPort : $defaultSessionPort),
             '--session-token-file-name=' . ($sessionTokenFileName !== '' ? $sessionTokenFileName : 'session_server.token'),
             '--memory-host=' . $memoryHost,
-            '--memory-port=' . ($memoryPort > 0 ? $memoryPort : 19971),
+            '--memory-port=' . ($memoryPort > 0 ? $memoryPort : $defaultMemoryPort),
             '--memory-token-file-name=' . ($memoryTokenFileName !== '' ? $memoryTokenFileName : 'memory_server.token'),
         ];
     }
