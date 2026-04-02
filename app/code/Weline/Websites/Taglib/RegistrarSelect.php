@@ -73,7 +73,7 @@ class RegistrarSelect implements TaglibInterface
             $html[] = '.weline-registrar-tags{display:flex;flex-wrap:wrap;gap:.25rem;align-items:center;flex:1}';
             $html[] = '.weline-registrar-tag{display:inline-flex;align-items:center;padding:.125rem .5rem;font-size:.75rem;background:var(--backend-color-primary-bg-subtle,rgba(85,110,230,.1));color:var(--backend-color-primary,#556ee6);border-radius:var(--backend-border-radius-sm,.25rem)}';
             $html[] = '.weline-registrar-tag-remove{margin-left:.25rem;cursor:pointer;opacity:.7}';
-            $html[] = '.weline-registrar-dropdown{position:absolute;left:0;right:0;top:calc(100% + 4px);z-index:3000;padding:.75rem;background:var(--backend-color-card-bg,#fff);border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:var(--backend-border-radius-md,.375rem);box-shadow:var(--backend-shadow-lg,0 .5rem 1rem rgba(0,0,0,.15))}';
+            $html[] = '.weline-registrar-dropdown{position:absolute;top:calc(100% + 4px);z-index:3000;padding:.75rem;background:var(--backend-color-card-bg,#fff);border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:var(--backend-border-radius-md,.375rem);box-shadow:var(--backend-shadow-lg,0 .5rem 1rem rgba(0,0,0,.15));min-width:200px;max-width:350px}';
             $html[] = '.weline-registrar-search{width:100%;padding:.5rem .75rem;margin-bottom:.5rem;border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:var(--backend-border-radius-sm,.25rem)}';
             $html[] = '.weline-registrar-list{max-height:280px;overflow-y:auto;border:1px solid var(--backend-color-border-default,#dee2e6);border-radius:var(--backend-border-radius-sm,.25rem);background:var(--backend-color-card-bg,#fff)}';
             $html[] = '.weline-registrar-group{padding:.45rem .75rem;font-weight:600;font-size:.75rem;text-transform:uppercase;color:var(--backend-color-text-secondary,#6c757d);background:var(--backend-color-bg-secondary,#f8f9fa);border-bottom:1px solid var(--backend-color-border-default,#dee2e6)}';
@@ -120,7 +120,7 @@ class RegistrarSelect implements TaglibInterface
             $html[] = '      var margin = cfg.margin || 8, gap = cfg.gap || 4;';
             $html[] = '      var vw = window.innerWidth || document.documentElement.clientWidth || 1200;';
             $html[] = '      var vh = window.innerHeight || document.documentElement.clientHeight || 900;';
-            $html[] = '      var width = Math.max(cfg.minWidth || 0, panelRect.width || anchorRect.width);';
+            $html[] = '      var width = cfg.maxWidth ? Math.min(cfg.maxWidth, Math.max(cfg.minWidth || 0, panelRect.width || anchorRect.width)) : Math.max(cfg.minWidth || 0, panelRect.width || anchorRect.width);';
             $html[] = '      var height = panelRect.height || 0;';
             $html[] = '      var bottomSpace = vh - anchorRect.bottom - margin;';
             $html[] = '      var topSpace = anchorRect.top - margin;';
@@ -138,7 +138,7 @@ class RegistrarSelect implements TaglibInterface
             $html[] = '        cfg = cfg || {}; if (!anchor || !panel) return null;';
             $html[] = '        if (!panel.__welineOriginalParent) { panel.__welineOriginalParent = panel.parentNode || null; panel.__welineOriginalNext = panel.nextSibling || null; }';
             $html[] = '        panel.style.position = "fixed"; panel.style.zIndex = String(cfg.zIndex || 4000); panel.style.left = "0px"; panel.style.top = "0px";';
-            $html[] = '        panel.style.minWidth = Math.max(cfg.minWidth || 0, Math.round(anchor.getBoundingClientRect().width)) + "px"; panel.style.maxWidth = "calc(100vw - 16px)";';
+            $html[] = 'var anchorW = Math.round(anchor.getBoundingClientRect().width); var minW = cfg.maxWidth ? Math.min(cfg.minWidth || 0, cfg.maxWidth) : Math.max(cfg.minWidth || 0, anchorW); panel.style.minWidth = minW + "px"; panel.style.maxWidth = cfg.maxWidth ? cfg.maxWidth + "px" : "calc(100vw - 16px)";';
             $html[] = '        document.body.appendChild(panel); panel.style.display = "block";';
             $html[] = '        var rect = anchor.getBoundingClientRect(); var pr = panel.getBoundingClientRect(); var next = compute(rect, pr, cfg);';
             $html[] = '        panel.style.left = Math.round(next.left) + "px"; panel.style.top = Math.round(next.top) + "px"; panel.style.width = Math.round(next.width) + "px"; panel.style.maxHeight = Math.round(next.maxHeight) + "px";';
@@ -234,7 +234,7 @@ class RegistrarSelect implements TaglibInterface
             $html[] = '  syncHidden(); renderTags(); renderList(search.value || "");';
             $html[] = '}';
             $html[] = 'function getSelected(){ return selected.map(function(v){ return options.find(function(opt){ return opt.value === v; }) || { value: v, label: v, group: "", meta: "", raw: null }; }); }';
-            $html[] = 'function positionDropdown(){ window.WelineSmartDropdown.mount(trigger, dropdown, { minWidth: trigger ? trigger.offsetWidth : 0, preferredHeight: 300, zIndex: 4200, gap: 4 }); }';
+            $html[] = 'function positionDropdown(){ window.WelineSmartDropdown.mount(trigger, dropdown, { minWidth: 280, maxWidth: 350, preferredHeight: 300, zIndex: 4200, gap: 4 }); }';
             $html[] = 'function openDropdown(){';
             $html[] = '  positionDropdown();';
             $html[] = '  floatingOpened = true;';

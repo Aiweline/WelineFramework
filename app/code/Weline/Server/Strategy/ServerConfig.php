@@ -103,7 +103,9 @@ final class ServerConfig
         $this->host = $config['host'] ?? '127.0.0.1';
         $this->port = (int) ($config['port'] ?? 443);
         $this->workerCount = (int) ($config['worker_count'] ?? $this->detectOptimalWorkerCount());
-        $this->workerBasePort = (int) ($config['worker_base_port'] ?? 10443);
+        // 默认端口 10000 + 项目偏移量，确保多项目不冲突
+        $defaultWorkerBasePort = 10000 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        $this->workerBasePort = (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort);
         $this->sslCert = $config['ssl_cert'] ?? '';
         $this->sslKey = $config['ssl_key'] ?? '';
         $this->sslEnabled = !empty($this->sslCert) && !empty($this->sslKey);

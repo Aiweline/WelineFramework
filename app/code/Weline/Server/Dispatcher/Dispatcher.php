@@ -524,6 +524,11 @@ class Dispatcher
     private function handleIpcMessage(array $msg): void
     {
         $type = $msg['type'] ?? '';
+
+        // 添加详细的 IPC 消息接收日志
+        $timestamp = date('Y-m-d H:i:s');
+        $this->log("[IPC-Recv] {$timestamp} type={$type} msg=" . json_encode($msg), 'DEBUG');
+
         // 帝王令：已收 shutdown 后不再处理 DRAIN/ADD_WORKER 等其他 IPC
         if ($type !== ControlMessage::TYPE_SHUTDOWN && $this->ipcReceivedShutdown) {
             return;
@@ -919,8 +924,8 @@ class Dispatcher
         
         // socket_select 等待事件（如果有缓冲数据，缩短等待时间）
         $hasBuffers = !empty($this->passthroughCore->getPendingBufferConnIds());
-        $timeout = $hasBuffers ? 0 : 0;
-        $microTimeout = $hasBuffers ? 5000 : 50000; // 有缓冲数据时 5ms，否则 50ms
+        $timeout = 0;
+        $microTimeout = $hasBuffers ? 1000 : 5000; // 有缓冲数据时 1ms，否则 5ms（优化响应速度）
         
         $changed = @\socket_select($readSockets, $writeSockets, $exceptSockets, $timeout, $microTimeout);
         
