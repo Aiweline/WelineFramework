@@ -594,7 +594,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $dbName = $configProvider->getDatabase();
 
         // 默认 schema 为 public
-        $schema = 'public';
+        $schema = SchemaConfig::getCurrentSchema();
         $table = $tableName;
 
         // 支持 "schema.table" 或 "db.schema.table" 格式
@@ -615,7 +615,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 // schema.table
                 [$schemaPart, $tablePart] = $parts;
                 if ($schemaPart === $dbName) {
-                    $schema = 'public';
+                    $schema = SchemaConfig::getCurrentSchema();
                     $table = $tablePart;
                 } else {
                     $schema = $schemaPart;
@@ -1783,7 +1783,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             $tableName = trim($matches[2], '`"\'');
             
             // 解析 schema 和 table
-            $schema = 'public';
+            $schema = SchemaConfig::getCurrentSchema();
             $table = $tableName;
             
             if (str_contains($tableName, '.')) {
