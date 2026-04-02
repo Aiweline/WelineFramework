@@ -29,14 +29,14 @@ final class CronRunLogService
     {
         $base = Process::logBasenameForExecuteName($executeName);
 
-        return Env::VAR_DIR . \DIRECTORY_SEPARATOR . 'cron' . \DIRECTORY_SEPARATOR . $base . '.log';
+        return Env::VAR_DIR . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR . 'cron' . \DIRECTORY_SEPARATOR . $base . '.log';
     }
 
     public function historyDir(string $executeName): string
     {
         $base = Process::logBasenameForExecuteName($executeName);
 
-        return Env::VAR_DIR . \DIRECTORY_SEPARATOR . 'cron' . \DIRECTORY_SEPARATOR . 'history' . \DIRECTORY_SEPARATOR . $base;
+        return Env::VAR_DIR . \DIRECTORY_SEPARATOR . 'log' . \DIRECTORY_SEPARATOR . 'cron' . \DIRECTORY_SEPARATOR . 'history' . \DIRECTORY_SEPARATOR . $base;
     }
 
     /**
