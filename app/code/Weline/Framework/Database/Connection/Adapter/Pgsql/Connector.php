@@ -438,38 +438,35 @@ SQL;
     {
         $table = str_replace(['`', '"'], '', $table);
         $field = str_replace(['`', '"'], '', $field);
-        $dbName = $this->configProvider->getDatabase();
-        $schema = null; // 先设为null，后面根据情况确定
 
-        if (str_contains($table, '.')) {
-            $parts = explode('.', $table);
-            $firstPart = $parts[0];
+        // 使用 formatTableName 处理表名（会自动添加前缀和 schema）
+        $formattedTableName = $this->formatTableName($table);
 
-            // 如果第一部分是数据库名，移除它，使用当前schema
-            if ($firstPart === $dbName) {
-                $table = $parts[1] ?? $parts[0];
-                $schema = null; // 使用当前schema
-            } else {
-                // 第一部分是 schema 名
-                $schema = $firstPart;
-                $table = $parts[1] ?? $parts[0];
-            }
+        // 从格式化后的表名中提取 schema 和 table
+        // 格式: "schema"."table"
+        $formattedTableName = str_replace(['"'], '', $formattedTableName);
+
+        $schema = SchemaConfig::getCurrentSchema();
+        $actualTable = $table;
+
+        if (str_contains($formattedTableName, '.')) {
+            $parts = explode('.', $formattedTableName, 2);
+            $schema = $parts[0];
+            $actualTable = $parts[1] ?? $parts[0];
         }
 
-        // 如果没有指定schema，使用current_schema()
-        if ($schema === null) {
-            try {
-                $currentSchema = $this->getLink()->query("SELECT current_schema()")->fetchColumn();
-                $schema = $currentSchema ?: 'public';
-            } catch (\Throwable $e) {
-                $schema = SchemaConfig::getCurrentSchema(); // 回退到public
-            }
-        }
-
+        // 转义特殊字符
         $schema = str_replace("'", "''", $schema);
-        $table = str_replace("'", "''", $table);
+        $actualTable = str_replace("'", "''", $actualTable);
         $field = str_replace("'", "''", $field);
-        $sql = "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE LOWER(table_schema) = LOWER('{$schema}') AND LOWER(table_name) = LOWER('{$table}') AND LOWER(column_name) = LOWER('{$field}'))";
+
+        $sql = "SELECT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE LOWER(table_schema) = LOWER('{$schema}')
+            AND LOWER(table_name) = LOWER('{$actualTable}')
+            AND LOWER(column_name) = LOWER('{$field}')
+        )";
+
         $stmt = $this->getLink()->query($sql);
         $result = $stmt->fetch(\PDO::FETCH_ASSOC);
         return (bool)($result['exists'] ?? false);
