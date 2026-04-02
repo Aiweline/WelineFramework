@@ -477,7 +477,7 @@ class Benchmark extends CommandAbstract
             ],
         ];
         
-        $reportDir = BP . 'var/log';
+        $reportDir = BP . 'var/log/wls';
         if (!\is_dir($reportDir)) {
             @\mkdir($reportDir, 0755, true);
         }

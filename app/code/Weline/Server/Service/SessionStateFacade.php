@@ -148,11 +148,11 @@ class SessionStateFacade implements SessionStateFacadeInterface
     private function buildServiceOptions(array $config, array $runtime = []): array
     {
         return [
-            'connect_timeout' => (float) ($config['connect_timeout'] ?? 1.0),
-            'timeout' => (float) ($config['timeout'] ?? 2.0),
+            'connect_timeout' => (float) ($config['connect_timeout'] ?? 0.5),
+            'timeout' => (float) ($config['timeout'] ?? 1.0),
             'pool_size' => (int) ($config['pool_size'] ?? 8),
-            'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 1),
-            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.2),
+            'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 2),
+            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.1),
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
         ];
     }

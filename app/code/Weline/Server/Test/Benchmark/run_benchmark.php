@@ -192,7 +192,7 @@ $report = [
     ],
 ];
 
-$reportDir = dirname(__DIR__, 2) . '/var/log';
+$reportDir = dirname(__DIR__, 2) . '/var/log/wls';
 if (!is_dir($reportDir)) {
     @mkdir($reportDir, 0755, true);
 }
