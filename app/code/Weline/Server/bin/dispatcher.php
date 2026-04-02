@@ -100,11 +100,12 @@ ErrorBootstrap::init($processTag, [
     'instance' => $instanceName,
 ]);
 
+// 设置 processTag（必须在所有模式下设置，否则日志无法输出）
+WlsLogger::getInstance()->setProcessTag($processTag);
+
 // 前台模式：启用控制台输出
 if ($isFrontend) {
-    WlsLogger::getInstance()
-        ->setStdoutEnabled(true)
-        ->setProcessTag($processTag);
+    WlsLogger::getInstance()->setStdoutEnabled(true);
 }
 
 // Daemon 下向已关闭连接写数据会触发 SIGPIPE 导致进程退出，与 Nginx 一致忽略 SIGPIPE
