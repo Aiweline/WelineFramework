@@ -265,20 +265,24 @@ class AnthropicProvider implements ProviderInterface
         if (!is_array($proxyInfo)) {
             $proxyInfo = [];
         }
-        
+
         $this->callStreamApi(
             $apiUrl,
             $apiKey,
             $requestData,
             function($chunk, $usage = null) use ($callback, &$fullContent, &$totalTokens) {
                 $fullContent .= $chunk;
-                $callback($chunk);
-                
+                // CRITICAL-FIX-2026-04-02: Propagate callback return value for SSE abort signal
+                $result = $callback($chunk);
+
                 // 更新token使用量（如果有）
                 if ($usage) {
                     $totalTokens['prompt_tokens'] = $usage['input_tokens'] ?? $totalTokens['prompt_tokens'];
                     $totalTokens['completion_tokens'] = $usage['output_tokens'] ?? $totalTokens['completion_tokens'];
                 }
+
+                // 传递返回值，让底层能检测到连接断开
+                return $result;
             },
             $proxyInfo,
             $timeout
@@ -642,60 +646,67 @@ class AnthropicProvider implements ProviderInterface
                     return -1;
                 }
             }
-            
+
             // 累积原始响应（限制大小，仅用于错误诊断）
             if (strlen($rawResponseBuffer) < 4096) {
                 $rawResponseBuffer .= $data;
             }
-            
+
             $lines = explode("\n", $data);
-            
+
             foreach ($lines as $line) {
                 $line = trim($line);
-                
+
                 if (empty($line) || !str_starts_with($line, 'data: ')) {
                     continue;
                 }
-                
+
                 $jsonData = substr($line, 6);
-                
+
                 if ($jsonData === '[DONE]') {
                     continue;
                 }
-                
+
                 $event = json_decode($jsonData, true);
-                
+
                 if (!$event) {
                     continue;
                 }
-                
+
                 // Anthropic流式响应格式处理
                 $type = $event['type'] ?? '';
-                
+
                 switch ($type) {
                     case 'content_block_delta':
                         $delta = $event['delta'] ?? [];
                         if (($delta['type'] ?? '') === 'text_delta') {
                             $hasValidChunk = true;
-                            $callback($delta['text'] ?? '');
+                            $result = $callback($delta['text'] ?? '');
+                            // CRITICAL-FIX-2026-04-02: Abort curl on SSE disconnect (return -1 stops CURLOPT_WRITEFUNCTION)
+                            if ($result === false) {
+                                return -1;
+                            }
                         }
                         break;
-                    
+
                     case 'message_delta':
                         // 消息结束时可能包含usage信息
                         $usage = $event['usage'] ?? null;
                         if ($usage) {
-                            $callback('', $usage);
+                            $result = $callback('', $usage);
+                            if ($result === false) {
+                                return -1;
+                            }
                         }
                         break;
-                    
+
                     case 'error':
                         // Anthropic 错误事件
                         $errorMsg = $event['error']['message'] ?? ($event['message'] ?? 'Unknown Anthropic error');
                         throw new Exception("Anthropic API 错误: {$errorMsg}");
                 }
             }
-            
+
             return strlen($data);
         });
 

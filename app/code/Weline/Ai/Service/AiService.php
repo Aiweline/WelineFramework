@@ -957,7 +957,9 @@ class AiService
                     $line = mb_substr($line, 0, 2000) . '...';
                 }
                 Env::log('ai_activity.log', $line, 'INFO', true, true, 0);
-                $callback($chunk);
+                // CRITICAL-FIX-2026-04-02: Must return callback result to propagate SSE connection state
+                // Returning false signals Provider to abort curl stream (fixes Worker crash on page refresh)
+                return $callback($chunk);
             };
             
             // 5. 流式调用API
