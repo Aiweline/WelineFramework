@@ -44,14 +44,16 @@ ORM→database-model-standards | Routing→weline-routing | Events→extension-p
 ```bash
 php bin/w setup:upgrade [--route]  # Schema/route sync
 php bin/w http:request / [-b|-api] # Route test
-php bin/w server:reload|restart -r # WLS lifecycle
+php bin/w server:start -p 9502 -n ai-test-{unique-id}  # Start test instance (REQUIRED)
+php bin/w server:reload|restart -r # WLS lifecycle (test instance only)
+php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (REQUIRED after testing)
 ```
 
 ## ⚠️ Constraints
 
-**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit` | Write detailed fix reports to root directory
+**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit` | Write detailed fix reports to root directory | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
 
-**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + `setup:upgrade` | Write fix reports in module's doc/ directory | Update module README with test status
+**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + `setup:upgrade` | Write fix reports in module's doc/ directory | Update module README with test status | **Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`)** | **Stop test instance after testing (`server:stop -n {instance-name}`)**
 
 ## 📝 Documentation Rules
 
