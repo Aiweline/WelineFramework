@@ -176,11 +176,8 @@ class FieldBackupServiceTest extends TestCore
         // 确保连接已建立并且 TableNameStrategy 有 PDO 引用
         $connector->getWrappedConnection();
 
-        $pdo = $connector->getWrappedConnection()->getPdo();
-
-        // 强制删除表（使用带前缀的表名）
-        $actualTableName = 'm_' . $this->testTable;
-        $pdo->exec("DROP TABLE IF EXISTS \"{$actualTableName}\" CASCADE");
+        // 使用框架 API 删除表（会自动处理不同数据库的语法）
+        $connector->dropTableIfExists($this->testTable);
 
         // 使用框架 API 创建表（会自动添加前缀 m_）
         $connector->reset()->createTable()->createTable($this->testTable, '测试表')
@@ -193,11 +190,9 @@ class FieldBackupServiceTest extends TestCore
     private function dropTestTable(): void
     {
         $connector = $this->dbManager->getConnector();
-        $pdo = $connector->getWrappedConnection()->getPdo();
 
-        // 删除带前缀的表
-        $actualTableName = 'm_' . $this->testTable;
-        $pdo->exec("DROP TABLE IF EXISTS \"{$actualTableName}\" CASCADE");
+        // 使用框架 API 删除表（会自动处理不同数据库的语法）
+        $connector->dropTableIfExists($this->testTable);
     }
 
     private function insertTestData(array $rows): void
@@ -242,12 +237,26 @@ class FieldBackupServiceTest extends TestCore
     {
         try {
             $connector = $this->dbManager->getConnector();
-            $pdo = $connector->getWrappedConnection()->getPdo();
+            $query = $connector->getQuery();
 
-            // 直接删除所有测试相关的备份数据（使用带前缀的表名）
-            $pdo->exec("DELETE FROM m_weline_framework_field_backup WHERE table_name LIKE '%test_field_backup_table%'");
-            $pdo->exec("DELETE FROM m_weline_framework_field_definition_backup WHERE table_name LIKE '%test_field_backup_table%'");
-            $pdo->exec("DELETE FROM m_weline_framework_field_backup_conflict WHERE table_name LIKE '%test_field_backup_table%'");
+            // 使用 Query API 删除测试相关的备份数据
+            $query->clearQuery()
+                ->table('weline_framework_field_backup')
+                ->where('table_name', 'like', '%test_field_backup_table%')
+                ->delete()
+                ->fetch();
+
+            $query->clearQuery()
+                ->table('weline_framework_field_definition_backup')
+                ->where('table_name', 'like', '%test_field_backup_table%')
+                ->delete()
+                ->fetch();
+
+            $query->clearQuery()
+                ->table('weline_framework_field_backup_conflict')
+                ->where('table_name', 'like', '%test_field_backup_table%')
+                ->delete()
+                ->fetch();
         } catch (\Exception $e) {
             // 忽略清理错误（表可能不存在）
         }
@@ -256,47 +265,52 @@ class FieldBackupServiceTest extends TestCore
     private function ensureBackupTablesExist(): void
     {
         $connector = $this->dbManager->getConnector();
-        $pdo = $connector->getWrappedConnection()->getPdo();
 
-        // 创建字段备份表（带前缀 m_，因为 Model 会自动添加前缀）
-        $pdo->exec("CREATE TABLE IF NOT EXISTS m_weline_framework_field_backup (
-            backup_id SERIAL PRIMARY KEY,
-            module VARCHAR(255),
-            table_name VARCHAR(255),
-            field_name VARCHAR(255),
-            primary_key VARCHAR(255),
-            primary_value TEXT,
-            field_value TEXT,
-            version VARCHAR(50),
-            restored SMALLINT DEFAULT 0,
-            restore_time TIMESTAMP,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        // 创建字段备份表（使用框架 API）
+        if (!$connector->tableExist('weline_framework_field_backup')) {
+            $connector->reset()->createTable()->createTable('weline_framework_field_backup', '字段备份表')
+                ->addColumn('backup_id', 'int', 11, 'auto_increment primary key', 'Backup ID')
+                ->addColumn('module', 'varchar', 255, 'not null', '模块名称')
+                ->addColumn('table_name', 'varchar', 255, 'not null', '表名')
+                ->addColumn('field_name', 'varchar', 255, 'not null', '字段名')
+                ->addColumn('primary_key', 'varchar', 255, 'not null', '主键')
+                ->addColumn('primary_value', 'text', null, '', '主键值')
+                ->addColumn('field_value', 'text', null, '', '字段值')
+                ->addColumn('version', 'varchar', 50, 'not null', '版本')
+                ->addColumn('restored', 'int', 11, 'default 0', '是否已恢复')
+                ->addColumn('restore_time', 'timestamp', null, '', '恢复时间')
+                ->addColumn('created_at', 'timestamp', null, 'default CURRENT_TIMESTAMP', '创建时间')
+                ->create();
+        }
 
-        // 创建字段定义备份表（带前缀 m_）
-        $pdo->exec("CREATE TABLE IF NOT EXISTS m_weline_framework_field_definition_backup (
-            definition_id SERIAL PRIMARY KEY,
-            module VARCHAR(255),
-            table_name VARCHAR(255),
-            field_name VARCHAR(255),
-            version VARCHAR(50),
-            definition TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        // 创建字段定义备份表（使用框架 API）
+        if (!$connector->tableExist('weline_framework_field_definition_backup')) {
+            $connector->reset()->createTable()->createTable('weline_framework_field_definition_backup', '字段定义备份表')
+                ->addColumn('definition_id', 'int', 11, 'auto_increment primary key', 'Definition ID')
+                ->addColumn('module', 'varchar', 255, 'not null', '模块名称')
+                ->addColumn('table_name', 'varchar', 255, 'not null', '表名')
+                ->addColumn('field_name', 'varchar', 255, 'not null', '字段名')
+                ->addColumn('version', 'varchar', 50, 'not null', '版本')
+                ->addColumn('definition', 'text', null, '', '字段定义')
+                ->addColumn('created_at', 'timestamp', null, 'default CURRENT_TIMESTAMP', '创建时间')
+                ->create();
+        }
 
-        // 创建冲突记录表（带前缀 m_）
-        $pdo->exec("CREATE TABLE IF NOT EXISTS m_weline_framework_field_backup_conflict (
-            conflict_id SERIAL PRIMARY KEY,
-            module VARCHAR(255),
-            table_name VARCHAR(255),
-            field_name VARCHAR(255),
-            primary_key VARCHAR(255),
-            primary_value TEXT,
-            backup_value TEXT,
-            current_value TEXT,
-            version VARCHAR(50),
-            note TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )");
+        // 创建冲突记录表（使用框架 API）
+        if (!$connector->tableExist('weline_framework_field_backup_conflict')) {
+            $connector->reset()->createTable()->createTable('weline_framework_field_backup_conflict', '字段备份冲突表')
+                ->addColumn('conflict_id', 'int', 11, 'auto_increment primary key', 'Conflict ID')
+                ->addColumn('module', 'varchar', 255, 'not null', '模块名称')
+                ->addColumn('table_name', 'varchar', 255, 'not null', '表名')
+                ->addColumn('field_name', 'varchar', 255, 'not null', '字段名')
+                ->addColumn('primary_key', 'varchar', 255, 'not null', '主键')
+                ->addColumn('primary_value', 'text', null, '', '主键值')
+                ->addColumn('backup_value', 'text', null, '', '备份值')
+                ->addColumn('current_value', 'text', null, '', '当前值')
+                ->addColumn('version', 'varchar', 50, 'not null', '版本')
+                ->addColumn('note', 'text', null, '', '备注')
+                ->addColumn('created_at', 'timestamp', null, 'default CURRENT_TIMESTAMP', '创建时间')
+                ->create();
+        }
     }
 }
