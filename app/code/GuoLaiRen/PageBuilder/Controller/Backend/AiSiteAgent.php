@@ -477,9 +477,10 @@ class AiSiteAgent extends BaseController
 
         // 认证失败：返回 HTTP 401，不启动 SSE
         if ($adminId <= 0) {
-            $this->response->setHttpResponseCode(401);
-            $this->response->setHeader('Content-Type', 'application/json');
-            $this->response->setBody(\json_encode([
+            $response = $this->request->getResponse();
+            $response->setHttpResponseCode(401);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(\json_encode([
                 'error' => 'UNAUTHORIZED',
                 'message' => (string)__('未登录或登录已过期'),
             ], JSON_UNESCAPED_UNICODE));
@@ -488,9 +489,10 @@ class AiSiteAgent extends BaseController
 
         // 参数无效：返回 HTTP 400，不启动 SSE
         if ($publicId === '') {
-            $this->response->setHttpResponseCode(400);
-            $this->response->setHeader('Content-Type', 'application/json');
-            $this->response->setBody(\json_encode([
+            $response = $this->request->getResponse();
+            $response->setHttpResponseCode(400);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(\json_encode([
                 'error' => 'INVALID_PARAMS',
                 'message' => (string)__('参数无效'),
                 'param' => self::PARAMS_PUBLIC_ID,
@@ -501,9 +503,10 @@ class AiSiteAgent extends BaseController
         // 会话不存在：返回 HTTP 404，不启动 SSE
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            $this->response->setHttpResponseCode(404);
-            $this->response->setHeader('Content-Type', 'application/json');
-            $this->response->setBody(\json_encode([
+            $response = $this->request->getResponse();
+            $response->setHttpResponseCode(404);
+            $response->setHeader('Content-Type', 'application/json');
+            $response->setBody(\json_encode([
                 'error' => 'SESSION_NOT_FOUND',
                 'message' => (string)__('会话不存在或无权访问'),
                 'param' => self::PARAMS_PUBLIC_ID,
@@ -926,41 +929,98 @@ class AiSiteAgent extends BaseController
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $scope['website_profile'] = $this->profileGenerationService->generate($scope);
         $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
-        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $pageTypeLabels = Page::getPageTypes();
+        $totalSteps = \count($pageTypes) + 2; // 网站资料 + 虚拟主题 + N个页面
+        $currentStep = 0;
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('正在准备网站资料'), 10);
+        // 步骤 1: 准备网站资料
+        $currentStep++;
+        $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('正在准备网站资料'), $progressPercent);
         $draftWebsite = $this->draftWebsiteService->ensureDraftWebsite($scope, $scope['website_profile']);
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
 
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('正在生成虚拟主题骨架'), 35);
-        $theme = $this->virtualThemeService->ensureVirtualTheme($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $session->getId());
-        $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
-        $scope['page_type_layouts'] = $theme['page_type_layouts'];
+        // 步骤 2: 生成虚拟主题骨架
+        $currentStep++;
+        $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('正在生成虚拟主题骨架'), $progressPercent);
 
-        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        // 初始化空的 page_type_layouts，稍后逐个生成
+        $pageTypeLayouts = [];
+        $virtualPages = [];
         $now = \date('Y-m-d H:i:s');
-        foreach ($virtualPages as $pageType => $pageData) {
-            $virtualPages[$pageType]['last_generated_at'] = $now;
-            if (\trim((string)($virtualPages[$pageType]['ai_description'] ?? '')) === '') {
-                $virtualPages[$pageType]['ai_description'] = (string)($scope['website_profile']['brief_description'] ?? '');
+
+        // 步骤 3-N: 逐个生成每个页面类型
+        foreach ($pageTypes as $pageType) {
+            $currentStep++;
+            $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+            $pageLabel = (string)($pageTypeLabels[$pageType] ?? $pageType);
+
+            $this->sendOperationProgress(
+                $sse,
+                $session,
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'build',
+                __('正在生成页面：%{page}', ['page' => $pageLabel]),
+                $progressPercent,
+                $pageType
+            );
+
+            // 为当前页面类型生成布局
+            $pageTypeLayouts[$pageType] = $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
+
+            // 更新虚拟主题（包含当前页面类型）
+            $theme = $this->virtualThemeService->ensureVirtualTheme(
+                $scope,
+                $scope['website_profile'],
+                [$pageType], // 只传入当前页面类型
+                [$pageType => $pageTypeLayouts[$pageType]],
+                $session->getId()
+            );
+            $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
+            $scope['page_type_layouts'] = \array_replace($scope['page_type_layouts'] ?? [], $theme['page_type_layouts']);
+
+            // 构建当前页面的虚拟页面数据
+            $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], $scope);
+            if (isset($currentVirtualPages[$pageType])) {
+                $currentVirtualPages[$pageType]['last_generated_at'] = $now;
+                if (\trim((string)($currentVirtualPages[$pageType]['ai_description'] ?? '')) === '') {
+                    $currentVirtualPages[$pageType]['ai_description'] = (string)($scope['website_profile']['brief_description'] ?? '');
+                }
+                $virtualPages[$pageType] = $currentVirtualPages[$pageType];
             }
+
+            // 实时更新 scope，让前端可以立即看到新生成的页面
+            $scope['virtual_pages_by_type'] = $virtualPages;
+            $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? ''));
+            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)$theme['virtual_theme_id']);
+
+            // 发送页面生成完成事件
+            $sse->sendEvent('page_generated', [
+                'page_type' => $pageType,
+                'page_label' => $pageLabel,
+                'virtual_theme_id' => (int)$theme['virtual_theme_id'],
+                'progress_percent' => $progressPercent,
+            ]);
         }
-        $scope['virtual_pages_by_type'] = $virtualPages;
-        $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? ''));
+
+        // 最终步骤：完成构建
         $scope['build_summary'] = ['page_count' => \count($virtualPages), 'last_generated_at' => $now, 'active_operation' => 'build', 'can_publish' => true];
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => $now, 'message' => (string)__('主题构建完成')]);
 
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->sessionService->bindWebsite($session->getId(), $adminId, (int)$draftWebsite['website_id']);
-        $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)$theme['virtual_theme_id']);
+        $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)($scope['virtual_theme_id'] ?? 0));
         $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
         $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
 
         $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('虚拟主题已生成，可继续进入页面编辑'), 100);
-        return ['message' => (string)__('主题构建完成'), 'draft_website_id' => (int)$draftWebsite['website_id'], 'virtual_theme_id' => (int)$theme['virtual_theme_id'], 'page_types' => $pageTypes];
+        return ['message' => (string)__('主题构建完成'), 'draft_website_id' => (int)$draftWebsite['website_id'], 'virtual_theme_id' => (int)($scope['virtual_theme_id'] ?? 0), 'page_types' => $pageTypes];
     }
 
     /**
