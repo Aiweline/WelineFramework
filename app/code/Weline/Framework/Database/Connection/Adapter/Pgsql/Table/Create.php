@@ -324,7 +324,7 @@ class Create extends AbstractTable implements CreateInterface
         
         // 处理表名：移除数据库名（如果存在），使用 public schema
         $dbName = $this->connector->getConfigProvider()->getDatabase();
-        $schema = 'public';
+        $schema = SchemaConfig::getCurrentSchema();
         
         if (str_contains($references_table, '.')) {
             $parts = explode('.', $references_table);

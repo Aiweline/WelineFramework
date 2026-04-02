@@ -136,6 +136,9 @@ final class Connector extends Query implements ConnectorInterface
         $this->_original_pdo = $this->link;
         $this->fromPool = true;
 
+        // 初始化 SchemaConfig（统一管理 schema）
+        SchemaConfig::setPdo($this->link);
+
         // 设置 PDO 到 TableNameStrategy，使其能够动态获取 current_schema
         $this->tableStrategy->setPdo($this->link);
 
@@ -203,9 +206,9 @@ final class Connector extends Query implements ConnectorInterface
             list($schema, $table) = explode('.', $table);
         }
         if (empty($schema)) {
-            $schema = 'public';
+            $schema = SchemaConfig::getCurrentSchema();
         }
-        
+
         // PostgreSQL 重建索引
         $sql = "REINDEX TABLE \"{$schema}\".\"{$table}\"";
         try {
@@ -219,7 +222,7 @@ final class Connector extends Query implements ConnectorInterface
     public function getIndexFields(string $table): array
     {
         $table = str_replace(['`', '"'], '', $table);
-        $schema = 'public';
+        $schema = SchemaConfig::getCurrentSchema();
         if (str_contains($table, '.')) {
             list($schema, $table) = explode('.', $table);
         }
@@ -270,7 +273,7 @@ SQL;
     public function getCreateTableSql(string $table_name): string
     {
         $table_name = str_replace(['`', '"'], '', $table_name);
-        $schema = 'public';
+        $schema = SchemaConfig::getCurrentSchema();
         if (str_contains($table_name, '.')) {
             list($schema, $table_name) = explode('.', $table_name);
         }
@@ -339,7 +342,7 @@ SQL;
             // 格式: "schema"."table"
             $formattedTableName = str_replace(['"'], '', $formattedTableName);
 
-            $schema = 'public';
+            $schema = SchemaConfig::getCurrentSchema();
             $table = $table_name;
 
             if (str_contains($formattedTableName, '.')) {
@@ -353,7 +356,7 @@ SQL;
                     $currentSchema = $this->getLink()->query('SELECT current_schema()')->fetchColumn();
                     $schema = $currentSchema ?: 'public';
                 } catch (\Throwable $e) {
-                    $schema = 'public';
+                    $schema = SchemaConfig::getCurrentSchema();
                 }
             }
 
@@ -410,9 +413,10 @@ SQL;
         try {
             $placeholders = implode(',', array_fill(0, count($clean), '?'));
             $sql = "SELECT table_name FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name IN ({$placeholders})";
+                    WHERE table_schema = :schema AND table_name IN ({$placeholders})";
             $stmt = $pdo->prepare($sql);
-            $stmt->execute(array_values($clean));
+            $params = array_merge([':schema' => SchemaConfig::getCurrentSchema()], array_values($clean));
+            $stmt->execute($params);
             return $stmt->fetchAll(PDO::FETCH_COLUMN, 0) ?: [];
         } catch (\Throwable) {
             // 降级为逐表检查
@@ -458,7 +462,7 @@ SQL;
                 $currentSchema = $this->getLink()->query("SELECT current_schema()")->fetchColumn();
                 $schema = $currentSchema ?: 'public';
             } catch (\Throwable $e) {
-                $schema = 'public'; // 回退到public
+                $schema = SchemaConfig::getCurrentSchema(); // 回退到public
             }
         }
 
@@ -475,7 +479,7 @@ SQL;
     {
         $table = str_replace(['`', '"'], '', $table);
         $idx_name = Standar::getIndexName($table, $idx_name);
-        $schema = 'public';
+        $schema = SchemaConfig::getCurrentSchema();
         if (str_contains($table, '.')) {
             list($schema, $table) = explode('.', $table);
         }
@@ -575,9 +579,10 @@ SQL;
             [$schema, $tableName] = $this->parseSchemaTable($table);
             $colName = (string) ($col['name'] ?? '');
             $seqName = $tableName . '_' . $colName . '_seq';
-            $seqRef = $schema . '.' . $seqName;
+            // 使用带引号的完整标识符，避免 PostgreSQL 默认查找 public schema
+            $seqRef = $d->quoteIdentifier($schema) . '.' . $d->quoteIdentifier($seqName);
             $parts[] = "ALTER COLUMN {$c} SET DEFAULT nextval('" . str_replace("'", "''", $seqRef) . "'::regclass)";
-            $createSeq = 'CREATE SEQUENCE IF NOT EXISTS ' . $d->quoteIdentifier($schema) . '.' . $d->quoteIdentifier($seqName);
+            $createSeq = 'CREATE SEQUENCE IF NOT EXISTS ' . $seqRef;
             return $prefix . $createSeq . ";\nALTER TABLE {$t} " . implode(', ', $parts) . ';';
         }
         if (isset($col['default']) && $col['default'] !== null) {
@@ -791,7 +796,16 @@ SQL;
             $parts = explode('.', $table, 2);
             return [trim($parts[0]) ?: 'public', trim($parts[1])];
         }
-        return ['public', $table];
+
+        // 使用 current_schema() 而不是硬编码 'public'
+        try {
+            $currentSchema = $this->getLink()->query('SELECT current_schema()')->fetchColumn();
+            $schema = $currentSchema ?: 'public';
+        } catch (\Throwable $e) {
+            $schema = 'public';
+        }
+
+        return [$schema, $table];
     }
 
     /** @inheritDoc */
