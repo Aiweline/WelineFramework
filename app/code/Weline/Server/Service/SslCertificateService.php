@@ -893,6 +893,87 @@ CNF;
     }
     
     /**
+     * 是否为 weline.local 开发通配相关域名（*.weline.local 或至少三段的 *.weline.local 子域，不含裸 weline.local）
+     */
+    protected function isWelineLocalWildcardCandidateDomain(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        if ($domain === '' || !\str_ends_with($domain, '.weline.local')) {
+            return false;
+        }
+        if ($domain === '*.weline.local') {
+            return true;
+        }
+        if ($domain === 'weline.local') {
+            return false;
+        }
+
+        return \count(\explode('.', $domain)) >= 3;
+    }
+
+    /**
+     * 自签签发前：若证书管理中已有有效 *.weline.local 泛域 PEM，则复用（避免重复生成通配或子域证书）。
+     *
+     * @return array|null ensureCertificate / generateSelfSignedCertificate 兼容结构，null 表示继续生成
+     */
+    protected function tryReuseWelineLocalWildcardBeforeSelfSign(string $domain, int $websiteId = 0): ?array
+    {
+        if (!$this->isWelineLocalWildcardCandidateDomain($domain)) {
+            return null;
+        }
+
+        $domainLower = \strtolower(\trim($domain));
+
+        // 子域：与 ensureCertificate 一致，优先套用库中 *.weline.local
+        if ($domainLower !== '*.weline.local') {
+            return $this->applyWildcardToSubdomainIfExists($domain, $websiteId);
+        }
+
+        $wildcardCert = ObjectManager::getInstance(SslCertificate::class, [], false)
+            ->findWildcardByRoot('weline.local');
+        if ($wildcardCert === null) {
+            return null;
+        }
+
+        $certPem = $wildcardCert->getCertPem();
+        $keyPem = $wildcardCert->getKeyPem();
+        if ($certPem === '' || $keyPem === '') {
+            return null;
+        }
+
+        $expiresAt = $wildcardCert->getExpiresAt();
+        if ($expiresAt !== '' && \strtotime($expiresAt) < \time()) {
+            w_log_info(__('[SslCertificateService] 库中 *.weline.local 通配证书已过期，将重新签发'));
+            return null;
+        }
+
+        if (!$this->restoreCertificateFilesFromData($wildcardCert->getData())) {
+            w_log_info(__('[SslCertificateService] 复用 *.weline.local 通配证书时写回磁盘失败，将尝试重新签发'));
+            return null;
+        }
+
+        $certDir = $this->getCertificateDir($wildcardCert->getDomain());
+        $certPath = $certDir . 'fullchain.pem';
+        $keyPath = $certDir . 'privkey.pem';
+        if (!\is_file($certPath) || !\is_file($keyPath)) {
+            return null;
+        }
+
+        $certInfo = $this->parseCertificate($certPath);
+
+        return [
+            'success'     => true,
+            'message'     => __('已复用现有 *.weline.local 通配证书，跳过重复签发'),
+            'cert_path'   => $certPath,
+            'key_path'    => $keyPath,
+            'issuer'      => $wildcardCert->getIssuer() ?: ($certInfo['issuer'] ?? self::ISSUER_SELF_SIGNED),
+            'expires_at'  => $expiresAt !== '' ? $expiresAt : ($certInfo['expires_at'] ?? ''),
+            'is_new'      => false,
+            'ssl_enabled' => true,
+        ];
+    }
+
+    /**
      * 生成自签证书（用于开发环境）
      * 
      * @param string $domain 域名
@@ -903,6 +984,11 @@ CNF;
     public function generateSelfSignedCertificate(string $domain, int $websiteId = 0, int $validDays = 365): array
     {
         try {
+            $reuse = $this->tryReuseWelineLocalWildcardBeforeSelfSign($domain, $websiteId);
+            if ($reuse !== null) {
+                return $reuse;
+            }
+
             $certDir = $this->getCertificateDir($domain);
             $certPath = $certDir . 'fullchain.pem';
             $keyPath = $certDir . 'privkey.pem';
@@ -1261,12 +1347,55 @@ CNF;
     }
     
     /**
+     * app/etc/ssl/ 下的目录名片段：Windows 路径禁止 `*`，泛域 `*.example.com` 映射为 `_wildcard_.example.com`（与 worker_ssl 磁盘解析一致）。
+     */
+    public static function certificateStorageSegmentForFilesystem(string $domain): string
+    {
+        $domain = \strtolower(\trim($domain));
+        if (\PHP_OS_FAMILY === 'Windows' && \str_starts_with($domain, '*.')) {
+            return '_wildcard_.' . \substr($domain, 2);
+        }
+
+        return $domain;
+    }
+
+    /**
+     * 探测/删除证书目录时可能存在的名片段（Windows 上映射目录 + 逻辑名，兼容从 Linux 拷贝的 `*.` 目录等边缘情况）。
+     *
+     * @return list<string>
+     */
+    public static function certificateStorageSegmentCandidatesForProbe(string $logicalDomain): array
+    {
+        $logicalDomain = \strtolower(\trim($logicalDomain));
+        $mapped = self::certificateStorageSegmentForFilesystem($logicalDomain);
+        if ($mapped === $logicalDomain) {
+            return [$mapped];
+        }
+
+        return \array_values(\array_unique([$mapped, $logicalDomain]));
+    }
+
+    /**
+     * 将磁盘目录名还原为证书管理中的逻辑域名（Windows 泛域目录 `_wildcard_.example.com` → `*.example.com`）。
+     */
+    public static function logicalDomainFromStorageSegment(string $segment): string
+    {
+        $segment = \strtolower(\trim($segment));
+        $prefix = '_wildcard_.';
+        if (\str_starts_with($segment, $prefix)) {
+            return '*.' . \substr($segment, \strlen($prefix));
+        }
+
+        return $segment;
+    }
+
+    /**
      * 获取证书存储目录（域名统一小写，与删除/扫描等逻辑一致，避免同域多写法导致“证书丢失”误判）
      */
     public function getCertificateDir(string $domain): string
     {
-        $domain = \strtolower(\trim($domain));
-        $dir = $this->certBaseDir . $domain . DS;
+        $segment = self::certificateStorageSegmentForFilesystem($domain);
+        $dir = $this->certBaseDir . $segment . DS;
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0755, true);
         }
@@ -1309,16 +1438,19 @@ CNF;
         if ($domain === '') {
             return false;
         }
-        $lockPath = $this->certBaseDir . $domain . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
-        if (!\is_file($lockPath)) {
-            return false;
+        foreach (self::certificateStorageSegmentCandidatesForProbe($domain) as $segment) {
+            $lockPath = $this->certBaseDir . $segment . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
+            if (!\is_file($lockPath)) {
+                continue;
+            }
+            $age = \time() - (int)@\filemtime($lockPath);
+            if ($age > self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
+                @\unlink($lockPath);
+                continue;
+            }
+            return true;
         }
-        $age = \time() - (int)@\filemtime($lockPath);
-        if ($age > self::SSL_ISSUANCE_LOCK_STALE_SECONDS) {
-            @\unlink($lockPath);
-            return false;
-        }
-        return true;
+        return false;
     }
 
     /**
@@ -1362,9 +1494,11 @@ CNF;
         if ($domain === '') {
             return;
         }
-        $lockPath = $this->certBaseDir . $domain . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
-        if (\is_file($lockPath)) {
-            @\unlink($lockPath);
+        foreach (self::certificateStorageSegmentCandidatesForProbe($domain) as $segment) {
+            $lockPath = $this->certBaseDir . $segment . DS . self::SSL_ISSUANCE_LOCK_FILENAME;
+            if (\is_file($lockPath)) {
+                @\unlink($lockPath);
+            }
         }
     }
 
@@ -1683,12 +1817,14 @@ CNF;
         // 尝试 DB 中的 domain 以及根域、www、泛域目录，避免证书在另一变体目录下被误判为丢失
         $dirCandidates = $this->getCertificateDirCandidates($domain);
         foreach ($dirCandidates as $dirName) {
-            $certDir = $this->certBaseDir . $dirName . DS;
-            foreach ($fileCandidates as $candidate) {
-                $candidateCertPath = $certDir . $candidate['cert'];
-                $candidateKeyPath = $certDir . $candidate['key'];
-                if (\is_file($candidateCertPath) && \is_file($candidateKeyPath)) {
-                    return [$candidateCertPath, $candidateKeyPath];
+            foreach (self::certificateStorageSegmentCandidatesForProbe($dirName) as $segment) {
+                $certDir = $this->certBaseDir . $segment . DS;
+                foreach ($fileCandidates as $candidate) {
+                    $candidateCertPath = $certDir . $candidate['cert'];
+                    $candidateKeyPath = $certDir . $candidate['key'];
+                    if (\is_file($candidateCertPath) && \is_file($candidateKeyPath)) {
+                        return [$candidateCertPath, $candidateKeyPath];
+                    }
                 }
             }
         }
@@ -2117,15 +2253,16 @@ CNF;
 
         if (\is_dir($sslDir)) {
             $domains = @\scandir($sslDir) ?: [];
-            foreach ($domains as $domain) {
-                if ($domain === '.' || $domain === '..') {
+            foreach ($domains as $dirName) {
+                if ($dirName === '.' || $dirName === '..') {
                     continue;
                 }
-                $domainDir = $sslDir . $domain . DS;
+                $domainDir = $sslDir . $dirName . DS;
                 if (!\is_dir($domainDir)) {
                     continue;
                 }
-                if ($this->isDomainSslIssuanceInProgress($domain)) {
+                $logicalDomain = self::logicalDomainFromStorageSegment($dirName);
+                if ($this->isDomainSslIssuanceInProgress($logicalDomain)) {
                     $skipped++;
                     continue;
                 }
@@ -2135,7 +2272,7 @@ CNF;
                     $keyPath = $domainDir . $format['key'];
                     if (\is_file($certPath) && \is_file($keyPath)) {
                         $matched = true;
-                        if ($this->syncCertificateRecordFromFiles($domain, $certPath, $keyPath) instanceof SslCertificate) {
+                        if ($this->syncCertificateRecordFromFiles($logicalDomain, $certPath, $keyPath) instanceof SslCertificate) {
                             $synced++;
                         } else {
                             $skipped++;
@@ -4182,19 +4319,21 @@ CNF;
             }
         }
 
-        // 2. 清除磁盘证书目录（app/etc/ssl/{domain}/）
-        $certDir = $this->certBaseDir . \strtolower($domain) . DS;
-        if (\is_dir($certDir)) {
-            $files = @\scandir($certDir);
-            if ($files !== false) {
-                foreach ($files as $file) {
-                    if ($file === '.' || $file === '..') {
-                        continue;
+        // 2. 清除磁盘证书目录（app/etc/ssl/{domain}/；Windows 泛域为 _wildcard_.）
+        foreach (self::certificateStorageSegmentCandidatesForProbe((string) $domain) as $segment) {
+            $certDir = $this->certBaseDir . $segment . DS;
+            if (\is_dir($certDir)) {
+                $files = @\scandir($certDir);
+                if ($files !== false) {
+                    foreach ($files as $file) {
+                        if ($file === '.' || $file === '..') {
+                            continue;
+                        }
+                        @\unlink($certDir . $file);
                     }
-                    @\unlink($certDir . $file);
                 }
+                @\rmdir($certDir);
             }
-            @\rmdir($certDir);
         }
 
         // 3. 通知其他模块清除关联状态

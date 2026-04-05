@@ -160,6 +160,44 @@ class SharedStateRuntimeOptionsTest extends TestCase
         );
     }
 
+    public function testSessionEndpointDoesNotFallbackToMainWlsPortBeforeSessionRuntimePort(): void
+    {
+        $options = SharedStateRuntimeOptions::fromCliArgs(
+            ['worker.php', '127.0.0.1', '9981', '1', 'shared-state-main-port-regression'],
+            'shared-state-main-port-regression',
+            [
+                'session' => ['server_host' => '127.0.0.20', 'server_port' => 19970],
+                'wls' => [
+                    // 这是主站监听端口，不应作为 Session 服务端口。
+                    'session' => [
+                        'host' => '127.0.0.1',
+                        'port' => 9522,
+                        'token_file_name' => 'session.main-port.token',
+                        'wls_server' => [
+                            'host' => '127.0.0.1',
+                            'port' => 9522,
+                            'token_file_name' => 'session.main-port.token',
+                        ],
+                    ],
+                    'shared_state' => [
+                        'runtime' => [
+                            'session' => [
+                                'host' => '127.0.0.30',
+                                'port' => 29970,
+                                'token_file_name' => 'session.runtime.token',
+                            ],
+                        ],
+                    ],
+                ],
+            ]
+        );
+
+        self::assertSame(
+            ['host' => '127.0.0.30', 'port' => 29970, 'token_file_name' => 'session.runtime.token'],
+            $options->getSession()
+        );
+    }
+
     /**
      * @param array<string, mixed> $data
      */

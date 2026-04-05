@@ -9,6 +9,10 @@ use Weline\Server\Log\WlsLogger;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
+/**
+ * 单连接上复用 Session 帧协议（非 HTTP/2 多路复用）。
+ * 由 ConnectionPoolManager 保证同一时刻仅一个租约持有者；不得把同一实例跨 Fiber 传递或并行读写。
+ */
 class PooledConnection implements PooledConnectionInterface
 {
     private mixed $socket = null;
@@ -19,6 +23,9 @@ class PooledConnection implements PooledConnectionInterface
     private int $authTokenVersion = 0; // Token 版本号
     private string $serviceType = ''; // 服务类型标识（Session/Memory/Cache）
 
+    private float $nextConnectAttemptAt = 0.0;
+    private int $consecutiveFailures = 0;
+
     public function __construct(
         private readonly string $host,
         private readonly int $port,
@@ -26,7 +33,8 @@ class PooledConnection implements PooledConnectionInterface
         private readonly float $timeout = 2.0,
         private readonly string $tokenFilePath = '',
         private readonly bool $logConnectFailure = true,
-        ?string $serviceType = null
+        ?string $serviceType = null,
+        private readonly bool $logLifecycleDetails = true,
     ) {
         // 根据端口自动推断服务类型
         $this->serviceType = $serviceType ?? $this->detectServiceType($port);
@@ -38,8 +46,14 @@ class PooledConnection implements PooledConnectionInterface
             return true;
         }
 
-        $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
-        $this->log("[CONN-START] {$timestamp} Attempting connect to {$this->host}:{$this->port} ({$this->serviceType})");
+        if (\microtime(true) < $this->nextConnectAttemptAt) {
+            return false;
+        }
+
+        if ($this->logLifecycleDetails) {
+            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+            $this->log("[CONN-START] {$timestamp} Attempting connect to {$this->host}:{$this->port} ({$this->serviceType})");
+        }
 
         $errno = 0;
         $errstr = '';
@@ -66,6 +80,7 @@ class PooledConnection implements PooledConnectionInterface
             if ($this->logConnectFailure) {
                 $this->log("[CONN-FAIL] {$timestamp} Connect failed: {$errstr} ({$errno}) ({$this->serviceType})");
             }
+            $this->registerFailure();
             return false;
         }
 
@@ -81,14 +96,20 @@ class PooledConnection implements PooledConnectionInterface
         $this->authenticated = false;
 
         if (!$this->authenticate()) {
-            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
-            $this->log("[CONN-AUTH-FAIL] {$timestamp} Authentication failed ({$this->serviceType})");
+            if ($this->logLifecycleDetails) {
+                $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+                $this->log("[CONN-AUTH-FAIL] {$timestamp} Authentication failed ({$this->serviceType})");
+            }
             $this->close();
+            $this->registerFailure();
             return false;
         }
 
-        $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
-        $this->log("[CONN-OK] {$timestamp} Connected and authenticated ({$this->serviceType})");
+        if ($this->logLifecycleDetails) {
+            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+            $this->log("[CONN-OK] {$timestamp} Connected and authenticated ({$this->serviceType})");
+        }
+        $this->resetFailureState();
         return true;
     }
 
@@ -188,8 +209,10 @@ class PooledConnection implements PooledConnectionInterface
     public function close(): void
     {
         if ($this->socket !== null) {
-            $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
-            $this->log("[CONN-CLOSE] {$timestamp} Closing connection to {$this->host}:{$this->port}");
+            if ($this->logLifecycleDetails) {
+                $timestamp = date('Y-m-d H:i:s.') . sprintf('%03d', (int)(microtime(true) * 1000) % 1000);
+                $this->log("[CONN-CLOSE] {$timestamp} Closing connection to {$this->host}:{$this->port}");
+            }
             @\fclose($this->socket);
             $this->socket = null;
         }
@@ -219,7 +242,7 @@ class PooledConnection implements PooledConnectionInterface
         $maxRetries = count($retryDelays);
 
         for ($retry = 0; $retry < $maxRetries; $retry++) {
-            \usleep($retryDelays[$retry]);
+            SchedulerSystem::usleep($retryDelays[$retry]);
             $freshToken = $this->loadToken(true);
 
             if ($freshToken !== null && $freshToken !== $token && $this->tryAuthenticateWithToken($freshToken)) {
@@ -328,6 +351,20 @@ class PooledConnection implements PooledConnectionInterface
         }
     }
 
+    private function registerFailure(): void
+    {
+        $this->consecutiveFailures++;
+        $step = \min(5, $this->consecutiveFailures - 1);
+        $delaySec = \min(5.0, 0.25 * (2 ** $step));
+        $this->nextConnectAttemptAt = \microtime(true) + $delaySec;
+    }
+
+    private function resetFailureState(): void
+    {
+        $this->consecutiveFailures = 0;
+        $this->nextConnectAttemptAt = 0.0;
+    }
+
     /**
      * 根据端口号推断服务类型
      */
@@ -336,7 +373,7 @@ class PooledConnection implements PooledConnectionInterface
         // 根据默认端口推断服务类型
         return match ($port) {
             26422, 26423 => 'Session',
-            19971 => 'Memory',
+            26424, 19971 => 'Memory',
             default => "Port:{$port}",
         };
     }

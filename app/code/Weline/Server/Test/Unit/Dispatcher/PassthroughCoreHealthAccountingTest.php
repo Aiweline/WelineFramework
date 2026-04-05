@@ -47,7 +47,7 @@ final class PassthroughCoreHealthAccountingTest extends TestCase
         $this->writePrivateProperty($core, 'workerHealth', [
             19091 => [
                 'failures' => 3,
-                'blacklisted_at' => \microtime(true) - 10.0,
+                'blacklisted_at' => \microtime(true) - 1.0,
                 'last_success' => 0.0,
                 'total_failures' => 3,
             ],

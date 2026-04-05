@@ -20,7 +20,7 @@ final class IpcControlGatewayTest extends TestCase
                 string $action,
                 string $reloadType = '',
                 array $payload = [],
-                float $timeout = 0.8,
+                float $timeout = 5.0,
                 string $acceptedMessage = 'Command queued'
             ): array {
                 $this->calls[] = [$instanceName, $action, $reloadType, $payload, $timeout, $acceptedMessage];

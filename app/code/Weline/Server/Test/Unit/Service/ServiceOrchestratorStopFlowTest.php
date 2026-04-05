@@ -47,21 +47,16 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame([[202]], $orchestrator->batchSignalCalls);
     }
 
-    public function testSettleShutdownIpcNonBlockingPollsOnlyOnce(): void
+    public function testWaitForServiceIpcDisconnectAfterShutdownExitsWhenNoServiceClients(): void
     {
-        $orchestrator = new class extends ServiceOrchestrator {
-            public int $pollCalls = 0;
+        $server = $this->createMock(MasterControlServer::class);
+        $server->expects(self::atLeastOnce())->method('poll')->willReturn(0);
+        $server->method('countServiceClients')->willReturn(0);
 
-            protected function pollStopFlowIpc(int $timeoutSec = 0, int $timeoutUsec = 100000): int
-            {
-                $this->pollCalls++;
-                return 0;
-            }
-        };
+        $orchestrator = new ServiceOrchestrator();
+        $this->setProperty($orchestrator, 'controlServer', $server);
 
-        $this->invokePrivate($orchestrator, 'settleShutdownIpcNonBlocking');
-
-        self::assertSame(1, $orchestrator->pollCalls);
+        $this->invokePrivate($orchestrator, 'waitForServiceIpcDisconnectAfterShutdown');
     }
 
     public function testVerifyAndKillRemainingProcessesAggregatesAtStageFive(): void
@@ -224,6 +219,20 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         };
 
         self::assertTrue($orchestrator->requestStop('command', 77, true));
+        $this->invokePrivate($orchestrator, 'consumePendingStopRequest', []);
+        $prop = $this->findPropertyRecursive($orchestrator, 'mainLoopTasks');
+        $prop->setAccessible(true);
+        /** @var array<string, array{fiber:\Fiber}> $tasks */
+        $tasks = $prop->getValue($orchestrator);
+        foreach ($tasks as $entry) {
+            $fiber = $entry['fiber'] ?? null;
+            if ($fiber instanceof \Fiber && $fiber->isSuspended()) {
+                $fiber->resume();
+            }
+        }
+        for ($i = 0; $i < 16; $i++) {
+            $this->invokePrivate($orchestrator, 'tickMainLoopTasks', []);
+        }
         self::assertSame([[
             'reason' => 'command',
             'progressClientId' => 77,
@@ -374,6 +383,19 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         $worker = $registry->getInstance('worker', 1);
         self::assertInstanceOf(ServiceInstance::class, $worker);
         self::assertSame(ServiceInstance::STATE_STOPPED, $worker->state);
+    }
+
+    private function findPropertyRecursive(object $object, string $property): \ReflectionProperty
+    {
+        $reflection = new \ReflectionClass($object);
+        while ($reflection !== false) {
+            if ($reflection->hasProperty($property)) {
+                return $reflection->getProperty($property);
+            }
+            $reflection = $reflection->getParentClass();
+        }
+
+        throw new \ReflectionException(\sprintf('Property %s::%s does not exist', $object::class, $property));
     }
 
     private function invokePrivate(object $object, string $method, array $args = []): mixed

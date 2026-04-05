@@ -26,12 +26,6 @@ class PathFallbackMatcher implements MatcherInterface
             return false;
         };
 
-        // 常见 SSE 路径命名：…/sse、…/stream-sse、…/event-stream、…/eventsource（不依赖 Accept 头）
-        if ($containsSegment($segments, 'sse')
-            || $containsSegment($segments, 'event-stream')
-            || $containsSegment($segments, 'eventsource')) {
-            return ['is_long_lived' => true, 'layer' => 'layer-3-path-fallback', 'protocol' => 'sse'];
-        }
         if ($containsSegment($segments, 'websocket') || $containsSegment($segments, 'socket')) {
             return ['is_long_lived' => true, 'layer' => 'layer-3-path-fallback', 'protocol' => 'websocket'];
         }
@@ -39,6 +33,10 @@ class PathFallbackMatcher implements MatcherInterface
             || $containsSegment($segments, 'rtc')
             || $containsSegment($segments, 'signal')) {
             return ['is_long_lived' => true, 'layer' => 'layer-3-path-fallback', 'protocol' => 'webrtc-signaling'];
+        }
+        if ($containsSegment($segments, 'sse')
+            || $containsSegment($segments, 'event-stream')) {
+            return ['is_long_lived' => true, 'layer' => 'layer-3-path-fallback', 'protocol' => 'sse'];
         }
 
         return null;
