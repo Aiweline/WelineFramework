@@ -24,6 +24,7 @@ use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedSidecarInspector;
+use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
@@ -724,11 +725,12 @@ class Start extends CommandAbstract
         }
 
         if ($daemon) {
-            $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port);
+            $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port);
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
-            // 打印成功结束语
-            $this->printGoodbye(true, __('服务器正在后台启动，请使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
+            if ($startupCompleted) {
+                $this->printGoodbye(true, __('所有服务已就绪，可使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
+            }
             return;
         }
 
@@ -883,7 +885,7 @@ class Start extends CommandAbstract
      * - 验证 Master 进程是否存活
      * - 超时（5秒）时输出警告而非假成功
      */
-    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443): void
+    protected function startMasterInBackground(string $instanceName, bool $sslEnabled = false, string $host = '127.0.0.1', int $port = 443): bool
     {
         $phpBinary = \defined('PHP_BINARY') ? PHP_BINARY : 'php';
         $script = BP . 'bin' . DS . 'w';
@@ -909,6 +911,7 @@ class Start extends CommandAbstract
         $waitStepMs = 200;      // 每 200ms 检查一次
         $waited = 0;
         $masterStarted = false;
+        $startupCompleted = false;
         $lastMasterPid = 0;
         $lastControlPort = 0;
         $lastStartupPhase = '';
@@ -944,12 +947,31 @@ class Start extends CommandAbstract
         }
 
         if ($masterStarted) {
-            if ($lastStartupPhase === 'bootstrapping') {
-                $this->printer->success(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），服务正在继续初始化', [$lastMasterPid, $lastControlPort]));
+            if ($lastStartupPhase !== 'running') {
+                $this->printer->note(__('Master 已启动，等待所有服务就绪...'));
+                $readyResult = $this->waitForBackgroundStartupReady(
+                    $instanceFile,
+                    $this->resolveBackgroundStartupReadyWaitMs(),
+                    $waitStepMs
+                );
+                $startupCompleted = $readyResult['ready'];
+                $lastStartupPhase = (string) ($readyResult['data']['startup_phase'] ?? $lastStartupPhase);
             } else {
-                $this->printer->success(__('服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）', [$lastMasterPid, $lastControlPort]));
+                $startupCompleted = true;
             }
-            $this->printer->note(__('使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
+
+            if ($startupCompleted) {
+                $this->printer->success(__('服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）', [$lastMasterPid, $lastControlPort]));
+                $this->printer->success(__('所有服务已就绪，启动完成。'));
+                $this->printer->note(__('使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
+            } else {
+                $phaseLabel = $lastStartupPhase !== '' ? $lastStartupPhase : 'bootstrapping';
+                $readyWaitSec = (int) \round($this->resolveBackgroundStartupReadyWaitMs() / 1000);
+                $this->printer->warning(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。', [$lastMasterPid, $lastControlPort, $readyWaitSec, $phaseLabel]));
+                $this->printer->note(__('本次启动未视为完成，请稍后执行以下命令检查状态：'));
+                $this->printer->note(__('  php bin/w server:status'));
+                $this->printer->note(__('  php bin/w server:status --all'));
+            }
         } else {
             // 启动确认失败：输出警告而非假成功
             $this->printer->warning(__('后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。', [$maxWaitMs / 1000]));
@@ -978,6 +1000,68 @@ class Start extends CommandAbstract
             }
             $this->showWindowsNginxProxyHint($host, $port);
         }
+
+        return $startupCompleted;
+    }
+
+    protected function resolveBackgroundStartupReadyWaitMs(): int
+    {
+        $timeoutSec = (float) (Env::get('wls.orchestrator.startup_timeout_sec', 30.0) ?? 30.0);
+        $timeoutSec = \max(10.0, \min(180.0, $timeoutSec + 20.0));
+
+        return (int) \round($timeoutSec * 1000);
+    }
+
+    /**
+     * @return array{ready: bool, data: array<string, mixed>}
+     */
+    protected function waitForBackgroundStartupReady(string $instanceFile, int $maxWaitMs, int $waitStepMs = 200): array
+    {
+        $waitStepMs = \max(50, $waitStepMs);
+        $waited = 0;
+        $lastData = $this->readBackgroundStartupData($instanceFile);
+
+        if ($this->isBackgroundStartupReady($lastData)) {
+            return ['ready' => true, 'data' => $lastData];
+        }
+
+        while ($waited < $maxWaitMs) {
+            SchedulerSystem::usleep($waitStepMs * 1000);
+            $waited += $waitStepMs;
+            $lastData = $this->readBackgroundStartupData($instanceFile);
+            if ($this->isBackgroundStartupReady($lastData)) {
+                return ['ready' => true, 'data' => $lastData];
+            }
+        }
+
+        return ['ready' => false, 'data' => $lastData];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    protected function readBackgroundStartupData(string $instanceFile): array
+    {
+        if (!\is_file($instanceFile)) {
+            return [];
+        }
+
+        $content = @\file_get_contents($instanceFile);
+        if ($content === false) {
+            return [];
+        }
+
+        $data = \json_decode($content, true);
+
+        return \is_array($data) ? $data : [];
+    }
+
+    /**
+     * @param array<string, mixed> $instanceData
+     */
+    protected function isBackgroundStartupReady(array $instanceData): bool
+    {
+        return \trim((string) ($instanceData['startup_phase'] ?? '')) === 'running';
     }
     
     /**
@@ -1157,7 +1241,14 @@ class Start extends CommandAbstract
             $envConfig = [];
         }
 
-        return $this->createSharedStateServiceManager()->ensureRuntime($instanceName, $config, $envConfig, $frontend);
+        // 启动阶段不在 CLI 入口串行 ensure 共享服务（包含 -r/force）：
+        // 统一由 Master startup phase-one 与 Dispatcher/maintenance 并发拉起共享侧车，避免前置阻塞。
+        return $this->createSharedStateRuntimeResolver()->resolve($config, $envConfig, $instanceName);
+    }
+
+    protected function createSharedStateRuntimeResolver(): SharedStateRuntimeResolver
+    {
+        return new SharedStateRuntimeResolver();
     }
 
     protected function createSharedStateServiceManager(): SharedStateServiceManager
@@ -1699,7 +1790,7 @@ class Start extends CommandAbstract
             $config['worker_count'],
             $config['mode'] ?? 'io'
         );
-        
+
         return $config;
     }
     
@@ -4747,9 +4838,10 @@ PHP;
         }
         // 默认端口 10000 + 项目偏移量，确保多项目不冲突
         $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
+        $hostValue = $config['host'] ?? '127.0.0.1';
         $serverConfig = new ServerConfig([
             'instance_name' => $instanceName,
-            'host' => $config['host'] ?? '127.0.0.1',
+            'host' => $hostValue,
             'port' => $strategyMainPort,
             'worker_count' => (int) ($config['worker_count'] ?? 4),
             'worker_base_port' => (int) ($config['worker_base_port'] ?? $defaultWorkerBasePort),

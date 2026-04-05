@@ -6,12 +6,57 @@ namespace Weline\Server\Service;
 
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Session\Server\SessionProtocol;
+use Weline\Server\Shared\Client\SharedStateClient;
 
 /**
  * 不依赖「进程可识别为 Weline」与 token 文件名猜测：直连 Session/Memory 协议探测是否可复用。
  */
 final class SharedStateProtocolProbe
 {
+    /**
+     * 单次 TCP 直连 + 读 token + 鉴权后 PING（不经 ConnectionPool）。
+     * 用于共享侧车就绪轮询，避免连接池构造阶段抢先建连、与 discardPool 交叉关闭导致误判。
+     */
+    public static function pingWithTokenBasename(string $host, int $port, string $tokenBasename): bool
+    {
+        $host = \trim($host);
+        $tokenBasename = \trim($tokenBasename);
+        if ($host === '' || $port <= 0 || $tokenBasename === '') {
+            return false;
+        }
+        $tokenBasename = \basename($tokenBasename);
+        if ($tokenBasename === '' || $tokenBasename === '.' || $tokenBasename === '..') {
+            return false;
+        }
+        if (!\defined('BP')) {
+            return false;
+        }
+        $path = BP . 'var' . \DIRECTORY_SEPARATOR . 'session' . \DIRECTORY_SEPARATOR . $tokenBasename;
+        if (!\is_file($path) || !\is_readable($path)) {
+            return false;
+        }
+        $secret = self::readSecretFromTokenFile($path);
+        if ($secret === '' || \strlen($secret) > 8192) {
+            return false;
+        }
+
+        try {
+            $client = new SharedStateClient($host, $port, [
+                'token_file_name' => $tokenBasename,
+                'min_idle' => 0,
+                'max_size' => 4,
+                'connect_timeout' => 1.0,
+                'timeout' => 2.0,
+                'acquire_timeout' => 0.35,
+                'log_connect_fail' => false,
+            ]);
+
+            return $client->ping();
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
     public static function findWorkingTokenBasename(string $host, int $port, string $defaultBasename): ?string
     {
         $host = \trim($host);
@@ -44,11 +89,7 @@ final class SharedStateProtocolProbe
             if (++$n > 48) {
                 break;
             }
-            $raw = @\file_get_contents($path);
-            if ($raw === false) {
-                continue;
-            }
-            $secret = \trim($raw);
+            $secret = self::readSecretFromTokenFile($path);
             if ($secret === '' || \strlen($secret) > 8192) {
                 continue;
             }
@@ -160,5 +201,21 @@ final class SharedStateProtocolProbe
         $messages = SessionProtocol::extractMessages($buffer);
 
         return $messages[0] ?? null;
+    }
+
+    private static function readSecretFromTokenFile(string $path): string
+    {
+        $raw = @\file_get_contents($path);
+        if ($raw === false) {
+            return '';
+        }
+
+        $raw = \trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+
+        $parts = \explode(':', $raw, 2);
+        return \trim((string)($parts[0] ?? ''));
     }
 }
