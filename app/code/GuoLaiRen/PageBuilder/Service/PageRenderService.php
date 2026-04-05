@@ -40,6 +40,7 @@ class PageRenderService
     
     private LayoutAssembler $layoutAssembler;
     private LayoutOwnerResolver $layoutOwnerResolver;
+    private ?AiHtmlRenderService $aiHtmlRenderService;
     private Page $pageModel;
     private Style $styleModel;
     private LocalDescription $localDescriptionModel;
@@ -66,10 +67,13 @@ class PageRenderService
         LocalDescription $localDescriptionModel,
         ?TemplatePathResolver $pathResolver = null,
         ?ComponentResolver $componentResolver = null,
-        ?LayoutConfigNormalizer $configNormalizer = null
+        ?LayoutConfigNormalizer $configNormalizer = null,
+        ?AiHtmlRenderService $aiHtmlRenderService = null
     ) {
         $this->layoutAssembler = $layoutAssembler;
         $this->layoutOwnerResolver = $layoutOwnerResolver;
+        $this->aiHtmlRenderService = $aiHtmlRenderService
+            ?? ObjectManager::getInstance(AiHtmlRenderService::class);
         $this->pageModel = $pageModel;
         $this->styleModel = $styleModel;
         $this->localDescriptionModel = $localDescriptionModel;
@@ -148,7 +152,10 @@ class PageRenderService
         // 重置模板变量
         $this->templateVars = [];
         try {
-        
+        if ($page->getId() && $page->isAiHtmlRenderMode()) {
+            return $this->aiHtmlRenderService->render($page, $mode, $locale);
+        }
+
         // 获取样式代码
         $styleCode = $tempStyleCode ?: ($page->getData('style') ?: 'default');
         
@@ -283,7 +290,7 @@ class PageRenderService
     }
 
     /**
-     * 布局组件在文件与 PageBuilder Component 模型均未命中时，尝试按当前 render 的 weline_theme_id 渲染虚拟主题部件
+     * 布局组件在文件与 PageBuilder Component 模型均未命中时，尝试按当前 render 的 virtual_theme_id 渲染虚拟主题部件
      */
     private function renderVirtualThemeComponentHtml(
         string $code,
@@ -1062,6 +1069,15 @@ class PageRenderService
             if (!$componentFile && !$componentPath) {
                 $virtualThemeHtml = $this->renderVirtualThemeComponentHtml($code, $config, $page, $styleSettings, $mode);
                 if ($virtualThemeHtml === null) {
+                    $this->logMissingComponentResolution(
+                        $page,
+                        $region,
+                        $styleCode,
+                        $code,
+                        $componentTemplateCode,
+                        $componentFiles,
+                        $mode
+                    );
                     $html .= "<!-- Component not found: {$code} (tried file-based, Component model, virtual theme) -->\n";
                     $componentIndex++;
                     continue;
@@ -1122,6 +1138,54 @@ class PageRenderService
     private function getComponentFilesMap(string $styleCode): array
     {
         return $this->componentResolver->getComponentFilesMap($styleCode);
+    }
+
+    /**
+     * @param array<string, string> $componentFiles
+     */
+    private function logMissingComponentResolution(
+        Page $page,
+        string $region,
+        string $styleCode,
+        string $code,
+        string $componentTemplateCode,
+        array $componentFiles,
+        string $mode
+    ): void {
+        if (!\function_exists('w_log_warning')) {
+            return;
+        }
+
+        $availableCodes = \array_keys($componentFiles);
+        \sort($availableCodes);
+        $sampleCodes = \array_slice($availableCodes, 0, 10);
+
+        w_log_warning(
+            '[PageRenderService] Component resolution failed for PageBuilder preview/page render.'
+            . ' page_id=' . (int)$page->getId()
+            . ' page_type=' . (string)$page->getData(Page::schema_fields_TYPE)
+            . ' page_style=' . (string)$page->getData(Page::schema_fields_STYLE)
+            . ' render_style=' . $styleCode
+            . ' region=' . $region
+            . ' code=' . $code
+            . ' template_code=' . ($componentTemplateCode !== '' ? $componentTemplateCode : '-')
+            . ' available_count=' . \count($availableCodes)
+            . ' available_sample=' . \implode(',', $sampleCodes),
+            [
+                'page_id' => (int)$page->getId(),
+                'page_type' => (string)$page->getData(Page::schema_fields_TYPE),
+                'page_style' => (string)$page->getData(Page::schema_fields_STYLE),
+                'render_style_code' => $styleCode,
+                'region' => $region,
+                'component_code' => $code,
+                'component_template_code' => $componentTemplateCode,
+                'mode' => $mode,
+                'available_component_count' => \count($availableCodes),
+                'available_component_codes_sample' => \array_slice($availableCodes, 0, 20),
+                'render_weline_theme_id' => $this->renderWelineThemeId,
+            ],
+            'pagebuilder'
+        );
     }
     
     /**
