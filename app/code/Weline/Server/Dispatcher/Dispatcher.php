@@ -323,16 +323,7 @@ class Dispatcher
         }
         
         // 初始化硬编码维护页（纯内存，最后一道防线）
-        $this->fallbackMaintenancePage = "HTTP/1.1 503 Service Unavailable\r\n"
-            . "Content-Type: text/html; charset=UTF-8\r\n"
-            . "Retry-After: 5\r\n"
-            . "Connection: close\r\n\r\n"
-            . "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-            . "<title>WLS Starting</title></head><body>"
-            . "<h1 style='text-align:center;margin-top:20vh'>"
-            . "WLS服务器正在启动中...</h1>"
-            . "<p style='text-align:center'>Maintenance worker is not ready yet. "
-            . "Please retry in a moment.</p></body></html>";
+        $this->fallbackMaintenancePage = $this->buildFriendlyStartupMaintenancePage();
         
         // 注册信号处理
         $this->registerSignals();
@@ -1523,6 +1514,109 @@ class Dispatcher
     {
         return $this->shouldServeMaintenanceFallback()
             && $this->passthroughCore->getWorkerCount() <= 0;
+    }
+
+    private function buildFriendlyStartupMaintenancePage(): string
+    {
+        $body = <<<'HTML'
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WLS启动中...</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg-top: #f6efe4;
+            --bg-bottom: #fffdf9;
+            --card: rgba(255,255,255,0.88);
+            --border: rgba(120,93,55,0.16);
+            --text: #2b241c;
+            --muted: #75624c;
+            --accent: #b06a2f;
+            --accent-soft: rgba(176,106,47,0.12);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-bottom) 100%);
+            color: var(--text);
+        }
+        .panel {
+            width: min(560px, 100%);
+            border: 1px solid var(--border);
+            border-radius: 24px;
+            padding: 40px 32px;
+            background: var(--card);
+            box-shadow: 0 24px 80px rgba(88, 62, 31, 0.10);
+            text-align: center;
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 14px;
+            color: var(--accent);
+            background: var(--accent-soft);
+        }
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            box-shadow: 0 0 0 0 rgba(176,106,47,0.45);
+            animation: pulse 1.6s infinite;
+        }
+        h1 {
+            margin: 22px 0 14px;
+            font-size: clamp(30px, 5vw, 42px);
+            line-height: 1.1;
+        }
+        p {
+            margin: 0;
+            font-size: 16px;
+            line-height: 1.8;
+            color: var(--muted);
+        }
+        .hint {
+            margin-top: 22px;
+            font-size: 14px;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(176,106,47,0.45); }
+            70% { box-shadow: 0 0 0 12px rgba(176,106,47,0.0); }
+            100% { box-shadow: 0 0 0 0 rgba(176,106,47,0.0); }
+        }
+    </style>
+</head>
+<body>
+    <main class="panel">
+        <div class="badge"><span class="dot"></span><span>维护接管准备中</span></div>
+        <h1>WLS启动中...</h1>
+        <p>维护 Worker 正在启动并准备接管请求。</p>
+        <p>当前入口已进入保护窗口，请稍后刷新页面。</p>
+        <p class="hint">系统会在维护页就绪后自动返回友好的维护信息。</p>
+    </main>
+</body>
+</html>
+HTML;
+
+        return "HTTP/1.1 503 Service Unavailable\r\n"
+            . "Content-Type: text/html; charset=UTF-8\r\n"
+            . "Cache-Control: no-store, no-cache, must-revalidate\r\n"
+            . "Pragma: no-cache\r\n"
+            . "Retry-After: 5\r\n"
+            . "Connection: close\r\n\r\n"
+            . $body;
     }
 
     /**

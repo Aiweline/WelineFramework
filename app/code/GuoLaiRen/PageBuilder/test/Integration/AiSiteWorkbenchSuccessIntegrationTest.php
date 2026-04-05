@@ -118,6 +118,17 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
         self::assertSame(AiSiteAgentSession::PUBLISH_STATUS_DRAFT, (string)($buildState['publish_status'] ?? ''));
         self::assertSame('can_publish', (string)($buildState['workspace_status'] ?? ''));
         self::assertCount(\count($pageTypes), (array)($buildState['virtual_pages_by_type'] ?? []));
+        $virtualPages = (array)($buildState['virtual_pages_by_type'] ?? []);
+        self::assertNotSame(
+            (string)($virtualPages[Page::TYPE_HOME]['ai_description'] ?? ''),
+            (string)($virtualPages[Page::TYPE_ABOUT]['ai_description'] ?? ''),
+            'Different page types should no longer share the same AI description.'
+        );
+        self::assertGreaterThan(
+            1,
+            \count((array)($buildState['page_type_layouts'][Page::TYPE_HOME]['content'] ?? [])),
+            'Prompt-driven build should create multiple content sections per page.'
+        );
         self::assertStringContainsString('/pagebuilder/backend/preview/full', $visualPreviewUrl);
         self::assertStringContainsString('virtual_theme_id=' . $virtualThemeId, $visualPreviewUrl);
         self::assertStringNotContainsString('weline_theme_id=', $visualPreviewUrl);
@@ -253,6 +264,8 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
             self::assertSame(200, $exception->getStatusCode());
             self::assertStringContainsString('<!DOCTYPE html>', $html);
             self::assertStringContainsString('pb-slot', $html);
+            self::assertStringContainsString('component-actions', $html);
+            self::assertStringContainsString('data-pb-action="refine"', $html);
             self::assertStringNotContainsString('weline_theme_id=', $html);
         }
 
@@ -277,6 +290,46 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
         self::assertNotFalse(\strpos($editorHtml, '<!DOCTYPE html>'));
         self::assertGreaterThan(1000, \strlen($editorHtml));
         self::assertStringNotContainsString('weline_theme_id=', $editorHtml);
+    }
+
+    public function testStartRefineComponentPersistsSectionRefinementAndQueuesRegenerate(): void
+    {
+        $buildFlow = $this->createAndBuildWorkbenchSession();
+        $publicId = (string)$buildFlow['public_id'];
+        $buildState = (array)$buildFlow['build_state'];
+        $pageType = (string)($buildState['preview_page_type'] ?? Page::TYPE_HOME);
+        $contentLayout = (array)($buildState['page_type_layouts'][$pageType]['content'] ?? []);
+        $componentCode = (string)($contentLayout[0]['code'] ?? '');
+
+        self::assertNotSame('', $componentCode);
+
+        $payload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-refine-component',
+            'POST',
+            'postStartRefineComponent',
+            [],
+            [
+                'public_id' => $publicId,
+                'page_type' => $pageType,
+                'component_code' => $componentCode,
+                'instruction' => '把这个区块改成更强调印度 APK 拉新和下载转化的表达',
+            ]
+        );
+
+        self::assertTrue((bool)($payload['success'] ?? false), \json_encode($payload, \JSON_UNESCAPED_UNICODE));
+        self::assertSame('regenerate_page', (string)($payload['operation'] ?? ''));
+        self::assertNotSame('', (string)($payload['execution_token'] ?? ''));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $session->getScopeArray();
+        $virtualPages = (array)($scope['virtual_pages_by_type'] ?? []);
+        $sectionRefinements = (array)($virtualPages[$pageType]['section_refinements'] ?? []);
+
+        self::assertSame(
+            '把这个区块改成更强调印度 APK 拉新和下载转化的表达',
+            (string)($sectionRefinements[$componentCode] ?? '')
+        );
     }
 
     public function testStartPublishShowsFriendlyMessageWhenDomainNotReady(): void

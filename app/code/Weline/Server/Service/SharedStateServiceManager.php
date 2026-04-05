@@ -837,8 +837,9 @@ class SharedStateServiceManager
             $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
             // 仅 env/wls 中显式端口视为「用户钉死」；勿用 $config['memory_server_port']（Master/实例 JSON 总会带该键，会禁用启动阶段端口可用性扫描）
             $memoryPortExplicit = \array_key_exists('port', $memoryConfig);
-            $memoryTokenExplicit = \array_key_exists('memory_server_token_file_name', $config)
-                || \array_key_exists('token_file_name', $memoryConfig);
+            // 仅 env/wls 中显式 token_file_name 视为「用户钉死」；
+            // 勿用 $config['memory_server_token_file_name']（实例 JSON / 运行时配置会残留旧端口 token，不能继续钉死）。
+            $memoryTokenExplicit = \array_key_exists('token_file_name', $memoryConfig);
 
             // 默认端口 19971 + 项目偏移量，确保多项目不冲突
             $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
@@ -890,8 +891,9 @@ class SharedStateServiceManager
         $sessionPortExplicit = \array_key_exists('port', $wlsServer)
             || \array_key_exists('port', $wlsSession)
             || \array_key_exists('server_port', $sessionConfig);
-        $sessionTokenExplicit = \array_key_exists('session_server_token_file_name', $config)
-            || \array_key_exists('token_file_name', $wlsServer)
+        // 仅 env/wls 中显式 token_file_name 视为「用户钉死」；
+        // 勿用 $config['session_server_token_file_name']（实例 JSON / 运行时配置会残留旧端口 token，不能继续钉死）。
+        $sessionTokenExplicit = \array_key_exists('token_file_name', $wlsServer)
             || \array_key_exists('token_file_name', $wlsSession);
 
         // 默认端口 19970 + 项目偏移量，确保多项目不冲突
@@ -1221,7 +1223,17 @@ class SharedStateServiceManager
             return false;
         }
 
-        return \str_contains($instanceName, '-' . $scope . '-') || \str_contains($processName, '-' . $scope . '-');
+        return $this->matchesProjectScopeToken($instanceName, $scope)
+            || $this->matchesProjectScopeToken($processName, $scope);
+    }
+
+    private function matchesProjectScopeToken(string $value, string $scope): bool
+    {
+        if ($value === '' || $scope === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:^|-)' . \preg_quote($scope, '/') . '(?:-|$)/', $value) === 1;
     }
 
     private function resolveSharedServiceTokenFileName(
@@ -1230,15 +1242,19 @@ class SharedStateServiceManager
         int $port,
         bool $explicitConfigured
     ): string {
+        $defaultTokenFileName = $this->defaultTokenForRole($role);
         $tokenFileName = \basename(\trim($tokenFileName));
         if ($tokenFileName === '' || $tokenFileName === '.' || $tokenFileName === '..') {
-            $tokenFileName = $this->defaultTokenForRole($role);
+            $tokenFileName = $defaultTokenFileName;
         }
 
         if ($explicitConfigured) {
             return $tokenFileName;
         }
 
+        // 非 env 显式配置时，统一按最终端口重建规范 token 名，
+        // 避免实例 JSON 残留旧端口 token（例如 port=26422 却继续携带 session_server.26425.token）。
+        $tokenFileName = $defaultTokenFileName;
         $defaultPort = $this->defaultPortForRole($role);
         if ($port <= 0 || $port === $defaultPort) {
             return $tokenFileName;

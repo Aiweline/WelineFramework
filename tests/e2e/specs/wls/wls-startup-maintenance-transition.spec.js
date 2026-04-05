@@ -196,6 +196,7 @@ test.describe('WLS startup maintenance transition', () => {
     const origin = `http://${HOST}:${mainPort}`;
     const maintenanceDelayMs = Number(process.env.WLS_E2E_MAINTENANCE_READY_DELAY_MS || 2500);
     const workerDelayMs = Number(process.env.WLS_E2E_WORKER_READY_DELAY_MS || 9000);
+    const listenTimeoutMs = Math.max(60000, workerDelayMs + 30000);
 
     const env = {
       WLS_E2E_MAINTENANCE_READY_DELAY_MS: String(maintenanceDelayMs),
@@ -211,7 +212,7 @@ test.describe('WLS startup maintenance transition', () => {
 
       expect(startResult.status, startResult.stderr || startResult.stdout || 'server:start failed').toBe(0);
 
-      await waitForPortListening(mainPort, HOST, 20000);
+      await waitForPortListening(mainPort, HOST, listenTimeoutMs);
 
       const firstResponse = await requestText(origin, '/', 20000);
       expect(firstResponse.durationMs).toBeGreaterThanOrEqual(Math.max(1000, maintenanceDelayMs - 800));
