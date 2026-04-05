@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service\AiWorkbench;
 
+use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\AiSiteBuilderMessage;
 
 class MessageService
@@ -36,7 +39,23 @@ class MessageService
         $message->setData(AiSiteBuilderMessage::schema_fields_CONTENT, $content);
         $message->setData(AiSiteBuilderMessage::schema_fields_MESSAGE_TYPE, \trim($messageType) ?: 'message');
         $message->setToolPayloadArray($toolPayload);
-        $message->save();
+        try {
+            $message->save();
+        } catch (\Throwable $e) {
+            if (!$this->isPgsqlAiSiteBuilderMessagePrimaryKeyBroken($e)) {
+                throw $e;
+            }
+
+            $message = clone $this->messageModel;
+            $message->clearData()->clearQuery();
+            $message->setData(AiSiteBuilderMessage::schema_fields_ID, $this->allocateNextMessageId());
+            $message->setData(AiSiteBuilderMessage::schema_fields_SESSION_ID, $sessionId);
+            $message->setData(AiSiteBuilderMessage::schema_fields_ROLE, \trim($role));
+            $message->setData(AiSiteBuilderMessage::schema_fields_CONTENT, $content);
+            $message->setData(AiSiteBuilderMessage::schema_fields_MESSAGE_TYPE, \trim($messageType) ?: 'message');
+            $message->setToolPayloadArray($toolPayload);
+            $message->save();
+        }
 
         return true;
     }
@@ -90,5 +109,40 @@ class MessageService
         }
 
         return $messages;
+    }
+
+    private function isPgsqlAiSiteBuilderMessagePrimaryKeyBroken(\Throwable $e): bool
+    {
+        $chain = $e;
+        while ($chain !== null) {
+            $msg = $chain->getMessage();
+            if ((\str_contains($msg, '23502') || \str_contains($msg, '23505'))
+                && \str_contains($msg, AiSiteBuilderMessage::schema_fields_ID)
+                && (\str_contains($msg, 'weline_websites_ai_site_builder_message')
+                    || \str_contains($msg, 'm_weline_websites_ai_site_builder_message'))) {
+                return true;
+            }
+            $chain = $chain->getPrevious();
+        }
+
+        return false;
+    }
+
+    private function allocateNextMessageId(): int
+    {
+        $connector = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
+        if (!$connector instanceof PgsqlConnector || !\method_exists($connector, 'getWrappedConnection')) {
+            return 0;
+        }
+
+        $pdo = $connector->getWrappedConnection()->getPdo();
+        $tableSql = $this->messageModel->getTable();
+        $pk = AiSiteBuilderMessage::schema_fields_ID;
+        $stmt = $pdo->query('SELECT COALESCE(MAX("' . $pk . '"), 0) AS mx FROM ' . $tableSql);
+        if ($stmt === false) {
+            return 0;
+        }
+
+        return ((int)($stmt->fetch(\PDO::FETCH_ASSOC)['mx'] ?? 0)) + 1;
     }
 }
