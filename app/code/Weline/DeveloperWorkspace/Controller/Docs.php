@@ -8,8 +8,9 @@ use Weline\DeveloperWorkspace\Model\Document;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\I18n\Model\I18n;
+use Weline\I18n\Model\Locale;
 use Weline\Websites\Data\WebsiteData;
-use Weline\I18n\Model\Locale\Name as LocaleName;
 
 /**
  * 前端文档浏览控制器
@@ -749,65 +750,80 @@ class Docs extends FrontendController
     private function getAvailableLocales(): array
     {
         try {
-            // 从当前网站获取关联的语言代码列表
             $languageCodes = WebsiteData::getLanguageCodes();
-            
-            // 如果网站没有关联语言，从数据库获取所有语言
+            $displayLocaleCode = $_SERVER['WELINE_USER_LANG']
+                ?? $_SERVER['WELINE_WEBSITE_LANGUAGE']
+                ?? 'zh_Hans_CN';
+
+            /** @var Locale $localeModel */
+            $localeModel = ObjectManager::getInstance(Locale::class);
+            /** @var I18n $i18n */
+            $i18n = ObjectManager::getInstance(I18n::class);
+
+            $query = $localeModel->clear()
+                ->order(Locale::schema_fields_CODE, 'ASC');
+
             if (empty($languageCodes)) {
-                /** @var LocaleName $localeNameModel */
-                $localeNameModel = ObjectManager::getInstance(LocaleName::class);
-                $locales = $localeNameModel->clear()
-                    ->order(LocaleName::schema_fields_LOCALE_CODE, 'ASC')
-                    ->select()
-                    ->fetch()
-                    ->getItems();
-                
-                $result = [];
-                foreach ($locales as $locale) {
-                    $result[] = [
-                        'code' => $locale->getData(LocaleName::schema_fields_LOCALE_CODE),
-                        'name' => $locale->getData(LocaleName::schema_fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::schema_fields_DISPLAY_LOCALE_CODE),
-                    ];
-                }
-                
-                // 如果数据库中没有语言，返回默认列表
-                if (empty($result)) {
-                    return [
-                        ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
-                        ['code' => 'en_US', 'name' => 'English'],
-                    ];
-                }
-                
-                return $result;
+                $query->where(Locale::schema_fields_IS_INSTALL, 1);
+            } else {
+                $query->where(Locale::schema_fields_CODE, array_values(array_unique($languageCodes)), 'in');
             }
-            
-            // 根据语言代码获取语言详细信息
-            /** @var LocaleName $localeNameModel */
-            $localeNameModel = ObjectManager::getInstance(LocaleName::class);
+
+            // Use fetchArray here to avoid cloning the model for every locale row.
+            $rows = $query->select()->fetchArray();
+            if (!is_array($rows) || empty($rows)) {
+                return [
+                    ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
+                    ['code' => 'en_US', 'name' => 'English'],
+                ];
+            }
+
+            $namesByCode = [];
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $code = trim((string)($row[Locale::schema_fields_CODE] ?? ''));
+                if ($code === '' || isset($namesByCode[$code])) {
+                    continue;
+                }
+                $name = (string)$i18n->getLocaleName($code, $displayLocaleCode);
+                $namesByCode[$code] = $name !== '' ? $name : $code;
+            }
+
+            if (empty($namesByCode)) {
+                return [
+                    ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
+                    ['code' => 'en_US', 'name' => 'English'],
+                ];
+            }
+
             $result = [];
-            foreach ($languageCodes as $code) {
-                $locale = $localeNameModel->clear()
-                    ->where(LocaleName::schema_fields_LOCALE_CODE, $code)
-                    ->find()
-                    ->fetch();
-                
-                if ($locale->getId()) {
-                    $result[] = [
-                        'code' => $locale->getData(LocaleName::schema_fields_LOCALE_CODE),
-                        'name' => $locale->getData(LocaleName::schema_fields_DISPLAY_NAME) ?: $locale->getData(LocaleName::schema_fields_DISPLAY_LOCALE_CODE),
-                    ];
-                } else {
-                    // 如果找不到详细信息，至少显示代码
+            if (!empty($languageCodes)) {
+                foreach ($languageCodes as $code) {
+                    $code = trim((string)$code);
+                    if ($code === '') {
+                        continue;
+                    }
                     $result[] = [
                         'code' => $code,
-                        'name' => $code,
+                        'name' => $namesByCode[$code] ?? $code,
                     ];
                 }
+                if (!empty($result)) {
+                    return $result;
+                }
             }
-            
+
+            foreach ($namesByCode as $code => $name) {
+                $result[] = [
+                    'code' => $code,
+                    'name' => $name,
+                ];
+            }
+
             return $result;
         } catch (\Exception $e) {
-            // 如果查询失败，返回默认列表
             return [
                 ['code' => 'zh_Hans_CN', 'name' => '简体中文'],
                 ['code' => 'en_US', 'name' => 'English'],
