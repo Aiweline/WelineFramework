@@ -284,12 +284,12 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
         <?= $headerCustomCode ?>
     <?php endif; ?>
     
-    <!-- 预览模式调试信息 -->
+    <!-- 预览模式调试信息（log 文案经 json_encode 输出为 \\u 转义，避免页面 charset 误判时控制台乱码） -->
     <?php if ($isPreview): ?>
     <script>
-        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
-        console.log('%c🔍 页面预览调试信息 (Page Preview Debug Info)', 'color: #00ff00; font-size: 16px; font-weight: bold;');
-        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
+        console.log(<?= json_encode('%c🔍 页面预览调试信息 (Page Preview Debug Info)') ?>, 'color: #00ff00; font-size: 16px; font-weight: bold;');
+        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
         
         // 页面数据
         const pageData = <?= json_encode([
@@ -311,13 +311,13 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             'locales' => $page ? $page->getData('locales') : '',
         ], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
         
-        console.log('%c📄 页面数据 (Page Data):', 'color: #ffcc00; font-weight: bold;');
+        console.log(<?= json_encode('%c📄 页面数据 (Page Data):') ?>, 'color: #ffcc00; font-weight: bold;');
         console.log(pageData);
         
         // 样式配置
         const styleSettings = <?= json_encode($styleSettings, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) ?>;
         
-        console.log('%c🎨 样式配置 (Style Settings):', 'color: #ffcc00; font-weight: bold;');
+        console.log(<?= json_encode('%c🎨 样式配置 (Style Settings):') ?>, 'color: #ffcc00; font-weight: bold;');
         console.log(styleSettings);
         
         // Logo 配置
@@ -326,7 +326,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             position: '<?= htmlspecialchars($logoPosition ?? '') ?>'
         };
         
-        console.log('%c🖼️ Logo 配置 (Logo Config):', 'color: #ffcc00; font-weight: bold;');
+        console.log(<?= json_encode('%c🖼️ Logo 配置 (Logo Config):') ?>, 'color: #ffcc00; font-weight: bold;');
         console.log(logoConfig);
         
         // 头部样式配置
@@ -341,7 +341,7 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             padding_h_desktop: '<?= htmlspecialchars($paddingH['desktop'] ?? '') ?>'
         };
         
-        console.log('%c📐 头部样式 (Header Style):', 'color: #ffcc00; font-weight: bold;');
+        console.log(<?= json_encode('%c📐 头部样式 (Header Style):') ?>, 'color: #ffcc00; font-weight: bold;');
         console.log(headerStyle);
         
         // 环境信息
@@ -352,13 +352,13 @@ $metaKeywords = $page ? $page->getData('meta_keywords') : '';
             user_agent: navigator.userAgent
         };
         
-        console.log('%c⚙️ 环境信息 (Environment Info):', 'color: #ffcc00; font-weight: bold;');
+        console.log(<?= json_encode('%c⚙️ 环境信息 (Environment Info):') ?>, 'color: #ffcc00; font-weight: bold;');
         console.log(envInfo);
         
-        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
-        console.log('%c✅ 调试信息输出完成！', 'color: #00ff00; font-size: 14px; font-weight: bold;');
-        console.log('%c💡 提示：展开上面的对象可以查看详细配置信息', 'color: #999999; font-style: italic;');
-        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color: #00ff00; font-weight: bold;');
+        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
+        console.log(<?= json_encode('%c✅ 调试信息输出完成！') ?>, 'color: #00ff00; font-size: 14px; font-weight: bold;');
+        console.log(<?= json_encode('%c💡 提示：展开上面的对象可以查看详细配置信息') ?>, 'color: #999999; font-style: italic;');
+        console.log(<?= json_encode('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━') ?>, 'color: #00ff00; font-weight: bold;');
     </script>
     <?php endif; ?>
 

@@ -113,14 +113,14 @@ class ComponentRenderer
         $styleSettings = $options['style_settings'] ?? [];
         $children = $options['children'] ?? [];
         
-        $welineThemeId = (int) ($options['weline_theme_id'] ?? 0);
-        if ($welineThemeId > 0) {
+        $virtualThemeId = (int) ($options['virtual_theme_id'] ?? 0);
+        if ($virtualThemeId > 0) {
             $virtualHtml = $this->tryRenderViaWelineVirtualTheme(
                 $componentCode,
                 $config,
                 $page,
                 $styleSettings,
-                $welineThemeId,
+                $virtualThemeId,
                 $options
             );
             if ($virtualHtml !== null) {
@@ -142,7 +142,7 @@ class ComponentRenderer
                     'style_code' => $styleCode,
                     'region' => $region,
                     'index' => $index,
-                    'weline_theme_id' => $welineThemeId,
+                    'virtual_theme_id' => $virtualThemeId,
                     'render_source' => 'weline_virtual_theme',
                 ]);
             }
@@ -231,7 +231,7 @@ class ComponentRenderer
      * @param string $componentCode 组件代码
      * @param string $styleCode 模板代码
      * @param array $config 组件配置
-     * @param array<string, mixed> $extraOptions 合并进 renderSingle 的选项（如 weline_theme_id、theme_component_area、style_settings）
+     * @param array<string, mixed> $extraOptions 合并进 renderSingle 的选项（如 virtual_theme_id、theme_component_area、style_settings）
      * @return RenderResult
      */
     public function renderPreview(
