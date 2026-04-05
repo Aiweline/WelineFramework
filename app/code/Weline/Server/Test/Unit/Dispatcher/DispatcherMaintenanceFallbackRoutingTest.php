@@ -123,6 +123,20 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         self::assertFalse($method->invoke($dispatcher));
     }
 
+    public function testFriendlyStartupMaintenancePageContainsFriendlyMessage(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'buildFriendlyStartupMaintenancePage');
+        $method->setAccessible(true);
+        $response = (string) $method->invoke($dispatcher);
+
+        self::assertStringContainsString('HTTP/1.1 503 Service Unavailable', $response);
+        self::assertStringContainsString('WLS启动中...', $response);
+        self::assertStringContainsString('维护 Worker 正在启动并准备接管请求。', $response);
+        self::assertStringContainsString('系统会在维护页就绪后自动返回友好的维护信息。', $response);
+    }
+
     private function newDispatcherWithoutConstructor(): Dispatcher
     {
         $reflector = new \ReflectionClass(Dispatcher::class);

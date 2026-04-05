@@ -71,6 +71,11 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
         return 'none';
     }
 
+    public function requiresStartupReadyBarrier(): bool
+    {
+        return true;
+    }
+
     public function buildCommand(int $instanceId, ServiceContext $context): ServiceCommand
     {
         $scriptDir = BP . 'app' . DS . 'code' . DS . 'Weline' . DS . 'Server' . DS . 'bin';

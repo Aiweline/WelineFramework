@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
-use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeComponent;
 use GuoLaiRen\PageBuilder\Model\VirtualThemeComponentVersion;
@@ -17,6 +16,11 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class AiSiteVirtualThemeService
 {
+    public function __construct(
+        private readonly ?AiSitePageBlueprintService $pageBlueprintService = null,
+    ) {
+    }
+
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
@@ -28,9 +32,16 @@ class AiSiteVirtualThemeService
         array $scope,
         array $websiteProfile,
         array $pageTypes,
-        array $pageTypeLayouts,
+        array|int $pageTypeLayouts,
         int $sessionId = 0
     ): array {
+        if (\is_int($pageTypeLayouts)) {
+            $sessionId = $pageTypeLayouts;
+            $pageTypeLayouts = [];
+        }
+
+        $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
+        $siteDisplayName = $pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
         $theme = $this->loadOrCreateTheme((int)($scope['virtual_theme_id'] ?? 0), $websiteProfile, $sessionId);
         if (!$theme->getId()) {
             $theme->save();
@@ -48,7 +59,7 @@ class AiSiteVirtualThemeService
             'AI Site Header',
             $this->buildHeaderTemplate(),
             [
-                'site_title' => (string)($websiteProfile['site_title'] ?? ''),
+                'site_title' => $siteDisplayName,
                 'site_tagline' => (string)($websiteProfile['site_tagline'] ?? ''),
                 'logo' => (string)($websiteProfile['logo'] ?? ''),
                 'nav_hint' => (string)__('Home | Pages | Contact'),
@@ -64,7 +75,7 @@ class AiSiteVirtualThemeService
             'AI Site Footer',
             $this->buildFooterTemplate(),
             [
-                'site_title' => (string)($websiteProfile['site_title'] ?? ''),
+                'site_title' => $siteDisplayName,
                 'brief_description' => (string)($websiteProfile['brief_description'] ?? ''),
                 'target_domain' => (string)($websiteProfile['target_domain'] ?? ''),
             ],
@@ -73,25 +84,34 @@ class AiSiteVirtualThemeService
 
         $resolvedLayouts = [];
         foreach ($pageTypes as $pageType) {
-            $contentCode = 'content/' . $this->slugify($pageType);
-            $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
+            $blueprint = $pageBlueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile);
+            $generatedContent = [];
 
-            $this->saveThemeComponent(
-                $themeId,
-                $contentCode,
-                VirtualThemeComponent::AREA_FRONTEND,
-                VirtualThemeComponent::CATEGORY_CONTENT,
-                $pageLabel,
-                $this->buildContentTemplate(),
-                [
-                    'page_label' => $pageLabel,
-                    'site_title' => (string)($websiteProfile['site_title'] ?? ''),
-                    'headline' => $this->buildPageHeadline($pageType, $websiteProfile),
-                    'description' => $this->buildPageDescription($pageType, $websiteProfile),
-                    'cta_label' => (string)__('Continue editing in the visual editor'),
-                ],
-                ['position' => ['content'], 'page_layouts' => [$pageType], 'sort_order' => 100]
-            );
+            foreach ($blueprint['sections'] as $section) {
+                $generatedContent[] = [
+                    'code' => (string)$section['code'],
+                    'enabled' => true,
+                    'config' => [],
+                    'instance_id' => '',
+                    'sort_order' => (int)($section['sort_order'] ?? 0),
+                ];
+
+                $this->saveThemeComponent(
+                    $themeId,
+                    (string)$section['code'],
+                    VirtualThemeComponent::AREA_FRONTEND,
+                    VirtualThemeComponent::CATEGORY_CONTENT,
+                    (string)($section['name'] ?? $blueprint['page_label']),
+                    $this->resolveContentTemplate((string)($section['template'] ?? 'hero')),
+                    \is_array($section['config'] ?? null) ? $section['config'] : [],
+                    [
+                        'position' => ['content'],
+                        'page_layouts' => [$pageType],
+                        'sort_order' => (int)($section['sort_order'] ?? 100),
+                        'section_key' => (string)($section['key'] ?? ''),
+                    ]
+                );
+            }
 
             $layout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
             $layout['header'] = \is_array($layout['header'] ?? null) ? $layout['header'] : ['component' => '', 'config' => []];
@@ -106,13 +126,7 @@ class AiSiteVirtualThemeService
             }
 
             if ($this->shouldInjectGeneratedContent($layout['content'])) {
-                $layout['content'] = [[
-                    'code' => $contentCode,
-                    'enabled' => true,
-                    'config' => [],
-                    'instance_id' => '',
-                    'sort_order' => 10,
-                ]];
+                $layout['content'] = $generatedContent;
             }
 
             $layout['version'] = '1.0';
@@ -297,34 +311,6 @@ class AiSiteVirtualThemeService
         return true;
     }
 
-    /**
-     * @param array<string, mixed> $websiteProfile
-     */
-    private function buildPageHeadline(string $pageType, array $websiteProfile): string
-    {
-        $siteTitle = \trim((string)($websiteProfile['site_title'] ?? ''));
-        $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
-
-        return $pageType === Page::TYPE_HOME ? $siteTitle : ($pageLabel . ' | ' . $siteTitle);
-    }
-
-    /**
-     * @param array<string, mixed> $websiteProfile
-     */
-    private function buildPageDescription(string $pageType, array $websiteProfile): string
-    {
-        $brief = \trim((string)($websiteProfile['brief_description'] ?? ''));
-        if ($brief !== '') {
-            return $brief;
-        }
-
-        return match ($pageType) {
-            Page::TYPE_CONTACT => (string)__('Share your contact details, service channels, and response expectations here.'),
-            Page::TYPE_ABOUT => (string)__('Introduce the story, offer, and trust signals that support this website.'),
-            default => (string)__('This page was prepared from the draft website profile and can now be refined in the visual editor.'),
-        };
-    }
-
     private function buildHeaderTemplate(): string
     {
         return <<<'PHTML'
@@ -362,23 +348,127 @@ PHTML;
 PHTML;
     }
 
-    private function buildContentTemplate(): string
+    private function resolveContentTemplate(string $template): string
+    {
+        return match ($template) {
+            'cards' => $this->buildCardsTemplate(),
+            'checklist' => $this->buildChecklistTemplate(),
+            'cta' => $this->buildCtaTemplate(),
+            default => $this->buildHeroTemplate(),
+        };
+    }
+
+    private function buildHeroTemplate(): string
     {
         return <<<'PHTML'
-<section class="pb-ai-generated-section" style="padding:64px 32px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);">
-    <div style="max-width:960px;margin:0 auto;display:grid;gap:16px;">
-        <?php if (!empty($page_label)): ?>
-            <span style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2563eb;"><?= htmlspecialchars((string)$page_label, ENT_QUOTES, 'UTF-8') ?></span>
+<section class="pb-ai-generated-section pb-ai-generated-section-hero" style="padding:64px 32px 48px;background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%);">
+    <div style="max-width:1080px;margin:0 auto;display:grid;gap:18px;">
+        <?php if (!empty($eyebrow)): ?>
+            <span style="font-size:12px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2563eb;"><?= htmlspecialchars((string)$eyebrow, ENT_QUOTES, 'UTF-8') ?></span>
         <?php endif; ?>
-        <h1 style="margin:0;font-size:42px;line-height:1.1;color:#0f172a;"><?= htmlspecialchars((string)($headline ?? $site_title ?? ''), ENT_QUOTES, 'UTF-8') ?></h1>
+        <h1 style="margin:0;font-size:42px;line-height:1.08;color:#0f172a;max-width:900px;"><?= htmlspecialchars((string)($headline ?? $site_title ?? ''), ENT_QUOTES, 'UTF-8') ?></h1>
         <?php if (!empty($description)): ?>
-            <p style="margin:0;max-width:720px;font-size:18px;line-height:1.7;color:#475569;"><?= nl2br(htmlspecialchars((string)$description, ENT_QUOTES, 'UTF-8')) ?></p>
+            <p style="margin:0;max-width:760px;font-size:18px;line-height:1.7;color:#475569;white-space:pre-line;"><?= htmlspecialchars((string)$description, ENT_QUOTES, 'UTF-8') ?></p>
         <?php endif; ?>
-        <?php if (!empty($cta_label)): ?>
-            <div>
-                <span style="display:inline-flex;align-items:center;padding:10px 18px;border-radius:999px;background:#0f172a;color:#ffffff;font-size:14px;font-weight:600;"><?= htmlspecialchars((string)$cta_label, ENT_QUOTES, 'UTF-8') ?></span>
+        <?php if (!empty($chips) && is_array($chips)): ?>
+            <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                <?php foreach ($chips as $chip): ?>
+                    <?php if (!is_scalar($chip) || trim((string)$chip) === '') { continue; } ?>
+                    <span style="display:inline-flex;align-items:center;padding:8px 14px;border-radius:999px;background:#ffffff;border:1px solid #dbe3ee;color:#0f172a;font-size:13px;font-weight:600;"><?= htmlspecialchars((string)$chip, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
             </div>
         <?php endif; ?>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+            <?php if (!empty($primary_cta)): ?>
+                <span style="display:inline-flex;align-items:center;padding:12px 20px;border-radius:999px;background:#0f172a;color:#ffffff;font-size:14px;font-weight:700;"><?= htmlspecialchars((string)$primary_cta, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+            <?php if (!empty($secondary_note)): ?>
+                <span style="font-size:13px;color:#64748b;"><?= htmlspecialchars((string)$secondary_note, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+PHTML;
+    }
+
+    private function buildCardsTemplate(): string
+    {
+        return <<<'PHTML'
+<section class="pb-ai-generated-section pb-ai-generated-section-cards" style="padding:20px 32px 40px;background:#ffffff;">
+    <div style="max-width:1080px;margin:0 auto;display:grid;gap:18px;">
+        <?php if (!empty($section_title)): ?>
+            <h2 style="margin:0;font-size:28px;line-height:1.2;color:#0f172a;"><?= htmlspecialchars((string)$section_title, ENT_QUOTES, 'UTF-8') ?></h2>
+        <?php endif; ?>
+        <?php if (!empty($section_intro)): ?>
+            <p style="margin:0;max-width:760px;font-size:16px;line-height:1.7;color:#475569;white-space:pre-line;"><?= htmlspecialchars((string)$section_intro, ENT_QUOTES, 'UTF-8') ?></p>
+        <?php endif; ?>
+        <?php if (!empty($items) && is_array($items)): ?>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:18px;">
+                <?php foreach ($items as $item): ?>
+                    <?php if (!is_array($item)) { continue; } ?>
+                    <article style="display:grid;gap:10px;padding:22px;border-radius:22px;background:#f8fafc;border:1px solid #e5e7eb;">
+                        <?php if (!empty($item['eyebrow'])): ?>
+                            <span style="font-size:11px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:#2563eb;"><?= htmlspecialchars((string)$item['eyebrow'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endif; ?>
+                        <h3 style="margin:0;font-size:20px;line-height:1.2;color:#0f172a;"><?= htmlspecialchars((string)($item['title'] ?? ''), ENT_QUOTES, 'UTF-8') ?></h3>
+                        <?php if (!empty($item['description'])): ?>
+                            <p style="margin:0;font-size:15px;line-height:1.7;color:#475569;white-space:pre-line;"><?= htmlspecialchars((string)$item['description'], ENT_QUOTES, 'UTF-8') ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+PHTML;
+    }
+
+    private function buildChecklistTemplate(): string
+    {
+        return <<<'PHTML'
+<section class="pb-ai-generated-section pb-ai-generated-section-checklist" style="padding:8px 32px 40px;background:#ffffff;">
+    <div style="max-width:1080px;margin:0 auto;display:grid;gap:18px;">
+        <?php if (!empty($section_title)): ?>
+            <h2 style="margin:0;font-size:26px;line-height:1.25;color:#0f172a;"><?= htmlspecialchars((string)$section_title, ENT_QUOTES, 'UTF-8') ?></h2>
+        <?php endif; ?>
+        <?php if (!empty($section_intro)): ?>
+            <p style="margin:0;max-width:760px;font-size:16px;line-height:1.7;color:#475569;white-space:pre-line;"><?= htmlspecialchars((string)$section_intro, ENT_QUOTES, 'UTF-8') ?></p>
+        <?php endif; ?>
+        <?php if (!empty($points) && is_array($points)): ?>
+            <div style="display:grid;gap:12px;">
+                <?php foreach ($points as $index => $point): ?>
+                    <?php if (!is_scalar($point) || trim((string)$point) === '') { continue; } ?>
+                    <div style="display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;padding:16px 18px;border-radius:18px;background:#f8fafc;border:1px solid #e5e7eb;">
+                        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;background:#0f172a;color:#ffffff;font-size:12px;font-weight:700;"><?= (int)$index + 1 ?></span>
+                        <p style="margin:0;font-size:15px;line-height:1.7;color:#334155;white-space:pre-line;"><?= htmlspecialchars((string)$point, ENT_QUOTES, 'UTF-8') ?></p>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+PHTML;
+    }
+
+    private function buildCtaTemplate(): string
+    {
+        return <<<'PHTML'
+<section class="pb-ai-generated-section pb-ai-generated-section-cta" style="padding:16px 32px 64px;background:linear-gradient(180deg,#ffffff 0%,#eef2ff 100%);">
+    <div style="max-width:1080px;margin:0 auto;padding:28px;border-radius:28px;background:#0f172a;color:#ffffff;display:grid;gap:14px;">
+        <?php if (!empty($section_title)): ?>
+            <h2 style="margin:0;font-size:28px;line-height:1.2;color:#ffffff;"><?= htmlspecialchars((string)$section_title, ENT_QUOTES, 'UTF-8') ?></h2>
+        <?php endif; ?>
+        <?php if (!empty($section_text)): ?>
+            <p style="margin:0;max-width:760px;font-size:16px;line-height:1.7;color:rgba(255,255,255,0.82);white-space:pre-line;"><?= htmlspecialchars((string)$section_text, ENT_QUOTES, 'UTF-8') ?></p>
+        <?php endif; ?>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;">
+            <?php if (!empty($button_label)): ?>
+                <span style="display:inline-flex;align-items:center;padding:12px 20px;border-radius:999px;background:#ffffff;color:#0f172a;font-size:14px;font-weight:700;"><?= htmlspecialchars((string)$button_label, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+            <?php if (!empty($assist_text)): ?>
+                <span style="font-size:13px;color:rgba(255,255,255,0.72);"><?= htmlspecialchars((string)$assist_text, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php endif; ?>
+        </div>
     </div>
 </section>
 PHTML;
