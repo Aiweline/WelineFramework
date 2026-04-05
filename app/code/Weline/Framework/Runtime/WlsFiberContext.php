@@ -12,6 +12,10 @@ use Weline\Framework\Manager\ObjectManager;
  *
  * 每个 Fiber（请求）suspend 前调用 capture() 保存当前请求状态快照，
  * resume 前调用 restore() 恢复该 Fiber 的独立上下文，防止多 Fiber 并发时状态互相覆盖。
+ *
+ * 审计提示：未纳入快照的进程级状态仍可能串请求，须注册 StateManager::registerResetCallback
+ * / registerStaticReset，或改为 RequestContext::set（Fiber 下走 WeakMap）。
+ * 典型风险：仅用 static 存请求缓存、Session 引用缓存、HeaderCollector 以外的自定义单例。
  */
 class WlsFiberContext
 {
@@ -24,6 +28,10 @@ class WlsFiberContext
     private array $serverVars;
     private array $getVars;
     private array $postVars;
+    private array $cookieVars;
+    private array $requestVars;
+    /** @var array<mixed> */
+    private array $filesVars;
 
     /** Request 对象引用（WlsRequest 或 Request），使用引用以兼容 ObjectManager::setInstance */
     private ?object $request = null;
@@ -48,6 +56,9 @@ class WlsFiberContext
         $ctx->serverVars = $_SERVER;
         $ctx->getVars = $_GET;
         $ctx->postVars = $_POST;
+        $ctx->cookieVars = $_COOKIE;
+        $ctx->requestVars = $_REQUEST;
+        $ctx->filesVars = $_FILES;
 
         try {
             $ctx->request = ObjectManager::getInstance(Request::class);
@@ -81,9 +92,30 @@ class WlsFiberContext
         $_SERVER = $this->serverVars;
         $_GET = $this->getVars;
         $_POST = $this->postVars;
+        $_COOKIE = $this->cookieVars;
+        $_REQUEST = $this->requestVars;
+        $_FILES = $this->filesVars;
+
+        RequestContext::syncFromServer();
 
         if ($this->request !== null) {
             ObjectManager::setInstance(Request::class, $this->request);
+            try {
+                $resolvedClass = ObjectManager::parserClass(Request::class);
+                if ($resolvedClass !== Request::class) {
+                    ObjectManager::setInstance($resolvedClass, $this->request);
+                }
+            } catch (\Throwable) {
+            }
+        } else {
+            ObjectManager::removeInstance(Request::class);
+            try {
+                $resolvedClass = ObjectManager::parserClass(Request::class);
+                if ($resolvedClass !== Request::class) {
+                    ObjectManager::removeInstance($resolvedClass);
+                }
+            } catch (\Throwable) {
+            }
         }
 
         if ($this->requestId !== null) {

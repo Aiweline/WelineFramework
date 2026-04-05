@@ -201,6 +201,10 @@ class WlsRuntime implements RuntimeInterface
             } catch (\Throwable) {
                 // 忽略：模块未加载或非 WLS 路由缓存
             }
+            // 常驻内存：新请求入口 OM/标签基线（与 StateManager 中对应 reset 回调对齐，供 peer Fiber 存在时 finally 可安全 omit）
+            if (Runtime::isPersistent()) {
+                StateManager::runWlsPersistentRequestEntryBaseline();
+            }
             $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
             // 早期从 URL 提取语言/货币，供 RequestContext::syncFromServer() 使用
             $this->parseUrlLangCurrency($timing['uri']);
@@ -384,7 +388,7 @@ class WlsRuntime implements RuntimeInterface
         } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
             // 重定向异常：转换为重定向响应
             Session::flushRequestSessions();
-            if ($this->isSseRequest()) {
+            if ($this->isSseRequest($request)) {
                 $redirectUrl = $redirectEx->getRedirectUrl();
                 $statusCode = str_contains(strtolower($redirectUrl), 'admin/login') ? 401 : 403;
                 $message = $statusCode === 401
@@ -434,7 +438,7 @@ class WlsRuntime implements RuntimeInterface
             
         } catch (\Weline\Framework\Http\NoRouterException $noRouterEx) {
             // 无路由异常：转换为 404/403 响应
-            if ($this->isSseRequest()) {
+            if ($this->isSseRequest($request)) {
                 return $this->buildSseFailedResponse(
                     $noRouterEx->getStatusCode(),
                     $noRouterEx->getErrorMessage()
@@ -462,7 +466,7 @@ class WlsRuntime implements RuntimeInterface
             
         } catch (\Weline\Framework\Http\ResponseTerminateException $terminateEx) {
             // 通用响应终止异常：使用异常的 toHttpString() 方法
-            if ($this->isSseRequest()) {
+            if ($this->isSseRequest($request)) {
                 $headers = $terminateEx->getHeaders();
                 $contentType = strtolower((string)($headers['Content-Type'] ?? $headers['content-type'] ?? ''));
                 if (str_contains($contentType, 'text/event-stream')) {
@@ -489,7 +493,7 @@ class WlsRuntime implements RuntimeInterface
             }
             
             // 返回错误响应
-            if ($this->isSseRequest()) {
+            if ($this->isSseRequest($request)) {
                 $message = (\defined('DEV') && DEV)
                     ? $e->getMessage()
                     : __('SSE 请求处理失败，请稍后重试。');
@@ -500,11 +504,19 @@ class WlsRuntime implements RuntimeInterface
         } finally {
             $t6 = \microtime(true);
             Session::flushRequestSessions();
+            if (Runtime::isPersistent() && WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
+                && \defined('DEV') && DEV) {
+                w_log_debug(
+                    '[WlsRuntime] request ended with other suspended fibers=' . WlsConcurrency::getOtherSuspendedRequestFiberCount(),
+                    [],
+                    'wls'
+                );
+            }
             // 在重置前保存 HeaderCollector 的 Cookie/Header（Worker 构建响应时需要）
             // StateManager::reset() 会清空 HeaderCollector，必须在此之前提取
             $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
             $this->snapshotPendingResponseState($hc);
-            // 确保总是重置状态
+            // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             $this->reset();
             $t7 = \microtime(true);
             $timing['reset_ms'] = \round(($t7 - $t6) * 1000, 2);
@@ -561,14 +573,19 @@ class WlsRuntime implements RuntimeInterface
             // 诊断日志：记录 WELINE_AREA 设置（已移除临时调试代码）
         }
 
-        // 合并后确保 WELINE_FULL_REQUEST_URI 有效（防御 parser 未设置或覆盖）
-        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
-        if ($fullUri === '' || !\str_contains($fullUri, '://')) {
-            $scheme = $_SERVER['REQUEST_SCHEME'] ?? 'http';
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            $path = $_SERVER['REQUEST_URI'] ?? '/';
-            $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . (\str_starts_with($path, '/') ? '' : '/') . $path;
+        // 每次请求都基于当前解析结果重建完整 URI，避免 Fiber/长连接恢复旧值后污染统一路由缓存键。
+        $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? 'http');
+        $host = (string)($_SERVER['HTTP_HOST'] ?? 'localhost');
+        $currentUri = (string)($parse['uri'] ?? ($_SERVER['REQUEST_URI'] ?? '/'));
+        if ($currentUri === '') {
+            $currentUri = '/';
         }
+        $currentUri = \Weline\Framework\Http\Url::decode_url($currentUri);
+        if (!\str_starts_with($currentUri, '/')) {
+            $currentUri = '/' . $currentUri;
+        }
+        $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $currentUri;
+        $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $currentUri;
         
         // 设置后端标识
         $welineArea = $_SERVER['WELINE_AREA'] ?? '';
@@ -987,11 +1004,47 @@ class WlsRuntime implements RuntimeInterface
 
     /**
      * SSE 协议请求（EventSource）统一识别。
+     *
+     * 只有当 Accept 头明确以 text/event-stream 开头，或者是唯一的 Accept 类型时，才认为是 SSE 请求。
+     * 避免误判：浏览器可能在 Accept 头中包含多种类型（如 text/html,text/event-stream;q=0.8），
+     * 此时应优先按照 q 值最高的类型处理，而不是简单地检查是否包含 text/event-stream。
+     *
+     * @param Request|null $request 请求对象，如果为 null 则从 $_SERVER 读取（兜底）
      */
-    private function isSseRequest(): bool
+    private function isSseRequest(?Request $request = null): bool
     {
-        $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
-        return str_contains($accept, 'text/event-stream');
+        // 优先从 Request 对象获取 Accept 头，避免 WLS 并发下 $_SERVER 污染
+        if ($request !== null) {
+            $acceptHeader = $request->getHeader('Accept');
+            // getHeader 可能返回 array|string|null，统一转为字符串
+            if (is_array($acceptHeader)) {
+                $accept = strtolower(implode(',', $acceptHeader));
+            } else {
+                $accept = strtolower((string)$acceptHeader);
+            }
+        } else {
+            // 兜底：从 $_SERVER 读取（仅在 Request 对象不可用时）
+            $accept = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+        }
+
+        if ($accept === '') {
+            return false;
+        }
+
+        // 精确匹配：Accept 头只包含 text/event-stream（可能带参数）
+        if (str_starts_with($accept, 'text/event-stream')) {
+            return true;
+        }
+
+        // 如果 Accept 头包含多个类型，检查 text/event-stream 是否是第一个（优先级最高）
+        // 例如：text/event-stream,*/*;q=0.8
+        $parts = explode(',', $accept);
+        if (count($parts) > 0) {
+            $firstType = trim(explode(';', $parts[0])[0]);
+            return $firstType === 'text/event-stream';
+        }
+
+        return false;
     }
 
     /**
@@ -1048,8 +1101,11 @@ class WlsRuntime implements RuntimeInterface
      */
     public function reset(): void
     {
-        // 使用 StateManager 执行所有重置操作
-        StateManager::reset();
+        $omitCallbacks = null;
+        if (Runtime::isPersistent() && WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0) {
+            $omitCallbacks = WlsConcurrency::callbackNamesOmittableWithPeerFibers();
+        }
+        StateManager::reset($omitCallbacks);
         
         // 重置超全局变量
         if ($this->globalsEmulator !== null) {

@@ -77,6 +77,23 @@ final class WlsFiberContextSseCallbackTest extends TestCase
         self::assertSame('stream-body', (string)\stream_get_contents($stream));
     }
 
+    public function testSetConnectionNullClearsSseFlagsAndWriteCallback(): void
+    {
+        $stream = $this->createStream();
+        SseContext::setConnection($stream);
+        SseContext::enableSse();
+        SseContext::markHeadersSent();
+        SseContext::setWriteCallback(static function (string $data): void {
+        });
+
+        SseContext::setConnection(null);
+
+        self::assertNull(SseContext::getConnection());
+        self::assertFalse(SseContext::isSseEnabled());
+        self::assertFalse(SseContext::isHeadersSent());
+        self::assertNull(SseContext::getWriteCallback());
+    }
+
     /**
      * @return resource
      */
