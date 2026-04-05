@@ -39,6 +39,15 @@ class WlsLogService
         return self::getLogDir($instanceName, $processTag, $configuredPath) . 'wls-' . \date('Y-m-d') . '.log';
     }
 
+    public static function getDebugLogFile(?string $path = null): string
+    {
+        $debugPath = $path !== null && \trim($path) !== ''
+            ? $path
+            : 'var/log/wls/debug.log';
+
+        return self::toAbsolutePath($debugPath);
+    }
+
     public static function getErrorLogFile(
         ?string $instanceName = null,
         ?string $processTag = null,
