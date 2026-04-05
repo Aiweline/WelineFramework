@@ -186,7 +186,7 @@ class Url implements UrlInterface
                 # URL自带星号处理
                 $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
-                    $path = str_replace('*', $router, $path);
+                    $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
                 $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('rest_backend') . '/' . $path;
@@ -207,7 +207,7 @@ class Url implements UrlInterface
                 # URL自带星号处理
                 $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
-                    $path = str_replace('*', $router, $path);
+                    $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
 
@@ -239,7 +239,7 @@ class Url implements UrlInterface
                 # URL自带星号处理
                 $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
-                    $path = str_replace('*', $router, $path);
+                    $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
                 $url = $this->getRequest()->getBaseHost() . self::getPrefix() . '/' . ltrim($path, '/');
@@ -285,7 +285,7 @@ class Url implements UrlInterface
                 # URL自带星号处理
                 $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
-                    $path = str_replace('*', $router, $path);
+                    $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
                 $url = $this->getRequest()->getBaseHost() . '/' . ltrim($path, '/');
@@ -367,7 +367,7 @@ class Url implements UrlInterface
                 # URL自带星号处理
                 $router = $this->getRequest()->getRouterData('router');
                 if (str_contains($path, '*')) {
-                    $path = str_replace('*', $router, $path);
+                    $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
                 $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('backend') . self::getPrefix() . (('/' === $path) ? '/' : '/' . ltrim($path, '/'));
@@ -420,7 +420,7 @@ class Url implements UrlInterface
                 # URL自带星号处理
                 $router = $this->getRequest()->getRouterData('backend_router');
                 if (str_contains($path, '*')) {
-                    $path = str_replace('*', $router, $path);
+                    $path = str_replace('*', (string)($router ?? ''), $path);
                     $path = str_replace('//', '/', $path);
                 }
                 $url = $this->getRequest()->getBaseHost() . '/' . Env::getAreaRoutePrefix('backend') . (('/' === $path) ? '' : '/' . ltrim($path, '/'));
@@ -1016,7 +1016,10 @@ class Url implements UrlInterface
         $matchedArea = Env::getAreaByRoutePrefix($area);
 
         // 诊断日志：记录区域匹配结果和调用栈
-        if (str_contains($url, 'ai-site-agent') || $area === 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8' || str_contains($url, 'pagebuilder/backend')) {
+        if (
+            Env::get('wls.debug.hot_path_logs', false)
+            && (str_contains($url, 'ai-site-agent') || $area === 'U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8' || str_contains($url, 'pagebuilder/backend'))
+        ) {
             $backtrace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 5);
             $caller = '';
             foreach ($backtrace as $trace) {
@@ -1024,10 +1027,14 @@ class Url implements UrlInterface
                     $caller .= $trace['class'] . '::' . $trace['function'] . ' -> ';
                 }
             }
-            file_put_contents(BP . 'var/log/url_parser_debug.log',
-                date('[Y-m-d H:i:s] ') . '[Url::parser] Area matching | url=' . $url . ' | first_segment=' . $area . ' | matched_area=' . ($matchedArea ?? 'null') . ' | caller=' . rtrim($caller, ' -> ') . PHP_EOL,
-                FILE_APPEND
-            );
+            if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
+                \Weline\Server\Log\WlsLogger::info_('[Url::parser] Area matching', [
+                    'url' => $url,
+                    'first_segment' => $area,
+                    'matched_area' => $matchedArea ?? 'null',
+                    'caller' => \rtrim($caller, ' -> '),
+                ]);
+            }
         }
 
         if ($matchedArea !== null) {
@@ -1063,7 +1070,7 @@ class Url implements UrlInterface
                     self::$parserServer['REQUEST_URI'] = $uri;
 
                     // 诊断日志：记录后台 URL 解析
-                    if (str_contains($uri, 'ai-site-agent')) {
+                    if (Env::get('wls.debug.hot_path_logs', false) && str_contains($uri, 'ai-site-agent')) {
                         w_log_warning('[Url::parser] Backend URL detected | uri=' . $uri . ' | area=backend | backendKey=' . $area);
                     }
                     break;
