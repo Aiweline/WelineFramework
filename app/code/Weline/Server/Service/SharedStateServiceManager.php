@@ -835,8 +835,8 @@ class SharedStateServiceManager
 
         if ($role === ControlMessage::ROLE_MEMORY_SERVER) {
             $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
-            $memoryPortExplicit = \array_key_exists('memory_server_port', $config)
-                || \array_key_exists('port', $memoryConfig);
+            // 仅 env/wls 中显式端口视为「用户钉死」；勿用 $config['memory_server_port']（Master/实例 JSON 总会带该键，会禁用启动阶段端口可用性扫描）
+            $memoryPortExplicit = \array_key_exists('port', $memoryConfig);
             $memoryTokenExplicit = \array_key_exists('memory_server_token_file_name', $config)
                 || \array_key_exists('token_file_name', $memoryConfig);
 
@@ -886,8 +886,8 @@ class SharedStateServiceManager
         $sessionConfig = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
         $wlsSession = \is_array($wlsConfig['session'] ?? null) ? $wlsConfig['session'] : [];
         $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
-        $sessionPortExplicit = \array_key_exists('session_server_port', $config)
-            || \array_key_exists('port', $wlsServer)
+        // 仅 env 中显式端口视为「用户钉死」；勿用 $config['session_server_port']（server:start 写入的运行时端口非用户意图钉死）
+        $sessionPortExplicit = \array_key_exists('port', $wlsServer)
             || \array_key_exists('port', $wlsSession)
             || \array_key_exists('server_port', $sessionConfig);
         $sessionTokenExplicit = \array_key_exists('session_server_token_file_name', $config)
@@ -1138,6 +1138,14 @@ class SharedStateServiceManager
         }
 
         if ($explicitConfigured) {
+            if (!$this->isPortCandidateReusable($role, $preferredPort, $tokenFileName)) {
+                throw new \RuntimeException(\sprintf(
+                    'Configured %s port %d is not available: in use by a non-reusable process (or another project).',
+                    $this->displayNameForRole($role),
+                    $preferredPort
+                ));
+            }
+
             return $preferredPort;
         }
 
@@ -1164,7 +1172,18 @@ class SharedStateServiceManager
             }
         }
 
-        return $preferredPort;
+        $secondEnd = \min($preferredPort, 65536);
+        for ($port = 1025; $port < $secondEnd; $port++) {
+            if ($this->isPortCandidateReusable($role, $port, $tokenFileName)) {
+                return $port;
+            }
+        }
+
+        throw new \RuntimeException(\sprintf(
+            'No allocatable port found for shared %s after scanning (preferred=%d).',
+            $this->displayNameForRole($role),
+            $preferredPort
+        ));
     }
 
     private function isPortCandidateReusable(string $role, int $port, string $tokenFileName): bool

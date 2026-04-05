@@ -27,7 +27,8 @@ final class StateFacadeInitializationTest extends TestCase
                 array $config = [],
                 array $envConfig = [],
                 string $requesterInstanceName = 'system',
-                bool $frontend = false
+                bool $frontend = false,
+                bool $forceRestart = false
             ): array {
                 $this->ensureCalls[] = [$role, $requesterInstanceName, $config];
 
@@ -72,7 +73,8 @@ final class StateFacadeInitializationTest extends TestCase
                 array $config = [],
                 array $envConfig = [],
                 string $requesterInstanceName = 'system',
-                bool $frontend = false
+                bool $frontend = false,
+                bool $forceRestart = false
             ): array {
                 $this->ensureCalls[] = [$role, $requesterInstanceName, $config];
 
@@ -121,7 +123,8 @@ final class StateFacadeInitializationTest extends TestCase
                 array $config = [],
                 array $envConfig = [],
                 string $requesterInstanceName = 'system',
-                bool $frontend = false
+                bool $frontend = false,
+                bool $forceRestart = false
             ): array {
                 $this->ensureCalls++;
 
@@ -171,7 +174,8 @@ final class StateFacadeInitializationTest extends TestCase
                 array $config = [],
                 array $envConfig = [],
                 string $requesterInstanceName = 'system',
-                bool $frontend = false
+                bool $frontend = false,
+                bool $forceRestart = false
             ): array {
                 $this->ensureCalls++;
 
