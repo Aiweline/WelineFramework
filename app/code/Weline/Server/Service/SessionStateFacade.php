@@ -39,7 +39,13 @@ class SessionStateFacade implements SessionStateFacadeInterface
             return;
         }
 
-        $this->runtime = $this->manager->ensure(ControlMessage::ROLE_SESSION_SERVER, $config, [], $this->consumerCode);
+        $this->runtime = $this->manager->ensure(
+            ControlMessage::ROLE_SESSION_SERVER,
+            $config,
+            [],
+            $this->consumerCode,
+            SharedStateServiceManager::resolveEnsureFrontendFlag($config)
+        );
         $this->runtime['consumer_code'] = $this->consumerCode;
 
         try {
@@ -157,7 +163,10 @@ class SessionStateFacade implements SessionStateFacadeInterface
             'pool_size' => (int) ($config['pool_size'] ?? 8),
             'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 2),
             'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.1),
+            'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
+            'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
+            'service_type' => 'Session',
         ];
     }
 

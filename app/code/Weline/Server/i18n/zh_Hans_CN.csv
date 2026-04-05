@@ -149,6 +149,17 @@ P99：%{1},P99：%{1}
 "📦 %{1}","📦 %{1}"
 文件：%{1},文件：%{1}
 显示性能优化文档链接,显示性能优化文档链接
+"当前 system.env=%{1} 下禁止执行 hosts 写入","当前 system.env=%{1} 下禁止执行 hosts 写入"
+"无效的 IP：%{1}","无效的 IP：%{1}"
+可选：--ip=127.0.0.1（默认）,可选：--ip=127.0.0.1（默认）
+"仅允许以 .local 结尾且非 localhost 的域名（与 WLS server:start 规则一致）","仅允许以 .local 结尾且非 localhost 的域名（与 WLS server:start 规则一致）"
+需要提升权限,需要提升权限
+"写入 hosts 失败","写入 hosts 失败"
+"向本机 hosts 添加 .local 域名（开发/测试；计划 w_query 入口）","向本机 hosts 添加 .local 域名（开发/测试；计划 w_query 入口）"
+用法,用法
+示例,示例
+说明,说明
+"与 server:start 使用的 HostsFileManager 相同；仅 system.env 为 local/dev/test 时可用","与 server:start 使用的 HostsFileManager 相同；仅 system.env 为 local/dev/test 时可用"
 "即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）","即将结束系统中所有 PHP 进程（含 WLS、CLI 服务器等）"
 正在执行…,正在执行…
 "已结束所有 php.exe 进程","已结束所有 php.exe 进程"
@@ -487,8 +498,11 @@ P99：%{1},P99：%{1}
 实例文件无效,实例文件无效
 "master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。","master-only 启动被拒绝：特权端口 %{1} 无法绑定（%{2}）。"
 "请执行 sudo setcap cap_net_bind_service=+ep $(which php) 授权，或使用 sudo。","请执行 sudo setcap cap_net_bind_service=+ep $(which php) 授权，或使用 sudo。"
-"Master 已在后台运行（PID: %{1}, 控制端口: %{2}），服务正在继续初始化","Master 已在后台运行（PID: %{1}, 控制端口: %{2}），服务正在继续初始化"
+"Master 已启动，等待所有服务就绪...","Master 已启动，等待所有服务就绪..."
 "服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）","服务器已在后台运行（Master PID: %{1}, 控制端口: %{2}）"
+所有服务已就绪，启动完成。,所有服务已就绪，启动完成。
+"Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。","Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。"
+本次启动未视为完成，请稍后执行以下命令检查状态：,本次启动未视为完成，请稍后执行以下命令检查状态：
 "后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。","后台启动已发起，但未能在 %{1} 秒内确认 Master 进程就绪。"
 可能原因：,可能原因：
 "1. 框架加载耗时较长（首次启动或 opcache 未预热）","1. 框架加载耗时较长（首次启动或 opcache 未预热）"
@@ -1000,6 +1014,10 @@ HTTPS,HTTPS
 %{1}：证书记录不存在,%{1}：证书记录不存在
 %{1}：%{2},%{1}：%{2}
 续签失败,续签失败
+"WLS Fiber concurrency probe is disabled.","WLS Fiber 并发探针未启用（需 DEV、ENV_TEST 或环境变量 WLS_FIBER_CONCURRENCY_PROBE=1）。"
+"WLS fiber probe: parallel clients are required; sequential PHP curl does not simulate users.","需要多路并行客户端；PHP 单进程里顺序 curl 无法模拟多用户同时访问。"
+"WLS fiber probe: set env WLS_FIBER_CONCURRENCY_PROBE=1 when DEV is off.","生产或 DEV 关闭时，可设置环境变量 WLS_FIBER_CONCURRENCY_PROBE=1 以启用探针。"
+"Invalid cid parameter for fiber probe.","Fiber 探针参数 cid 无效（需 8～128 位字母数字、下划线或连字符）。"
 攻击信号监控,攻击信号监控
 "监控攻击信号文件，触发 CDN 攻击防护/恢复","监控攻击信号文件，触发 CDN 攻击防护/恢复"
 无攻击信号需要处理,无攻击信号需要处理
@@ -1195,9 +1213,9 @@ DDoS攻击,DDoS攻击
 "前台模式: %{1}","前台模式: %{1}"
 "Master 初始化完成","Master 初始化完成"
 "启动 Master 进程...","启动 Master 进程..."
+"已注册 Master PID","已注册 Master PID"
+"控制端口: %{1}（首选 %{2} 不可用，已自动顺延）","控制端口: %{1}（首选 %{2} 不可用，已自动顺延）"
 "控制端口: %{1}","控制端口: %{1}"
-正在启动子进程...,正在启动子进程...
-子进程启动完成,子进程启动完成
 "Master 进入主循环，监控子进程...","Master 进入主循环，监控子进程..."
 "Master 主循环结束","Master 主循环结束"
 "Master 启动失败: %{1}","Master 启动失败: %{1}"
@@ -1215,7 +1233,7 @@ DDoS攻击,DDoS攻击
 "Windows 模式：已注册 Ctrl+C 处理函数（sapi_windows_set_ctrl_handler）","Windows 模式：已注册 Ctrl+C 处理函数（sapi_windows_set_ctrl_handler）"
 检测到异常退出，执行清理...,检测到异常退出，执行清理...
 "已注册 shutdown 清理函数（Ctrl+C 可能不会触发优雅停止）","已注册 shutdown 清理函数（Ctrl+C 可能不会触发优雅停止）"
-停机流程进行中，忽略重复终止信号（signal=%{1}）,停机流程进行中，忽略重复终止信号（signal=%{1}）
+"停机流程进行中，再次收到终止信号：将强制结束子进程并退出 Master（signal=%{1}）","停机流程进行中，再次收到终止信号：将强制结束子进程并退出 Master（signal=%{1}）"
 "已回收子进程 PID %{1} (%{2})","已回收子进程 PID %{1} (%{2})"
 启动锁已释放（回调）,启动锁已释放（回调）
 启动锁已释放,启动锁已释放
@@ -1330,6 +1348,8 @@ DDoS攻击,DDoS攻击
 已可用,已可用
 "proc_open 函数已启用","proc_open 函数已启用"
 "找到 disable_functions 行，删除 proc_open","找到 disable_functions 行，删除 proc_open"
+"缓存清理已执行，但未能向 CLI 发送完成回执","缓存清理已执行，但未能向 CLI 发送完成回执"
+"重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）","重载未正常结束：未收到完整回执（可能因 IPC 抢占中止、内部提前返回或控制连接异常）"
 "IPC 清场：已取消 Fiber 池统计请求","IPC 清场：已取消 Fiber 池统计请求"
 "IPC 清场：已由更高优先级控制指令中断","IPC 清场：已由更高优先级控制指令中断"
 服务器已就绪,服务器已就绪
@@ -1352,6 +1372,9 @@ DDoS攻击,DDoS攻击
 "子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书","子域名 %{1} 已被泛域名 *.%{2} 覆盖，直接使用泛域证书"
 "HTTPS 已在此域名禁用","HTTPS 已在此域名禁用"
 使用已有证书,使用已有证书
+"[SslCertificateService] 库中 *.weline.local 通配证书已过期，将重新签发","[SslCertificateService] 库中 *.weline.local 通配证书已过期，将重新签发"
+"[SslCertificateService] 复用 *.weline.local 通配证书时写回磁盘失败，将尝试重新签发","[SslCertificateService] 复用 *.weline.local 通配证书时写回磁盘失败，将尝试重新签发"
+"已复用现有 *.weline.local 通配证书，跳过重复签发","已复用现有 *.weline.local 通配证书，跳过重复签发"
 生成私钥失败,生成私钥失败
 "生成 CSR 失败","生成 CSR 失败"
 签发证书失败,签发证书失败
@@ -1737,7 +1760,6 @@ Fiber,Fiber
 接口,接口
 方法,方法
 路径,路径
-说明,说明
 攻击统计,攻击统计
 近7天,近7天
 详情,详情

@@ -102,6 +102,11 @@ class Dispatcher
      * 连接超时（秒）
      */
     private int $connectionTimeout = 300;
+    /**
+     * 客户端已半关闭但尚未上送任何请求字节时的短超时（秒）。
+     * 用于快速回收 preconnect/握手失败遗留连接，避免 CLOSE_WAIT 堆积。
+     */
+    private float $clientHalfClosedIdleTimeoutSec = 5.0;
     
     /**
      * 请求计数
@@ -188,6 +193,7 @@ class Dispatcher
      * 上次输出「所有 Worker 不可用」日志时间（节流，避免启动期刷屏）
      */
     private float $lastAllWorkersUnavailableLogAt = 0.0;
+    private int $lastAllWorkersDownReported = 0;
 
     /**
      * 启动保护：窗口期内未达到最小 READY 阈值时，对外返回 503 而非直接断开。
@@ -234,16 +240,38 @@ class Dispatcher
      * 是否启用维护页兜底
      */
     private bool $maintenanceFallbackActive = false;
+
+    /**
+     * SET_WORKER_POOL / ADD_WORKER 入队，由主循环分片 resume Fiber，避免 handleIpcMessage 长时间阻塞。
+     *
+     * @var list<array{type: 'set_pool'|'add_workers', ports: int[]}>
+     */
+    private array $deferredWorkerPoolJobs = [];
+
+    private ?\Fiber $deferredWorkerPoolFiber = null;
+
+    /** @var 'set_pool'|'add_workers'|null */
+    private ?string $deferredWorkerPoolFiberKind = null;
+    private bool $spinWaitTickInProgress = false;
+    private int $maintenanceTakeoverRetryTicks = 3;
     
     /**
      * 封禁拦截日志限流记录（IP => 上次记录时间）
      */
     private array $banLogThrottle = [];
+    /**
+     * 半关闭空连接快速回收日志限流（IP => 上次记录时间）
+     */
+    private array $halfClosedFastCloseLogThrottle = [];
     
     /**
      * 封禁日志限流间隔（秒）
      */
     private int $banLogInterval = 60;
+    /**
+     * 半关闭空连接快速回收日志限流间隔（秒）
+     */
+    private int $halfClosedFastCloseLogInterval = 10;
     
     /**
      * 每连接字节统计（connId => ['in' => int, 'out' => int]）
@@ -272,13 +300,16 @@ class Dispatcher
         int $port = 0
     ) {
         $this->serverSocket = $serverSocket;
-        $this->passthroughCore = new PassthroughCore($workerHost, $workerBasePort, $workerCount);
-        $this->attackDetector = AttackDetector::getInstance()->setInstanceName($instanceName);
         $this->instanceName = $instanceName;
         $this->processName = $processName;
         $this->port = $port;
         $this->expectedWorkerCount = \max(0, $workerCount);
         $this->httpsEnabled = $this->detectHttpsEnabled($instanceName);
+        $this->passthroughCore = new PassthroughCore($workerHost, $workerBasePort, $workerCount, $this->httpsEnabled);
+        $this->passthroughCore->setSpinWaitTickCallback(function (): void {
+            $this->pumpSpinWaitControlTick();
+        });
+        $this->attackDetector = AttackDetector::getInstance()->setInstanceName($instanceName);
         $this->startTime = \time();
         $this->lastMasterCheck = \time();
         
@@ -330,6 +361,9 @@ class Dispatcher
         
         if (isset($config['connection_timeout'])) {
             $this->connectionTimeout = (int) $config['connection_timeout'];
+        }
+        if (isset($config['client_half_closed_idle_timeout_sec'])) {
+            $this->clientHalfClosedIdleTimeoutSec = \max(0.5, (float)$config['client_half_closed_idle_timeout_sec']);
         }
         if (isset($config['first_response_timeout'])) {
             // <=0 表示关闭该启发式（避免对长处理请求误杀）。
@@ -506,6 +540,7 @@ class Dispatcher
             $this->orchestratorEpoch,
             $this->orchestratorLaunchId
         );
+        $this->log('已上报就绪状态 (WORKER_READY)', 'INFO');
         // 开发模式：日志统一汇聚到 Master 控制台
         if (\Weline\Server\Log\LogConfig::isDevMode() && $this->ipcClient !== null) {
             $ipc = $this->ipcClient;
@@ -521,6 +556,184 @@ class Dispatcher
     /**
      * 处理 IPC 控制消息
      */
+    private function pumpIpcOnce(): void
+    {
+        if (!$this->ipcClient) {
+            return;
+        }
+
+        if ($this->ipcClient->isConnected()) {
+            $ipcSocket = $this->ipcClient->getSocket();
+            if ($ipcSocket && \is_resource($ipcSocket)) {
+                $ipcRead = [$ipcSocket];
+                $ipcWrite = [];
+                $ipcExcept = [];
+                $ipcChanged = @\stream_select($ipcRead, $ipcWrite, $ipcExcept, 0, 0);
+                if ($ipcChanged > 0) {
+                    $this->ipcClient->handleReadable();
+                }
+            }
+            return;
+        }
+
+        if (!$this->ipcReceivedShutdown) {
+            $this->ipcClient->tryReconnect();
+        }
+    }
+
+    /**
+     * 在 PassthroughCore 自旋等待阶段推进控制面：
+     * - 先处理 IPC 收发（含 SET_WORKER_POOL / ADD_WORKER）
+     * - 再推进 deferred warmup Fiber 一个步进
+     *
+     * 避免「handleNewConnection 自旋中」主循环被占用时，预热任务得不到推进。
+     */
+    private function pumpSpinWaitControlTick(): void
+    {
+        // 防重入：warmup Fiber 里可能再次触发回调，避免递归 tick。
+        if ($this->spinWaitTickInProgress) {
+            return;
+        }
+        $this->spinWaitTickInProgress = true;
+        try {
+            $this->pumpIpcOnce();
+            $this->pumpDeferredWorkerPoolJobs();
+        } finally {
+            $this->spinWaitTickInProgress = false;
+        }
+    }
+
+    /**
+     * 每轮事件循环最多推进一次 suspend/resume，使探活/预热不霸占 IPC 回调栈。
+     */
+    private function pumpDeferredWorkerPoolJobs(): void
+    {
+        if ($this->deferredWorkerPoolFiber === null) {
+            if ($this->deferredWorkerPoolJobs === []) {
+                return;
+            }
+            $job = \array_shift($this->deferredWorkerPoolJobs);
+            $this->deferredWorkerPoolFiber = $this->createDeferredWorkerPoolFiber($job);
+            $this->deferredWorkerPoolFiberKind = $job['type'];
+        }
+
+        $fiber = $this->deferredWorkerPoolFiber;
+        if ($fiber === null) {
+            return;
+        }
+
+        try {
+            if (!$fiber->isStarted()) {
+                $fiber->start();
+            } elseif (!$fiber->isTerminated()) {
+                $fiber->resume();
+            }
+        } catch (\Throwable $e) {
+            $this->log('Deferred worker pool Fiber 异常: ' . $e->getMessage(), 'ERROR');
+            $this->passthroughCore->setWarmupCooperativeYield(null);
+            $this->deferredWorkerPoolFiber = null;
+            $this->deferredWorkerPoolFiberKind = null;
+            return;
+        }
+        if ($fiber->isTerminated()) {
+            $this->finalizeDeferredWorkerPoolFiber();
+        }
+    }
+
+    /**
+     * @param array{type: 'set_pool'|'add_workers', ports: int[]} $job
+     */
+    private function createDeferredWorkerPoolFiber(array $job): \Fiber
+    {
+        if ($job['type'] === 'set_pool') {
+            $ports = $job['ports'];
+
+            return new \Fiber(function () use ($ports): array {
+                $this->passthroughCore->setWarmupCooperativeYield(static fn () => \Fiber::suspend());
+                try {
+                    return $this->passthroughCore->setWorkerPorts($ports);
+                } finally {
+                    $this->passthroughCore->setWarmupCooperativeYield(null);
+                }
+            });
+        }
+
+        $ports = $job['ports'];
+
+        return new \Fiber(function () use ($ports): array {
+            $this->passthroughCore->setWarmupCooperativeYield(static fn () => \Fiber::suspend());
+            try {
+                $acceptedPorts = [];
+                $rejectedParts = [];
+                foreach ($ports as $port) {
+                    $result = $this->passthroughCore->addWorkerPort((int) $port);
+                    if (!empty($result['accepted'])) {
+                        $acceptedPorts[] = (int) $port;
+                    } else {
+                        $rejectedParts[] = (int) $port . ': ' . (string) ($result['error'] ?? 'warmup rejected');
+                    }
+                }
+
+                return ['accepted_ports' => $acceptedPorts, 'rejected_parts' => $rejectedParts];
+            } finally {
+                $this->passthroughCore->setWarmupCooperativeYield(null);
+            }
+        });
+    }
+
+    private function finalizeDeferredWorkerPoolFiber(): void
+    {
+        $fiber = $this->deferredWorkerPoolFiber;
+        $kind = $this->deferredWorkerPoolFiberKind;
+        $this->deferredWorkerPoolFiber = null;
+        $this->deferredWorkerPoolFiberKind = null;
+
+        if ($fiber === null) {
+            return;
+        }
+        try {
+            $payload = $fiber->getReturn();
+        } catch (\Throwable $e) {
+            $this->log('Deferred worker pool Fiber 结束异常: ' . $e->getMessage(), 'ERROR');
+
+            return;
+        }
+        if ($kind === 'set_pool') {
+            $result = \is_array($payload) ? $payload : [];
+            $acceptedPorts = \is_array($result['accepted'] ?? null) ? $result['accepted'] : [];
+            $rejectedPorts = \is_array($result['rejected'] ?? null) ? $result['rejected'] : [];
+            $this->maintenanceFallbackActive = $acceptedPorts === [];
+            $this->log('SET_WORKER_POOL: ' . \implode(',', $acceptedPorts), 'INFO');
+            if ($rejectedPorts !== []) {
+                $items = [];
+                foreach ($rejectedPorts as $port => $reason) {
+                    $items[] = "{$port}: {$reason}";
+                }
+                $this->log('SET_WORKER_POOL 预热失败，拒绝纳入负载池: ' . \implode('; ', $items), 'ERROR');
+            }
+
+            return;
+        }
+        if ($kind === 'add_workers') {
+            $acceptedPorts = \is_array($payload['accepted_ports'] ?? null) ? $payload['accepted_ports'] : [];
+            $rejectedParts = \is_array($payload['rejected_parts'] ?? null) ? $payload['rejected_parts'] : [];
+            if ($acceptedPorts !== []) {
+                $this->maintenanceFallbackActive = false;
+                $this->log(
+                    '已添加 Worker 端口到负载均衡池: ' . \implode(',', $acceptedPorts)
+                    . ', 当前总数: ' . $this->passthroughCore->getWorkerCount(),
+                    'INFO'
+                );
+            }
+            if ($rejectedParts !== []) {
+                $this->log(
+                    'ADD_WORKER 预热失败，拒绝纳入负载池: ' . \implode('; ', $rejectedParts),
+                    'ERROR'
+                );
+            }
+        }
+    }
+
     private function handleIpcMessage(array $msg): void
     {
         $type = $msg['type'] ?? '';
@@ -559,13 +772,18 @@ class Dispatcher
                 break;
                 
             case ControlMessage::TYPE_ADD_WORKER:
-                // 动态添加 Worker 端口到负载均衡池
                 $ports = $msg['ports'] ?? [];
-                $this->log('收到 ADD_WORKER 消息，端口列表: ' . \json_encode($ports), 'INFO');
-                foreach ($ports as $port) {
-                    $this->passthroughCore->addWorkerPort((int)$port);
+                $this->log('收到 ADD_WORKER 消息（已入队异步入池）: ' . \json_encode($ports), 'INFO');
+                $norm = [];
+                foreach (\is_array($ports) ? $ports : [] as $port) {
+                    $p = (int) $port;
+                    if ($p > 0) {
+                        $norm[] = $p;
+                    }
                 }
-                $this->log('已添加 Worker 端口到负载均衡池: ' . \implode(',', $ports) . ', 当前总数: ' . $this->passthroughCore->getWorkerCount(), 'INFO');
+                if ($norm !== []) {
+                    $this->deferredWorkerPoolJobs[] = ['type' => 'add_workers', 'ports' => $norm];
+                }
                 break;
                 
             case ControlMessage::TYPE_REMOVE_WORKER:
@@ -589,10 +807,8 @@ class Dispatcher
             case ControlMessage::TYPE_SET_WORKER_POOL:
                 $ports = $msg['ports'] ?? [];
                 if (\is_array($ports)) {
-                    $this->passthroughCore->setWorkerPorts($ports);
-                    // 维护模式下若切到维护池，仍走正常分流；若池为空，启用维护页兜底。
-                    $this->maintenanceFallbackActive = $ports === [];
-                    $this->log('SET_WORKER_POOL: ' . \implode(',', $ports), 'INFO');
+                    $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports];
+                    $this->log('收到 SET_WORKER_POOL（已入队异步入池），候选端口数: ' . \count($ports), 'INFO');
                 }
                 break;
 
@@ -653,6 +869,10 @@ class Dispatcher
         
         // 设置服务器 socket 为非阻塞
         \socket_set_nonblock($this->serverSocket);
+
+        // Dispatcher 无请求 Fiber：PassthroughCore 内 SchedulerSystem::usleep 须为真实阻塞式微睡眠，
+        // 显式停用协作调度标记，避免与其它进程/残留状态混淆（休眠量级通常为微秒～毫秒，IPC 仍由每轮 pumpIpcOnce 处理）。
+        SchedulerSystem::disableScheduler();
         
         $loopCount = 0;
         $consecutiveLoopErrors = 0;
@@ -666,22 +886,10 @@ class Dispatcher
                 }
                 
                 // IPC 控制通道：处理消息（非阻塞读取）
-                if ($this->ipcClient) {
-                    if ($this->ipcClient->isConnected()) {
-                        $ipcSocket = $this->ipcClient->getSocket();
-                        if ($ipcSocket && \is_resource($ipcSocket)) {
-                            $ipcRead = [$ipcSocket];
-                            $ipcWrite = [];
-                            $ipcExcept = [];
-                            $ipcChanged = @\stream_select($ipcRead, $ipcWrite, $ipcExcept, 0, 0);
-                            if ($ipcChanged > 0) {
-                                $this->ipcClient->handleReadable();
-                            }
-                        }
-                    } elseif (!$this->ipcReceivedShutdown) {
-                        $this->ipcClient->tryReconnect();
-                    }
-                }
+                $this->pumpIpcOnce();
+
+                // Worker 池探活/预热：Fiber 分片推进，避免阻塞 IPC 与 accept
+                $this->pumpDeferredWorkerPoolJobs();
 
                 // Master 心跳检查（保留文件方式作为兜底，IPC 断开时使用）
                 if (!$this->ipcClient || !$this->ipcClient->isConnected()) {
@@ -715,6 +923,7 @@ class Dispatcher
                     $this->running = false;
                     break;
                 }
+                $this->pumpIpcOnce();
                 SchedulerSystem::usleep(10000);
             }
         }
@@ -862,16 +1071,27 @@ class Dispatcher
         $closedCount = 0;
         
         foreach ($this->connectionLastActivity as $connId => $lastActivity) {
-            if (($nowMicro - $lastActivity) > $this->connectionTimeout) {
-                $hasClientSocket = isset($this->clientConnections[$connId]);
-                $clientInputClosed = false;
-                if ($hasClientSocket) {
-                    $clientInputClosed = $this->passthroughCore->isClientInputClosed($this->clientConnections[$connId]);
-                }
-                $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
-                $inBytes = (int)($bytes['in'] ?? 0);
-                $outBytes = (int)($bytes['out'] ?? 0);
+            $elapsed = $nowMicro - (float)$lastActivity;
+            $hasClientSocket = isset($this->clientConnections[$connId]);
+            $clientInputClosed = false;
+            if ($hasClientSocket) {
+                $clientInputClosed = $this->passthroughCore->isClientInputClosed($this->clientConnections[$connId]);
+            }
+            $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
+            $inBytes = (int)($bytes['in'] ?? 0);
+            $outBytes = (int)($bytes['out'] ?? 0);
 
+            // 快速回收：客户端已半关闭且从未发送请求数据，短时间内直接清理（典型于 preconnect/握手中止）。
+            if ($hasClientSocket
+                && $this->shouldFastCloseHalfClosedWithoutRequest($connId, $clientInputClosed, $inBytes, $outBytes)
+                && $elapsed > $this->clientHalfClosedIdleTimeoutSec) {
+                $this->logHalfClosedFastCloseIfNeeded($connId, 'timeout');
+                $this->closeConnection($connId, 'client_half_closed_without_request_timeout');
+                $closedCount++;
+                continue;
+            }
+
+            if ($elapsed > $this->connectionTimeout) {
                 // 客户端上行半关闭后仍可能等待 worker 长处理：
                 // 这里不要简单按 connectionTimeout 直接关闭，改为续约。
                 if ($hasClientSocket && $clientInputClosed) {
@@ -881,7 +1101,7 @@ class Dispatcher
                     }
                 }
                 
-                $this->closeConnection($connId, 'flush_pending_buffers_failed');
+                $this->closeConnection($connId, 'connection_timeout');
                 $closedCount++;
             }
         }
@@ -1123,24 +1343,39 @@ class Dispatcher
             
             // 尝试建立到 Worker 的连接（含故障转移：失败时自动尝试其他 Worker）
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
-                $this->clientConnections[$connId] = $clientSocket;
-                $this->connectionAcceptTime[$connId] = \microtime(true);
-                $this->connectionLastActivity[$connId] = \microtime(true);
-                $this->connectionBytes[$connId] = ['in' => 0, 'out' => 0];
-                $this->requestCount++;
-
-                $workerPort = $this->passthroughCore->getConnectionWorkerPort($clientSocket);
-                if ($this->isDevMode) {
-                    $this->log("新连接: {$clientIp} (connId: {$connId}) → Worker:{$workerPort}", 'ROUTE');
-                }
+                $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
             } else {
-                // 所有 Worker 均不可用（节流 ERROR 日志，避免启动期刷屏）
-                $now = \microtime(true);
-                if ($now - $this->lastAllWorkersUnavailableLogAt >= 10.0) {
-                    $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
-                    $this->log("所有 Worker 不可用! {$clientIp} (connId: {$connId}), "
-                        . "healthy: {$healthSummary['healthy']}/{$healthSummary['total']}", 'ERROR');
-                    $this->lastAllWorkersUnavailableLogAt = $now;
+                // 业务 Worker 暂不可用时，优先尝试推进控制面并让维护 Worker 接管。
+                if ($this->tryRouteToMaintenanceWorker($clientSocket, $clientIp, $connId)) {
+                    $accepted++;
+                    if (($accepted % 10) === 0) {
+                        // 高并发 accept 风暴下也要周期推进 IPC/预热，避免主循环“看似活着但控制面饥饿”。
+                        $this->pumpSpinWaitControlTick();
+                    }
+                    continue;
+                }
+
+                // 所有 Worker 均不可用（启动窗口内池尚未下发 total=0 为预期，不记日志）
+                $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+                $healthy = (int) ($healthSummary['healthy'] ?? 0);
+                $total = (int) ($healthSummary['total'] ?? 0);
+                $uptime = \time() - $this->startTime;
+                $suppressEmptyPoolNoise = ($total <= 0
+                    && $this->startupProtectionEnabled
+                    && $this->startupProtectionWindowSec > 0.0
+                    && $uptime >= 0
+                    && $uptime <= (int) $this->startupProtectionWindowSec);
+                if (!$suppressEmptyPoolNoise) {
+                    $now = \microtime(true);
+                    if ($now - $this->lastAllWorkersUnavailableLogAt >= 10.0) {
+                        $logLevel = $total <= 0 ? 'WARN' : 'ERROR';
+                        $detail = $total <= 0
+                            ? 'worker pool is empty'
+                            : 'all workers unavailable';
+                        $this->log("所有 Worker 不可用! {$clientIp} (connId: {$connId}), "
+                            . "healthy: {$healthy}/{$total}, {$detail}", $logLevel);
+                        $this->lastAllWorkersUnavailableLogAt = $now;
+                    }
                 }
                 if ($this->shouldServeMaintenanceFallback()) {
                     $this->respondWithStartupProtection($clientSocket);
@@ -1153,7 +1388,47 @@ class Dispatcher
             }
             
             $accepted++;
+            if (($accepted % 10) === 0) {
+                // 高并发 accept 风暴下也要周期推进 IPC/预热，避免主循环“看似活着但控制面饥饿”。
+                $this->pumpSpinWaitControlTick();
+            }
         } while ($accepted < $maxAcceptPerLoop);
+    }
+
+    private function registerAcceptedClientConnection($clientSocket, string $clientIp, int $connId): void
+    {
+        $this->clientConnections[$connId] = $clientSocket;
+        $this->connectionAcceptTime[$connId] = \microtime(true);
+        $this->connectionLastActivity[$connId] = \microtime(true);
+        $this->connectionBytes[$connId] = ['in' => 0, 'out' => 0];
+        $this->requestCount++;
+
+        $workerPort = $this->passthroughCore->getConnectionWorkerPort($clientSocket);
+        if ($this->isDevMode) {
+            $this->log("新连接: {$clientIp} (connId: {$connId}) → Worker:{$workerPort}", 'ROUTE');
+        }
+    }
+
+    private function tryRouteToMaintenanceWorker($clientSocket, string $clientIp, int $connId): bool
+    {
+        if (!$this->shouldServeMaintenanceFallback()) {
+            return false;
+        }
+
+        $ticks = \max(1, $this->maintenanceTakeoverRetryTicks);
+        for ($i = 0; $i < $ticks; $i++) {
+            $this->pumpSpinWaitControlTick();
+            if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
+                $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
+                if ($this->isDevMode) {
+                    $this->log("维护接管成功: {$clientIp} (connId: {$connId})", 'ROUTE');
+                }
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function shouldApplyStartupProtection(): bool
@@ -1170,7 +1445,12 @@ class Dispatcher
         $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
         $healthy = (int)($healthSummary['healthy'] ?? 0);
         $dynamicTotal = (int)($healthSummary['total'] ?? 0);
+        $poolSize = $this->passthroughCore->getWorkerCount();
         $expected = $this->expectedWorkerCount > 0 ? $this->expectedWorkerCount : $dynamicTotal;
+        // 仅维护 Worker 先入池时，期望业务 Worker 数会大于当前池大小；若不封顶会长期误判「未就绪」而只返回 503
+        if ($poolSize > 0 && $expected > $poolSize) {
+            $expected = $poolSize;
+        }
         if ($expected <= 0) {
             $expected = 1;
         }
@@ -1186,7 +1466,9 @@ class Dispatcher
 
     private function shouldServeMaintenanceFallback(): bool
     {
-        if ($this->maintenanceFallbackActive) {
+        // 仅当池确实为空时，才把「维护兜底」理解为硬编码 503；若已有端口（含维护 Worker），应已走透传+自旋，
+        // 避免 maintenanceFallbackActive 与池状态短暂不一致时误杀可转发流量。
+        if ($this->maintenanceFallbackActive && $this->passthroughCore->getWorkerCount() <= 0) {
             return true;
         }
 
@@ -1456,6 +1738,16 @@ class Dispatcher
         // result === -2: 客户端上行半关闭（FIN），但下行仍可继续，不关闭连接
         if ($result === -2) {
             $this->connectionLastActivity[$connId] = \microtime(true);
+            $bytes = $this->connectionBytes[$connId] ?? ['in' => 0, 'out' => 0];
+            $inBytes = (int)($bytes['in'] ?? 0);
+            $outBytes = (int)($bytes['out'] ?? 0);
+            // 客户端已断开且未产生有效请求/响应，快速回收，避免残留 CLOSE_WAIT。
+            $clientInputClosed = $this->passthroughCore->isClientInputClosed($clientSocket);
+            if ($this->shouldFastCloseHalfClosedWithoutRequest($connId, $clientInputClosed, $inBytes, $outBytes)
+                && !$this->passthroughCore->hasBufferedData($clientSocket)) {
+                $this->logHalfClosedFastCloseIfNeeded($connId, 'event');
+                $this->closeConnection($connId, 'client_half_closed_without_request');
+            }
             return;
         }
         
@@ -1523,6 +1815,7 @@ class Dispatcher
             $this->passthroughCore->closeConnection($clientSocket);
             
             // 关闭客户端连接
+            @\socket_shutdown($clientSocket, 2);
             @\socket_close($clientSocket);
             
             unset($this->clientConnections[$connId]);
@@ -1533,6 +1826,45 @@ class Dispatcher
             $this->connectionLastActivity[$connId],
             $this->connectionBytes[$connId]
         );
+    }
+
+    private function shouldFastCloseHalfClosedWithoutRequest(
+        int $connId,
+        bool $clientInputClosed,
+        int $inBytes,
+        int $outBytes
+    ): bool {
+        if (!$clientInputClosed || $inBytes > 0 || $outBytes > 0) {
+            return false;
+        }
+
+        if (!isset($this->clientConnections[$connId])) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function logHalfClosedFastCloseIfNeeded(int $connId, string $source): void
+    {
+        if (!$this->isDevMode) {
+            return;
+        }
+
+        $clientSocket = $this->clientConnections[$connId] ?? null;
+        $clientIp = 'unknown';
+        if ($clientSocket !== null) {
+            $connInfo = $this->passthroughCore->getConnectionInfo($clientSocket);
+            $clientIp = (string)($connInfo['client_ip'] ?? 'unknown');
+        }
+
+        $now = \time();
+        $lastLog = $this->halfClosedFastCloseLogThrottle[$clientIp] ?? 0;
+        if (($now - $lastLog) < $this->halfClosedFastCloseLogInterval) {
+            return;
+        }
+        $this->halfClosedFastCloseLogThrottle[$clientIp] = $now;
+        $this->log("快速回收半关闭空连接: {$clientIp} (connId: {$connId}, source={$source})", 'HEALTH');
     }
     
     /**
@@ -1556,7 +1888,7 @@ class Dispatcher
         $cacheHitRate = $coreStats['cache_stats']['sni_hit_rate'] ?? 0;
         $failoverRouted = $coreStats['failover_routed'] ?? 0;
         $workerFailures = $coreStats['worker_failures'] ?? 0;
-        $allWorkersDown = $coreStats['all_workers_down'] ?? 0;
+        $allWorkersDown = (int)($coreStats['all_workers_down'] ?? 0);
         
         // Worker 健康状态
         $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
@@ -1579,9 +1911,14 @@ class Dispatcher
             }
         }
         
-        // 如果发生过"所有 Worker 均不可用"的情况，发出警告
-        if ($allWorkersDown > 0) {
-            $this->log("{$allWorkersDown} requests failed - all workers were unavailable!", 'ERROR');
+        // 只输出自上次统计以来新增的 all_workers_down，避免累计值每分钟重复刷同一错误。
+        $newAllWorkersDown = $allWorkersDown - $this->lastAllWorkersDownReported;
+        if ($newAllWorkersDown > 0) {
+            $this->log("{$newAllWorkersDown} requests failed - all workers were unavailable!", 'ERROR');
+            $this->lastAllWorkersDownReported = $allWorkersDown;
+        } elseif ($allWorkersDown < $this->lastAllWorkersDownReported) {
+            // 核心统计被重置（如热重载/进程恢复）后，重新对齐基线。
+            $this->lastAllWorkersDownReported = $allWorkersDown;
         }
         
         // 记录 Dispatcher 状态到数据库

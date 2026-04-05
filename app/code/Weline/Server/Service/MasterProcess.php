@@ -21,6 +21,7 @@ namespace Weline\Server\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
@@ -197,10 +198,12 @@ class MasterProcess
         $this->frontend = $frontend;
         $this->logger->setProcessTag('Master@' . $instanceName);
 
-        // 前台模式或开发模式：启用 Logger 控制台输出并保证写入日志文件
+        // 始终启用文件日志（后台模式也需要日志）
+        $this->logger->setFileEnabled(true);
+
+        // 前台模式或开发模式：额外启用控制台输出
         if ($frontend || \Weline\Server\Log\LogConfig::isDevMode()) {
             $this->logger->setStdoutEnabled(true);
-            $this->logger->setFileEnabled(true);
         }
 
         $this->log('========================================');
@@ -225,44 +228,103 @@ class MasterProcess
     public function run(): void
     {
         (new LongRunningPhpRuntime())->apply();
+
+        // Master 不经 WlsRuntime::bootstrap()，须显式进入 WLS 模式，否则 Runtime::isWls() 为 false，
+        // SchedulerWaitObserver 不注册 yield 定时器，runLoop 内延迟启动 Fiber 会永久挂起、子进程无法拉起。
+        if (!\defined('WLS_MODE')) {
+            \define('WLS_MODE', true);
+        }
+        Runtime::resetModeCache();
+
+        // 强制刷新日志缓冲区，确保后台模式下日志能写入
+        $this->logger->flush(true);
+
         $this->log(__('启动 Master 进程...'));
+        $this->logger->flush(true);
+
         try {
             // 注册 Master PID 到索引（用于快速检测 Master 是否退出）
             $this->registerMasterPid();
+            $this->log(__('  已注册 Master PID'));
+            $this->logger->flush(true);
 
             // 初始化控制端口：
-            // 1) 优先使用 server.control_port（手动配置）
-            // 2) 未配置时采用 main_port + 10000 + project_offset（自动隔离）
-            // 3) 不进行范围扫描，避免主动占用其他端口
+            // 1) 优先使用 server.control_port（手动配置，不扫描）
+            // 2) 未配置时：20000 + main_port + project_offset 为首选，若被占用则顺延（仅非其它 WLS 实例声明的占用）
             $configuredControlPort = (int) (Env::get('server.control_port', 0) ?? 0);
-            if ($configuredControlPort > 0) {
-                $preferredControlPort = $configuredControlPort;
-            } else {
-                // 自动分配：基础端口 20000（避免与 Worker 端口 10000 冲突）+ 主端口 + 项目偏移量
-                // 确保多项目不冲突，且不与 Worker 端口范围重叠
+            $autoAssign = $configuredControlPort <= 0;
+            $scanMax = (int) (Env::get('server.control_port_scan_max', 64) ?? 64);
+            if ($scanMax < 1) {
+                $scanMax = 1;
+            }
+            if ($scanMax > 512) {
+                $scanMax = 512;
+            }
+            if (!$autoAssign) {
+                $scanMax = 1;
+            }
+
+            if ($autoAssign) {
                 $projectOffset = self::getProjectPortOffset();
-                $preferredControlPort = 20000 + $this->mainPort + $projectOffset;
+                $preferredBase = 20000 + $this->mainPort + $projectOffset;
+            } else {
+                $preferredBase = $configuredControlPort;
             }
-            $this->controlPort = $preferredControlPort;
-            if ($this->controlPort <= 0 || $this->controlPort > 65535) {
+
+            if ($preferredBase <= 0 || $preferredBase > 65535) {
                 throw new \RuntimeException(
-                    "Invalid control port: {$this->controlPort}. Please set env server.control_port to a valid TCP port."
+                    "Invalid control port base: {$preferredBase}. Please set env server.control_port to a valid TCP port."
                 );
             }
-            $conflictInstance = $this->findRunningInstanceByControlPort($this->controlPort);
-            if ($conflictInstance !== null) {
+
+            $this->controlPort = 0;
+            $chosenFallback = false;
+            for ($i = 0; $i < $scanMax; $i++) {
+                $candidate = $preferredBase + $i;
+                if ($candidate > 65535) {
+                    break;
+                }
+                $conflictInstance = $this->findRunningInstanceByControlPort($candidate);
+                if ($conflictInstance !== null) {
+                    if (!$autoAssign) {
+                        throw new \RuntimeException(
+                            "IPC control port {$candidate} is already used by instance '{$conflictInstance}'. " .
+                            "Please set a unique server.control_port per instance."
+                        );
+                    }
+
+                    continue;
+                }
+                if (Processer::isPortInUse($candidate)) {
+                    if (!$autoAssign) {
+                        throw new \RuntimeException(
+                            "IPC control port {$candidate} is unavailable. " .
+                            'Please free it or set a fixed server.control_port.'
+                        );
+                    }
+
+                    continue;
+                }
+                $this->controlPort = $candidate;
+                $chosenFallback = $autoAssign && $i > 0;
+                break;
+            }
+
+            if ($this->controlPort <= 0) {
                 throw new \RuntimeException(
-                    "IPC control port {$this->controlPort} is already used by instance '{$conflictInstance}'. " .
-                    "Please set a unique server.control_port per instance."
+                    $autoAssign
+                        ? "IPC control port could not be bound: tried {$scanMax} candidate(s) from {$preferredBase}. " .
+                          'Free a port in range or set server.control_port in env.'
+                        : "IPC control port {$preferredBase} is unavailable. " .
+                          'Please free it or set a fixed server.control_port.'
                 );
             }
-            if (Processer::isPortInUse($this->controlPort)) {
-                throw new \RuntimeException(
-                    "IPC control port {$this->controlPort} is unavailable. " .
-                    'Please free it or set a fixed server.control_port.'
-                );
+
+            if ($chosenFallback) {
+                $this->log(__('  控制端口: %{1}（首选 %{2} 不可用，已自动顺延）', [$this->controlPort, $preferredBase]));
+            } else {
+                $this->log(__('  控制端口: %{1}', [$this->controlPort]));
             }
-            $this->log(__('  控制端口: %{1}', [$this->controlPort]));
 
             // 构建 ServiceContext
             $this->context = $this->buildContext();
@@ -275,45 +337,21 @@ class MasterProcess
             $this->registerSignalHandlers();
 
             // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
-            fwrite(STDERR, "[DEBUG] 准备调用 bootstrapControlPlane\n");
             $this->orchestrator->bootstrapControlPlane($this->context);
-            fwrite(STDERR, "[DEBUG] bootstrapControlPlane 完成\n");
             $this->saveMasterInfo('bootstrapping');
-            fwrite(STDERR, "[DEBUG] saveMasterInfo 完成\n");
 
-            // 启动所有服务
-            $this->log(__('正在启动子进程...'));
-            fwrite(STDERR, "[DEBUG] 准备调用 startAll\n");
-            $this->orchestrator->startAll($this->context);
-            fwrite(STDERR, "[DEBUG] startAll 完成\n");
-            $this->log(__('子进程启动完成'));
-
-            // 释放启动锁（允许其他进程检测服务器状态或重新启动）
-            fwrite(STDERR, "[DEBUG] 准备释放启动锁\n");
-            $this->releaseStartupLock();
-            fwrite(STDERR, "[DEBUG] 启动锁已释放\n");
-
-            // 保存 Master 信息
-            $this->saveMasterInfo('running');
-            fwrite(STDERR, "[DEBUG] Master 信息已保存为 running\n");
-
-            // 进入主循环
+            // 进入主循环；子服务在 Fiber 中拉起，等待期间仍可 poll 控制面 IPC（启动完成后再释放启动锁，方案 B）
             $this->log(__('Master 进入主循环，监控子进程...'));
-            fwrite(STDERR, "[DEBUG] 准备进入 runLoop\n");
-            $this->orchestrator->runLoop();
-            fwrite(STDERR, "[DEBUG] runLoop 已退出\n");
-
+            $this->orchestrator->runLoopWithDeferredChildStartup($this->context, function (): void {
+                $this->releaseStartupLock();
+            });
             $this->log(__('Master 主循环结束'));
         } catch (\Throwable $e) {
-            fwrite(STDERR, "[DEBUG] 捕获异常: " . $e->getMessage() . "\n");
-            fwrite(STDERR, "[DEBUG] 异常堆栈: " . $e->getTraceAsString() . "\n");
             $this->log(__('Master 启动失败: %{1}', [$e->getMessage()]));
             WlsLogger::error_('[Master] 启动异常: ' . $e->getMessage(), ['exception' => $e]);
             throw $e;
         } finally {
-            fwrite(STDERR, "[DEBUG] 进入 finally 块，准备注销 PID\n");
             $this->unregisterMasterPid();
-            fwrite(STDERR, "[DEBUG] PID 已注销\n");
         }
     }
     
@@ -537,8 +575,13 @@ class MasterProcess
 
     private function handleTerminationSignal(string $signal, string $message): void
     {
-        if ($this->stopRequested || $this->orchestrator?->isShuttingDown()) {
-            $this->log(__('停机流程进行中，忽略重复终止信号（signal=%{1}）', [$signal]), 'warning');
+        if ($this->stopRequested) {
+            // 首次 Ctrl+C 已入队，但主循环可能尚未 consume（例如卡在启动 Fiber 的同步 batchCreate）；
+            // 第二次信号先尝试同步并入队 stop_all，仍失败再强杀。
+            if ($this->orchestrator !== null && $this->orchestrator->applyRepeatTerminationNudge()) {
+                return;
+            }
+            $this->escalateTerminationToForceExit($signal);
             return;
         }
 
@@ -547,13 +590,25 @@ class MasterProcess
     }
 
     /**
+     * 优雅停机已启动后再次收到终止信号：强杀子进程并退出（Windows 上常见“再按一次 Ctrl+C”预期）。
+     */
+    private function escalateTerminationToForceExit(string $signal): void
+    {
+        $this->log(__('停机流程进行中，再次收到终止信号：将强制结束子进程并退出 Master（signal=%{1}）', [$signal]), 'warning');
+        $this->logger?->flush(true);
+        if ($this->orchestrator !== null) {
+            $this->orchestrator->forceTerminateMasterAndChildren('repeat_signal:' . $signal);
+        }
+        exit(2);
+    }
+
+    /**
      * 停止 Master（用于信号处理，统一走 IPC 停机通道）
      */
     public function stopWithProgress(string $signal): void
     {
         if ($this->stopRequested || $this->orchestrator?->isShuttingDown()) {
-            $this->log(__('停机流程进行中，忽略重复终止信号（signal=%{1}）', [$signal]), 'warning');
-            return;
+            $this->escalateTerminationToForceExit($signal);
         }
 
         $this->stopRequested = true;
