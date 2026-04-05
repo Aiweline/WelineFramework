@@ -1,10 +1,10 @@
 <?php
 
 /*
- * æœ¬æ–‡ä»¶ç”± ç§‹æž«é›�é£ž ç¼–å†™ï¼Œæ‰€æœ‰è§£é‡Šæ�ƒå½’Aiwelineæ‰€æœ‰ã€?
- * é‚®ç®±ï¼šaiweline@qq.com
- * ç½‘å�€ï¼šaiweline.com
- * è®ºå�›ï¼šhttps://bbs.aiweline.com
+ * 本文件由 秋枫云飞 编写，解释权归 Aiweline 所有。
+ * 邮箱：aiweline@qq.com
+ * 网址：aiweline.com
+ * 论坛：https://bbs.aiweline.com
  */
 
 namespace Weline\Framework\Module\Helper;

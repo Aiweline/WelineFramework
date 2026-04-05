@@ -126,7 +126,7 @@ class Session implements SessionInterface
             self::clearKeysFromInstances(\Weline\Framework\Manager\MessageManager::keys);
         }
         $count = count(self::$instancesForShutdown);
-        if ($count > 0 && function_exists('w_log_info')) {
+        if ($count > 0 && self::shouldLogSessionOperations()) {
             w_log_info('[Session] flushRequestSessions count=' . $count, [], 'session');
         }
         $keep = [];
@@ -358,10 +358,19 @@ class Session implements SessionInterface
      */
     private static function sessionLog(string $op, string $detail): void
     {
-        if (!function_exists('w_log_info')) {
+        if (!self::shouldLogSessionOperations()) {
             return;
         }
         w_log_info('[Session] ' . $op . ' ' . $detail, [], 'session');
+    }
+
+    private static function shouldLogSessionOperations(): bool
+    {
+        if (!function_exists('w_log_info')) {
+            return false;
+        }
+
+        return (bool)\Weline\Framework\App\Env::get('wls.debug.hot_path_logs', false);
     }
 
     // ==================== 兼容方法（过渡期使用） ====================

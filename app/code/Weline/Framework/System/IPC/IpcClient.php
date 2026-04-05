@@ -57,6 +57,10 @@ class IpcClient
     private bool $verboseLog = false;
     private IpcLoggerInterface $logger;
 
+    private int $maxClientReadBufferSize = 2097152;
+
+    private int $maxNdjsonLinesPerReadable = 384;
+
     public function __construct(?IpcLoggerInterface $logger = null)
     {
         $this->logger = $logger ?? new NullIpcLogger();
@@ -277,8 +281,15 @@ class IpcClient
             return [];
         }
 
+        if (\strlen($this->buffer) + \strlen($data) > $this->maxClientReadBufferSize) {
+            $this->logger->error("[IPC-{$this->selfTag}] READ BUFFER OVERFLOW, disconnecting");
+            $this->handleDisconnect();
+
+            return [];
+        }
+
         $this->buffer .= $data;
-        $messages = NdjsonProtocol::extractMessages($this->buffer);
+        $messages = NdjsonProtocol::extractMessages($this->buffer, true, $this->maxNdjsonLinesPerReadable);
 
         foreach ($messages as $msg) {
             $type = $msg['type'] ?? 'unknown';

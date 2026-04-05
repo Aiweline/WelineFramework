@@ -812,6 +812,14 @@ abstract class AbstractModel extends DataObject
                 $this->setData($this->_primary_key, $save_result);
             }
             $this->getQuery()->commit();
+
+            // load() 会命中静态 identity map；save 落库后必须失效，否则后续 load 读到旧行
+            if ($this->_primary_key) {
+                $pk = $this->getData($this->_primary_key);
+                if ($pk !== null && $pk !== '') {
+                    unset(self::$loadIdentityMap[static::class . '::' . (string)$pk]);
+                }
+            }
         } catch (\Exception $exception) {
             // 🔧 修复：业务层负责检查事务状态，只有在有活动事务时才回滚
             $this->getQuery()->rollBack();
@@ -1466,7 +1474,7 @@ abstract class AbstractModel extends DataObject
         return $this;
     }
 
-    public function getPaginationData(string $url_path = '', string $pagination_style = 'pagination-rounded'): array
+    public function getPaginationData(string $url_path = '', string $pagination_style = 'pagination-rounded', bool $use_backend_url = false): array
     {
         # 分页数据存在
         if (isset($this->pagination['lastPage']) && $this->pagination['lastPage'] < 2) {
@@ -1499,8 +1507,8 @@ abstract class AbstractModel extends DataObject
         $this->pagination['lang'] = \Weline\Framework\Http\Cookie::getLangLocal();
         $this->pagination['uri'] = $request->getUri();
 
-        # 页码缓存
-        $cache_key = md5(json_encode($this->pagination));
+        # 页码缓存（区分样式与是否强制后台 URL，避免 WLS 下区域判断偶发偏差时命中错误缓存）
+        $cache_key = md5(json_encode($this->pagination) . '|' . $pagination_style . '|' . ($use_backend_url ? '1' : '0'));
         if ($data = $this->_cache->get($cache_key)) {
             $this->pagination = $data;
             return $data;
@@ -1511,7 +1519,9 @@ abstract class AbstractModel extends DataObject
         unset($params['page']);
         unset($params['pageSize']);
         $query_flag = $params ? '&' : '?';
-        $queryUrl = $urlBuilder->getUrl($url_path, $params);
+        $queryUrl = $use_backend_url
+            ? $urlBuilder->getBackendUrl($url_path, $params)
+            : $urlBuilder->getUrl($url_path, $params);
         $prePageName = __('上一页');
         unset($params);
         $prePageClassStatus = $hasPrePage ? '' : 'disabled';
@@ -1617,9 +1627,9 @@ PAGINATION;
         return $this->pagination;
     }
 
-    public function getPagination(string $pagination_style = 'pagination-rounded', string $url_path = ''): string
+    public function getPagination(string $pagination_style = 'pagination-rounded', string $url_path = '', bool $use_backend_url = false): string
     {
-        return $this->getPaginationData($url_path, $pagination_style)['html'] ?? '';
+        return $this->getPaginationData($url_path, $pagination_style, $use_backend_url)['html'] ?? '';
     }
 
     /**----------链接查询--------------*/
