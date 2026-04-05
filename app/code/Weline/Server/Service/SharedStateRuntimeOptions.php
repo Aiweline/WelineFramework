@@ -168,6 +168,12 @@ class SharedStateRuntimeOptions
      */
     private static function resolveSession(array $args, array $instanceRuntime, array $envConfig): array
     {
+        $sharedStateRuntime = \is_array(($envConfig['wls'] ?? [])['shared_state']['runtime'] ?? null)
+            ? $envConfig['wls']['shared_state']['runtime']
+            : [];
+        $runtimeSession = \is_array($sharedStateRuntime['session'] ?? null)
+            ? $sharedStateRuntime['session']
+            : [];
         $wlsSession = \is_array(($envConfig['wls'] ?? [])['session'] ?? null)
             ? $envConfig['wls']['session']
             : [];
@@ -178,9 +184,10 @@ class SharedStateRuntimeOptions
         $host = (string) (
             $args['session-host']
             ?? $instanceSession['host']
-            ?? $wlsServer['host']
+            ?? $runtimeSession['host']
             ?? $wlsSession['host']
             ?? $envSession['server_host']
+            ?? $wlsServer['host']
             ?? '127.0.0.1'
         );
         $host = \trim($host) !== '' ? \trim($host) : '127.0.0.1';
@@ -190,9 +197,10 @@ class SharedStateRuntimeOptions
         $port = (int) (
             $args['session-port']
             ?? $instanceSession['port']
-            ?? $wlsServer['port']
-            ?? $wlsSession['port']
+            ?? $runtimeSession['port']
             ?? $envSession['server_port']
+            ?? $wlsSession['port']
+            ?? $wlsServer['port']
             ?? $defaultPort
         );
         if ($port <= 0) {
@@ -202,8 +210,9 @@ class SharedStateRuntimeOptions
         $tokenFileName = (string) (
             $args['session-token-file-name']
             ?? $instanceSession['token_file_name']
-            ?? $wlsServer['token_file_name']
+            ?? $runtimeSession['token_file_name']
             ?? $wlsSession['token_file_name']
+            ?? $wlsServer['token_file_name']
             ?? 'session_server.token'
         );
         if ($tokenFileName === '') {

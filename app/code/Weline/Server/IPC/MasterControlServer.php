@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\LogLevel;
 use Weline\Server\Log\WlsLogger;
 
@@ -73,6 +74,25 @@ class MasterControlServer
 
     /** 开发模式下是否将子进程日志输出到 Master 控制台（前台=true，后台=false 仅写文件） */
     private bool $logToConsole = true;
+
+    /** 单个客户端最大待发送缓冲区（2MB），避免反压时无限堆积 */
+    private int $maxClientWriteBufferSize = 2097152;
+
+    /** 与 ControlClient 对齐：读缓冲上限，防止半包/恶意流无限追加 */
+    private int $maxClientReadBufferSize = 2097152;
+
+    /**
+     * 单次 extract 批大小（行数）。较小值让多客户端在 poll 轮次间更公平，避免单连接日志洪泛占满 Master。
+     */
+    private int $maxNdjsonLinesPerReadable = 32;
+
+    /**
+     * 单次 handleReadable（一次 socket 可读唤醒）内累计最多处理多少行，防止同连接仍长时间霸占回调栈。
+     */
+    private int $maxNdjsonLinesPerClientWake = 192;
+
+    /** 单次非阻塞 flush 的最大写入字节数 */
+    private int $maxImmediateWriteBytes = 65536;
 
     /**
      * 设置是否将子进程日志输出到控制台（开发模式）
@@ -316,6 +336,7 @@ class MasterControlServer
         $this->clients[$clientId] = [
             'socket'                => $conn,
             'buffer'                => '',
+            'write_buffer'          => '',
             'role'                  => null,
             'pid'                   => 0,
             'port'                  => 0,
@@ -365,6 +386,7 @@ class MasterControlServer
             $this->clients[$clientId] = [
                 'socket'                => $conn,
                 'buffer'                => '',
+                'write_buffer'          => '',
                 'role'                  => null,
                 'pid'                   => 0,
                 'port'                  => 0,
@@ -402,77 +424,110 @@ class MasterControlServer
             return;
         }
 
-        if ($data === '') {
+        if ($data !== '') {
+            $buf = (string) ($this->clients[$clientId]['buffer'] ?? '');
+            if (\strlen($buf) + \strlen($data) > $this->maxClientReadBufferSize) {
+                $tag = $this->formatClientTag($clientId);
+                $this->ipcLog("[IPC-Master] READ BUFFER OVERFLOW --> {$tag}, disconnecting");
+                $this->removeClient($clientId);
+
+                return;
+            }
+
+            $this->clients[$clientId]['buffer'] = $buf . $data;
+        }
+
+        // 即使本轮 fread 为空（对端暂无话），仍消化已积压的完整 NDJSON 行，避免 extract 截断后因无新 TCP 数据而永久滞留。
+        $this->flushBufferedNdjsonForClient($clientId);
+    }
+
+    /**
+     * 将客户端缓冲中的完整 NDJSON 行解码并分发，多轮小批以让出其它客户端与其它 socket 的处理时机。
+     */
+    private function flushBufferedNdjsonForClient(int $clientId): void
+    {
+        $linesRemaining = \max(1, $this->maxNdjsonLinesPerClientWake);
+        while ($linesRemaining > 0 && isset($this->clients[$clientId])) {
+            $chunk = \min($this->maxNdjsonLinesPerReadable, $linesRemaining);
+            $messages = ControlMessage::extractMessages(
+                $this->clients[$clientId]['buffer'],
+                true,
+                $chunk
+            );
+            if ($messages === []) {
+                return;
+            }
+
+            $linesRemaining -= \count($messages);
+            foreach ($messages as $msg) {
+                if (!isset($this->clients[$clientId])) {
+                    return;
+                }
+                $this->dispatchDecodedControlMessage($clientId, $msg);
+                if (!isset($this->clients[$clientId])) {
+                    return;
+                }
+            }
+        }
+    }
+
+    private function dispatchDecodedControlMessage(int $clientId, array $msg): void
+    {
+        $this->classifyClientFromMessage($clientId, $msg);
+        $type = $msg['type'] ?? 'unknown';
+        $tag  = $this->formatClientTag($clientId);
+        if ($type !== ControlMessage::TYPE_LOG) {
+            $this->ipcVerboseLog("[IPC-Master] RECV <-- {$tag}: type={$type}" . $this->formatMsgPayload($msg));
+        }
+
+        if ($type === ControlMessage::TYPE_REGISTER) {
+            $this->handleRegister($clientId, $msg);
+        }
+
+        if ($type === ControlMessage::TYPE_READY) {
+            $this->clients[$clientId]['state'] = self::STATE_READY;
+        }
+
+        if ($type === ControlMessage::TYPE_DRAINING_COMPLETE) {
+            $this->clients[$clientId]['state'] = self::STATE_DRAINING;
+        }
+
+        if ($type === ControlMessage::TYPE_PONG) {
+            $this->clients[$clientId]['last_pong_time'] = $msg['pong_timestamp'] ?? \microtime(true);
+        }
+
+        if ($type === ControlMessage::TYPE_EXITED) {
+            $this->ipcLog("[IPC-Master] {$tag} 即将退出");
+            $this->removeClient($clientId);
+
             return;
         }
 
-        // 追加到缓冲区
-        $this->clients[$clientId]['buffer'] .= $data;
-
-        // 提取完整消息
-        $messages = ControlMessage::extractMessages($this->clients[$clientId]['buffer']);
-
-        foreach ($messages as $msg) {
-            $this->classifyClientFromMessage($clientId, $msg);
-            $type = $msg['type'] ?? 'unknown';
-            $tag  = $this->formatClientTag($clientId);
-            if ($type !== ControlMessage::TYPE_LOG) {
-                $this->ipcVerboseLog("[IPC-Master] RECV <-- {$tag}: type={$type}" . $this->formatMsgPayload($msg));
-            }
-
-            // 内部处理 register 消息
-            if ($type === ControlMessage::TYPE_REGISTER) {
-                $this->handleRegister($clientId, $msg);
-            }
-
-            // 内部处理 ready 消息
-            if ($type === ControlMessage::TYPE_READY) {
-                $this->clients[$clientId]['state'] = self::STATE_READY;
-            }
-
-            // 内部处理 draining_complete 消息
-            if ($type === ControlMessage::TYPE_DRAINING_COMPLETE) {
-                $this->clients[$clientId]['state'] = self::STATE_DRAINING;
-            }
-
-            // 内部处理 pong 消息（健康检查响应）
-            if ($type === ControlMessage::TYPE_PONG) {
-                $this->clients[$clientId]['last_pong_time'] = $msg['pong_timestamp'] ?? \microtime(true);
-            }
-
-            // 内部处理 exited 消息（子进程即将退出，提前从列表移除）
-            if ($type === ControlMessage::TYPE_EXITED) {
-                $this->ipcLog("[IPC-Master] {$tag} 即将退出");
-                $this->removeClient($clientId);
-            }
-
-            // 开发模式：子进程日志汇聚到 Master；前台输出到控制台（着色），始终写入 wls.log（纯文本）
-            if ($type === ControlMessage::TYPE_LOG) {
-                $line = $msg['line'] ?? '';
-                if ($line !== '') {
-                    if ($this->logToConsole) {
-                        $level = $msg['level'] ?? 'INFO';
-                        $pTag  = $msg['process_tag'] ?? '';
-                        $colored = LogLevel::colorLine($line, $level, $pTag);
-                        if (\defined('STDOUT') && \is_resource(STDOUT)) {
-                            @\fwrite(STDOUT, $colored);
-                            @\fflush(STDOUT);
-                        } else {
-                            echo $colored;
-                            if (\function_exists('flush')) {
-                                @\flush();
-                            }
+        if ($type === ControlMessage::TYPE_LOG) {
+            $line = $msg['line'] ?? '';
+            if ($line !== '') {
+                if ($this->logToConsole) {
+                    $level = $msg['level'] ?? 'INFO';
+                    $pTag  = $msg['process_tag'] ?? '';
+                    $colored = LogLevel::colorLine($line, $level, $pTag);
+                    if (\defined('STDOUT') && \is_resource(STDOUT)) {
+                        @\fwrite(STDOUT, $colored);
+                        @\fflush(STDOUT);
+                    } else {
+                        echo $colored;
+                        if (\function_exists('flush')) {
+                            @\flush();
                         }
                     }
-                    WlsLogger::getInstance()->appendLineForMaster($line);
                 }
-                continue;
+                WlsLogger::getInstance()->appendLineForMaster($line);
             }
 
-            // 回调外部处理器
-            if ($this->messageHandler) {
-                ($this->messageHandler)($msg, $clientId, $this);
-            }
+            return;
+        }
+
+        if ($this->messageHandler) {
+            ($this->messageHandler)($msg, $clientId, $this);
         }
     }
 
@@ -597,76 +652,138 @@ class MasterControlServer
         $type = $decoded['type'] ?? 'raw';
         $this->ipcVerboseLog("[IPC-Master] SEND --> {$tag}: type={$type}" . ($decoded ? $this->formatMsgPayload($decoded) : ''));
 
-        $sent = $this->writeFully($socket, $message);
-        if (!$sent) {
-            // CRITICAL-FIX-2026-04-02: PHP 8.1+ socket_last_error() requires Socket object, not resource
-            // WLS uses stream_socket_* (returns resource), so use stream_get_meta_data() instead
-            $meta = @\stream_get_meta_data($socket);
-            $errno = $meta['timed_out'] ? 110 : (@\feof($socket) ? 32 : 0);
-            $errstr = $errno > 0 ? ($errno === 110 ? 'timeout' : 'connection closed') : 'unknown';
-            $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: type={$type}, errno={$errno}, error={$errstr}");
-
-            // 区分临时错误和永久错误
-            // EPIPE(32), ECONNRESET(104), ETIMEDOUT(110), ECONNABORTED(103)
-            $permanentErrors = [32, 103, 104, 110];
-            if (@\feof($socket) || \in_array($errno, $permanentErrors, true)) {
-                $this->removeClient($clientId);
-            }
+        if (!$this->enqueueWrite($clientId, $message)) {
+            $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: type={$type}, reason=write_queue_overflow");
+            $this->removeClient($clientId);
+            return false;
         }
 
-        return $sent;
+        $this->handleWritable($socket);
+
+        return isset($this->clients[$clientId]);
     }
 
     /**
-     * 在非阻塞 socket 上完整写入一条 IPC 消息，避免 NDJSON 半包被误判为发送成功。
-     *
-     * @param resource $socket
+     * @return resource[]
      */
-    private function writeFully($socket, string $message, float $timeoutSec = 1.0): bool
+    private function getWritableClientSockets(): array
     {
-        $length = \strlen($message);
-        if ($length === 0) {
+        $sockets = [];
+        foreach ($this->clients as $client) {
+            if (($client['write_buffer'] ?? '') === '') {
+                continue;
+            }
+            if (\is_resource($client['socket'])) {
+                $sockets[] = $client['socket'];
+            }
+        }
+
+        return $sockets;
+    }
+
+    private function enqueueWrite(int $clientId, string $message): bool
+    {
+        if (!isset($this->clients[$clientId])) {
+            return false;
+        }
+
+        if ($message === '') {
             return true;
         }
 
-        $offset = 0;
-        $deadline = \microtime(true) + $timeoutSec;
+        $current = (string) ($this->clients[$clientId]['write_buffer'] ?? '');
+        if ((\strlen($current) + \strlen($message)) > $this->maxClientWriteBufferSize) {
+            return false;
+        }
 
-        while ($offset < $length) {
-            $remaining = $deadline - \microtime(true);
-            if ($remaining <= 0) {
-                return false;
-            }
+        $this->clients[$clientId]['write_buffer'] = $current . $message;
 
+        return true;
+    }
+
+    /**
+     * @param resource $socket
+     */
+    public function handleWritable($socket): void
+    {
+        $clientId = (int) $socket;
+        if (!isset($this->clients[$clientId])) {
+            return;
+        }
+
+        $written = $this->flushClientWriteBuffer($clientId, $socket, 0.0);
+        if ($written >= 0) {
+            return;
+        }
+
+        $tag = $this->formatClientTag($clientId);
+        $bufferSize = \strlen((string) ($this->clients[$clientId]['write_buffer'] ?? ''));
+        $this->ipcLog("[IPC-Master] SEND FAILED --> {$tag}: pending_bytes={$bufferSize}, error=connection_closed");
+        $this->removeClient($clientId);
+    }
+
+    /**
+     * @param resource $socket
+     */
+    private function flushClientWriteBuffer(int $clientId, $socket, float $timeBudgetSec = 0.0): int
+    {
+        if (!isset($this->clients[$clientId])) {
+            return -1;
+        }
+
+        $writeBuffer = (string) ($this->clients[$clientId]['write_buffer'] ?? '');
+        if ($writeBuffer === '') {
+            return 0;
+        }
+
+        $deadline = $timeBudgetSec > 0.0 ? (\microtime(true) + $timeBudgetSec) : 0.0;
+        $totalWritten = 0;
+
+        do {
             $read = [];
             $write = [$socket];
             $except = [];
-            $sec = (int)$remaining;
-            $usec = (int)(($remaining - $sec) * 1000000);
+            if ($deadline > 0.0) {
+                $remaining = $deadline - \microtime(true);
+                if ($remaining <= 0.0) {
+                    break;
+                }
+                $sec = (int) $remaining;
+                $usec = (int) (($remaining - $sec) * 1000000);
+            } else {
+                $sec = 0;
+                $usec = 0;
+            }
 
             $ready = @\stream_select($read, $write, $except, $sec, $usec);
             if ($ready === false) {
-                return false;
+                return -1;
             }
             if ($ready === 0) {
-                continue;
+                break;
             }
 
-            $written = @\fwrite($socket, \substr($message, $offset));
+            $chunk = \substr($writeBuffer, 0, $this->maxImmediateWriteBytes);
+            $written = @\fwrite($socket, $chunk);
             if ($written === false) {
-                return false;
+                return -1;
             }
             if ($written === 0) {
                 if (@\feof($socket)) {
-                    return false;
+                    return -1;
                 }
-                continue;
+                break;
             }
 
-            $offset += $written;
-        }
+            $totalWritten += $written;
+            $writeBuffer = (string) \substr($writeBuffer, $written);
+            if (!isset($this->clients[$clientId])) {
+                return -1;
+            }
+            $this->clients[$clientId]['write_buffer'] = $writeBuffer;
+        } while ($writeBuffer !== '' && $deadline > 0.0 && \microtime(true) < $deadline);
 
-        return true;
+        return $totalWritten;
     }
 
     /**
@@ -865,6 +982,53 @@ class MasterControlServer
     }
 
     /**
+     * 子服务侧 IPC 连接数（排除一次性 control/CLI 控制面）。
+     *
+     * @param int|null $excludeClientId 额外排除的客户端（如与 role 判定无关的长连接）
+     */
+    public function countServiceClients(?int $excludeClientId = null): int
+    {
+        $n = 0;
+        foreach ($this->clients as $clientId => $client) {
+            if ($excludeClientId !== null && $clientId === $excludeClientId) {
+                continue;
+            }
+            $role = $client['role'] ?? null;
+            if ($role === self::ROLE_CONTROL) {
+                continue;
+            }
+            $n++;
+        }
+
+        return $n;
+    }
+
+    public function hasPendingWrites(): bool
+    {
+        foreach ($this->clients as $client) {
+            if (($client['write_buffer'] ?? '') !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * 关闭前尽力把出站缓冲推到内核，避免 DRAIN/SHUTDOWN 等末包未发出就关连接。
+     */
+    public function flushPendingWrites(float $maxSeconds = 2.0): void
+    {
+        $deadline = \microtime(true) + \max(0.05, $maxSeconds);
+        while (\microtime(true) < $deadline && $this->hasPendingWrites()) {
+            $this->poll(0, 50000);
+        }
+        if ($this->hasPendingWrites()) {
+            $this->ipcLog('[IPC-Master] flushPendingWrites: 超时，仍有待发字节未完全写出');
+        }
+    }
+
+    /**
      * 处理一轮 I/O 事件（便捷方法）
      *
      * 将 serverSocket 和所有 clientSockets 放入 stream_select，
@@ -881,11 +1045,29 @@ class MasterControlServer
         }
 
         $read = \array_merge([$this->serverSocket], $this->getClientSockets());
-        $write  = [];
+        $write  = $this->getWritableClientSockets();
         $except = [];
 
+        $requestedTimeoutSec = $timeoutSec;
+        $requestedTimeoutUsec = $timeoutUsec;
+
+        if (\Fiber::getCurrent() !== null && ($timeoutSec > 0 || $timeoutUsec > 0)) {
+            $timeoutSec = 0;
+            $timeoutUsec = 0;
+        }
+
         $changed = @\stream_select($read, $write, $except, $timeoutSec, $timeoutUsec);
-        if ($changed === false || $changed === 0) {
+        if ($changed === false) {
+            return 0;
+        }
+        if ($changed === 0) {
+            if (\Fiber::getCurrent() !== null && ($requestedTimeoutSec > 0 || $requestedTimeoutUsec > 0)) {
+                $delayMs = 1;
+                if ($requestedTimeoutSec > 0 || $requestedTimeoutUsec > 0) {
+                    $delayMs = \max(1, (int) \ceil(($requestedTimeoutSec * 1000000 + $requestedTimeoutUsec) / 1000));
+                }
+                SchedulerSystem::yieldDelay($delayMs);
+            }
             return 0;
         }
 
@@ -917,6 +1099,11 @@ class MasterControlServer
 
         foreach ($clientSockets as $socket) {
             $this->handleReadable($socket);
+            $events++;
+        }
+
+        foreach ($write as $socket) {
+            $this->handleWritable($socket);
             $events++;
         }
 

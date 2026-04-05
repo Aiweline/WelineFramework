@@ -48,4 +48,65 @@ class SslCertificateServiceTest extends TestCase
         $this->assertStringContainsString('sectigo.com', $liteProd);
         $this->assertNull($liteStaging);
     }
+
+    public function testIsWelineLocalWildcardCandidateDomain(): void
+    {
+        $service = new SslCertificateService();
+        $m = new ReflectionMethod($service, 'isWelineLocalWildcardCandidateDomain');
+        $m->setAccessible(true);
+
+        $this->assertTrue($m->invoke($service, '*.weline.local'));
+        $this->assertTrue($m->invoke($service, 'p11005ce4.weline.local'));
+        $this->assertTrue($m->invoke($service, 'shop-1.weline.local'));
+
+        $this->assertFalse($m->invoke($service, 'weline.local'));
+        $this->assertFalse($m->invoke($service, 'example.com'));
+        $this->assertFalse($m->invoke($service, ''));
+    }
+
+    public function testCertificateStorageSegmentForFilesystemPlainDomain(): void
+    {
+        $this->assertSame(
+            'p11005ce4.weline.local',
+            SslCertificateService::certificateStorageSegmentForFilesystem('p11005ce4.weline.local')
+        );
+    }
+
+    public function testCertificateStorageSegmentForFilesystemWildcard(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->assertSame(
+                '_wildcard_.weline.local',
+                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.local')
+            );
+        } else {
+            $this->assertSame(
+                '*.weline.local',
+                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.local')
+            );
+        }
+    }
+
+    public function testCertificateStorageSegmentCandidatesForProbeWildcard(): void
+    {
+        $c = SslCertificateService::certificateStorageSegmentCandidatesForProbe('*.weline.local');
+        if (\PHP_OS_FAMILY === 'Windows') {
+            $this->assertContains('_wildcard_.weline.local', $c);
+            $this->assertContains('*.weline.local', $c);
+        } else {
+            $this->assertSame(['*.weline.local'], $c);
+        }
+    }
+
+    public function testLogicalDomainFromStorageSegment(): void
+    {
+        $this->assertSame(
+            '*.weline.local',
+            SslCertificateService::logicalDomainFromStorageSegment('_wildcard_.weline.local')
+        );
+        $this->assertSame(
+            'p1.weline.local',
+            SslCertificateService::logicalDomainFromStorageSegment('p1.weline.local')
+        );
+    }
 }

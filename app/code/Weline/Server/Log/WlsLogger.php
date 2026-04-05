@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Log;
 
+use Weline\Server\Log\Error\ErrorContext;
 use Weline\Server\Service\WlsLogService;
 
 class WlsLogger
@@ -15,6 +16,7 @@ class WlsLogger
     private bool $stdoutEnabled = false;
     private bool $fileEnabled = true;
     private string $logDir = '';
+    private ?string $devDebugLogFile = null;
     private string $buffer = '';
     private int $bufferSize = 0;
     private int $maxBufferBytes = 65536; // 从 8KB 增加到 64KB，减少刷新频率
@@ -30,10 +32,27 @@ class WlsLogger
      */
     private $ipcLogSink = null;
 
+    /** 开发模式多进程同时打 debug/info 时，经 IPC 汇聚易形成 Master 端消息风暴 */
+    private static float $ipcSinkWindowStart = 0.0;
+
+    private static int $ipcSinkWindowCount = 0;
+
+    private static int $ipcSinkDroppedBursty = 0;
+
+    private const IPC_SINK_WINDOW_SEC = 1.0;
+
+    /** 每窗口内允许转发到 Master 的「低优先级」行数（WARNING 及以上不受此限） */
+    private const IPC_SINK_MAX_LOW_PRI_PER_WINDOW = 120;
+
     private function __construct()
     {
         $this->lastFlushTime = \microtime(true);
-        $this->instanceName = WlsLogService::resolveInstanceName();
+        $resolvedTag = $this->resolveFallbackProcessTag();
+        if ($resolvedTag !== null) {
+            $this->processTag = $resolvedTag;
+        }
+
+        $this->instanceName = WlsLogService::resolveInstanceName(null, $this->processTag);
         $this->logDir = LogConfig::getLogDir($this->instanceName, $this->processTag);
         $this->minLevel = LogConfig::getMinLevel();
         $this->fileEnabled = LogConfig::isEnabled();
@@ -41,6 +60,7 @@ class WlsLogger
         if (LogConfig::isDevMode()) {
             $this->stdoutEnabled = true;
             $this->fileEnabled = true;
+            $this->devDebugLogFile = WlsLogService::getDebugLogFile();
         }
     }
 
@@ -55,13 +75,15 @@ class WlsLogger
 
     public function setProcessTag(string $tag): self
     {
-        $this->processTag = $tag;
-        $this->setInstanceName(WlsLogService::resolveInstanceName(null, $tag));
+        $normalizedTag = self::normalizeProcessTag($tag) ?? 'Unknown';
+        $this->processTag = $normalizedTag;
+        $this->setInstanceName(WlsLogService::resolveInstanceName(null, $normalizedTag));
         return $this;
     }
 
     public function getProcessTag(): string
     {
+        $this->ensureProcessTagResolved();
         return $this->processTag;
     }
 
@@ -114,9 +136,40 @@ class WlsLogger
         return $this;
     }
 
+    private function shouldEmitToIpcSink(string $level): bool
+    {
+        if ($this->ipcLogSink === null || !LogConfig::isDevMode()) {
+            return false;
+        }
+
+        if (LogLevel::isAtLeast($level, LogLevel::WARNING)) {
+            return true;
+        }
+
+        $now = \microtime(true);
+        if ($now - self::$ipcSinkWindowStart >= self::IPC_SINK_WINDOW_SEC) {
+            self::$ipcSinkWindowStart = $now;
+            self::$ipcSinkWindowCount = 0;
+        }
+
+        if (self::$ipcSinkWindowCount >= self::IPC_SINK_MAX_LOW_PRI_PER_WINDOW) {
+            self::$ipcSinkDroppedBursty++;
+            if (self::$ipcSinkDroppedBursty % 200 === 1) {
+                @\error_log('[WlsLogger] IPC log sink: rate limited low-priority lines, dropped≈' . self::$ipcSinkDroppedBursty);
+            }
+
+            return false;
+        }
+
+        self::$ipcSinkWindowCount++;
+
+        return true;
+    }
+
     public function log(string $level, string $message, array $context = []): void
     {
         $level = LogLevel::normalize($level);
+        $this->ensureProcessTagResolved();
 
         $contextInstance = $context['instance'] ?? null;
         if (\is_scalar($contextInstance) && (string)$contextInstance !== '') {
@@ -168,12 +221,12 @@ class WlsLogger
         }
         $line = "[{$timestamp}] [{$this->processTag}] [{$level}] {$message}{$contextStr}\n";
 
-        if (LogConfig::isDevMode() && $this->ipcLogSink !== null) {
+        // IPC 上报给 Master（如果已连接；低优先级限流防风暴）
+        if ($this->shouldEmitToIpcSink($level)) {
             ($this->ipcLogSink)($line, $level, $this->processTag);
-            $this->ensureShutdownRegistered();
-            return;
         }
 
+        // Worker 本地输出（stdout + 文件）
         if ($this->stdoutEnabled) {
             $this->writeStdout($line, $level);
         }
@@ -181,6 +234,8 @@ class WlsLogger
         if ($this->fileEnabled) {
             $this->writeBuffer($line, $level);
         }
+
+        $this->writeDevDebugMirror($line);
 
         if ($level === LogLevel::ERROR || $level === LogLevel::FATAL) {
             $this->flush(true);
@@ -256,7 +311,15 @@ class WlsLogger
 
     public static function flush_(bool $force = false): void
     {
-        self::getInstance()->flush($force);
+        try {
+            self::getInstance()->flush($force);
+        } catch (\Throwable $e) {
+            // 捕获并重新抛出，添加更多上下文
+            $trace = debug_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS, 3);
+            $caller = $trace[1] ?? ['file' => 'unknown', 'line' => 0];
+            error_log("[WlsLogger] flush_() 调用失败，调用者: {$caller['file']}:{$caller['line']}, 错误: {$e->getMessage()}");
+            throw $e;
+        }
     }
 
     public static function tick_(): bool
@@ -309,6 +372,20 @@ class WlsLogger
         $this->bufferSize = 0;
         $this->bufferLineCount = 0;
         $this->lastFlushTime = \microtime(true);
+    }
+
+    private function writeDevDebugMirror(string $line): void
+    {
+        if ($this->devDebugLogFile === null || $line === '') {
+            return;
+        }
+
+        $logDir = \dirname($this->devDebugLogFile);
+        if (!\is_dir($logDir)) {
+            @\mkdir($logDir, 0755, true);
+        }
+
+        @\file_put_contents($this->devDebugLogFile, $line, FILE_APPEND);
     }
 
     public function writeErrorLog(string $line): void
@@ -385,7 +462,21 @@ class WlsLogger
             return;
         }
 
-        // 防止缓冲区无限增长
+        // Master 汇聚多子进程日志时若走内存 buffer，高频 IPC 下易与 EventsManager 等叠加撑爆 memory_limit。
+        // 子进程行已带换行；直接落盘与 flush() 使用同一主日志文件，避免重复缓冲。
+        if ($this->fileEnabled && $this->logDir !== '') {
+            if (!\is_dir($this->logDir)) {
+                @\mkdir($this->logDir, 0755, true);
+            }
+            $mainLog = $this->logDir . 'wls-' . \date('Y-m-d') . '.log';
+            if (!\str_ends_with($line, "\n")) {
+                $line .= "\n";
+            }
+            @\file_put_contents($mainLog, $line, FILE_APPEND);
+            $this->writeDevDebugMirror($line);
+            return;
+        }
+
         if ($this->bufferLineCount >= $this->maxBufferLines || $this->bufferSize >= $this->maxBufferBytes) {
             $this->flush(true);
         }
@@ -494,5 +585,170 @@ class WlsLogger
         self::$instance = null;
         LogConfig::clearCache();
     }
-}
 
+    private function ensureProcessTagResolved(): void
+    {
+        if (!self::isUnknownProcessTag($this->processTag)) {
+            return;
+        }
+
+        $resolvedTag = $this->resolveFallbackProcessTag();
+        if ($resolvedTag === null) {
+            return;
+        }
+
+        $this->setProcessTag($resolvedTag);
+    }
+
+    private function resolveFallbackProcessTag(): ?string
+    {
+        $candidates = [
+            self::getProcessTagFromErrorContext(),
+            self::getProcessTagFromEnvironment(),
+            self::getProcessTagFromCli(),
+            self::getProcessTagFromSapi(),
+        ];
+
+        foreach ($candidates as $candidate) {
+            $normalized = self::normalizeProcessTag($candidate);
+            if ($normalized !== null && !self::isUnknownProcessTag($normalized)) {
+                return $normalized;
+            }
+        }
+
+        return null;
+    }
+
+    private static function getProcessTagFromErrorContext(): ?string
+    {
+        if (!\class_exists(ErrorContext::class)) {
+            return null;
+        }
+
+        $tag = ErrorContext::getProcessTag();
+        return self::isUnknownProcessTag($tag) ? null : $tag;
+    }
+
+    private static function getProcessTagFromEnvironment(): ?string
+    {
+        $candidates = [
+            \getenv('WLS_PROCESS_TAG'),
+            $_ENV['WLS_PROCESS_TAG'] ?? null,
+            $_SERVER['WLS_PROCESS_TAG'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (\is_string($candidate) && \trim($candidate) !== '') {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static function getProcessTagFromCli(): ?string
+    {
+        if (\PHP_SAPI !== 'cli' && \PHP_SAPI !== 'phpdbg') {
+            return null;
+        }
+
+        $argv = $_SERVER['argv'] ?? [];
+        if (!\is_array($argv)) {
+            return 'CLI';
+        }
+
+        $arg0 = isset($argv[0]) && \is_string($argv[0]) ? $argv[0] : '';
+        $scriptName = self::sanitizeCliProcessSegment(
+            \pathinfo(\str_replace('\\', '/', $arg0), PATHINFO_FILENAME)
+        );
+
+        if (\in_array($scriptName, ['w', 'bin_w'], true)) {
+            $command = self::findFirstCliCommand($argv);
+            if ($command !== null) {
+                return 'Cli:' . self::sanitizeCliProcessSegment($command);
+            }
+
+            return 'Cli:w';
+        }
+
+        if ($scriptName !== '' && \str_contains(\strtolower($scriptName), 'phpunit')) {
+            return 'PHPUnit';
+        }
+
+        if ($scriptName !== '' && \str_contains(\strtolower($scriptName), 'pest')) {
+            return 'Pest';
+        }
+
+        if (\defined('PHPUNIT_COMPOSER_INSTALL') || \defined('__PHPUNIT_PHAR__')) {
+            return 'PHPUnit';
+        }
+
+        if ($scriptName !== '') {
+            return 'Cli:' . $scriptName;
+        }
+
+        return 'CLI';
+    }
+
+    private static function findFirstCliCommand(array $argv): ?string
+    {
+        foreach (\array_slice($argv, 1) as $argument) {
+            if (!\is_string($argument)) {
+                continue;
+            }
+
+            $argument = \trim($argument);
+            if ($argument === '' || \str_starts_with($argument, '-')) {
+                continue;
+            }
+
+            return $argument;
+        }
+
+        return null;
+    }
+
+    private static function getProcessTagFromSapi(): ?string
+    {
+        return match (\PHP_SAPI) {
+            'cli' => 'CLI',
+            'phpdbg' => 'PHPDBG',
+            default => null,
+        };
+    }
+
+    private static function normalizeProcessTag(?string $tag): ?string
+    {
+        if (!\is_string($tag)) {
+            return null;
+        }
+
+        $tag = \trim($tag);
+        if ($tag === '') {
+            return null;
+        }
+
+        return (string) (\preg_replace('/\s+/', '_', $tag) ?? $tag);
+    }
+
+    private static function sanitizeCliProcessSegment(string $value): string
+    {
+        $value = \trim($value);
+        if ($value === '') {
+            return '';
+        }
+
+        $value = (string) (\preg_replace('/[^A-Za-z0-9._:@#-]+/', '_', $value) ?? $value);
+        return \trim($value, '._-');
+    }
+
+    private static function isUnknownProcessTag(?string $tag): bool
+    {
+        if (!\is_string($tag)) {
+            return true;
+        }
+
+        $tag = \trim($tag);
+        return $tag === '' || \strcasecmp($tag, 'Unknown') === 0;
+    }
+}
