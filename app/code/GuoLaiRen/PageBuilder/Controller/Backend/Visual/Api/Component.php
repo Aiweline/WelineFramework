@@ -88,7 +88,7 @@ class Component extends BackendController
             
             // 是否包含预览HTML（默认不包含，减小响应大小）
             $includePreview = $this->request->getParam('include_preview', '0') === '1';
-            $welineThemeId = (int) $this->request->getParam('weline_theme_id', 0);
+            $virtualThemeId = $this->resolveRequestVirtualThemeId();
             $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             // 获取为构建器格式化的组件数据
@@ -97,7 +97,7 @@ class Component extends BackendController
                 $layoutCode ?: null,
                 $includePreview,
                 $pageType ?: null,
-                $welineThemeId,
+                $virtualThemeId,
                 $themeComponentArea
             );
             
@@ -166,7 +166,7 @@ class Component extends BackendController
             $componentCode = $this->request->getParam('component_code', '');
             $styleCode = $this->request->getParam('style_code', '');
             $config = $this->request->getParam('config', '');
-            $welineThemeId = (int) $this->request->getParam('weline_theme_id', 0);
+            $virtualThemeId = $this->resolveRequestVirtualThemeId();
             $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             if (!$componentCode) {
@@ -176,14 +176,14 @@ class Component extends BackendController
             $configArray = json_decode($config, true) ?: [];
             
             // 绑定 Weline 主题虚拟部件时：走 ComponentRenderer（虚拟未命中仍可回落到文件模板）
-            if ($welineThemeId > 0) {
+            if ($virtualThemeId > 0) {
                 $styleForRender = $styleCode !== '' ? $styleCode : 'default';
                 $virtualPreview = $this->componentRenderer->renderPreview(
                     $componentCode,
                     $styleForRender,
                     $configArray,
                     [
-                        'weline_theme_id' => $welineThemeId,
+                        'virtual_theme_id' => $virtualThemeId,
                         'theme_component_area' => $themeComponentArea,
                         'style_settings' => [],
                     ]
@@ -205,9 +205,9 @@ class Component extends BackendController
                         : [
                             'code' => $componentCode,
                             'style_code' => $styleForRender,
-                            'weline_theme_id' => $welineThemeId,
+                            'virtual_theme_id' => $virtualThemeId,
                         ];
-                    $componentPayload['weline_theme_id'] = $welineThemeId;
+                    $componentPayload['virtual_theme_id'] = $virtualThemeId;
                     $componentPayload['render_source'] = $virtualPreview->getData()['render_source'] ?? '';
                     
                     return $this->fetchJson([
@@ -323,7 +323,7 @@ class Component extends BackendController
             $parentComponentId = $body['parent_component_id'] ?? null; // 父组件实例ID（嵌套时）
             $targetSlot = $body['slot'] ?? null; // 目标 slot 名称（嵌套时）
             $returnHtml = $body['return_html'] ?? true; // 是否返回渲染的 HTML（用于局部刷新）
-            $welineThemeId = (int) ($body['weline_theme_id'] ?? 0);
+            $virtualThemeId = $this->resolvePayloadVirtualThemeId($body);
             $themeComponentArea = (string) ($body['theme_component_area'] ?? 'frontend');
             
             if (!$pageId) {
@@ -484,8 +484,8 @@ class Component extends BackendController
                     'page' => $page,
                     'style_settings' => $styleSettings,
                 ];
-                if ($welineThemeId > 0) {
-                    $renderOptions['weline_theme_id'] = $welineThemeId;
+                if ($virtualThemeId > 0) {
+                    $renderOptions['virtual_theme_id'] = $virtualThemeId;
                     $renderOptions['theme_component_area'] = $themeComponentArea;
                 }
                 
@@ -757,7 +757,7 @@ class Component extends BackendController
             $parentComponentCode = $body['parent_component_code'] ?? null;
             $targetSlot = $body['slot'] ?? null;
             $parentInstanceId = $body['parent_instance_id'] ?? null;
-            $welineThemeId = (int) ($body['weline_theme_id'] ?? 0);
+            $virtualThemeId = $this->resolvePayloadVirtualThemeId($body);
             $themeComponentArea = (string) ($body['theme_component_area'] ?? 'frontend');
             
             if (!$componentCode) {
@@ -858,7 +858,7 @@ class Component extends BackendController
             $styleCode = $this->request->getParam('style_code', '');
             $parentComponentCode = $this->request->getParam('parent_component_code', '');
             $targetSlot = $this->request->getParam('slot', '');
-            $welineThemeId = (int) $this->request->getParam('weline_theme_id', 0);
+            $virtualThemeId = $this->resolveRequestVirtualThemeId();
             $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             if ($parentComponentCode && $targetSlot) {
@@ -867,12 +867,12 @@ class Component extends BackendController
                     $parentComponentCode,
                     $targetSlot,
                     $styleCode,
-                    $welineThemeId,
+                    $virtualThemeId,
                     $themeComponentArea
                 );
                 
                 // 获取 slot 信息
-                $slotInfo = $this->slotValidator->getComponentSlots($parentComponentCode, $styleCode, $welineThemeId, $themeComponentArea);
+                $slotInfo = $this->slotValidator->getComponentSlots($parentComponentCode, $styleCode, $virtualThemeId, $themeComponentArea);
                 $slotConfig = $slotInfo[$targetSlot] ?? [];
                 
                 return $this->fetchJson([
@@ -888,7 +888,7 @@ class Component extends BackendController
                 $components = $this->slotValidator->getCompatibleComponentsForRegion(
                     $region,
                     $styleCode,
-                    $welineThemeId,
+                    $virtualThemeId,
                     $themeComponentArea
                 );
                 
@@ -921,7 +921,7 @@ class Component extends BackendController
         try {
             $componentCode = $this->request->getParam('component_code', '');
             $styleCode = $this->request->getParam('style_code', '');
-            $welineThemeId = (int) $this->request->getParam('weline_theme_id', 0);
+            $virtualThemeId = $this->resolveRequestVirtualThemeId();
             $themeComponentArea = (string) $this->request->getParam('theme_component_area', 'frontend');
             
             if (!$componentCode) {
@@ -931,9 +931,9 @@ class Component extends BackendController
                 ]);
             }
             
-            $slots = $this->slotValidator->getComponentSlots($componentCode, $styleCode, $welineThemeId, $themeComponentArea);
+            $slots = $this->slotValidator->getComponentSlots($componentCode, $styleCode, $virtualThemeId, $themeComponentArea);
             $isContainer = !empty($slots);
-            $componentInfo = $this->slotValidator->resolvePlacementComponentInfo($componentCode, $styleCode, $welineThemeId, $themeComponentArea);
+            $componentInfo = $this->slotValidator->resolvePlacementComponentInfo($componentCode, $styleCode, $virtualThemeId, $themeComponentArea);
             
             return $this->fetchJson([
                 'success' => true,
@@ -1785,7 +1785,7 @@ class Component extends BackendController
             $parentComponentId = $body['parent_component_id'] ?? null;
             $targetSlot = $body['slot'] ?? null;
             $returnHtml = $body['return_html'] ?? true;
-            $welineThemeId = (int)($body['weline_theme_id'] ?? 0);
+            $virtualThemeId = $this->resolvePayloadVirtualThemeId($body);
             $themeComponentArea = (string)($body['theme_component_area'] ?? 'frontend');
 
             if ($componentCode === '' || $region === '') {
@@ -1807,7 +1807,7 @@ class Component extends BackendController
                     (string)$targetSlot,
                     $context['style_code'],
                     (string)$parentComponentId,
-                    $welineThemeId,
+                    $virtualThemeId,
                     $themeComponentArea
                 );
             } else {
@@ -1815,7 +1815,7 @@ class Component extends BackendController
                     $componentCode,
                     $region,
                     $context['style_code'],
-                    $welineThemeId,
+                    $virtualThemeId,
                     $themeComponentArea
                 );
             }
@@ -1883,8 +1883,8 @@ class Component extends BackendController
                     'page' => $context['page'],
                     'style_settings' => $styleSettings,
                 ];
-                if ($welineThemeId > 0) {
-                    $renderOptions['weline_theme_id'] = $welineThemeId;
+                if ($virtualThemeId > 0) {
+                    $renderOptions['virtual_theme_id'] = $virtualThemeId;
                     $renderOptions['theme_component_area'] = $themeComponentArea;
                 }
                 $renderResult = $this->componentRenderer->renderSingle(
@@ -2208,6 +2208,19 @@ class Component extends BackendController
         }
 
         return null;
+    }
+
+    private function resolveRequestVirtualThemeId(): int
+    {
+        return \max(0, (int)$this->request->getParam('virtual_theme_id', 0));
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     */
+    private function resolvePayloadVirtualThemeId(array $payload): int
+    {
+        return \max(0, (int)($payload['virtual_theme_id'] ?? 0));
     }
 
     private function getVirtualLayoutService(): AiSiteVirtualLayoutService

@@ -10,7 +10,7 @@ PageBuilder AI 建站虚拟主题请求拦截器。
 2. 优先读取显式 `virtual_theme_id`
 3. 仅在 `pagebuilder`、`ai-site-agent`、`site-builder-agent` 相关路由下复用已持久化上下文
 4. 将上下文写入 `pagebuilder_virtual_theme_context`
-5. 向当前请求注入 `virtual_theme_id`、`pagebuilder_virtual_theme_id`、`virtual_theme_path`、`theme_component_area`
+5. 向当前请求注入 `virtual_theme_id`、`virtual_theme_path`、`theme_component_area`
 
 ### Guardrails
 

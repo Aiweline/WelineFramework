@@ -367,11 +367,7 @@ class Preview extends BackendController
         $pageId = (int)$this->request->getGet('page_id');
         $locale = $this->request->getGet('locale');
         $tempStyleCode = $this->request->getGet('style_code'); // 临时样式代码（用于预览）
-        // 支持 virtual_theme_id（PageBuilder 自有）和 weline_theme_id（旧兼容）
-        $welineThemeId = (int)$this->request->getGet('virtual_theme_id', 0);
-        if ($welineThemeId <= 0) {
-            $welineThemeId = (int)$this->request->getGet('weline_theme_id', 0);
-        }
+        $virtualThemeId = $this->resolveRequestedVirtualThemeId();
 
         if (!$pageId && $previewPublicId !== '') {
             $virtualContext = $this->resolveVirtualPreviewContext();
@@ -380,7 +376,7 @@ class Preview extends BackendController
                 $page = $virtualContext['page'];
                 $currentLocale = $locale ?: (string)($virtualContext['locale'] ?? State::getLang());
                 $resolvedStyleCode = $tempStyleCode ?: (string)($virtualContext['style_code'] ?? '');
-                $resolvedThemeId = $welineThemeId > 0 ? $welineThemeId : (int)($virtualContext['virtual_theme_id'] ?? 0);
+                $resolvedThemeId = $virtualThemeId > 0 ? $virtualThemeId : (int)($virtualContext['virtual_theme_id'] ?? 0);
                 $isVisualEditor = $this->request->getGet('visual_editor') === '1';
                 $renderMode = $isVisualEditor ? PageRenderService::MODE_VISUAL : PageRenderService::MODE_PREVIEW;
 
@@ -435,7 +431,7 @@ class Preview extends BackendController
             $renderMode,
             $currentLocale,
             $tempStyleCode,
-            $welineThemeId > 0 ? $welineThemeId : null
+            $virtualThemeId > 0 ? $virtualThemeId : null
         );
         if ($isVisualEditor) {
             $html = $this->injectVisualEditorNavLinks($html, $page);
@@ -698,10 +694,7 @@ SCRIPT;
         $styleCode = $this->request->getGet('style_code');
         $locale = $this->request->getGet('locale', 'zh_Hans_CN'); // 默认语言
         $pageType = $this->request->getGet('page_type', Page::TYPE_HOME); // 默认首页类型
-        $welineThemeId = (int)$this->request->getGet('virtual_theme_id', 0);
-        if ($welineThemeId <= 0) {
-            $welineThemeId = (int)$this->request->getGet('weline_theme_id', 0);
-        }
+        $virtualThemeId = $this->resolveRequestedVirtualThemeId();
         
         if (!$styleCode) {
             echo '<div style="padding: 20px; color: red;">样式代码不能为空</div>';
@@ -757,7 +750,7 @@ SCRIPT;
                 PageRenderService::MODE_PREVIEW,
                 $locale,
                 $styleCode,
-                $welineThemeId > 0 ? $welineThemeId : null
+                $virtualThemeId > 0 ? $virtualThemeId : null
             );
             
             echo $html;
@@ -1645,6 +1638,11 @@ JS;
     private function getVirtualLayoutService(): AiSiteVirtualLayoutService
     {
         return ObjectManager::getInstance(AiSiteVirtualLayoutService::class);
+    }
+
+    private function resolveRequestedVirtualThemeId(): int
+    {
+        return \max(0, (int)$this->request->getGet('virtual_theme_id', 0));
     }
 
     private function getScopeCompatibilityService(): AiSiteScopeCompatibilityService
