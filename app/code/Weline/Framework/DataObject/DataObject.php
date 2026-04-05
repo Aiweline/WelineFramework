@@ -623,7 +623,14 @@ class DataObject implements \ArrayAccess
             $data = $this->getData();
             foreach ($data as &$datum) {
                 if (is_array($datum)) {
-                    $datum = implode(', ', $datum);
+                    $datum = implode(', ', array_map(static function ($v): string {
+                        if ($v === null || is_scalar($v)) {
+                            return (string)$v;
+                        }
+                        $json = json_encode($v, JSON_UNESCAPED_UNICODE);
+
+                        return $json !== false ? $json : '';
+                    }, $datum));
                 }
             }
             $result = implode(', ', $data);

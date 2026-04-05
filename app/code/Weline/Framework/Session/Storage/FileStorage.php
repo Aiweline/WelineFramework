@@ -41,6 +41,12 @@ final class FileStorage implements SessionStorageInterface
         }
     }
 
+    private static function shouldLogSessionOperations(): bool
+    {
+        return \function_exists('w_log_info')
+            && (bool)Env::get('wls.debug.hot_path_logs', false);
+    }
+
     /**
      * 获取 Session 文件路径
      */
@@ -75,7 +81,7 @@ final class FileStorage implements SessionStorageInterface
         if (!\is_array($data)) {
             return [];
         }
-        if (function_exists('w_log_info')) {
+        if (self::shouldLogSessionOperations()) {
             w_log_info('[FileStorage] read sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data), [], 'session');
         }
         return $data;
@@ -89,7 +95,7 @@ final class FileStorage implements SessionStorageInterface
         $filePath = $this->getFilePath($sessionId);
         $content = \serialize($data);
         $result = @\file_put_contents($filePath, $content, LOCK_EX);
-        if (function_exists('w_log_info')) {
+        if (self::shouldLogSessionOperations()) {
             w_log_info('[FileStorage] write sid=' . substr($sessionId, 0, 8) . '... keys=' . count($data) . ' ok=' . ($result !== false ? '1' : '0'), [], 'session');
         }
         return $result !== false;
@@ -103,7 +109,7 @@ final class FileStorage implements SessionStorageInterface
         $filePath = $this->getFilePath($sessionId);
         $existed = \file_exists($filePath);
         $ok = $existed ? @\unlink($filePath) : true;
-        if (function_exists('w_log_info')) {
+        if (self::shouldLogSessionOperations()) {
             w_log_info('[FileStorage] destroy sid=' . substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'), [], 'session');
         }
         return $ok;
