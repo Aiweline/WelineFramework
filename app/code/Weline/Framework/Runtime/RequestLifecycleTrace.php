@@ -15,6 +15,11 @@ class RequestLifecycleTrace
 {
     private static bool $stateManagerRegistered = false;
 
+    /** 极端重试/风暴时防止静态 span 无限增长导致 OOM */
+    private const MAX_SPANS = 4096;
+
+    private static bool $maxSpansLogged = false;
+
     /** @var list<array{name: string, duration_ms: float, category?: string, parent?: string, meta?: array<string, mixed>}> */
     private static array $spans = [];
 
@@ -72,6 +77,14 @@ class RequestLifecycleTrace
     ): void
     {
         if (!self::isEnabled()) {
+            return;
+        }
+        if (\count(self::$spans) >= self::MAX_SPANS) {
+            if (!self::$maxSpansLogged) {
+                self::$maxSpansLogged = true;
+                \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) self::MAX_SPANS . '，已停止记录直至 reset');
+            }
+
             return;
         }
         self::registerStateManager();
@@ -244,5 +257,6 @@ class RequestLifecycleTrace
         self::$spans = [];
         self::$startStack = [];
         self::$currentParentStack = [];
+        self::$maxSpansLogged = false;
     }
 }

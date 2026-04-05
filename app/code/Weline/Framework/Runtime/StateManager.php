@@ -307,10 +307,14 @@ class StateManager
     
     /**
      * 执行所有重置操作
-     * 
-     * 每个请求结束时调用
+     *
+     * 每个请求结束时调用。
+     *
+     * @param list<string>|null $omitCallbackNames 按注册名跳过部分回调（实验 / 与 {@see WlsConcurrency} 协同）；
+     *        生产默认应传 null。{@see cleanup()} 始终等价于完整 reset。
+     * @param bool $skipHeaderCollectorReset 为 true 时不重置 HeaderCollector（极少场景与挂起 Fiber 并存时使用）
      */
-    public static function reset(): void
+    public static function reset(?array $omitCallbackNames = null, bool $skipHeaderCollectorReset = false): void
     {
         // 1. 重置静态变量
         self::resetStaticProperties();
@@ -320,6 +324,9 @@ class StateManager
         
         // 3. 执行所有重置回调
         foreach (self::$resetCallbacks as $name => $callback) {
+            if ($omitCallbackNames !== null && \in_array($name, $omitCallbackNames, true)) {
+                continue;
+            }
             try {
                 $callback();
             } catch (\Throwable $e) {
@@ -331,8 +338,112 @@ class StateManager
         self::$requestScopedInstances = [];
         
         // 5. 重置 HeaderCollector
-        if (\class_exists(\Weline\Framework\Http\HeaderCollector::class, false)) {
+        if (!$skipHeaderCollectorReset && \class_exists(\Weline\Framework\Http\HeaderCollector::class, false)) {
             \Weline\Framework\Http\HeaderCollector::reset();
+        }
+    }
+
+    /**
+     * WLS 新请求入口基线：在 {@see WlsRuntime::handle} 中 emulate 之后调用，与 {@see WlsConcurrency::callbackNamesOmittableWithPeerFibers}
+     * 所列 reset 回调语义对齐，避免「仅依赖请求结束 reset」时在多 Fiber 交错下串用 OM 单例。
+     *
+     * 刻意不包含：session 相关、sse_context、request_context、DB 清理、Request 注册（由入口后续逻辑与 finally 负责）。
+     */
+    public static function runWlsPersistentRequestEntryBaseline(): void
+    {
+        \Weline\Framework\Manager\ResultManager::resetRequestState();
+
+        \Weline\Framework\View\Template::resetInstance();
+        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Template::class);
+        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Http\Response::class);
+        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\App\State::class);
+        \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Router\Core::class);
+
+        $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
+        $removeControllers = [];
+        $removeModels = [];
+        $removeObservers = [];
+        foreach ($instances as $class => $instance) {
+            if ($instance instanceof \Weline\Framework\Controller\Core) {
+                $removeControllers[] = $class;
+            } elseif ($instance instanceof \Weline\Framework\Database\AbstractModel) {
+                $removeModels[] = $class;
+            } elseif ($instance instanceof \Weline\Framework\Event\ObserverInterface) {
+                $removeObservers[] = $class;
+            }
+        }
+        foreach ($removeControllers as $class) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+        }
+        foreach ($removeModels as $class) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+        }
+        foreach ($removeObservers as $class) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+        }
+
+        if (\class_exists(\Weline\Theme\Service\SlotRendererService::class, false)) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Theme\Service\SlotRendererService::class);
+        }
+        if (\class_exists(\Weline\Backend\Block\ThemeConfig::class, false)) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Backend\Block\ThemeConfig::class);
+        }
+        if (\class_exists(\Weline\Frontend\Block\ThemeConfig::class, false)) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Frontend\Block\ThemeConfig::class);
+        }
+        if (\class_exists(\Weline\Theme\Helper\ThemeData::class, false)) {
+            \Weline\Theme\Helper\ThemeData::resetRequestState();
+        }
+        if (\class_exists(\Weline\Theme\Service\PreviewTokenService::class, false)) {
+            \Weline\Theme\Service\PreviewTokenService::resetRequestState();
+        }
+        if (\class_exists(\Weline\Admin\Service\MenuRenderService::class, false)) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Admin\Service\MenuRenderService::class);
+        }
+        if (\class_exists(\Weline\Acl\Taglib\Acl::class, false)) {
+            \Weline\Acl\Taglib\Acl::resetRequestState();
+        }
+        if (\class_exists(\Weline\Framework\Manager\MessageManager::class, false)) {
+            \Weline\Framework\Manager\MessageManager::resetRequestState();
+        }
+        if (\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
+            try {
+                $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+                if (\method_exists($eventsManager, 'resetRequestState')) {
+                    $eventsManager->resetRequestState();
+                } elseif (\method_exists($eventsManager, 'clearObserverCache')) {
+                    $eventsManager->clearObserverCache();
+                }
+            } catch (\Throwable) {
+            }
+        }
+        if (\class_exists(\Weline\Widget\Taglib\Widget::class, false)) {
+            \Weline\Widget\Taglib\Widget::resetRequestState();
+        }
+
+        $pagebuilderSingletons = [
+            \GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::class,
+            \GuoLaiRen\PageBuilder\Service\Component\ComponentRenderer::class,
+            \GuoLaiRen\PageBuilder\Service\Component\ComponentResolver::class,
+            \GuoLaiRen\PageBuilder\Service\Component\SlotValidator::class,
+            \GuoLaiRen\PageBuilder\Service\ComponentValidator::class,
+            \GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer::class,
+        ];
+        foreach ($pagebuilderSingletons as $class) {
+            if (\class_exists($class, false)) {
+                \Weline\Framework\Manager\ObjectManager::removeInstance($class);
+            }
+        }
+
+        if (\class_exists(\GuoLaiRen\PageBuilder\Observer\VirtualThemeRequestInterceptor::class, false)) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(
+                \GuoLaiRen\PageBuilder\Observer\VirtualThemeRequestInterceptor::class
+            );
+        }
+        if (\class_exists(\GuoLaiRen\PageBuilder\Service\VirtualThemeContextService::class, false)) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(
+                \GuoLaiRen\PageBuilder\Service\VirtualThemeContextService::class
+            );
         }
     }
     

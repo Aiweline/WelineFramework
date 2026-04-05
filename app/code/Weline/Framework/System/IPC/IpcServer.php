@@ -48,6 +48,12 @@ class IpcServer
      */
     private array $clients = [];
 
+    /** 单连接读缓冲上限（与 NdjsonProtocol 2MB 策略一致） */
+    private int $maxClientReadBufferSize = 2097152;
+
+    /** 单次可读事件最多解码行数，防止消息风暴拖死事件循环 */
+    private int $maxNdjsonLinesPerReadable = 384;
+
     private $messageHandler    = null;
     private $disconnectHandler = null;
     private bool $verboseLog   = false;
@@ -273,8 +279,20 @@ class IpcServer
             return;
         }
 
-        $this->clients[$clientId]['buffer'] .= $data;
-        $messages = NdjsonProtocol::extractMessages($this->clients[$clientId]['buffer']);
+        $buf = (string) ($this->clients[$clientId]['buffer'] ?? '');
+        if (\strlen($buf) + \strlen($data) > $this->maxClientReadBufferSize) {
+            $this->logger->error('[IPC-Server] READ BUFFER OVERFLOW client #' . $clientId . ', disconnecting');
+            $this->removeClient($clientId);
+
+            return;
+        }
+
+        $this->clients[$clientId]['buffer'] = $buf . $data;
+        $messages = NdjsonProtocol::extractMessages(
+            $this->clients[$clientId]['buffer'],
+            true,
+            $this->maxNdjsonLinesPerReadable
+        );
 
         foreach ($messages as $msg) {
             $type = $msg['type'] ?? 'unknown';
