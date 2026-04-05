@@ -301,6 +301,12 @@ body {
     box-shadow: var(--backend-shadow-lg);
 }
 
+/* 可视化全屏编辑打开时：后台主布局内卡片不再位移，避免 transform 层叠上下文与底层误触 */
+body.visual-config-editor-open #layout-wrapper .card:hover {
+    transform: none;
+    box-shadow: var(--backend-card-shadow);
+}
+
 .card-header,
 .card-footer {
     background: linear-gradient(180deg, var(--backend-color-card-header-bg) 0%, var(--backend-color-card-bg) 100%);
@@ -430,8 +436,37 @@ textarea.form-control {
 
 .btn-light:hover,
 .btn-secondary:hover {
+    color: var(--backend-color-text-primary);
     background: var(--backend-color-bg-tertiary);
     border-color: var(--backend-color-border-default);
+}
+
+.btn-check:focus + .btn-light,
+.btn-check:focus + .btn-secondary,
+.btn-light:focus,
+.btn-secondary:focus,
+.btn-check:active + .btn-light,
+.btn-check:active + .btn-secondary,
+.btn-light:active,
+.btn-secondary:active,
+.btn-light.active,
+.btn-secondary.active,
+.show > .btn-light.dropdown-toggle,
+.show > .btn-secondary.dropdown-toggle,
+.btn-check:checked + .btn-light,
+.btn-check:checked + .btn-secondary {
+    color: var(--backend-color-text-primary) !important;
+    background: var(--backend-color-bg-tertiary) !important;
+    border-color: var(--backend-color-border-default) !important;
+}
+
+.btn-light:disabled,
+.btn-light.disabled,
+.btn-secondary:disabled,
+.btn-secondary.disabled {
+    color: var(--backend-color-text-secondary) !important;
+    background: var(--backend-color-bg-secondary) !important;
+    border-color: var(--backend-color-border-light) !important;
 }
 
 .alert {
