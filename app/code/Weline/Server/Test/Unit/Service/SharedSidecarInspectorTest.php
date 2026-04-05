@@ -68,6 +68,24 @@ final class SharedSidecarInspectorTest extends TestCase
         self::assertFalse((bool) $isShared);
     }
 
+    public function testIsSharedServiceProcessAcceptsLegacyScopedSessionProcessName(): void
+    {
+        $inspector = new SharedSidecarInspector();
+        $method = new \ReflectionMethod($inspector, 'isSharedServiceProcess');
+        $method->setAccessible(true);
+        $scope = \Weline\Server\Service\MasterProcess::getProjectScopeToken();
+
+        $isShared = $method->invoke(
+            $inspector,
+            '"C:\\php\\php.exe" "E:\\WelineFramework\\DEV-workspace\\app\\code\\Weline\\Server\\bin\\session_server.php" '
+            . '127.0.0.1 19970 test --instance-name=test --token-file-name=session_server.token '
+            . '--name=weline-wls-session-test-' . $scope,
+            ControlMessage::ROLE_SESSION_SERVER
+        );
+
+        self::assertTrue((bool) $isShared);
+    }
+
     public function testIsSharedServiceProcessAcceptsSharedInstanceNameMarker(): void
     {
         $inspector = new SharedSidecarInspector();
