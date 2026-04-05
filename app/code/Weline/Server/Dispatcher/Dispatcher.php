@@ -21,7 +21,6 @@ declare(strict_types=1);
 
 namespace Weline\Server\Dispatcher;
 
-use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlClient;
@@ -311,16 +310,6 @@ class Dispatcher
         $this->passthroughCore->setSpinWaitTickCallback(function (): void {
             $this->pumpSpinWaitControlTick();
         });
-        $this->passthroughCore->setWorkerSslModeResolvedCallback(function (bool $sslEnabled, int $portHint): void {
-            unset($portHint);
-            if ($this->httpsEnabled !== $sslEnabled) {
-                $this->httpsEnabled = $sslEnabled;
-                $this->log(
-                    'Dispatcher HTTPS/明文模式已与 Worker 后端探活对齐为: ' . ($sslEnabled ? 'HTTPS(worker_ssl)' : 'HTTP(worker.php)'),
-                    'WARN'
-                );
-            }
-        });
         $this->attackDetector = AttackDetector::getInstance()->setInstanceName($instanceName);
         $this->startTime = \time();
         $this->lastMasterCheck = \time();
@@ -355,55 +344,11 @@ class Dispatcher
     private function detectHttpsEnabled(string $instanceName): bool
     {
         $instanceFile = BP . 'var' . DS . 'server' . DS . 'instances' . DS . $instanceName . '.json';
-        if (\is_file($instanceFile)) {
-            $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
-            if (\is_array($instData) && \array_key_exists('ssl_enabled', $instData)) {
-                return (bool) $instData['ssl_enabled'];
-            }
-        }
-
-        return $this->detectHttpsEnabledFromEnvWls();
-    }
-
-    /**
-     * 实例 JSON 无 ssl_enabled 时回退 wls.https / wls.ssl_enabled，避免 Dispatcher 与 worker_ssl 维护进程协议不一致。
-     */
-    private function detectHttpsEnabledFromEnvWls(): bool
-    {
-        try {
-            $cfg = Env::getInstance()->getConfig();
-        } catch (\Throwable) {
+        if (!\is_file($instanceFile)) {
             return false;
         }
-        if (!\is_array($cfg)) {
-            return false;
-        }
-        $wls = \is_array($cfg['wls'] ?? null) ? $cfg['wls'] : [];
-        if (\array_key_exists('https', $wls)) {
-            return (bool) $wls['https'];
-        }
-        if (\array_key_exists('ssl_enabled', $wls)) {
-            return (bool) $wls['ssl_enabled'];
-        }
-
-        return false;
-    }
-
-    /**
-     * Master 下发 Worker 池前同步一次（实例文件可能在运行期更新）。
-     */
-    private function syncHttpsAndWorkerBackendFromInstance(): void
-    {
-        $want = $this->detectHttpsEnabled($this->instanceName);
-        if ($want === $this->httpsEnabled && $want === $this->passthroughCore->isWorkerSslEnabled()) {
-            return;
-        }
-        $this->httpsEnabled = $want;
-        $this->passthroughCore->setWorkerSslEnabled($want);
-        $this->log(
-            '已从实例/env 同步 Worker 后端协议: ' . ($want ? 'TLS(worker_ssl)' : 'TCP(worker.php)'),
-            'INFO'
-        );
+        $instData = @\json_decode((string)\file_get_contents($instanceFile), true);
+        return \is_array($instData) && !empty($instData['ssl_enabled']);
     }
     
     /**
@@ -860,7 +805,6 @@ class Dispatcher
                 break;
                 
             case ControlMessage::TYPE_ADD_WORKER:
-                $this->syncHttpsAndWorkerBackendFromInstance();
                 $ports = $msg['ports'] ?? [];
                 $this->log('收到 ADD_WORKER 消息（已入队异步入池）: ' . \json_encode($ports), 'INFO');
                 $norm = [];
@@ -894,7 +838,6 @@ class Dispatcher
                 break;
 
             case ControlMessage::TYPE_SET_WORKER_POOL:
-                $this->syncHttpsAndWorkerBackendFromInstance();
                 $ports = $msg['ports'] ?? [];
                 if (\is_array($ports)) {
                     $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports];

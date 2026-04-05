@@ -124,9 +124,6 @@ class PassthroughCore
      */
     private bool $workerSslEnabled = false;
 
-    /** Worker 后端 TLS 模式由探活纠正时通知 Dispatcher（同步 httpsEnabled / 重定向等行为） */
-    private ?\Closure $workerSslModeResolvedCallback = null;
-
     /**
      * 是否启用 SNI 路由
      */
@@ -325,52 +322,6 @@ class PassthroughCore
         // 不再使用临时种子端口池，完全依赖 Master 通过 IPC 发送的权威端口列表。
         // 这确保了多项目部署时不会出现跨项目的 Worker 端口干扰。
         // 启动期间如果 workerPorts 为空，Dispatcher 会进入自旋等待（spinWaitForWorkerPorts）。
-    }
-
-    public function isWorkerSslEnabled(): bool
-    {
-        return $this->workerSslEnabled;
-    }
-
-    /**
-     * 与实例 JSON / Master 的 ssl_enabled 对齐（收到 SET_WORKER_POOL 等 IPC 时调用）。
-     */
-    public function setWorkerSslEnabled(bool $enabled): void
-    {
-        $this->workerSslEnabled = $enabled;
-    }
-
-    /**
-     * @param callable(bool $sslEnabled, int $portHint): void $callback
-     */
-    public function setWorkerSslModeResolvedCallback(?callable $callback): void
-    {
-        $this->workerSslModeResolvedCallback = $callback !== null ? \Closure::fromCallable($callback) : null;
-    }
-
-    private function notifyWorkerSslModeResolved(bool $sslEnabled, int $portHint): void
-    {
-        if ($this->workerSslModeResolvedCallback === null) {
-            return;
-        }
-        try {
-            ($this->workerSslModeResolvedCallback)($sslEnabled, $portHint);
-        } catch (\Throwable) {
-        }
-    }
-
-    private function resolveWorkerSslModeFromSuccessfulProbe(bool $actualTls, int $port): void
-    {
-        if ($this->workerSslEnabled === $actualTls) {
-            return;
-        }
-        $this->workerSslEnabled = $actualTls;
-        $this->logWarmup(
-            'Worker 后端协议与配置不一致，已按探活结果对齐为 '
-            . ($actualTls ? 'TLS(worker_ssl)' : '明文 TCP(worker.php)') . " (port={$port})",
-            'WARNING'
-        );
-        $this->notifyWorkerSslModeResolved($actualTls, $port);
     }
     
     /**
@@ -1408,7 +1359,7 @@ class PassthroughCore
             $conn = null;
             try {
                 // 真异步：非阻塞 connect + 分片 wait（每轮可 warmupYield）
-                $context = $this->createWorkerHealthContextForTls($this->workerSslEnabled);
+                $context = $this->createWorkerHealthContext();
                 $conn = @\stream_socket_client(
                     "tcp://{$this->workerHost}:{$port}",
                     $errno,
@@ -1632,9 +1583,9 @@ class PassthroughCore
     /**
      * @return resource|null
      */
-    private function createWorkerHealthContextForTls(bool $useWorkerTls): mixed
+    private function createWorkerHealthContext()
     {
-        if (!$useWorkerTls) {
+        if (!$this->workerSslEnabled) {
             return null;
         }
 
@@ -1655,27 +1606,6 @@ class PassthroughCore
      */
     private function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
     {
-        $primary = $this->requestWorkerHealthWithTls($port, $connectTimeout, $responseTimeout, $this->workerSslEnabled);
-        if ($primary['success']) {
-            return $primary;
-        }
-
-        $alternateTls = !$this->workerSslEnabled;
-        $fallback = $this->requestWorkerHealthWithTls($port, $connectTimeout, $responseTimeout, $alternateTls);
-        if ($fallback['success']) {
-            $this->resolveWorkerSslModeFromSuccessfulProbe($alternateTls, $port);
-
-            return $fallback;
-        }
-
-        return $primary;
-    }
-
-    /**
-     * @return array{success: bool, error: string, status_line?: string, elapsed: float}
-     */
-    private function requestWorkerHealthWithTls(int $port, float $connectTimeout, float $responseTimeout, bool $useWorkerTls): array
-    {
         $this->warmupYield();
         $target = "tcp://{$this->workerHost}:{$port}";
         $startedAt = \microtime(true);
@@ -1685,7 +1615,7 @@ class PassthroughCore
             $errstr,
             0.0,
             \STREAM_CLIENT_CONNECT | \STREAM_CLIENT_ASYNC_CONNECT,
-            $this->createWorkerHealthContextForTls($useWorkerTls)
+            $this->createWorkerHealthContext()
         );
 
         if (!\is_resource($conn)) {
@@ -1723,7 +1653,7 @@ class PassthroughCore
                 ];
             }
 
-            if ($useWorkerTls) {
+            if ($this->workerSslEnabled) {
                 $tlsDeadline = \microtime(true) + \max(0.5, \min($responseTimeout, 2.5));
                 $tlsOk = false;
                 while (\microtime(true) < $tlsDeadline) {
