@@ -31,7 +31,9 @@ class Acl extends \Weline\Admin\Controller\BaseController
         }
         $aclModel->pagination()->select()->fetch();
         $this->assign('acls',$aclModel->getItems());
-        $this->assign('pagination',$aclModel->getPagination());
+        // pagination() 内会预渲染分页 HTML；WLS 下区域偶发误判时 getUrl 会走前台前缀，需强制后台地址
+        unset($aclModel->pagination['html']);
+        $this->assign('pagination', $aclModel->getPagination('pagination-rounded', '*/backend/acl', true));
         return $this->fetch('index');
     }
 }
