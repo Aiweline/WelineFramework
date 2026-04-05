@@ -25,6 +25,18 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     private int $consecutiveConnectFailures = 0;
     private string $lastConnectFailureReason = '';
 
+    /**
+     * 池槽必须为带 conn 的完整结构；Fiber 交错下对 $pool[$idx]['busy'] 等字段赋值可能在错误 idx 上生成缺 conn 的残缺项，须统一经此校验。
+     *
+     * @param array<mixed> $item
+     */
+    private static function poolConnFromSlot(array $item): ?PooledConnectionInterface
+    {
+        $c = $item['conn'] ?? null;
+
+        return $c instanceof PooledConnectionInterface ? $c : null;
+    }
+
     public static function getInstance(string $host, int $port, array $options = []): self
     {
         $normalizedOptions = self::normalizeOptions($options);
@@ -113,10 +125,26 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $maxSize = \max(1, (int)($this->options['max_size'] ?? 8));
         while (true) {
             $idleConnected = 0;
-            foreach ($this->pool as $item) {
-                if (!$item['busy'] && $item['conn']->isConnected()) {
+            $purged = false;
+            foreach (\array_keys($this->pool) as $idx) {
+                $item = $this->pool[$idx] ?? null;
+                if (!\is_array($item)) {
+                    unset($this->pool[$idx]);
+                    $purged = true;
+                    continue;
+                }
+                $conn = self::poolConnFromSlot($item);
+                if ($conn === null) {
+                    unset($this->pool[$idx]);
+                    $purged = true;
+                    continue;
+                }
+                if (!($item['busy'] ?? false) && $conn->isConnected()) {
                     $idleConnected++;
                 }
+            }
+            if ($purged) {
+                $this->pool = \array_values($this->pool);
             }
             if ($idleConnected >= $minIdle || \count($this->pool) >= $maxSize) {
                 break;
@@ -162,24 +190,51 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 $this->sleepUntilRetryWindow($deadline);
                 continue;
             }
-            foreach ($this->pool as $idx => $item) {
-                if ($item['busy']) {
+            $purgedAcquire = false;
+            foreach (\array_keys($this->pool) as $idx) {
+                $item = $this->pool[$idx] ?? null;
+                if (!\is_array($item)) {
+                    unset($this->pool[$idx]);
+                    $purgedAcquire = true;
                     continue;
                 }
-                $conn = $item['conn'];
+                $conn = self::poolConnFromSlot($item);
+                if ($conn === null) {
+                    unset($this->pool[$idx]);
+                    $purgedAcquire = true;
+                    continue;
+                }
+                if ($item['busy'] ?? false) {
+                    continue;
+                }
                 if (!$conn->isConnected() && !$conn->connect()) {
                     $this->registerConnectFailure('reuse_connect');
                     continue;
                 }
+                $slot = $this->pool[$idx] ?? null;
+                if (!\is_array($slot) || ($slot['conn'] ?? null) !== $conn) {
+                    continue;
+                }
                 $this->registerConnectSuccess();
-                $this->pool[$idx]['busy'] = true;
-                $this->pool[$idx]['last_used'] = \microtime(true);
-                $this->pool[$idx]['lease_fiber_id'] = $leaseFiberId;
+                $now = \microtime(true);
+                $this->pool[$idx] = [
+                    'conn' => $conn,
+                    'busy' => true,
+                    'last_used' => $now,
+                    'lease_fiber_id' => $leaseFiberId,
+                ];
 
                 // 记录成功获取延迟
                 $this->recordAcquireMetric($startTime, 'success', $retryCount);
 
+                if ($purgedAcquire) {
+                    $this->pool = \array_values($this->pool);
+                }
+
                 return $conn;
+            }
+            if ($purgedAcquire) {
+                $this->pool = \array_values($this->pool);
             }
 
             if (\count($this->pool) < $maxSize) {
@@ -222,8 +277,21 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     {
         $currentLease = self::currentFiberLeaseId();
 
-        foreach ($this->pool as $idx => $item) {
-            if ($item['conn'] !== $connection) {
+        $purgedRelease = false;
+        foreach (\array_keys($this->pool) as $idx) {
+            $item = $this->pool[$idx] ?? null;
+            if (!\is_array($item)) {
+                unset($this->pool[$idx]);
+                $purgedRelease = true;
+                continue;
+            }
+            $slotConn = self::poolConnFromSlot($item);
+            if ($slotConn === null) {
+                unset($this->pool[$idx]);
+                $purgedRelease = true;
+                continue;
+            }
+            if ($slotConn !== $connection) {
                 continue;
             }
 
@@ -235,29 +303,53 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                     (string)$expected,
                     (string)$currentLease
                 ));
+                if ($purgedRelease) {
+                    $this->pool = \array_values($this->pool);
+                }
                 $this->invalidate($connection);
 
                 return;
             }
 
-            $this->pool[$idx]['busy'] = false;
-            $this->pool[$idx]['last_used'] = \microtime(true);
-            $this->pool[$idx]['lease_fiber_id'] = null;
+            $this->pool[$idx] = [
+                'conn' => $connection,
+                'busy' => false,
+                'last_used' => \microtime(true),
+                'lease_fiber_id' => null,
+            ];
+
+            if ($purgedRelease) {
+                $this->pool = \array_values($this->pool);
+            }
 
             return;
+        }
+        if ($purgedRelease) {
+            $this->pool = \array_values($this->pool);
         }
     }
 
     public function invalidate(PooledConnectionInterface $connection): void
     {
-        foreach ($this->pool as $idx => $item) {
-            if ($item['conn'] === $connection) {
-                $item['conn']->close();
+        foreach (\array_keys($this->pool) as $idx) {
+            $item = $this->pool[$idx] ?? null;
+            if (!\is_array($item)) {
+                unset($this->pool[$idx]);
+                continue;
+            }
+            $slotConn = self::poolConnFromSlot($item);
+            if ($slotConn === null) {
+                unset($this->pool[$idx]);
+                continue;
+            }
+            if ($slotConn === $connection) {
+                $slotConn->close();
                 unset($this->pool[$idx]);
                 $this->pool = \array_values($this->pool);
                 return;
             }
         }
+        $this->pool = \array_values($this->pool);
     }
 
     public function healthCheck(): bool
@@ -282,15 +374,30 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             return true;
         }
 
-        foreach ($this->pool as $idx => $item) {
-            if ($item['busy']) {
+        foreach (\array_keys($this->pool) as $idx) {
+            if (!isset($this->pool[$idx])) {
+                continue;
+            }
+            $item = $this->pool[$idx];
+            if (!\is_array($item)) {
+                unset($this->pool[$idx]);
+                $this->pool = \array_values($this->pool);
+                continue;
+            }
+            $pooledConn = self::poolConnFromSlot($item);
+            if ($pooledConn === null) {
+                unset($this->pool[$idx]);
+                $this->pool = \array_values($this->pool);
+                continue;
+            }
+            if ($item['busy'] ?? false) {
                 continue;
             }
 
             // 检查空闲超时：超过阈值的连接关闭（但保留最小空闲数）
-            $idleDuration = $now - $item['last_used'];
+            $idleDuration = $now - (float)($item['last_used'] ?? 0.0);
             if ($idleDuration > $idleTimeout && \count($this->pool) > $minIdle) {
-                $item['conn']->close();
+                $pooledConn->close();
                 unset($this->pool[$idx]);
                 $this->pool = \array_values($this->pool);
                 $this->log(\sprintf('Closed idle connection (idle: %.2fs)', $idleDuration));
@@ -298,9 +405,9 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             }
 
             // 可选：对空闲连接逐条 ping（易与业务请求交错误判，默认关闭，见 pool_health_ping_idle）
-            if (($this->options['pool_health_ping_idle'] ?? false) && !$item['conn']->ping()) {
+            if (($this->options['pool_health_ping_idle'] ?? false) && !$pooledConn->ping()) {
                 $ok = false;
-                $item['conn']->close();
+                $pooledConn->close();
                 $conn = $this->createConnection();
                 if ($conn->connect()) {
                     $this->registerConnectSuccess();
@@ -321,7 +428,10 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     public function shutdown(): void
     {
         foreach ($this->pool as $item) {
-            $item['conn']->close();
+            $c = \is_array($item) ? self::poolConnFromSlot($item) : null;
+            if ($c !== null) {
+                $c->close();
+            }
         }
         $this->pool = [];
     }
@@ -488,11 +598,15 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $toInvalidate = [];
 
         foreach ($this->pool as $item) {
-            if (!$item['busy']) {
+            if (!\is_array($item) || !($item['busy'] ?? false)) {
+                continue;
+            }
+            $pooledConn = self::poolConnFromSlot($item);
+            if ($pooledConn === null) {
                 continue;
             }
 
-            $busyDuration = $now - $item['last_used'];
+            $busyDuration = $now - (float)($item['last_used'] ?? 0.0);
             if ($busyDuration > $leakThresholdSec) {
                 $leakCount++;
 
@@ -513,7 +627,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 // 半开/卡死连接不可再标为空闲入池，避免下一 Fiber 复用污染协议状态
                 if ($autoReclaim) {
                     $this->log('Auto-reclaiming leaked connection (invalidate/close)');
-                    $toInvalidate[] = $item['conn'];
+                    $toInvalidate[] = $pooledConn;
                 }
             }
         }
@@ -544,14 +658,17 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $busy = 0;
 
         foreach ($this->pool as $item) {
-            if ($item['busy']) {
+            if (!\is_array($item) || self::poolConnFromSlot($item) === null) {
+                continue;
+            }
+            if ($item['busy'] ?? false) {
                 $busy++;
             } else {
                 $idle++;
             }
         }
 
-        $total = \count($this->pool);
+        $total = $idle + $busy;
 
         // 更新 Gauge 指标
         if (isset($GLOBALS['wls_metrics_collector'])) {

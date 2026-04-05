@@ -7977,7 +7977,7 @@ class ServiceOrchestrator
     /**
      * @param string[] $roles
      */
-    private function ensureSharedCriticalInfra(array $roles): void
+    private function ensureSharedCriticalInfra(array $roles, bool $throwOnFailure = false): void
     {
         if ($this->context === null) {
             return;
@@ -8013,6 +8013,9 @@ class ServiceOrchestrator
                 '[Orchestrator] ensure shared infra failed (ensureRuntime): '
                 . $throwable->getMessage()
             );
+            if ($throwOnFailure) {
+                throw $throwable;
+            }
         }
     }
 
