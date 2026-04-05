@@ -86,6 +86,11 @@ class ErrorHandler
             return false;
         }
 
+        // PHP 8.4: 某些 vendor 仍存在隐式 nullable 签名，过滤该类已知弃用噪声
+        if (self::shouldSuppressDeprecatedNotice($errno, $errstr, $errfile)) {
+            return true;
+        }
+
         // 获取日志级别
         $level = self::LEVEL_MAP[$errno] ?? LogLevel::WARNING;
 
@@ -107,6 +112,26 @@ class ErrorHandler
 
         // 返回 false 让 PHP 继续标准处理（写入 error_log 等）
         return false;
+    }
+
+    private static function shouldSuppressDeprecatedNotice(
+        int $errno,
+        string $errstr,
+        string $errfile
+    ): bool {
+        if ($errno !== E_DEPRECATED) {
+            return false;
+        }
+
+        if (!\str_contains($errstr, 'Implicitly marking parameter')
+            || !\str_contains($errstr, 'explicit nullable type must be used instead')) {
+            return false;
+        }
+
+        $normalizedFile = \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $errfile);
+        $vendorNeedle = DIRECTORY_SEPARATOR . 'vendor' . DIRECTORY_SEPARATOR . 'endroid' . DIRECTORY_SEPARATOR . 'qr-code' . DIRECTORY_SEPARATOR;
+
+        return \str_contains($normalizedFile, $vendorNeedle);
     }
 
     /**
