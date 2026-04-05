@@ -36,13 +36,19 @@ final class WlsSharedStorage implements SessionStorageInterface
         $this->disconnect();
     }
 
+    private static function shouldLogSessionOperations(): bool
+    {
+        return \function_exists('w_log_info')
+            && (bool)\Weline\Framework\App\Env::get('wls.debug.hot_path_logs', false);
+    }
+
     public function read(string $sessionId): array
     {
         $facade = $this->sessionFacade();
         $data = $facade !== null
             ? $facade->read($sessionId)
             : $this->fallbackStorage()->read($sessionId);
-        if (\function_exists('w_log_info')) {
+        if (self::shouldLogSessionOperations()) {
             w_log_info(
                 '[WlsSharedStorage] read sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data),
                 [],
@@ -60,7 +66,7 @@ final class WlsSharedStorage implements SessionStorageInterface
         $ok = $facade !== null
             ? $facade->write($sessionId, $data, $ttl)
             : $this->fallbackStorage()->write($sessionId, $data, $ttl);
-        if (\function_exists('w_log_info')) {
+        if (self::shouldLogSessionOperations()) {
             w_log_info(
                 '[WlsSharedStorage] write sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data) . ' ttl=' . $ttl . ' ok=' . ($ok ? '1' : '0'),
                 [],
@@ -84,7 +90,7 @@ final class WlsSharedStorage implements SessionStorageInterface
         $ok = $facade !== null
             ? $facade->destroy($sessionId)
             : $this->fallbackStorage()->destroy($sessionId);
-        if (\function_exists('w_log_info')) {
+        if (self::shouldLogSessionOperations()) {
             w_log_info(
                 '[WlsSharedStorage] destroy sid=' . \substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'),
                 [],
