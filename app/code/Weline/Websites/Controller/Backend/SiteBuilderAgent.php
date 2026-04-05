@@ -1844,7 +1844,7 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderEntryUrl(Url $urlHelper, string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => $urlHelper->getBackendUrl('pagebuilder/backend/ai-site-agent/index', ['legacy' => 1]),
+            'pagebuilder' => $urlHelper->getBackendUrl('pagebuilder/backend/ai-site-agent/index'),
             'websites_default' => $this->getHubEntryUrl('websites_default'),
             default => $this->getHubEntryUrl($providerCode),
         };
@@ -3256,7 +3256,7 @@ class SiteBuilderAgent extends BackendController
     private function resolveProviderNativeEntryUrl(string $providerCode): string
     {
         return match ($providerCode) {
-            'pagebuilder' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/index', ['legacy' => 1]),
+            'pagebuilder' => $this->getUrlHelper()->getBackendUrl('pagebuilder/backend/ai-site-agent/index'),
             'websites_default' => $this->getHubEntryUrl('websites_default', $this->isFakeModeRequested()),
             default => $this->getHubEntryUrl($providerCode, $this->isFakeModeRequested()),
         };

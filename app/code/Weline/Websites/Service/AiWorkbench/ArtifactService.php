@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service\AiWorkbench;
 
+use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Model\AiSiteBuilderArtifact;
 
 class ArtifactService
@@ -54,7 +57,24 @@ class ArtifactService
         $artifact->setData(AiSiteBuilderArtifact::schema_fields_TITLE, \trim($title));
         $artifact->setData(AiSiteBuilderArtifact::schema_fields_STATUS, \trim($status) ?: AiSiteBuilderArtifact::STATUS_READY);
         $artifact->setPayloadArray($payload);
-        $artifact->save();
+        try {
+            $artifact->save();
+        } catch (\Throwable $e) {
+            if (!$this->isPgsqlAiSiteBuilderArtifactPrimaryKeyBroken($e)) {
+                throw $e;
+            }
+
+            $artifact = clone $this->artifactModel;
+            $artifact->clearData()->clearQuery();
+            $artifact->setData(AiSiteBuilderArtifact::schema_fields_ID, $this->allocateNextArtifactId());
+            $artifact->setData(AiSiteBuilderArtifact::schema_fields_SESSION_ID, $sessionId);
+            $artifact->setData(AiSiteBuilderArtifact::schema_fields_ARTIFACT_TYPE, $artifactType);
+            $artifact->setData(AiSiteBuilderArtifact::schema_fields_ARTIFACT_CODE, $artifactCode);
+            $artifact->setData(AiSiteBuilderArtifact::schema_fields_TITLE, \trim($title));
+            $artifact->setData(AiSiteBuilderArtifact::schema_fields_STATUS, \trim($status) ?: AiSiteBuilderArtifact::STATUS_READY);
+            $artifact->setPayloadArray($payload);
+            $artifact->save();
+        }
 
         return true;
     }
@@ -153,5 +173,40 @@ class ArtifactService
             'payload' => $artifact->getPayloadArray(),
             'update_time' => (string)$artifact->getData(AiSiteBuilderArtifact::schema_fields_UPDATE_TIME),
         ];
+    }
+
+    private function isPgsqlAiSiteBuilderArtifactPrimaryKeyBroken(\Throwable $e): bool
+    {
+        $chain = $e;
+        while ($chain !== null) {
+            $msg = $chain->getMessage();
+            if ((\str_contains($msg, '23502') || \str_contains($msg, '23505'))
+                && \str_contains($msg, AiSiteBuilderArtifact::schema_fields_ID)
+                && (\str_contains($msg, 'weline_websites_ai_site_builder_artifact')
+                    || \str_contains($msg, 'm_weline_websites_ai_site_builder_artifact'))) {
+                return true;
+            }
+            $chain = $chain->getPrevious();
+        }
+
+        return false;
+    }
+
+    private function allocateNextArtifactId(): int
+    {
+        $connector = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
+        if (!$connector instanceof PgsqlConnector || !\method_exists($connector, 'getWrappedConnection')) {
+            return 0;
+        }
+
+        $pdo = $connector->getWrappedConnection()->getPdo();
+        $tableSql = $this->artifactModel->getTable();
+        $pk = AiSiteBuilderArtifact::schema_fields_ID;
+        $stmt = $pdo->query('SELECT COALESCE(MAX("' . $pk . '"), 0) AS mx FROM ' . $tableSql);
+        if ($stmt === false) {
+            return 0;
+        }
+
+        return ((int)($stmt->fetch(\PDO::FETCH_ASSOC)['mx'] ?? 0)) + 1;
     }
 }
