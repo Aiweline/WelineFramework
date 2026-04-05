@@ -74,7 +74,9 @@ final class SessionServerTokenCleanupTest extends TestCase
             $server->tick(0);
 
             self::assertFileExists($tokenPath);
-            self::assertSame($server->getAuthToken(), \trim((string) @\file_get_contents($tokenPath)));
+            $fileRaw = \trim((string) @\file_get_contents($tokenPath));
+            $parts = \explode(':', $fileRaw, 2);
+            self::assertSame($server->getAuthToken(), $parts[0] ?? '');
         } finally {
             $server->stop();
             if (\is_file($tokenPath)) {

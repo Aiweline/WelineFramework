@@ -14,6 +14,8 @@ declare(strict_types=1);
 
 namespace Weline\Server\Service;
 
+use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
@@ -195,11 +197,11 @@ class WorkerScaler
             }
 
             // 检查进程是否还活着
-            if (!\posix_kill($instance->pid, 0)) {
+            if (!$this->isProcessAlive($instance->pid)) {
                 return false;
             }
 
-            \usleep(100000); // 100ms
+            SchedulerSystem::usleep(100000); // 100ms
         }
 
         return false;
@@ -218,11 +220,11 @@ class WorkerScaler
 
         while (\microtime(true) < $deadline) {
             // 检查进程是否还活着
-            if (!\posix_kill($instance->pid, 0)) {
+            if (!$this->isProcessAlive($instance->pid)) {
                 return true;
             }
 
-            \usleep(100000); // 100ms
+            SchedulerSystem::usleep(100000); // 100ms
         }
 
         return false;
@@ -238,7 +240,7 @@ class WorkerScaler
     public function checkHealth(int $pid, float $timeoutSec = 2.0): bool
     {
         // 检查进程是否存在
-        if (!\posix_kill($pid, 0)) {
+        if (!$this->isProcessAlive($pid)) {
             return false;
         }
 
@@ -274,7 +276,7 @@ class WorkerScaler
                     // 收到有效的 pong 响应
                     return true;
                 }
-                \usleep(50000); // 50ms
+                SchedulerSystem::usleep(50000); // 50ms
             }
 
             // 超时未收到 pong
@@ -316,5 +318,14 @@ class WorkerScaler
     public function getAllWorkers(): array
     {
         return $this->orchestrator->getInstancesByRole('worker');
+    }
+
+    private function isProcessAlive(int $pid): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+
+        return Processer::isRunningByPid($pid);
     }
 }

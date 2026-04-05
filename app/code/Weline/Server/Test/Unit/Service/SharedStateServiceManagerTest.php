@@ -76,7 +76,7 @@ final class SharedStateServiceManagerTest extends TestCase
                 return true;
             }
 
-            protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName): int
+            protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName, bool $frontend = false): int
             {
                 $this->launchCalls[] = [$definition['role'], $requesterInstanceName];
 
@@ -84,7 +84,7 @@ final class SharedStateServiceManagerTest extends TestCase
             }
         };
 
-        $runtime = $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], [], 'consumer-a');
+        $runtime = $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv(), 'consumer-a');
 
         self::assertTrue((bool) ($runtime['reuse_existing'] ?? false));
         self::assertTrue((bool) ($runtime['shared_service'] ?? false));
@@ -148,7 +148,7 @@ final class SharedStateServiceManagerTest extends TestCase
             }
         };
 
-        $runtime = $manager->ensure(ControlMessage::ROLE_MEMORY_SERVER);
+        $runtime = $manager->ensure(ControlMessage::ROLE_MEMORY_SERVER, [], self::memoryPortEnv());
 
         self::assertTrue((bool) ($runtime['reuse_existing'] ?? false));
         self::assertSame(21144, $runtime['pid'] ?? null);
@@ -231,35 +231,40 @@ final class SharedStateServiceManagerTest extends TestCase
                 return true;
             }
 
-            protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName): int
+            protected function launchSharedServiceProcess(array $definition, string $requesterInstanceName, bool $frontend = false): int
             {
                 $this->launchCalls[] = [$definition['role'], $requesterInstanceName];
 
                 return 1;
             }
 
-            protected function waitUntilServiceReady(array $definition): array
+            protected function waitUntilSharedServicesReadyBatch(array $definitions): array
             {
-                $runtime = [
-                    'role' => (string) $definition['role'],
-                    'host' => (string) $definition['host'],
-                    'port' => (int) $definition['port'],
-                    'token_file_name' => (string) $definition['token_file_name'],
-                    'pid' => 6543,
-                    'process_name' => (string) $definition['process_name'],
-                    'instance_name' => (string) $definition['service_instance_name'],
-                    'started_at' => '2026-03-26T09:00:00+08:00',
-                    'healthy_at' => '2026-03-26T09:00:01+08:00',
-                    'created_now' => true,
-                    'shared_service' => true,
-                ];
-                $this->writeRuntimeFile((string) $definition['role'], $runtime);
+                $done = [];
+                foreach ($definitions as $definition) {
+                    $role = (string) $definition['role'];
+                    $runtime = [
+                        'role' => $role,
+                        'host' => (string) $definition['host'],
+                        'port' => (int) $definition['port'],
+                        'token_file_name' => (string) $definition['token_file_name'],
+                        'pid' => 6543,
+                        'process_name' => (string) $definition['process_name'],
+                        'instance_name' => (string) $definition['service_instance_name'],
+                        'started_at' => '2026-03-26T09:00:00+08:00',
+                        'healthy_at' => '2026-03-26T09:00:01+08:00',
+                        'created_now' => true,
+                        'shared_service' => true,
+                    ];
+                    $this->writeRuntimeFile($role, $runtime);
+                    $done[$role] = $runtime;
+                }
 
-                return $runtime;
+                return $done;
             }
         };
 
-        $runtime = $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], [], 'consumer-b');
+        $runtime = $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv(), 'consumer-b');
 
         self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 9876]], $manager->stopCalls);
         self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 'consumer-b']], $manager->launchCalls);
@@ -311,7 +316,7 @@ final class SharedStateServiceManagerTest extends TestCase
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Shared Session Server port 19970 is occupied by an unexpected process.');
 
-        $manager->ensure(ControlMessage::ROLE_SESSION_SERVER);
+        $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv());
     }
 
     public function testReleaseCompatibilityShellIsNoop(): void
@@ -326,5 +331,46 @@ final class SharedStateServiceManagerTest extends TestCase
         self::assertSame(0, $result['local_ref_count'] ?? null);
         self::assertFalse((bool) ($result['shutdown_scheduled'] ?? true));
         self::assertSame(['port' => 19970], $result['runtime'] ?? null);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function sessionPortEnv(): array
+    {
+        return [
+            'session' => ['server_port' => 19970],
+            'wls' => [
+                'session' => [
+                    'port' => 19970,
+                    'token_file_name' => 'session_server.token',
+                    'wls_server' => [
+                        'port' => 19970,
+                        'token_file_name' => 'session_server.token',
+                    ],
+                ],
+                'memory_service' => [
+                    'enabled' => true,
+                    'port' => 19971,
+                    'token_file_name' => 'memory_server.token',
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function memoryPortEnv(): array
+    {
+        return [
+            'wls' => [
+                'memory_service' => [
+                    'enabled' => true,
+                    'port' => 19971,
+                    'token_file_name' => 'memory_server.token',
+                ],
+            ],
+        ];
     }
 }

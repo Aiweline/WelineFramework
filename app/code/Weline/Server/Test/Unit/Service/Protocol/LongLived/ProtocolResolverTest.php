@@ -20,6 +20,30 @@ final class ProtocolResolverTest extends TestCase
         self::assertSame('layer-1-header', $detected['layer']);
     }
 
+    public function testDetectsSseWhenSecondAcceptHeaderIsEventStream(): void
+    {
+        $resolver = new ProtocolResolver();
+        $raw = "GET /api/updates HTTP/1.1\r\nHost: example.com\r\nAccept: */*\r\nAccept: text/event-stream\r\n\r\n";
+
+        $detected = $resolver->detect($raw);
+
+        self::assertTrue($detected['is_long_lived']);
+        self::assertSame('sse', $detected['protocol']);
+        self::assertSame('layer-1-header', $detected['layer']);
+    }
+
+    public function testDetectsSseWithEventStreamMediaTypeParameters(): void
+    {
+        $resolver = new ProtocolResolver();
+        $raw = "GET /x HTTP/1.1\r\nHost: example.com\r\nAccept: text/event-stream; charset=utf-8\r\n\r\n";
+
+        $detected = $resolver->detect($raw);
+
+        self::assertTrue($detected['is_long_lived']);
+        self::assertSame('sse', $detected['protocol']);
+        self::assertSame('layer-1-header', $detected['layer']);
+    }
+
     public function testFallsBackToPathWhenAcceptHeaderMissing(): void
     {
         $resolver = new ProtocolResolver();

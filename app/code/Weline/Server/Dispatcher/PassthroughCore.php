@@ -17,6 +17,11 @@ declare(strict_types=1);
  * - SSL 握手由 Worker 完成
  * - 路由决策基于 SNI + IP + 连接缓存
  *
+ * 调度说明：本类内 SchedulerSystem::usleep 用于写重试自旋。Dispatcher 进程无 Fiber 请求上下文，
+ * 应在 Dispatcher::run() 入口调用 SchedulerSystem::disableScheduler()，使此处为真实微秒级休眠。
+ * IPC 入池探活/首页预热路径可通过 setWarmupCooperativeYield() 注册回调（通常为 Fiber::suspend），
+ * 由 Dispatcher 主循环分片 resume，避免长时间占用 handleIpcMessage。
+ *
  * @author Aiweline
  * @email aiweline@qq.com
  */
@@ -24,6 +29,7 @@ declare(strict_types=1);
 namespace Weline\Server\Dispatcher;
 
 use Weline\Framework\Runtime\SchedulerSystem;
+use Weline\Server\Log\WlsLogger;
 
 // 确保 SOCKET_EAGAIN 常量存在（Windows 兼容）
 if (!\defined('SOCKET_EAGAIN')) {
@@ -44,12 +50,40 @@ class PassthroughCore
      * Worker 连续失败多少次后加入黑名单
      */
     private const WORKER_FAIL_THRESHOLD = 3;
+    private const WORKER_HEALTH_PATH = '/_wls/health';
+
+    /**
+     * Master 已通过 IPC 确认 Worker READY 后的入池探活：短超时、少重试。
+     * 避免与「监听已就绪」重复采用 2~4s 级连接窗口，拖慢首流量入池。
+     */
+    private const IPC_READY_WARMUP_CONNECT_MIN = 0.5;
+    private const IPC_READY_WARMUP_CONNECT_MAX = 1.5;
+    private const IPC_READY_WARMUP_RESPONSE_SEC = 2.0;
+    private const IPC_READY_WARMUP_RETRIES = 2;
+    private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 50000;
+    /**
+     * 首页预热仅用于“提前点燃”应用栈，不参与入池成败判定；因此采用更短预算，避免拖慢维护接流。
+     */
+    private const IPC_READY_HOMEPAGE_WARMUP_RETRIES = 1;
+    private const IPC_READY_HOMEPAGE_CONNECT_TIMEOUT_SEC = 2.0;
+    private const IPC_READY_HOMEPAGE_TLS_TIMEOUT_SEC = 3.0;
+    private const IPC_READY_HOMEPAGE_WRITE_TIMEOUT_SEC = 2.0;
+    private const IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC = 3.0;
     
     /**
      * Worker 黑名单恢复时间（秒）
      * 黑名单中的 Worker 在此时间后自动尝试恢复
      */
     private const WORKER_BLACKLIST_RECOVERY_SECONDS = 5;
+
+    /**
+     * HTTPS 透传模式下的启动兜底等待（秒）
+     *
+     * 在 TLS 握手之前 Dispatcher 无法返回可读的 HTTP 维护页；若把 spin wait 配成 0，
+     * 首个 HTTPS 请求会把 Worker 启动空窗直接暴露为浏览器 400/协议错误。
+     * 因此在 SSL Worker 模式下为启动恢复保留一个最小等待窗口。
+     */
+    private const MIN_SSL_STARTUP_SPIN_WAIT_SECONDS = 15.0;
     
     /**
      * Worker 基础端口（仅用于兼容初始化，实际端口由动态列表管理）
@@ -76,9 +110,19 @@ class PassthroughCore
     private array $workerPorts = [];
 
     /**
+     * 可选：探活/预热过程中协作式让出（仅应在 Dispatcher 的入池 Fiber 内注册为 Fiber::suspend）。
+     */
+    private ?\Closure $warmupCooperativeYield = null;
+
+    /**
      * HTTP 重定向端口（用于明文 HTTP 请求转发到 http_redirect_worker）
      */
     private int $httpRedirectPort = 0;
+
+    /**
+     * Worker 是否启用 SSL
+     */
+    private bool $workerSslEnabled = false;
 
     /**
      * 是否启用 SNI 路由
@@ -220,6 +264,11 @@ class PassthroughCore
     private float $spinWaitMaxSeconds = 3.0;
 
     /**
+     * workerPorts 为空时的自旋上限（秒）。避免 SSL 模式下 15s 级自旋 × 大量连接拖死 Dispatcher、放大重试风暴。
+     */
+    private float $emptyPoolSpinMaxSeconds = 0.5;
+
+    /**
      * 自旋等待间隔（毫秒）
      */
     private int $spinWaitIntervalMs = 50;
@@ -228,13 +277,14 @@ class PassthroughCore
      * 上次输出「workerPorts 为空」到 stderr 的时间（节流，避免启动时刷屏）
      */
     private float $lastEmptyWorkerPortsStderrAt = 0.0;
+    private $spinWaitTickCallback = null;
 
     /**
      * 统计信息
      *
      * PHP 8.4 优化：类型化统计数组提升性能
      *
-     * @var array{total_connections: int, active_connections: int, cache_routed: int, round_robin_routed: int, failover_routed: int, sni_extractions: int, bytes_in: int, bytes_out: int, worker_failures: int, all_workers_down: int, backend_pool_reused: int, backend_pool_released: int, backend_pool_discarded: int}
+     * @var array{total_connections: int, active_connections: int, cache_routed: int, round_robin_routed: int, failover_routed: int, saturated_fallback_routed: int, sni_extractions: int, bytes_in: int, bytes_out: int, worker_failures: int, all_workers_down: int, backend_pool_reused: int, backend_pool_released: int, backend_pool_discarded: int}
      */
     private array $stats = [
         'total_connections' => 0,
@@ -242,6 +292,7 @@ class PassthroughCore
         'cache_routed' => 0,
         'round_robin_routed' => 0,
         'failover_routed' => 0,
+        'saturated_fallback_routed' => 0,
         'sni_extractions' => 0,
         'bytes_in' => 0,
         'bytes_out' => 0,
@@ -258,12 +309,14 @@ class PassthroughCore
      * @param string $workerHost Worker 主机地址
      * @param int $workerBasePort Worker 基础端口（仅用于兼容，实际端口由 Master 通知）
      * @param int $workerCount Worker 数量（初始值，实际由动态端口列表决定）
+     * @param bool $workerSslEnabled Worker 是否启用 SSL
      */
-    public function __construct(string $workerHost, int $workerBasePort, int $workerCount)
+    public function __construct(string $workerHost, int $workerBasePort, int $workerCount, bool $workerSslEnabled = false)
     {
         $this->workerHost = $workerHost;
         $this->workerBasePort = $workerBasePort;
         $this->workerCount = 0; // 由 workerPorts 长度决定
+        $this->workerSslEnabled = $workerSslEnabled;
         $this->routingCache = RoutingCacheService::getInstance();
 
         // 不再使用临时种子端口池，完全依赖 Master 通过 IPC 发送的权威端口列表。
@@ -297,10 +350,17 @@ class PassthroughCore
             $this->firstByteTimeoutSeconds = \max(0.5, (float)$config['first_byte_timeout_seconds']);
         }
         if (isset($config['spin_wait_max_seconds'])) {
-            $this->spinWaitMaxSeconds = (float) $config['spin_wait_max_seconds'];
+            $requestedSpinWait = (float) $config['spin_wait_max_seconds'];
+            if ($requestedSpinWait <= 0.0 && $this->workerSslEnabled) {
+                $requestedSpinWait = self::MIN_SSL_STARTUP_SPIN_WAIT_SECONDS;
+            }
+            $this->spinWaitMaxSeconds = $requestedSpinWait;
         }
         if (isset($config['spin_wait_interval_ms'])) {
             $this->spinWaitIntervalMs = \max(10, (int) $config['spin_wait_interval_ms']);
+        }
+        if (isset($config['empty_pool_spin_max_seconds'])) {
+            $this->emptyPoolSpinMaxSeconds = \max(0.0, (float) $config['empty_pool_spin_max_seconds']);
         }
         if (isset($config['backend_pool_enabled'])) {
             $this->backendPoolEnabled = (bool)$config['backend_pool_enabled'];
@@ -324,6 +384,11 @@ class PassthroughCore
         if (!$this->backendPoolEnabled) {
             $this->closeAllIdleWorkerSockets();
         }
+    }
+
+    public function setSpinWaitTickCallback(?callable $callback): void
+    {
+        $this->spinWaitTickCallback = $callback;
     }
 
     /**
@@ -448,6 +513,15 @@ class PassthroughCore
             }
         }
 
+        // 4.5 Keep-Alive / SNI / IP 粘连里的端口若已不在当前 Worker 池（reload 换端口、缩容、SET_WORKER_POOL 变更），
+        //    视为失效：清缓存并走池内分配，避免对「已不存在」的端口 connect + recordWorkerFailure 污染健康度。
+        if ($workerPort !== null && !$this->isWorkerPortInPool((int)$workerPort)) {
+            $this->routingCache->removeConnection($connId);
+            $this->routingCache->purgeRouteCache($clientIp, $sni);
+            $workerPort = null;
+            $fromCache = false;
+        }
+
         // 5. 如果有缓存路由，先尝试连接该 Worker
         if ($workerPort !== null) {
             // 检查缓存路由的 Worker 是否在黑名单中
@@ -472,20 +546,32 @@ class PassthroughCore
             return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
         }
 
+        // 6b. 全部处于「长连接饱和」时，上面一步会跳过所有端口；此处对饱和 Worker 做最后分配尝试，避免误报「全部不可用」
+        $workerSocket = $this->connectToSaturatedWorker($workerPort, $sni);
+        if ($workerSocket !== false) {
+            return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
+        }
+
         // 7. 所有健康 Worker 都失败了，最后尝试黑名单中的 Worker（可能已经恢复）
         $workerSocket = $this->connectToAnyWorker($workerPort);
         if ($workerSocket !== false) {
             return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
         }
 
-        // 8. 自旋等待：仅在 Worker 池暂时为空时重试，避免逐请求阻塞事件循环
-        if ($this->shouldSpinWaitForWorkerRecovery()) {
-            $deadline = \microtime(true) + $this->spinWaitMaxSeconds;
+        // 8. 自旋等待：池为空（短窗口）、池内端口暂不可连（维护/业务 Worker 仍在 listen）、或全部黑名单/饱和时，
+        //    在预算内重试并 runSpinWaitTick→抽 IPC（异步入池 Fiber 能推进），避免维护 Worker 已下发但尚未 accept 时直接失败。
+        $spinBudget = $this->resolvePostFailureSpinBudgetSeconds();
+        if ($spinBudget > 0.0) {
+            $deadline = \microtime(true) + $spinBudget;
             while (\microtime(true) < $deadline) {
-                SchedulerSystem::usleep((int)($this->spinWaitIntervalMs * 1000));
+                $this->runSpinWaitTick();
                 $workerSocket = $this->connectToAvailableWorker($workerPort, $sni);
                 if ($workerSocket !== false) {
                     $this->stats['failover_routed']++;
+                    return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
+                }
+                $workerSocket = $this->connectToSaturatedWorker($workerPort, $sni);
+                if ($workerSocket !== false) {
                     return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
                 }
                 $workerSocket = $this->connectToAnyWorker($workerPort);
@@ -493,6 +579,7 @@ class PassthroughCore
                     $this->stats['failover_routed']++;
                     return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
                 }
+                SchedulerSystem::usleep((int)($this->spinWaitIntervalMs * 1000));
             }
         }
         
@@ -502,35 +589,46 @@ class PassthroughCore
     }
 
     /**
-     * 当当前没有可分配 Worker 时进行自旋等待：
-     * - Worker 端口池为空（启动窗口）
-     * - Worker 存在但全部处于黑名单（重载/故障恢复窗口）
+     * 本轮路由在「已尝试所有 Worker 连接」仍失败后，允许自旋的秒数预算。
      *
-     * 目的：在短暂恢复窗口内等待 Worker 上线后再分配流量，减少瞬时失败。
+     * - 池为空：短窗口 min(spin_wait_max, empty_pool_spin)，避免无端口时长时间占死事件循环。
+     * - 池非空：使用完整 spin_wait_max（含「有维护端口但尚未 listen」：此前误判为可分配而不自旋，导致永远进不了维护 Worker）。
      */
-    private function shouldSpinWaitForWorkerRecovery(): bool
+    private function resolvePostFailureSpinBudgetSeconds(): float
     {
-        if ($this->spinWaitMaxSeconds <= 0) {
-            return false;
+        if ($this->spinWaitMaxSeconds <= 0.0) {
+            return 0.0;
         }
-        if (empty($this->workerPorts)) {
-            return true;
+        if ($this->workerPorts === []) {
+            if ($this->emptyPoolSpinMaxSeconds <= 0.0) {
+                return 0.0;
+            }
+
+            return \min($this->spinWaitMaxSeconds, $this->emptyPoolSpinMaxSeconds);
         }
 
-        return !$this->hasAllocatableWorkerPort();
+        return $this->spinWaitMaxSeconds;
+    }
+
+    private function runSpinWaitTick(): void
+    {
+        if ($this->spinWaitTickCallback === null) {
+            return;
+        }
+
+        try {
+            ($this->spinWaitTickCallback)();
+        } catch (\Throwable $e) {
+            $this->logWarmup('spin-wait tick failed: ' . $e->getMessage(), 'WARNING');
+        }
     }
 
     /**
-     * 是否存在可分配（未黑名单且未饱和）的 Worker 端口。
+     * 当前负载均衡池是否包含该 Worker 端口（用于丢弃 reload 前的路由粘连）。
      */
-    private function hasAllocatableWorkerPort(): bool
+    private function isWorkerPortInPool(int $port): bool
     {
-        foreach ($this->workerPorts as $port) {
-            if (!$this->isWorkerBlacklisted((int)$port) && !$this->isWorkerSaturated((int)$port)) {
-                return true;
-            }
-        }
-        return false;
+        return $this->workerPorts !== [] && \in_array($port, $this->workerPorts, true);
     }
     
     /**
@@ -573,6 +671,8 @@ class PassthroughCore
      */
     private function connectToAvailableWorker(?int $excludePort, string $sni): array|false
     {
+        $excludePort = $this->normalizeExcludePortForWorkerPool($excludePort);
+
         // 如果没有可用 Worker，直接返回（节流 stderr，避免启动期刷屏）
         if (empty($this->workerPorts)) {
             $now = \microtime(true);
@@ -602,9 +702,7 @@ class PassthroughCore
                 continue;
             }
 
-            // 跳过处于长连接饱和状态的 Worker
-            // 注意：这意味着当所有 Worker 都饱和时，所有新连接都会被拒绝。
-            // 这是一种保护机制，防止 Worker 过载。
+            // 跳过处于长连接饱和状态的 Worker（优先把新连接分给未饱和实例；若全部饱和则由 connectToSaturatedWorker 兜底）
             if ($this->isWorkerSaturated($port)) {
                 continue;
             }
@@ -625,6 +723,50 @@ class PassthroughCore
         
         return false;
     }
+
+    /**
+     * 在全部 Worker 均被标记为长连接饱和时，仍尝试向饱和池分配（优于直接 503 / all_workers_down）。
+     *
+     * @param int|null $excludePort 已尝试过的端口，跳过
+     */
+    private function connectToSaturatedWorker(?int $excludePort, string $sni): array|false
+    {
+        unset($sni);
+
+        $excludePort = $this->normalizeExcludePortForWorkerPool($excludePort);
+
+        if (empty($this->workerPorts)) {
+            return false;
+        }
+
+        $count = \count($this->workerPorts);
+        $startIndex = $this->connectionCounter > 0 ? (($this->connectionCounter - 1) % $count) : 0;
+
+        for ($i = 0; $i < $count; $i++) {
+            $index = ($startIndex + $i) % $count;
+            $port = $this->workerPorts[$index];
+
+            if ($excludePort !== null && $port === $excludePort) {
+                continue;
+            }
+            if (!$this->isWorkerSaturated((int)$port)) {
+                continue;
+            }
+            if ($this->isWorkerBlacklisted((int)$port)) {
+                continue;
+            }
+
+            $workerSocket = $this->connectToWorker((int)$port);
+            if ($workerSocket !== false) {
+                $this->stats['saturated_fallback_routed']++;
+
+                return ['socket' => $workerSocket, 'port' => (int)$port];
+            }
+            $this->recordWorkerFailure((int)$port);
+        }
+
+        return false;
+    }
     
     /**
      * 最后的尝试：连接到任何 Worker（包括黑名单中的）
@@ -635,6 +777,8 @@ class PassthroughCore
      */
     private function connectToAnyWorker(?int $excludePort): array|false
     {
+        $excludePort = $this->normalizeExcludePortForWorkerPool($excludePort);
+
         foreach ($this->workerPorts as $port) {
             if ($port === $excludePort) {
                 continue;
@@ -653,6 +797,24 @@ class PassthroughCore
         }
         
         return false;
+    }
+
+    /**
+     * 池中仅有一个 Worker 时，不得因 excludePort 跳过该端口。
+     *
+     * 否则：SNI/IP 缓存先连该端口失败后，connectToAvailableWorker / connectToAnyWorker 会把唯一端口排除在外，
+     * 故障转移路径零次重试，瞬断或忙时 accept 延迟会误报「所有 Worker 不可用」，且 healthy 仍可能显示 1/1。
+     */
+    private function normalizeExcludePortForWorkerPool(?int $excludePort): ?int
+    {
+        if ($excludePort === null || $this->workerPorts === []) {
+            return $excludePort;
+        }
+        if (\count($this->workerPorts) !== 1) {
+            return $excludePort;
+        }
+
+        return (int) $this->workerPorts[0] === (int) $excludePort ? null : $excludePort;
     }
     
     /**
@@ -702,7 +864,7 @@ class PassthroughCore
      */
     private function connectToWorker(int $workerPort)
     {
-        if ($this->backendPoolEnabled) {
+        if ($this->backendPoolEnabled && !$this->workerSslEnabled) {
             $reusedSocket = $this->acquireIdleWorkerSocket($workerPort);
             if ($reusedSocket !== false) {
                 $this->stats['backend_pool_reused']++;
@@ -733,11 +895,11 @@ class PassthroughCore
                 }
             }
             
-            // 使用较短超时（1 秒）以便快速故障转移
+            // 连接超时过短会在高并发下放大「全部不可用」误判；限制在 1~3s 间折中。
             $write = [$workerSocket];
             $read = null;
             $except = null;
-            $failoverTimeout = \min($this->connectTimeout, 1);
+            $failoverTimeout = \max(1, \min($this->connectTimeout, 3));
             
             $ready = @\socket_select($read, $write, $except, $failoverTimeout);
             
@@ -774,15 +936,13 @@ class PassthroughCore
             return false;
         }
 
-        return $this->workerHealth[$port]['blacklisted_at'] > 0;
-        
         $health = $this->workerHealth[$port];
-        
+
         // 不在黑名单中
         if ($health['blacklisted_at'] <= 0) {
             return false;
         }
-        
+
         // 检查是否到了恢复时间
         $elapsed = \microtime(true) - $health['blacklisted_at'];
         if ($elapsed >= self::WORKER_BLACKLIST_RECOVERY_SECONDS) {
@@ -791,7 +951,7 @@ class PassthroughCore
             $this->workerHealth[$port]['failures'] = 0;
             return false;
         }
-        
+
         return true;
     }
     
@@ -882,68 +1042,14 @@ class PassthroughCore
         }
 
         return $recovered;
-        
-        foreach ($this->workerHealth as $port => $health) {
-            if ($health['blacklisted_at'] <= 0) {
-                continue; // 不在黑名单中，跳过
-            }
-            
-            // 尝试 TCP 连接探活
-            $socket = $this->connectToWorker($port);
-            if ($socket !== false) {
-                @\socket_close($socket);
-                $this->recordWorkerSuccess($port);
-                $recovered[] = $port;
-            }
-        }
-        
-        return $recovered;
     }
 
     private function probeWorkerApplicationHealth(int $port): bool
     {
-        $context = \stream_context_create([
-            'ssl' => [
-                'verify_peer' => false,
-                'verify_peer_name' => false,
-                'allow_self_signed' => true,
-                'SNI_enabled' => false,
-            ],
-        ]);
-
         $timeout = \max(0.3, \min((float)$this->connectTimeout, 0.8));
-        $conn = @\stream_socket_client(
-            "ssl://{$this->workerHost}:{$port}",
-            $errno,
-            $errstr,
-            $timeout,
-            STREAM_CLIENT_CONNECT,
-            $context
-        );
+        $probe = $this->requestWorkerHealth($port, $timeout, 0.5);
 
-        if (!\is_resource($conn)) {
-            return false;
-        }
-
-        try {
-            @\stream_set_timeout($conn, 0, 500000);
-            $request = "GET /_wls/health HTTP/1.1\r\n"
-                . "Host: {$this->workerHost}\r\n"
-                . "Connection: close\r\n\r\n";
-            $written = @\fwrite($conn, $request);
-            if (!\is_int($written) || $written <= 0) {
-                return false;
-            }
-
-            $responseHead = @\fread($conn, 64);
-            if (!\is_string($responseHead) || $responseHead === '') {
-                return false;
-            }
-
-            return \str_starts_with($responseHead, 'HTTP/');
-        } finally {
-            @\fclose($conn);
-        }
+        return $probe['success'];
     }
     
     // ========== IPC 控制通道：外部调用接口 ==========
@@ -1037,32 +1143,191 @@ class PassthroughCore
     
     /**
      * 动态添加 Worker 端口到负载均衡池（IPC add_worker 命令）
+     *
+     * @return array{accepted: bool, error: string}
      */
-    public function addWorkerPort(int $port): void
+    public function addWorkerPort(int $port): array
     {
-        // 添加到动态端口列表
-        if (!\in_array($port, $this->workerPorts, true)) {
-            $this->workerPorts[] = $port;
-            $this->workerCount = \count($this->workerPorts);
-            $this->writeStderr("[PassthroughCore] 添加 Worker 端口: {$port}, 当前列表: " . \implode(',', $this->workerPorts) . "\n");
+        if ($port <= 0) {
+            return ['accepted' => false, 'error' => 'invalid worker port'];
         }
 
-        // 添加或重置健康状态
-        if (!isset($this->workerHealth[$port])) {
-            $this->workerHealth[$port] = [
-                'failures' => 0,
-                'blacklisted_at' => 0.0,
-                'last_success' => \microtime(true),
-                'total_failures' => 0,
-            ];
-        } else {
-            // 已存在则重置为健康状态
-            $this->workerHealth[$port]['failures'] = 0;
-            $this->workerHealth[$port]['blacklisted_at'] = 0.0;
+        if (\in_array($port, $this->workerPorts, true)) {
+            return ['accepted' => true, 'error' => ''];
         }
 
-        // Dispatcher 预热：验证 Worker 连通性
-        $this->warmupWorker($port);
+        $warmup = $this->warmupWorkerTrustingMasterReady($port);
+        if (!$warmup['success']) {
+            return ['accepted' => false, 'error' => $warmup['error']];
+        }
+
+        $this->workerPorts[] = $port;
+        $this->workerCount = \count($this->workerPorts);
+        $this->workerHealth[$port] = [
+            'failures' => 0,
+            'blacklisted_at' => 0.0,
+            'last_success' => \microtime(true),
+            'total_failures' => 0,
+        ];
+        $this->writeStderr("[PassthroughCore] 添加 Worker 端口: {$port}, 当前列表: " . \implode(',', $this->workerPorts) . "\n");
+
+        return ['accepted' => true, 'error' => ''];
+    }
+
+    public function setWarmupCooperativeYield(?\Closure $yield): void
+    {
+        $this->warmupCooperativeYield = $yield;
+    }
+
+    private function warmupYield(): void
+    {
+        if ($this->warmupCooperativeYield !== null) {
+            ($this->warmupCooperativeYield)();
+        }
+    }
+
+    /**
+     * 预热阶段延迟：若在 Dispatcher 入池 Fiber 内，走协作让出，避免阻塞主循环；
+     * 否则回退为真实微睡眠（兼容历史同步调用路径）。
+     */
+    private function warmupDelayUsec(int $microseconds): void
+    {
+        if ($microseconds <= 0) {
+            return;
+        }
+
+        if ($this->warmupCooperativeYield !== null) {
+            $this->warmupYield();
+            return;
+        }
+
+        SchedulerSystem::usleep($microseconds);
+    }
+
+    /**
+     * Master 已收到 Worker READY 后的轻量探活（ADD_WORKER / SET_WORKER_POOL）。
+     * 连接与重试更紧，避免重复等待「Worker 尚未 listen」的长窗口。
+     *
+     * 入池语义采用双条件：
+     * 1) /_wls/health 可用；
+     * 2) 首页预热通过（触发真实路由/框架初始化）。
+     *
+     * 首页预热实现为“非阻塞 I/O + 协作式分片推进”，避免单次阻塞调用占住 Dispatcher 主循环。
+     */
+    protected function warmupWorkerTrustingMasterReady(int $port): array
+    {
+        $maxRetries = self::IPC_READY_WARMUP_RETRIES;
+        $retryDelay = self::IPC_READY_WARMUP_RETRY_DELAY_USEC;
+        $lastError = 'warmup failed';
+        $configured = (float) $this->connectTimeout;
+        $connectTimeout = \max(
+            self::IPC_READY_WARMUP_CONNECT_MIN,
+            \min($configured > 0 ? $configured : self::IPC_READY_WARMUP_CONNECT_MAX, self::IPC_READY_WARMUP_CONNECT_MAX)
+        );
+        $responseTimeout = self::IPC_READY_WARMUP_RESPONSE_SEC;
+
+        $this->logWarmup(
+            "IPC 入池探活 Worker:{$port} path=" . self::WORKER_HEALTH_PATH
+            . " protocol=" . ($this->workerSslEnabled ? 'ssl' : 'tcp')
+            . " connect_timeout={$connectTimeout}s response_timeout={$responseTimeout}s retries={$maxRetries}",
+            'INFO'
+        );
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $this->warmupYield();
+            $probe = $this->requestWorkerHealth($port, $connectTimeout, $responseTimeout);
+            if ($probe['success']) {
+                $elapsed = $probe['elapsed'] ?? 0.0;
+                $statusLine = (string)($probe['status_line'] ?? 'HTTP/1.1 200 OK');
+                $this->logWarmup(
+                    "Worker:{$port} IPC 入池探活成功 (耗时 {$elapsed}s, 尝试 {$attempt}/{$maxRetries}, response=\"{$statusLine}\")",
+                    'INFO'
+                );
+                if (isset($this->workerHealth[$port])) {
+                    $this->workerHealth[$port]['last_success'] = \microtime(true);
+                }
+                $this->warmupYield();
+                $homeWarmup = $this->warmupWorkerViaHomepage(
+                    $port,
+                    self::IPC_READY_HOMEPAGE_WARMUP_RETRIES,
+                    self::IPC_READY_HOMEPAGE_CONNECT_TIMEOUT_SEC,
+                    self::IPC_READY_HOMEPAGE_TLS_TIMEOUT_SEC,
+                    self::IPC_READY_HOMEPAGE_WRITE_TIMEOUT_SEC,
+                    self::IPC_READY_HOMEPAGE_READ_TIMEOUT_SEC
+                );
+                if (!$homeWarmup['success']) {
+                    $homeErr = (string) ($homeWarmup['error'] ?? 'homepage warmup failed');
+                    $this->logWarmup(
+                        "Worker:{$port} 首页预热失败，但健康探活已通过，允许入池: {$homeErr}",
+                        'WARNING'
+                    );
+                }
+                return ['success' => true, 'error' => ''];
+            }
+
+            $lastError = (string)($probe['error'] ?? $lastError);
+            $elapsed = $probe['elapsed'] ?? 0.0;
+            $this->logWarmup(
+                "Worker:{$port} IPC 入池探活失败 (尝试 {$attempt}/{$maxRetries}, 耗时 {$elapsed}s): {$lastError}",
+                $attempt === $maxRetries ? 'ERROR' : 'WARNING'
+            );
+            if ($attempt < $maxRetries) {
+                $this->warmupYield();
+                $this->warmupDelayUsec($retryDelay);
+            }
+        }
+
+        return ['success' => false, 'error' => $lastError];
+    }
+
+    /**
+     * 严格预热（较长连接/响应窗口，多次重试）。供非 IPC 就绪语义场景或子类测试桩覆盖。
+     */
+    protected function warmupWorker(int $port): array
+    {
+        $maxRetries = 3;
+        $retryDelay = 100000; // 100ms in microseconds
+        $lastError = 'warmup failed';
+        $connectTimeout = \max(2.0, \min((float)$this->connectTimeout, 4.0));
+        $responseTimeout = 4.0;
+
+        $this->logWarmup(
+            "开始预热 Worker:{$port} path=" . self::WORKER_HEALTH_PATH
+            . " protocol=" . ($this->workerSslEnabled ? 'ssl' : 'tcp')
+            . " connect_timeout={$connectTimeout}s response_timeout={$responseTimeout}s",
+            'INFO'
+        );
+
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $this->warmupYield();
+            $probe = $this->requestWorkerHealth($port, $connectTimeout, $responseTimeout);
+            if ($probe['success']) {
+                $elapsed = $probe['elapsed'] ?? 0.0;
+                $statusLine = (string)($probe['status_line'] ?? 'HTTP/1.1 200 OK');
+                $this->logWarmup(
+                    "Worker:{$port} 预热成功 (耗时 {$elapsed}s, 尝试 {$attempt}/{$maxRetries}, response=\"{$statusLine}\")",
+                    'INFO'
+                );
+                if (isset($this->workerHealth[$port])) {
+                    $this->workerHealth[$port]['last_success'] = \microtime(true);
+                }
+                return ['success' => true, 'error' => ''];
+            }
+
+            $lastError = (string)($probe['error'] ?? $lastError);
+            $elapsed = $probe['elapsed'] ?? 0.0;
+            $this->logWarmup(
+                "Worker:{$port} 预热失败 (尝试 {$attempt}/{$maxRetries}, 耗时 {$elapsed}s): {$lastError}",
+                $attempt === $maxRetries ? 'ERROR' : 'WARNING'
+            );
+            if ($attempt < $maxRetries) {
+                $this->warmupYield();
+                $this->warmupDelayUsec($retryDelay);
+                continue;
+            }
+        }
+
+        return ['success' => false, 'error' => $lastError];
     }
 
     /**
@@ -1073,62 +1338,478 @@ class PassthroughCore
      * 2. 确保 Worker 已进入事件循环，可以 accept 连接
      * 3. 避免第一个真实用户请求失败
      *
-     * 预热策略：
-     * - 异步预热，不阻塞 ADD_WORKER 消息处理
-     * - 预热失败不影响 Worker 加入负载池（由健康检查机制处理）
-     * - 预热成功则更新 last_success 时间戳
+     * @return array{success: bool, error: string}
      */
-    private function warmupWorker(int $port): void
+    private function warmupWorkerViaHomepage(
+        int $port,
+        int $maxRetries = 3,
+        float $connectTimeoutSeconds = 5.0,
+        float $tlsTimeoutSeconds = 8.0,
+        float $writeTimeoutSeconds = 5.0,
+        float $readTimeoutSeconds = 60.0
+    ): array
     {
         $this->writeStderr("[PassthroughCore] 开始预热 Worker:{$port}...\n");
 
-        try {
-            // 建立 TCP 连接（2 秒超时）
-            $conn = @\stream_socket_client(
-                "tcp://{$this->workerHost}:{$port}",
-                $errno,
-                $errstr,
-                2.0,
-                \STREAM_CLIENT_CONNECT
-            );
+        $retryDelay = 100000; // 100ms in microseconds
+        $lastError = 'warmup failed';
 
-            if (!$conn) {
-                $this->writeStderr("[PassthroughCore] Worker:{$port} 预热连接失败: {$errstr} (errno={$errno})\n");
-                return;
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            $conn = null;
+            try {
+                // 真异步：非阻塞 connect + 分片 wait（每轮可 warmupYield）
+                $context = $this->createWorkerHealthContext();
+                $conn = @\stream_socket_client(
+                    "tcp://{$this->workerHost}:{$port}",
+                    $errno,
+                    $errstr,
+                    0.0,
+                    \STREAM_CLIENT_CONNECT | \STREAM_CLIENT_ASYNC_CONNECT,
+                    $context
+                );
+
+                if (!$conn) {
+                    $lastError = "connect failed: {$errstr} (errno={$errno})";
+                    $this->writeStderr("[PassthroughCore] Worker:{$port} 预热连接失败 (尝试 {$attempt}/{$maxRetries}): {$errstr} (errno={$errno})\n");
+                    if ($attempt < $maxRetries) {
+                        $this->warmupYield();
+                        $this->warmupDelayUsec($retryDelay);
+                        continue;
+                    }
+                    break;
+                }
+
+                \stream_set_blocking($conn, false);
+
+                $connectDeadline = \microtime(true) + \max(0.2, $connectTimeoutSeconds);
+                $connected = $this->waitForStreamReady($conn, false, true, $connectDeadline);
+                if ($connected === false) {
+                    $lastError = 'connect wait select failed';
+                    $this->writeStderr("[PassthroughCore] Worker:{$port} 预热连接等待失败 (尝试 {$attempt}/{$maxRetries})\n");
+                    if ($attempt < $maxRetries) {
+                        $this->warmupYield();
+                        $this->warmupDelayUsec($retryDelay);
+                        continue;
+                    }
+                    break;
+                }
+                if ($connected === 0) {
+                    $lastError = 'connect timeout after ' . \max(0.2, $connectTimeoutSeconds) . 's';
+                    $this->writeStderr("[PassthroughCore] Worker:{$port} 预热连接超时 (尝试 {$attempt}/{$maxRetries})\n");
+                    if ($attempt < $maxRetries) {
+                        $this->warmupYield();
+                        $this->warmupDelayUsec($retryDelay);
+                        continue;
+                    }
+                    break;
+                }
+
+                if ($this->workerSslEnabled) {
+                    $tlsDeadline = \microtime(true) + \max(0.3, $tlsTimeoutSeconds);
+                    $tlsOk = false;
+                    while (\microtime(true) < $tlsDeadline) {
+                        $this->warmupYield();
+                        $crypto = @\stream_socket_enable_crypto(
+                            $conn,
+                            true,
+                            \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT
+                        );
+                        if ($crypto === true) {
+                            $tlsOk = true;
+                            break;
+                        }
+                        if ($crypto === false) {
+                            $lastError = 'tls handshake failed';
+                            break;
+                        }
+                        $ready = $this->waitForStreamReady($conn, true, true, $tlsDeadline);
+                        if ($ready === false) {
+                            $lastError = 'tls handshake select failed';
+                            break;
+                        }
+                        if ($ready === 0) {
+                            $lastError = 'tls handshake timeout after ' . \max(0.3, $tlsTimeoutSeconds) . 's';
+                            break;
+                        }
+                    }
+                    if (!$tlsOk) {
+                        $this->writeStderr("[PassthroughCore] Worker:{$port} TLS 握手失败 (尝试 {$attempt}/{$maxRetries}): {$lastError}\n");
+                        if ($attempt < $maxRetries) {
+                            $this->warmupYield();
+                            $this->warmupDelayUsec($retryDelay);
+                            continue;
+                        }
+                        break;
+                    }
+                }
+
+                // 发送真实的首页请求来触发框架初始化（而不是简单的健康检查）
+                // 这样可以预热框架、数据库连接、缓存等，避免第一个用户请求过慢
+                $request = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+                $writeOffset = 0;
+                $writeDeadline = \microtime(true) + \max(0.2, $writeTimeoutSeconds);
+                while ($writeOffset < \strlen($request)) {
+                    $this->warmupYield();
+                    $written = @\fwrite($conn, \substr($request, $writeOffset));
+                    if (\is_int($written) && $written > 0) {
+                        $writeOffset += $written;
+                        continue;
+                    }
+                    $ready = $this->waitForStreamReady($conn, false, true, $writeDeadline);
+                    if ($ready === false) {
+                        $lastError = 'warmup request write select failed';
+                        break;
+                    }
+                    if ($ready === 0) {
+                        $lastError = 'warmup request write timeout after ' . \max(0.2, $writeTimeoutSeconds) . 's';
+                        break;
+                    }
+                }
+                if ($writeOffset < \strlen($request)) {
+                    $this->writeStderr("[PassthroughCore] Worker:{$port} 预热写入失败 (尝试 {$attempt}/{$maxRetries}): {$lastError}\n");
+                    if ($attempt < $maxRetries) {
+                        $this->warmupYield();
+                        $this->warmupDelayUsec($retryDelay);
+                        continue;
+                    }
+                    break;
+                }
+
+                // 读取响应头（检查 HTTP 状态码）
+                // 注意：这里只读取响应头，不读取完整的 HTML 内容，以节省时间
+                $response = '';
+                $startTime = \microtime(true);
+                $readDeadline = $startTime + \max(0.3, $readTimeoutSeconds);
+                while (!\str_contains($response, "\r\n\r\n") && \microtime(true) < $readDeadline) {
+                    $this->warmupYield();
+                    $chunk = @\fread($conn, 1024);
+                    if (\is_string($chunk) && $chunk !== '') {
+                        $response .= $chunk;
+                        continue;
+                    }
+                    if (\feof($conn)) {
+                        break;
+                    }
+                    $ready = $this->waitForStreamReady($conn, true, false, $readDeadline);
+                    if ($ready === false) {
+                        $lastError = 'warmup response read select failed';
+                        break;
+                    }
+                    if ($ready === 0) {
+                        $lastError = 'warmup response timeout after ' . \max(0.3, $readTimeoutSeconds) . 's';
+                        break;
+                    }
+                }
+
+                // 2xx：正常业务；503：维护/过载页仍表示 HTTP 栈与路由可用（维护 Worker 常见）
+                if ($response && \preg_match('/HTTP\/1\.[01]\s+(?:2\d{2}|503)\b/', $response)) {
+                    $elapsed = \round(\microtime(true) - $startTime, 2);
+                    $this->writeStderr("[PassthroughCore] Worker:{$port} 预热成功 ✓ (耗时 {$elapsed}s, 尝试 {$attempt}/{$maxRetries})\n");
+                    if (isset($this->workerHealth[$port])) {
+                        $this->workerHealth[$port]['last_success'] = \microtime(true);
+                    }
+                    return ['success' => true, 'error' => ''];
+                }
+
+                $preview = \substr($response ?: '', 0, 100);
+                $lastError = 'unexpected warmup response: ' . $preview;
+                $this->writeStderr("[PassthroughCore] Worker:{$port} 预热响应异常 (尝试 {$attempt}/{$maxRetries}): {$preview}\n");
+                if ($attempt < $maxRetries) {
+                    $this->warmupYield();
+                    $this->warmupDelayUsec($retryDelay);
+                    continue;
+                }
+            } catch (\Throwable $e) {
+                $lastError = 'warmup exception: ' . $e->getMessage();
+                $this->writeStderr("[PassthroughCore] Worker:{$port} 预热异常 (尝试 {$attempt}/{$maxRetries}): " . $e->getMessage() . "\n");
+                if ($attempt < $maxRetries) {
+                    $this->warmupYield();
+                    $this->warmupDelayUsec($retryDelay);
+                    continue;
+                }
+            } finally {
+                if (\is_resource($conn)) {
+                    @\fclose($conn);
+                }
             }
-
-            \stream_set_blocking($conn, true);
-            \stream_set_timeout($conn, 2);
-
-            // 发送简单的 HTTP 健康检查请求
-            $request = "GET /_wls/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-            $written = @\fwrite($conn, $request);
-
-            if ($written === false || $written === 0) {
-                $this->writeStderr("[PassthroughCore] Worker:{$port} 预热写入失败\n");
-                @\fclose($conn);
-                return;
-            }
-
-            // 读取响应（至少读到 HTTP 状态行）
-            $response = @\fread($conn, 1024);
-            @\fclose($conn);
-
-            if ($response && \str_contains($response, 'HTTP/1.1 200')) {
-                $this->writeStderr("[PassthroughCore] Worker:{$port} 预热成功 ✓\n");
-                $this->workerHealth[$port]['last_success'] = \microtime(true);
-            } else {
-                $this->writeStderr("[PassthroughCore] Worker:{$port} 预热响应异常: " . \substr($response ?: '', 0, 100) . "\n");
-            }
-        } catch (\Throwable $e) {
-            $this->writeStderr("[PassthroughCore] Worker:{$port} 预热异常: " . $e->getMessage() . "\n");
         }
+
+        return ['success' => false, 'error' => $lastError];
+    }
+
+    /**
+     * 等待 stream 在截止时间前变为可读/可写。
+     *
+     * @param resource $stream
+     * @return int|false 1=就绪，0=超时，false=select 异常
+     */
+    private function waitForStreamReady($stream, bool $read, bool $write, float $deadline): int|false
+    {
+        while (true) {
+            $this->warmupYield();
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0) {
+                return 0;
+            }
+
+            $slice = \min($remaining, $this->resolveWarmupWaitSliceSeconds());
+            $sec = (int)\floor($slice);
+            $usec = (int)\max(1000, \round(($slice - $sec) * 1000000));
+            $readSet = $read ? [$stream] : [];
+            $writeSet = $write ? [$stream] : [];
+            $exceptSet = [];
+            $changed = @\stream_select($readSet, $writeSet, $exceptSet, $sec, $usec);
+            if ($changed === false) {
+                return false;
+            }
+            if ($changed > 0) {
+                return 1;
+            }
+        }
+    }
+
+    private function resolveWarmupWaitSliceSeconds(): float
+    {
+        // 在协作式预热（Dispatcher deferred Fiber）里用更短 slice，
+        // 缩短单次阻塞片段，提升维护接管与控制面响应性。
+        return $this->warmupCooperativeYield !== null ? 0.01 : 0.05;
     }
 
     /**
      * 获取当前 Worker 端口列表（调试用）
      * @return int[]
      */
+    /**
+     * @return resource|null
+     */
+    private function createWorkerHealthContext()
+    {
+        if (!$this->workerSslEnabled) {
+            return null;
+        }
+
+        return \stream_context_create([
+            'ssl' => [
+                'verify_peer' => false,
+                'verify_peer_name' => false,
+                'allow_self_signed' => true,
+                'SNI_enabled' => false,
+                'disable_compression' => true,
+                'crypto_method' => \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT,
+            ],
+        ]);
+    }
+
+    /**
+     * @return array{success: bool, error: string, status_line?: string, elapsed: float}
+     */
+    private function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
+    {
+        $this->warmupYield();
+        $target = "tcp://{$this->workerHost}:{$port}";
+        $startedAt = \microtime(true);
+        $conn = @\stream_socket_client(
+            $target,
+            $errno,
+            $errstr,
+            0.0,
+            \STREAM_CLIENT_CONNECT | \STREAM_CLIENT_ASYNC_CONNECT,
+            $this->createWorkerHealthContext()
+        );
+
+        if (!\is_resource($conn)) {
+            $elapsed = \round(\microtime(true) - $startedAt, 2);
+            $errorDetail = \trim((string)$errstr);
+            if ($errorDetail === '') {
+                $errorDetail = $elapsed >= ($connectTimeout - 0.1)
+                    ? "connect timeout after {$elapsed}s"
+                    : 'stream_socket_client returned no error detail';
+            }
+            return [
+                'success' => false,
+                'error' => "connect failed: {$errorDetail} (errno={$errno})",
+                'elapsed' => $elapsed,
+            ];
+        }
+
+        try {
+            \stream_set_blocking($conn, false);
+
+            $connectDeadline = \microtime(true) + \max(0.2, $connectTimeout);
+            $connected = $this->waitForStreamReady($conn, false, true, $connectDeadline);
+            if ($connected === false) {
+                return [
+                    'success' => false,
+                    'error' => 'health connect select failed',
+                    'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                ];
+            }
+            if ($connected === 0) {
+                return [
+                    'success' => false,
+                    'error' => 'health connect timeout after ' . \max(0.2, $connectTimeout) . 's',
+                    'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                ];
+            }
+
+            if ($this->workerSslEnabled) {
+                $tlsDeadline = \microtime(true) + \max(0.5, \min($responseTimeout, 2.5));
+                $tlsOk = false;
+                while (\microtime(true) < $tlsDeadline) {
+                    $this->warmupYield();
+                    $crypto = @\stream_socket_enable_crypto(
+                        $conn,
+                        true,
+                        \STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | \STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT
+                    );
+                    if ($crypto === true) {
+                        $tlsOk = true;
+                        break;
+                    }
+                    if ($crypto === false) {
+                        return [
+                            'success' => false,
+                            'error' => 'health tls handshake failed',
+                            'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                        ];
+                    }
+                    $ready = $this->waitForStreamReady($conn, true, true, $tlsDeadline);
+                    if ($ready === false) {
+                        return [
+                            'success' => false,
+                            'error' => 'health tls handshake select failed',
+                            'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                        ];
+                    }
+                    if ($ready === 0) {
+                        return [
+                            'success' => false,
+                            'error' => 'health tls handshake timeout',
+                            'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                        ];
+                    }
+                }
+                if (!$tlsOk) {
+                    return [
+                        'success' => false,
+                        'error' => 'health tls handshake timeout',
+                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                    ];
+                }
+            }
+
+            $request = "GET " . self::WORKER_HEALTH_PATH . " HTTP/1.1\r\n"
+                . "Host: {$this->workerHost}\r\n"
+                . "Connection: close\r\n\r\n";
+            $writeOffset = 0;
+            $writeDeadline = \microtime(true) + \max(0.3, \min($responseTimeout, 2.0));
+            $requestLen = \strlen($request);
+            while ($writeOffset < $requestLen) {
+                $this->warmupYield();
+                $written = @\fwrite($conn, \substr($request, $writeOffset));
+                if (\is_int($written) && $written > 0) {
+                    $writeOffset += $written;
+                    continue;
+                }
+                $ready = $this->waitForStreamReady($conn, false, true, $writeDeadline);
+                if ($ready === false) {
+                    return [
+                        'success' => false,
+                        'error' => 'health request write select failed',
+                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                    ];
+                }
+                if ($ready === 0) {
+                    return [
+                        'success' => false,
+                        'error' => 'health request write timeout',
+                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                    ];
+                }
+            }
+
+            $response = '';
+            $readDeadline = \microtime(true) + \max(0.5, $responseTimeout);
+            while (!\feof($conn) && \strlen($response) < 512 && \microtime(true) < $readDeadline) {
+                $this->warmupYield();
+                $chunk = @\fread($conn, 256);
+                if (\is_string($chunk) && $chunk !== '') {
+                    $response .= $chunk;
+                    if (\str_contains($response, "\r\n")) {
+                        break;
+                    }
+                    continue;
+                }
+                if (\feof($conn)) {
+                    break;
+                }
+                $ready = $this->waitForStreamReady($conn, true, false, $readDeadline);
+                if ($ready === false) {
+                    return [
+                        'success' => false,
+                        'error' => 'health response read select failed',
+                        'elapsed' => \round(\microtime(true) - $startedAt, 2),
+                    ];
+                }
+                if ($ready === 0) {
+                    break;
+                }
+            }
+
+            $elapsed = \round(\microtime(true) - $startedAt, 2);
+            if ($response === '') {
+                return [
+                    'success' => false,
+                    'error' => "health response timeout after {$elapsed}s",
+                    'elapsed' => $elapsed,
+                ];
+            }
+
+            $statusLine = \trim((string)(\strtok($response, "\r\n") ?: ''));
+            // 503：维护/降级 Worker 仍表示 HTTP 栈已响应，应允许入池（与首页预热语义一致）
+            if ($statusLine !== '' && \preg_match('/^HTTP\/1\.[01]\s+(?:2\d{2}|503)\b/', $statusLine)) {
+                return [
+                    'success' => true,
+                    'error' => '',
+                    'status_line' => $statusLine,
+                    'elapsed' => $elapsed,
+                ];
+            }
+
+            $preview = \substr(\trim($response), 0, 120);
+            if ($preview === '') {
+                $preview = 'empty response';
+            }
+
+            return [
+                'success' => false,
+                'error' => 'unexpected health response: ' . $preview,
+                'status_line' => $statusLine,
+                'elapsed' => $elapsed,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'error' => 'health probe exception: ' . $e->getMessage(),
+                'elapsed' => \round(\microtime(true) - $startedAt, 2),
+            ];
+        } finally {
+            @\fclose($conn);
+        }
+    }
+
+    private function logWarmup(string $message, string $level = 'INFO'): void
+    {
+        $message = '[PassthroughCore] ' . $message;
+        match (\strtoupper($level)) {
+            'DEBUG' => WlsLogger::debug_($message),
+            'WARN', 'WARNING' => WlsLogger::warning_($message),
+            'ERROR' => WlsLogger::error_($message),
+            default => WlsLogger::info_($message),
+        };
+        $this->writeStderr($message . "\n");
+    }
+
     public function getWorkerPorts(): array
     {
         return $this->workerPorts;
@@ -1185,35 +1866,132 @@ class PassthroughCore
     }
 
     /**
+     * SET_WORKER_POOL 渐进发布：每预热成功一个端口即更新池，使维护 Worker 不必等待后续业务 Worker。
+     *
+     * @param int[] $newPorts
+     * @param array<int, array{failures: int, blacklisted_at: float, last_success: float, total_failures: int}> $newHealth
+     */
+    private function applyWorkerPoolTransition(array $newPorts, array $newHealth): void
+    {
+        $prev = $this->workerPorts;
+        foreach ($prev as $p) {
+            if (!\in_array($p, $newPorts, true)) {
+                $this->closeIdleSocketsByPort((int) $p);
+            }
+        }
+
+        $this->workerPorts = \array_values($newPorts);
+        $this->workerCount = \count($this->workerPorts);
+        $this->workerHealth = $newHealth;
+
+        foreach (\array_keys($this->workerSaturation) as $p) {
+            if (!\in_array((int) $p, $this->workerPorts, true)) {
+                unset($this->workerSaturation[$p]);
+            }
+        }
+    }
+
+    /**
      * 替换整个 Worker 端口池（维护模式：仅维护 Worker / 恢复业务 Worker）
      *
      * @param int[] $ports
+     * @return array{accepted: int[], rejected: array<int, string>}
      */
-    public function setWorkerPorts(array $ports): void
+    public function setWorkerPorts(array $ports): array
     {
-        $oldPorts = $this->workerPorts;
-        $this->workerPorts = \array_values(\array_unique(\array_map('intval', $ports)));
-        $this->workerCount = \count($this->workerPorts);
-        $this->workerHealth = [];
-        $this->workerSaturation = [];
-        foreach ($this->workerPorts as $port) {
-            if ($port <= 0) {
+        $previousPorts = $this->workerPorts;
+        $previousHealth = $this->workerHealth;
+        $candidatePorts = \array_values(\array_filter(
+            \array_unique(\array_map('intval', $ports)),
+            static fn(int $port): bool => $port > 0
+        ));
+        $acceptedPorts = [];
+        $rejectedPorts = [];
+        $acceptedHealth = [];
+
+        foreach ($candidatePorts as $port) {
+            $this->warmupYield();
+            $warmup = $this->warmupWorkerTrustingMasterReady($port);
+            if (!$warmup['success']) {
+                $rejectedPorts[$port] = $warmup['error'];
                 continue;
             }
-            $this->workerHealth[$port] = [
+
+            $acceptedPorts[] = $port;
+            $acceptedHealth[$port] = [
                 'failures' => 0,
                 'blacklisted_at' => 0.0,
                 'last_success' => \microtime(true),
                 'total_failures' => 0,
             ];
+            // 每成功预热一个端口立即发布池状态，避免「等整表 Worker 全好」才转发；维护 Worker 可第一时间接流
+            $this->applyWorkerPoolTransition($acceptedPorts, $acceptedHealth);
+        }
+
+        // 兜底：若首轮快速探活未纳入任何端口，再做一轮轻量探活，避免偶发瞬时抖动导致池被清空。
+        if ($acceptedPorts === [] && $candidatePorts !== []) {
+            $configured = (float) $this->connectTimeout;
+            $connectTimeout = \max(
+                self::IPC_READY_WARMUP_CONNECT_MIN,
+                \min($configured > 0 ? $configured : self::IPC_READY_WARMUP_CONNECT_MAX, self::IPC_READY_WARMUP_CONNECT_MAX)
+            );
+            $responseTimeout = self::IPC_READY_WARMUP_RESPONSE_SEC;
+            foreach ($candidatePorts as $port) {
+                $this->warmupYield();
+                if (isset($acceptedHealth[$port])) {
+                    continue;
+                }
+                $probe = $this->requestWorkerHealth($port, $connectTimeout, $responseTimeout);
+                if (!$probe['success']) {
+                    continue;
+                }
+                $acceptedPorts[] = $port;
+                $acceptedHealth[$port] = [
+                    'failures' => 0,
+                    'blacklisted_at' => 0.0,
+                    'last_success' => \microtime(true),
+                    'total_failures' => 0,
+                ];
+                unset($rejectedPorts[$port]);
+                $this->applyWorkerPoolTransition($acceptedPorts, $acceptedHealth);
+            }
+            if ($acceptedPorts !== []) {
+                $this->logWarmup(
+                    'SET_WORKER_POOL 首轮快速探活未通过，已通过兜底探活入池: '
+                    . \implode(',', $acceptedPorts),
+                    'WARNING'
+                );
+            }
+        }
+
+        // 关键保护：若 Master 下发了新池但所有端口都因瞬时探活失败被拒绝，
+        // 不清空现有可用池，避免入口瞬断为 0/0。
+        if ($candidatePorts !== [] && $acceptedPorts === [] && $previousPorts !== []) {
+            $this->applyWorkerPoolTransition($previousPorts, $previousHealth);
+            $this->logWarmup(
+                'SET_WORKER_POOL 新端口全量预热失败，保留旧池: ' . \implode(',', $previousPorts),
+                'WARNING'
+            );
+        } else {
+            $this->applyWorkerPoolTransition($acceptedPorts, $acceptedHealth);
         }
         $this->writeStderr(
             '[PassthroughCore] SET_WORKER_POOL 当前列表: ' . (\implode(',', $this->workerPorts) ?: '(空)') . "\n"
         );
-        $removedPorts = \array_diff($oldPorts, $this->workerPorts);
-        foreach ($removedPorts as $removedPort) {
-            $this->closeIdleSocketsByPort((int)$removedPort);
+        if ($rejectedPorts !== []) {
+            $items = [];
+            foreach ($rejectedPorts as $port => $reason) {
+                $items[] = "{$port}: {$reason}";
+            }
+            $this->writeStderr(
+                '[PassthroughCore] SET_WORKER_POOL 预热拒绝端口: ' . \implode('; ', $items) . "\n"
+            );
         }
+
+        return [
+            'accepted' => $acceptedPorts,
+            'rejected' => $rejectedPorts,
+        ];
     }
     
     /**
@@ -1724,6 +2502,7 @@ class PassthroughCore
         $isTlsTunnelLikely = (($this->connections[$connId]['sni'] ?? '') !== '');
 
         $reusable = $this->backendPoolEnabled
+            && !$this->workerSslEnabled
             && !$isTlsTunnelLikely
             && empty($this->clientWriteBuffers[$connId])
             && empty($this->workerClosed[$connId]);
@@ -1807,6 +2586,10 @@ class PassthroughCore
         if (!$this->backendPoolEnabled) {
             return false;
         }
+        if ($this->workerSslEnabled) {
+            // SSL 透传链路禁止复用后端 socket，避免跨连接 TLS 状态污染。
+            return false;
+        }
 
         if (!\in_array($workerPort, $this->workerPorts, true)) {
             return false;
@@ -1886,6 +2669,7 @@ class PassthroughCore
     private function discardWorkerSocket($socket): void
     {
         if (\is_resource($socket) || $socket instanceof \Socket) {
+            @\socket_shutdown($socket, 2);
             @\socket_close($socket);
             $this->stats['backend_pool_discarded']++;
         }
@@ -1915,6 +2699,7 @@ class PassthroughCore
             'cache_routed' => 0,
             'round_robin_routed' => 0,
             'failover_routed' => 0,
+            'saturated_fallback_routed' => 0,
             'sni_extractions' => 0,
             'bytes_in' => 0,
             'bytes_out' => 0,

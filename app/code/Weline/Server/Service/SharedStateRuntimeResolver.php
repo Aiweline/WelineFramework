@@ -36,54 +36,68 @@ class SharedStateRuntimeResolver
 
         $wlsServer = \is_array($config['wls_server'] ?? null) ? $config['wls_server'] : [];
 
-        $sessionHost = \trim((string) ($config['host'] ?? $config['server_host'] ?? $wlsServer['host'] ?? $session['host']));
+        $sessionHost = \trim((string) ($config['session_host'] ?? $config['session_server_host'] ?? $session['host']));
         if ($sessionHost === '') {
             $sessionHost = '127.0.0.1';
         }
 
-        $sessionPort = (int) ($config['port'] ?? $config['server_port'] ?? $config['session_server_port'] ?? $wlsServer['port'] ?? $session['port']);
+        $sessionPort = (int) ($config['session_server_port'] ?? $config['session_port'] ?? $session['port']);
         if ($sessionPort <= 0) {
-            // 尝试探测实际运行的 Session Server,而不是使用硬编码端口
-            $probe = (new SharedStateServiceManager())->probe('session_server', [], $envConfig);
-            $sessionPort = (int) ($probe['runtime']['port'] ?? 0);
+            $probeRuntime = $this->probeRuntime('session_server', [], $envConfig);
+            $sessionPort = (int) ($probeRuntime['port'] ?? 0);
             // 如果探测失败,使用项目偏移量计算默认端口
             if ($sessionPort <= 0) {
                 $sessionPort = 19970 + MasterProcess::getProjectPortOffset();
             }
         }
 
+        $sessionTokenExplicit = \array_key_exists('session_token_file_name', $config)
+            || \array_key_exists('session_server_token_file_name', $config);
         $sessionToken = \trim((string) (
-            $config['token_file_name']
+            $config['session_token_file_name']
             ?? $config['session_server_token_file_name']
-            ?? $wlsServer['token_file_name']
             ?? $session['token_file_name']
         ));
+        if (!$sessionTokenExplicit && ($sessionToken === '' || $sessionToken === 'session_server.token')) {
+            $probeRuntime = $this->probeRuntime('session_server', $config, $envConfig);
+            $probeToken = \trim((string)($probeRuntime['token_file_name'] ?? ''));
+            if ($probeToken !== '') {
+                $sessionToken = $probeToken;
+            }
+        }
         if ($sessionToken === '') {
             $sessionToken = 'session_server.token';
         }
 
-        $memoryHost = \trim((string) ($config['host'] ?? $config['memory_host'] ?? $memory['host']));
+        $memoryHost = \trim((string) ($config['memory_host'] ?? $config['memory_server_host'] ?? $memory['host']));
         if ($memoryHost === '') {
             $memoryHost = '127.0.0.1';
         }
 
-        $memoryPort = (int) ($config['port'] ?? $config['memory_port'] ?? $config['memory_server_port'] ?? $memory['port']);
+        $memoryPort = (int) ($config['memory_server_port'] ?? $config['memory_port'] ?? $memory['port']);
         if ($memoryPort <= 0) {
-            // 尝试探测实际运行的 Memory Server,而不是使用硬编码端口
-            $probe = (new SharedStateServiceManager())->probe('memory_server', [], $envConfig);
-            $memoryPort = (int) ($probe['runtime']['port'] ?? 0);
+            $probeRuntime = $this->probeRuntime('memory_server', [], $envConfig);
+            $memoryPort = (int) ($probeRuntime['port'] ?? 0);
             // 如果探测失败,使用项目偏移量计算默认端口
             if ($memoryPort <= 0) {
                 $memoryPort = 19971 + MasterProcess::getProjectPortOffset();
             }
         }
 
+        $memoryTokenExplicit = \array_key_exists('memory_token_file_name', $config)
+            || \array_key_exists('memory_server_token_file_name', $config);
         $memoryToken = \trim((string) (
-            $config['token_file_name']
-            ?? $config['memory_token_file_name']
+            $config['memory_token_file_name']
             ?? $config['memory_server_token_file_name']
             ?? $memory['token_file_name']
         ));
+        if (!$memoryTokenExplicit && ($memoryToken === '' || $memoryToken === 'memory_server.token')) {
+            $probeRuntime = $this->probeRuntime('memory_server', $config, $envConfig);
+            $probeToken = \trim((string)($probeRuntime['token_file_name'] ?? ''));
+            if ($probeToken !== '') {
+                $memoryToken = $probeToken;
+            }
+        }
         if ($memoryToken === '') {
             $memoryToken = 'memory_server.token';
         }
@@ -126,14 +140,17 @@ class SharedStateRuntimeResolver
      */
     private function resolveFallbackSession(array $envConfig): array
     {
+        $runtimeSession = \is_array(($envConfig['wls'] ?? [])['shared_state']['runtime']['session'] ?? null)
+            ? $envConfig['wls']['shared_state']['runtime']['session']
+            : [];
         $wlsSession = \is_array(($envConfig['wls'] ?? [])['session'] ?? null) ? $envConfig['wls']['session'] : [];
         $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
         $session = \is_array($envConfig['session'] ?? null) ? $envConfig['session'] : [];
 
         return [
-            'host' => (string) ($wlsServer['host'] ?? $wlsSession['host'] ?? $session['server_host'] ?? '127.0.0.1'),
-            'port' => (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $session['server_port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
-            'token_file_name' => (string) ($wlsServer['token_file_name'] ?? $wlsSession['token_file_name'] ?? 'session_server.token'),
+            'host' => (string) ($runtimeSession['host'] ?? $wlsSession['host'] ?? $session['server_host'] ?? $wlsServer['host'] ?? '127.0.0.1'),
+            'port' => (int) ($runtimeSession['port'] ?? $session['server_port'] ?? $wlsSession['port'] ?? $wlsServer['port'] ?? (19970 + MasterProcess::getProjectPortOffset())),
+            'token_file_name' => (string) ($runtimeSession['token_file_name'] ?? $wlsSession['token_file_name'] ?? $wlsServer['token_file_name'] ?? 'session_server.token'),
         ];
     }
 
@@ -152,5 +169,16 @@ class SharedStateRuntimeResolver
             'port' => (int) ($memory['port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'token_file_name' => (string) ($memory['token_file_name'] ?? 'memory_server.token'),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $envConfig
+     * @return array<string, mixed>
+     */
+    protected function probeRuntime(string $role, array $config, array $envConfig): array
+    {
+        $probe = (new SharedStateServiceManager())->probe($role, $config, $envConfig);
+        return \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
     }
 }
