@@ -233,31 +233,16 @@ function parseSseResponseText(raw) {
  */
 async function consumeSseStream(page, absoluteUrl, options = {}) {
   const timeoutMs = options.timeoutMs ?? 120000;
-  const context = page.context();
-  const temp = await context.newPage();
   try {
-    await temp.goto(page.url(), { waitUntil: 'domcontentloaded', timeout: Math.min(timeoutMs, 60000) });
-    const bundle = await temp.evaluate(
-      async ({ url, ms }) => {
-        const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), ms);
-        try {
-          const response = await fetch(url, {
-            method: 'GET',
-            credentials: 'same-origin',
-            signal: ctrl.signal,
-            headers: { Accept: 'text/event-stream' },
-          });
-          const status = response.status;
-          const ok = response.ok;
-          const text = await response.text();
-          return { ok, status, text };
-        } finally {
-          clearTimeout(tid);
-        }
-      },
-      { url: absoluteUrl, ms: timeoutMs }
-    );
+    const response = await page.request.get(absoluteUrl, {
+      timeout: timeoutMs,
+      headers: { Accept: 'text/event-stream' },
+    });
+    const bundle = {
+      ok: response.ok(),
+      status: response.status(),
+      text: await response.text(),
+    };
     const status = Number(bundle && bundle.status ? bundle.status : 0);
     const raw = String((bundle && bundle.text) || '');
     const contentType = 'text/event-stream';
@@ -294,8 +279,6 @@ async function consumeSseStream(page, absoluteUrl, options = {}) {
       rawHead: '',
       error: String(e && e.message ? e.message : e),
     };
-  } finally {
-    await temp.close().catch(() => {});
   }
 }
 
