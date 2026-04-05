@@ -1,0 +1,378 @@
+#!/usr/bin/env bash
+#
+# 统一服务入口（轻量转发器）
+#
+# 用法：
+#   ./bin/server server start [args...]      # 启动 Weline Server（默认实例/按 server:start 参数）
+#   ./bin/server server stop [args...]       # 停止 Weline Server
+#   ./bin/server server restart [args...]    # 重启 Weline Server
+#   ./bin/server server status [args...]     # 查看 Weline Server 状态
+#
+#   ./bin/server pgsql start|stop|status [-D dataDir]
+#
+#   ./bin/server all start [args...]         # 先 pgsql:start，再 server:start
+#   ./bin/server all stop [args...]          # 先 server:stop，再 pgsql:stop
+#
+#
+# 这里不启用 `set -euo/pipefail`，避免在部分 Windows+MSYS Bash 环境下
+# 对 `set` 选项解析不兼容导致脚本提前失败。
+#
+
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
+
+die() {
+  echo "ERROR: $*" >&2
+  exit 1
+}
+
+DEFAULT_PHP_1="${PROJECT_ROOT}/extend/server/php/bin/php"
+DEFAULT_PHP_2="${PROJECT_ROOT}/extend/server/php/php"
+
+if [[ -x "${DEFAULT_PHP_1}" ]]; then
+  PHP_BIN="${PHP_BIN:-${DEFAULT_PHP_1}}"
+elif [[ -x "${DEFAULT_PHP_2}" ]]; then
+  PHP_BIN="${PHP_BIN:-${DEFAULT_PHP_2}}"
+else
+  PHP_BIN="${PHP_BIN:-php}"
+fi
+
+if [[ $# -lt 2 ]]; then
+  echo "Usage: $0 <server|pgsql|all> <start|stop|restart|status> [args...]"
+  exit 0
+fi
+
+SERVICE="$1"
+ACTION="$2"
+shift 2 || true
+
+PGSQL_DIR="${PROJECT_ROOT}/extend/server/pgsql"
+PGSQL_BIN="${PGSQL_DIR}/bin"
+PGSQL_DATA_DEFAULT="${PGSQL_DIR}/data"
+
+pgsql_resolve_data_dir() {
+  local data_dir="${PGSQL_DATA_DEFAULT}"
+  local i
+  for ((i=1; i<="$#"; i++)); do
+    local arg="${!i}"
+    if [[ "$arg" == "-D" || "$arg" == "--data-dir" ]]; then
+      local next_index=$((i+1))
+      local next="${!next_index:-}"
+      if [[ -n "$next" && ! "$next" =~ ^- ]]; then
+        data_dir="$next"
+      fi
+    fi
+  done
+  echo "$data_dir"
+}
+
+pgsql_find_pgctl_in_extend() {
+  local candidate
+  candidate="${PGSQL_BIN}/pg_ctl"
+  if [[ -x "${candidate}" ]]; then
+    echo "${candidate}"
+    return 0
+  fi
+  candidate="${PGSQL_BIN}/pg_ctl.exe"
+  if [[ -x "${candidate}" ]]; then
+    echo "${candidate}"
+    return 0
+  fi
+  return 1
+}
+
+pgsql_find_initdb_in_extend() {
+  local candidate
+  candidate="${PGSQL_BIN}/initdb"
+  if [[ -x "${candidate}" ]]; then
+    echo "${candidate}"
+    return 0
+  fi
+  candidate="${PGSQL_BIN}/initdb.exe"
+  if [[ -x "${candidate}" ]]; then
+    echo "${candidate}"
+    return 0
+  fi
+  return 1
+}
+
+pgsql_command_exists() {
+  command -v "$1" >/dev/null 2>&1
+}
+
+pgsql_is_port_in_use() {
+  local port="$1"
+  [[ -z "$port" ]] && return 1
+  [[ "$port" -le 0 || "$port" -gt 65535 ]] && return 1
+
+  if pgsql_command_exists ss; then
+    if ss -lntp 2>/dev/null | grep -q ":${port}"; then
+      return 0
+    fi
+  fi
+
+  if pgsql_command_exists lsof; then
+    if lsof -i :"${port}" 2>/dev/null | grep -q LISTEN; then
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+pgsql_resolve_port_from_conf() {
+  local data_dir="$1"
+  local conf="${data_dir}/postgresql.conf"
+  if [[ -f "$conf" ]]; then
+    local line
+    while IFS= read -r line; do
+      [[ "$line" =~ ^[[:space:]]*# ]] && continue
+      if [[ "$line" =~ ^[[:space:]]*port[[:space:]]*=[[:space:]]*([0-9]+) ]]; then
+        local p="${BASH_REMATCH[1]}"
+        if [[ "$p" -gt 0 && "$p" -le 65535 ]]; then
+          echo "$p"
+          return 0
+        fi
+      fi
+    done < "$conf"
+  fi
+  echo "5432"
+}
+
+pgsql_try_system_start() {
+  if [[ "$(uname -s)" != "Linux" ]]; then
+    return 1
+  fi
+  if pgsql_command_exists systemctl; then
+    local unit
+    for unit in postgresql postgresql-16 postgresql-15 postgresql-14 postgresql-13 postgresql@16-main postgresql@15-main postgresql@14-main postgresql@13-main; do
+      if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\b"; then
+        echo "尝试通过 systemd 启动：${unit}"
+        if systemctl start "${unit}"; then
+          echo "系统 PostgreSQL 已启动：${unit}"
+          systemctl status "${unit}" --no-pager 2>/dev/null || true
+          return 0
+        fi
+      fi
+    done
+  fi
+  if pgsql_command_exists service; then
+    echo "尝试通过 service 启动：postgresql"
+    if service postgresql start 2>/dev/null; then
+      echo "系统 PostgreSQL 已启动（service postgresql）。"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+pgsql_start() {
+  local data_dir
+  data_dir="$(pgsql_resolve_data_dir "$@")"
+
+  local pgctl
+  if pgctl="$(pgsql_find_pgctl_in_extend)"; then
+    local initdb
+    if [[ ! -f "${data_dir}/PG_VERSION" ]]; then
+      if ! initdb="$(pgsql_find_initdb_in_extend)"; then
+        echo "extend/server/pgsql/bin 下未找到 initdb，无法初始化数据目录：${data_dir}"
+        echo "请执行 bin/install.sh pgsql 或手动安装 PostgreSQL 到 extend/server/pgsql。"
+        return 1
+      fi
+      mkdir -p "${data_dir}"
+      echo "初始化 PostgreSQL 数据目录（initdb）：${data_dir}"
+      "${initdb}" -D "${data_dir}" -E UTF8 -U postgres
+    fi
+
+    # 权限自检与自动修复：PostgreSQL 要求 data 目录权限为 0700 或 0750
+    if [[ -d "${data_dir}" ]]; then
+      if command -v stat >/dev/null 2>&1; then
+        # 使用八进制权限，兼容大多数 Linux
+        local mode
+        mode="$(stat -c '%a' "${data_dir}" 2>/dev/null || echo '')"
+        if [[ -n "${mode}" && "${mode}" != "700" && "${mode}" != "750" ]]; then
+          echo "检测到数据目录权限为 ${mode}，PostgreSQL 要求为 0700 或 0750。"
+        fi
+      fi
+      echo "尝试自动修复数据目录权限为 0700：chmod 700 \"${data_dir}\""
+      chmod 700 "${data_dir}" 2>/dev/null || true
+    fi
+
+    local port
+    port="$(pgsql_resolve_port_from_conf "${data_dir}")"
+    if pgsql_is_port_in_use "${port}"; then
+      echo "警告：检测到 PostgreSQL 端口 ${port} 已被占用，本次启动将被中止。"
+      echo "你可以："
+      echo "  1) 查看占用进程：sudo ss -lntp | grep :${port}  或  sudo lsof -i :${port}"
+      echo "  2) 释放端口后再执行：bash bin/server pgsql start -D \"${data_dir}\""
+      echo "  3) 或修改 ${data_dir}/postgresql.conf 里的 port，后再重启。"
+      return 1
+    fi
+
+    local logfile="${data_dir}/logfile"
+    echo "启动 PostgreSQL（pg_ctl）：${data_dir}"
+    if [[ "$(uname -s)" == "Linux" ]]; then
+      # 注意：-o 后面的参数必须作为一个整体传给 pg_ctl，否则会被当成多余参数报错
+      "${pgctl}" -D "${data_dir}" -l "${logfile}" -o "-k ${data_dir}" start
+    else
+      "${pgctl}" -D "${data_dir}" -l "${logfile}" start
+    fi
+    local rc=$?
+    echo
+    echo "=== PostgreSQL 状态检查 ==="
+    "${pgctl}" -D "${data_dir}" status || true
+    echo "==========================="
+    echo
+    if [[ ${rc} -ne 0 ]]; then
+      echo "✖ PostgreSQL 启动失败（退出码：${rc}）"
+      echo "  日志文件：${logfile}"
+      if [[ -f "${logfile}" ]]; then
+        echo
+        echo "──── PostgreSQL 日志（最后 50 行） ────"
+        tail -n 50 "${logfile}" || true
+        echo "──────────────────────────────────────"
+        echo
+        echo "提示：如需查看更多日志，可执行："
+        echo "  tail -n 200 \"${logfile}\""
+      else
+        echo "  未找到日志文件：${logfile}"
+      fi
+      return "${rc}"
+    else
+      echo "✓ PostgreSQL 已尝试启动，如上为当前状态。"
+      return 0
+    fi
+  fi
+
+  # extend/server 中无 pg_ctl：尝试系统服务
+  if pgsql_try_system_start; then
+    return 0
+  fi
+
+  echo "未在 extend/server/pgsql/bin 中找到 pg_ctl，也未能通过系统服务启动 PostgreSQL。"
+  echo "你可以："
+  echo "  1) 执行 bin/install.sh pgsql （Linux/Mac）安装项目内 PostgreSQL；"
+  echo "  2) 或安装系统 PostgreSQL（如：sudo apt-get install -y postgresql && sudo systemctl start postgresql）。"
+  return 1
+}
+
+pgsql_status() {
+  local data_dir
+  data_dir="$(pgsql_resolve_data_dir "$@")"
+
+  local pgctl
+  if pgctl="$(pgsql_find_pgctl_in_extend)"; then
+    if [[ ! -f "${data_dir}/PG_VERSION" ]]; then
+      echo "extend/server/pgsql 尚未初始化数据目录：${data_dir}"
+      return 0
+    fi
+    "${pgctl}" -D "${data_dir}" status || true
+    return 0
+  fi
+
+  if [[ "$(uname -s)" == "Linux" ]] && pgsql_command_exists systemctl; then
+    local unit
+    for unit in postgresql postgresql-16 postgresql-15 postgresql-14 postgresql-13 postgresql@16-main postgresql@15-main postgresql@14-main postgresql@13-main; do
+      if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\b"; then
+        echo "检测到系统 PostgreSQL 单元：${unit}"
+        systemctl status "${unit}" --no-pager 2>/dev/null || true
+        return 0
+      fi
+    done
+  fi
+
+  echo "未检测到 extend/server 内 PostgreSQL，也未发现常见 systemd 单元。"
+  echo "如使用系统 PostgreSQL，可执行：systemctl status postgresql 或 service postgresql status。"
+  return 0
+}
+
+pgsql_stop() {
+  local data_dir
+  data_dir="$(pgsql_resolve_data_dir "$@")"
+
+  local pgctl
+  if pgctl="$(pgsql_find_pgctl_in_extend)"; then
+    if [[ ! -f "${data_dir}/PG_VERSION" ]]; then
+      echo "extend/server/pgsql 尚未初始化数据目录：${data_dir}"
+      return 0
+    fi
+    echo "停止 PostgreSQL（pg_ctl stop -m fast）：${data_dir}"
+    "${pgctl}" -D "${data_dir}" stop -m fast || true
+    echo "状态："
+    "${pgctl}" -D "${data_dir}" status || true
+    return 0
+  fi
+
+  if [[ "$(uname -s)" == "Linux" ]] && pgsql_command_exists systemctl; then
+    local unit
+    for unit in postgresql postgresql-16 postgresql-15 postgresql-14 postgresql-13 postgresql@16-main postgresql@15-main postgresql@14-main postgresql@13-main; do
+      if systemctl list-unit-files 2>/dev/null | grep -q "^${unit}\b"; then
+        echo "尝试停止系统 PostgreSQL：${unit}"
+        systemctl stop "${unit}" 2>/dev/null || true
+        systemctl status "${unit}" --no-pager 2>/dev/null || true
+        return 0
+      fi
+    done
+  fi
+
+  echo "未找到可停止的 PostgreSQL 实例。"
+  echo "如使用系统 PostgreSQL，可执行：systemctl stop postgresql 或 service postgresql stop。"
+  return 0
+}
+
+case "$SERVICE" in
+  server)
+    "${PHP_BIN}" "${PROJECT_ROOT}/bin/w" "server:${ACTION}" "$@"
+    ;;
+  pgsql)
+    case "${ACTION}" in
+      start)  pgsql_start "$@" ;;
+      status) pgsql_status "$@" ;;
+      stop)   pgsql_stop "$@" ;;
+      help|-h|--help)
+        echo "用法：bash bin/server pgsql <start|status|stop> [-D dataDir]"
+        echo
+        echo "说明："
+        echo "  1) 优先使用 extend/server/pgsql/bin 下的 pg_ctl + data 目录；"
+        echo "  2) 若未找到 pg_ctl，会尝试系统 PostgreSQL（systemctl/service）；"
+        echo "  3) 端口被占用时会提前检查并给出排查建议。"
+        echo
+        echo "示例："
+        echo "  bash bin/server pgsql start"
+        echo "  bash bin/server pgsql status"
+        echo "  bash bin/server pgsql stop"
+        echo "  bash bin/server pgsql start -D /home/weline/extend/server/pgsql/data"
+        ;;
+      *)
+        die "pgsql 子命令只支持：start / status / stop / help"
+        ;;
+    esac
+    ;;
+  all)
+    case "$ACTION" in
+      start)
+        pgsql_start "$@"
+        "${PHP_BIN}" "${PROJECT_ROOT}/bin/w" "server:start" "$@"
+        ;;
+      stop)
+        "${PHP_BIN}" "${PROJECT_ROOT}/bin/w" "server:stop" "$@"
+        pgsql_stop "$@"
+        ;;
+      restart)
+        pgsql_start "$@"
+        "${PHP_BIN}" "${PROJECT_ROOT}/bin/w" "server:restart" "$@"
+        ;;
+      status)
+        pgsql_status "$@"
+        "${PHP_BIN}" "${PROJECT_ROOT}/bin/w" "server:status" "$@"
+        ;;
+      *)
+        die "all 只支持 start/stop/restart/status"
+        ;;
+    esac
+    ;;
+  *)
+    die "unknown service: ${SERVICE} (expected server|pgsql|all)"
+    ;;
+esac
+
