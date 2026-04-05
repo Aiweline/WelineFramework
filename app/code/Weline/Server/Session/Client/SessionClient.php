@@ -45,6 +45,9 @@ final class SessionClient
             'max_size' => (int)($options['pool_size'] ?? 8),
             'token_file_name' => (string)($options['token_file_name'] ?? 'session_server.token'),
             'log_connect_fail' => (bool)($options['log_connect_fail'] ?? true),
+            // Worker 常驻：拉长空闲 TCP 寿命，避免池健康检查频繁关连导致 Session 进程刷屏「Client disconnected」
+            'idle_timeout' => (float)($options['idle_timeout'] ?? 86400.0),
+            'pool_health_ping_idle' => (bool)($options['pool_health_ping_idle'] ?? false),
         ]);
     }
 
@@ -79,7 +82,7 @@ final class SessionClient
      */
     public function isConnected(): bool
     {
-        return $this->connected || $this->stateClient->isHealthy();
+        return $this->connected;
     }
 
     /**
@@ -97,7 +100,12 @@ final class SessionClient
         if ($msg === null) {
             return null;
         }
-        return $this->stateClient->request((string)$msg['cmd'], $msg);
+        $response = $this->stateClient->request((string)$msg['cmd'], $msg);
+        if ($response === null) {
+            $this->connected = false;
+        }
+
+        return $response;
     }
 
     // ==================== 高级 API ====================

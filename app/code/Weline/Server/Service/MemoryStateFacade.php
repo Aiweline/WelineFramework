@@ -37,7 +37,13 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
     ) {
         $this->manager = $manager ?? new SharedStateServiceManager();
         $this->consumerCode = $this->resolveConsumerCode($config);
-        $this->runtime = $this->manager->ensure(ControlMessage::ROLE_MEMORY_SERVER, $config, [], $this->consumerCode);
+        $this->runtime = $this->manager->ensure(
+            ControlMessage::ROLE_MEMORY_SERVER,
+            $config,
+            [],
+            $this->consumerCode,
+            SharedStateServiceManager::resolveEnsureFrontendFlag($config)
+        );
         $this->runtime['consumer_code'] = $this->consumerCode;
         try {
             $serviceOptions = $this->buildServiceOptions($config);
@@ -247,7 +253,12 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
             'pool_size' => (int) ($config['pool_size'] ?? 8),
             'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 1),
             'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.2),
+            'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
+            'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
             'token_file_name' => (string) ($this->runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
+            'service_type' => 'Memory',
+            // Master/CLI 门面默认静默逐条 CONN-*，避免与 Memory 侧车/token 就绪竞态时刷屏；排障可设 log_pool_lifecycle=true
+            'log_pool_lifecycle' => (bool) ($config['log_pool_lifecycle'] ?? false),
         ];
     }
 
