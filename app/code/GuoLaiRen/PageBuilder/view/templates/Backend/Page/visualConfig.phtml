@@ -6,19 +6,20 @@
  */
 $page = $this->getData('page');
 $pageId = $page && $page->getId() ? $page->getId() : 0;
-$welineThemeId = (int) ($this->getData('visual_config_weline_theme_id') ?: ($_GET['weline_theme_id'] ?? 0));
+$virtualThemeId = (int) ($this->getData('visual_config_virtual_theme_id') ?: ($_GET['virtual_theme_id'] ?? 0));
 $styleSettings = $page ? $page->getStyleSettings() : [];
 ?>
 
 <style>
-/* 可视化配置容器 */
+/* 可视化配置容器（须高于后台顶栏/右侧栏，见 theme.css / app.css） */
 .visual-config-wrapper {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
-    z-index: 9999;
+    z-index: 100500 !important;
+    isolation: isolate;
     background: #fff;
     display: none;
 }
@@ -600,7 +601,7 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
         <?php 
         $this->assign('style_code', $page ? $page->getData('style') : 'default');
         $this->assign('layout_code', $page ? ($page->getData('layout') ?: 'default') : 'default');
-        $this->assign('visual_weline_theme_id', $welineThemeId);
+        $this->assign('visual_virtual_theme_id', $virtualThemeId);
         ?>
         <w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/component_panel.phtml</w:template>
     </div>
@@ -611,7 +612,7 @@ $styleSettings = $page ? $page->getStyleSettings() : [];
 if (typeof pageId === 'undefined') {
     var pageId = <?= $pageId ?>;
 }
-window.visualWelineThemeId = <?= (int) $welineThemeId ?>;
+window.visualVirtualThemeId = <?= (int) $virtualThemeId ?>;
 
 // 自动保存防抖定时器
 let autoSaveTimer = null;
@@ -619,13 +620,19 @@ const AUTO_SAVE_DELAY = 1000; // 1秒
 
 // 打开可视化配置
 function openVisualConfig() {
-    document.getElementById('visualConfigWrapper').classList.add('active');
+    var w = document.getElementById('visualConfigWrapper');
+    if (w && w.parentElement !== document.body) {
+        document.body.appendChild(w);
+    }
+    w.classList.add('active');
+    document.body.classList.add('visual-config-editor-open');
     document.body.style.overflow = 'hidden';
 }
 
 // 关闭可视化配置
 function closeVisualConfig() {
     document.getElementById('visualConfigWrapper').classList.remove('active');
+    document.body.classList.remove('visual-config-editor-open');
     document.body.style.overflow = '';
 }
 
@@ -710,8 +717,8 @@ function refreshPreview() {
     
     // 重新加载iframe
     let previewQs = '?page_id=' + pageId + '&t=' + Date.now();
-    if (typeof window.visualWelineThemeId === 'number' && window.visualWelineThemeId > 0) {
-        previewQs += '&weline_theme_id=' + encodeURIComponent(String(window.visualWelineThemeId));
+    if (typeof window.visualVirtualThemeId === 'number' && window.visualVirtualThemeId > 0) {
+        previewQs += '&virtual_theme_id=' + encodeURIComponent(String(window.visualVirtualThemeId));
     }
     iframe.src = iframe.src.split('?')[0] + previewQs;
     

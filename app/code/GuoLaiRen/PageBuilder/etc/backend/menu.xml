@@ -1,166 +1,156 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
-       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
-       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
-    
-    <!-- ==================== 页面构建（内容管理下） ==================== -->
-    <!-- 分组说明：按使用流程 创作 → 建站 → 管理 → 运维 → 配置 -->
-    
-    <!-- 1. 页面创作：核心编辑入口 -->
+<menus xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+
     <menu source="GuoLaiRen_PageBuilder::page_creation_group"
-         name="page_creation_group"
-         title="页面创作"
-         action=""
-         parent="Weline_Backend::page_builder_group"
-         icon="mdi mdi-pencil-ruler"
-         order="10">
-        
+          name="page_creation_group"
+          title="页面创建"
+          action=""
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-pencil-ruler"
+          order="10">
+
         <menu source="GuoLaiRen_PageBuilder::page_builder"
-             name="page_builder"
-             title="网站构建器"
-             action="pagebuilder/backend/page/index"
-             icon="mdi mdi-file-document-edit-outline"
-             order="10"/>
-        
+              name="page_builder"
+              title="页面搭建"
+              action="pagebuilder/backend/page/index"
+              icon="mdi mdi-file-document-edit-outline"
+              order="10"/>
+
         <menu source="GuoLaiRen_PageBuilder::template_management"
-             name="template_management"
-             title="模板管理"
-             action="pagebuilder/backend/template/index"
-             icon="mdi mdi-palette-outline"
-             order="20"/>
+              name="template_management"
+              title="模板管理"
+              action="pagebuilder/backend/template/index"
+              icon="mdi mdi-palette-outline"
+              order="20"/>
     </menu>
-    
-    <!-- 2. 快速建站：一站式建站 -->
+
     <menu source="GuoLaiRen_PageBuilder::quick_build"
-         name="quick_build"
-         title="快速建站"
-         action=""
-         parent="Weline_Backend::page_builder_group"
-         icon="mdi mdi-rocket-launch-outline"
-         order="20">
-        
+          name="quick_build"
+          title="快速建站"
+          action=""
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-rocket-launch-outline"
+          order="20">
+
         <menu source="GuoLaiRen_PageBuilder::quick_build_wizard"
-             name="quick_build_wizard"
-             title="新建站点"
-             action="pagebuilder/backend/quick-build/wizard"
-             icon="mdi mdi-creation"
-             order="10"/>
-        
+              name="quick_build_wizard"
+              title="建站向导"
+              action="pagebuilder/backend/quick-build/wizard"
+              icon="mdi mdi-creation"
+              order="10"/>
+
         <menu source="GuoLaiRen_PageBuilder::quick_build_orders"
-             name="quick_build_orders"
-             title="配置订单"
-             action="pagebuilder/backend/quick-build/orders"
-             icon="mdi mdi-clipboard-list-outline"
-             order="20"/>
+              name="quick_build_orders"
+              title="建站订单"
+              action="pagebuilder/backend/quick-build/orders"
+              icon="mdi mdi-clipboard-list-outline"
+              order="20"/>
 
         <menu source="GuoLaiRen_PageBuilder::ai_site_agent"
-             name="ai_site_agent"
-             title="AI 建站工作台"
-             action="pagebuilder/backend/ai-site-agent/index?legacy=1"
-             icon="mdi mdi-robot-outline"
-             order="15"/>
+              name="ai_site_agent"
+              title="AI 建站工作台"
+              action="pagebuilder/backend/ai-site-agent/index?legacy=1"
+              icon="mdi mdi-robot-outline"
+              order="15"/>
     </menu>
-    
-    <!-- 3. 网站管理：站点与域名 -->
+
     <menu source="GuoLaiRen_PageBuilder::website_management"
-         name="website_management"
-         title="网站管理"
-         action=""
-         parent="Weline_Backend::page_builder_group"
-         icon="mdi mdi-web"
-         order="30">
-        
+          name="website_management"
+          title="网站管理"
+          action=""
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-web"
+          order="30">
+
         <menu source="GuoLaiRen_PageBuilder::website_listing"
-             name="website_listing"
-             title="网站列表"
-             action="pagebuilder/backend/website-management/index"
-             icon="mdi mdi-format-list-bulleted"
-             order="10"/>
-        
+              name="website_listing"
+              title="网站列表"
+              action="pagebuilder/backend/website-management/index"
+              icon="mdi mdi-format-list-bulleted"
+              order="10"/>
+
         <menu source="GuoLaiRen_PageBuilder::website_assignment"
-             name="website_assignment"
-             title="站点分配"
-             action="pagebuilder/backend/website/index"
-             icon="mdi mdi-shield-account-outline"
-             order="20"/>
-        
+              name="website_assignment"
+              title="网站指派"
+              action="pagebuilder/backend/website/index"
+              icon="mdi mdi-shield-account-outline"
+              order="20"/>
+
         <menu source="GuoLaiRen_PageBuilder::domain_management"
-             name="domain_management"
-             title="域名管理"
-             action="pagebuilder/backend/domain-management/index"
-             icon="mdi mdi-dns-outline"
-             order="30"/>
+              name="domain_management"
+              title="域名管理"
+              action="pagebuilder/backend/domain-management/index"
+              icon="mdi mdi-dns-outline"
+              order="30"/>
     </menu>
-    
-    <!-- 4. 服务器运维：底层支撑 -->
+
     <menu source="GuoLaiRen_PageBuilder::server_management"
-         name="server_management"
-         title="服务器运维"
-         action=""
-         parent="Weline_Backend::page_builder_group"
-         icon="mdi mdi-server-network"
-         order="40">
-        
+          name="server_management"
+          title="服务器管理"
+          action=""
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-server-network"
+          order="40">
+
         <menu source="GuoLaiRen_PageBuilder::server_manager"
-             name="server_manager"
-             title="服务器实例"
-             action="pagebuilder/backend/server-manager/index"
-             icon="mdi mdi-server"
-             order="10"/>
-        
+              name="server_manager"
+              title="服务器"
+              action="pagebuilder/backend/server-manager/index"
+              icon="mdi mdi-server"
+              order="10"/>
+
         <menu source="GuoLaiRen_PageBuilder::server_monitor"
-             name="server_monitor"
-             title="服务器监控"
-             action="pagebuilder/backend/server-manager/monitor"
-             icon="mdi mdi-speedometer"
-             order="20"/>
-        
+              name="server_monitor"
+              title="监控"
+              action="pagebuilder/backend/server-manager/monitor"
+              icon="mdi mdi-speedometer"
+              order="20"/>
+
         <menu source="GuoLaiRen_PageBuilder::server_ssl"
-             name="server_ssl"
-             title="SSL 证书管理"
-             action="pagebuilder/backend/server-manager/ssl"
-             icon="mdi mdi-shield-lock"
-             order="30"/>
-        
+              name="server_ssl"
+              title="SSL"
+              action="pagebuilder/backend/server-manager/ssl"
+              icon="mdi mdi-shield-lock"
+              order="30"/>
+
         <menu source="GuoLaiRen_PageBuilder::server_optimization"
-             name="server_optimization"
-             title="性能优化指南"
-             action="pagebuilder/backend/server-manager/optimization"
-             icon="mdi mdi-lightning-bolt"
-             order="40"/>
+              name="server_optimization"
+              title="优化"
+              action="pagebuilder/backend/server-manager/optimization"
+              icon="mdi mdi-lightning-bolt"
+              order="40"/>
     </menu>
-    
-    <!-- 5. 内容与优化：表单、SEO -->
+
     <menu source="GuoLaiRen_PageBuilder::content_optimization_group"
-         name="content_optimization_group"
-         title="内容与优化"
-         action=""
-         parent="Weline_Backend::page_builder_group"
-         icon="mdi mdi-chart-line"
-         order="50">
-        
+          name="content_optimization_group"
+          title="内容优化"
+          action=""
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-chart-line"
+          order="50">
+
         <menu source="GuoLaiRen_PageBuilder::form_submissions"
-             name="form_submissions"
-             title="表单提交"
-             action="pagebuilder/backend/submission/index"
-             icon="mdi mdi-email-open-outline"
-             order="10"/>
-        
+              name="form_submissions"
+              title="表单提交"
+              action="pagebuilder/backend/submission/index"
+              icon="mdi mdi-email-open-outline"
+              order="10"/>
+
         <menu source="GuoLaiRen_PageBuilder::seo_management"
-             name="seo_management"
-             title="SEO 管理"
-             action="pagebuilder/backend/seo/index"
-             icon="mdi mdi-search-web"
-             order="20"/>
+              name="seo_management"
+              title="SEO 管理"
+              action="pagebuilder/backend/seo/index"
+              icon="mdi mdi-search-web"
+              order="20"/>
     </menu>
-    
-    <!-- 6. 配置 -->
+
     <menu source="GuoLaiRen_PageBuilder::config"
-         name="config"
-         title="构建器配置"
-         action="pagebuilder/backend/config/index"
-         parent="Weline_Backend::page_builder_group"
-         icon="mdi mdi-cog-outline"
-         order="90"/>
-    
+          name="config"
+          title="配置"
+          action="pagebuilder/backend/config/index"
+          parent="Weline_Backend::page_builder_group"
+          icon="mdi mdi-cog-outline"
+          order="90"/>
+
 </menus>
