@@ -78,6 +78,51 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         \fclose($socket);
     }
 
+    public function testStartupProtectionIsPreferredBeforeMaintenanceRoutingWhenPoolIsEmpty(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->expects(self::exactly(2))
+            ->method('getWorkerCount')
+            ->willReturn(0);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'maintenanceFallbackActive', true);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'shouldRespondWithStartupProtectionBeforeMaintenanceRouting');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke($dispatcher));
+    }
+
+    public function testStartupProtectionIsNotPreferredWhenPoolHasMaintenancePort(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->expects(self::once())
+            ->method('getWorkerCount')
+            ->willReturn(1);
+        $core->expects(self::once())
+            ->method('getWorkerHealthSummary')
+            ->willReturn([
+                'total' => 1,
+                'healthy' => 1,
+                'unhealthy' => 0,
+                'saturated' => 0,
+            ]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'maintenanceFallbackActive', true);
+        $this->setProperty($dispatcher, 'startupProtectionEnabled', false);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'shouldRespondWithStartupProtectionBeforeMaintenanceRouting');
+        $method->setAccessible(true);
+
+        self::assertFalse($method->invoke($dispatcher));
+    }
+
     private function newDispatcherWithoutConstructor(): Dispatcher
     {
         $reflector = new \ReflectionClass(Dispatcher::class);
