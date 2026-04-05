@@ -14,24 +14,44 @@ class AiSiteProfileGenerationService
     {
         $existing = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $siteTitle = $this->resolveSiteTitle($scope, $existing);
-        $siteTagline = \trim((string)($existing['site_tagline'] ?? $scope['site_tagline'] ?? ''));
-        $briefDescription = \trim((string)($existing['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''));
-        $targetDomain = \strtolower(\trim((string)($existing['target_domain'] ?? $scope['target_domain'] ?? '')));
-        $defaultLocale = \trim((string)($existing['default_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? 'en_US'));
-        $locales = $this->normalizeLocales($existing['locales'] ?? $scope['locales'] ?? $scope['language_codes'] ?? [], $defaultLocale);
+        $siteTagline = $this->pickString($scope['site_tagline'] ?? null, $existing['site_tagline'] ?? null);
+        $briefDescription = $this->pickString(
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+            $existing['brief_description'] ?? null
+        );
+        $targetDomain = \strtolower($this->pickString($scope['target_domain'] ?? null, $existing['target_domain'] ?? null));
+        $defaultLocale = $this->pickString(
+            $scope['default_locale'] ?? null,
+            $scope['default_language'] ?? null,
+            $existing['default_locale'] ?? null,
+            'en_US'
+        );
+        $localesSource = $scope['locales'] ?? $scope['language_codes'] ?? null;
+        if (!\is_array($localesSource) || $localesSource === []) {
+            $localesSource = $existing['locales'] ?? [];
+        }
+        $locales = $this->normalizeLocales($localesSource, $defaultLocale);
         $initials = $this->extractInitials($siteTitle, $targetDomain);
 
-        $logo = \trim((string)($existing['logo'] ?? $scope['logo'] ?? ''));
+        $logo = $this->pickString($scope['logo'] ?? null, $existing['logo'] ?? null);
         if ($logo === '') {
             $logo = $this->buildSvgDataUri($initials, '#0f172a', '#ffffff', 160, 48, 12);
         }
 
-        $icon = \trim((string)($existing['icon'] ?? $existing['favicon'] ?? $scope['icon'] ?? $scope['favicon'] ?? ''));
+        $icon = $this->pickString(
+            $scope['icon'] ?? null,
+            $scope['favicon'] ?? null,
+            $existing['icon'] ?? null,
+            $existing['favicon'] ?? null
+        );
         if ($icon === '') {
             $icon = $this->buildSvgDataUri($initials, '#2563eb', '#ffffff', 64, 64, 18);
         }
 
-        $seo = \is_array($existing['seo'] ?? null) ? $existing['seo'] : [];
+        $seo = \is_array($scope['seo'] ?? null)
+            ? $scope['seo']
+            : (\is_array($existing['seo'] ?? null) ? $existing['seo'] : []);
         $metaTitle = \trim((string)($seo['meta_title'] ?? ''));
         if ($metaTitle === '') {
             $metaTitle = $siteTagline !== '' ? ($siteTitle . ' | ' . $siteTagline) : $siteTitle;
@@ -74,12 +94,12 @@ class AiSiteProfileGenerationService
      */
     private function resolveSiteTitle(array $scope, array $existing): string
     {
-        $siteTitle = \trim((string)($existing['site_title'] ?? $scope['site_title'] ?? ''));
+        $siteTitle = $this->pickString($scope['site_title'] ?? null, $existing['site_title'] ?? null);
         if ($siteTitle !== '') {
             return $siteTitle;
         }
 
-        $domain = \strtolower(\trim((string)($existing['target_domain'] ?? $scope['target_domain'] ?? '')));
+        $domain = \strtolower($this->pickString($scope['target_domain'] ?? null, $existing['target_domain'] ?? null));
         if ($domain !== '') {
             $host = \preg_replace('/^https?:\/\//', '', $domain);
             $host = \explode('/', (string)$host)[0] ?? '';
@@ -89,6 +109,21 @@ class AiSiteProfileGenerationService
         }
 
         return $siteTitle !== '' ? $siteTitle : 'AI Site';
+    }
+
+    private function pickString(mixed ...$values): string
+    {
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $candidate = \trim((string)$value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
     }
 
     /**

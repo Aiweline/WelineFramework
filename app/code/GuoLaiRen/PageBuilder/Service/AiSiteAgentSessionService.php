@@ -204,7 +204,25 @@ class AiSiteAgentSessionService
             \trim($level) !== '' ? \trim($level) : AiSiteAgentSessionEvent::LEVEL_INFO
         );
         $event->setPayloadArray($payload);
-        $event->save();
+        try {
+            $event->save();
+        } catch (\Throwable $e) {
+            if (!$this->isPgsqlAiSessionEventPrimaryKeyBroken($e)) {
+                throw $e;
+            }
+            $event = clone $this->eventModel;
+            $event->clearData()->clearQuery();
+            $event->setData(AiSiteAgentSessionEvent::schema_fields_ID, $this->allocateNextAiSessionEventId());
+            $event->setData(AiSiteAgentSessionEvent::schema_fields_AGENT_SESSION_ID, $sessionId);
+            $event->setData(AiSiteAgentSessionEvent::schema_fields_STAGE_CODE, \trim($stageCode));
+            $event->setData(AiSiteAgentSessionEvent::schema_fields_EVENT_TYPE, $eventType);
+            $event->setData(
+                AiSiteAgentSessionEvent::schema_fields_LEVEL,
+                \trim($level) !== '' ? \trim($level) : AiSiteAgentSessionEvent::LEVEL_INFO
+            );
+            $event->setPayloadArray($payload);
+            $event->save();
+        }
         return true;
     }
 
@@ -382,6 +400,41 @@ class AiSiteAgentSessionService
             $chain = $chain->getPrevious();
         }
         return false;
+    }
+
+    private function isPgsqlAiSessionEventPrimaryKeyBroken(\Throwable $e): bool
+    {
+        $chain = $e;
+        while ($chain !== null) {
+            $msg = $chain->getMessage();
+            if ((\str_contains($msg, '23502') || \str_contains($msg, '23505'))
+                && \str_contains($msg, AiSiteAgentSessionEvent::schema_fields_ID)
+                && (\str_contains($msg, 'guolairen_page_builder_ai_site_agent_event')
+                    || \str_contains($msg, 'm_guolairen_page_builder_ai_site_agent_event'))) {
+                return true;
+            }
+            $chain = $chain->getPrevious();
+        }
+
+        return false;
+    }
+
+    private function allocateNextAiSessionEventId(): int
+    {
+        $connector = ObjectManager::getInstance(ConnectionFactory::class)->getConnector();
+        if (!$connector instanceof PgsqlConnector || !\method_exists($connector, 'getWrappedConnection')) {
+            return 0;
+        }
+
+        $pdo = $connector->getWrappedConnection()->getPdo();
+        $tableSql = $this->eventModel->getTable();
+        $pk = AiSiteAgentSessionEvent::schema_fields_ID;
+        $stmt = $pdo->query('SELECT COALESCE(MAX("' . $pk . '"), 0) AS mx FROM ' . $tableSql);
+        if ($stmt === false) {
+            return 0;
+        }
+
+        return ((int)($stmt->fetch(\PDO::FETCH_ASSOC)['mx'] ?? 0)) + 1;
     }
 
     /**
