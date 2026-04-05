@@ -89,7 +89,7 @@ class ExceptionHandler
             $output = $renderer->render($exception);
             
             // 设置响应码
-            if (!headers_sent() && !CLI) {
+            if (!headers_sent() && \PHP_SAPI !== 'cli') {
                 $code = self::getHttpStatusCode($exception);
                 http_response_code($code);
                 
@@ -119,7 +119,7 @@ class ExceptionHandler
             )
             : "An error occurred. Please contact the administrator.";
 
-        if (CLI) {
+        if (\PHP_SAPI === 'cli') {
             fwrite(STDERR, $message . PHP_EOL);
         } else {
             echo '<pre>' . htmlspecialchars($message) . '</pre>';
