@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedStateServiceManager;
 
 final class SharedStateServiceManagerTest extends TestCase
@@ -319,6 +320,126 @@ final class SharedStateServiceManagerTest extends TestCase
         $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv());
     }
 
+    public function testEnsureAcceptsLegacyScopedReusableProcessesOwnedByCurrentProject(): void
+    {
+        $scope = MasterProcess::getProjectScopeToken();
+        $manager = new class($scope) extends SharedStateServiceManager {
+            public array $runtimeFiles = [];
+
+            public function __construct(private readonly string $scope)
+            {
+            }
+
+            protected function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->runtimeFiles[$role] ?? [];
+            }
+
+            protected function writeRuntimeFile(string $role, array $runtime): void
+            {
+                $this->runtimeFiles[$role] = $runtime;
+            }
+
+            protected function isPortOccupied(int $port): bool
+            {
+                return true;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                $role = (string) $definition['role'];
+                $instanceName = $role === ControlMessage::ROLE_MEMORY_SERVER ? 'memory-default' : 'session-default';
+                $processPrefix = $role === ControlMessage::ROLE_MEMORY_SERVER
+                    ? 'weline-wls-memory'
+                    : 'weline-wls-session';
+
+                return [
+                    'reusable' => true,
+                    'pid' => 4321,
+                    'port' => (int) $definition['port'],
+                    'role' => $role,
+                    'token_file_name' => $expectedTokenFileName,
+                    'process_name' => $processPrefix . '-' . $instanceName . '-' . $this->scope,
+                    'instance_name' => $instanceName,
+                ];
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                return true;
+            }
+        };
+
+        $cases = [
+            [
+                'role' => ControlMessage::ROLE_SESSION_SERVER,
+                'env' => self::sessionPortEnv(),
+                'port' => 19970,
+            ],
+            [
+                'role' => ControlMessage::ROLE_MEMORY_SERVER,
+                'env' => self::memoryPortEnv(),
+                'port' => 19971,
+            ],
+        ];
+
+        foreach ($cases as $case) {
+            $runtime = $manager->ensure((string) $case['role'], [], (array) $case['env']);
+
+            self::assertTrue((bool) ($runtime['reuse_existing'] ?? false));
+            self::assertTrue((bool) ($runtime['shared_service'] ?? false));
+            self::assertSame($case['port'], $runtime['port'] ?? null);
+        }
+    }
+
+    public function testImplicitSharedSessionTokenResetsToCanonicalDefaultPortToken(): void
+    {
+        $manager = new SharedStateServiceManager();
+        $defaultPort = (int) $this->invokePrivateMethod(
+            $manager,
+            'defaultPortForRole',
+            ControlMessage::ROLE_SESSION_SERVER
+        );
+
+        $resolved = (string) $this->invokePrivateMethod(
+            $manager,
+            'resolveSharedServiceTokenFileName',
+            ControlMessage::ROLE_SESSION_SERVER,
+            'session_server.26425.token',
+            $defaultPort,
+            false
+        );
+
+        self::assertSame('session_server.token', $resolved);
+    }
+
+    public function testImplicitSharedMemoryTokenRebasesToResolvedNonDefaultPort(): void
+    {
+        $manager = new SharedStateServiceManager();
+        $defaultPort = (int) $this->invokePrivateMethod(
+            $manager,
+            'defaultPortForRole',
+            ControlMessage::ROLE_MEMORY_SERVER
+        );
+        $resolvedPort = $defaultPort + 7;
+
+        $resolved = (string) $this->invokePrivateMethod(
+            $manager,
+            'resolveSharedServiceTokenFileName',
+            ControlMessage::ROLE_MEMORY_SERVER,
+            'memory_server.26424.token',
+            $resolvedPort,
+            false
+        );
+
+        self::assertSame("memory_server.{$resolvedPort}.token", $resolved);
+    }
+
     public function testReleaseCompatibilityShellIsNoop(): void
     {
         $manager = new SharedStateServiceManager();
@@ -372,5 +493,16 @@ final class SharedStateServiceManagerTest extends TestCase
                 ],
             ],
         ];
+    }
+
+    private function invokePrivateMethod(object $target, string $method, mixed ...$args): mixed
+    {
+        $caller = function (string $methodName, array $invokeArgs): mixed {
+            return $this->{$methodName}(...$invokeArgs);
+        };
+        $bound = \Closure::bind($caller, $target, SharedStateServiceManager::class);
+        self::assertInstanceOf(\Closure::class, $bound);
+
+        return $bound($method, $args);
     }
 }
