@@ -558,6 +558,7 @@ class AiSiteScopeCompatibilityService
             'preview_full_url' => \trim((string)($data['preview_full_url'] ?? '')),
             'last_generated_at' => \trim((string)($data['last_generated_at'] ?? '')),
             'materialized_page_id' => (int)($data['materialized_page_id'] ?? 0),
+            'section_refinements' => $this->normalizeStringMap($data['section_refinements'] ?? []),
             'blocks' => $blocks,
         ];
     }
@@ -582,6 +583,30 @@ class AiSiteScopeCompatibilityService
                 'type' => \trim((string)($b['type'] ?? 'section')),
                 'html' => (string)($b['html'] ?? ''),
             ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function normalizeStringMap(mixed $raw): array
+    {
+        if (!\is_array($raw)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($raw as $key => $value) {
+            if (!\is_scalar($key) || !\is_scalar($value)) {
+                continue;
+            }
+            $text = \trim((string)$value);
+            if ($text === '') {
+                continue;
+            }
+            $out[(string)$key] = $text;
         }
 
         return $out;
