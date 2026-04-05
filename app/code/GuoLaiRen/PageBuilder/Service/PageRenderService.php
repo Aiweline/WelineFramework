@@ -1118,7 +1118,9 @@ class PageRenderService
                     $escapedCode = htmlspecialchars($code);
                     $escapedRegion = htmlspecialchars($region);
                     $escapedStyleCode = htmlspecialchars($useTemplateCode);
-                    $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\">{$componentHtml}</div>";
+                    $escapedPageType = htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8');
+                    $componentActions = $this->buildWorkspaceVisualActionsHtml($code, $region, $componentIndex, $page);
+                    $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" data-page-type=\"{$escapedPageType}\">{$componentActions}{$componentHtml}</div>";
                 }
                 $html .= $componentHtml;
                 $html .= "<!-- Component {$code} rendered successfully -->\n";
@@ -1129,7 +1131,33 @@ class PageRenderService
         
         return $html;
     }
+
+    private function buildVisualComponentActionsHtml(string $componentCode, string $region, int $index, Page $page): string
+    {
+        $pageType = htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8');
+        $escapedCode = htmlspecialchars($componentCode, ENT_QUOTES, 'UTF-8');
+        $escapedRegion = htmlspecialchars($region, ENT_QUOTES, 'UTF-8');
+        $escapedIndex = (string)$index;
+
+        return '<div class="component-actions" data-page-type="' . $pageType . '" data-component="' . $escapedCode . '" data-region="' . $escapedRegion . '" data-index="' . $escapedIndex . '">'
+            . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
+            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="open-editor" title="打开当前页真实编辑器">编辑器</button>'
+            . '</div>';
+    }
     
+    private function buildWorkspaceVisualActionsHtml(string $componentCode, string $region, int $index, Page $page): string
+    {
+        $pageType = htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8');
+        $escapedCode = htmlspecialchars($componentCode, ENT_QUOTES, 'UTF-8');
+        $escapedRegion = htmlspecialchars($region, ENT_QUOTES, 'UTF-8');
+        $escapedIndex = (string)$index;
+
+        return '<div class="component-actions" data-page-type="' . $pageType . '" data-component="' . $escapedCode . '" data-region="' . $escapedRegion . '" data-index="' . $escapedIndex . '">'
+            . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
+            . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="open-editor" title="打开当前页真实编辑器">编辑器</button>'
+            . '</div>';
+    }
+
     /**
      * 获取组件文件映射
      * 
@@ -1378,7 +1406,7 @@ class PageRenderService
         // 导致 setupPreviewDropZones 无法注入 component-actions。补包 wrapper 并设置 data-component 供编辑/删除定位
         if (stripos($footerHtml, 'tpmst-component-wrapper') === false && stripos($footerHtml, 'pb-component-wrapper') === false) {
             $footerComponentCode = 'footer-links';
-            $footerHtml = '<div class="tpmst-component-wrapper pb-component-wrapper" data-region="footer" data-component="' . $footerComponentCode . '">' . $footerHtml . '</div>';
+            $footerHtml = '<div class="tpmst-component-wrapper pb-component-wrapper" data-region="footer" data-component="' . $footerComponentCode . '" data-index="0" data-page-type="' . htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8') . '">' . $this->buildWorkspaceVisualActionsHtml($footerComponentCode, 'footer', 0, $page) . $footerHtml . '</div>';
         }
         
         // 组件化模式：构建完整 HTML
@@ -1403,7 +1431,7 @@ class PageRenderService
         body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     </style>' . $sharedHeadBlock . '
 </head>
-<body>
+<body data-page-type="' . htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8') . '">
     ' . $debugInfo . '
     ' . $previewBoot . '
     <div class="pb-slot pb-slot-header" data-region="header" data-multiple="false" data-slot-name="Header">' . $headerHtml . '</div>
@@ -1627,6 +1655,31 @@ class PageRenderService
                 box-shadow: 0 2px 12px rgba(0,0,0,0.15), 0 0 0 1px rgba(0,0,0,0.05) !important;
                 pointer-events: auto !important;
             }
+            .tpmst-component-wrapper .component-actions .component-action-btn,
+            .pb-component-wrapper .component-actions .component-action-btn {
+                border: 0;
+                border-radius: 999px;
+                padding: 8px 12px;
+                font-size: 12px;
+                font-weight: 700;
+                line-height: 1;
+                cursor: pointer;
+                transition: transform 0.15s ease, opacity 0.15s ease;
+            }
+            .tpmst-component-wrapper .component-actions .component-action-btn:hover,
+            .pb-component-wrapper .component-actions .component-action-btn:hover {
+                transform: translateY(-1px);
+            }
+            .tpmst-component-wrapper .component-actions .component-action-refine,
+            .pb-component-wrapper .component-actions .component-action-refine {
+                background: #2563eb;
+                color: #ffffff;
+            }
+            .tpmst-component-wrapper .component-actions .component-action-editor,
+            .pb-component-wrapper .component-actions .component-action-editor {
+                background: #e2e8f0;
+                color: #0f172a;
+            }
             .tpmst-component-wrapper:hover .component-actions,
             .pb-component-wrapper:hover .component-actions,
             .tpmst-component-wrapper .component-actions:hover,
@@ -1656,6 +1709,12 @@ class PageRenderService
                 window.__PAGEBUILDER_PAGE_ID__ = ' . $pageId . ';
                 // 布局拥有者页面ID（API调用时使用此ID）
                 window.__PAGEBUILDER_LAYOUT_OWNER_PAGE_ID__ = ' . $layoutOwnerPageId . ';
+                var hasParentWindow = window.parent && window.parent !== window;
+                if (!hasParentWindow) {
+                    document.querySelectorAll(".component-actions").forEach(function(actions) {
+                        actions.remove();
+                    });
+                }
                 
                 // 初始化拖拽区域
                 document.querySelectorAll(".pb-slot").forEach(function(slot) {
@@ -1681,22 +1740,49 @@ class PageRenderService
                 });
                 
                 // 组件选择
-                document.querySelectorAll(".tpmst-component-wrapper").forEach(function(wrapper) {
+                document.querySelectorAll(".tpmst-component-wrapper, .pb-component-wrapper").forEach(function(wrapper) {
                     wrapper.addEventListener("click", function(e) {
+                        if (e.target && e.target.closest && e.target.closest(".component-actions")) {
+                            return;
+                        }
                         e.stopPropagation();
-                        document.querySelectorAll(".tpmst-component-wrapper.selected").forEach(function(el) {
+                        document.querySelectorAll(".tpmst-component-wrapper.selected, .pb-component-wrapper.selected").forEach(function(el) {
                             el.classList.remove("selected");
                         });
                         this.classList.add("selected");
                         // 通知父窗口
-                        if (window.parent && window.parent !== window) {
+                        if (hasParentWindow) {
                             window.parent.postMessage({
                                 type: "pb-component-select",
                                 component: this.dataset.component,
                                 region: this.dataset.region,
-                                index: this.dataset.index
+                                index: this.dataset.index,
+                                page_type: this.dataset.pageType || document.body.getAttribute("data-page-type") || ""
                             }, "*");
                         }
+                    });
+                });
+
+                document.querySelectorAll(".component-actions [data-pb-action]").forEach(function(button) {
+                    button.addEventListener("click", function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        e.stopImmediatePropagation();
+                        if (!hasParentWindow) {
+                            return;
+                        }
+                        var wrapper = this.closest(".tpmst-component-wrapper, .pb-component-wrapper");
+                        if (!wrapper) {
+                            return;
+                        }
+                        window.parent.postMessage({
+                            type: "pb-component-action",
+                            action: this.getAttribute("data-pb-action") || "",
+                            component: wrapper.dataset.component || "",
+                            region: wrapper.dataset.region || "",
+                            index: wrapper.dataset.index || "",
+                            page_type: wrapper.dataset.pageType || document.body.getAttribute("data-page-type") || ""
+                        }, "*");
                     });
                 });
             })();
