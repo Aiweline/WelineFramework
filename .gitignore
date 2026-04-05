@@ -78,6 +78,8 @@ tests/e2e/playwright-report/
 tests/e2e/test-results/
 tests/e2e/collected-tests.json
 tests/e2e/*-debug.png
+tests/e2e/.last-playwright-tee.txt
+tests/e2e/.smoke-publish-last.log
 
 # Codex 任务过程产物
 dev/ai/codex/tasks/**/artifacts/*
