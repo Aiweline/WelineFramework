@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\HealthCheckResult;
 use Weline\Server\Service\Contract\ServiceCommand;
@@ -104,6 +105,13 @@ class WorkerProvider extends AbstractServiceProvider
 
         $arguments = \array_merge($arguments, $this->buildSharedStateArguments($context));
 
+        $loopDriver = (string) $context->getConfig('wls.loop.driver', 'auto');
+        $loopDriver = \strtolower(\trim($loopDriver));
+        if ($loopDriver === '') {
+            $loopDriver = 'auto';
+        }
+        $arguments[] = '--wls-loop-driver=' . $loopDriver;
+
         // Dispatcher 模式（TCP 透传）下启用延迟 SSL
         // Worker 先 tcp:// 接入，accept 后根据首包判断协议并手动启用 SSL
         // 解决 ssl:// 非阻塞模式下 stream_socket_accept 无法完成 TLS 握手的问题。
@@ -125,6 +133,12 @@ class WorkerProvider extends AbstractServiceProvider
 
         if ($mode === 'linux-direct') {
             return $context->mainPort;
+        }
+
+        // 零停机滚动重启：临时 Worker (ID > 100) 使用动态端口避免冲突
+        // 例如：Worker 1 使用 9501，临时 Worker 101 使用 9601
+        if ($instanceId > 100) {
+            return $basePort + $instanceId;
         }
 
         return $basePort + $instanceId;
@@ -181,17 +195,15 @@ class WorkerProvider extends AbstractServiceProvider
      */
     private function resolveSessionRuntime(ServiceContext $context): array
     {
-        $wlsSession = \is_array(($context->envConfig['wls'] ?? [])['session'] ?? null)
-            ? $context->envConfig['wls']['session']
-            : [];
-        $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
-
-        $host = (string) ($wlsServer['host'] ?? $wlsSession['host'] ?? '127.0.0.1');
-        $host = \trim($host) !== '' ? $host : '127.0.0.1';
-        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $runtime = (new SharedStateRuntimeResolver())->resolve($context->envConfig, $context->envConfig, $context->instanceName);
+        $session = \is_array($runtime['session'] ?? null) ? $runtime['session'] : [];
+        $host = \trim((string) ($session['host'] ?? '127.0.0.1'));
+        if ($host === '') {
+            $host = '127.0.0.1';
+        }
         $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
-        $port = (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $context->envConfig['session']['server_port'] ?? $defaultPort);
-        $tokenFileName = (string) ($wlsServer['token_file_name'] ?? $wlsSession['token_file_name'] ?? 'session_server.token');
+        $port = (int) ($session['port'] ?? $defaultPort);
+        $tokenFileName = \trim((string) ($session['token_file_name'] ?? 'session_server.token'));
 
         return [
             'host' => $host,
@@ -205,20 +217,19 @@ class WorkerProvider extends AbstractServiceProvider
      */
     private function resolveMemoryRuntime(ServiceContext $context): array
     {
-        $memory = \is_array(($context->envConfig['wls'] ?? [])['memory_service'] ?? null)
-            ? $context->envConfig['wls']['memory_service']
-            : [];
-
-        $host = (string) ($memory['host'] ?? '127.0.0.1');
-        $host = \trim($host) !== '' ? $host : '127.0.0.1';
-        // 默认端口 19971 + 项目偏移量，确保多项目不冲突
+        $runtime = (new SharedStateRuntimeResolver())->resolve($context->envConfig, $context->envConfig, $context->instanceName);
+        $memory = \is_array($runtime['memory'] ?? null) ? $runtime['memory'] : [];
+        $host = \trim((string) ($memory['host'] ?? '127.0.0.1'));
+        if ($host === '') {
+            $host = '127.0.0.1';
+        }
         $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
         $port = (int) ($memory['port'] ?? $defaultPort);
-        $tokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
+        $tokenFileName = \trim((string) ($memory['token_file_name'] ?? 'memory_server.token'));
 
         return [
             'host' => $host,
-            'port' => $port > 0 ? $port : 19971,
+            'port' => $port > 0 ? $port : $defaultPort,
             'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'memory_server.token',
         ];
     }

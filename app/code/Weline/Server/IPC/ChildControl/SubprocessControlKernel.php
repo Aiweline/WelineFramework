@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC\ChildControl;
 
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\ControlClient;
 use Weline\Server\Log\WlsLogger;
 
 final class SubprocessControlKernel
 {
     private ?ControlClient $client = null;
+
+    private const E2E_READY_DELAY_LIMIT_MS = 60000;
 
     public function __construct(
         private readonly ChildProcessIdentity $identity,
@@ -34,6 +37,31 @@ final class SubprocessControlKernel
             return 0;
         }
         return (int)($instanceData['control_port'] ?? 0);
+    }
+
+    public static function resolveReadyDelayMilliseconds(string $role): int
+    {
+        $envName = match ($role) {
+            ControlMessage::ROLE_WORKER => 'WLS_E2E_WORKER_READY_DELAY_MS',
+            ControlMessage::ROLE_MAINTENANCE => 'WLS_E2E_MAINTENANCE_READY_DELAY_MS',
+            default => '',
+        };
+
+        if ($envName === '') {
+            return 0;
+        }
+
+        $raw = \getenv($envName);
+        if ($raw === false || $raw === '') {
+            return 0;
+        }
+
+        $delayMs = (int) $raw;
+        if ($delayMs <= 0) {
+            return 0;
+        }
+
+        return \min($delayMs, self::E2E_READY_DELAY_LIMIT_MS);
     }
 
     public function connectAndRegister(int $controlPort): bool
@@ -65,6 +93,8 @@ final class SubprocessControlKernel
             return false;
         }
 
+        $this->applyE2EReadyDelayIfNeeded();
+
         $ready = $client->sendReady(
             $this->identity->role,
             $this->identity->workerId,
@@ -89,11 +119,34 @@ final class SubprocessControlKernel
         return true;
     }
 
+    private function applyE2EReadyDelayIfNeeded(): void
+    {
+        $delayMs = self::resolveReadyDelayMilliseconds($this->identity->role);
+        if ($delayMs <= 0) {
+            return;
+        }
+
+        $this->log("E2E startup hook: delaying READY by {$delayMs}ms");
+        \usleep($delayMs * 1000);
+    }
+
     public function tick(): void
     {
         if ($this->client && $this->client->isConnected()) {
             $this->client->handleReadable();
         }
+    }
+
+    public function flushWrites(): void
+    {
+        if ($this->client && $this->client->isConnected()) {
+            $this->client->handleWritable();
+        }
+    }
+
+    public function hasPendingWrites(): bool
+    {
+        return $this->client !== null && $this->client->hasPendingWrites();
     }
 
     public function reconnect(): bool

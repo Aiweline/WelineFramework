@@ -8,16 +8,32 @@ use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
-use Weline\Server\Shared\Client\SharedStateClient;
 use Weline\Server\Shared\Connection\ConnectionPoolManager;
 
 class SharedStateServiceManager
 {
     private const DEFAULT_ENSURE_TIMEOUT_SEC = 30.0;
     private const DEFAULT_ENSURE_POLL_INTERVAL_MS = 100;
+
+    /**
+     * 解析 ensure() 的前台标志，与日志及 Windows 下共享侧车拉起方式一致。
+     * - `server:start --frontend` 经 ensureRuntime 显式传入；
+     * - Worker 带 `--frontend` 时由 worker.php / worker_ssl.php 定义常量 WLS_FRONTEND_MODE。
+     *
+     * @param array<string, mixed> $config 可含 shared_service_frontend 强制覆盖
+     */
+    public static function resolveEnsureFrontendFlag(array $config = []): bool
+    {
+        if (\array_key_exists('shared_service_frontend', $config)) {
+            return (bool) $config['shared_service_frontend'];
+        }
+
+        return \defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE;
+    }
 
     /**
      * @param array<string, mixed> $config
@@ -27,14 +43,90 @@ class SharedStateServiceManager
      *   memory: array<string, mixed>
      * }
      */
-    public function ensureRuntime(string $requesterInstanceName, array $config, array $envConfig = [], bool $frontend = false): array
-    {
+    public function ensureRuntime(
+        string $requesterInstanceName,
+        array $config,
+        array $envConfig = [],
+        bool $frontend = false,
+        bool $forceRestart = false
+    ): array {
+        // Session / Memory 分角色短锁内仅「探测→必要时停止→拉起子进程」，就绪等待放到锁外并对多角色统一轮询，
+        // 使两个共享侧车进程能并行启动，缩短 server:start -r 等场景的总耗时。
+        $sessionDefinition = $this->buildRoleDefinition(
+            ControlMessage::ROLE_SESSION_SERVER,
+            $requesterInstanceName,
+            $config,
+            $envConfig
+        );
+        $sessionPrepare = $this->withRoleLock((string) $sessionDefinition['role'], function () use (
+            $sessionDefinition,
+            $requesterInstanceName,
+            $frontend,
+            $forceRestart
+        ): array {
+            return $this->prepareSharedServiceUnderLock(
+                $sessionDefinition,
+                $requesterInstanceName,
+                $frontend,
+                $forceRestart
+            );
+        });
+
+        $memoryPrepare = null;
+        if ($this->isMemoryEnabled($config, $envConfig)) {
+            $memoryDefinition = $this->buildRoleDefinition(
+                ControlMessage::ROLE_MEMORY_SERVER,
+                $requesterInstanceName,
+                $config,
+                $envConfig
+            );
+            $memoryPrepare = $this->withRoleLock((string) $memoryDefinition['role'], function () use (
+                $memoryDefinition,
+                $requesterInstanceName,
+                $frontend,
+                $forceRestart
+            ): array {
+                return $this->prepareSharedServiceUnderLock(
+                    $memoryDefinition,
+                    $requesterInstanceName,
+                    $frontend,
+                    $forceRestart
+                );
+            });
+        }
+
+        $pendingDefinitions = [];
+        if (($sessionPrepare['status'] ?? '') === 'pending') {
+            $pendingDefinitions[] = $sessionPrepare['definition'];
+        }
+        if ($memoryPrepare !== null && (($memoryPrepare['status'] ?? '') === 'pending')) {
+            $pendingDefinitions[] = $memoryPrepare['definition'];
+        }
+
+        $batchReady = [];
+        if ($pendingDefinitions !== []) {
+            $roleLabels = [];
+            foreach ($pendingDefinitions as $def) {
+                $roleLabels[] = (string) ($def['role'] ?? '?');
+            }
+            WlsLogger::info_(
+                '[SharedStateServiceManager] 并发等待共享服务就绪 (角色: ' . \implode(', ', $roleLabels) . ')'
+            );
+            WlsLogger::flush_(true);
+            $batchReady = $this->waitUntilSharedServicesReadyBatch($pendingDefinitions);
+        }
+
         $runtime = [
-            'session' => $this->ensure(ControlMessage::ROLE_SESSION_SERVER, $config, $envConfig, $requesterInstanceName, $frontend),
+            'session' => ($sessionPrepare['status'] ?? '') === 'ready'
+                ? $sessionPrepare['runtime']
+                : ($batchReady[(string) $sessionDefinition['role']] ?? []),
         ];
 
         if ($this->isMemoryEnabled($config, $envConfig)) {
-            $runtime['memory'] = $this->ensure(ControlMessage::ROLE_MEMORY_SERVER, $config, $envConfig, $requesterInstanceName, $frontend);
+            $memoryRole = ControlMessage::ROLE_MEMORY_SERVER;
+            $runtime['memory'] = ($memoryPrepare !== null && ($memoryPrepare['status'] ?? '') === 'ready')
+                ? $memoryPrepare['runtime']
+                : ($batchReady[$memoryRole] ?? []);
         } else {
             $runtime['memory'] = $this->buildRoleDefinition(
                 ControlMessage::ROLE_MEMORY_SERVER,
@@ -61,41 +153,178 @@ class SharedStateServiceManager
         array $config = [],
         array $envConfig = [],
         string $requesterInstanceName = 'system',
-        bool $frontend = false
+        bool $frontend = false,
+        bool $forceRestart = false
     ): array {
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
-        return $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend): array {
-            $probe = $this->probeDefinition($definition);
-            if ((bool) ($probe['healthy'] ?? false)) {
+        $prepare = $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend, $forceRestart): array {
+            return $this->prepareSharedServiceUnderLock($definition, $requesterInstanceName, $frontend, $forceRestart);
+        });
+
+        if (($prepare['status'] ?? '') === 'ready') {
+            return $prepare['runtime'];
+        }
+
+        return $this->waitUntilSharedServicesReadyBatch([$prepare['definition']])[(string) $definition['role']];
+    }
+
+    /**
+     * 在角色锁内完成探测 / 强制停止 / 拉起子进程；就绪轮询在锁外执行（便于 Session 与 Memory 并行启动）。
+     *
+     * @param array<string, mixed> $definition
+     * @return array{
+     *   status: 'ready',
+     *   runtime: array<string, mixed>
+     * }|array{
+     *   status: 'pending',
+     *   definition: array<string, mixed>
+     * }
+     */
+    private function prepareSharedServiceUnderLock(
+        array $definition,
+        string $requesterInstanceName,
+        bool $frontend,
+        bool $forceRestart
+    ): array {
+        $probe = $this->probeDefinition($definition);
+        if ((bool) ($probe['healthy'] ?? false)) {
+            if ($forceRestart) {
+                WlsLogger::info_(
+                    '[SharedStateServiceManager] 强制重启共享服务 (角色: '
+                    . (string) $definition['role']
+                    . ", 请求者: {$requesterInstanceName}, 前台: "
+                    . ($frontend ? '是' : '否') . ')'
+                );
+                $this->forceStopReusedService(
+                    $definition,
+                    \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []
+                );
+                if (\defined('IS_WIN') && IS_WIN) {
+                    SchedulerSystem::usleep(500_000);
+                }
+            } else {
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
                 $runtime['reuse_existing'] = true;
                 $runtime['shared_service'] = true;
 
                 $this->writeRuntimeFile((string) $definition['role'], $runtime);
-
-                return $runtime;
-            }
-
-            if ((bool) ($probe['unexpected_occupant'] ?? false)) {
-                throw new \RuntimeException((string) ($probe['message'] ?? 'Shared service port is occupied.'));
-            }
-
-            if ((bool) ($probe['reusable_but_unhealthy'] ?? false)) {
-                $this->forceStopReusedService($definition, \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []);
-                if (\defined('IS_WIN') && IS_WIN) {
-                    // Windows 上强制杀进程后端口进入 TIME_WAIT，过短间隔内子进程 bind 可能失败。
-                    SchedulerSystem::usleep(500_000);
+                WlsLogger::info_(
+                    '[SharedStateServiceManager] 共享服务已存在 (角色: ' . (string) $definition['role']
+                    . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
+                );
+                if ($frontend && \defined('IS_WIN') && IS_WIN) {
+                    WlsLogger::info_(
+                        '[SharedStateServiceManager] 提示: 当前为复用已有共享进程，不会出现新的控制台窗口；若需 Session/Memory 独立窗口请使用 server:start -r（或先 server:shared:stop）'
+                    );
                 }
+                WlsLogger::flush_(true);
+
+                return ['status' => 'ready', 'runtime' => $runtime];
+            }
+        }
+
+        if ((bool) ($probe['unexpected_occupant'] ?? false)) {
+            throw new \RuntimeException((string) ($probe['message'] ?? 'Shared service port is occupied.'));
+        }
+
+        if ((bool) ($probe['reusable_but_unhealthy'] ?? false)) {
+            $this->forceStopReusedService($definition, \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []);
+            if (\defined('IS_WIN') && IS_WIN) {
+                SchedulerSystem::usleep(500_000);
+            }
+        }
+        WlsLogger::info_(
+            '[SharedStateServiceManager] 启动共享服务 (角色: ' . (string) $definition['role']
+            . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
+        );
+        $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, $frontend);
+        if ($pid <= 0) {
+            throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
+        }
+
+        return ['status' => 'pending', 'definition' => $definition];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $definitions
+     * @return array<string, array<string, mixed>> role => runtime
+     */
+    protected function waitUntilSharedServicesReadyBatch(array $definitions): array
+    {
+        if ($definitions === []) {
+            return [];
+        }
+
+        foreach ($definitions as $definition) {
+            ConnectionPoolManager::discardPool(
+                (string) $definition['host'],
+                (int) $definition['port'],
+                (string) ($definition['token_file_name'] ?? '')
+            );
+        }
+
+        $timeoutSec = self::DEFAULT_ENSURE_TIMEOUT_SEC;
+        foreach ($definitions as $definition) {
+            $timeoutSec = \max(
+                $timeoutSec,
+                (float) ($definition['ensure_timeout_sec'] ?? self::DEFAULT_ENSURE_TIMEOUT_SEC)
+            );
+        }
+
+        $deadline = \microtime(true) + $timeoutSec;
+        $startedAt = \date('c');
+        $pending = [];
+        foreach ($definitions as $definition) {
+            $roleKey = (string) $definition['role'];
+            $pending[$roleKey] = $definition;
+        }
+
+        $pollIntervals = [50_000, 100_000, 150_000, 200_000];
+        $pollIndex = 0;
+        $done = [];
+
+        while (\microtime(true) < $deadline && $pending !== []) {
+            $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
+            SchedulerSystem::usleep($sleepUs);
+            $pollIndex++;
+
+            foreach ($pending as $roleKey => $definition) {
+                $probe = $this->probeDefinition($definition);
+                if (!((bool) ($probe['healthy'] ?? false))) {
+                    continue;
+                }
+
+                $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
+                $runtime['started_at'] = $startedAt;
+                $runtime['healthy_at'] = \date('c');
+                $runtime['created_now'] = true;
+                $runtime['shared_service'] = true;
+
+                $this->writeRuntimeFile($roleKey, $runtime);
+                $done[$roleKey] = $runtime;
+                unset($pending[$roleKey]);
+            }
+        }
+
+        if ($pending !== []) {
+            $parts = [];
+            foreach ($pending as $roleKey => $definition) {
+                $parts[] = \sprintf(
+                    '%s %s:%d',
+                    $this->displayNameForRole($roleKey),
+                    (string) $definition['host'],
+                    (int) $definition['port']
+                );
             }
 
-            $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, $frontend);
-            if ($pid <= 0) {
-                throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
-            }
+            throw new \RuntimeException(
+                '下列共享服务未在时限内就绪: ' . \implode('; ', $parts)
+                . '。请查看对应进程日志与 token 文件；若需释放共享侧车可执行 php bin/w server:shared:stop 后重试。'
+            );
+        }
 
-            return $this->waitUntilServiceReady($definition);
-        });
+        return $done;
     }
 
     /**
@@ -127,18 +356,24 @@ class SharedStateServiceManager
     ): array {
         $definition = $this->buildRoleDefinition($role, $requesterInstanceName, $config, $envConfig);
 
-        return $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend): array {
+        $prepare = $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend): array {
             $this->forceStopReusedService($definition, []);
             if (\defined('IS_WIN') && IS_WIN) {
                 SchedulerSystem::usleep(500_000);
             }
+            WlsLogger::info_(
+                "[SharedStateServiceManager] 启动共享服务 (角色: " . (string) $definition['role']
+                . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
+            );
             $pid = $this->launchSharedServiceProcess($definition, $requesterInstanceName, $frontend);
             if ($pid <= 0) {
                 throw new \RuntimeException($this->buildSharedSpawnFailureMessage($definition));
             }
 
-            return $this->waitUntilServiceReady($definition);
+            return ['status' => 'pending', 'definition' => $definition];
         });
+
+        return $this->waitUntilSharedServicesReadyBatch([$prepare['definition']])[(string) $definition['role']];
     }
 
     /**
@@ -219,7 +454,13 @@ class SharedStateServiceManager
             return $options['runtime'];
         }
 
-        return $this->ensure($role, $config, $envConfig, $consumerCode !== '' ? $consumerCode : 'system');
+        return $this->ensure(
+            $role,
+            $config,
+            $envConfig,
+            $consumerCode !== '' ? $consumerCode : 'system',
+            self::resolveEnsureFrontendFlag($config)
+        );
     }
 
     /**
@@ -391,56 +632,7 @@ class SharedStateServiceManager
      */
     protected function waitUntilServiceReady(array $definition): array
     {
-        $timeoutSec = (float) ($definition['ensure_timeout_sec'] ?? self::DEFAULT_ENSURE_TIMEOUT_SEC);
-        $pollMs = (int) ($definition['ensure_poll_interval_ms'] ?? self::DEFAULT_ENSURE_POLL_INTERVAL_MS);
-        if ($pollMs <= 0) {
-            $pollMs = self::DEFAULT_ENSURE_POLL_INTERVAL_MS;
-        }
-
-        ConnectionPoolManager::discardPool(
-            (string) $definition['host'],
-            (int) $definition['port'],
-            (string) ($definition['token_file_name'] ?? '')
-        );
-
-        $deadline = \microtime(true) + $timeoutSec;
-        $startedAt = \date('c');
-
-        // 渐进式轮询：快速探测 -> 逐步放缓（50ms -> 100ms -> 150ms -> 200ms）
-        $pollIntervals = [50_000, 100_000, 150_000, 200_000];
-        $pollIndex = 0;
-
-        while (\microtime(true) < $deadline) {
-            $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
-            SchedulerSystem::usleep($sleepUs);
-            $pollIndex++;
-
-            $probe = $this->probeDefinition($definition);
-            if (!((bool) ($probe['healthy'] ?? false))) {
-                continue;
-            }
-
-            $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
-            $runtime['started_at'] = $startedAt;
-            $runtime['healthy_at'] = \date('c');
-            $runtime['created_now'] = true;
-            $runtime['shared_service'] = true;
-
-            $this->writeRuntimeFile((string) $definition['role'], $runtime);
-
-            return $runtime;
-        }
-
-        throw new \RuntimeException(
-            \sprintf(
-                'Shared %s service failed to become ready on %s:%d. 请查看进程日志（进程名 %s）与 %s；若需释放共享侧车可执行 php bin/w server:shared:stop 后重试。',
-                $this->displayNameForRole((string) $definition['role']),
-                (string) $definition['host'],
-                (int) $definition['port'],
-                (string) ($definition['process_name'] ?? ''),
-                $this->formatSharedTokenFilePathForMessage((string) ($definition['token_file_name'] ?? ''))
-            )
-        );
+        return $this->waitUntilSharedServicesReadyBatch([$definition])[(string) $definition['role']];
     }
 
     /**
@@ -504,24 +696,14 @@ class SharedStateServiceManager
      */
     protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
     {
-        $client = new SharedStateClient(
-            (string) $definition['host'],
-            (int) $definition['port'],
-            [
-                'token_file_name' => $tokenFileName,
-                'acquire_timeout' => 0.35,
-                'connect_timeout' => 0.85,
-                'timeout' => 1.25,
-                'log_connect_fail' => false,
-            ]
-        );
-
         try {
-            return $client->ping();
+            return SharedStateProtocolProbe::pingWithTokenBasename(
+                (string) $definition['host'],
+                (int) $definition['port'],
+                $tokenFileName
+            );
         } catch (\Throwable) {
             return false;
-        } finally {
-            $client->disconnect();
         }
     }
 
@@ -543,8 +725,9 @@ class SharedStateServiceManager
         }
 
         // Windows：优先用 Start-Process -ArgumentList 数组拉起 PHP，避免中文 BP 下「整段命令行」编码损坏导致 PID=0。
+        // createWindowsDetachedPhpArgv 的脚本固定 WindowStyle=Hidden，前台模式必须走 Processer::create(foreground:true) 才有可见控制台。
         // 与 Framework Processer 需同版本部署；旧版无 createWindowsDetachedPhpArgv 时回退 create()。
-        if (\defined('IS_WIN') && IS_WIN && \method_exists(Processer::class, 'createWindowsDetachedPhpArgv')) {
+        if (\defined('IS_WIN') && IS_WIN && \method_exists(Processer::class, 'createWindowsDetachedPhpArgv') && !$frontend) {
             $argv = \array_merge(
                 [PHP_BINARY, $command->getAbsoluteScript()],
                 \array_map(static fn (mixed $a): string => (string) $a, $command->arguments)
@@ -654,6 +837,8 @@ class SharedStateServiceManager
             $memoryConfig = \is_array($wlsConfig['memory_service'] ?? null) ? $wlsConfig['memory_service'] : [];
             $memoryPortExplicit = \array_key_exists('memory_server_port', $config)
                 || \array_key_exists('port', $memoryConfig);
+            $memoryTokenExplicit = \array_key_exists('memory_server_token_file_name', $config)
+                || \array_key_exists('token_file_name', $memoryConfig);
 
             // 默认端口 19971 + 项目偏移量，确保多项目不冲突
             $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
@@ -677,6 +862,12 @@ class SharedStateServiceManager
                 $tokenFileName,
                 $memoryPortExplicit
             );
+            $tokenFileName = $this->resolveSharedServiceTokenFileName(
+                $role,
+                $tokenFileName,
+                $port,
+                $memoryTokenExplicit
+            );
 
             return [
                 'role' => $role,
@@ -699,6 +890,9 @@ class SharedStateServiceManager
             || \array_key_exists('port', $wlsServer)
             || \array_key_exists('port', $wlsSession)
             || \array_key_exists('server_port', $sessionConfig);
+        $sessionTokenExplicit = \array_key_exists('session_server_token_file_name', $config)
+            || \array_key_exists('token_file_name', $wlsServer)
+            || \array_key_exists('token_file_name', $wlsSession);
 
         // 默认端口 19970 + 项目偏移量，确保多项目不冲突
         $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
@@ -728,6 +922,12 @@ class SharedStateServiceManager
             $port,
             $tokenFileName,
             $sessionPortExplicit
+        );
+        $tokenFileName = $this->resolveSharedServiceTokenFileName(
+            $role,
+            $tokenFileName,
+            $port,
+            $sessionTokenExplicit
         );
 
         return [
@@ -772,7 +972,7 @@ class SharedStateServiceManager
                     break;
                 }
                 // 等待 100ms 后重试
-                \usleep(100_000);
+                SchedulerSystem::usleep(100_000);
             }
 
             if (!$locked) {
@@ -1003,5 +1203,37 @@ class SharedStateServiceManager
         }
 
         return \str_contains($instanceName, '-' . $scope . '-') || \str_contains($processName, '-' . $scope . '-');
+    }
+
+    private function resolveSharedServiceTokenFileName(
+        string $role,
+        string $tokenFileName,
+        int $port,
+        bool $explicitConfigured
+    ): string {
+        $tokenFileName = \basename(\trim($tokenFileName));
+        if ($tokenFileName === '' || $tokenFileName === '.' || $tokenFileName === '..') {
+            $tokenFileName = $this->defaultTokenForRole($role);
+        }
+
+        if ($explicitConfigured) {
+            return $tokenFileName;
+        }
+
+        $defaultPort = $this->defaultPortForRole($role);
+        if ($port <= 0 || $port === $defaultPort) {
+            return $tokenFileName;
+        }
+
+        $ext = \pathinfo($tokenFileName, \PATHINFO_EXTENSION);
+        $name = \pathinfo($tokenFileName, \PATHINFO_FILENAME);
+        if ($name === '') {
+            $name = $this->toShortRole($role) . '_server';
+        }
+        if ($ext === '') {
+            $ext = 'token';
+        }
+
+        return $name . '.' . $port . '.' . $ext;
     }
 }
