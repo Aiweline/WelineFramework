@@ -76,6 +76,7 @@ $previewPageType = (string)($state['preview_page_type'] ?? '');
 $previewFullUrl = (string)($state['preview_full_url'] ?? '');
 $visualPreviewUrl = (string)($state['visual_preview_url'] ?? '');
 $visualEditUrl = (string)($state['visual_edit_url'] ?? '');
+$embeddedVisualUrl = $visualEditUrl !== '' ? $visualEditUrl : $visualPreviewUrl;
 $activeOperation = \is_array($state['active_operation'] ?? null) ? $state['active_operation'] : [];
 $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
 $canPublish = !empty($state['can_publish']);
@@ -414,10 +415,10 @@ $guidedScopeDefaults = [
 
                     <div class="alert alert-light border mb-3 d-none" id="pb-ai-page-gen-status-board"></div>
 
-                    <?php if ($visualEditUrl): ?>
-                    <a class="btn btn-primary mb-3 pb-ai-open-visual-editor-link" href="<?= htmlspecialchars($visualEditUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                    <?php if ($embeddedVisualUrl): ?>
+                    <button type="button" class="btn btn-primary mb-3 pb-ai-focus-embedded-editor">
                         <i class="mdi mdi-open-in-new me-1"></i><?= htmlspecialchars((string)__('打开可视化编辑器'), ENT_QUOTES, 'UTF-8') ?>
-                    </a>
+                    </button>
                     <?php endif; ?>
                     <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
                         <button type="button" class="btn btn-success pb-ai-start-publish-shortcut"<?= $canPublish ? '' : ' disabled' ?>>
@@ -434,13 +435,13 @@ $guidedScopeDefaults = [
                 </div>
             </div>
 
-            <?php if ($visualPreviewUrl !== ''): ?>
+            <?php if ($embeddedVisualUrl !== ''): ?>
             <div class="card">
                 <div class="card-body p-0 overflow-hidden" style="border-radius:16px;">
                     <iframe
                         id="pb-ai-visual-preview-frame"
                         title="<?= htmlspecialchars((string)__('网站预览'), ENT_QUOTES, 'UTF-8') ?>"
-                        src="<?= htmlspecialchars($visualPreviewUrl, ENT_QUOTES, 'UTF-8') ?>"
+                        src="<?= htmlspecialchars($embeddedVisualUrl, ENT_QUOTES, 'UTF-8') ?>"
                         loading="lazy"
                         referrerpolicy="no-referrer"
                         style="width:100%;min-height:600px;border:none;display:block;">
@@ -502,10 +503,10 @@ $guidedScopeDefaults = [
                         <i class="mdi mdi-code-json me-1"></i><?= htmlspecialchars((string)__('状态 JSON'), ENT_QUOTES, 'UTF-8') ?>
                     </a>
                 <?php endif; ?>
-                <?php if ($visualEditUrl !== ''): ?>
-                    <a class="btn btn-primary btn-sm" id="pb-ai-open-visual-editor" href="<?= htmlspecialchars($visualEditUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">
+                <?php if ($embeddedVisualUrl !== ''): ?>
+                    <button type="button" class="btn btn-primary btn-sm pb-ai-focus-embedded-editor" id="pb-ai-open-visual-editor">
                         <i class="mdi mdi-open-in-new me-1"></i><?= htmlspecialchars((string)__('打开可视化编辑器'), ENT_QUOTES, 'UTF-8') ?>
-                    </a>
+                    </button>
                 <?php endif; ?>
                 <?php if ($guidedUrl !== ''): ?>
                     <a class="btn btn-soft-success btn-sm" href="<?= htmlspecialchars($guidedUrl, ENT_QUOTES, 'UTF-8') ?>">
@@ -676,8 +677,8 @@ $guidedScopeDefaults = [
                 </div>
                 <?php endif; ?>
                 <div class="d-flex flex-wrap gap-2 mb-3">
-                    <?php if ($visualEditUrl): ?>
-                        <a class="btn btn-primary" href="<?= htmlspecialchars($visualEditUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars((string)__('进入真实编辑器'), ENT_QUOTES, 'UTF-8') ?></a>
+                    <?php if ($embeddedVisualUrl): ?>
+                        <button type="button" class="btn btn-primary pb-ai-focus-embedded-editor"><?= htmlspecialchars((string)__('当前页直接编辑'), ENT_QUOTES, 'UTF-8') ?></button>
                     <?php endif; ?>
                     <?php if ($previewFullUrl): ?>
                         <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($previewFullUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars((string)__('打开普通预览'), ENT_QUOTES, 'UTF-8') ?></a>
@@ -742,9 +743,9 @@ $guidedScopeDefaults = [
                 </p>
             </div>
             <div class="card-body p-4">
-                <?php if ($visualPreviewUrl !== ''): ?>
+                <?php if ($embeddedVisualUrl !== ''): ?>
                     <iframe id="pb-ai-visual-preview-frame" title="<?= htmlspecialchars((string)__('PageBuilder 可视化预览'), ENT_QUOTES, 'UTF-8') ?>"
-                            src="<?= htmlspecialchars($visualPreviewUrl, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" referrerpolicy="no-referrer"
+                            src="<?= htmlspecialchars($embeddedVisualUrl, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" referrerpolicy="no-referrer"
                             style="width:100%;min-height:860px;border:1px solid var(--backend-color-border-default, #e5e7eb);border-radius:16px;background:var(--backend-color-bg-primary, #fff);"></iframe>
                 <?php else: ?>
                     <div class="alert alert-info mb-0"><?= htmlspecialchars((string)__('完成虚拟主题编排后，这里会直接显示真实的 PageBuilder 可视化预览。'), ENT_QUOTES, 'UTF-8') ?></div>
@@ -831,6 +832,7 @@ $guidedScopeDefaults = [
     var switchPreviewPageUrl = <?= \json_encode($switchPreviewPageUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var guidedUrl = <?= \json_encode($guidedUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var currentVisualEditUrl = <?= \json_encode($visualEditUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var messages = {
         networkError: <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         saveSuccess: <?= \json_encode((string)__('已自动保存'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -981,9 +983,49 @@ $guidedScopeDefaults = [
         if (!url) {
             return;
         }
-        document.querySelectorAll('.pb-ai-open-visual-editor-link, #pb-ai-open-visual-editor').forEach(function (link) {
-            if (link && link.tagName === 'A') {
-                link.setAttribute('href', String(url));
+        currentVisualEditUrl = String(url);
+        normalizeEmbeddedEditorTriggers();
+    }
+
+    function focusEmbeddedEditor() {
+        var frame = document.getElementById('pb-ai-visual-preview-frame');
+        if (!frame) {
+            return;
+        }
+        if (currentVisualEditUrl && frame.getAttribute('src') !== currentVisualEditUrl) {
+            setPreviewFrameUrl(currentVisualEditUrl);
+        }
+        if (typeof frame.scrollIntoView === 'function') {
+            frame.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+    }
+
+    function normalizeEmbeddedEditorTriggers() {
+        document.querySelectorAll('.pb-ai-focus-embedded-editor').forEach(function (trigger) {
+            if (!trigger.dataset.embeddedLabelApplied) {
+                trigger.dataset.embeddedLabelApplied = '1';
+                trigger.textContent = '当前页直接编辑';
+            }
+        });
+        if (!currentVisualEditUrl) {
+            return;
+        }
+        document.querySelectorAll('a[href]').forEach(function (link) {
+            var href = link.getAttribute('href') || '';
+            if (href !== currentVisualEditUrl) {
+                return;
+            }
+            link.setAttribute('href', '#');
+            link.removeAttribute('target');
+            link.removeAttribute('rel');
+            link.classList.add('pb-ai-focus-embedded-editor');
+            link.addEventListener('click', function (event) {
+                event.preventDefault();
+                focusEmbeddedEditor();
+            });
+            if (!link.dataset.embeddedLabelApplied) {
+                link.dataset.embeddedLabelApplied = '1';
+                link.textContent = '当前页直接编辑';
             }
         });
     }
@@ -1008,11 +1050,11 @@ $guidedScopeDefaults = [
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
-        if (workspaceState.visual_preview_url) {
-            setPreviewFrameUrl(workspaceState.visual_preview_url);
-        }
         if (workspaceState.visual_edit_url) {
             setVisualEditorUrl(workspaceState.visual_edit_url);
+            setPreviewFrameUrl(workspaceState.visual_edit_url);
+        } else if (workspaceState.visual_preview_url) {
+            setPreviewFrameUrl(workspaceState.visual_preview_url);
         }
         var pagesByType = workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object'
             ? workspaceState.pagebuilder_pages_by_type
@@ -1289,6 +1331,12 @@ $guidedScopeDefaults = [
     document.querySelectorAll('.pb-ai-preview-tab').forEach(function (tab) {
         tab.addEventListener('click', function () { switchPreviewByTab(tab); });
     });
+    document.querySelectorAll('.pb-ai-focus-embedded-editor').forEach(function (button) {
+        button.addEventListener('click', function () {
+            focusEmbeddedEditor();
+        });
+    });
+    normalizeEmbeddedEditorTriggers();
     syncPreviewTabsWithSelection();
 
     if (currentStageCode === 'visual_edit' && !hasGeneratedPages && !isOperationRunning) {
