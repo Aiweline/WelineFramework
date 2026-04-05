@@ -64,14 +64,19 @@ class AiSiteDraftWebsiteService
         $defaultLocale = \trim((string)($websiteProfile['default_locale'] ?? 'en_US'));
         $locales = \is_array($websiteProfile['locales'] ?? null) ? $websiteProfile['locales'] : [];
 
+        $websiteName = $siteTitle !== '' ? $siteTitle : ($targetDomain !== '' ? $targetDomain : 'PageBuilder AI Draft');
+        $websiteCode = 'pagebuilder-ai-' . $this->slugify($siteTitle !== '' ? $siteTitle : $targetDomain) . '-' . \substr(\md5((string)\microtime(true)), 0, 8);
+        $websiteUrl = $targetDomain !== ''
+            ? $this->buildWebsiteUrl($targetDomain)
+            : $this->resolveDraftWebsiteUrl($website, $websiteName, $websiteCode);
+        $websiteName = $this->resolveDraftWebsiteName($website, $websiteName, $websiteCode);
+
         if (!$website->getWebsiteId()) {
-            $website->setCode(
-                'pagebuilder-ai-' . $this->slugify($siteTitle !== '' ? $siteTitle : $targetDomain) . '-' . \substr(\md5((string)\microtime(true)), 0, 8)
-            );
+            $website->setCode($websiteCode);
         }
 
-        $website->setName($siteTitle !== '' ? $siteTitle : ($targetDomain !== '' ? $targetDomain : 'PageBuilder AI Draft'))
-            ->setUrl($this->buildWebsiteUrl($targetDomain))
+        $website->setName($websiteName)
+            ->setUrl($websiteUrl)
             ->setDefaultLanguage($defaultLocale !== '' ? $defaultLocale : 'en_US')
             ->setDefaultCurrency($website->getDefaultCurrency() ?: 'USD')
             ->setDefaultTimezone($website->getDefaultTimezone() !== '' ? $website->getDefaultTimezone() : 'UTC')
@@ -141,6 +146,56 @@ class AiSiteDraftWebsiteService
         }
 
         return 'http://' . $targetDomain;
+    }
+
+    private function resolveDraftWebsiteUrl(Website $website, string $websiteName, string $websiteCode): string
+    {
+        $existingUrl = \trim((string)$website->getUrl());
+        if ($existingUrl !== '') {
+            return $existingUrl;
+        }
+
+        $slug = $this->slugify($websiteName !== '' ? $websiteName : $websiteCode);
+        if ($slug === '') {
+            $slug = 'draft';
+        }
+
+        return 'http://pagebuilder-ai-' . $slug . '-' . \substr(\md5($websiteCode), 0, 8) . '.local.test';
+    }
+
+    private function resolveDraftWebsiteName(Website $website, string $websiteName, string $websiteCode): string
+    {
+        $websiteName = \trim($websiteName);
+        if ($websiteName === '') {
+            $websiteName = 'PageBuilder AI Draft';
+        }
+
+        $existing = $this->loadByName($websiteName);
+        if ($existing === null) {
+            return $websiteName;
+        }
+
+        if ((int)$existing->getWebsiteId() === (int)$website->getWebsiteId()) {
+            return $websiteName;
+        }
+
+        return $websiteName . ' ' . \strtoupper(\substr(\md5($websiteCode), 0, 6));
+    }
+
+    private function loadByName(string $websiteName): ?Website
+    {
+        $websiteName = \trim($websiteName);
+        if ($websiteName === '') {
+            return null;
+        }
+
+        $website = clone $this->websiteModel;
+        $website->clearData()->clearQuery()
+            ->where(Website::schema_fields_NAME, $websiteName)
+            ->find()
+            ->fetch();
+
+        return $website->getWebsiteId() > 0 ? $website : null;
     }
 
     private function slugify(string $value): string

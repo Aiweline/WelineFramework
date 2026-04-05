@@ -507,7 +507,7 @@ class ComponentService
                 'preview_html' => '',
                 'preview_html_encoded' => false,
                 'is_weline_virtual' => true,
-                'weline_theme_id' => $welineThemeId,
+                'virtual_theme_id' => $welineThemeId,
                 'isOwn' => false,
                 'isShared' => false,
                 'templateCode' => 'weline_theme',
@@ -520,7 +520,7 @@ class ComponentService
                     $styleCode !== '' ? $styleCode : 'default',
                     $defaultConfig,
                     [
-                        'weline_theme_id' => $welineThemeId,
+                        'virtual_theme_id' => $welineThemeId,
                         'theme_component_area' => $themeComponentArea,
                         'style_settings' => [],
                     ]

@@ -84,6 +84,10 @@ class AiSiteAgentWorkflowTest extends TestCase
                 ->select()
                 ->fetchOrigin();
 
+            if (!is_array($testWebsites)) {
+                $testWebsites = [];
+            }
+
             foreach ($testWebsites as $websiteData) {
                 $websiteId = (int)($websiteData['website_id'] ?? 0);
                 if ($websiteId > 0) {
@@ -97,11 +101,14 @@ class AiSiteAgentWorkflowTest extends TestCase
     }
 
     /**
-     * 输出日志
+     * 输出日志（默认静默，避免 PHPUnit risky；本地排查可设 PB_AI_SITE_TEST_VERBOSE=1）
      */
     private function log(string $message): void
     {
-        echo $message . PHP_EOL;
+        $v = getenv('PB_AI_SITE_TEST_VERBOSE');
+        if ($v !== false && $v !== '' && $v !== '0') {
+            echo $message . PHP_EOL;
+        }
     }
 
     protected function tearDown(): void
@@ -506,7 +513,14 @@ class AiSiteAgentWorkflowTest extends TestCase
             ];
         }
 
-        $published = $this->publishService->publish($websiteId, $virtualThemeId, $websiteProfile, $pageTypes, $pageTypeLayouts);
+        $published = $this->publishService->publish(
+            $websiteId,
+            $virtualThemeId,
+            $websiteProfile,
+            $pageTypes,
+            $pageTypeLayouts,
+            $scope['virtual_pages_by_type'] ?? []
+        );
 
         $scope['pagebuilder_pages_by_type'] = $published['pagebuilder_pages_by_type'] ?? [];
         $scope['workspace_status'] = 'published';
