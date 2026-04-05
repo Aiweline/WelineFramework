@@ -87,7 +87,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
 
         $client = \socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
         self::assertNotFalse($client);
-        self::assertTrue(\socket_connect($client, '127.0.0.1', (int)$port));
+        self::assertTrue(\socket_connect($client, '127.0.0.1', (int) $port));
 
         $accepted = \socket_accept($server);
         self::assertNotFalse($accepted);
@@ -129,11 +129,11 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame(19982, $this->invokePrivateMethod($core, 'normalizeExcludePortForWorkerPool', 19982));
     }
 
-    public function testPostFailureSpinBudgetEmptyPoolUsesShortCap(): void
+    public function testPostFailureSpinBudgetEmptyPoolReturnsZero(): void
     {
         $core = new PassthroughCore('127.0.0.1', 19981, 2);
         $budget = (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds');
-        self::assertSame(0.5, $budget);
+        self::assertSame(0.0, $budget);
 
         $readyCore = $this->createWarmupStubCore([
             19982 => true,
@@ -166,7 +166,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         $sslCore->setWorkerPorts([]);
         $sslCore->configure(['spin_wait_max_seconds' => 0.0]);
 
-        self::assertSame(0.5, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
+        self::assertSame(0.0, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
         self::assertSame(15.0, $this->getPrivateProperty($sslCore, 'spinWaitMaxSeconds'));
 
         $plainCore = new PassthroughCore('127.0.0.1', 19981, 2, false);
@@ -175,6 +175,15 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
 
         self::assertSame(0.0, (float) $this->invokePrivateMethod($plainCore, 'resolvePostFailureSpinBudgetSeconds'));
         self::assertSame(0.0, $this->getPrivateProperty($plainCore, 'spinWaitMaxSeconds'));
+    }
+
+    public function testSslModeStillSpinsWhenPoolAlreadyHasPorts(): void
+    {
+        $sslCore = new PassthroughCore('127.0.0.1', 19981, 2, true);
+        $sslCore->configure(['spin_wait_max_seconds' => 0.0]);
+        $this->setPrivateProperty($sslCore, 'workerPorts', [19982]);
+
+        self::assertSame(15.0, (float) $this->invokePrivateMethod($sslCore, 'resolvePostFailureSpinBudgetSeconds'));
     }
 
     public function testAddWorkerPortRejectsPortWhenWarmupFails(): void
@@ -223,38 +232,57 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
 
         self::assertSame([], $result['accepted']);
         self::assertSame([19996 => 'connect failed: timeout'], $result['rejected']);
-        self::assertSame([19982], $core->getWorkerPorts(), '新池全失败时应保留旧池，避免 0/0');
+        self::assertSame([19982], $core->getWorkerPorts(), 'previous pool should stay when every new port is rejected');
         self::assertSame(1, $core->getWorkerCount());
     }
 
     public function testSetWorkerPortsPublishesAcceptedPortsProgressively(): void
     {
         $core = $this->createWarmupStubCore([
-            19982 => true,  // 维护 Worker
-            19983 => true,  // 业务 Worker
+            19982 => true,
+            19983 => true,
         ]);
 
-        $snapshots = [];
-        $core->setWarmupCooperativeYield(function () use ($core, &$snapshots): void {
-            $snapshots[] = $core->getWorkerPorts();
-        });
+        $core->setWarmupCooperativeYield(static fn (): mixed => \Fiber::suspend());
 
-        $result = $core->setWorkerPorts([19982, 19983]);
+        $result = null;
+        $fiber = new \Fiber(function () use ($core, &$result): void {
+            $result = $core->setWorkerPorts([19982, 19983]);
+        });
+        $fiber->start();
+
+        self::assertTrue($fiber->isSuspended());
+        self::assertSame([], $core->getWorkerPorts());
+
+        $fiber->resume();
+
+        self::assertTrue($fiber->isSuspended());
+        self::assertSame([19982], $core->getWorkerPorts(), 'first accepted port should be published before later warmup continues');
+
+        while ($fiber->isSuspended()) {
+            $fiber->resume();
+        }
 
         self::assertSame([19982, 19983], $result['accepted']);
         self::assertSame([], $result['rejected']);
         self::assertSame([19982, 19983], $core->getWorkerPorts());
-        self::assertContains([19982], $snapshots, '应在后续端口预热前已发布首个可用端口（维护接流可提前生效）');
     }
 
-    public function testWarmupWaitSliceIsShorterInCooperativeMode(): void
+    public function testWarmupWaitSliceFallsBackOutsideFiberEvenWhenCallbackIsRegistered(): void
     {
         $core = new PassthroughCore('127.0.0.1', 19981, 1);
-        self::assertSame(0.05, (float)$this->invokePrivateMethod($core, 'resolveWarmupWaitSliceSeconds'));
+        self::assertSame(0.05, (float) $this->invokePrivateMethod($core, 'resolveWarmupWaitSliceSeconds'));
 
-        $core->setWarmupCooperativeYield(static function (): void {
+        $core->setWarmupCooperativeYield(static fn (): mixed => \Fiber::suspend());
+        self::assertSame(0.05, (float) $this->invokePrivateMethod($core, 'resolveWarmupWaitSliceSeconds'));
+
+        $slice = null;
+        $fiber = new \Fiber(function () use ($core, &$slice): void {
+            $slice = (float) $this->invokePrivateMethod($core, 'resolveWarmupWaitSliceSeconds');
         });
-        self::assertSame(0.01, (float)$this->invokePrivateMethod($core, 'resolveWarmupWaitSliceSeconds'));
+        $fiber->start();
+
+        self::assertSame(0.01, $slice);
     }
 
     public function testBackendPoolReleaseAndAcquireRoundTrip(): void
@@ -317,7 +345,7 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         [$socket, $peer, $server] = $this->createConnectedSocketPair();
         $released = $this->invokePrivateMethod($core, 'releaseWorkerSocketToPool', 19982, $socket);
 
-        self::assertFalse($released, 'SSL 透传模式下不应复用后端 socket');
+        self::assertFalse($released, 'SSL passthrough mode must not reuse backend sockets');
         $this->invokePrivateMethod($core, 'discardWorkerSocket', $socket);
         @\socket_close($peer);
         @\socket_close($server);
