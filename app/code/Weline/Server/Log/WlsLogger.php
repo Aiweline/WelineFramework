@@ -136,14 +136,17 @@ class WlsLogger
         return $this;
     }
 
-    private function shouldEmitToIpcSink(string $level): bool
+    /**
+     * @return array{emit: bool, low_pri_ipc_rate_limited: bool}
+     */
+    private function evaluateIpcSink(string $level): array
     {
         if ($this->ipcLogSink === null || !LogConfig::isDevMode()) {
-            return false;
+            return ['emit' => false, 'low_pri_ipc_rate_limited' => false];
         }
 
         if (LogLevel::isAtLeast($level, LogLevel::WARNING)) {
-            return true;
+            return ['emit' => true, 'low_pri_ipc_rate_limited' => false];
         }
 
         $now = \microtime(true);
@@ -155,15 +158,43 @@ class WlsLogger
         if (self::$ipcSinkWindowCount >= self::IPC_SINK_MAX_LOW_PRI_PER_WINDOW) {
             self::$ipcSinkDroppedBursty++;
             if (self::$ipcSinkDroppedBursty % 200 === 1) {
-                @\error_log('[WlsLogger] IPC log sink: rate limited low-priority lines, dropped≈' . self::$ipcSinkDroppedBursty);
+                @\error_log(
+                    '[WlsLogger] IPC log sink: low-priority rate limited (not forwarded to Master); '
+                    . 'lines appended immediately to local wls-*.log, ipc_skipped≈' . self::$ipcSinkDroppedBursty
+                );
             }
 
-            return false;
+            return ['emit' => false, 'low_pri_ipc_rate_limited' => true];
         }
 
         self::$ipcSinkWindowCount++;
 
-        return true;
+        return ['emit' => true, 'low_pri_ipc_rate_limited' => false];
+    }
+
+    /**
+     * 与 buffer 刷新写入同一主日志文件；用于 IPC 低优先级限流时立即落盘，避免长时间滞留于内存 buffer。
+     */
+    private function appendImmediateToMainLog(string $line, string $level): void
+    {
+        if (!$this->fileEnabled || $this->logDir === '') {
+            return;
+        }
+
+        if (!\is_dir($this->logDir)) {
+            @\mkdir($this->logDir, 0755, true);
+        }
+
+        $mainLog = $this->logDir . 'wls-' . \date('Y-m-d') . '.log';
+        if (!\str_ends_with($line, "\n")) {
+            $line .= "\n";
+        }
+
+        @\file_put_contents($mainLog, $line, FILE_APPEND);
+
+        if (LogLevel::isAtLeast($level, LogLevel::ERROR)) {
+            $this->writeErrorLog($line);
+        }
     }
 
     public function log(string $level, string $message, array $context = []): void
@@ -222,7 +253,8 @@ class WlsLogger
         $line = "[{$timestamp}] [{$this->processTag}] [{$level}] {$message}{$contextStr}\n";
 
         // IPC 上报给 Master（如果已连接；低优先级限流防风暴）
-        if ($this->shouldEmitToIpcSink($level)) {
+        $ipc = $this->evaluateIpcSink($level);
+        if ($ipc['emit']) {
             ($this->ipcLogSink)($line, $level, $this->processTag);
         }
 
@@ -232,7 +264,13 @@ class WlsLogger
         }
 
         if ($this->fileEnabled) {
-            $this->writeBuffer($line, $level);
+            if ($ipc['low_pri_ipc_rate_limited']) {
+                // 先刷出 buffer 内尚未落盘的行，再追加本行，避免「限流后直接写盘」跑到时间更早的缓冲行之前
+                $this->flush(true);
+                $this->appendImmediateToMainLog($line, $level);
+            } else {
+                $this->writeBuffer($line, $level);
+            }
         }
 
         $this->writeDevDebugMirror($line);
