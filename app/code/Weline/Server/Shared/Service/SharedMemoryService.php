@@ -27,8 +27,18 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
             $host = $endpoint['host'];
             $port = $endpoint['port'];
         }
+        $options['service_type'] = (string)($options['service_type'] ?? 'Memory');
         if (!isset($options['token_file_name']) || (string)$options['token_file_name'] === '') {
-            $options['token_file_name'] = $port === 19971 ? 'memory_server.token' : 'session_server.token';
+            $options['token_file_name'] = 'memory_server.token';
+        }
+        if (!isset($options['pool_min_idle']) && !isset($options['min_idle'])) {
+            $options['pool_min_idle'] = 1;
+        }
+        if (!isset($options['idle_timeout'])) {
+            $options['idle_timeout'] = 86400.0;
+        }
+        if (!isset($options['pool_health_ping_idle'])) {
+            $options['pool_health_ping_idle'] = false;
         }
         $this->client = new SharedStateClient($host, $port, $options);
     }

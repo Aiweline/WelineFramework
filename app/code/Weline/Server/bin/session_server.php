@@ -97,12 +97,10 @@ ErrorBootstrap::init($processTag, [
     'bootstrap_instance' => $bootstrapInstance,
 ]);
 
-// 前台模式：启用控制台输出
-if ($isFrontend) {
-    WlsLogger::getInstance()
-        ->setStdoutEnabled(true)
-        ->setProcessTag($processTag);
-}
+// 所有进程都启用 stdout 输出（便于调试和监控）
+WlsLogger::getInstance()
+    ->setStdoutEnabled(true)
+    ->setProcessTag($processTag);
 
 if ($processName) {
     $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
@@ -249,6 +247,7 @@ while ($server->isRunning()) {
     // 每次循环都检查 IPC 消息（确保及时响应 shutdown 等命令）
     if ($kernel !== null && $kernel->isConnected()) {
         $kernel->tick();
+        $kernel->flushWrites();
     }
 
     if ($kernel !== null && !$kernel->isConnected() && !$ipcReceivedShutdown) {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Test\Unit\ChildControl;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Server\IPC\ControlMessage;
 use Weline\Server\IPC\ChildControl\MasterOrphanGuard;
 use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
 
@@ -34,6 +35,33 @@ final class SubprocessControlKernelTest extends TestCase
 
         $this->assertFalse($guard->shouldExit(0, false, false, 'UT'));
         $this->assertFalse($guard->shouldExit(1234, false, true, 'UT'));
+    }
+
+    public function testResolveReadyDelayMillisecondsUsesRoleSpecificEnv(): void
+    {
+        \putenv('WLS_E2E_WORKER_READY_DELAY_MS=4500');
+        \putenv('WLS_E2E_MAINTENANCE_READY_DELAY_MS=1200');
+        try {
+            $this->assertSame(4500, SubprocessControlKernel::resolveReadyDelayMilliseconds(ControlMessage::ROLE_WORKER));
+            $this->assertSame(1200, SubprocessControlKernel::resolveReadyDelayMilliseconds(ControlMessage::ROLE_MAINTENANCE));
+            $this->assertSame(0, SubprocessControlKernel::resolveReadyDelayMilliseconds(ControlMessage::ROLE_DISPATCHER));
+        } finally {
+            \putenv('WLS_E2E_WORKER_READY_DELAY_MS');
+            \putenv('WLS_E2E_MAINTENANCE_READY_DELAY_MS');
+        }
+    }
+
+    public function testResolveReadyDelayMillisecondsClampsInvalidValues(): void
+    {
+        \putenv('WLS_E2E_WORKER_READY_DELAY_MS=-5');
+        \putenv('WLS_E2E_MAINTENANCE_READY_DELAY_MS=999999');
+        try {
+            $this->assertSame(0, SubprocessControlKernel::resolveReadyDelayMilliseconds(ControlMessage::ROLE_WORKER));
+            $this->assertSame(60000, SubprocessControlKernel::resolveReadyDelayMilliseconds(ControlMessage::ROLE_MAINTENANCE));
+        } finally {
+            \putenv('WLS_E2E_WORKER_READY_DELAY_MS');
+            \putenv('WLS_E2E_MAINTENANCE_READY_DELAY_MS');
+        }
     }
 }
 

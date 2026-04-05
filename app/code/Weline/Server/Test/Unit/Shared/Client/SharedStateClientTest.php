@@ -48,4 +48,40 @@ final class SharedStateClientTest extends TestCase
 
         return $client;
     }
+
+    public function testWithConnectionReleasesWhenCallbackReturnsArray(): void
+    {
+        $conn = $this->createMock(PooledConnectionInterface::class);
+        $pool = $this->createMock(ConnectionPoolInterface::class);
+        $pool->expects(self::once())->method('acquire')->willReturn($conn);
+        $pool->expects(self::once())->method('release')->with($conn);
+        $pool->expects(self::never())->method('invalidate');
+
+        $client = $this->createClientWithPool($pool);
+        $method = (new ReflectionClass(SharedStateClient::class))->getMethod('withConnection');
+        $method->setAccessible(true);
+
+        $out = $method->invoke($client, static fn (PooledConnectionInterface $c): array => ['ok' => true]);
+
+        self::assertSame(['ok' => true], $out);
+    }
+
+    public function testWithConnectionInvalidatesWhenCallbackThrows(): void
+    {
+        $conn = $this->createMock(PooledConnectionInterface::class);
+        $pool = $this->createMock(ConnectionPoolInterface::class);
+        $pool->expects(self::once())->method('acquire')->willReturn($conn);
+        $pool->expects(self::never())->method('release');
+        $pool->expects(self::once())->method('invalidate')->with($conn);
+
+        $client = $this->createClientWithPool($pool);
+        $method = (new ReflectionClass(SharedStateClient::class))->getMethod('withConnection');
+        $method->setAccessible(true);
+
+        $out = $method->invoke($client, static function (PooledConnectionInterface $c): void {
+            throw new \RuntimeException('simulated');
+        });
+
+        self::assertNull($out);
+    }
 }

@@ -23,7 +23,7 @@ class BroadcastControlDispatchService
      *     message:string
      * }
      */
-    public function reloadAsync(?string $instanceName, string $reloadType, float $timeout = 0.8): array
+    public function reloadAsync(?string $instanceName, string $reloadType, float $timeout = 5.0): array
     {
         $label = match ($reloadType) {
             ControlMessage::RELOAD_TYPE_FORCE => '强制重载',
@@ -46,7 +46,7 @@ class BroadcastControlDispatchService
      *     message:string
      * }
      */
-    public function cacheClear(?string $instanceName = null, float $timeout = 0.8): array
+    public function cacheClear(?string $instanceName = null, float $timeout = 5.0): array
     {
         return $this->dispatchToRunningInstances(
             $instanceName,

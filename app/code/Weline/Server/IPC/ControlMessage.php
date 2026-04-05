@@ -309,9 +309,9 @@ class ControlMessage
      * @param string &$buffer 读取缓冲区（引用传递，会被修改）
      * @return array 解码后的消息数组
      */
-    public static function extractMessages(string &$buffer): array
+    public static function extractMessages(string &$buffer, bool $requireType = true, int $maxLinesPerCall = 0): array
     {
-        return NdjsonProtocol::extractMessages($buffer);
+        return NdjsonProtocol::extractMessages($buffer, $requireType, $maxLinesPerCall);
     }
 
     // ========== 进程归属类型常量（规范源：ProcessKind，此处作向后兼容别名）==========

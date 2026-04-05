@@ -162,4 +162,28 @@ class ErrorBootstrapTest extends TestCase
         $this->assertFalse(ShutdownHandler::isFatalError(E_WARNING));
         $this->assertFalse(ShutdownHandler::isFatalError(E_NOTICE));
     }
+
+    public function testSuppressesVendorImplicitNullableDeprecatedNotice(): void
+    {
+        $handled = ErrorHandler::handle(
+            E_DEPRECATED,
+            'Endroid\QrCode\Writer\WriterInterface::write(): Implicitly marking parameter $label as nullable is deprecated, the explicit nullable type must be used instead',
+            'E:\WelineFramework\DEV-workspace\vendor\endroid\qr-code\src\Writer\WriterInterface.php',
+            15
+        );
+
+        $this->assertTrue($handled);
+    }
+
+    public function testDoesNotSuppressOtherDeprecatedNotice(): void
+    {
+        $handled = ErrorHandler::handle(
+            E_DEPRECATED,
+            'Deprecated: something else',
+            'E:\WelineFramework\DEV-workspace\app\code\Demo\Example.php',
+            10
+        );
+
+        $this->assertFalse($handled);
+    }
 }

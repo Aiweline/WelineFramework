@@ -35,6 +35,9 @@ class ProviderTest extends TestCase
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                     'dispatcher_port' => 18080,
+                    'loop' => [
+                        'driver' => 'event',
+                    ],
                     'session' => [
                         'port' => 18888,
                     ],
@@ -61,9 +64,11 @@ class ProviderTest extends TestCase
         $command = $provider->buildCommand(1, $this->context);
 
         $this->assertStringContainsString('worker_ssl.php', $command->script);
-        $this->assertContains('--port=10444', $command->arguments);
-        $this->assertContains('--instance=test-instance', $command->arguments);
-        $this->assertEquals('weline-wls-worker-test-instance-1', $command->getProcessName());
+        $this->assertContains('127.0.0.1', $command->arguments);
+        $this->assertContains('10444', $command->arguments);
+        $this->assertContains('test-instance', $command->arguments);
+        $this->assertStringStartsWith('weline-wls-worker-test-instance', $command->getProcessName());
+        $this->assertContains('--wls-loop-driver=event', $command->arguments);
     }
 
     public function testWorkerProviderPort(): void

@@ -71,12 +71,10 @@ ErrorBootstrap::init($processTag, [
     'process_name' => $processName,
 ]);
 
-// 前台模式：启用控制台输出
-if ($isFrontend) {
-    WlsLogger::getInstance()
-        ->setStdoutEnabled(true)
-        ->setProcessTag($processTag);
-}
+// 所有进程都启用 stdout 输出（便于调试和监控）
+WlsLogger::getInstance()
+    ->setStdoutEnabled(true)
+    ->setProcessTag($processTag);
 
 // 进程日志文件（持久化，跨重启保留）
 if ($processName) {
@@ -259,9 +257,12 @@ while (true) {
     if ($ipcSocket && \is_resource($ipcSocket)) {
         $readSockets[] = $ipcSocket;
     }
-    
+
     $read = $readSockets;
     $write = [];
+    if ($ipcSocket && $kernel && $kernel->hasPendingWrites()) {
+        $write[] = $ipcSocket;
+    }
     $except = [];
     $changed = @\stream_select($read, $write, $except, 0, 100000);
 
@@ -278,6 +279,9 @@ while (true) {
         if ($ipcKey !== false) {
             unset($read[$ipcKey]);
         }
+    }
+    if ($ipcSocket && \in_array($ipcSocket, $write, true) && $kernel) {
+        $kernel->flushWrites();
     }
     
     if (\in_array($socket, $read, true)) {
