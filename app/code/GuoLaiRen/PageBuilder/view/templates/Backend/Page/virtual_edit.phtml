@@ -74,7 +74,7 @@ $metaKeywords = (string)($virtualPage['meta_keywords'] ?? ($page ? $page->getDat
 <input type="hidden" id="meta_description" value="<?= htmlspecialchars($metaDescription) ?>">
 <input type="hidden" id="meta_keywords" value="<?= htmlspecialchars($metaKeywords) ?>">
 
-<w:template>GuoLaiRen_PageBuilder::Backend/Page/form_component/visual_config.phtml</w:template>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/Page/form_component/visual_config.phtml') ?>
 
 <script>
 window.currentStyle = <?= json_encode($styleCode, JSON_UNESCAPED_UNICODE) ?>;

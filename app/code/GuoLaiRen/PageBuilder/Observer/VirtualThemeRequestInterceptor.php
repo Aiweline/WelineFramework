@@ -105,7 +105,6 @@ class VirtualThemeRequestInterceptor implements ObserverInterface
         $virtualThemeId = (int)$context['virtual_theme_id'];
 
         $this->request->setGet('virtual_theme_id', $virtualThemeId);
-        $this->request->setGet('pagebuilder_virtual_theme_id', $virtualThemeId);
         $this->request->setGet('is_virtual_theme', '1');
         $this->request->setGet('editor_area', 'frontend');
         $this->request->setGet('shell', 'pagebuilder');
