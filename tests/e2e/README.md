@@ -153,6 +153,13 @@ php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="fa
 
 不写入 hosts（CI 等）：`$env:PLAYWRIGHT_SKIP_HOSTS_REGISTER='1'`。
 
+PageBuilder 工作台：预览 Tab 切换 iframe、`post-switch-preview-page` 与「重新选择页面类型并重新生成」弹窗（均需已启动 WLS，建议与上文相同 `PLAYWRIGHT_INSTANCE_NAME` / 代理变量）：
+
+```bash
+php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="expert: preview tabs switch iframe src page_type" --headless --project=chromium
+php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="expert: page type repick modal confirm triggers post-start-build" --headless --project=chromium
+```
+
 列出可用模块：
 
 ```bash
@@ -200,5 +207,7 @@ moduleDescribe(test, MODULE, 'backend smoke', () => {
 1. `php tests/e2e/framework/runtime-info.php`
 2. `node tests/e2e/collect-tests.js`
 3. `npx playwright test --list`
+
+**若在仓库根目录执行 `npx playwright test tests/e2e/specs/...` 出现 `test.describe() was not expected here` / `No tests found`：**请改用 `php bin/w e2e:run ...`（命令会在 `tests/e2e` 下调用 `node node_modules/playwright/cli.js test`，与 spec 中的 `require('@playwright/test')` 为同一套 Runner）。若坚持本地 npx，请先 `cd tests/e2e` 再执行 `npx playwright test --config playwright.config.js specs/backend/xxx.spec.js`。
 
 如果主题预览或后台地址异常，通常不是用例本身的问题，而是运行时信息、随机前缀或主题上下文没有被统一 helper 接管。
