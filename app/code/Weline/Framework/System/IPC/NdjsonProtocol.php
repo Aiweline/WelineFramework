@@ -82,9 +82,11 @@ final class NdjsonProtocol
      *
      * @param string &$buffer 读取缓冲区（引用传递，会被修改）
      * @param bool   $requireType 是否要求消息包含 type 字段（默认 true）
+     * @param int    $maxLinesPerCall 单次最多消费多少行（不含行尾换行后的空段）；0=不限制。
+     *                                防止单轮 TCP 读出成千上万条 NDJSON 时 explode+foreach 撑爆内存或拖死事件循环。
      * @return array 解码后的消息数组
      */
-    public static function extractMessages(string &$buffer, bool $requireType = true): array
+    public static function extractMessages(string &$buffer, bool $requireType = true, int $maxLinesPerCall = 0): array
     {
         $messages = [];
 
@@ -114,8 +116,24 @@ final class NdjsonProtocol
         $complete = \substr($buffer, 0, $lastNewline + 1);
         $buffer = \substr($buffer, $lastNewline + 1);
 
-        $lines = \explode("\n", $complete);
-        foreach ($lines as $line) {
+        $remaining = $complete;
+        $linesConsumed = 0;
+        while ($remaining !== '') {
+            if ($maxLinesPerCall > 0 && $linesConsumed >= $maxLinesPerCall) {
+                $buffer = $remaining . $buffer;
+                break;
+            }
+
+            $nl = \strpos($remaining, "\n");
+            if ($nl === false) {
+                $buffer = $remaining . $buffer;
+                break;
+            }
+
+            $line = \substr($remaining, 0, $nl);
+            $remaining = \substr($remaining, $nl + 1);
+            $linesConsumed++;
+
             $msg = $requireType ? self::decodeWithType($line) : self::decode($line);
             if ($msg !== null) {
                 $messages[] = $msg;

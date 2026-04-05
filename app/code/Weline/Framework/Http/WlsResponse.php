@@ -120,7 +120,8 @@ class WlsResponse
      */
     public static function json(array $data, int $statusCode = 200): self
     {
-        $response = new self(\json_encode($data, JSON_UNESCAPED_UNICODE), $statusCode);
+        $body = \json_encode($data, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+        $response = new self($body !== false ? $body : '{"error":true,"message":"JSON encode failed"}', $statusCode);
         $response->setHeader('Content-Type', 'application/json; charset=utf-8');
         return $response;
     }

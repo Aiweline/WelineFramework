@@ -132,7 +132,7 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         // 处理更新依据条件
         if (is_string($update_where_fields) && $update_where_fields) {
             $update_where_fields = explode(',', $update_where_fields);
-            // 🔧 修复：过滤掉空字符串（explode(',', '') 会返回 ['']）
+            // Filter empty strings
             $update_where_fields = array_filter(array_map('trim', $update_where_fields), function($field) {
                 return !empty($field);
             });
@@ -2803,6 +2803,27 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         }
     }
     
+    private function safeLastInsertId(): ?string
+    {
+        try {
+            $lastId = $this->getLink()->lastInsertId();
+        } catch (\PDOException $exception) {
+            $code = (string)$exception->getCode();
+            $message = (string)$exception->getMessage();
+            if ($code === '55000' || \str_contains($message, 'lastval is not yet defined in this session')) {
+                return null;
+            }
+
+            throw $exception;
+        }
+
+        if ($lastId === false || $lastId === '') {
+            return null;
+        }
+
+        return (string)$lastId;
+    }
+
     /**
      * 🔧 处理 fetch 结果（不调用 nextRowset）
      * find 只读一行；select/query 逐行读取并设上限，避免大结果集耗尽内存
@@ -2884,11 +2905,11 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                             $result = reset($firstRow);
                         }
                     } else {
-                        $lastId = $this->getLink()->lastInsertId();
+                        $lastId = $this->safeLastInsertId();
                         $result = $lastId !== false ? $lastId : (reset($data) ?? null);
                     }
                 } else {
-                    $lastId = $this->getLink()->lastInsertId();
+                    $lastId = $this->safeLastInsertId();
                     $result = $lastId !== false ? $lastId : null;
                 }
                 break;
@@ -3220,4 +3241,3 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
     }
     
 }
-

@@ -220,8 +220,22 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getAreaRouter(): mixed
     {
+        $welineArea = (string)$this->getServer('WELINE_AREA');
+        if ($welineArea === 'backend') {
+            return '';
+        }
+
+        $server = $this->getServer();
+        if (\is_array($server) && \array_key_exists('WELINE_AREA_ROUTE', $server)) {
+            return (string)($server['WELINE_AREA_ROUTE'] ?? '');
+        }
+
         $areaRoute = $this->getServer('WELINE_AREA_ROUTE');
-        return ($areaRoute !== '' && $areaRoute !== null) ? $areaRoute : $this->area_router;
+        if ($areaRoute !== null) {
+            return (string)$areaRoute;
+        }
+
+        return $this->area_router;
     }
 
     /**
