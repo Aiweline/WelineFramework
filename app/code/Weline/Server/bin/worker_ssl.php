@@ -513,6 +513,26 @@ try {
     $runtime->bootstrap();
     WlsLogger::info_("框架运行时初始化成功");
 
+    // 共享服务提前并发 ensure：拿到最新 host/port/token，避免沿用陈旧 runtime 导致认证失败
+    try {
+        $sharedRuntime = (new \Weline\Server\Service\SharedStateServiceManager())->ensureRuntime(
+            $instanceName,
+            [],
+            $envConfig,
+            $isFrontend,
+            false
+        );
+        if (\is_array($sharedRuntime['session'] ?? null)) {
+            $sessionRuntime = \array_replace($sessionRuntime, $sharedRuntime['session']);
+        }
+        if (\is_array($sharedRuntime['memory'] ?? null)) {
+            $memoryRuntime = \array_replace($memoryRuntime, $sharedRuntime['memory']);
+        }
+        WlsLogger::info_('[SharedState] Session/Memory 共享服务已提前并发就绪');
+    } catch (\Throwable $sharedEnsureError) {
+        WlsLogger::warning_('[SharedState] 提前确保共享服务失败，继续按本地 runtime 尝试: ' . $sharedEnsureError->getMessage());
+    }
+
     // 启动后必须连上 Session 服务再开始工作，否则拒绝启动（重试 10 次，每次间隔 2 秒）
     $sessionHost = (string) ($sessionRuntime['host'] ?? '127.0.0.1');
     $sessionPort = (int) ($sessionRuntime['port'] ?? 19970);
