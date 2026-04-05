@@ -889,20 +889,17 @@ class ServiceOrchestratorStartupTest extends TestCase
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new DispatcherProvider());
         $registry->registerProvider(new MaintenanceWorkerProvider());
-        $registry->registerProvider(new class extends WorkerProvider {
-            public function getInstanceCount(ServiceContext $context): int
-            {
-                return 0;
-            }
-        });
+        // 不注册 WorkerProvider，避免测试中触发真实 Worker 拉起；通过既有 Worker 实例模拟 workerDesired>0。
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 18080,
+        ));
 
         $context = $this->createWorkerInfraContext();
         $this->writePrivate($orchestrator, 'context', $context);
         $this->writePrivate($orchestrator, 'running', true);
-        // 预置 workerDesired>0，使 shared critical infra 在本轮启动中生效。
-        $this->writePrivate($orchestrator, 'desiredState', [
-            ControlMessage::ROLE_WORKER => 1,
-        ]);
         $this->writePrivate($orchestrator, 'maintenanceMode', true);
 
         $this->invokePrivateWithArgs($orchestrator, 'startAllChildServicesBody', [$context]);
@@ -914,6 +911,68 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertNotFalse($phaseOneIndex);
         self::assertNotFalse($sessionEnsureIndex);
         self::assertLessThan($phaseOneIndex, $sessionEnsureIndex);
+    }
+
+    public function testStartAllChildServicesBodyThrowsWhenSharedCriticalInfraEnsureFails(): void
+    {
+        $events = new \ArrayObject();
+        $sharedManager = new class extends \Weline\Server\Service\SharedStateServiceManager {
+            public function ensureRuntime(
+                string $requesterInstanceName,
+                array $config,
+                array $envConfig = [],
+                bool $frontend = false,
+                bool $forceRestart = false
+            ): array {
+                throw new \RuntimeException('shared infra bootstrap failed');
+            }
+        };
+
+        $orchestrator = new class($sharedManager, $events) extends ServiceOrchestrator {
+            public function __construct(
+                private readonly \Weline\Server\Service\SharedStateServiceManager $sharedManager,
+                private readonly \ArrayObject $events
+            ) {
+                parent::__construct();
+            }
+
+            protected function createSharedStateServiceManager(): \Weline\Server\Service\SharedStateServiceManager
+            {
+                return $this->sharedManager;
+            }
+
+            protected function startProvidersBatch(array $providers, ServiceContext $context): array
+            {
+                $this->events->append('phase_one_batch_started');
+
+                return [];
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->registerProvider(new DispatcherProvider());
+        $registry->registerProvider(new MaintenanceWorkerProvider());
+        // 不注册 WorkerProvider，避免触发真实 Worker 拉起；用现存 Worker 模拟 workerDesired>0。
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            state: ServiceInstance::STATE_READY,
+            port: 18080,
+        ));
+
+        $context = $this->createWorkerInfraContext();
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        try {
+            $this->invokePrivateWithArgs($orchestrator, 'startAllChildServicesBody', [$context]);
+            self::fail('Expected shared critical infra startup failure to be thrown.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString('shared infra bootstrap failed', $exception->getMessage());
+        }
+
+        $eventList = \iterator_to_array($events, false);
+        self::assertNotContains('phase_one_batch_started', $eventList);
     }
 
     /**
