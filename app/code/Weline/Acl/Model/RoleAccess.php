@@ -190,7 +190,10 @@ class RoleAccess extends Model
         if ($roleId <= 0) {
             return [];
         }
-        return $this->clear()
+        // WLS 模式下使用新实例避免状态污染（JOIN/WHERE 条件残留）
+        /** @var RoleAccess $freshInstance */
+        $freshInstance = \Weline\Framework\Manager\ObjectManager::getInstance(self::class, [], false);
+        return $freshInstance
             ->joinModel(Acl::class, 'a', 'main_table.source_id=a.source_id')
             ->where('main_table.role_id', $roleId)
             ->select()
