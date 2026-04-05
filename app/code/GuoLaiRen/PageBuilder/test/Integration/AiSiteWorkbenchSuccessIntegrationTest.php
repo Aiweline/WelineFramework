@@ -324,6 +324,55 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
         self::assertStringContainsString('域名尚未就绪', (string)($startPublishPayload['message'] ?? ''));
     }
 
+    public function testSwitchPreviewPageAppendsMissingPageTypeToScope(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $mergePayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-merge-scope',
+            'POST',
+            'postMergeScope',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => [
+                    'site_title' => 'Switch preview scope sync test',
+                    'page_types' => [Page::TYPE_HOME],
+                ],
+            ]
+        );
+        self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $switchPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-switch-preview-page',
+            'POST',
+            'postSwitchPreviewPage',
+            [],
+            [
+                'public_id' => $publicId,
+                'preview_page_id' => '0',
+                'preview_page_type' => Page::TYPE_ABOUT,
+            ]
+        );
+        self::assertTrue((bool)($switchPayload['success'] ?? false), \json_encode($switchPayload, \JSON_UNESCAPED_UNICODE));
+        $data = (array)($switchPayload['data'] ?? []);
+        self::assertSame(Page::TYPE_ABOUT, (string)($data['preview_page_type'] ?? ''));
+        self::assertStringContainsString('page_type=' . Page::TYPE_ABOUT, (string)($data['visual_preview_url'] ?? ''));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $scope = $session->getScopeArray();
+        $pts = (array)($scope['page_types'] ?? []);
+        self::assertContains(Page::TYPE_ABOUT, $pts, 'about_page should be merged into scope when user switches preview to it');
+    }
+
     /**
      * @param array<string, scalar|array> $query
      * @param array<string, scalar|array> $post
@@ -346,6 +395,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
             'postStartBuild' => $controller->postStartBuild(),
             'postPublishChecklist' => $controller->postPublishChecklist(),
             'postStartPublish' => $controller->postStartPublish(),
+            'postSwitchPreviewPage' => $controller->postSwitchPreviewPage(),
             'getStateJson' => $controller->getStateJson(),
             default => throw new \RuntimeException('Unsupported controller method: ' . $controllerMethod),
         };
