@@ -29,7 +29,7 @@
 
 | 场景/关键词 | 技能 | 路径 |
 |---|---|---|
-| PHPUnit、http:req、e2e、QA、Browser MCP、Playwright、路由验证 | testing | `dev/ai/skills/testing/SKILL.md` |
+| PHPUnit、http:req、`php bin/w e2e:run`（UI/E2E/冒烟）、QA、Browser MCP、Playwright、路由验证 | testing | `dev/ai/skills/testing/SKILL.md` |
 | 事件、dispatch、event.xml、Hook、Extends、extends.php | extension-points | `dev/ai/skills/extension-points/SKILL.md` |
 | Sticker、Weline_Sticker、w:sticker、贴纸、非侵入改模板、sticker:collect、sticker:refresh | weline-sticker | `dev/ai/skills/weline-sticker/SKILL.md` |
 | WLS、Worker、server:start、reload、restart、static、State、Processer | runtime-and-process | `dev/ai/skills/runtime-and-process/SKILL.md` |

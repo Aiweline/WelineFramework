@@ -1,6 +1,6 @@
 ---
 name: testing
-description: 测试与质量。TDD、PHPUnit(`test/Unit/`)、`http:req` 路由验证、前端 Browser MCP/Playwright、QA、E2E 收口。禁止单独创建测试脚本。
+description: 测试与质量。TDD、PHPUnit、`php bin/w e2e:run`（浏览器 UI / E2E / 冒烟，勿在仓库根 `npx playwright test tests/e2e/...`）、`http:req`、Browser MCP、QA。禁止单独创建测试脚本。
 globs:
   - "**/test/**/*.php"
   - "**/Test/**/*.php"
@@ -120,23 +120,34 @@ tests/unit/specs/
 - **测试框架**：Playwright 1.48.x
 - **测试文件**：`tests/e2e/specs/backend/`、`tests/e2e/specs/frontend/`
 
+### UI 交互与冒烟：统一用 `e2e:run`
+
+- **所有**真实浏览器 UI 交互、跨页链路、**冒烟验收**，默认通过 **`php bin/w e2e:run`** 执行（在**仓库根目录**即可，无需手动 `cd tests/e2e`）。
+- 框架会在 `tests/e2e` 下调用 `node node_modules/playwright/cli.js test`，与 spec 里 `require('@playwright/test')` 为**同一套** Runner，避免版本分叉。
+- **禁止**在仓库根目录执行 `npx playwright test tests/e2e/specs/...`：易出现 `test.describe() was not expected here`、`No tests found`（CLI 与 `tests/e2e/node_modules` 中 `@playwright/test` 不一致）。
+- 若必须裸用 npx：先 `cd tests/e2e`，再 `npx playwright test --config playwright.config.js specs/backend/xxx.spec.js`。
+- 冒烟 / CI：单文件 + `--grep=`（或 `--case=` / `--case-id=`）缩小范围，并加 **`--headless`**；长链路可配合 `PLAYWRIGHT_INSTANCE_NAME`、`PLAYWRIGHT_DISABLE_PROXY` 等（见 `tests/e2e/README.md`）。
+
 ### 运行命令
 
 ```bash
-# 推荐：统一使用框架命令（无需 cd）
+# 推荐：统一使用框架命令（无需 cd）；含 UI 交互与冒烟
 php bin/w e2e:run
 
 # 有界面运行（可视化默认）
 php bin/w e2e:run --project=chromium
 
-# UI 模式
+# UI 模式（调试）
 php bin/w e2e:run --ui --project=chromium
 
 # 按模块运行
 php bin/w e2e:run --module=Vendor_Module --project=chromium
 
-# 跑单文件
+# 跑单文件（smoke / 单链路）
 php bin/w e2e:run specs/backend/WeShop_Cart-smoke-backend.spec.js --project=chromium
+
+# 冒烟：单文件 + Playwright 标题正则（--grep 透传）
+php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="expert: preview tabs switch" --headless --project=chromium
 
 # 按用例标题关键词
 php bin/w e2e:run --module=WeShop_Cart --case="remove item" --project=chromium
@@ -252,7 +263,7 @@ php bin/w http:request / -C -t=100
 ## 5) 前端 UI 测试
 
 - **Browser MCP** / **Playwright** 仅用于前端 UI；后端优先 PHPUnit 或 `http:req`
-- 涉及用户主路径、后台关键操作链路、跨模块集成流程时，默认补齐对应 e2e
+- 涉及用户主路径、后台关键操作链路、跨模块集成流程时，默认补齐对应 e2e；**验收与冒烟跑通**使用 **`php bin/w e2e:run`**（见 §3），不要用仓库根目录裸 `npx playwright test tests/e2e/...`
 - 如果暂不具备 e2e 条件，必须在当前任务 `result.md` 明确缺口、风险和补测计划
 
 ---
@@ -295,7 +306,10 @@ php bin/w phpunit:run -b Vendor_Module
 # 路由验证
 php bin/w http:req admin/dashboard -b
 
-# E2E 测试
+# E2E（含 UI 交互 / 冒烟：单文件 + grep + headless）
+php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="smoke long chain" --headless --project=chromium
+
+# E2E（按模块）
 php bin/w e2e:run --module=Vendor_Module --project=chromium
 
 # 前端单元测试

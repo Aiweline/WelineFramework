@@ -62,7 +62,7 @@ alwaysApply: false
 
 | 场景/关键词 | 技能 | 路径 |
 |---|---|---|
-| PHPUnit、http:req、e2e、Playwright | testing | `dev/ai/skills/testing/SKILL.md` |
+| PHPUnit、http:req、`php bin/w e2e:run`（UI/E2E/冒烟）、Playwright | testing | `dev/ai/skills/testing/SKILL.md` |
 | 调试日志、agent_log | debug-logging | `dev/ai/skills/debug-logging/SKILL.md` |
 
 ### 特殊场景
