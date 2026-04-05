@@ -125,7 +125,10 @@ class AclService implements AclServiceInterface
             return self::$routeProtectedCache[$routePath];
         }
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
-        $row = $this->aclModel->clear()
+        // WLS 模式下使用新实例避免状态污染（WHERE 条件残留）
+        /** @var Acl $freshAcl */
+        $freshAcl = ObjectManager::getInstance(Acl::class, [], false);
+        $row = $freshAcl
             ->where(Acl::schema_fields_ROUTE, $routePath)
             ->limit(1)
             ->find()
