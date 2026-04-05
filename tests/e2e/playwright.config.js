@@ -218,9 +218,11 @@ console.log('[playwright] testMatch:', testMatch);
 console.log('[playwright] proxy baseURL:', baseURL);
 console.log('[playwright] target origin:', runtimeInfo.runtime.target_origin);
 
+const globalSetupHostsPath = path.join(__dirname, 'global-setup-hosts.js');
+
 module.exports = defineConfig({
   rootDir,
-  globalSetup: undefined,
+  globalSetup: process.env.PLAYWRIGHT_E2E_HOSTS_FQDN ? globalSetupHostsPath : undefined,
   globalTeardown: undefined,
   timeout: resolvedTimeout,
   expect: {

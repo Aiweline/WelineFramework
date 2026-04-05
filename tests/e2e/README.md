@@ -98,6 +98,8 @@ await gotoThemePreview(page, { pageType: 'homepage' });
 
 ## 运行测试
 
+**工作目录：** Playwright 必须在 `tests/e2e` 下解析 `node_modules`（与 `php bin/w e2e:run` 一致）。若在仓库根目录执行 `npx playwright test --config=tests/e2e/playwright.config.js`，可能加载到另一份 `@playwright/test`，报错：`Playwright Test did not expect test.describe() to be called here`。请优先用下面的 `e2e:run`，或先 `cd tests/e2e` 再 `npx playwright test --config=playwright.config.js`。
+
 ```bash
 php bin/w e2e:run
 ```
@@ -131,6 +133,25 @@ php bin/w e2e:run --module=WeShop_Cart --case="remove item" --project=chromium
 ```bash
 php bin/w e2e:run --module=WeShop_Cart --case-id=BACKEND-SMOKE-001 --project=chromium
 ```
+
+PageBuilder AI 建站发布全链路冒烟（需已启动目标 WLS；示例命名实例 `ai-test-e2e-pb`，直连可设 `PLAYWRIGHT_DISABLE_PROXY=1`）：
+
+```bash
+# PowerShell 示例
+$env:PLAYWRIGHT_INSTANCE_NAME='ai-test-e2e-pb'
+$env:PLAYWRIGHT_DISABLE_PROXY='1'
+php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="builder index lists published" --headless --project=chromium
+```
+
+**本地注册商 + `*.weline.local` 子域 + Hub 假购买 + Handoff + SSE 发布 + 真实浏览器打开前台**（用例会执行 `php bin/w server:hosts:add <子域>`，Windows 下建议「以管理员身份」跑终端，否则仅回退为 `Host` 头 API 断言，日志会打印可手动访问的 URL）：
+
+```bash
+$env:PLAYWRIGHT_INSTANCE_NAME='ai-test-e2e-pb'
+$env:PLAYWRIGHT_DISABLE_PROXY='1'
+php bin/w e2e:run specs/backend/pagebuilder-ai-site-workbench.spec.js --grep="fake local domain purchase" --headless --project=chromium
+```
+
+不写入 hosts（CI 等）：`$env:PLAYWRIGHT_SKIP_HOSTS_REGISTER='1'`。
 
 列出可用模块：
 
