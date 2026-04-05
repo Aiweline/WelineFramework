@@ -1,5 +1,13 @@
 # WelineFramework
 
+## 架构文档
+
+- **[框架架构总览](./docs/weline/架构总览.md)**（分层、双运行时 FPM/WLS、路由、ORM、事件与扩展、模块约定、特性速查）
+- **Weline 文档目录**：[docs/weline/README.md](./docs/weline/README.md)
+- **项目文档索引**：[docs/README.md](./docs/README.md)
+
+开发时若需极简 ASCII 图节省上下文，可见：`dev/ai/diagrams/00-INDEX.txt`。
+
 ## 如何安装（一键命令）
 
 **推荐方式**：直接远程下载引导脚本并运行，由脚本完成克隆与安装（需已安装 [Git](https://git-scm.com)，未安装时安装脚本会尝试自动安装）。**无需先手动 clone。**

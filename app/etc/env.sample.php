@@ -220,6 +220,10 @@ return [
             'timing_log_file' => 'var/log/wls/timing.log',
         ],
         'worker_count' => 'auto',
+        // EventLoop 后端：auto=优先 event 扩展，不可用回退 select
+        'loop' => [
+            'driver' => 'auto', // auto|select|event
+        ],
         'mode' => 'io',
         'max_connections' => 10000,
         // Worker Keep-Alive 空闲连接超时（秒），<=0 则使用内置默认 60。
@@ -324,6 +328,19 @@ return [
             'maintenance_connection_drain_timeout_sec' => 300,
             // maintenance_ready_timeout_sec：维护 Worker 子进程全部 READY 的等待上限（秒）。
             'maintenance_ready_timeout_sec' => 90,
+            // zero_downtime_rolling_restart：零停机滚动重启开关。
+            //   true = 先启动新 Worker（临时 ID）再停旧 Worker，全程无服务中断（内存占用翻倍）
+            //   false = 传统模式：先停旧 Worker 再启新 Worker（有短暂服务中断）
+            'zero_downtime_rolling_restart' => true,
+            // stop_all_ipc_disconnect_wait_sec：stopAll 阶段 4 等待「子服务 IPC」断开的上限（秒），不含 control/CLI。
+            'stop_all_ipc_disconnect_wait_sec' => 30.0,
+            // stop_ipc_flush_before_close_sec：关闭 IPC 监听前冲刷出站写缓冲的上限（秒）。
+            'stop_ipc_flush_before_close_sec' => 2.0,
+            // force_stop_ipc_flush_sec / force_stop_ipc_post_kill_wait_sec：二次 Ctrl+C 等强制停机路径上，杀进程前/后的短 IPC 窗口（秒）。
+            'force_stop_ipc_flush_sec' => 0.5,
+            'force_stop_ipc_post_kill_wait_sec' => 0.35,
+            // control_poll_slice_usec：启动验收等控制面等待时 stream_select 超时（微秒），替代叠 sleep。
+            'control_poll_slice_usec' => 100000,
         ],
     ],
     
