@@ -25,8 +25,23 @@ class ControlClient
     /** 读缓冲区 */
     private string $buffer = '';
 
+    /** 写缓冲区（非阻塞发送队列） */
+    private string $writeBuffer = '';
+
     /** 读缓冲区最大大小（2MB），防止内存泄漏 */
     private int $maxBufferSize = 2097152;
+
+    /** 写缓冲区最大大小（2MB），防止控制面反压时无限堆积 */
+    private int $maxWriteBufferSize = 2097152;
+
+    /** 单次 extract 批大小（行数），与 Master 侧对齐，避免单轮处理过多命令阻塞业务循环 */
+    private int $maxNdjsonLinesPerReadable = 32;
+
+    /** 单次 handleReadable 唤醒内累计最多处理多少行 NDJSON */
+    private int $maxNdjsonLinesPerWake = 192;
+
+    /** 单次非阻塞 flush 的最大写入字节数 */
+    private int $maxImmediateWriteBytes = 65536;
 
     /** Master 地址 */
     private string $host = '127.0.0.1';
@@ -104,6 +119,7 @@ class ControlClient
         \stream_set_blocking($this->socket, false);
         @\stream_set_write_buffer($this->socket, 0);
         $this->buffer = '';
+        $this->writeBuffer = '';
         $this->ipcLog("[IPC-{$this->selfTag}] CONNECT 已连接 Master {$host}:{$port}");
         return true;
     }
@@ -124,6 +140,11 @@ class ControlClient
     public function getSocket()
     {
         return $this->socket;
+    }
+
+    public function hasPendingWrites(): bool
+    {
+        return $this->writeBuffer !== '';
     }
 
     /**
@@ -368,13 +389,15 @@ class ControlClient
         if (!$this->isConnected()) {
             return false;
         }
-        return $this->send(ControlMessage::logLine($line, $level, $processTag));
+        $message = ControlMessage::logLine($line, $level, $processTag);
+        // 日志类消息：写队列反压时丢弃，不断开 IPC（避免断连-重连风暴）
+        return $this->send($message, false);
     }
 
     /**
-     * 发送原始消息
+     * @param bool $disconnectOnWriteOverflow true=队列满则断连（控制指令）；false=仅丢本包（如日志汇聚）
      */
-    public function send(string $message): bool
+    public function send(string $message, bool $disconnectOnWriteOverflow = true): bool
     {
         if (!$this->isConnected()) {
             return false;
@@ -384,65 +407,125 @@ class ControlClient
         $type = $decoded['type'] ?? 'raw';
         $this->ipcVerboseLog("[IPC-{$this->selfTag}] SEND --> Master: type={$type}" . ($decoded ? $this->formatMsgPayload($decoded) : ''));
 
-        $sent = $this->writeFully($this->socket, $message);
-        if (!$sent) {
-            $this->ipcLog("[IPC-{$this->selfTag}] SEND FAILED --> Master: type={$type}");
-            $this->handleDisconnect();
+        if (!$this->enqueueWrite($message)) {
+            $this->ipcLog("[IPC-{$this->selfTag}] SEND FAILED --> Master: type={$type}, reason=write_queue_overflow");
+            if ($disconnectOnWriteOverflow) {
+                $this->handleDisconnect();
+            }
+
+            return false;
         }
 
-        return $sent;
+        $this->flushPendingWrites();
+
+        return true;
     }
 
     /**
-     * 在非阻塞 socket 上完整写入 IPC 消息，避免 NDJSON 半包被误判为成功。
-     *
-     * @param resource $socket
+     * 在主循环 writable 事件中推进写队列。
      */
-    private function writeFully($socket, string $message, float $timeoutSec = 1.0): bool
+    public function handleWritable(): bool
     {
-        $length = \strlen($message);
-        if ($length === 0) {
+        return $this->flushPendingWrites();
+    }
+
+    /**
+     * 尝试刷新待发送队列；默认不等待，只利用当前非阻塞可写窗口推进。
+     */
+    public function flushPendingWrites(float $timeBudgetSec = 0.0): bool
+    {
+        if (!$this->isConnected()) {
+            return false;
+        }
+
+        if ($this->writeBuffer === '') {
             return true;
         }
 
-        $offset = 0;
-        $deadline = \microtime(true) + $timeoutSec;
-
-        while ($offset < $length) {
-            $remaining = $deadline - \microtime(true);
-            if ($remaining <= 0) {
-                return false;
-            }
-
-            $read = [];
-            $write = [$socket];
-            $except = [];
-            $sec = (int)$remaining;
-            $usec = (int)(($remaining - $sec) * 1000000);
-
-            $ready = @\stream_select($read, $write, $except, $sec, $usec);
-            if ($ready === false) {
-                return false;
-            }
-            if ($ready === 0) {
-                continue;
-            }
-
-            $written = @\fwrite($socket, \substr($message, $offset));
-            if ($written === false) {
+        $deadline = $timeBudgetSec > 0.0 ? (\microtime(true) + $timeBudgetSec) : 0.0;
+        do {
+            $written = $this->flushWriteBufferChunk($deadline);
+            if ($written < 0) {
+                $this->handleDisconnect();
                 return false;
             }
             if ($written === 0) {
-                if (@\feof($socket)) {
-                    return false;
-                }
-                continue;
+                break;
             }
+        } while ($this->writeBuffer !== '' && $deadline > 0.0 && \microtime(true) < $deadline);
 
-            $offset += $written;
+        return $this->isConnected();
+    }
+
+    private function enqueueWrite(string $message): bool
+    {
+        if ($message === '') {
+            return true;
         }
 
+        if ((\strlen($this->writeBuffer) + \strlen($message)) > $this->maxWriteBufferSize) {
+            return false;
+        }
+
+        $this->writeBuffer .= $message;
+
         return true;
+    }
+
+    /**
+     * 在非阻塞 socket 上推进写缓冲区，避免 NDJSON 半包被误判为成功。
+     *
+     * @param resource $socket
+     */
+    private function flushWriteBufferChunk(float $deadline = 0.0): int
+    {
+        if (!$this->isConnected() || $this->writeBuffer === '') {
+            return 0;
+        }
+
+        $socket = $this->socket;
+        if (!\is_resource($socket)) {
+            return -1;
+        }
+
+        $read = [];
+        $write = [$socket];
+        $except = [];
+        if ($deadline > 0.0) {
+            $remaining = $deadline - \microtime(true);
+            if ($remaining <= 0.0) {
+                return 0;
+            }
+            $sec = (int) $remaining;
+            $usec = (int) (($remaining - $sec) * 1000000);
+        } else {
+            $sec = 0;
+            $usec = 0;
+        }
+
+        $ready = @\stream_select($read, $write, $except, $sec, $usec);
+        if ($ready === false) {
+            return -1;
+        }
+        if ($ready === 0) {
+            return 0;
+        }
+
+        $payload = \substr($this->writeBuffer, 0, $this->maxImmediateWriteBytes);
+        $written = @\fwrite($socket, $payload);
+        if ($written === false) {
+            return -1;
+        }
+        if ($written === 0) {
+            if (@\feof($socket)) {
+                return -1;
+            }
+            return 0;
+        }
+
+        $this->writeBuffer = (string) \substr($this->writeBuffer, $written);
+
+        return $written;
     }
 
     /**
@@ -465,69 +548,75 @@ class ControlClient
         $except = [];
         $changed = @\stream_select($read, $write, $except, 0, 0);
 
-        // 没有数据可读，直接返回（不是断开）
-        if ($changed === 0) {
-            return [];
-        }
+        if ($changed > 0) {
+            $data = @\fread($this->socket, 65536);
 
-        $data = @\fread($this->socket, 65536);
-
-        // 连接断开判断：
-        // 1. fread 返回 false 表示错误
-        // 2. fread 返回空字符串 + feof() 为 true 表示 TCP FIN
-        // 注意：非阻塞模式下空字符串不一定是断开，需要配合 feof 判断
-        if ($data === false || ($data === '' && @\feof($this->socket))) {
-            $this->handleDisconnect();
-            return [];
-        }
-
-        // 没有数据但也没断开（非阻塞模式正常情况）
-        if ($data === '') {
-            return [];
-        }
-
-        // 防止缓冲区无限增长：检查大小限制
-        if (\strlen($this->buffer) + \strlen($data) > $this->maxBufferSize) {
-            $this->ipcLog("[IPC-{$this->selfTag}] ERROR: Buffer overflow detected, clearing buffer (size: " . \strlen($this->buffer) . " bytes)");
-            $this->buffer = '';
-            // 断开连接，触发重连
-            $this->handleDisconnect();
-            return [];
-        }
-
-        // 追加到缓冲区
-        $this->buffer .= $data;
-
-        // 提取完整消息
-        $messages = ControlMessage::extractMessages($this->buffer);
-
-        foreach ($messages as $msg) {
-            $type = $msg['type'] ?? 'unknown';
-            $this->ipcVerboseLog("[IPC-{$this->selfTag}] RECV <-- Master: type={$type}" . $this->formatMsgPayload($msg));
-
-            // 内部处理特殊消息
-            switch ($type) {
-                case ControlMessage::TYPE_ACK:
-                    $this->resurrectionPriority = (int) ($msg['resurrection_priority'] ?? 0);
-                    break;
-
-                case ControlMessage::TYPE_SHUTDOWN:
-                    $this->receivedShutdown = true;
-                    $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: SHUTDOWN 收到停止命令，准备退出...");
-                    break;
-
-                case ControlMessage::TYPE_DRAIN:
-                    $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: DRAIN 收到排水命令，停止接收新请求...");
-                    break;
+            if ($data === false || ($data === '' && @\feof($this->socket))) {
+                $this->handleDisconnect();
+                return [];
             }
 
-            // 回调外部处理器
-            if ($this->messageHandler) {
-                ($this->messageHandler)($msg, $this);
+            if ($data !== '') {
+                if (\strlen($this->buffer) + \strlen($data) > $this->maxBufferSize) {
+                    $this->ipcLog("[IPC-{$this->selfTag}] ERROR: Buffer overflow detected, clearing buffer (size: " . \strlen($this->buffer) . " bytes)");
+                    $this->buffer = '';
+                    $this->handleDisconnect();
+                    return [];
+                }
+                $this->buffer .= $data;
             }
         }
 
-        return $messages;
+        // select==0 或 fread 空：仍尝试排空已积压的完整 NDJSON（extract 截断后否则会卡死直到 Master 再发数据）
+        return $this->flushBufferedControlMessages();
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function flushBufferedControlMessages(): array
+    {
+        $all = [];
+        $linesRemaining = \max(1, $this->maxNdjsonLinesPerWake);
+        while ($linesRemaining > 0) {
+            $chunk = \min($this->maxNdjsonLinesPerReadable, $linesRemaining);
+            $messages = ControlMessage::extractMessages($this->buffer, true, $chunk);
+            if ($messages === []) {
+                break;
+            }
+            $linesRemaining -= \count($messages);
+            foreach ($messages as $msg) {
+                $this->dispatchMasterDownstreamMessage($msg);
+                $all[] = $msg;
+            }
+        }
+
+        return $all;
+    }
+
+    private function dispatchMasterDownstreamMessage(array $msg): void
+    {
+        $type = $msg['type'] ?? 'unknown';
+        $this->ipcVerboseLog("[IPC-{$this->selfTag}] RECV <-- Master: type={$type}" . $this->formatMsgPayload($msg));
+
+        switch ($type) {
+            case ControlMessage::TYPE_ACK:
+                $this->resurrectionPriority = (int) ($msg['resurrection_priority'] ?? 0);
+                break;
+
+            case ControlMessage::TYPE_SHUTDOWN:
+                $this->receivedShutdown = true;
+                $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: SHUTDOWN 收到停止命令，准备退出...");
+                break;
+
+            case ControlMessage::TYPE_DRAIN:
+                $this->ipcLog("[IPC-{$this->selfTag}] RECV <-- Master: DRAIN 收到排水命令，停止接收新请求...");
+                break;
+        }
+
+        if ($this->messageHandler) {
+            ($this->messageHandler)($msg, $this);
+        }
     }
 
     /**
@@ -544,6 +633,7 @@ class ControlClient
         }
         $this->socket = null;
         $this->buffer = '';
+        $this->writeBuffer = '';
 
         // 回调外部处理器
         if ($this->disconnectHandler) {
@@ -637,11 +727,15 @@ class ControlClient
      */
     public function close(): void
     {
+        if ($this->socket && \is_resource($this->socket) && $this->writeBuffer !== '') {
+            $this->flushPendingWrites(0.2);
+        }
         if ($this->socket && \is_resource($this->socket)) {
             @\fclose($this->socket);
         }
         $this->socket = null;
         $this->buffer = '';
+        $this->writeBuffer = '';
     }
 
     /**

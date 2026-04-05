@@ -26,9 +26,9 @@ final class StateFacadeInitializationTest extends TestCase
                 string $role,
                 array $config = [],
                 array $envConfig = [],
-                string $requesterInstanceName = 'system'
-            ): array
-            {
+                string $requesterInstanceName = 'system',
+                bool $frontend = false
+            ): array {
                 $this->ensureCalls[] = [$role, $requesterInstanceName, $config];
 
                 return [
@@ -71,9 +71,9 @@ final class StateFacadeInitializationTest extends TestCase
                 string $role,
                 array $config = [],
                 array $envConfig = [],
-                string $requesterInstanceName = 'system'
-            ): array
-            {
+                string $requesterInstanceName = 'system',
+                bool $frontend = false
+            ): array {
                 $this->ensureCalls[] = [$role, $requesterInstanceName, $config];
 
                 return [
@@ -120,9 +120,9 @@ final class StateFacadeInitializationTest extends TestCase
                 string $role,
                 array $config = [],
                 array $envConfig = [],
-                string $requesterInstanceName = 'system'
-            ): array
-            {
+                string $requesterInstanceName = 'system',
+                bool $frontend = false
+            ): array {
                 $this->ensureCalls++;
 
                 return [
@@ -170,9 +170,9 @@ final class StateFacadeInitializationTest extends TestCase
                 string $role,
                 array $config = [],
                 array $envConfig = [],
-                string $requesterInstanceName = 'system'
-            ): array
-            {
+                string $requesterInstanceName = 'system',
+                bool $frontend = false
+            ): array {
                 $this->ensureCalls++;
 
                 return [];
