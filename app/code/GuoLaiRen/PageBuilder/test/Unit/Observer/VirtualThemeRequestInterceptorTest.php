@@ -92,12 +92,12 @@ class VirtualThemeRequestInterceptorTest extends TestCase
         $this->assertSame(456, $persistedContext['session_id']);
 
         $this->assertSame($virtualThemeId, $setGetCalls['virtual_theme_id'] ?? null);
-        $this->assertSame($virtualThemeId, $setGetCalls['pagebuilder_virtual_theme_id'] ?? null);
         $this->assertSame('1', $setGetCalls['is_virtual_theme'] ?? null);
         $this->assertSame('frontend', $setGetCalls['editor_area'] ?? null);
         $this->assertSame('pagebuilder', $setGetCalls['shell'] ?? null);
         $this->assertSame('ai/test-theme', $setGetCalls['virtual_theme_path'] ?? null);
         $this->assertSame('frontend', $setGetCalls['theme_component_area'] ?? null);
+        $this->assertArrayNotHasKey('pagebuilder_virtual_theme_id', $setGetCalls);
         $this->assertArrayNotHasKey('preview_theme', $setGetCalls);
         $this->assertArrayNotHasKey('preview_area', $setGetCalls);
         $this->assertArrayNotHasKey('frontend_theme_id', $setGetCalls);

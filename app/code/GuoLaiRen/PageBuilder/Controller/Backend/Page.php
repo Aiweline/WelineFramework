@@ -868,7 +868,7 @@ class Page extends BackendController
         $this->assign('page', $context['page']);
         $this->assign('visual_config_page_id', 0);
         $this->assign('visual_config_handle', (string)($context['virtual_page']['handle'] ?? ''));
-        $this->assign('visual_config_weline_theme_id', (int)$context['virtual_theme_id']);
+        $this->assign('visual_config_virtual_theme_id', (int)$context['virtual_theme_id']);
         $this->assign('visual_is_virtual_mode', true);
         $this->assign('visual_public_id', $publicId);
         $this->assign('visual_page_type', $context['page_type']);
