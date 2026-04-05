@@ -302,18 +302,18 @@ class Core
 
         // 诊断日志：记录路由开始时的关键状态
         $originalUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
-        if (str_contains($originalUri, 'ai-site-agent')) {
-            file_put_contents(BP . 'var/log/router_debug.log',
-                date('[Y-m-d H:i:s] ') . '[Router::start] ai-site-agent request | '
-                . 'REQUEST_URI=' . ($_SERVER['REQUEST_URI'] ?? '(empty)') . ' | '
-                . 'WELINE_AREA=' . ($_SERVER['WELINE_AREA'] ?? '(empty)') . ' | '
-                . 'WELINE_IS_BACKEND=' . (($_SERVER['WELINE_IS_BACKEND'] ?? false) ? 'true' : 'false') . ' | '
-                . 'is_backend=' . ($this->is_backend ? 'true' : 'false') . ' | '
-                . 'request_area=' . ($this->request_area ?? '(empty)') . ' | '
-                . 'area_router=' . ($this->area_router ?? '(empty)') . ' | '
-                . 'processed_url=' . $url . PHP_EOL,
-                FILE_APPEND
-            );
+        if (Env::get('wls.debug.hot_path_logs', false) && str_contains($originalUri, 'ai-site-agent')) {
+            if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
+                \Weline\Server\Log\WlsLogger::info_('[Router::start] ai-site-agent request', [
+                    'request_uri' => $_SERVER['REQUEST_URI'] ?? '(empty)',
+                    'weline_area' => $_SERVER['WELINE_AREA'] ?? '(empty)',
+                    'weline_is_backend' => (($_SERVER['WELINE_IS_BACKEND'] ?? false) ? 'true' : 'false'),
+                    'is_backend' => ($this->is_backend ? 'true' : 'false'),
+                    'request_area' => $this->request_area ?? '(empty)',
+                    'area_router' => $this->area_router ?? '(empty)',
+                    'processed_url' => $url,
+                ]);
+            }
         }
         $hasPreviewTheme = isset($_GET['preview_theme']) && (int)$_GET['preview_theme'] > 0;
         
@@ -326,7 +326,13 @@ class Core
         }
         
         // 优先从统一缓存中读取 router
-        if (!$hasPreviewTheme && is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY]) && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])) {
+        if (
+            !$this->is_backend
+            && !$hasPreviewTheme
+            && is_array($this->unifiedCacheData)
+            && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])
+            && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY])
+        ) {
             $cachedRouter = $this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_ROUTER_KEY];
             if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $cachedRouter)) {
                 $this->clearCurrentRequestRouteCaches();
@@ -337,7 +343,7 @@ class Core
         }
         
         // 回退到旧的缓存方式（兼容性）
-        $router = $hasPreviewTheme ? null : $this->cache->get($this->_router_cache_key);
+        $router = ($this->is_backend || $hasPreviewTheme) ? null : $this->cache->get($this->_router_cache_key);
         if ($router) {
             if (self::isStaleEmptyRootRouterCache($this->request_area, $url, $this->request->getRule(), $router)) {
                 $this->clearCurrentRequestRouteCaches();
@@ -631,7 +637,9 @@ class Core
                     ($getFallback ? ($routers['index/index' . $getFallback] ?? null) : null);
                 # 缓存路由结果
                 $this->router['type'] = 'api';
-                $this->cache->set($this->_router_cache_key, $this->router);
+                if (!$is_api_admin) {
+                    $this->cache->set($this->_router_cache_key, $this->router);
+                }
                 return $this->route();
             }
         }
@@ -717,7 +725,9 @@ class Core
                 
                 # 缓存路由结果
                 $this->router['type'] = 'pc';
-                $this->cache->set($this->_router_cache_key, $this->router);
+                if (!$is_pc_admin) {
+                    $this->cache->set($this->_router_cache_key, $this->router);
+                }
                 
                 return $this->route();
             }
@@ -868,6 +878,13 @@ class Core
 
     public function getController(array $router): array
     {
+        if ($this->is_backend) {
+            return [
+                $router['class']['name'] ?? '',
+                $router['class']['method'] ?: 'index',
+            ];
+        }
+
         $controller_cache_controller_key = 'controller_cache_key_' . implode('_', $router['class']) . '_controller';
         $controller_cache_method_key = 'controller_cache_key_' . implode('_', $router['class']) . '_method';
         $dispatch = $this->cache->get($controller_cache_controller_key);
@@ -969,6 +986,23 @@ class Core
         $this->request->setRouter($this->router);
         
         list($dispatch, $method) = $this->getController($this->router);
+        $originalUri = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '');
+        if (
+            Env::get('wls.debug.hot_path_logs', false)
+            && \str_contains($originalUri, 'ai-site-agent')
+            && \class_exists(\Weline\Server\Log\WlsLogger::class)
+        ) {
+            \Weline\Server\Log\WlsLogger::info_('[Router::route] controller_resolved', [
+                'uri' => $originalUri,
+                'request_area' => $this->request_area,
+                'area_router' => $this->area_router,
+                'is_backend' => $this->is_backend,
+                'router_class' => (string)($this->router['class']['name'] ?? ''),
+                'router_method' => (string)($this->router['class']['method'] ?? ''),
+                'dispatch' => (string)$dispatch,
+                'method' => (string)$method,
+            ]);
+        }
         
         // 解析注解
         $dispatchReflection = ObjectManager::getReflectionInstance($dispatch);
