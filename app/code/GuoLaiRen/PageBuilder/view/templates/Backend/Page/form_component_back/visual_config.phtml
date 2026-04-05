@@ -21,6 +21,16 @@ $handle = $this->getData('visual_config_handle') ?: ($page ? $page->getData('han
 $styleSettings = $page ? $page->getStyleSettings() : [];
 $isTemplateConfigMode = $this->getData('is_template_config_mode') ?: false;
 
+// 虚拟主题 / 会话预览：由 virtual-edit 等入口 assign，普通编辑页为 0 / 空串
+$virtualThemeIdForVisual = (int)($this->getData('visual_config_virtual_theme_id') ?: 0);
+$visualPublicId = (string)($this->getData('visual_public_id') ?? '');
+$visualPageTypeForPreview = (string)($this->getData('visual_page_type') ?? '');
+$visualPreviewUrlBootstrap = (string)($this->getData('visual_preview_url') ?? '');
+$isVisualVirtualMode = (bool)($this->getData('visual_is_virtual_mode') ?? false);
+$previewIframeSrc = ($isVisualVirtualMode && $visualPreviewUrlBootstrap !== '')
+    ? $visualPreviewUrlBootstrap
+    : $this->getBackendUrl('*/backend/preview/full', ['page_id' => (int)$pageId, 'visual_editor' => '1']);
+
 // AI 组件配置生成所需：页面类型、页面描述、各类型提示词（供前端手风琴展示）
 $pageType = $page ? (string)($page->getData('type') ?? 'custom_page') : 'custom_page';
 $aiDescription = $page ? (string)($page->getData('ai_description') ?? '') : '';
@@ -43,7 +53,8 @@ $themeModel = $themeConfig->getThemeModel();
 $themeMode = $themeModel ?: 'light'; // 默认为light
 ?>
 <style>
-/* 可视化配置容器：须高于 #page-topbar(10050)、.right-bar(10060)，低于 SweetAlert2(100000+) */
+/* 可视化配置容器 - 使用CSS变量支持主题
+ * 层级须高于 #page-topbar(10050)、.right-bar(10060)，且低于 SweetAlert2(100000+) */
 .visual-config-wrapper {
     position: fixed;
     top: 0;
@@ -57,7 +68,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     display: none;
 }
 
-/* 工具栏与侧栏高于中间预览，避免 iframe 盖住操作区 */
+/* 工具栏、侧栏、组件库高于中间预览区，避免 iframe/预览层盖住操作区 */
 .visual-config-wrapper.active > .visual-toolbar {
     position: relative;
     z-index: 60;
@@ -81,14 +92,6 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 .visual-config-wrapper.active .component-panel {
     position: relative;
     z-index: 40;
-}
-
-/* 编辑器内若使用后台 .card，禁用 hover 位移（theme.css 全局 transform 会致弹窗内抖动） */
-.visual-config-wrapper .card {
-    transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-.visual-config-wrapper .card:hover {
-    transform: none;
 }
 
 /* 亮色主题（默认） */
@@ -192,6 +195,30 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 .visual-config-wrapper * {
     scrollbar-width: thin;
     scrollbar-color: var(--visual-config-scrollbar-thumb, rgba(0, 0, 0, 0.15)) transparent;
+}
+
+.visual-color-input {
+    min-height: 38px;
+    padding-left: 42px;
+    padding-right: 12px;
+    background:
+        linear-gradient(var(--preview-color, transparent), var(--preview-color, transparent)) no-repeat 10px center / 22px 22px,
+        linear-gradient(45deg, rgba(0,0,0,0.08) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.08) 75%) no-repeat 10px center / 22px 22px,
+        linear-gradient(45deg, rgba(0,0,0,0.08) 25%, transparent 25%, transparent 75%, rgba(0,0,0,0.08) 75%) no-repeat 21px center / 22px 22px;
+}
+
+.clr-field {
+    width: 100%;
+    position: relative;
+}
+
+#visual-coloris-portal {
+    position: relative;
+    z-index: 2147483000;
+}
+
+#clr-picker {
+    z-index: 2147483646 !important;
 }
 
 /* 顶部工具栏 */
@@ -626,6 +653,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
 .color-scheme-item:hover {
     border-color: #3498db;
     box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+    transform: translateY(-2px);
 }
 
 .color-scheme-item.selected {
@@ -1053,7 +1081,7 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     margin-top: 1rem;
 }
 
-/* SweetAlert2 在可视化全屏层(100500)之上 */
+/* SweetAlert2 弹窗层级调整：确保在可视化全屏层(100500)之上 */
 .swal2-container {
     z-index: 100000 !important;
 }
@@ -1169,7 +1197,10 @@ $themeMode = $themeModel ?: 'light'; // 默认为light
     border-color: rgba(102,126,234,0.3) !important;
 }
 
-/* 全屏层之上打开 Bootstrap Modal：抬高遮罩/对话框，并冻结可视化层指针（backdrop 默认 1040 低于 100500） */
+/*
+ * 全屏层 z-index 100500；Bootstrap 默认 backdrop(1040) 仍低于该层。
+ * 打开子弹窗时抬高 backdrop/modal 至全屏层之上，并冻结可视化层指针事件。
+ */
 body.visual-config-editor-open.modal-open #visualConfigWrapper {
     pointer-events: none !important;
 }
@@ -1179,6 +1210,7 @@ body.visual-config-editor-open.modal-open .modal-backdrop.show {
 body.visual-config-editor-open.modal-open .modal.show {
     z-index: 100520 !important;
 }
+/* 后台主题 .card:hover 的 transform 在可滚动弹窗内会造成抖动 */
 body.visual-config-editor-open .weline-component-config-modal .card,
 body.visual-config-editor-open #resetConfigConfirmModal .card {
     transition: box-shadow 0.2s ease, border-color 0.2s ease;
@@ -1684,7 +1716,7 @@ body.visual-config-editor-open .swal2-popup .card:hover {
         <!-- 中间预览面板 -->
         <div class="preview-panel">
             <div class="preview-container device-desktop" id="previewContainer">
-                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId, 'visual_editor' => '1']) ?>"></iframe>
+                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= htmlspecialchars($previewIframeSrc, ENT_QUOTES, 'UTF-8') ?>"></iframe>
                 <div class="preview-loading" id="previewLoading">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden"><?= __('加载中...') ?></span>
@@ -1706,9 +1738,14 @@ body.visual-config-editor-open .swal2-popup .card:hover {
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<script>
+window.visualVirtualThemeId = window.visualVirtualThemeId || <?= (int)$virtualThemeIdForVisual ?>;
+window.visualPublicId = <?= json_encode($visualPublicId, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+window.visualPageType = <?= json_encode($visualPageTypeForPreview, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+</script>
 <!-- 早期挂载一个全局入口，确保表单可调用，即使主脚本延迟/异常 -->
 <script>
-/** 挂到 body，避免嵌在表单 .card 内时 theme .card:hover transform 产生层叠上下文锁住 fixed */
+/** 将可视化容器挂到 body，避免嵌在 .card 内因 transform 产生层叠上下文而无法盖过顶栏/侧栏 */
 window.ensureVisualConfigPortal = function () {
     try {
         var el = document.getElementById('visualConfigWrapper');
@@ -2064,6 +2101,190 @@ function toggleSection(sectionId) {
     saveSectionState(sectionId, isExpanded);
 }
 
+const VISUAL_COLORIS_CSS_URLS = [
+    'https://cdn.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.css',
+    'https://cdn.jsdelivr.net/npm/@melloware/coloris@latest/dist/coloris.min.css'
+];
+
+const VISUAL_COLORIS_JS_URLS = [
+    'https://cdn.jsdelivr.net/gh/mdbassit/Coloris@latest/dist/coloris.min.js',
+    'https://cdn.jsdelivr.net/npm/@melloware/coloris@latest/dist/umd/coloris.min.js'
+];
+
+function ensureVisualColorisCss() {
+    if (document.querySelector('link[data-visual-coloris="1"]')) {
+        return;
+    }
+    
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = VISUAL_COLORIS_CSS_URLS[0];
+    link.setAttribute('data-visual-coloris', '1');
+    link.onerror = function() {
+        if (link.href !== VISUAL_COLORIS_CSS_URLS[1]) {
+            link.href = VISUAL_COLORIS_CSS_URLS[1];
+        }
+    };
+    document.head.appendChild(link);
+}
+
+function ensureVisualColorisJs() {
+    if (typeof window.Coloris === 'function') {
+        return Promise.resolve(window.Coloris);
+    }
+    
+    if (window.__visualColorisLoadPromise) {
+        return window.__visualColorisLoadPromise;
+    }
+    
+    window.__visualColorisLoadPromise = new Promise(function(resolve, reject) {
+        let index = 0;
+        
+        const loadScript = function() {
+            if (typeof window.Coloris === 'function') {
+                resolve(window.Coloris);
+                return;
+            }
+            
+            if (index >= VISUAL_COLORIS_JS_URLS.length) {
+                reject(new Error('Coloris script failed to load from all CDN sources'));
+                return;
+            }
+            
+            const url = VISUAL_COLORIS_JS_URLS[index++];
+            const existing = document.querySelector(`script[data-visual-coloris-src="${url}"]`);
+            if (existing) {
+                existing.addEventListener('load', function() {
+                    if (typeof window.Coloris === 'function') {
+                        resolve(window.Coloris);
+                    } else {
+                        loadScript();
+                    }
+                }, { once: true });
+                existing.addEventListener('error', function() {
+                    loadScript();
+                }, { once: true });
+                return;
+            }
+            
+            const script = document.createElement('script');
+            script.src = url;
+            script.async = true;
+            script.setAttribute('data-visual-coloris-src', url);
+            script.onload = function() {
+                if (typeof window.Coloris === 'function') {
+                    resolve(window.Coloris);
+                } else {
+                    loadScript();
+                }
+            };
+            script.onerror = function() {
+                script.remove();
+                loadScript();
+            };
+            document.head.appendChild(script);
+        };
+        
+        loadScript();
+    }).catch(function(error) {
+        console.error('[VisualConfig] Coloris 加载失败:', error);
+        window.__visualColorisLoadPromise = null;
+        throw error;
+    });
+    
+    return window.__visualColorisLoadPromise;
+}
+
+function ensureVisualColorisPortal() {
+    let portal = document.getElementById('visual-coloris-portal');
+    if (portal) {
+        return portal;
+    }
+    
+    portal = document.createElement('div');
+    portal.id = 'visual-coloris-portal';
+    
+    const toastContainer = document.querySelector('.backend-toast-container');
+    const host = (toastContainer && toastContainer.parentElement) ? toastContainer.parentElement : document.body;
+    host.appendChild(portal);
+    
+    return portal;
+}
+
+function updateVisualColorPreview(input) {
+    if (!(input instanceof HTMLElement)) {
+        return;
+    }
+    const value = String(input.value || '').trim();
+    const isEmpty = value === '';
+    input.style.setProperty('--preview-color', isEmpty ? 'transparent' : value);
+    input.classList.toggle('visual-color-input-empty', isEmpty);
+    input.title = isEmpty ? '<?= __('点击选择颜色') ?>' : value;
+}
+
+function initVisualColorInputs(scope) {
+    const root = scope instanceof Element ? scope : document;
+    const colorInputs = root.querySelectorAll('.visual-color-input[data-coloris]');
+    if (!colorInputs.length) {
+        return;
+    }
+    
+    ensureVisualColorisCss();
+    colorInputs.forEach(function(input) {
+        input.setAttribute('autocomplete', 'off');
+        if (!input.placeholder) {
+            input.placeholder = '#000000 / rgba(...) / transparent';
+        }
+        
+        if (!input.dataset.visualColorPreviewBound) {
+            const syncPreview = function() {
+                updateVisualColorPreview(input);
+            };
+            input.addEventListener('input', syncPreview, { passive: true });
+            input.addEventListener('change', syncPreview, { passive: true });
+            input.dataset.visualColorPreviewBound = '1';
+        }
+        
+        updateVisualColorPreview(input);
+    });
+    
+    ensureVisualColorisJs().then(function() {
+        const portal = ensureVisualColorisPortal();
+        if (!window.__visualColorisConfigured) {
+            window.Coloris({
+                el: '.visual-color-input[data-coloris]',
+                alpha: true,
+                format: 'mixed',
+                formatToggle: true,
+                clearButton: true,
+                theme: 'default',
+                themeMode: 'auto',
+                parent: portal,
+                swatches: [
+                    '#ffffff',
+                    '#000000',
+                    '#0066cc',
+                    '#1f7a5b',
+                    '#e74c3c',
+                    'rgba(0,0,0,0.35)'
+                ],
+                onChange: function(color, input) {
+                    if (!input) {
+                        return;
+                    }
+                    if (input.value !== color) {
+                        input.value = color;
+                    }
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                }
+            });
+            window.__visualColorisConfigured = true;
+        }
+    }).catch(function() {
+        // CDN 都失败时保留普通文本输入，不阻断页面其他功能
+    });
+}
+
 // 切换设备视图
 function switchDevice(device) {
     // 更新按钮状态
@@ -2248,17 +2469,24 @@ window.refreshPreview = function(savedPosition) {
     const styleCode = window.currentTemplateStyleCode || '';
     const templatePageId = window.currentTemplatePageId || 0;
     
-    // 构建预览 URL（使用全局 pageId 或从 window 获取）
+    // 构建预览 URL（page_id 模式 或 虚拟主题 public_id + page_type）
     const currentPageId = typeof pageId !== 'undefined' ? pageId : (window.pageId || window.visualPageId || 0);
-    let previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId + '&visual_editor=1';
+    const useVirtualPreview = typeof window.visualPublicId === 'string' && window.visualPublicId.trim() !== ''
+        && typeof window.visualPageType === 'string' && window.visualPageType.trim() !== '';
+    let previewUrl;
+    if (useVirtualPreview) {
+        previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?public_id=' + encodeURIComponent(window.visualPublicId)
+            + '&page_type=' + encodeURIComponent(window.visualPageType) + '&visual_editor=1';
+    } else {
+        previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId + '&visual_editor=1';
+    }
     
-    if (isTemplateMode && styleCode) {
+    if (!useVirtualPreview && isTemplateMode && styleCode) {
         previewUrl += '&style_code=' + encodeURIComponent(styleCode);
         if (templatePageId) {
             previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + templatePageId + '&style_code=' + encodeURIComponent(styleCode) + '&visual_editor=1';
         }
     } else {
-        // 普通页面配置模式：如果有外部样式选择，带上样式代码
         const externalStyleSelect = document.getElementById('style');
         const externalStyleCode = externalStyleSelect ? externalStyleSelect.value : (typeof window.currentStyle !== 'undefined' ? window.currentStyle : '');
         if (externalStyleCode) {
@@ -2267,6 +2495,10 @@ window.refreshPreview = function(savedPosition) {
         if (window.currentVisualLanguage) {
             previewUrl += '&locale=' + encodeURIComponent(window.currentVisualLanguage);
         }
+    }
+    
+    if (typeof window.visualVirtualThemeId === 'number' && window.visualVirtualThemeId > 0) {
+        previewUrl += '&virtual_theme_id=' + encodeURIComponent(String(window.visualVirtualThemeId));
     }
     
     previewUrl += '&t=' + Date.now();
@@ -2772,10 +3004,10 @@ function renderTemplateConfig(configGroups) {
             fieldHtml += `</div>`;
             fieldHtml += `</div>`;
         } else if (config.type === 'color') {
-            // type="color" 只接受 #rrggbb，rgba 等会导致解析/验证错误
-            const colorHex = /^#[0-9A-Fa-f]{6}$/.test(String(rawValue || '')) ? rawValue : '#000000';
-            fieldHtml += `<input type="color" id="${fieldId}" class="form-control form-control-color auto-save-field" 
-                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(colorHex)}">`;
+            fieldHtml += `<input type="text" id="${fieldId}" class="form-control auto-save-field visual-color-input" 
+                    data-coloris
+                    data-config-key="${escapeHtmlForTemplate(configKey)}" value="${escapeHtmlForTemplate(String(rawValue || ''))}"
+                    placeholder="#000000 / rgba(...) / transparent">`;
         } else if (config.type === 'textarea') {
             // 处理 textarea 的值：将字面量 \n 和 \r\n 转换为实际换行符
             // 注意：textarea 内容中的换行符不需要 HTML 转义，但需要转义其他 HTML 特殊字符
@@ -3162,6 +3394,8 @@ function renderTemplateConfig(configGroups) {
             field.addEventListener('input', handler, { passive: true });
             field.addEventListener('change', handler, { passive: true });
         });
+        
+        initVisualColorInputs(configFields);
         
         // 为每个配置分组添加恢复默认值按钮（在分组标题旁边）
         document.querySelectorAll('.config-section').forEach(section => {
@@ -3791,8 +4025,9 @@ window.resetVisualConfigField = function(button) {
             break;
             
         case 'color':
-            // 颜色选择器：直接设置值
-            field.value = defaultValue || '#ffffff';
+            // Coloris 使用文本输入，保留 hex/rgb/rgba/transparent 原始值
+            field.value = defaultValue || '';
+            field.dispatchEvent(new Event('input', { bubbles: true }));
             field.dispatchEvent(new Event('change', { bubbles: true }));
             break;
         
@@ -5486,12 +5721,7 @@ window.editComponentInPreview = async function(wrapper) {
                         formHtml += '<textarea id="' + inputId + '" data-field="' + fullKey + '" class="form-control form-control-sm" rows="3" style="width: 100%;">' + 
                             escapeHtml(currentValue) + '</textarea>';
                     } else if (fieldType === 'color') {
-                        const colorVal = String(currentValue || '');
-                        const colorHex = /^#[0-9A-Fa-f]{6}$/.test(colorVal) ? colorVal : '#000000';
-                        formHtml += '<div style="display: flex; gap: 8px; align-items: center;">';
-                        formHtml += '<input type="color" id="' + inputId + '" data-field="' + fullKey + '" value="' + escapeHtml(colorHex) + '" style="width: 40px; height: 32px; border-radius: 4px; padding: 2px; cursor: pointer;">';
-                        formHtml += '<input type="text" id="' + inputId + '_text" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm" style="flex: 1;" placeholder="#000000">';
-                        formHtml += '</div>';
+                        formHtml += '<input type="text" id="' + inputId + '" data-field="' + fullKey + '" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm visual-color-input" data-coloris style="width: 100%;" placeholder="#000000 / rgba(...) / transparent">';
                     } else if (fieldType === 'image') {
                         formHtml += '<div style="display: flex; gap: 8px; align-items: center;">';
                         formHtml += '<input type="text" id="' + inputId + '" data-field="' + fullKey + '" value="' + escapeHtml(currentValue) + '" class="form-control form-control-sm" style="flex: 1;" placeholder="<?= __('图片URL') ?>">';
@@ -5516,20 +5746,7 @@ window.editComponentInPreview = async function(wrapper) {
             confirmText: '<?= __('保存') ?>',
             cancelText: '<?= __('取消') ?>',
             onOpen: (modalElement) => {
-                // 颜色选择器同步
-                modalElement.querySelectorAll('input[type="color"]').forEach(colorInput => {
-                    const textInput = document.getElementById(colorInput.id + '_text');
-                    if (textInput) {
-                        colorInput.addEventListener('input', () => {
-                            textInput.value = colorInput.value;
-                        });
-                        textInput.addEventListener('input', () => {
-                            if (/^#[0-9A-Fa-f]{6}$/.test(textInput.value)) {
-                                colorInput.value = textInput.value;
-                            }
-                        });
-                    }
-                });
+                initVisualColorInputs(modalElement);
                 
                 // AI 生成按钮点击事件（SSE 流式，在「生成过程」终端中展示）
                 const aiBtn = document.getElementById('aiGenerateComponentConfigBtn');

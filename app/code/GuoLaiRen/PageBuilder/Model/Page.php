@@ -84,6 +84,13 @@ class Page extends Model
     public const schema_fields_LAYOUT_PAGE_ID = 'layout_page_id';
     #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: '状态:0草稿,1已发布')]
     public const schema_fields_STATUS = 'status';
+    /** 空字符串表示传统主题渲染；ai_html 为 HTML 区块拼接轨 */
+    #[Col(type: 'varchar', length: 32, nullable: false, default: '', comment: '前台渲染模式：空=主题，ai_html=区块HTML')]
+    public const schema_fields_RENDER_MODE = 'render_mode';
+    #[Col(type: 'text', nullable: true, comment: 'AI 页面区块编辑态 JSON：blocks[] 等')]
+    public const schema_fields_AI_LAYOUT = 'ai_layout';
+    #[Col(type: 'text', nullable: true, comment: '最近 N 次发布快照 JSON 数组（消毒后）')]
+    public const schema_fields_AI_PUBLISH_SNAPSHOTS = 'ai_publish_snapshots';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_CREATE_TIME = 'create_time';
     #[Col(type: 'datetime', nullable: false, default: 'CURRENT_TIMESTAMP', comment: '更新时间')]
@@ -109,6 +116,11 @@ class Page extends Model
     // 状态常量
     public const STATUS_DRAFT = 0;
     public const STATUS_PUBLISHED = 1;
+
+    public const RENDER_MODE_THEME = '';
+    public const RENDER_MODE_AI_HTML = 'ai_html';
+    /** 发布快照保留份数上限（与计划「最近 N」一致，可调） */
+    public const AI_PUBLISH_SNAPSHOT_MAX = 5;
     
     /**
      * 获取所有页面类型
@@ -220,6 +232,87 @@ class Page extends Model
     public function getStatusName(): string
     {
         return $this->getData(self::schema_fields_STATUS) == self::STATUS_PUBLISHED ? __('已发布') : __('草稿');
+    }
+
+    public function isAiHtmlRenderMode(): bool
+    {
+        return \trim((string)$this->getData(self::schema_fields_RENDER_MODE)) === self::RENDER_MODE_AI_HTML;
+    }
+
+    /**
+     * @return array<string, mixed> 含 blocks:list<array{block_id:string,type:string,html:string}>
+     */
+    public function getAiLayoutArray(): array
+    {
+        $raw = $this->getData(self::schema_fields_AI_LAYOUT);
+        if ($raw === null || $raw === '') {
+            return ['blocks' => []];
+        }
+        $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
+
+        return \is_array($decoded) ? $decoded : ['blocks' => []];
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    public function setAiLayoutArray(array $layout): self
+    {
+        return $this->setData(self::schema_fields_AI_LAYOUT, \json_encode($layout, \JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function getAiPublishSnapshotsList(): array
+    {
+        $raw = $this->getData(self::schema_fields_AI_PUBLISH_SNAPSHOTS);
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+        $decoded = \is_string($raw) ? \json_decode($raw, true) : null;
+
+        return \is_array($decoded) ? \array_values($decoded) : [];
+    }
+
+    /**
+     * @param array<string, mixed> $sanitizedLayout 已消毒的 ai_layout 结构
+     */
+    public function appendAiPublishSnapshot(array $sanitizedLayout): self
+    {
+        $list = $this->getAiPublishSnapshotsList();
+        $list[] = [
+            'published_at' => \date('Y-m-d H:i:s'),
+            'ai_layout' => $sanitizedLayout,
+        ];
+        if (\count($list) > self::AI_PUBLISH_SNAPSHOT_MAX) {
+            $list = \array_slice($list, -self::AI_PUBLISH_SNAPSHOT_MAX);
+        }
+
+        return $this->setData(self::schema_fields_AI_PUBLISH_SNAPSHOTS, \json_encode($list, \JSON_UNESCAPED_UNICODE));
+    }
+
+    /**
+     * 已发布页读最后一次快照；无快照时回退编辑态 ai_layout
+     *
+     * @return array<string, mixed>
+     */
+    public function resolveAiLayoutForFrontend(bool $useDraftInsteadOfSnapshot = false): array
+    {
+        if ($useDraftInsteadOfSnapshot) {
+            return $this->getAiLayoutArray();
+        }
+        if ((int)$this->getData(self::schema_fields_STATUS) !== self::STATUS_PUBLISHED) {
+            return $this->getAiLayoutArray();
+        }
+        $snapshots = $this->getAiPublishSnapshotsList();
+        if ($snapshots === []) {
+            return $this->getAiLayoutArray();
+        }
+        $last = $snapshots[\array_key_last($snapshots)];
+        $layout = $last['ai_layout'] ?? null;
+
+        return \is_array($layout) ? $layout : $this->getAiLayoutArray();
     }
     
     /**

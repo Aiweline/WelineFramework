@@ -48,8 +48,8 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
         array $providerState = [],
         array $context = []
     ): array {
-        $legacyUrl = $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/index', ['legacy' => 1]);
-        $nativeEntryUrl = $this->resolveNativeEntryUrl($sessionState, $scope, $legacyUrl);
+        $entryUrl = $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/index');
+        $nativeEntryUrl = $this->resolveNativeEntryUrl($sessionState, $scope, $entryUrl);
         $domainManagementUrl = $this->url->getBackendUrl('pagebuilder/backend/domainManagement/index');
         $websiteManagementUrl = $this->url->getBackendUrl('pagebuilder/backend/websiteManagement/index');
         $pageIndexUrl = $this->url->getBackendUrl('pagebuilder/backend/page/index');
@@ -59,6 +59,12 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
             'preferred_editor' => 'pagebuilder',
             'provider_handoff_mode' => self::HANDOFF_MODE_NATIVE_WORKSPACE,
             'provider_authority' => 'pagebuilder_native',
+            /** 与 PageBuilder can_publish 组合：1=域名就绪可发布，0=仅草稿 */
+            'site_ready' => (int)($scope['site_ready'] ?? 1),
+            /** virtual_theme | html_blocks，全站二选一轨 */
+            'workspace_track' => \trim((string)($scope['workspace_track'] ?? 'virtual_theme')) !== 'html_blocks'
+                ? 'virtual_theme'
+                : 'html_blocks',
         ];
         if (($context['source'] ?? '') !== '') {
             $resolvedScope['created_from'] = (string)$context['source'];
@@ -167,6 +173,24 @@ class PageBuilderProvider implements AiSiteBuilderWorkbenchProviderInterface
                     'icon' => 'mdi mdi-file-document-multiple-outline',
                     'button_class' => 'btn-outline-secondary',
                     'url' => $pageIndexUrl,
+                ],
+                [
+                    'code' => 'handoff_scope_site_ready',
+                    'label' => (string)__('写入 site_ready（域名门禁）'),
+                    'description' => (string)__('通过 Websites 会话 merge-scope 写入 site_ready=1 表示域名流程完成；0 时 PageBuilder 仅允许草稿。详见模块 doc 计划-AI建站工作台-Websites侧.md。'),
+                    'type' => 'link',
+                    'icon' => 'mdi mdi-web-check',
+                    'button_class' => 'btn-outline-secondary',
+                    'url' => $this->url->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => 'pagebuilder']),
+                ],
+                [
+                    'code' => 'handoff_scope_workspace_track',
+                    'label' => (string)__('说明：workspace_track 双轨'),
+                    'description' => (string)__('handoff 可带 workspace_track=html_blocks（默认 HTML 区块）或 virtual_theme（高级虚拟主题）。进入 PageBuilder 工作区后可在「阶段2」卡片切换。'),
+                    'type' => 'link',
+                    'icon' => 'mdi mdi-source-branch',
+                    'button_class' => 'btn-outline-secondary',
+                    'url' => $nativeEntryUrl,
                 ],
             ],
         ];
