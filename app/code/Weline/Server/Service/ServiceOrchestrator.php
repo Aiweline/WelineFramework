@@ -146,6 +146,9 @@ class ServiceOrchestrator
     /** 维护模式是否激活 */
     private bool $maintenanceMode = false;
 
+    /** 是否为显式维护态（配置/命令开启），禁止在业务 Worker READY 后自动退出 */
+    private bool $maintenanceSticky = false;
+
     /**
      * 等待 Worker 对 set_maintenance_mode 的 ACK（request_id 对齐）
      *
@@ -921,7 +924,7 @@ class ServiceOrchestrator
                 $this->ipcClearFieldForNewImperial($clientId, ControlMessage::ACTION_MAINTENANCE_ENABLE);
                 $snap = $this->ipcImperialEpoch;
                 try {
-                    $this->enableMaintenanceMode();
+                    $this->enableMaintenanceMode(true);
                 } finally {
                     if ($this->ipcImperialEpoch === $snap && $this->ipcExclusiveClientId === $clientId) {
                         $this->ipcReleaseExclusive();
@@ -1193,6 +1196,7 @@ class ServiceOrchestrator
             $this->registerTimeout = $this->startupGracePeriod;
         }
         $this->desiredState = [];
+        $this->maintenanceSticky = false;
 
         // 启动 IPC 控制服务器
         $this->controlServer = new MasterControlServer();
@@ -1229,13 +1233,28 @@ class ServiceOrchestrator
             return;
         }
 
-        $workerCount = (int)($context->getConfig('wls.worker.count', 1) ?? 1);
-        $nMaint = \max(1, (int)\ceil(\max($workerCount, 1) / 3));
+        $workerCount = $context->getWorkerCount();
+        if ($workerCount === 'auto') {
+            $workerProvider = $this->registry->getProvider(ControlMessage::ROLE_WORKER);
+            $workerCount = $workerProvider?->getInstanceCount($context) ?? 1;
+        }
+        $workerCount = \max(1, (int) $workerCount);
+        $nMaint = \max(1, (int)\ceil($workerCount / 3));
+        $sticky = (bool) (
+            ($context->envConfig['system']['maintenance'] ?? null)
+            ?? ($context->envConfig['maintenance'] ?? false)
+        );
 
         $maintenanceProvider->enable($nMaint);
         $this->maintenanceMode = true;
+        $this->maintenanceSticky = $sticky;
         $this->desiredState[ControlMessage::ROLE_MAINTENANCE] = $nMaint;
-        WlsLogger::info_('[Orchestrator] 自动维护模式预置完成，待第一阶段并发拉起 maintenance workers=' . $nMaint);
+        WlsLogger::info_(
+            '[Orchestrator] 自动维护模式预置完成，待第一阶段并发拉起 maintenance workers='
+            . $nMaint
+            . ', sticky='
+            . ($sticky ? 'true' : 'false')
+        );
     }
 
     /**
@@ -1247,6 +1266,10 @@ class ServiceOrchestrator
     {
         if (!$this->maintenanceMode) {
             return true;
+        }
+
+        if ($this->maintenanceSticky) {
+            return false;
         }
 
         $workers = $this->registry->getInstancesByRole('worker');
@@ -1300,6 +1323,7 @@ class ServiceOrchestrator
         $providers = $this->sortProvidersForStartup($this->registry->getAllProviders());
         $startedCount = 0;
         $startupAcceptance = [];
+        $phaseOneStartupAcceptance = [];
         $phaseOneProviders = [];
         $workerProviders = [];
 
@@ -1355,6 +1379,15 @@ class ServiceOrchestrator
                 }
             }
             $this->controlServer?->poll(0, 250000);
+            if ($this->shouldAbortStartupTransition()) {
+                return;
+            }
+            $phaseOneStartupAcceptance = $startupAcceptance;
+            $startupAcceptance = [];
+        }
+
+        if ($phaseOneStartupAcceptance !== []) {
+            $this->waitForStartupAcceptance($phaseOneStartupAcceptance, $context);
             if ($this->shouldAbortStartupTransition()) {
                 return;
             }
@@ -2273,6 +2306,24 @@ class ServiceOrchestrator
             return [$this->startInstance($provider, $instanceIds[0], $context)];
         }
 
+        if ($this->shouldUseCooperativeSequentialStartupBatch($instanceIds)) {
+            WlsLogger::info_(
+                '[Orchestrator] Windows 启动阶段采用协作式顺序拉起，避免批量创建长时间阻塞控制面: '
+                . $provider->getRole() . ' [' . \implode(',', $instanceIds) . ']'
+            );
+
+            $results = [];
+            foreach ($instanceIds as $instanceId) {
+                $results[] = $this->startInstance($provider, $instanceId, $context);
+                $this->drainControlPlaneAfterStartupStep();
+                if ($this->shouldAbortStartupTransition()) {
+                    break;
+                }
+            }
+
+            return $results;
+        }
+
         $role = $provider->getRole();
         $preparedInstances = [];
         $commands = [];
@@ -2349,9 +2400,52 @@ class ServiceOrchestrator
             $results[] = $instance;
         }
 
-        $this->controlServer?->poll(0, 100000);
+        $this->drainControlPlaneAfterStartupStep();
 
         return $results;
+    }
+
+    /**
+     * Windows 上批量 Processer::batchCreate 可能在启动期长时间阻塞，
+     * 期间 register/ready/ACK_READY 无法及时处理。启动阶段退回顺序拉起，
+     * 每启动一个实例就 poll 一次控制面，优先保证控制消息通畅。
+     *
+     * @param int[] $instanceIds
+     */
+    private function shouldUseCooperativeSequentialStartupBatch(array $instanceIds): bool
+    {
+        return \defined('IS_WIN') && IS_WIN
+            && \count($instanceIds) > 1
+            && $this->childServicesBootstrapInProgress
+            && $this->controlServer !== null;
+    }
+
+    /**
+     * 启动窗口内尽量把已到达的 register/ready/ack 等控制消息及时消化掉，
+     * 避免“只 poll 一帧”后马上再次进入长时间 spawnProcess，导致 READY 饿死。
+     */
+    private function drainControlPlaneAfterStartupStep(int $maxPolls = 30, int $blockingUsec = 100000): void
+    {
+        if ($this->controlServer === null) {
+            return;
+        }
+
+        $idleStreak = 0;
+        for ($i = 0; $i < $maxPolls; $i++) {
+            $changed = $this->controlServer->poll(0, $blockingUsec);
+            if ($this->shouldAbortStartupTransition()) {
+                return;
+            }
+            if ($changed > 0) {
+                $idleStreak = 0;
+                continue;
+            }
+
+            $idleStreak++;
+            if ($idleStreak >= 2) {
+                return;
+            }
+        }
     }
 
     /**
@@ -2484,13 +2578,64 @@ class ServiceOrchestrator
 
         WlsLogger::debug_("[Orchestrator] 执行命令: {$cmd}");
 
+        $foreground = $this->shouldLaunchForeground($instance->role, $this->context);
+        $argv = $this->buildWindowsDetachedPhpArgvForCommand($command, $instance, $processName);
+        if ($argv !== []) {
+            return Processer::createWindowsDetachedPhpArgv(
+                $argv,
+                $command->getWorkingDir(),
+                $cmd
+            );
+        }
+
         // 必须 block=false，否则会阻塞 Master 主循环。
         // Windows 前台模式下允许 Worker 打开独立控制台窗口，便于直接观察每个槽位的启动与请求日志。
         return Processer::create(
             $cmd,
             block: false,
-            foreground: $this->shouldLaunchForeground($instance->role, $this->context)
+            foreground: $foreground
         );
+    }
+
+    /**
+     * Windows 后台启动优先走 argv 版 Start-Process：
+     * - 避免整段命令行经 shell / PowerShell 再解析带来的慢启动与编码问题
+     * - 更快返回 PID，减少 startup Fiber 长时间卡在 spawnProcess 阶段
+     *
+     * @return list<string>
+     */
+    private function buildWindowsDetachedPhpArgvForCommand(
+        ServiceCommand $command,
+        ServiceInstance $instance,
+        ?string $processName
+    ): array {
+        if (!(\defined('IS_WIN') && IS_WIN)) {
+            return [];
+        }
+        if ($this->shouldLaunchForeground($instance->role, $this->context)) {
+            return [];
+        }
+        if ($command->environment !== []) {
+            return [];
+        }
+
+        $argv = [
+            PHP_BINARY,
+            $command->getAbsoluteScript(),
+            ...\array_map(static fn (mixed $arg): string => (string) $arg, $command->arguments),
+        ];
+
+        if ($instance->epoch > 0) {
+            $argv[] = '--epoch=' . (string) $instance->epoch;
+        }
+        if ($instance->launchId !== '') {
+            $argv[] = '--launch-id=' . $instance->launchId;
+        }
+        if ($processName !== null && $processName !== '') {
+            $argv[] = '--name=' . $processName;
+        }
+
+        return $argv;
     }
 
     private function shouldLaunchForeground(string $role, ?ServiceContext $context): bool
@@ -3554,7 +3699,7 @@ class ServiceOrchestrator
             && (!$multiWorkerWorkerReload || $forceReload);
         $maintenanceEnabledForReload = false;
         try {
-            if ($multiWorkerWorkerReload && $this->maintenanceMode) {
+            if ($multiWorkerWorkerReload && $this->maintenanceMode && !$this->maintenanceSticky) {
                 $this->disableMaintenanceMode();
                 $this->controlServer?->poll(0, 400000);
             }
@@ -7083,9 +7228,15 @@ class ServiceOrchestrator
      *
      * @return array{success: bool, message: string, maintenance_workers: int, worker_ipc_acked?: int}
      */
-    public function enableMaintenanceMode(): array
+    public function enableMaintenanceMode(bool $sticky = false): array
     {
         if ($this->maintenanceMode) {
+            if ($sticky && !$this->maintenanceSticky) {
+                $this->maintenanceSticky = true;
+                if ($this->context !== null) {
+                    $this->persistServicesInfo($this->context);
+                }
+            }
             return [
                 'success' => true,
                 'message' => 'Maintenance mode already enabled',
@@ -7241,6 +7392,7 @@ class ServiceOrchestrator
         }
 
         $this->maintenanceMode = true;
+        $this->maintenanceSticky = $sticky;
         $this->desiredState['maintenance'] = $nMaint;
         $this->persistServicesInfo($this->context);
 
@@ -7260,6 +7412,7 @@ class ServiceOrchestrator
     public function disableMaintenanceMode(): array
     {
         if (!$this->maintenanceMode) {
+            $this->maintenanceSticky = false;
             return [
                 'success' => true,
                 'message' => 'Maintenance mode already disabled',
@@ -7302,6 +7455,7 @@ class ServiceOrchestrator
 
         $this->stopMaintenanceWorkers();
         $this->maintenanceMode = false;
+        $this->maintenanceSticky = false;
         unset($this->desiredState['maintenance']);
 
         if ($this->context !== null) {
@@ -7370,7 +7524,7 @@ class ServiceOrchestrator
                 }
                 $this->controlServer?->poll(0, 600000);
             }
-        } elseif ($this->maintenanceMode) {
+        } elseif ($this->maintenanceMode && !$this->maintenanceSticky) {
             $this->disableMaintenanceMode();
             $this->controlServer?->poll(0, 400000);
         }
@@ -7573,13 +7727,19 @@ class ServiceOrchestrator
         $this->rollingRestartInProgress = false;
         $this->rollingRestartClientId = null;
 
-        $disableResult = $this->disableMaintenanceMode();
-        if (!($disableResult['success'] ?? false)) {
-            WlsLogger::warning_("[Orchestrator] 滚动重启后禁用维护模式失败: " . ($disableResult['message'] ?? 'unknown'));
+        if (!$this->maintenanceSticky) {
+            $disableResult = $this->disableMaintenanceMode();
+            if (!($disableResult['success'] ?? false)) {
+                WlsLogger::warning_("[Orchestrator] 滚动重启后禁用维护模式失败: " . ($disableResult['message'] ?? 'unknown'));
+            }
         }
 
         if ($success) {
-            $this->syncDispatcherFullWorkerPoolFromRegistry();
+            if ($this->maintenanceSticky) {
+                $this->pushMaintenanceWorkerPoolToDispatchersFromRegistry();
+            } else {
+                $this->syncDispatcherFullWorkerPoolFromRegistry();
+            }
         }
 
         if ($clientId !== null) {
