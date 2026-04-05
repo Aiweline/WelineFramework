@@ -6,6 +6,7 @@ namespace Weline\Server\Test;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Log\LogLevel;
 use Weline\Server\Log\LogConfig;
+use Weline\Server\Log\Error\ErrorContext;
 use Weline\Server\Log\WlsLogger;
 
 /**
@@ -14,6 +15,7 @@ use Weline\Server\Log\WlsLogger;
 class WlsLoggerTest extends TestCase
 {
     private string $testLogDir;
+    private array $originalArgv = [];
 
     protected function setUp(): void
     {
@@ -22,12 +24,16 @@ class WlsLoggerTest extends TestCase
         if (!\is_dir($this->testLogDir)) {
             \mkdir($this->testLogDir, 0755, true);
         }
+        $this->originalArgv = \is_array($_SERVER['argv'] ?? null) ? $_SERVER['argv'] : [];
+        ErrorContext::reset();
         WlsLogger::reset();
     }
 
     protected function tearDown(): void
     {
         parent::tearDown();
+        $_SERVER['argv'] = $this->originalArgv;
+        ErrorContext::reset();
         WlsLogger::reset();
         
         // 清理测试日志文件
@@ -132,6 +138,24 @@ class WlsLoggerTest extends TestCase
         
         $this->assertInstanceOf(WlsLogger::class, $logger);
         $this->assertEquals('TestProcess', $logger->getProcessTag());
+    }
+
+    public function testLoggerFallsBackToErrorContextProcessTag(): void
+    {
+        ErrorContext::setProcessTag('Cli:state:probe');
+
+        $logger = WlsLogger::getInstance();
+
+        $this->assertSame('Cli:state:probe', $logger->getProcessTag());
+    }
+
+    public function testLoggerFallsBackToCliCommandProcessTag(): void
+    {
+        $_SERVER['argv'] = ['bin/w', 'setup:upgrade', '--skip-reflect'];
+
+        $logger = WlsLogger::getInstance();
+
+        $this->assertSame('Cli:setup:upgrade', $logger->getProcessTag());
     }
 
     public function testProcessTagSwitchesInstanceScopedLogDir(): void

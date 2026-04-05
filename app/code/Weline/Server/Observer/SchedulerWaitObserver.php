@@ -5,7 +5,6 @@ namespace Weline\Server\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Scheduler\FiberScheduler;
 
@@ -13,7 +12,8 @@ use Weline\Server\Scheduler\FiberScheduler;
  * 调度器等待事件观察者
  *
  * 监听 Weline_Framework::scheduler::wait，根据 type 向 FiberScheduler 注册定时器。
- * 仅在 WLS 模式下有实际逻辑；FPM/CLI 下直接 return。
+ * 当调度器已激活且已注入 FiberScheduler 时注册定时器（含 Master Orchestrator 主循环 Fiber）。
+ * FPM 或未 enableScheduler 时 SchedulerSystem 会走原生 sleep，通常不会派发本事件。
  */
 class SchedulerWaitObserver implements ObserverInterface
 {
@@ -34,7 +34,7 @@ class SchedulerWaitObserver implements ObserverInterface
 
     public function execute(Event &$event): void
     {
-        if (!Runtime::isWls() || !SchedulerSystem::isSchedulerActive() || !self::$scheduler) {
+        if (!SchedulerSystem::isSchedulerActive() || !self::$scheduler) {
             return;
         }
 

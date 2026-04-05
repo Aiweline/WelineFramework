@@ -10,6 +10,17 @@ use Weline\Server\Service\MasterProcess;
 
 class IpcControlGateway implements IpcControlGatewayInterface
 {
+    /**
+     * CLI/后台异步派发常用 0.8s 级读超时；若与连接共用会导致 stream_socket_client 在 Windows/高负载下频繁误判失败。
+     * 连接阶段单独使用不低于本值的超时，读 ACK 仍用调用方传入的 $timeout。
+     */
+    private const CONTROL_MIN_CONNECT_TIMEOUT_SEC = 12.0;
+
+    /** 控制端口瞬时不可达（Master 忙、系统更新）时短暂重试 */
+    private const CONTROL_CONNECT_ATTEMPTS = 3;
+
+    private const CONTROL_CONNECT_RETRY_USEC = 350_000;
+
     public function command(
         string $instanceName,
         string $action,
@@ -42,7 +53,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
     public function reloadAsync(
         string $instanceName,
         string $reloadType,
-        float $timeout = 0.8
+        float $timeout = 5.0
     ): array {
         return $this->commandAsync(
             $instanceName,
@@ -54,7 +65,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
-    public function cacheClear(string $instanceName, float $timeout = 0.8): array
+    public function cacheClear(string $instanceName, float $timeout = 5.0): array
     {
         return $this->commandAsync(
             $instanceName,
@@ -66,7 +77,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
-    public function routingCacheClear(string $instanceName, float $timeout = 0.8): array
+    public function routingCacheClear(string $instanceName, float $timeout = 5.0): array
     {
         return $this->commandAsync(
             $instanceName,
@@ -131,7 +142,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
         string $action,
         string $reloadType = '',
         array $payload = [],
-        float $timeout = 0.8,
+        float $timeout = 5.0,
         string $acceptedMessage = 'Command queued'
     ): array {
         $controlPort = $this->resolveControlPort($instanceName);
@@ -219,7 +230,26 @@ class IpcControlGateway implements IpcControlGatewayInterface
         string $acceptedMessage = ''
     ): array
     {
-        $conn = @\stream_socket_client("tcp://127.0.0.1:{$controlPort}", $errno, $errstr, $timeout);
+        $readTimeout = \max(0.05, $timeout);
+        $connectTimeout = \max($readTimeout, self::CONTROL_MIN_CONNECT_TIMEOUT_SEC);
+
+        $conn = null;
+        $errno = 0;
+        $errstr = '';
+        for ($attempt = 1; $attempt <= self::CONTROL_CONNECT_ATTEMPTS; $attempt++) {
+            $conn = @\stream_socket_client(
+                "tcp://127.0.0.1:{$controlPort}",
+                $errno,
+                $errstr,
+                $connectTimeout
+            );
+            if ($conn) {
+                break;
+            }
+            if ($attempt < self::CONTROL_CONNECT_ATTEMPTS) {
+                SchedulerSystem::usleep(self::CONTROL_CONNECT_RETRY_USEC);
+            }
+        }
         if (!$conn) {
             return [
                 'success' => false,
@@ -238,7 +268,7 @@ class IpcControlGateway implements IpcControlGatewayInterface
                 ];
             }
 
-            $result = $this->readCommandResult($conn, $timeout);
+            $result = $this->readCommandResult($conn, $readTimeout);
             if ($acceptWriteTimeoutAsAsyncAck && !empty($result['timed_out'])) {
                 return [
                     'success' => true,

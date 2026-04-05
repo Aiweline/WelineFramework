@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\ServiceCommand;
 use Weline\Server\Service\Contract\ServiceContext;
@@ -111,6 +112,13 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
 
         $arguments = \array_merge($arguments, $this->buildSharedStateArguments($context));
 
+        $loopDriver = (string) $context->getConfig('wls.loop.driver', 'auto');
+        $loopDriver = \strtolower(\trim($loopDriver));
+        if ($loopDriver === '') {
+            $loopDriver = 'auto';
+        }
+        $arguments[] = '--wls-loop-driver=' . $loopDriver;
+
         if ($context->sslEnabled && $mode !== 'linux-direct') {
             $arguments[] = '--defer-ssl';
         }
@@ -172,27 +180,26 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
      */
     private function buildSharedStateArguments(ServiceContext $context): array
     {
-        $wlsSession = \is_array(($context->envConfig['wls'] ?? [])['session'] ?? null)
-            ? $context->envConfig['wls']['session']
-            : [];
-        $wlsServer = \is_array($wlsSession['wls_server'] ?? null) ? $wlsSession['wls_server'] : [];
-        $memory = \is_array(($context->envConfig['wls'] ?? [])['memory_service'] ?? null)
-            ? $context->envConfig['wls']['memory_service']
-            : [];
+        $runtime = (new SharedStateRuntimeResolver())->resolve($context->envConfig, $context->envConfig, $context->instanceName);
+        $session = \is_array($runtime['session'] ?? null) ? $runtime['session'] : [];
+        $memory = \is_array($runtime['memory'] ?? null) ? $runtime['memory'] : [];
 
-        $sessionHost = (string) ($wlsServer['host'] ?? $wlsSession['host'] ?? '127.0.0.1');
-        $sessionHost = \trim($sessionHost) !== '' ? $sessionHost : '127.0.0.1';
-        // 默认端口 19970 + 项目偏移量，确保多项目不冲突
+        $sessionHost = \trim((string) ($session['host'] ?? '127.0.0.1'));
+        if ($sessionHost === '') {
+            $sessionHost = '127.0.0.1';
+        }
         $defaultSessionPort = 19970 + MasterProcess::getProjectPortOffset();
-        $sessionPort = (int) ($wlsServer['port'] ?? $wlsSession['port'] ?? $context->envConfig['session']['server_port'] ?? $defaultSessionPort);
-        $sessionTokenFileName = (string) ($wlsServer['token_file_name'] ?? $wlsSession['token_file_name'] ?? 'session_server.token');
+        $sessionPort = (int) ($session['port'] ?? $defaultSessionPort);
+        $sessionTokenFileName = \trim((string) ($session['token_file_name'] ?? 'session_server.token'));
 
-        $memoryHost = (string) ($memory['host'] ?? '127.0.0.1');
-        $memoryHost = \trim($memoryHost) !== '' ? $memoryHost : '127.0.0.1';
+        $memoryHost = \trim((string) ($memory['host'] ?? '127.0.0.1'));
+        if ($memoryHost === '') {
+            $memoryHost = '127.0.0.1';
+        }
         // 默认端口 19971 + 项目偏移量，确保多项目不冲突
         $defaultMemoryPort = 19971 + MasterProcess::getProjectPortOffset();
         $memoryPort = (int) ($memory['port'] ?? $defaultMemoryPort);
-        $memoryTokenFileName = (string) ($memory['token_file_name'] ?? 'memory_server.token');
+        $memoryTokenFileName = \trim((string) ($memory['token_file_name'] ?? 'memory_server.token'));
 
         return [
             '--session-host=' . $sessionHost,

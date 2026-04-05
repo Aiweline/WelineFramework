@@ -414,9 +414,10 @@ class SslCertificate extends Model
         if (empty($domain)) {
             return '';
         }
-        
-        // 证书存储在 app/etc/ssl/{domain}/ 目录下
-        return \dirname(\Weline\Framework\App\Env::path_ENV_FILE) . DS . 'ssl' . DS . $domain . DS;
+
+        $segment = \Weline\Server\Service\SslCertificateService::certificateStorageSegmentForFilesystem($domain);
+
+        return \dirname(\Weline\Framework\App\Env::path_ENV_FILE) . DS . 'ssl' . DS . $segment . DS;
     }
     
     /**

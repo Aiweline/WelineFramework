@@ -200,6 +200,45 @@ final class ServiceOrchestratorControlQueueTest extends TestCase
         self::assertSame('STOP rejected: missing explicit stop intent', $server->sent[0]['message']['message'] ?? '');
     }
 
+    public function testMaintenanceEnableDuplicateCommandIsDeduplicated(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $server = new class extends MasterControlServer {
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = [
+                    'clientId' => $clientId,
+                    'message' => ControlMessage::decode(\rtrim($message, "\n")),
+                ];
+
+                return true;
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_MAINTENANCE_ENABLE,
+        ], 21]);
+        $this->invokePrivate($orchestrator, 'handleCommand', [[
+            'action' => ControlMessage::ACTION_MAINTENANCE_ENABLE,
+        ], 22]);
+
+        $pending = $this->readPrivate($orchestrator, 'pendingControlOperations');
+        self::assertCount(1, $pending, '重复 maintenance_enable 不应重复入队');
+
+        self::assertCount(2, $server->sent);
+        $first = $server->sent[0]['message'];
+        $second = $server->sent[1]['message'];
+
+        self::assertTrue((bool)$first['success']);
+        self::assertTrue((bool)$second['success']);
+        self::assertSame($first['data']['operation_id'] ?? null, $second['data']['operation_id'] ?? null);
+        self::assertTrue((bool)($second['data']['deduplicated'] ?? false));
+    }
+
     private function invokePrivate(object $object, string $method, array $arguments = []): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

@@ -139,6 +139,11 @@ final class SessionServer
         WlsLogger::info_('[SessionServer] ' . $message);
     }
 
+    private function logDebug(string $message): void
+    {
+        WlsLogger::debug_('[SessionServer] ' . $message);
+    }
+
     /**
      * 启动服务器
      *
@@ -327,7 +332,7 @@ final class SessionServer
             'authenticated' => $this->authToken === null,
         ];
 
-        $this->log("Client connected: {$peerName} (id={$clientId})");
+        $this->logDebug("Client connected: {$peerName} (id={$clientId})");
     }
 
     /**
@@ -673,7 +678,7 @@ final class SessionServer
      */
     private function handleAuth(int $clientId, array $msg): void
     {
-        $token = $msg['token'] ?? '';
+        $token = $this->normalizeAuthToken((string)($msg['token'] ?? ''));
 
         if ($this->authToken === null) {
             $this->clients[$clientId]['authenticated'] = true;
@@ -683,7 +688,7 @@ final class SessionServer
 
         if (\hash_equals($this->authToken, $token)) {
             $this->clients[$clientId]['authenticated'] = true;
-            $this->log("Client authenticated: {$this->clients[$clientId]['addr']} (id={$clientId})");
+            $this->logDebug("Client authenticated: {$this->clients[$clientId]['addr']} (id={$clientId})");
             $this->sendToClient($clientId, SessionProtocol::encodeSuccess('Authenticated'));
         } else {
             $this->log("Client auth failed: {$this->clients[$clientId]['addr']} (id={$clientId}) - Expected len=" . \strlen($this->authToken) . ", Got len=" . \strlen($token) . ", Match=" . ($this->authToken === $token ? 'Y' : 'N'));
@@ -825,7 +830,7 @@ final class SessionServer
     {
         if ($this->tokenFilePath && \is_file($this->tokenFilePath)) {
             $currentToken = @\file_get_contents($this->tokenFilePath);
-            $currentToken = \is_string($currentToken) ? \trim($currentToken) : '';
+            $currentToken = \is_string($currentToken) ? $this->normalizeAuthToken($currentToken) : '';
             $ownToken = \is_string($this->authToken) ? \trim($this->authToken) : '';
 
             // 避免并发重启时旧进程把新进程刚写入的 token 文件误删。
@@ -904,6 +909,17 @@ final class SessionServer
         }
 
         @\chmod($this->tokenFilePath, 0600);
+    }
+
+    private function normalizeAuthToken(string $token): string
+    {
+        $token = \trim($token);
+        if ($token === '') {
+            return '';
+        }
+
+        $parts = \explode(':', $token, 2);
+        return \trim((string)($parts[0] ?? ''));
     }
 
     /**
