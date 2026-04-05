@@ -53,6 +53,10 @@ class SseContext
     {
         self::$connection = $conn;
         if ($conn === null) {
+            self::$sseEnabled = false;
+            self::$headersSent = false;
+            self::$writeCallback = null;
+
             return;
         }
         self::$sseEnabled = false;

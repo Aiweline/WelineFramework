@@ -27,6 +27,14 @@ class ResultManager
         StateManager::registerStaticResets(self::class, ['result' => null]);
     }
 
+    /**
+     * WLS 新请求入口显式清空（避免上一请求 success/error 残留到下一 Fiber 请求）
+     */
+    public static function resetRequestState(): void
+    {
+        self::$result = null;
+    }
+
     public static function success(string $message, bool $reload = true): void
     {
         self::$result = ['type' => 'success', 'message' => $message, 'reload' => $reload];
