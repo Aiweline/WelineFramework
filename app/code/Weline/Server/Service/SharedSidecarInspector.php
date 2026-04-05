@@ -140,6 +140,20 @@ final class SharedSidecarInspector
             return true;
         }
 
+        // 兼容历史命名：旧版由 SessionServerProvider/MemoryServerProvider 拉起的
+        // 进程名不含 "-shared-"，但若明确带当前项目 scope，允许复用避免启动阶段误判端口占用。
+        if ($processName !== '') {
+            $scopeToken = MasterProcess::getProjectScopeToken();
+            if ($scopeToken !== '' && \str_contains($processName, '-' . $scopeToken)) {
+                if ($role === ControlMessage::ROLE_SESSION_SERVER && \str_starts_with($processName, 'weline-wls-session-')) {
+                    return true;
+                }
+                if ($role === ControlMessage::ROLE_MEMORY_SERVER && \str_starts_with($processName, 'weline-wls-memory-')) {
+                    return true;
+                }
+            }
+        }
+
         return false;
     }
 
