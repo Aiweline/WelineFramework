@@ -22,3 +22,12 @@ Thumbs.db
 # Test artifacts
 collected-tests.json
 .weline-e2e-target-origin
+
+# 本地运行产物 / 调试（不入库）
+.last-playwright-tee.txt
+.smoke-publish-last.log
+framework/.active-proxy-port
+pw-json-out/
+pw-out/
+results/
+artifacts/backend/**/*.png
