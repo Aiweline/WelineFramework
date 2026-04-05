@@ -3,7 +3,7 @@
 _Learn about the person you're helping. Update this as you go._
 
 - **Name:**
-- **What to call them:**
+- **What to call them:** 老板（见 `.cursor/rules/address-user-as-boss.mdc` 与 `dev/ai/rules/QUALITY_SYSTEM_CURSOR_RULES.md` §6）
 - **Pronouns:** _(optional)_
 - **Timezone:**
 - **Notes:**
