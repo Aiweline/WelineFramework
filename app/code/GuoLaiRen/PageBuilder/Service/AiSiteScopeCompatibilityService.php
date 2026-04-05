@@ -70,7 +70,20 @@ class AiSiteScopeCompatibilityService
             $normalized['website_profile'] = [];
         }
 
+        $normalized['workspace_track'] = $this->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
+        $normalized['site_ready'] = (int)($scope['site_ready'] ?? 1);
+
         return $normalized;
+    }
+
+    public const WORKSPACE_TRACK_VIRTUAL_THEME = 'virtual_theme';
+    public const WORKSPACE_TRACK_HTML_BLOCKS = 'html_blocks';
+
+    public function normalizeWorkspaceTrack(string $raw): string
+    {
+        $t = \trim($raw);
+
+        return $t === self::WORKSPACE_TRACK_HTML_BLOCKS ? self::WORKSPACE_TRACK_HTML_BLOCKS : self::WORKSPACE_TRACK_VIRTUAL_THEME;
     }
 
     public function normalizeStage(string $stage): string
@@ -271,6 +284,25 @@ class AiSiteScopeCompatibilityService
     /**
      * @param array<string, array<string, mixed>> $virtualPagesByType
      */
+    /**
+     * HTML 区块轨：每个页面类型均须有非空 blocks[]
+     *
+     * @param array<string, array<string, mixed>> $virtualPagesByType
+     * @param list<string> $pageTypes
+     */
+    public function htmlTrackHasCompleteBlocks(array $virtualPagesByType, array $pageTypes): bool
+    {
+        foreach ($pageTypes as $pageType) {
+            $row = $virtualPagesByType[$pageType] ?? [];
+            $blocks = \is_array($row['blocks'] ?? null) ? $row['blocks'] : [];
+            if ($blocks === []) {
+                return false;
+            }
+        }
+
+        return $pageTypes !== [];
+    }
+
     public function resolvePreviewPageType(array $virtualPagesByType, string $requestedPageType = ''): string
     {
         $requestedPageType = \trim($requestedPageType);
@@ -504,6 +536,12 @@ class AiSiteScopeCompatibilityService
         $resolvedType = \trim((string)($data['page_type'] ?? $data['type'] ?? $pageType));
         $label = (string)(Page::getPageTypes()[$resolvedType] ?? $resolvedType);
 
+        $blocks = $data['blocks'] ?? null;
+        if (!\is_array($blocks) && isset($data['ai_layout']['blocks']) && \is_array($data['ai_layout']['blocks'])) {
+            $blocks = $data['ai_layout']['blocks'];
+        }
+        $blocks = \is_array($blocks) ? $this->normalizeBlocksList($blocks) : [];
+
         return [
             'page_type' => $resolvedType,
             'title' => \trim((string)($data['title'] ?? $data['name'] ?? $label)),
@@ -520,7 +558,33 @@ class AiSiteScopeCompatibilityService
             'preview_full_url' => \trim((string)($data['preview_full_url'] ?? '')),
             'last_generated_at' => \trim((string)($data['last_generated_at'] ?? '')),
             'materialized_page_id' => (int)($data['materialized_page_id'] ?? 0),
+            'blocks' => $blocks,
         ];
+    }
+
+    /**
+     * @param list<mixed> $raw
+     * @return list<array{block_id:string,type:string,html:string}>
+     */
+    private function normalizeBlocksList(array $raw): array
+    {
+        $out = [];
+        foreach ($raw as $b) {
+            if (!\is_array($b)) {
+                continue;
+            }
+            $bid = \trim((string)($b['block_id'] ?? ''));
+            if ($bid === '') {
+                $bid = 'blk_' . \bin2hex(\random_bytes(4));
+            }
+            $out[] = [
+                'block_id' => $bid,
+                'type' => \trim((string)($b['type'] ?? 'section')),
+                'html' => (string)($b['html'] ?? ''),
+            ];
+        }
+
+        return $out;
     }
 
     /**

@@ -45,6 +45,15 @@ class AiSiteFullFlowTest extends TestCase
         $this->pageModel = ObjectManager::getInstance(Page::class);
     }
 
+    /** 默认静默；本地排查可设 PB_AI_SITE_TEST_VERBOSE=1 */
+    private function verboseLog(string $message): void
+    {
+        $v = getenv('PB_AI_SITE_TEST_VERBOSE');
+        if ($v !== false && $v !== '' && $v !== '0') {
+            echo $message;
+        }
+    }
+
     /**
      * 测试完整的 AI 建站流程
      *
@@ -63,7 +72,7 @@ class AiSiteFullFlowTest extends TestCase
         $siteName = 'E2E Test Site ' . $timestamp;
 
         // ========== 步骤 1: 创建会话 ==========
-        echo "\n[Step 1] 创建 AI 建站会话...\n";
+        $this->verboseLog("\n[Step 1] 创建 AI 建站会话...\n");
         $session = $this->sessionService->createSession($adminUserId, [
             'workspace_status' => 'preparing',
         ]);
@@ -71,10 +80,10 @@ class AiSiteFullFlowTest extends TestCase
         $this->assertInstanceOf(AiSiteAgentSession::class, $session);
         $this->assertGreaterThan(0, $session->getId());
         $this->assertNotEmpty($session->getPublicId());
-        echo "✓ 会话创建成功，public_id: {$session->getPublicId()}\n";
+        $this->verboseLog("✓ 会话创建成功，public_id: {$session->getPublicId()}\n");
 
         // ========== 步骤 2: 填写需求 ==========
-        echo "\n[Step 2] 填写网站需求...\n";
+        $this->verboseLog("\n[Step 2] 填写网站需求...\n");
         $scope = [
             'site_title' => $siteName,
             'target_domain' => $testDomain,
@@ -114,13 +123,13 @@ class AiSiteFullFlowTest extends TestCase
         $savedScope = $session->getScopeArray();
         $this->assertEquals($siteName, $savedScope['site_title']);
         $this->assertEquals($testDomain, $savedScope['target_domain']);
-        echo "✓ 需求填写完成\n";
+        $this->verboseLog("✓ 需求填写完成\n");
 
         // ========== 步骤 3: 构建虚拟主题 ==========
-        echo "\n[Step 3] 构建虚拟主题...\n";
+        $this->verboseLog("\n[Step 3] 构建虚拟主题...\n");
 
         // 3.1 创建草稿 Website
-        echo "  [3.1] 创建草稿站点...\n";
+        $this->verboseLog("  [3.1] 创建草稿站点...\n");
         $websiteProfile = [
             'site_title' => $scope['site_title'],
             'target_domain' => $scope['target_domain'],
@@ -131,10 +140,10 @@ class AiSiteFullFlowTest extends TestCase
         $draftWebsite = $this->draftWebsiteService->ensureDraftWebsite($scope, $websiteProfile);
         $this->assertGreaterThan(0, $draftWebsite['website_id']);
         $websiteId = $draftWebsite['website_id'];
-        echo "  ✓ 草稿站点创建成功，website_id: {$websiteId}\n";
+        $this->verboseLog("  ✓ 草稿站点创建成功，website_id: {$websiteId}\n");
 
         // 3.2 生成虚拟主题
-        echo "  [3.2] 生成虚拟主题...\n";
+        $this->verboseLog("  [3.2] 生成虚拟主题...\n");
         $pageTypes = $scope['page_types'];
         $pageTypeLayouts = $scope['page_type_layouts'];
         $theme = $this->virtualThemeService->ensureVirtualTheme(
@@ -146,36 +155,37 @@ class AiSiteFullFlowTest extends TestCase
         );
         $this->assertGreaterThan(0, $theme['virtual_theme_id']);
         $virtualThemeId = $theme['virtual_theme_id'];
-        echo "  ✓ 虚拟主题生成成功，virtual_theme_id: {$virtualThemeId}\n";
+        $this->verboseLog("  ✓ 虚拟主题生成成功，virtual_theme_id: {$virtualThemeId}\n");
 
         // 3.3 更新会话绑定
         $this->sessionService->bindWebsite($session->getId(), $adminUserId, $websiteId);
         $this->sessionService->bindVirtualTheme($session->getId(), $adminUserId, $virtualThemeId);
         $this->sessionService->setStage($session->getId(), $adminUserId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
-        echo "  ✓ 会话绑定完成\n";
+        $this->verboseLog("  ✓ 会话绑定完成\n");
 
         // ========== 步骤 4: 发布上线 ==========
-        echo "\n[Step 4] 发布上线...\n";
+        $this->verboseLog("\n[Step 4] 发布上线...\n");
         $published = $this->publishService->publish(
             $websiteId,
             $virtualThemeId,
             $websiteProfile,
             $pageTypes,
-            $pageTypeLayouts
+            $pageTypeLayouts,
+            $scope['virtual_pages_by_type'] ?? []
         );
 
         $this->assertIsArray($published);
         $this->assertArrayHasKey('materialized_pages_by_type', $published);
         $this->assertArrayHasKey('published_at', $published);
         $this->assertCount(count($pageTypes), $published['materialized_pages_by_type']);
-        echo "✓ 发布完成，已创建 " . count($published['materialized_pages_by_type']) . " 个页面\n";
+        $this->verboseLog("✓ 发布完成，已创建 " . count($published['materialized_pages_by_type']) . " 个页面\n");
 
         // 验证页面已创建
         foreach ($pageTypes as $pageType) {
             $this->assertArrayHasKey($pageType, $published['materialized_pages_by_type']);
             $pageData = $published['materialized_pages_by_type'][$pageType];
             $this->assertGreaterThan(0, $pageData['page_id']);
-            echo "  ✓ {$pageType} 页面已创建，page_id: {$pageData['page_id']}\n";
+            $this->verboseLog("  ✓ {$pageType} 页面已创建，page_id: {$pageData['page_id']}\n");
         }
 
         // 更新会话发布状态
@@ -183,16 +193,16 @@ class AiSiteFullFlowTest extends TestCase
         $this->sessionService->setStage($session->getId(), $adminUserId, AiSiteAgentSession::STAGE_PUBLISH);
 
         // 立即验证虚拟主题是否已更新
-        echo "\n[Debug] 发布后立即检查虚拟主题...\n";
+        $this->verboseLog("\n[Debug] 发布后立即检查虚拟主题...\n");
         $themeCheck = clone $this->virtualThemeModel;
         $themeCheck->clearData()->clearQuery()->load($virtualThemeId);
-        echo "  - virtual_theme_id: " . $themeCheck->getId() . "\n";
-        echo "  - website_id: " . $themeCheck->getWebsiteId() . "\n";
-        echo "  - is_active: " . $themeCheck->getIsActive() . "\n";
-        echo "  - name: " . $themeCheck->getName() . "\n";
+        $this->verboseLog("  - virtual_theme_id: " . $themeCheck->getId() . "\n");
+        $this->verboseLog("  - website_id: " . $themeCheck->getWebsiteId() . "\n");
+        $this->verboseLog("  - is_active: " . $themeCheck->getIsActive() . "\n");
+        $this->verboseLog("  - name: " . $themeCheck->getName() . "\n");
 
         // ========== 步骤 5: 验证能访问域名 ==========
-        echo "\n[Step 5] 验证网站可访问性...\n";
+        $this->verboseLog("\n[Step 5] 验证网站可访问性...\n");
 
         // 5.1 验证 Website 存在且激活
         $website = clone $this->websiteModel;
@@ -201,29 +211,14 @@ class AiSiteFullFlowTest extends TestCase
         $this->assertEquals($siteName, $website->getName());
         $websiteUrl = $website->getUrl();
         $this->assertNotEmpty($websiteUrl);
-        echo "  ✓ Website 已激活，URL: {$websiteUrl}\n";
+        $this->verboseLog("  ✓ Website 已激活，URL: {$websiteUrl}\n");
 
-        // 5.2 验证虚拟主题已激活
+        // 5.2 验证虚拟主题已激活并与站点绑定（发布流程应 UPDATE 落库）
         $virtualTheme = clone $this->virtualThemeModel;
         $virtualTheme->clearData()->clearQuery()->load($virtualThemeId);
         $this->assertGreaterThan(0, $virtualTheme->getId());
-
-        // TODO: 修复虚拟主题保存问题 - 目前 save() 方法无法正确保存 website_id 和 is_active
-        // 临时跳过这个断言
-        /*
-        // 检查虚拟主题是否激活
-        $isActive = $virtualTheme->getIsActive();
-        if (!$isActive) {
-            echo "  ⚠ 虚拟主题未激活，is_active = {$isActive}\n";
-            echo "  调试信息：\n";
-            echo "    - virtual_theme_id: {$virtualThemeId}\n";
-            echo "    - website_id: " . $virtualTheme->getWebsiteId() . "\n";
-            echo "    - name: " . $virtualTheme->getName() . "\n";
-        }
-        $this->assertTrue((bool)$isActive, '虚拟主题应该已激活');
-        $this->assertEquals($websiteId, $virtualTheme->getWebsiteId());
-        */
-        echo "  ⚠ 虚拟主题激活验证已跳过（待修复）\n";
+        $this->assertTrue($virtualTheme->isActive(), '虚拟主题应在发布后被标记为激活');
+        $this->assertSame($websiteId, $virtualTheme->getWebsiteId(), '虚拟主题应绑定到已发布站点');
 
         // 5.3 验证首页存在且可访问
         $homePage = clone $this->pageModel;
@@ -236,26 +231,26 @@ class AiSiteFullFlowTest extends TestCase
         $this->assertEquals(Page::STATUS_PUBLISHED, $homePage->getStatus());
         $homeHandle = $homePage->getHandle();
         $this->assertNotEmpty($homeHandle);
-        echo "  ✓ 首页已发布，handle: {$homeHandle}\n";
+        $this->verboseLog("  ✓ 首页已发布，handle: {$homeHandle}\n");
 
         // 5.4 构建访问 URL
         $homeUrl = rtrim($websiteUrl, '/') . '/' . ltrim($homeHandle, '/');
-        echo "\n========================================\n";
-        echo "✅ AI 建站完整流程测试通过！\n";
-        echo "========================================\n";
-        echo "网站信息：\n";
-        echo "  - 网站名称: {$siteName}\n";
-        echo "  - Website ID: {$websiteId}\n";
-        echo "  - 虚拟主题 ID: {$virtualThemeId}\n";
-        echo "  - 网站 URL: {$websiteUrl}\n";
-        echo "  - 首页 URL: {$homeUrl}\n";
-        echo "  - 已创建页面: " . implode(', ', $pageTypes) . "\n";
-        echo "========================================\n";
-        echo "\n访问测试命令：\n";
-        echo "php bin/w http:request '{$homeHandle}' --website-id={$websiteId}\n";
-        echo "\n或通过浏览器访问（需配置 hosts）：\n";
-        echo "{$homeUrl}\n";
-        echo "========================================\n";
+        $this->verboseLog("\n========================================\n");
+        $this->verboseLog("✅ AI 建站完整流程测试通过！\n");
+        $this->verboseLog("========================================\n");
+        $this->verboseLog("网站信息：\n");
+        $this->verboseLog("  - 网站名称: {$siteName}\n");
+        $this->verboseLog("  - Website ID: {$websiteId}\n");
+        $this->verboseLog("  - 虚拟主题 ID: {$virtualThemeId}\n");
+        $this->verboseLog("  - 网站 URL: {$websiteUrl}\n");
+        $this->verboseLog("  - 首页 URL: {$homeUrl}\n");
+        $this->verboseLog("  - 已创建页面: " . implode(', ', $pageTypes) . "\n");
+        $this->verboseLog("========================================\n");
+        $this->verboseLog("\n访问测试命令：\n");
+        $this->verboseLog("php bin/w http:request '{$homeHandle}' --website-id={$websiteId}\n");
+        $this->verboseLog("\n或通过浏览器访问（需配置 hosts）：\n");
+        $this->verboseLog("{$homeUrl}\n");
+        $this->verboseLog("========================================\n");
 
         // ========== 清理测试数据 ==========
         $this->cleanupTestData($websiteId, $virtualThemeId, $session->getId());
@@ -266,7 +261,7 @@ class AiSiteFullFlowTest extends TestCase
      */
     private function cleanupTestData(int $websiteId, int $virtualThemeId, int $sessionId): void
     {
-        echo "\n[Cleanup] 清理测试数据...\n";
+        $this->verboseLog("\n[Cleanup] 清理测试数据...\n");
 
         // 删除页面
         $page = clone $this->pageModel;
@@ -300,6 +295,6 @@ class AiSiteFullFlowTest extends TestCase
             $website->delete();
         }
 
-        echo "✓ 测试数据已清理\n";
+        $this->verboseLog("✓ 测试数据已清理\n");
     }
 }
