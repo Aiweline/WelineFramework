@@ -1088,6 +1088,192 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame([$maintPort], $poolSent['ports'] ?? null);
     }
 
+    public function testAutoStartMaintenanceModeUsesRuntimeWorkerCount(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+
+        $context = new ServiceContext(
+            instanceName: 'ai-u-maint-runtime-count',
+            epoch: 12,
+            controlPort: 37983,
+            masterPid: 424244,
+            host: '127.0.0.1',
+            mainPort: 18090,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [],
+            dispatcherEnabled: true,
+            workerCount: 6,
+            workerBasePort: 28182,
+            workerPort: 28182,
+        );
+
+        $this->invokePrivateWithArgs($orchestrator, 'autoStartMaintenanceMode', [$context]);
+
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
+        self::assertFalse($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
+        self::assertSame(2, ($this->readPrivate($orchestrator, 'desiredState')[ControlMessage::ROLE_MAINTENANCE] ?? null));
+    }
+
+    public function testCooperativeSequentialStartupBatchEnabledDuringWindowsBootstrap(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        });
+
+        $enabled = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldUseCooperativeSequentialStartupBatch',
+            [[1, 2]]
+        );
+
+        self::assertSame(\defined('IS_WIN') && IS_WIN, $enabled);
+    }
+
+    public function testCooperativeSequentialStartupBatchDisabledWithoutBootstrapContext(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', false);
+        $this->writePrivate($orchestrator, 'controlServer', null);
+
+        $enabled = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldUseCooperativeSequentialStartupBatch',
+            [[1, 2]]
+        );
+
+        self::assertFalse($enabled);
+    }
+
+    public function testBuildWindowsDetachedPhpArgvForBackgroundCommandIncludesEpochLaunchIdAndName(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: 7,
+            launchId: 'worker-1-launch',
+            port: 19001,
+            state: ServiceInstance::STATE_STARTING,
+        );
+        $command = new \Weline\Server\Service\Contract\ServiceCommand(
+            script: 'app/code/Weline/Server/bin/worker.php',
+            arguments: ['127.0.0.1', '19001', '1', 'test-instance'],
+            processName: 'weline-wls-worker-test-instance-1',
+        );
+
+        $argv = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'buildWindowsDetachedPhpArgvForCommand',
+            [$command, $instance, $command->getProcessName()]
+        );
+
+        if (\defined('IS_WIN') && IS_WIN) {
+            self::assertNotSame([], $argv);
+            self::assertSame(PHP_BINARY, $argv[0]);
+            self::assertContains('--epoch=7', $argv);
+            self::assertContains('--launch-id=worker-1-launch', $argv);
+            self::assertContains('--name=weline-wls-worker-test-instance-1', $argv);
+        } else {
+            self::assertSame([], $argv);
+        }
+    }
+
+    public function testDrainControlPlaneAfterStartupStepPollsUntilIdle(): void
+    {
+        $pollCalls = 0;
+        $server = new class($pollCalls) extends MasterControlServer {
+            public function __construct(private int &$pollCalls)
+            {
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                $this->pollCalls++;
+
+                return $this->pollCalls < 3 ? 1 : 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $this->invokePrivateWithArgs($orchestrator, 'drainControlPlaneAfterStartupStep', [8, 1]);
+
+        self::assertSame(4, $pollCalls);
+    }
+
+    public function testConfiguredMaintenanceDoesNotAutoDisableWhenWorkerBecomesReady(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+
+        $context = new ServiceContext(
+            instanceName: 'ai-u-maint-sticky',
+            epoch: 13,
+            controlPort: 37984,
+            masterPid: 424245,
+            host: '127.0.0.1',
+            mainPort: 18091,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'system' => [
+                    'maintenance' => true,
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 28184,
+            workerPort: 28184,
+        );
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->invokePrivateWithArgs($orchestrator, 'autoStartMaintenanceMode', [$context]);
+
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'sticky-worker',
+            port: 28185,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 301,
+        ));
+
+        self::assertFalse($orchestrator->checkAndDisableMaintenanceIfReady());
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
+    }
+
     private function createWorkerInfraContext(): ServiceContext
     {
         return new ServiceContext(

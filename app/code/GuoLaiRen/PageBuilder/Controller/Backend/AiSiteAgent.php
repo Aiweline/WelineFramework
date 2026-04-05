@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSessionEvent;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteDraftWebsiteService;
+use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePublishService;
 use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
@@ -30,6 +31,7 @@ class AiSiteAgent extends BaseController
     private const PARAMS_PUBLIC_ID = ['public_id'];
     private const PARAMS_OPERATION_SSE = ['public_id', 'execution_token'];
     private const PARAMS_REGENERATE = ['public_id', 'page_type'];
+    private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
 
     private readonly AiSiteAgentSessionService $sessionService;
@@ -40,6 +42,7 @@ class AiSiteAgent extends BaseController
     private readonly AiSitePublishService $publishService;
     private readonly AiSiteVisualUrlService $visualUrlService;
     private readonly AiSiteHtmlBlocksBuildService $htmlBlocksBuildService;
+    private readonly AiSitePageBlueprintService $pageBlueprintService;
     private readonly Url $url;
 
     public function __construct(
@@ -51,6 +54,7 @@ class AiSiteAgent extends BaseController
         ?AiSitePublishService $publishService = null,
         ?AiSiteVisualUrlService $visualUrlService = null,
         ?AiSiteHtmlBlocksBuildService $htmlBlocksBuildService = null,
+        ?AiSitePageBlueprintService $pageBlueprintService = null,
         ?Url $url = null,
     ) {
         $this->sessionService = $sessionService;
@@ -68,6 +72,8 @@ class AiSiteAgent extends BaseController
             ?? ObjectManager::getInstance(AiSiteVisualUrlService::class);
         $this->htmlBlocksBuildService = $htmlBlocksBuildService
             ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
+        $this->pageBlueprintService = $pageBlueprintService
+            ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
         $this->url = $url ?? ObjectManager::getInstance(Url::class);
     }
 
@@ -118,6 +124,7 @@ class AiSiteAgent extends BaseController
         $this->assign('run_virtual_theme_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-build'));
         $this->assign('start_build_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-build'));
         $this->assign('start_regenerate_page_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-regenerate-page'));
+        $this->assign('start_refine_component_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-refine-component'));
         $this->assign('start_publish_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-publish'));
         $this->assign('operation_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
         $this->assign('stream_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/stream-sse', ['public_id' => $publicId]));
@@ -227,6 +234,9 @@ class AiSiteAgent extends BaseController
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动单页重建', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartRegeneratePage(): string { return $this->handleStartRegeneratePage(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动区块 AI 微调', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postStartRefineComponent(): string { return $this->handleStartRefineComponent(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动发布流程', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartPublish(): string { return $this->handleStartPublish(); }
@@ -343,6 +353,65 @@ class AiSiteAgent extends BaseController
             'regenerate_page',
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             [],
+            $pageType,
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
+        ));
+    }
+
+    private function handleStartRefineComponent(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
+        $componentCode = \trim((string)$this->getRequestBodyValue('component_code', ''));
+        $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
+        $componentLabel = \trim((string)$this->getRequestBodyValue('component_label', ''));
+
+        if ($adminId <= 0 || $publicId === '' || $pageType === '' || $componentCode === '' || $instruction === '') {
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_REFINE_COMPONENT);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        if (!\in_array($pageType, $pageTypes, true)) {
+            return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
+        }
+
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
+        $sectionRefinements[$componentCode] = $instruction;
+        $virtualPage['section_refinements'] = $sectionRefinements;
+        $virtualPages[$pageType] = $virtualPage;
+
+        $label = $componentLabel !== '' ? $componentLabel : $componentCode;
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'component_refine_requested',
+            (string)__('已记录区块微调：%{component}', ['component' => $label]),
+            [
+                'operation' => 'regenerate_page',
+                'page_type' => $pageType,
+                'details' => [
+                    'component_code' => $componentCode,
+                    'instruction' => $instruction,
+                ],
+            ]
+        );
+
+        return $this->fetchJson($this->startOperation(
+            $session,
+            $adminId,
+            'regenerate_page',
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            ['virtual_pages_by_type' => $virtualPages],
             $pageType,
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
         ));
@@ -1066,6 +1135,7 @@ class AiSiteAgent extends BaseController
             $currentStep++;
             $progressPercent = (int)(($currentStep / $totalSteps) * 100);
             $pageLabel = (string)($pageTypeLabels[$pageType] ?? $pageType);
+            $blueprint = $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $scope['website_profile']);
             $this->sendOperationProgress(
                 $sse,
                 $session,
@@ -1076,10 +1146,16 @@ class AiSiteAgent extends BaseController
                 $progressPercent,
                 $pageType
             );
-            $blocks = $this->htmlBlocksBuildService->buildPlaceholderBlocksForPageType($pageType, $scope['website_profile']);
+            $blocks = $this->htmlBlocksBuildService->buildPlaceholderBlocksForPageType($pageType, $scope['website_profile'], $scope);
             $row = $virtualPages[$pageType] ?? [];
             $row['blocks'] = $blocks;
             $row['last_generated_at'] = $now;
+            $row['title'] = (string)($blueprint['page_title'] ?? ($row['title'] ?? ''));
+            $row['ai_description'] = (string)($blueprint['ai_description'] ?? ($row['ai_description'] ?? ''));
+            $row['meta_title'] = (string)($blueprint['meta_title'] ?? ($row['meta_title'] ?? ''));
+            $row['meta_description'] = (string)($blueprint['meta_description'] ?? ($row['meta_description'] ?? ''));
+            $row['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($row['meta_keywords'] ?? ''));
+            $row['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
             $virtualPages[$pageType] = $row;
             $scope['virtual_pages_by_type'] = $virtualPages;
             $scope['virtual_theme_id'] = 0;
@@ -1090,7 +1166,22 @@ class AiSiteAgent extends BaseController
                 'page_label' => $pageLabel,
                 'virtual_theme_id' => 0,
                 'progress_percent' => $progressPercent,
+                'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
             ]);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'page_generated',
+                (string)__('页面已生成：%{page}', ['page' => $pageLabel]),
+                [
+                    'operation' => 'build',
+                    'page_type' => $pageType,
+                    'details' => [
+                        'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
+                    ],
+                ]
+            );
         }
 
         $scope['build_summary'] = ['page_count' => \count($virtualPages), 'last_generated_at' => $now, 'active_operation' => 'build', 'can_publish' => true];
@@ -1148,6 +1239,7 @@ class AiSiteAgent extends BaseController
             $currentStep++;
             $progressPercent = (int)(($currentStep / $totalSteps) * 100);
             $pageLabel = (string)($pageTypeLabels[$pageType] ?? $pageType);
+            $blueprint = $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $scope['website_profile']);
 
             $this->sendOperationProgress(
                 $sse,
@@ -1176,11 +1268,15 @@ class AiSiteAgent extends BaseController
 
             // 构建当前页面的虚拟页面数据
             $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], $scope);
+            $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], $scope);
             if (isset($currentVirtualPages[$pageType])) {
                 $currentVirtualPages[$pageType]['last_generated_at'] = $now;
-                if (\trim((string)($currentVirtualPages[$pageType]['ai_description'] ?? '')) === '') {
-                    $currentVirtualPages[$pageType]['ai_description'] = (string)($scope['website_profile']['brief_description'] ?? '');
-                }
+                $currentVirtualPages[$pageType]['title'] = (string)($blueprint['page_title'] ?? ($currentVirtualPages[$pageType]['title'] ?? ''));
+                $currentVirtualPages[$pageType]['ai_description'] = (string)($blueprint['ai_description'] ?? ($currentVirtualPages[$pageType]['ai_description'] ?? ''));
+                $currentVirtualPages[$pageType]['meta_title'] = (string)($blueprint['meta_title'] ?? ($currentVirtualPages[$pageType]['meta_title'] ?? ''));
+                $currentVirtualPages[$pageType]['meta_description'] = (string)($blueprint['meta_description'] ?? ($currentVirtualPages[$pageType]['meta_description'] ?? ''));
+                $currentVirtualPages[$pageType]['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($currentVirtualPages[$pageType]['meta_keywords'] ?? ''));
+                $currentVirtualPages[$pageType]['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
                 $virtualPages[$pageType] = $currentVirtualPages[$pageType];
             }
 
@@ -1196,7 +1292,23 @@ class AiSiteAgent extends BaseController
                 'page_label' => $pageLabel,
                 'virtual_theme_id' => (int)$theme['virtual_theme_id'],
                 'progress_percent' => $progressPercent,
+                'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
             ]);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'page_generated',
+                (string)__('页面已生成：%{page}', ['page' => $pageLabel]),
+                [
+                    'operation' => 'build',
+                    'page_type' => $pageType,
+                    'details' => [
+                        'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
+                        'virtual_theme_id' => (int)$theme['virtual_theme_id'],
+                    ],
+                ]
+            );
         }
 
         // 最终步骤：完成构建
@@ -1233,10 +1345,17 @@ class AiSiteAgent extends BaseController
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
             $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('正在重建页面：%{page}', ['page' => (string)(Page::getPageTypes()[$pageType] ?? $pageType)]), 20, $pageType);
             $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
-            $blocks = $this->htmlBlocksBuildService->buildPlaceholderBlocksForPageType($pageType, $scope['website_profile']);
+            $blueprint = $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $scope['website_profile']);
+            $blocks = $this->htmlBlocksBuildService->buildPlaceholderBlocksForPageType($pageType, $scope['website_profile'], $scope);
             $row = $virtualPages[$pageType] ?? [];
             $row['blocks'] = $blocks;
             $row['last_generated_at'] = \date('Y-m-d H:i:s');
+            $row['title'] = (string)($blueprint['page_title'] ?? ($row['title'] ?? ''));
+            $row['ai_description'] = (string)($blueprint['ai_description'] ?? ($row['ai_description'] ?? ''));
+            $row['meta_title'] = (string)($blueprint['meta_title'] ?? ($row['meta_title'] ?? ''));
+            $row['meta_description'] = (string)($blueprint['meta_description'] ?? ($row['meta_description'] ?? ''));
+            $row['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($row['meta_keywords'] ?? ''));
+            $row['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
             $virtualPages[$pageType] = $row;
             $scope['virtual_pages_by_type'] = $virtualPages;
             $scope['preview_page_type'] = $pageType;
@@ -1244,6 +1363,21 @@ class AiSiteAgent extends BaseController
             $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('页面区块已重建')]);
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
             $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('页面重建完成'), 100, $pageType);
+
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'page_generated',
+                (string)__('页面已重建：%{page}', ['page' => (string)(Page::getPageTypes()[$pageType] ?? $pageType)]),
+                [
+                    'operation' => 'regenerate_page',
+                    'page_type' => $pageType,
+                    'details' => [
+                        'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
+                    ],
+                ]
+            );
 
             return ['message' => (string)__('页面重建完成'), 'page_type' => $pageType, 'virtual_theme_id' => 0];
         }
@@ -1257,7 +1391,14 @@ class AiSiteAgent extends BaseController
         $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
 
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $blueprint = $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $scope['website_profile']);
         $virtualPages[$pageType]['last_generated_at'] = \date('Y-m-d H:i:s');
+        $virtualPages[$pageType]['title'] = (string)($blueprint['page_title'] ?? ($virtualPages[$pageType]['title'] ?? ''));
+        $virtualPages[$pageType]['ai_description'] = (string)($blueprint['ai_description'] ?? ($virtualPages[$pageType]['ai_description'] ?? ''));
+        $virtualPages[$pageType]['meta_title'] = (string)($blueprint['meta_title'] ?? ($virtualPages[$pageType]['meta_title'] ?? ''));
+        $virtualPages[$pageType]['meta_description'] = (string)($blueprint['meta_description'] ?? ($virtualPages[$pageType]['meta_description'] ?? ''));
+        $virtualPages[$pageType]['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($virtualPages[$pageType]['meta_keywords'] ?? ''));
+        $virtualPages[$pageType]['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope['preview_page_type'] = $pageType;
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
@@ -1265,6 +1406,21 @@ class AiSiteAgent extends BaseController
 
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
         $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)$theme['virtual_theme_id']);
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'page_generated',
+            (string)__('页面已重建：%{page}', ['page' => (string)(Page::getPageTypes()[$pageType] ?? $pageType)]),
+            [
+                'operation' => 'regenerate_page',
+                'page_type' => $pageType,
+                'details' => [
+                    'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
+                    'virtual_theme_id' => (int)$theme['virtual_theme_id'],
+                ],
+            ]
+        );
 
         $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'regenerate_page', __('页面重建完成，可继续调整组件'), 100, $pageType);
         return ['message' => (string)__('页面重建完成'), 'page_type' => $pageType, 'virtual_theme_id' => (int)$theme['virtual_theme_id']];
