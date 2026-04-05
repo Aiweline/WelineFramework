@@ -45,7 +45,8 @@ class Role extends \Weline\Admin\Controller\BaseController
         }
         $roleModel->pagination()->select()->fetch();
         $this->assign('roles', $roleModel->getItems());
-        $this->assign('pagination', $roleModel->getPagination());
+        unset($roleModel->pagination['html']);
+        $this->assign('pagination', $roleModel->getPagination('pagination-rounded', '*/backend/acl/role', true));
         return $this->fetch('index');
     }
 
