@@ -491,6 +491,9 @@ async function startFallbackPhpServer(port) {
 }
 
 async function resolveFallbackRuntime() {
+    /** @type {string[]} */
+    const startupErrors = [];
+
     for (const port of FALLBACK_PORTS) {
         const origin = `http://${FALLBACK_HOST}:${port}`;
         const listening = await isPortListening(port, FALLBACK_HOST);
@@ -506,12 +509,21 @@ async function resolveFallbackRuntime() {
         }
 
         if (!listening) {
-            return startFallbackPhpServer(port);
+            try {
+                return await startFallbackPhpServer(port);
+            } catch (error) {
+                startupErrors.push(`${origin}: ${error && error.message ? error.message : error}`);
+            }
         }
     }
 
     const dynamicPort = await findFreePort(FALLBACK_HOST);
-    return startFallbackPhpServer(dynamicPort);
+    try {
+        return await startFallbackPhpServer(dynamicPort);
+    } catch (error) {
+        startupErrors.push(`http://${FALLBACK_HOST}:${dynamicPort}: ${error && error.message ? error.message : error}`);
+        throw new Error(startupErrors.join('; '));
+    }
 }
 
 async function finalizePreparedRuntime(runtimeInfo, userPinnedProxyMode, note, cleanup = null, options = {}) {
