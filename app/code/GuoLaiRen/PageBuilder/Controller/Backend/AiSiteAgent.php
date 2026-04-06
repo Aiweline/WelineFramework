@@ -16,8 +16,10 @@ use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
+use Weline\Framework\App\State;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Sse\LastEventIdResolver;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
@@ -32,6 +34,7 @@ class AiSiteAgent extends BaseController
     private const PARAMS_OPERATION_SSE = ['public_id', 'execution_token'];
     private const PARAMS_REGENERATE = ['public_id', 'page_type'];
     private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
+    private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
 
     private readonly AiSiteAgentSessionService $sessionService;
@@ -125,6 +128,7 @@ class AiSiteAgent extends BaseController
         $this->assign('start_build_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-build'));
         $this->assign('start_regenerate_page_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-regenerate-page'));
         $this->assign('start_refine_component_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-refine-component'));
+        $this->assign('update_block_config_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-update-block-config'));
         $this->assign('start_publish_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-publish'));
         $this->assign('operation_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
         $this->assign('stream_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/stream-sse', ['public_id' => $publicId]));
@@ -145,6 +149,201 @@ class AiSiteAgent extends BaseController
         );
 
         return $this->fetch();
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站工作台预览', 'mdi-eye-outline', '在 AI 建站工作台中渲染可视化预览', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function workspacePreview(): void
+    {
+        $context = $this->resolveWorkspacePreviewContext();
+        if ($context === null) {
+            $message = (string)__('预览页面不存在或无访问权限');
+            $html = '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="margin:0;padding:24px;font-family:system-ui,sans-serif;color:#b91c1c;background:#fff7f7;">'
+                . \htmlspecialchars($message, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8')
+                . '</body></html>';
+            throw new ResponseTerminateException(404, $html, ['Content-Type' => 'text/html; charset=UTF-8']);
+        }
+
+        /** @var \GuoLaiRen\PageBuilder\Service\PageRenderService $pageRenderService */
+        $pageRenderService = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\PageRenderService::class);
+        $isVisualEditor = $this->request->getGet('visual_editor') === '1';
+        $renderMode = $isVisualEditor
+            ? \GuoLaiRen\PageBuilder\Service\PageRenderService::MODE_VISUAL
+            : \GuoLaiRen\PageBuilder\Service\PageRenderService::MODE_PREVIEW;
+
+        $html = $pageRenderService->render(
+            $context['page'],
+            $renderMode,
+            $context['locale'],
+            $context['style_code'] !== '' ? $context['style_code'] : null,
+            $context['virtual_theme_id'] > 0 ? $context['virtual_theme_id'] : null
+        );
+        if ($isVisualEditor) {
+            $html = $this->injectWorkspacePreviewNavLinks($html, $context['virtual_pages']);
+        }
+
+        throw new ResponseTerminateException(200, $html, [
+            'Content-Type' => 'text/html; charset=UTF-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, max-age=0, post-check=0, pre-check=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+            'X-Accel-Expires' => '0',
+        ]);
+    }
+
+    /**
+     * @return array{
+     *   page:Page,
+     *   style_code:string,
+     *   locale:string,
+     *   virtual_theme_id:int,
+     *   virtual_pages:array<string, array<string, mixed>>
+     * }|null
+     */
+    private function resolveWorkspacePreviewContext(): ?array
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $requestedPageType = \trim((string)$this->request->getGet('page_type', ''));
+        if ($adminId <= 0 || $publicId === '' || $requestedPageType === '') {
+            return null;
+        }
+
+        /** @var \GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService $virtualLayoutService */
+        $virtualLayoutService = ObjectManager::getInstance(\GuoLaiRen\PageBuilder\Service\AiSiteVirtualLayoutService::class);
+        $context = $virtualLayoutService->loadContext($publicId, $adminId, $requestedPageType);
+        if ($context === null) {
+            return null;
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope($context['scope']);
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
+            $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []),
+            $scope
+        );
+        $pageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
+        if ($pageType === '' || !\is_array($virtualPages[$pageType] ?? null)) {
+            return null;
+        }
+
+        $virtualThemeId = \max(
+            (int)$this->request->getGet('virtual_theme_id', 0),
+            (int)($context['virtual_theme_id'] ?? 0)
+        );
+        $virtualPage = $virtualPages[$pageType];
+        $styleCode = \trim((string)($this->request->getGet('style_code') ?: ($virtualPage['style_code'] ?? 'default')));
+        $styleCode = $styleCode !== '' ? $styleCode : 'default';
+        $locale = \trim((string)($this->request->getGet('locale') ?: ($virtualPage['locale'] ?? State::getLang())));
+        $locale = $locale !== '' ? $locale : State::getLang();
+        $layout = $virtualLayoutService->getResolvedLayout($virtualThemeId, $pageType);
+        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
+
+        $page = ObjectManager::make(Page::class);
+        $page->setData([
+            Page::schema_fields_ID => 0,
+            Page::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
+            Page::schema_fields_PARENT_ID => $pageType === Page::TYPE_HOME ? 0 : 1,
+            Page::schema_fields_LAYOUT_PAGE_ID => 0,
+            Page::schema_fields_STATUS => Page::STATUS_DRAFT,
+            Page::schema_fields_TITLE => (string)($virtualPage['title'] ?? ''),
+            Page::schema_fields_NAME => (string)($virtualPage['title'] ?? ''),
+            Page::schema_fields_HANDLE => (string)($virtualPage['handle'] ?? ''),
+            Page::schema_fields_STYLE => $styleCode,
+            Page::schema_fields_TYPE => $pageType,
+            Page::schema_fields_CONTENT => '',
+            Page::schema_fields_META_TITLE => (string)($virtualPage['meta_title'] ?? ''),
+            Page::schema_fields_META_DESCRIPTION => (string)($virtualPage['meta_description'] ?? ''),
+            Page::schema_fields_META_KEYWORDS => (string)($virtualPage['meta_keywords'] ?? ''),
+            Page::schema_fields_AI_DESCRIPTION => (string)($virtualPage['ai_description'] ?? ''),
+            Page::schema_fields_LOCALES => \json_encode([$locale], \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_DEFAULT_LOCALE => $locale,
+            Page::schema_fields_STYLE_SETTING => \json_encode([
+                $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
+            ], \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, \JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_RENDER_MODE => $renderMode,
+            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], \JSON_UNESCAPED_UNICODE),
+        ]);
+        $page->setData('virtual_public_id', $publicId);
+        $page->setData('virtual_page_type', $pageType);
+        $page->setData('virtual_theme_id', $virtualThemeId);
+        $page->setData('virtual_layout_config', $layout);
+        $page->setData('virtual_pages_by_type', $virtualPages);
+
+        return [
+            'page' => $page,
+            'style_code' => $styleCode,
+            'locale' => $locale,
+            'virtual_theme_id' => $virtualThemeId,
+            'virtual_pages' => $virtualPages,
+        ];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $virtualPages
+     */
+    private function injectWorkspacePreviewNavLinks(string $html, array $virtualPages): string
+    {
+        if ($virtualPages === []) {
+            return $html;
+        }
+
+        $pages = [];
+        foreach ($virtualPages as $pageType => $pageData) {
+            if (!\is_string($pageType) || !\is_array($pageData)) {
+                continue;
+            }
+            $handle = \trim((string)($pageData['handle'] ?? ''));
+            $url = ($pageType === Page::TYPE_HOME || $handle === '') ? '/' : '/' . $handle;
+            $pages[] = [
+                'page_type' => $pageType,
+                'url' => $url,
+            ];
+        }
+        if ($pages === []) {
+            return $html;
+        }
+
+        $pagesJson = \json_encode($pages, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR);
+        $script = <<<SCRIPT
+<script>
+(function(){
+  var pages = {$pagesJson};
+  function findPageByHref(href) {
+    if (!href || href.charAt(0) === '#') return null;
+    var path = href.replace(/^https?:\\/\\/[^/]*/, '').replace(/\\?.*$/, '').split('#')[0] || '/';
+    if (path === '') path = '/';
+    for (var i = 0; i < pages.length; i++) {
+      if (pages[i].url === path) return pages[i];
+    }
+    return null;
+  }
+  var selector = 'header a[href^="/"], footer a[href^="/"], [data-region="header"] a[href^="/"], [data-region="footer"] a[href^="/"], nav a[href^="/"]';
+  var links = document.querySelectorAll(selector);
+  for (var j = 0; j < links.length; j++) {
+    var link = links[j];
+    var page = findPageByHref(link.getAttribute('href'));
+    if (!page || !page.page_type) continue;
+    link.setAttribute('href', '#');
+    link.setAttribute('data-ve-page-type', String(page.page_type));
+    link.addEventListener('click', function(e) {
+      e.preventDefault();
+      var pageType = this.getAttribute('data-ve-page-type');
+      if (pageType && window.parent !== window) {
+        window.parent.postMessage({ type: 'PageBuilderVisualEditor', action: 'navigate', page_type: pageType }, '*');
+      }
+    });
+  }
+})();
+</script>
+SCRIPT;
+
+        $position = \strripos($html, '</body>');
+        if ($position !== false) {
+            return \substr($html, 0, $position) . $script . "\n" . \substr($html, $position);
+        }
+
+        return $html . $script;
     }
 
     private function isAiSiteAgentExpertUiRequested(): bool
@@ -237,6 +436,9 @@ class AiSiteAgent extends BaseController
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动区块 AI 微调', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartRefineComponent(): string { return $this->handleStartRefineComponent(); }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 寤虹珯浼氳瘽 API', 'mdi-api', '鏇存柊鍖哄潡閰嶇疆', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postUpdateBlockConfig(): string { return $this->handleUpdateBlockConfig(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动发布流程', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartPublish(): string { return $this->handleStartPublish(); }
@@ -444,6 +646,87 @@ class AiSiteAgent extends BaseController
             '',
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING
         ));
+    }
+
+    private function handleUpdateBlockConfig(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
+        $blockId = \trim((string)$this->getRequestBodyValue('block_id', ''));
+        if ($adminId <= 0 || $publicId === '' || $pageType === '' || $blockId === '') {
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_UPDATE_BLOCK);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_PUBLIC_ID);
+        }
+
+        $error = '';
+        $blockConfig = $this->getRequestJsonObject('block_config', $error);
+        if ($error !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $error]);
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        if (!\in_array($pageType, $pageTypes, true)) {
+            return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_UPDATE_BLOCK);
+        }
+
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $updatedBlock = null;
+
+        foreach ($blocks as $index => $block) {
+            if (!\is_array($block) || \trim((string)($block['block_id'] ?? '')) !== $blockId) {
+                continue;
+            }
+
+            $updatedBlock = $this->htmlBlocksBuildService->rebuildBlock(
+                $block,
+                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                $scope,
+                $blockConfig
+            );
+            $blocks[$index] = $updatedBlock;
+            break;
+        }
+
+        if ($updatedBlock === null) {
+            return $this->fetchJson(['success' => false, 'message' => __('未找到要更新的区块')]);
+        }
+
+        $virtualPage['blocks'] = \array_values($blocks);
+        $virtualPage['last_generated_at'] = \date('Y-m-d H:i:s');
+        $virtualPages[$pageType] = $virtualPage;
+        $scope['virtual_pages_by_type'] = $virtualPages;
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'block_config_updated',
+            (string)__('区块配置已更新：%{block}', ['block' => $blockId]),
+            [
+                'page_type' => $pageType,
+                'details' => [
+                    'block_id' => $blockId,
+                    'config_keys' => \array_values(\array_map('strval', \array_keys($blockConfig))),
+                ],
+            ]
+        );
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('区块已更新'),
+            'block' => $updatedBlock,
+            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+        ]);
     }
 
     private function handleSwitchPreviewPage(): string
