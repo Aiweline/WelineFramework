@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
@@ -38,6 +39,13 @@ class WlsFiberContext
 
     /** RequestContext 存储快照 */
     private ?string $requestId;
+    /** @var array{headers: array<string, string|array>, cookies: array<string, array<string, mixed>>, status_code: int, status_code_explicit: bool} */
+    private array $headerCollectorState = [
+        'headers' => [],
+        'cookies' => [],
+        'status_code' => 200,
+        'status_code_explicit' => false,
+    ];
 
     private function __construct() {}
 
@@ -67,6 +75,7 @@ class WlsFiberContext
         }
 
         $ctx->requestId = RequestContext::getId();
+        $ctx->headerCollectorState = HeaderCollector::getInstance()->captureState();
 
         return $ctx;
     }
@@ -74,7 +83,7 @@ class WlsFiberContext
     /**
      * 将此快照恢复到全局环境：resume 前调用
      */
-    public function restore(): void
+    public function restore(bool $restoreResponseState = true): void
     {
         SseContext::setConnection($this->sseConnection);
         if (\is_callable($this->sseWriteCallback)) {
@@ -120,6 +129,9 @@ class WlsFiberContext
 
         if ($this->requestId !== null) {
             RequestContext::setId($this->requestId);
+        }
+        if ($restoreResponseState) {
+            HeaderCollector::getInstance()->restoreState($this->headerCollectorState);
         }
     }
 

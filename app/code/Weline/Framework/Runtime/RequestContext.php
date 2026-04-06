@@ -74,16 +74,19 @@ class RequestContext
      * 当前请求 ID
      */
     private static ?string $requestId = null;
+    private static ?\WeakMap $fiberRequestIds = null;
     
     /**
      * 请求开始时间
      */
     private static float $startTime = 0;
+    private static ?\WeakMap $fiberStartTimes = null;
     
     /**
      * 已注册的清理回调
      */
     private static array $cleanupCallbacks = [];
+    private static ?\WeakMap $fiberCleanupCallbacks = null;
     
     // ==================== WELINE_* 服务器变量 Backing Storage ====================
     
@@ -131,10 +134,12 @@ class RequestContext
      */
     public static function init(): void
     {
-        self::$requestId = self::generateRequestId();
-        self::$startTime = \microtime(true);
-        self::$storage = [];
-        self::$cleanupCallbacks = [];
+        self::setRequestIdValue(self::generateRequestId());
+        self::setStartTimeValue(\microtime(true));
+        $storage = self::getStorage();
+        $storage = [];
+        self::setStorage($storage);
+        self::setCleanupCallbacksValue([]);
         
         // 从 $_SERVER 同步 WELINE_* 变量
         self::syncFromServer();
@@ -160,7 +165,7 @@ class RequestContext
      */
     public static function getRequestId(): ?string
     {
-        return self::$requestId;
+        return self::getRequestIdValue();
     }
 
     /**
@@ -168,7 +173,7 @@ class RequestContext
      */
     public static function getId(): ?string
     {
-        return self::$requestId;
+        return self::getRequestIdValue();
     }
 
     /**
@@ -176,7 +181,7 @@ class RequestContext
      */
     public static function setId(?string $id): void
     {
-        self::$requestId = $id;
+        self::setRequestIdValue($id);
     }
     
     /**
@@ -186,7 +191,7 @@ class RequestContext
      */
     public static function getStartTime(): float
     {
-        return self::$startTime;
+        return self::getStartTimeValue();
     }
     
     /**
@@ -196,7 +201,7 @@ class RequestContext
      */
     public static function getElapsedMs(): float
     {
-        return (\microtime(true) - self::$startTime) * 1000;
+        return (\microtime(true) - self::getStartTimeValue()) * 1000;
     }
     
     /**
@@ -208,7 +213,9 @@ class RequestContext
      */
     public static function set(string $key, mixed $value): void
     {
-        self::$storage[$key] = $value;
+        $storage = self::getStorage();
+        $storage[$key] = $value;
+        self::setStorage($storage);
     }
     
     /**
@@ -220,7 +227,8 @@ class RequestContext
      */
     public static function get(string $key, mixed $default = null): mixed
     {
-        return self::$storage[$key] ?? $default;
+        $storage = self::getStorage();
+        return $storage[$key] ?? $default;
     }
     
     /**
@@ -231,7 +239,8 @@ class RequestContext
      */
     public static function has(string $key): bool
     {
-        return \array_key_exists($key, self::$storage);
+        $storage = self::getStorage();
+        return \array_key_exists($key, $storage);
     }
     
     /**
@@ -242,7 +251,9 @@ class RequestContext
      */
     public static function remove(string $key): void
     {
-        unset(self::$storage[$key]);
+        $storage = self::getStorage();
+        unset($storage[$key]);
+        self::setStorage($storage);
     }
     
     /**
@@ -252,7 +263,8 @@ class RequestContext
      */
     public static function all(): array
     {
-        return self::$storage;
+        $storage = self::getStorage();
+        return $storage;
     }
     
     /**
@@ -266,11 +278,13 @@ class RequestContext
      */
     public static function onCleanup(callable $callback, ?string $name = null): void
     {
+        $cleanupCallbacks = self::getCleanupCallbacksValue();
         if ($name !== null) {
-            self::$cleanupCallbacks[$name] = $callback;
+            $cleanupCallbacks[$name] = $callback;
         } else {
-            self::$cleanupCallbacks[] = $callback;
+            $cleanupCallbacks[] = $callback;
         }
+        self::setCleanupCallbacksValue($cleanupCallbacks);
     }
     
     /**
@@ -283,7 +297,7 @@ class RequestContext
     public static function cleanup(): void
     {
         // 执行所有清理回调
-        foreach (self::$cleanupCallbacks as $callback) {
+        foreach (self::getCleanupCallbacksValue() as $callback) {
             try {
                 $callback();
             } catch (\Throwable $e) {
@@ -293,10 +307,12 @@ class RequestContext
         }
         
         // 清理存储
-        self::$storage = [];
-        self::$cleanupCallbacks = [];
-        self::$requestId = null;
-        self::$startTime = 0;
+        $storage = self::getStorage();
+        $storage = [];
+        self::setStorage($storage);
+        self::setCleanupCallbacksValue([]);
+        self::setRequestIdValue(null);
+        self::setStartTimeValue(0.0);
         
         // 重置 WELINE_* 变量
         self::resetWelineVars();
@@ -309,7 +325,7 @@ class RequestContext
      */
     public static function isInitialized(): bool
     {
-        return self::$requestId !== null;
+        return self::getRequestIdValue() !== null;
     }
     
     // =============== WLS 隔离存储 ===============
@@ -319,7 +335,7 @@ class RequestContext
      * 
      * @return array
      */
-    private static function &getStorage(): array
+    private static function getStorage(): array
     {
         // 常驻内存模式且在 Fiber 中
         if (Runtime::isPersistent()) {
@@ -336,6 +352,107 @@ class RequestContext
         }
         // FPM 模式或非 Fiber 环境
         return self::$storage;
+    }
+
+    private static function setStorage(array $storage): void
+    {
+        if (Runtime::isPersistent()) {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber !== null) {
+                if (self::$fiberStorage === null) {
+                    self::$fiberStorage = new \WeakMap();
+                }
+                self::$fiberStorage[$fiber] = $storage;
+                return;
+            }
+        }
+
+        self::$storage = $storage;
+    }
+
+    private static function getRequestIdValue(): ?string
+    {
+        if (Runtime::isPersistent()) {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber !== null && self::$fiberRequestIds !== null && isset(self::$fiberRequestIds[$fiber])) {
+                return self::$fiberRequestIds[$fiber];
+            }
+        }
+
+        return self::$requestId;
+    }
+
+    private static function setRequestIdValue(?string $requestId): void
+    {
+        if (Runtime::isPersistent()) {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber !== null) {
+                if (self::$fiberRequestIds === null) {
+                    self::$fiberRequestIds = new \WeakMap();
+                }
+                self::$fiberRequestIds[$fiber] = $requestId;
+                return;
+            }
+        }
+
+        self::$requestId = $requestId;
+    }
+
+    private static function getStartTimeValue(): float
+    {
+        if (Runtime::isPersistent()) {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber !== null && self::$fiberStartTimes !== null && isset(self::$fiberStartTimes[$fiber])) {
+                return (float) self::$fiberStartTimes[$fiber];
+            }
+        }
+
+        return self::$startTime;
+    }
+
+    private static function setStartTimeValue(float $startTime): void
+    {
+        if (Runtime::isPersistent()) {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber !== null) {
+                if (self::$fiberStartTimes === null) {
+                    self::$fiberStartTimes = new \WeakMap();
+                }
+                self::$fiberStartTimes[$fiber] = $startTime;
+                return;
+            }
+        }
+
+        self::$startTime = $startTime;
+    }
+
+    private static function getCleanupCallbacksValue(): array
+    {
+        if (Runtime::isPersistent()) {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber !== null && self::$fiberCleanupCallbacks !== null && isset(self::$fiberCleanupCallbacks[$fiber])) {
+                $cleanupCallbacks = self::$fiberCleanupCallbacks[$fiber];
+                return \is_array($cleanupCallbacks) ? $cleanupCallbacks : [];
+            }
+        }
+
+        return self::$cleanupCallbacks;
+    }
+
+    private static function setCleanupCallbacksValue(array $cleanupCallbacks): void
+    {
+        if (Runtime::isPersistent()) {
+            $fiber = \Fiber::getCurrent();
+            if ($fiber !== null) {
+                if (self::$fiberCleanupCallbacks === null) {
+                    self::$fiberCleanupCallbacks = new \WeakMap();
+                }
+                self::$fiberCleanupCallbacks[$fiber] = $cleanupCallbacks;
+                return;
+            }
+        }
+
+        self::$cleanupCallbacks = $cleanupCallbacks;
     }
     
     // =============== WELINE_* 服务器变量访问（统一入口） ===============
