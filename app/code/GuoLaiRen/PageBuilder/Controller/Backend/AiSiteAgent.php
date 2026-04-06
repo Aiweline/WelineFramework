@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSessionEvent;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteDraftWebsiteService;
+use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePublishService;
 use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
@@ -217,7 +218,7 @@ class AiSiteAgent extends BaseController
 
         $scope = $this->scopeCompatibilityService->normalizeScope($context['scope']);
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType(
-            $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []),
+            $this->scopeCompatibilityService->resolveScopedPageTypes($scope),
             $scope
         );
         $pageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
@@ -526,6 +527,18 @@ SCRIPT;
         if ($error !== '') {
             return $this->fetchJson(['success' => false, 'message' => $error]);
         }
+        if (isset($scopePatch['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $scopePatch)) {
+            $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
+        }
+        $siteProfileManual = \is_array($scopePatch['site_profile_manual'] ?? null) ? $scopePatch['site_profile_manual'] : [];
+        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description'] as $manualField) {
+            if (\array_key_exists($manualField, $scopePatch) && !\array_key_exists($manualField, $siteProfileManual)) {
+                $siteProfileManual[$manualField] = true;
+            }
+        }
+        if ($siteProfileManual !== []) {
+            $scopePatch['site_profile_manual'] = $siteProfileManual;
+        }
         return $this->fetchJson($this->startOperation(
             $session,
             $adminId,
@@ -579,7 +592,7 @@ SCRIPT;
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_REGENERATE);
         }
@@ -670,7 +683,7 @@ SCRIPT;
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             return $this->jsonError('INVALID_PARAMS', (string)__('所选页面类型不在当前工作区中'), self::PARAMS_UPDATE_BLOCK);
         }
@@ -746,7 +759,7 @@ SCRIPT;
         // 前端 Tab 可能对应已勾选但尚未完成 mergeScope（防抖）的页面类型；若不写入 scope，resolvePreviewPageType 会回退到首页，预览看似「切不过去」。
         if ($requestedPageType !== '' && \array_key_exists($requestedPageType, Page::getPageTypes())) {
             $scopeArr = $session->getScopeArray();
-            $existingTypes = $this->scopeCompatibilityService->normalizePageTypes($scopeArr['page_types'] ?? []);
+            $existingTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scopeArr);
             if (!\in_array($requestedPageType, $existingTypes, true)) {
                 $existingTypes[] = $requestedPageType;
                 $this->sessionService->mergeScope($session->getId(), $adminId, ['page_types' => $existingTypes]);
@@ -769,7 +782,7 @@ SCRIPT;
 
         $virtualPages = $this->scopeCompatibilityService->normalizeVirtualPagesByType(
             $state['scope']['virtual_pages_by_type'] ?? [],
-            $this->scopeCompatibilityService->normalizePageTypes($state['scope']['page_types'] ?? [])
+            $this->scopeCompatibilityService->resolveScopedPageTypes(\is_array($state['scope'] ?? null) ? $state['scope'] : [])
         );
         $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, $requestedPageType);
         if ($previewPageType === '') {
@@ -808,7 +821,7 @@ SCRIPT;
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
         $scope = $state['scope'];
         $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $track = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $checkItems = [
             ['key' => 'draft_website', 'label' => __('草稿站点已创建'), 'ok' => (int)$state['draft_website_id'] > 0, 'value' => (int)$state['draft_website_id']],
@@ -1092,7 +1105,7 @@ SCRIPT;
     ): array {
         $normalized = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $normalized['website_profile'] = $this->profileGenerationService->generate($normalized);
-        $normalized['page_types'] = $this->scopeCompatibilityService->normalizePageTypes($normalized['page_types'] ?? []);
+        $normalized['page_types'] = $this->scopeCompatibilityService->resolveScopedPageTypes($normalized);
         $normalized['page_type_layouts'] = $this->scopeCompatibilityService->normalizePageTypeLayouts(
             $normalized['page_type_layouts'] ?? [],
             $normalized['page_types']
@@ -1205,6 +1218,7 @@ SCRIPT;
             'website_profile' => \is_array($normalized['website_profile']) ? $normalized['website_profile'] : [],
             'draft_website_id' => $draftWebsiteId,
             'pagebuilder_pages_by_type' => $pagesByType,
+            'page_type_layouts' => \is_array($normalized['page_type_layouts'] ?? null) ? $normalized['page_type_layouts'] : [],
             'virtual_pages_by_type' => $virtualPagesByType,
             'preview_page_options' => \is_array($normalized['preview_page_options']) ? $normalized['preview_page_options'] : [],
             'preview_page_id' => (int)$normalized['preview_page_id'],
@@ -1270,7 +1284,7 @@ SCRIPT;
         $track = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         if ($track === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
             $vps = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
-            $pts = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+            $pts = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
             if ($this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($vps, $pts)) {
                 return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_EDITING;
             }
@@ -1351,7 +1365,7 @@ SCRIPT;
         }
 
         $scope = \array_replace($scope, $scopePatch);
-        $scope['page_types'] = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $scope['page_types'] = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if ($pageType !== '' && !\in_array($pageType, $scope['page_types'], true)) {
             return ['success' => false, 'message' => __('所选页面类型不在当前工作区中')];
         }
@@ -1398,9 +1412,9 @@ SCRIPT;
         array $scope
     ): array {
         $scope['website_profile'] = $this->profileGenerationService->generate($scope);
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pageTypeLabels = Page::getPageTypes();
-        $totalSteps = \count($pageTypes) + 1;
+        $totalSteps = \count($pageTypes) + 2;
         $currentStep = 0;
 
         $currentStep++;
@@ -1410,6 +1424,33 @@ SCRIPT;
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
+
+        /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
+        $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+        $sharedComponents = $pageComponentGenerationService->generateSharedComponents($scope['website_profile'], $scope);
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'shared_layout_generated',
+            (string)__('AI 已生成站点页头与页脚'),
+            ['operation' => 'build']
+        );
+
+        /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
+        $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+        $currentStep++;
+        $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('AI 正在生成站点页头与页脚'), $progressPercent);
+        $sharedComponents = $pageComponentGenerationService->generateSharedComponents($scope['website_profile'], $scope);
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'shared_layout_generated',
+            (string)__('AI 已生成站点页头与页脚'),
+            ['operation' => 'build']
+        );
 
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
         $now = \date('Y-m-d H:i:s');
@@ -1429,7 +1470,9 @@ SCRIPT;
                 $progressPercent,
                 $pageType
             );
-            $blocks = $this->htmlBlocksBuildService->buildPlaceholderBlocksForPageType($pageType, $scope['website_profile'], $scope);
+            $buildScope = $scope;
+            $buildScope['_ai_generated_shared_components'] = $sharedComponents;
+            $blocks = $this->htmlBlocksBuildService->buildPlaceholderBlocksForPageType($pageType, $scope['website_profile'], $buildScope);
             $row = $virtualPages[$pageType] ?? [];
             $row['blocks'] = $blocks;
             $row['last_generated_at'] = $now;
@@ -1493,7 +1536,7 @@ SCRIPT;
             return $this->runHtmlBlocksBuildOperation($sse, $session, $adminId, $scope);
         }
         $scope['website_profile'] = $this->profileGenerationService->generate($scope);
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pageTypeLabels = Page::getPageTypes();
         $totalSteps = \count($pageTypes) + 2; // 网站资料 + 虚拟主题 + N个页面
         $currentStep = 0;
@@ -1539,7 +1582,7 @@ SCRIPT;
             $pageTypeLayouts[$pageType] = $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
 
             // 更新虚拟主题（包含当前页面类型）
-            $theme = $this->virtualThemeService->ensureVirtualTheme(
+            $theme = $this->virtualThemeService->ensureAiGeneratedVirtualTheme(
                 $scope,
                 $scope['website_profile'],
                 [$pageType], // 只传入当前页面类型
@@ -1618,7 +1661,7 @@ SCRIPT;
             throw new \RuntimeException((string)__('缺少要重建的页面类型'));
         }
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         if (!\in_array($pageType, $pageTypes, true)) {
             throw new \RuntimeException((string)__('页面类型不在当前工作区中'));
         }
@@ -1669,7 +1712,7 @@ SCRIPT;
         $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
         $pageTypeLayouts[$pageType] = $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
 
-        $theme = $this->virtualThemeService->ensureVirtualTheme($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $session->getId());
+        $theme = $this->virtualThemeService->ensureAiGeneratedVirtualTheme($scope, $scope['website_profile'], $pageTypes, $pageTypeLayouts, $session->getId(), false);
         $scope['page_type_layouts'] = $theme['page_type_layouts'];
         $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
 
@@ -1715,7 +1758,7 @@ SCRIPT;
     private function runPublishOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): array
     {
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($scope['page_types'] ?? []);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
         $websiteProfile = $this->profileGenerationService->generate($scope);
         if ((int)($scope['site_ready'] ?? 1) !== 1) {
@@ -1878,6 +1921,18 @@ SCRIPT;
         $payload = $this->getRequestJsonObject($jsonKey, $error);
         if ($error !== '') {
             return $this->fetchJson(['success' => false, 'message' => $error]);
+        }
+        if (isset($payload['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $payload)) {
+            $payload[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
+        }
+        $siteProfileManual = \is_array($payload['site_profile_manual'] ?? null) ? $payload['site_profile_manual'] : [];
+        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description'] as $manualField) {
+            if (\array_key_exists($manualField, $payload) && !\array_key_exists($manualField, $siteProfileManual)) {
+                $siteProfileManual[$manualField] = true;
+            }
+        }
+        if ($siteProfileManual !== []) {
+            $payload['site_profile_manual'] = $siteProfileManual;
         }
 
         $saved = $merge ? $this->sessionService->mergeScope($session->getId(), $adminId, $payload) : $this->sessionService->replaceScope($session->getId(), $adminId, $payload);

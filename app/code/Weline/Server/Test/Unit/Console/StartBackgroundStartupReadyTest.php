@@ -30,6 +30,75 @@ final class StartBackgroundStartupReadyTest extends TestCase
         self::assertSame('running', $result['data']['startup_phase']);
     }
 
+    public function testFinalizeBackgroundStartupOutputDefersServerInfoUntilStartupCompleted(): void
+    {
+        $start = new class extends Start {
+            public int $startupInfoCalls = 0;
+            public int $usageInfoCalls = 0;
+
+            protected function showStartupInfo(
+                string $instanceName,
+                string $host,
+                int $port,
+                int $count,
+                bool $daemon,
+                string $source = '',
+                bool $sslEnabled = false,
+                bool $dispatcherEnabled = false,
+                int $workerPort = 0,
+                int $httpRedirectPort = 0,
+                bool $directReusePortEnabled = false
+            ): void {
+                unset($instanceName, $host, $port, $count, $daemon, $source, $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $directReusePortEnabled);
+                $this->startupInfoCalls++;
+            }
+
+            protected function showUsageInfo(string $host, int $port, string $instanceName, bool $sslEnabled = false): void
+            {
+                unset($host, $port, $instanceName, $sslEnabled);
+                $this->usageInfoCalls++;
+            }
+        };
+
+        $this->invokeProtected(
+            $start,
+            'finalizeBackgroundStartupOutput',
+            false,
+            'default',
+            '127.0.0.1',
+            8080,
+            2,
+            'cli',
+            false,
+            true,
+            18080,
+            0,
+            false
+        );
+
+        self::assertSame(0, $start->startupInfoCalls);
+        self::assertSame(0, $start->usageInfoCalls);
+
+        $this->invokeProtected(
+            $start,
+            'finalizeBackgroundStartupOutput',
+            true,
+            'default',
+            '127.0.0.1',
+            8080,
+            2,
+            'cli',
+            false,
+            true,
+            18080,
+            0,
+            false
+        );
+
+        self::assertSame(1, $start->startupInfoCalls);
+        self::assertSame(1, $start->usageInfoCalls);
+    }
+
     private function createTempInstanceFile(array $data): string
     {
         $file = \tempnam(\sys_get_temp_dir(), 'wls-start-');

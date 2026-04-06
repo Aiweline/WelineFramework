@@ -72,12 +72,55 @@ $showNav = $getConfig('navigation.display', 'yes') !== 'no';
 $navItems = [];
 
 if ($page) {
-    $navigationPages = $page->getNavigationPages([], 10);
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $navigationPages = $page->getHeaderNavigationPages(10);
+    } else {
+        $navigationPages = $page->getNavigationPages([], 10);
+    }
     foreach ($navigationPages as $navPage) {
         $navItems[] = [
-            'text' => $navPage['title'] ?? '',
-            'href' => $navPage['url'] ?? '#',
+            'text' => $navPage['title'] ?? ($navPage['text'] ?? ''),
+            'href' => $navPage['url'] ?? ($navPage['href'] ?? '#'),
         ];
+    }
+}
+
+if (empty($navItems)) {
+    $configNavItems = $componentConfig['nav_items'] ?? [];
+    if (is_array($configNavItems)) {
+        foreach ($configNavItems as $navItem) {
+            if (!is_array($navItem)) {
+                continue;
+            }
+            $text = trim((string)($navItem['text'] ?? $navItem['label'] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            $navItems[] = [
+                'text' => $text,
+                'href' => trim((string)($navItem['href'] ?? '#')) ?: '#',
+            ];
+        }
+    }
+
+    if (empty($navItems)) {
+        $navItemsRaw = (string)$getConfig('navigation.items', '');
+        $navItemsLines = preg_split('/\r?\n/', $navItemsRaw) ?: [];
+        foreach ($navItemsLines as $navLine) {
+            $navLine = trim((string)$navLine);
+            if ($navLine === '') {
+                continue;
+            }
+            $parts = explode('=>', $navLine, 2);
+            $text = trim((string)($parts[0] ?? ''));
+            if ($text === '') {
+                continue;
+            }
+            $navItems[] = [
+                'text' => $text,
+                'href' => trim((string)($parts[1] ?? '#')) ?: '#',
+            ];
+        }
     }
 }
 
