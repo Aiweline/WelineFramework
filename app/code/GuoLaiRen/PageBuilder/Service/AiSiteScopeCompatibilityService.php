@@ -6,6 +6,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
+use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteScopeCompatibilityService
 {
@@ -19,6 +20,7 @@ class AiSiteScopeCompatibilityService
 
     public function __construct(
         private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
+        private readonly ?AiSiteHtmlBlocksBuildService $aiSiteHtmlBlocksBuildService = null,
     ) {
     }
 
@@ -252,8 +254,10 @@ class AiSiteScopeCompatibilityService
     public function buildVirtualPagesByType(array $pageTypes, array $scope = []): array
     {
         $existing = $this->normalizeVirtualPagesByType($scope['virtual_pages_by_type'] ?? [], $pageTypes);
+        $layouts = $this->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
         $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $siteTitle = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''));
+        $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
 
         foreach ($pageTypes as $pageType) {
             $record = $existing[$pageType] ?? $this->normalizeVirtualPageRecord([], $pageType);
@@ -274,6 +278,14 @@ class AiSiteScopeCompatibilityService
             }
             if (!\is_array($record['style_settings'] ?? null)) {
                 $record['style_settings'] = [];
+            }
+            if ($this->shouldHydrateLegacyBlocks($record, $layouts[$pageType] ?? [], $pageType)) {
+                $record['blocks'] = $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
+            } else {
+                $record['blocks'] = $this->hydrateEditableBlockMetadata(
+                    \is_array($record['blocks'] ?? null) ? $record['blocks'] : [],
+                    $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope)
+                );
             }
             $existing[$pageType] = $record;
         }
@@ -564,8 +576,118 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
+     * @param array<string, mixed> $record
+     * @param array<string, mixed> $layout
+     */
+    private function shouldHydrateLegacyBlocks(array $record, array $layout, string $pageType): bool
+    {
+        $blocks = \is_array($record['blocks'] ?? null) ? $record['blocks'] : [];
+        if ($blocks !== []) {
+            return false;
+        }
+
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        if ($content === []) {
+            return true;
+        }
+
+        if (\count($content) !== 1) {
+            return false;
+        }
+
+        $code = \trim((string)($content[0]['code'] ?? $content[0]['component'] ?? ''));
+        if ($code === '') {
+            return true;
+        }
+
+        $slugPageType = \str_replace('_', '-', $pageType);
+        $genericCodes = [
+            'content/' . $slugPageType,
+            'content/' . $pageType,
+            'content/ai-generated-section',
+            'ai-generated-section',
+            'content-ai-generated-section',
+        ];
+        if (\in_array($code, $genericCodes, true)) {
+            return true;
+        }
+
+        if (\preg_match('#^content/[^/]+$#', $code) === 1) {
+            foreach (['-hero', '-highlights', '-details', '-cta', '-story', '-values', '-channels', '-process', '-coverage', '-rights', '-topics', '-structure', '-modules', '-steps'] as $marker) {
+                if (\str_contains($code, $marker)) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $existingBlocks
+     * @param list<array<string,mixed>> $defaultBlocks
+     * @return list<array<string,mixed>>
+     */
+    private function hydrateEditableBlockMetadata(array $existingBlocks, array $defaultBlocks): array
+    {
+        if ($defaultBlocks === []) {
+            return $existingBlocks;
+        }
+
+        $defaultById = [];
+        foreach ($defaultBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? ''));
+            if ($blockId === '') {
+                continue;
+            }
+            $defaultById[$blockId] = $block;
+        }
+
+        $hydrated = [];
+        foreach ($existingBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? ''));
+            $defaultBlock = ($blockId !== '' && isset($defaultById[$blockId])) ? $defaultById[$blockId] : null;
+            if (\is_array($defaultBlock)) {
+                $block = \array_replace($defaultBlock, $block);
+                if (!\is_array($block['config'] ?? null) || $block['config'] === []) {
+                    $block['config'] = \is_array($defaultBlock['config'] ?? null) ? $defaultBlock['config'] : [];
+                }
+                if (!\is_array($block['field_schema'] ?? null) || $block['field_schema'] === []) {
+                    $block['field_schema'] = \is_array($defaultBlock['field_schema'] ?? null) ? $defaultBlock['field_schema'] : [];
+                }
+            }
+            $hydrated[] = $block;
+        }
+
+        $existingIds = \array_values(\array_filter(\array_map(static function (array $block): string {
+            return \trim((string)($block['block_id'] ?? ''));
+        }, $hydrated), static fn(string $id): bool => $id !== ''));
+
+        foreach ($defaultBlocks as $defaultBlock) {
+            if (!\is_array($defaultBlock)) {
+                continue;
+            }
+            $blockId = \trim((string)($defaultBlock['block_id'] ?? ''));
+            if ($blockId === '' || \in_array($blockId, $existingIds, true)) {
+                continue;
+            }
+            $hydrated[] = $defaultBlock;
+        }
+
+        return $hydrated;
+    }
+
+    /**
      * @param list<mixed> $raw
-     * @return list<array{block_id:string,type:string,html:string}>
+     * @return list<array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}>
      */
     private function normalizeBlocksList(array $raw): array
     {
@@ -582,6 +704,8 @@ class AiSiteScopeCompatibilityService
                 'block_id' => $bid,
                 'type' => \trim((string)($b['type'] ?? 'section')),
                 'html' => (string)($b['html'] ?? ''),
+                'config' => \is_array($b['config'] ?? null) ? $b['config'] : [],
+                'field_schema' => \is_array($b['field_schema'] ?? null) ? $b['field_schema'] : [],
             ];
         }
 

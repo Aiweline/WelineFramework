@@ -492,6 +492,8 @@ class Preview extends BackendController
         $locale = \trim((string)($this->request->getGet('locale') ?: ($virtualPage['locale'] ?? '')));
         $locale = $locale !== '' ? $locale : 'en_US';
         $layout = $this->getVirtualLayoutService()->getResolvedLayout($virtualThemeId, $pageType);
+        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $renderMode = $virtualBlocks === [] ? Page::RENDER_MODE_THEME : Page::RENDER_MODE_AI_HTML;
 
         $page = ObjectManager::make(Page::class);
         $page->setData([
@@ -516,6 +518,8 @@ class Preview extends BackendController
                 $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
             ], JSON_UNESCAPED_UNICODE),
             Page::schema_fields_LAYOUT_CONFIG => \json_encode($layout, JSON_UNESCAPED_UNICODE),
+            Page::schema_fields_RENDER_MODE => $renderMode,
+            Page::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], JSON_UNESCAPED_UNICODE),
         ]);
         $page->setData('virtual_public_id', $publicId);
         $page->setData('virtual_page_type', $pageType);
