@@ -35,6 +35,11 @@ class PreviewPageStub
      */
     public function getHeaderNavigationPages(int $limit = 10): array
     {
+        $customItems = $this->data['header_navigation_pages'] ?? null;
+        if (\is_array($customItems) && $customItems !== []) {
+            return \array_slice(\array_values($customItems), 0, $limit);
+        }
+
         $items = [
             ['title' => __('Home'), 'handle' => '', 'url' => '/', 'type' => Page::TYPE_HOME, 'page_id' => 1],
             ['title' => __('About Us'), 'handle' => 'about', 'url' => '/about', 'type' => Page::TYPE_ABOUT, 'page_id' => 2],
@@ -51,6 +56,19 @@ class PreviewPageStub
      */
     public function getNavigationPages(array $excludeTypes = [], int $limit = 30): array
     {
+        $customItems = $this->data['navigation_pages'] ?? null;
+        if (\is_array($customItems) && $customItems !== []) {
+            $items = \array_values($customItems);
+            if (!empty($excludeTypes)) {
+                $items = \array_values(\array_filter(
+                    $items,
+                    static fn(array $row): bool => !\in_array((string)($row['type'] ?? ''), $excludeTypes, true)
+                ));
+            }
+
+            return \array_slice($items, 0, $limit);
+        }
+
         $items = [
             ['title' => __('Home'), 'handle' => '', 'url' => '/', 'type' => Page::TYPE_HOME, 'page_id' => 1],
             ['title' => __('About Us'), 'handle' => 'about', 'url' => '/about', 'type' => Page::TYPE_ABOUT, 'page_id' => 2],
@@ -63,5 +81,32 @@ class PreviewPageStub
             $items = array_values(array_filter($items, static fn($row) => !in_array($row['type'] ?? '', $excludeTypes, true)));
         }
         return array_slice($items, 0, $limit);
+    }
+
+    public function getBlogPosts(int $limit = 10, string $orderBy = 'published_at', string $orderDir = 'DESC'): array
+    {
+        $posts = $this->data['blog_posts'] ?? [];
+        return \is_array($posts) ? \array_slice(\array_values($posts), 0, $limit) : [];
+    }
+
+    public function getBlogCategories(): array
+    {
+        $categories = $this->data['blog_categories'] ?? [];
+        return \is_array($categories) ? \array_values($categories) : [];
+    }
+
+    public function getHomePageConfig(): array
+    {
+        $config = $this->data['home_page_config'] ?? [];
+        return \is_array($config) ? $config : [];
+    }
+
+    public function isBlogType(): bool
+    {
+        return \in_array((string)($this->data['type'] ?? ''), [
+            Page::TYPE_BLOG,
+            Page::TYPE_BLOG_CATEGORY,
+            Page::TYPE_BLOG_LIST,
+        ], true);
     }
 }

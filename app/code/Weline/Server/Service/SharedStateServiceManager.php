@@ -140,6 +140,24 @@ class SharedStateServiceManager
             ];
         }
 
+        $runtime['session'] = $this->finalizeEnsuredRuntime(
+            ControlMessage::ROLE_SESSION_SERVER,
+            $runtime['session'],
+            $requesterInstanceName
+        );
+        if ($this->isMemoryEnabled($config, $envConfig)) {
+            $runtime['memory'] = $this->finalizeEnsuredRuntime(
+                ControlMessage::ROLE_MEMORY_SERVER,
+                $runtime['memory'],
+                $requesterInstanceName
+            );
+        } else {
+            $runtime['memory'] = $this->mergeRuntimeWithRegistryMetadata(
+                ControlMessage::ROLE_MEMORY_SERVER,
+                $runtime['memory']
+            );
+        }
+
         return $runtime;
     }
 
@@ -163,10 +181,18 @@ class SharedStateServiceManager
         });
 
         if (($prepare['status'] ?? '') === 'ready') {
-            return $prepare['runtime'];
+            return $this->finalizeEnsuredRuntime(
+                (string) $definition['role'],
+                $prepare['runtime'],
+                $requesterInstanceName
+            );
         }
 
-        return $this->waitUntilSharedServicesReadyBatch([$prepare['definition']])[(string) $definition['role']];
+        return $this->finalizeEnsuredRuntime(
+            (string) $definition['role'],
+            $this->waitUntilSharedServicesReadyBatch([$prepare['definition']])[(string) $definition['role']],
+            $requesterInstanceName
+        );
     }
 
     /**
@@ -373,7 +399,11 @@ class SharedStateServiceManager
             return ['status' => 'pending', 'definition' => $definition];
         });
 
-        return $this->waitUntilSharedServicesReadyBatch([$prepare['definition']])[(string) $definition['role']];
+        return $this->finalizeEnsuredRuntime(
+            (string) $definition['role'],
+            $this->waitUntilSharedServicesReadyBatch([$prepare['definition']])[(string) $definition['role']],
+            $requesterInstanceName
+        );
     }
 
     /**
@@ -435,6 +465,7 @@ class SharedStateServiceManager
         return $this->withRoleLock((string) $definition['role'], function () use ($definition): bool {
             $stopped = $this->forceStopReusedService($definition, []);
             $this->removeRuntimeFile((string) $definition['role']);
+            $this->createRegistry()->removeRecord((string) $definition['role']);
 
             return $stopped;
         });
@@ -476,6 +507,14 @@ class SharedStateServiceManager
      */
     public function release(string $role, string $consumerCode = '', array $options = []): array
     {
+        if ($this->shouldTrackConsumer($consumerCode)) {
+            $this->withRoleLock($this->normalizeRoleName($role), function () use ($role, $consumerCode): void {
+                $registry = $this->createRegistry();
+                $registry->releaseConsumer($role, $consumerCode);
+                $this->syncRuntimeRegistryMetadata($role, $registry);
+            });
+        }
+
         return [
             'released' => true,
             'local_ref_count' => 0,
@@ -486,6 +525,18 @@ class SharedStateServiceManager
 
     public function releaseInstanceConsumers(string $instanceName): void
     {
+        if (!$this->shouldTrackConsumer($instanceName)) {
+            return;
+        }
+
+        foreach ([ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER] as $role) {
+            $this->withRoleLock($role, function () use ($role, $instanceName): void {
+                $registry = $this->createRegistry();
+                $registry->releaseConsumer($role, $instanceName);
+                $this->syncRuntimeRegistryMetadata($role, $registry);
+                $this->shutdownIfUnusedUnderLock($role, [], $registry);
+            });
+        }
     }
 
     /**
@@ -520,7 +571,11 @@ class SharedStateServiceManager
      */
     public function shutdownIfUnused(string $role, array $options = []): bool
     {
-        return false;
+        $role = $this->normalizeRoleName($role);
+
+        return $this->withRoleLock($role, function () use ($role, $options): bool {
+            return $this->shutdownIfUnusedUnderLock($role, $options);
+        });
     }
 
     /**
@@ -532,7 +587,7 @@ class SharedStateServiceManager
         $shortRole = $this->toShortRole($role);
         $envConfig = $this->loadEnvConfig();
         $definition = $this->buildRoleDefinition($role, 'system', [], $envConfig);
-        $record = $this->readRuntimeFile($role);
+        $record = $this->mergeRuntimeWithRegistryMetadata($role, $this->readRuntimeFile($role));
 
         return \array_merge(
             [
@@ -546,6 +601,8 @@ class SharedStateServiceManager
                 'healthy_at' => null,
                 'healthy' => false,
                 'registered' => false,
+                'consumer_count' => 0,
+                'shutdown_due_at' => null,
                 'enabled' => $shortRole === 'memory' ? $this->isMemoryEnabled([], $envConfig) : true,
             ],
             $record
@@ -1024,6 +1081,15 @@ class SharedStateServiceManager
             'pid' => (int) ($runtime['pid'] ?? 0),
             'started_at' => $runtime['started_at'] ?? null,
             'healthy_at' => $runtime['healthy_at'] ?? null,
+            'process_name' => (string) ($runtime['process_name'] ?? ''),
+            'instance_name' => (string) ($runtime['instance_name'] ?? ''),
+            'service_instance_name' => (string) ($runtime['service_instance_name'] ?? ''),
+            'reuse_existing' => (bool) ($runtime['reuse_existing'] ?? false),
+            'created_now' => (bool) ($runtime['created_now'] ?? false),
+            'shared_service' => (bool) ($runtime['shared_service'] ?? false),
+            'registered' => (bool) ($runtime['registered'] ?? false),
+            'consumer_count' => (int) ($runtime['consumer_count'] ?? 0),
+            'shutdown_due_at' => $runtime['shutdown_due_at'] ?? null,
         ];
 
         if (!ServerInstanceManager::atomicWriteJsonStatic($path, $payload)) {
@@ -1064,6 +1130,106 @@ class SharedStateServiceManager
         }
 
         return (bool) (($envConfig['wls']['memory_service']['enabled'] ?? true));
+    }
+
+    protected function createRegistry(): SharedStateServiceRegistry
+    {
+        return new SharedStateServiceRegistry();
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     * @return array<string, mixed>
+     */
+    protected function finalizeEnsuredRuntime(string $role, array $runtime, string $requesterInstanceName): array
+    {
+        $role = $this->normalizeRoleName($role);
+
+        return $this->withRoleLock($role, function () use ($role, $runtime, $requesterInstanceName): array {
+            $registry = $this->createRegistry();
+            if ($this->shouldTrackConsumer($requesterInstanceName)) {
+                $registry->touchConsumer($role, $requesterInstanceName);
+            }
+
+            $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $runtime, $registry);
+            if ($runtime !== []) {
+                $this->writeRuntimeFile($role, $runtime);
+            }
+
+            return $runtime;
+        });
+    }
+
+    /**
+     * @param array<string, mixed> $runtime
+     * @return array<string, mixed>
+     */
+    protected function mergeRuntimeWithRegistryMetadata(
+        string $role,
+        array $runtime,
+        ?SharedStateServiceRegistry $registry = null
+    ): array {
+        $registry ??= $this->createRegistry();
+        $record = $registry->getRecord($role);
+        $consumers = $registry->getConsumers($role);
+
+        $runtime['registered'] = $record !== [];
+        $runtime['consumer_count'] = \count($consumers);
+        $runtime['shutdown_due_at'] = $record['shutdown_due_at'] ?? null;
+
+        return $runtime;
+    }
+
+    protected function syncRuntimeRegistryMetadata(string $role, ?SharedStateServiceRegistry $registry = null): void
+    {
+        $role = $this->normalizeRoleName($role);
+        $runtime = $this->readRuntimeFile($role);
+        if ($runtime === []) {
+            return;
+        }
+
+        $this->writeRuntimeFile(
+            $role,
+            $this->mergeRuntimeWithRegistryMetadata($role, $runtime, $registry)
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    protected function shutdownIfUnusedUnderLock(
+        string $role,
+        array $options = [],
+        ?SharedStateServiceRegistry $registry = null
+    ): bool {
+        $role = $this->normalizeRoleName($role);
+        $registry ??= $this->createRegistry();
+        if ($registry->getConsumers($role) !== []) {
+            return false;
+        }
+
+        $envConfig = \is_array($options['env_config'] ?? null) ? $options['env_config'] : $this->loadEnvConfig();
+        $config = \is_array($options['config'] ?? null) ? $options['config'] : [];
+        $definition = $this->buildRoleDefinition($role, 'system', $config, $envConfig);
+        $runtime = \is_array($options['runtime'] ?? null) ? $options['runtime'] : $this->readRuntimeFile($role);
+
+        $stopped = false;
+        if ($runtime !== [] || $this->isPortOccupied((int) $definition['port'])) {
+            $stopped = $this->forceStopReusedService($definition, $runtime);
+        } else {
+            $this->removeRuntimeFile($role);
+        }
+
+        $registry->removeRecord($role);
+
+        return $stopped;
+    }
+
+    protected function shouldTrackConsumer(string $consumerCode): bool
+    {
+        $consumerCode = \trim($consumerCode);
+
+        return $consumerCode !== '' && $consumerCode !== 'system';
     }
 
     /**

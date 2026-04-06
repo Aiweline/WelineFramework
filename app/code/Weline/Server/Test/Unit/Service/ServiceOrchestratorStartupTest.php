@@ -1124,6 +1124,32 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(2, ($this->readPrivate($orchestrator, 'desiredState')[ControlMessage::ROLE_MAINTENANCE] ?? null));
     }
 
+    public function testPerformHealthChecksDoesNotPromoteStartingMaintenanceWithOnlyIpcBindingToReady(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            port: 29333,
+            state: ServiceInstance::STATE_STARTING,
+            startedAt: \microtime(true),
+            ipcClientId: 901,
+        ));
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', false);
+
+        $this->invokePrivate($orchestrator, 'performHealthChecks');
+
+        $instance = $registry->getInstance(ControlMessage::ROLE_MAINTENANCE, 1);
+        self::assertInstanceOf(ServiceInstance::class, $instance);
+        self::assertSame(ServiceInstance::STATE_STARTING, $instance->state);
+    }
+
     public function testCooperativeSequentialStartupBatchEnabledDuringWindowsBootstrap(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -1143,6 +1169,48 @@ class ServiceOrchestratorStartupTest extends TestCase
         );
 
         self::assertSame(\defined('IS_WIN') && IS_WIN, $enabled);
+    }
+
+    public function testCooperativeSequentialProvidersStartupBatchEnabledDuringWindowsBootstrap(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        });
+
+        $enabled = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldUseCooperativeSequentialProvidersStartupBatch',
+            [2]
+        );
+
+        self::assertSame(\defined('IS_WIN') && IS_WIN, $enabled);
+    }
+
+    public function testCooperativeSequentialProvidersStartupBatchDisabledForSingleLaunch(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        });
+
+        $enabled = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldUseCooperativeSequentialProvidersStartupBatch',
+            [1]
+        );
+
+        self::assertFalse($enabled);
     }
 
     public function testCooperativeSequentialStartupBatchDisabledWithoutBootstrapContext(): void

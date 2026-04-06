@@ -262,7 +262,7 @@ class AiSiteMaterializationService
      */
     private function buildPageDefaults(string $pageType, array $websiteProfile): array
     {
-        $siteTitle = \trim((string)($websiteProfile['site_title'] ?? 'AI Site'));
+        $siteTitle = \trim((string)($websiteProfile['site_title'] ?? ''));
         $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
         $seo = \is_array($websiteProfile['seo'] ?? null) ? $websiteProfile['seo'] : [];
 

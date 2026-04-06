@@ -91,6 +91,39 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(11, $scope['preview_page_options'][0]['page_id']);
     }
 
+    public function testNormalizePageTypesDefaultsToAllSupportedPageTypes(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $this->assertSame(\array_keys(Page::getPageTypes()), $service->normalizePageTypes([]));
+        $this->assertSame(\array_keys(Page::getPageTypes()), $service->normalizePageTypes(''));
+    }
+
+    public function testNormalizeScopeExpandsLegacyDefaultPageTypesWhenSelectionWasNotCustomized(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT],
+        ]);
+
+        $this->assertSame(\array_keys(Page::getPageTypes()), $scope['page_types']);
+        $this->assertSame(0, $scope[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY]);
+    }
+
+    public function testNormalizeScopeKeepsLegacySubsetWhenUserCustomizedSelection(): void
+    {
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer());
+
+        $scope = $service->normalizeScope([
+            'page_types' => [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT],
+            AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY => 1,
+        ]);
+
+        $this->assertSame([Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT], $scope['page_types']);
+        $this->assertSame(1, $scope[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY]);
+    }
+
     public function testBuildVirtualPagesByTypeHydratesLegacySingleContentPageIntoBlocks(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
@@ -138,5 +171,61 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
 
         self::assertCount(2, $virtualPages[Page::TYPE_HOME]['blocks']);
         self::assertSame('home-page-hero', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
+    }
+
+    public function testBuildVirtualPagesByTypeFallsBackToStaticBlocksWhenAiHydrationHitsRecoverable402Failure(): void
+    {
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->expects($this->once())
+            ->method('buildPlaceholderBlocksForPageType')
+            ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
+            ->willThrowException(new \RuntimeException('AI流式生成失败: AI API 错误 (HTTP 402, unknown_error): Insufficient Balance'));
+        $blocksBuilder->expects($this->once())
+            ->method('buildStaticPlaceholderBlocksForPageType')
+            ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
+            ->willReturn([
+                ['block_id' => 'home-page-site-header', 'type' => 'site_header', 'html' => '<header>fallback</header>'],
+                ['block_id' => 'home-page-overview', 'type' => 'hero', 'html' => '<section>fallback hero</section>'],
+                ['block_id' => 'home-page-site-footer', 'type' => 'site_footer', 'html' => '<footer>fallback</footer>'],
+            ]);
+
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
+
+        $virtualPages = $service->buildVirtualPagesByType([Page::TYPE_HOME], [
+            'website_profile' => [
+                'site_title' => 'Legacy Demo',
+                'default_locale' => 'en_US',
+            ],
+            'page_type_layouts' => [
+                Page::TYPE_HOME => [
+                    'header' => ['component' => 'header/ai-site-header', 'config' => []],
+                    'content' => [
+                        [
+                            'code' => 'content/home-page',
+                            'enabled' => true,
+                            'config' => [],
+                            'instance_id' => '',
+                            'sort_order' => 10,
+                        ],
+                    ],
+                    'footer' => ['component' => 'footer/ai-site-footer', 'config' => []],
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => '首页',
+                    'locale' => 'en_US',
+                    'style_code' => 'default',
+                    'ai_description' => 'legacy session',
+                    'blocks' => [],
+                ],
+            ],
+        ]);
+
+        self::assertCount(3, $virtualPages[Page::TYPE_HOME]['blocks']);
+        self::assertSame('home-page-site-header', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
+        self::assertSame('home-page-overview', $virtualPages[Page::TYPE_HOME]['blocks'][1]['block_id']);
+        self::assertSame('home-page-site-footer', $virtualPages[Page::TYPE_HOME]['blocks'][2]['block_id']);
     }
 }

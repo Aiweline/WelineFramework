@@ -10,6 +10,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteScopeCompatibilityService
 {
+    public const PAGE_TYPES_USER_CUSTOMIZED_KEY = 'page_types_user_customized';
     public const WORKSPACE_STATUS_PREPARING = 'preparing';
     public const WORKSPACE_STATUS_BUILDING = 'building';
     public const WORKSPACE_STATUS_EDITING = 'editing';
@@ -31,7 +32,10 @@ class AiSiteScopeCompatibilityService
     public function normalizeScope(array $scope): array
     {
         $normalized = $scope;
-        $normalized['page_types'] = $this->normalizePageTypes($scope['page_types'] ?? $scope['recommended_pages'] ?? []);
+        $normalized[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] = $this->normalizePageTypesUserCustomized(
+            $scope[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] ?? null
+        ) ? 1 : 0;
+        $normalized['page_types'] = $this->resolveScopedPageTypes($scope);
         $normalized['page_type_layouts'] = $this->normalizePageTypeLayouts(
             $scope['page_type_layouts'] ?? [],
             $normalized['page_types']
@@ -113,7 +117,82 @@ class AiSiteScopeCompatibilityService
     /**
      * @return list<string>
      */
+    public function resolveScopedPageTypes(array $scope): array
+    {
+        $rawPageTypes = $scope['page_types'] ?? $scope['recommended_pages'] ?? [];
+        $providedPageTypes = $this->extractAllowedPageTypes($rawPageTypes);
+        $pageTypesUserCustomized = $this->normalizePageTypesUserCustomized($scope[self::PAGE_TYPES_USER_CUSTOMIZED_KEY] ?? null);
+
+        if ($providedPageTypes === []) {
+            return $this->defaultPageTypes();
+        }
+
+        if (!$pageTypesUserCustomized && $this->matchesLegacyDefaultPageTypes($providedPageTypes)) {
+            return $this->defaultPageTypes();
+        }
+
+        return $this->normalizePageTypes($providedPageTypes);
+    }
+
+    public function normalizePageTypesUserCustomized(mixed $raw): bool
+    {
+        if (\is_bool($raw)) {
+            return $raw;
+        }
+
+        if (\is_int($raw) || \is_float($raw)) {
+            return (int)$raw === 1;
+        }
+
+        if (\is_string($raw)) {
+            return \in_array(\strtolower(\trim($raw)), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<string>
+     */
     public function normalizePageTypes(mixed $raw): array
+    {
+        $pageTypes = $this->extractAllowedPageTypes($raw);
+
+        if ($pageTypes === []) {
+            $pageTypes = $this->defaultPageTypes();
+        }
+
+        if (!\in_array(Page::TYPE_HOME, $pageTypes, true)) {
+            \array_unshift($pageTypes, Page::TYPE_HOME);
+        }
+
+        return \array_values(\array_unique($pageTypes));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function defaultPageTypes(): array
+    {
+        return \array_keys(Page::getPageTypes());
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function legacyDefaultPageTypes(): array
+    {
+        return [
+            Page::TYPE_HOME,
+            Page::TYPE_ABOUT,
+            Page::TYPE_CONTACT,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function extractAllowedPageTypes(mixed $raw): array
     {
         if (\is_array($raw)) {
             $items = $raw;
@@ -137,19 +216,27 @@ class AiSiteScopeCompatibilityService
             $pageTypes[] = $pageType;
         }
 
-        if ($pageTypes === []) {
-            $pageTypes = [
-                Page::TYPE_HOME,
-                Page::TYPE_ABOUT,
-                Page::TYPE_CONTACT,
-            ];
-        }
+        return $pageTypes;
+    }
 
-        if (!\in_array(Page::TYPE_HOME, $pageTypes, true)) {
-            \array_unshift($pageTypes, Page::TYPE_HOME);
-        }
+    /**
+     * @param list<string> $pageTypes
+     */
+    private function matchesLegacyDefaultPageTypes(array $pageTypes): bool
+    {
+        return $this->samePageTypeSet($pageTypes, $this->legacyDefaultPageTypes());
+    }
 
-        return \array_values(\array_unique($pageTypes));
+    /**
+     * @param list<string> $left
+     * @param list<string> $right
+     */
+    private function samePageTypeSet(array $left, array $right): bool
+    {
+        \sort($left);
+        \sort($right);
+
+        return $left === $right;
     }
 
     /**
@@ -279,18 +366,72 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($record['style_settings'] ?? null)) {
                 $record['style_settings'] = [];
             }
+            $placeholderBlocks = $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope);
             if ($this->shouldHydrateLegacyBlocks($record, $layouts[$pageType] ?? [], $pageType)) {
-                $record['blocks'] = $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
+                $record['blocks'] = $placeholderBlocks;
             } else {
                 $record['blocks'] = $this->hydrateEditableBlockMetadata(
                     \is_array($record['blocks'] ?? null) ? $record['blocks'] : [],
-                    $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope)
+                    $placeholderBlocks
                 );
             }
             $existing[$pageType] = $record;
         }
 
         return $existing;
+    }
+
+    /**
+     * 工作台初始化时允许在 AI 账户不可用的情况下回退到静态占位块，
+     * 避免旧会话或查看页因为实时 AI 生成失败而直接 500。
+     *
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return list<array<string, mixed>>
+     */
+    private function buildWorkspacePlaceholderBlocks(
+        AiSiteHtmlBlocksBuildService $blocksBuilder,
+        string $pageType,
+        array $websiteProfile,
+        array $scope
+    ): array {
+        try {
+            return $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
+        } catch (\Throwable $throwable) {
+            if (!$this->shouldFallbackToStaticBlocks($throwable)) {
+                throw $throwable;
+            }
+
+            $message = \trim(\strip_tags($throwable->getMessage()));
+            w_log_error('AI Site workspace placeholder fallback: ' . ($message !== '' ? $message : 'unknown error'));
+
+            return $blocksBuilder->buildStaticPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
+        }
+    }
+
+    private function shouldFallbackToStaticBlocks(\Throwable $throwable): bool
+    {
+        for ($cursor = $throwable; $cursor !== null; $cursor = $cursor->getPrevious()) {
+            $message = \strtolower(\trim(\strip_tags($cursor->getMessage())));
+            if ($message === '') {
+                continue;
+            }
+
+            if (
+                \str_contains($message, 'http 402')
+                || \str_contains($message, 'insufficient balance')
+                || \str_contains($message, '余额不足')
+                || \str_contains($message, '额度不足')
+                || \str_contains($message, 'api key')
+                || \str_contains($message, 'api密钥')
+                || \str_contains($message, '供应商账户')
+                || \str_contains($message, 'provider account')
+            ) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
