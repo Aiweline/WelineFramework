@@ -205,7 +205,7 @@ class PageRenderService
         // 如果是博客类型页面或布局中包含博客组件，加载博客数据
         // 虚拟页面跳过博客数据加载
         $hasBlogComponent = $this->hasBlogComponent($layoutConfig);
-        if (!$isVirtualPage && ($page->isBlogType() || $hasBlogComponent)) {
+        if ($page->isBlogType() || $hasBlogComponent) {
             $this->loadBlogData($page);
         }
         
@@ -650,6 +650,7 @@ class PageRenderService
         // 博客文章列表：优先使用预设数据
         if (!empty($existingBlogPosts)) {
             $this->assign('blog_posts', $existingBlogPosts);
+            $blogPosts = \is_array($existingBlogPosts) ? $existingBlogPosts : [];
         } else {
             $blogPosts = $page->getBlogPosts(20, 'published_at', 'DESC');
             $this->assign('blog_posts', $blogPosts);
@@ -658,6 +659,7 @@ class PageRenderService
         // 博客分类：优先使用预设数据
         if (!empty($existingCategories)) {
             $this->assign('blog_categories', $existingCategories);
+            $blogCategories = \is_array($existingCategories) ? $existingCategories : [];
         } else {
             $blogCategories = $page->getBlogCategories();
             $this->assign('blog_categories', $blogCategories);
@@ -687,6 +689,14 @@ class PageRenderService
                         $relatedPosts = $this->getRelatedBlogPosts($currentPost, 6);
                         $this->assign('related_posts', $relatedPosts);
                     }
+                } elseif (!empty($blogPosts[0]) && \is_array($blogPosts[0])) {
+                    $currentPost = $blogPosts[0];
+                    $this->assign('current_post', $currentPost);
+                    if (!empty($existingRelatedPosts)) {
+                        $this->assign('related_posts', $existingRelatedPosts);
+                    } else {
+                        $this->assign('related_posts', \array_values(\array_slice($blogPosts, 1, 6)));
+                    }
                 }
             }
         }
@@ -701,6 +711,18 @@ class PageRenderService
                 if ($currentCategory) {
                     $categoryPosts = $this->getBlogPostsByCategory($currentCategory['category_id'], 20);
                     $this->assign('category_posts', $categoryPosts);
+                }
+            } elseif (!empty($blogCategories[0]) && \is_array($blogCategories[0])) {
+                $currentCategory = $blogCategories[0];
+                $this->assign('current_category', $currentCategory);
+                $categoryId = (int)($currentCategory['category_id'] ?? $currentCategory['id'] ?? 0);
+                if ($categoryId > 0) {
+                    $this->assign('category_posts', \array_values(\array_filter(
+                        $blogPosts,
+                        static fn(array $post): bool => (int)($post['category_id'] ?? 0) === $categoryId
+                    )));
+                } else {
+                    $this->assign('category_posts', $blogPosts);
                 }
             }
         }

@@ -7,10 +7,11 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\Manager\ObjectManager;
 
-final class AiSiteHtmlBlocksBuildService
+class AiSiteHtmlBlocksBuildService
 {
     public function __construct(
         private readonly ?AiSitePageBlueprintService $pageBlueprintService = null,
+        private readonly ?AiSitePageComponentGenerationService $pageComponentGenerationService = null,
     ) {
     }
 
@@ -21,21 +22,74 @@ final class AiSiteHtmlBlocksBuildService
      */
     public function buildPlaceholderBlocksForPageType(string $pageType, array $websiteProfile, array $scope = []): array
     {
-        $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
-        $blueprint = $pageBlueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile);
+        $generationService = $this->pageComponentGenerationService ?? ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+        $sharedComponents = \is_array($scope['_ai_generated_shared_components'] ?? null)
+            ? $scope['_ai_generated_shared_components']
+            : $generationService->generateSharedComponents($websiteProfile, $scope);
+        $pageSections = $generationService->generatePageSections($pageType, $websiteProfile, $scope);
+
+        $blocks = [
+            $this->buildGeneratedBlockRecord(
+                \str_replace('_', '-', $pageType) . '-site-header',
+                'ai_generated_header',
+                (string)($sharedComponents['header']['html'] ?? ''),
+                \array_replace(
+                    ['region' => 'header', 'html_content' => (string)($sharedComponents['header']['html'] ?? '')],
+                    \is_array($sharedComponents['header']['default_config'] ?? null) ? $sharedComponents['header']['default_config'] : []
+                )
+            ),
+        ];
+
+        foreach (($pageSections['sections'] ?? []) as $section) {
+            if (!\is_array($section)) {
+                continue;
+            }
+
+            $blockId = \str_replace(['content/', '/'], ['', '-'], (string)($section['code'] ?? ''));
+            $blockId = $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4)));
+            $blocks[] = $this->buildGeneratedBlockRecord(
+                $blockId,
+                'ai_generated_section',
+                (string)($section['html'] ?? ''),
+                \array_replace(
+                    ['region' => 'content', 'html_content' => (string)($section['html'] ?? '')],
+                    \is_array($section['default_config'] ?? null) ? $section['default_config'] : [],
+                    ['component_label' => (string)($section['name'] ?? $blockId)]
+                )
+            );
+        }
+
+        $blocks[] = $this->buildGeneratedBlockRecord(
+            \str_replace('_', '-', $pageType) . '-site-footer',
+            'ai_generated_footer',
+            (string)($sharedComponents['footer']['html'] ?? ''),
+            \array_replace(
+                ['region' => 'footer', 'html_content' => (string)($sharedComponents['footer']['html'] ?? '')],
+                \is_array($sharedComponents['footer']['default_config'] ?? null) ? $sharedComponents['footer']['default_config'] : []
+            )
+        );
+
+        return $blocks !== [] ? $blocks : [
+            $this->buildHeaderBlock($pageType, $websiteProfile, $scope),
+            $this->buildFooterBlock($pageType, $websiteProfile, $scope),
+        ];
+    }
+
+    /**
+     * 当 AI 生成不可用时，回退到可编辑的静态占位块，确保工作台仍可打开。
+     *
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return list<array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}>
+     */
+    public function buildStaticPlaceholderBlocksForPageType(string $pageType, array $websiteProfile, array $scope = []): array
+    {
         $blocks = [
             $this->buildHeaderBlock($pageType, $websiteProfile, $scope),
         ];
 
-        foreach ($blueprint['sections'] as $section) {
-            $blockId = \str_replace(['content/', '/'], ['', '-'], (string)$section['code']);
-            $template = (string)($section['template'] ?? 'hero');
-            $config = \is_array($section['config'] ?? null) ? $section['config'] : [];
-            $blocks[] = $this->buildBlockRecord(
-                $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4))),
-                $template,
-                $config
-            );
+        foreach ($this->buildStaticSectionBlocks($pageType, $websiteProfile, $scope) as $block) {
+            $blocks[] = $block;
         }
 
         $blocks[] = $this->buildFooterBlock($pageType, $websiteProfile, $scope);
@@ -55,6 +109,17 @@ final class AiSiteHtmlBlocksBuildService
         $blockId = \trim((string)($block['block_id'] ?? ''));
         $type = \trim((string)($block['type'] ?? 'hero'));
         $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        if (\str_starts_with($type, 'ai_generated_')) {
+            $config = \array_replace_recursive($config, $configPatch);
+
+            return [
+                'block_id' => $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4))),
+                'type' => $type !== '' ? $type : 'ai_generated_section',
+                'html' => \trim((string)($config['html_content'] ?? $block['html'] ?? '')),
+                'config' => $config,
+                'field_schema' => $this->buildFieldSchema($type !== '' ? $type : 'ai_generated_section'),
+            ];
+        }
         $config = $this->normalizeBlockConfig($type, \array_replace_recursive($config, $configPatch), $websiteProfile, $scope);
 
         return [
@@ -84,6 +149,21 @@ final class AiSiteHtmlBlocksBuildService
     }
 
     /**
+     * @param array<string, mixed> $config
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    private function buildGeneratedBlockRecord(string $blockId, string $type, string $html, array $config): array
+    {
+        return [
+            'block_id' => $blockId,
+            'type' => $type,
+            'html' => $html,
+            'config' => $config,
+            'field_schema' => $this->buildFieldSchema($type),
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $scope
      * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
@@ -94,7 +174,7 @@ final class AiSiteHtmlBlocksBuildService
             \str_replace('_', '-', $pageType) . '-site-header',
             'site_header',
             [
-                'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'site_tagline' => (string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
                 'current_page_label' => (string)(Page::getPageTypes()[$pageType] ?? $pageType),
                 'nav_items' => $this->buildNavItems($scope),
@@ -115,7 +195,7 @@ final class AiSiteHtmlBlocksBuildService
             \str_replace('_', '-', $pageType) . '-site-footer',
             'site_footer',
             [
-                'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'brief_description' => (string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
                 'domain' => (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
                 'nav_items' => $this->buildNavItems($scope),
@@ -123,6 +203,167 @@ final class AiSiteHtmlBlocksBuildService
             $websiteProfile,
             $scope
         );
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return list<array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}>
+     */
+    private function buildStaticSectionBlocks(string $pageType, array $websiteProfile, array $scope): array
+    {
+        $blueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
+        $blueprint = $blueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile);
+        $sections = \is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : [];
+        $blocks = [];
+
+        foreach ($sections as $index => $section) {
+            if (!\is_array($section)) {
+                continue;
+            }
+
+            $code = \trim((string)($section['code'] ?? ''));
+            $blockId = \str_replace(['content/', '/'], ['', '-'], $code);
+            $blockId = $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4)));
+            $template = $this->resolveStaticSectionTemplate($sections, $index);
+            $blocks[] = $this->buildBlockRecord(
+                $blockId,
+                $template,
+                $this->buildStaticSectionConfig($template, $pageType, $section, $websiteProfile, $scope),
+                $websiteProfile,
+                $scope
+            );
+        }
+
+        if ($blocks !== []) {
+            return $blocks;
+        }
+
+        return [
+            $this->buildBlockRecord(
+                \str_replace('_', '-', $pageType) . '-overview',
+                'hero',
+                $this->buildStaticSectionConfig('hero', $pageType, [], $websiteProfile, $scope),
+                $websiteProfile,
+                $scope
+            ),
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $sections
+     */
+    private function resolveStaticSectionTemplate(array $sections, int $index): string
+    {
+        $count = \count($sections);
+        if ($index === 0) {
+            return 'hero';
+        }
+        if ($count > 1 && $index === $count - 1) {
+            return 'cta';
+        }
+
+        return $index % 2 === 0 ? 'checklist' : 'cards';
+    }
+
+    /**
+     * @param array<string, mixed> $section
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function buildStaticSectionConfig(
+        string $template,
+        string $pageType,
+        array $section,
+        array $websiteProfile,
+        array $scope
+    ): array {
+        $pageLabel = (string)(Page::getPageTypes()[$pageType] ?? $pageType);
+        $siteTitle = (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? '');
+        $sectionName = \trim((string)($section['name'] ?? $section['title'] ?? $pageLabel));
+        $summary = $this->summarizeStaticSectionText($section, $websiteProfile, $scope);
+
+        return match ($template) {
+            'cards' => [
+                'section_title' => $sectionName,
+                'section_intro' => $summary,
+                'items' => [
+                    [
+                        'eyebrow' => (string)__('亮点 01'),
+                        'title' => $siteTitle !== '' ? $siteTitle : $sectionName,
+                        'description' => $summary,
+                    ],
+                    [
+                        'eyebrow' => (string)__('亮点 02'),
+                        'title' => (string)__('当前已回退为静态内容'),
+                        'description' => (string)__('AI 服务暂时不可用，你仍可继续预览、编辑并稍后重新生成。'),
+                    ],
+                    [
+                        'eyebrow' => (string)__('亮点 03'),
+                        'title' => $pageLabel,
+                        'description' => (string)__('此占位区块会保留页面结构，避免工作台因 AI 账户问题中断。'),
+                    ],
+                ],
+            ],
+            'checklist' => [
+                'section_title' => $sectionName,
+                'section_intro' => $summary,
+                'points' => [
+                    $summary !== '' ? $summary : (string)__('根据当前站点简介生成本节内容结构。'),
+                    (string)__('AI 服务暂不可用，已自动切换到静态占位内容。'),
+                    (string)__('你可以先继续编辑区块，稍后再重新触发 AI 生成。'),
+                ],
+            ],
+            'cta' => [
+                'section_title' => $sectionName !== '' ? $sectionName : (string)__('准备好继续完善网站了吗？'),
+                'section_text' => $summary !== '' ? $summary : (string)__('当前区域先使用静态占位内容承接工作流，后续可重新生成。'),
+                'button_label' => (string)__('继续编辑'),
+                'assist_text' => (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? __('稍后可重新生成 AI 内容')),
+            ],
+            default => [
+                'eyebrow' => $pageLabel,
+                'headline' => $sectionName !== '' ? $sectionName : ($siteTitle !== '' ? $siteTitle : $pageLabel),
+                'description' => $summary !== '' ? $summary : (string)__('当前页面先使用静态占位内容保证工作台可访问。'),
+                'chips' => [
+                    $siteTitle !== '' ? $siteTitle : $pageLabel,
+                    (string)__('静态占位'),
+                    (string)__('可继续编辑'),
+                ],
+                'primary_cta' => (string)__('继续完善'),
+                'secondary_note' => (string)__('AI 可用后可重新生成该区块'),
+            ],
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $section
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     */
+    private function summarizeStaticSectionText(array $section, array $websiteProfile, array $scope): string
+    {
+        $candidates = [
+            $section['description'] ?? null,
+            $section['prompt_instruction'] ?? null,
+            $section['prompt'] ?? null,
+            $websiteProfile['brief_description'] ?? null,
+            $scope['brief_description'] ?? null,
+            $scope['user_description'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            if (!\is_scalar($candidate)) {
+                continue;
+            }
+
+            $text = \trim(\preg_replace('/\s+/u', ' ', (string)$candidate) ?? '');
+            if ($text !== '') {
+                return \mb_substr($text, 0, 180);
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -146,6 +387,16 @@ final class AiSiteHtmlBlocksBuildService
     public function buildFieldSchema(string $template): array
     {
         return match ($template) {
+            'ai_generated_header',
+            'ai_generated_section',
+            'ai_generated_footer' => [
+                'content' => [
+                    'label' => 'AI 生成结果',
+                    'fields' => [
+                        'html_content' => ['type' => 'textarea', 'label' => 'HTML 内容'],
+                    ],
+                ],
+            ],
             'site_header' => [
                 'identity' => [
                     'label' => '页头信息',
@@ -240,7 +491,7 @@ final class AiSiteHtmlBlocksBuildService
      */
     private function renderHeaderBlock(array $config): string
     {
-        $siteTitle = $this->escape($config['site_title'] ?? 'AI Site');
+        $siteTitle = $this->escape($config['site_title'] ?? '');
         $siteTagline = $this->escape($config['site_tagline'] ?? '');
         $currentPageLabel = $this->escape($config['current_page_label'] ?? '');
         $navItems = \is_array($config['nav_items'] ?? null) ? $config['nav_items'] : [];
@@ -341,7 +592,7 @@ final class AiSiteHtmlBlocksBuildService
      */
     private function renderFooterBlock(array $config): string
     {
-        $siteTitle = $this->escape($config['site_title'] ?? 'AI Site');
+        $siteTitle = $this->escape($config['site_title'] ?? '');
         $brief = $this->escape($config['brief_description'] ?? '');
         $domain = $this->escape($config['domain'] ?? '');
         $navItems = \is_array($config['nav_items'] ?? null) ? $config['nav_items'] : [];
@@ -410,13 +661,13 @@ final class AiSiteHtmlBlocksBuildService
     {
         return match ($template) {
             'site_header' => [
-                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'site_tagline' => (string)($config['site_tagline'] ?? $websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
                 'current_page_label' => (string)($config['current_page_label'] ?? ''),
                 'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildNavItems($scope)),
             ],
             'site_footer' => [
-                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'brief_description' => (string)($config['brief_description'] ?? $websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
                 'domain' => (string)($config['domain'] ?? $websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
                 'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildNavItems($scope)),

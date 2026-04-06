@@ -18,6 +18,7 @@ class AiSiteVirtualThemeService
 {
     public function __construct(
         private readonly ?AiSitePageBlueprintService $pageBlueprintService = null,
+        private readonly ?AiSitePageComponentGenerationService $pageComponentGenerationService = null,
     ) {
     }
 
@@ -154,6 +155,154 @@ class AiSiteVirtualThemeService
     }
 
     /**
+     * 基于真实 AI 生成 header / footer / page sections，并写入虚拟主题组件。
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param list<string> $pageTypes
+     * @param array<string, array<string, mixed>>|int $pageTypeLayouts
+     * @return array{virtual_theme_id:int,page_type_layouts:array<string, array<string, mixed>>,theme:VirtualTheme}
+     */
+    public function ensureAiGeneratedVirtualTheme(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        array|int $pageTypeLayouts,
+        int $sessionId = 0,
+        bool $regenerateSharedComponents = true,
+        array $prebuiltSharedComponents = []
+    ): array {
+        if (\is_int($pageTypeLayouts)) {
+            $sessionId = $pageTypeLayouts;
+            $pageTypeLayouts = [];
+        }
+
+        $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
+        $pageComponentGenerationService = $this->pageComponentGenerationService ?? ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+
+        $theme = $this->loadOrCreateTheme((int)($scope['virtual_theme_id'] ?? 0), $websiteProfile, $sessionId);
+        if (!$theme->getId()) {
+            $theme->save();
+        }
+
+        $themeId = (int)$theme->getId();
+        $sharedComponents = $prebuiltSharedComponents !== []
+            ? $prebuiltSharedComponents
+            : $pageComponentGenerationService->generateSharedComponents($websiteProfile, $scope);
+        $headerCode = (string)($sharedComponents['header']['code'] ?? 'header/ai-site-header');
+        $footerCode = (string)($sharedComponents['footer']['code'] ?? 'footer/ai-site-footer');
+        $headerConfig = \is_array($sharedComponents['header']['default_config'] ?? null) ? $sharedComponents['header']['default_config'] : [];
+        $footerConfig = \is_array($sharedComponents['footer']['default_config'] ?? null) ? $sharedComponents['footer']['default_config'] : [];
+
+        if ($regenerateSharedComponents || !$this->themeComponentExists($themeId, $headerCode, VirtualThemeComponent::AREA_FRONTEND)) {
+            $this->saveThemeComponent(
+                $themeId,
+                $headerCode,
+                VirtualThemeComponent::AREA_FRONTEND,
+                VirtualThemeComponent::CATEGORY_HEADER,
+                (string)($sharedComponents['header']['name'] ?? 'AI Site Header'),
+                (string)($sharedComponents['header']['phtml'] ?? ''),
+                $headerConfig,
+                ['position' => ['header'], 'page_layouts' => ['*'], 'sort_order' => 10]
+            );
+        }
+
+        if ($regenerateSharedComponents || !$this->themeComponentExists($themeId, $footerCode, VirtualThemeComponent::AREA_FRONTEND)) {
+            $this->saveThemeComponent(
+                $themeId,
+                $footerCode,
+                VirtualThemeComponent::AREA_FRONTEND,
+                VirtualThemeComponent::CATEGORY_FOOTER,
+                (string)($sharedComponents['footer']['name'] ?? 'AI Site Footer'),
+                (string)($sharedComponents['footer']['phtml'] ?? ''),
+                $footerConfig,
+                ['position' => ['footer'], 'page_layouts' => ['*'], 'sort_order' => 20]
+            );
+        }
+
+        $resolvedLayouts = [];
+        foreach ($pageTypes as $pageType) {
+            $pageSections = $pageComponentGenerationService->generatePageSections($pageType, $websiteProfile, $scope);
+            $blueprint = \is_array($pageSections['blueprint'] ?? null)
+                ? $pageSections['blueprint']
+                : $pageBlueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile);
+            $generatedContent = [];
+
+            foreach (($pageSections['sections'] ?? []) as $section) {
+                if (!\is_array($section)) {
+                    continue;
+                }
+                $componentCode = \trim((string)($section['code'] ?? ''));
+                if ($componentCode === '') {
+                    continue;
+                }
+
+                $componentConfig = \is_array($section['default_config'] ?? null) ? $section['default_config'] : [];
+                $generatedContent[] = [
+                    'code' => $componentCode,
+                    'enabled' => true,
+                    'config' => $componentConfig,
+                    'instance_id' => '',
+                    'sort_order' => (int)($section['sort_order'] ?? 0),
+                ];
+
+                $this->saveThemeComponent(
+                    $themeId,
+                    $componentCode,
+                    VirtualThemeComponent::AREA_FRONTEND,
+                    VirtualThemeComponent::CATEGORY_CONTENT,
+                    (string)($section['name'] ?? ($blueprint['page_label'] ?? $componentCode)),
+                    (string)($section['phtml'] ?? ''),
+                    $componentConfig,
+                    [
+                        'position' => ['content'],
+                        'page_layouts' => [$pageType],
+                        'sort_order' => (int)($section['sort_order'] ?? 100),
+                        'section_key' => (string)($section['key'] ?? ''),
+                    ]
+                );
+            }
+
+            $layout = \is_array($pageTypeLayouts[$pageType] ?? null) ? $pageTypeLayouts[$pageType] : [];
+            $layout['header'] = \is_array($layout['header'] ?? null) ? $layout['header'] : ['component' => '', 'config' => []];
+            $layout['footer'] = \is_array($layout['footer'] ?? null) ? $layout['footer'] : ['component' => '', 'config' => []];
+            $layout['content'] = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+
+            if ($regenerateSharedComponents || \trim((string)($layout['header']['component'] ?? '')) === '') {
+                $layout['header'] = ['component' => $headerCode, 'config' => $headerConfig];
+            }
+            if ($regenerateSharedComponents || \trim((string)($layout['footer']['component'] ?? '')) === '') {
+                $layout['footer'] = ['component' => $footerCode, 'config' => $footerConfig];
+            }
+            if ($generatedContent !== []) {
+                $layout['content'] = $generatedContent;
+            }
+
+            $layout['version'] = '1.0';
+            $layout['page_id'] = (int)($layout['page_id'] ?? 0);
+            $layout['use_original_template'] = false;
+            $resolvedLayouts[$pageType] = $layout;
+
+            $this->saveThemeLayout($themeId, $pageType, $layout);
+        }
+
+        $config = $theme->getConfig();
+        $config['source'] = VirtualTheme::SOURCE_PAGEBUILDER_AI;
+        $config['scope_session_id'] = $sessionId;
+        $config['website_profile'] = $websiteProfile;
+        $config['selected_page_types'] = $pageTypes;
+        $config['virtual_page_layouts'] = $resolvedLayouts;
+        $theme->setConfig($config);
+        $theme->save();
+
+        return [
+            'virtual_theme_id' => $themeId,
+            'page_type_layouts' => $resolvedLayouts,
+            'theme' => $theme,
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $websiteProfile
      */
     private function loadOrCreateTheme(int $themeId, array $websiteProfile, int $sessionId): VirtualTheme
@@ -186,6 +335,19 @@ class AiSiteVirtualThemeService
             ]);
 
         return $theme;
+    }
+
+    private function themeComponentExists(int $themeId, string $componentCode, string $area): bool
+    {
+        /** @var VirtualThemeComponent $component */
+        $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+        $component->clearData()->clearQuery();
+        $component->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
+            ->where(VirtualThemeComponent::schema_fields_COMPONENT_CODE, $componentCode)
+            ->where(VirtualThemeComponent::schema_fields_AREA, $area)
+            ->find();
+
+        return (int)$component->getId() > 0;
     }
 
     private function saveThemeComponent(

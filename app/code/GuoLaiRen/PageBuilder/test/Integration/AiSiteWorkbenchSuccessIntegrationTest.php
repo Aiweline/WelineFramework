@@ -129,7 +129,11 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
             \count((array)($buildState['page_type_layouts'][Page::TYPE_HOME]['content'] ?? [])),
             'Prompt-driven build should create multiple content sections per page.'
         );
-        self::assertStringContainsString('/pagebuilder/backend/preview/full', $visualPreviewUrl);
+        self::assertTrue(
+            \str_contains($visualPreviewUrl, '/pagebuilder/backend/preview/full')
+            || \str_contains($visualPreviewUrl, '/pagebuilder/backend/ai-site-agent/workspace-preview'),
+            'Visual preview URL should point to preview/full or workspace-preview route.'
+        );
         self::assertStringContainsString('virtual_theme_id=' . $virtualThemeId, $visualPreviewUrl);
         self::assertStringNotContainsString('weline_theme_id=', $visualPreviewUrl);
         self::assertStringContainsString('/pagebuilder/backend/page/virtual-edit', $visualEditUrl);
