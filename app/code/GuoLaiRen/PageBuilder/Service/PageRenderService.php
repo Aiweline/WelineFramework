@@ -152,7 +152,7 @@ class PageRenderService
         // 重置模板变量
         $this->templateVars = [];
         try {
-        if ($page->getId() && $page->isAiHtmlRenderMode()) {
+        if ($page->isAiHtmlRenderMode()) {
             return $this->aiHtmlRenderService->render($page, $mode, $locale);
         }
 
@@ -1119,8 +1119,9 @@ class PageRenderService
                     $escapedRegion = htmlspecialchars($region);
                     $escapedStyleCode = htmlspecialchars($useTemplateCode);
                     $escapedPageType = htmlspecialchars((string)($page->getData(Page::schema_fields_TYPE) ?? ''), ENT_QUOTES, 'UTF-8');
+                    $componentLabel = $this->buildVisualComponentLabelHtml($code, $region);
                     $componentActions = $this->buildWorkspaceVisualActionsHtml($code, $region, $componentIndex, $page);
-                    $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" data-page-type=\"{$escapedPageType}\">{$componentActions}{$componentHtml}</div>";
+                    $componentHtml = "<div class=\"tpmst-component-wrapper\" data-component=\"{$escapedCode}\" data-region=\"{$escapedRegion}\" data-index=\"{$componentIndex}\" data-style-code=\"{$escapedStyleCode}\" data-page-type=\"{$escapedPageType}\">{$componentLabel}{$componentActions}{$componentHtml}</div>";
                 }
                 $html .= $componentHtml;
                 $html .= "<!-- Component {$code} rendered successfully -->\n";
@@ -1156,6 +1157,23 @@ class PageRenderService
             . '<button type="button" class="component-action-btn component-action-refine" data-pb-action="refine" title="AI 微调当前区块">AI 微调</button>'
             . '<button type="button" class="component-action-btn component-action-editor" data-pb-action="open-editor" title="打开当前页真实编辑器">编辑器</button>'
             . '</div>';
+    }
+
+    private function buildVisualComponentLabelHtml(string $componentCode, string $region): string
+    {
+        $regionLabel = match ($region) {
+            'header' => '页头',
+            'footer' => '页脚',
+            default => '内容',
+        };
+        $simpleCode = \trim($componentCode);
+        if (\str_contains($simpleCode, '/')) {
+            $simpleCode = (string)\substr($simpleCode, (int)\strrpos($simpleCode, '/') + 1);
+        }
+        $simpleCode = \str_replace(['-', '_'], ' ', $simpleCode);
+        $label = $regionLabel . ' · ' . ($simpleCode !== '' ? $simpleCode : 'block');
+
+        return '<div class="pb-component-label">' . \htmlspecialchars($label, \ENT_QUOTES, 'UTF-8') . '</div>';
     }
 
     /**
@@ -1617,7 +1635,27 @@ class PageRenderService
             .tpmst-component-wrapper,
             .pb-component-wrapper {
                 position: relative !important;
+                overflow: visible !important;
+                isolation: isolate !important;
                 transition: box-shadow 0.2s ease;
+            }
+            .tpmst-component-wrapper .pb-component-label,
+            .pb-component-wrapper .pb-component-label {
+                position: absolute !important;
+                top: 8px !important;
+                left: 8px !important;
+                z-index: 99998 !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                padding: 6px 10px !important;
+                border-radius: 999px !important;
+                background: rgba(15, 23, 42, 0.86) !important;
+                color: #ffffff !important;
+                font-size: 11px !important;
+                font-weight: 700 !important;
+                letter-spacing: 0.04em !important;
+                text-transform: uppercase !important;
+                pointer-events: none !important;
             }
             .tpmst-component-wrapper:hover,
             .pb-component-wrapper:hover {
@@ -1625,6 +1663,7 @@ class PageRenderService
                 box-shadow: inset 0 0 0 2px rgba(52, 152, 219, 0.3) !important;
                 background: transparent !important;
                 background-color: transparent !important;
+                z-index: 10001 !important;
             }
             .tpmst-component-wrapper.selected,
             .pb-component-wrapper.selected {
@@ -1683,7 +1722,11 @@ class PageRenderService
             .tpmst-component-wrapper:hover .component-actions,
             .pb-component-wrapper:hover .component-actions,
             .tpmst-component-wrapper .component-actions:hover,
-            .pb-component-wrapper .component-actions:hover {
+            .pb-component-wrapper .component-actions:hover,
+            .tpmst-component-wrapper .component-actions.pb-actions-visible,
+            .pb-component-wrapper .component-actions.pb-actions-visible,
+            .tpmst-component-wrapper.selected .component-actions,
+            .pb-component-wrapper.selected .component-actions {
                 display: flex !important;
             }
             /* footer 区域：因主题结构常阻挡 hover，工具按钮始终显示 */
@@ -1762,6 +1805,42 @@ class PageRenderService
                         }
                     });
                 });
+
+                var wrapperSelector = ".tpmst-component-wrapper, .pb-component-wrapper";
+                function toggleWrapperActions(wrapper, visible) {
+                    if (!wrapper) {
+                        return;
+                    }
+                    var actions = wrapper.querySelector(".component-actions");
+                    if (!actions) {
+                        return;
+                    }
+                    if (visible) {
+                        actions.classList.add("pb-actions-visible");
+                        wrapper.classList.add("pb-actions-hover");
+                    } else {
+                        actions.classList.remove("pb-actions-visible");
+                        wrapper.classList.remove("pb-actions-hover");
+                    }
+                }
+                document.addEventListener("mouseover", function(e) {
+                    var wrapper = e.target && e.target.closest ? e.target.closest(wrapperSelector) : null;
+                    if (!wrapper) {
+                        return;
+                    }
+                    toggleWrapperActions(wrapper, true);
+                }, true);
+                document.addEventListener("mouseout", function(e) {
+                    var wrapper = e.target && e.target.closest ? e.target.closest(wrapperSelector) : null;
+                    if (!wrapper) {
+                        return;
+                    }
+                    var related = e.relatedTarget;
+                    if (related && wrapper.contains(related)) {
+                        return;
+                    }
+                    toggleWrapperActions(wrapper, false);
+                }, true);
 
                 document.querySelectorAll(".component-actions [data-pb-action]").forEach(function(button) {
                     button.addEventListener("click", function(e) {
