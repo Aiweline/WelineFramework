@@ -5117,6 +5117,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     ): PageModel {
         /** @var PageModel $page */
         $page = ObjectManager::make(PageModel::class);
+        $virtualBlocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
+        $renderMode = $virtualBlocks === [] ? PageModel::RENDER_MODE_THEME : PageModel::RENDER_MODE_AI_HTML;
         $page->setData([
             PageModel::schema_fields_ID => 0,
             PageModel::schema_fields_WEBSITE_ID => (int)($scope['draft_website_id'] ?? 0),
@@ -5139,6 +5141,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                 $styleCode => \is_array($virtualPage['style_settings'] ?? null) ? $virtualPage['style_settings'] : [],
             ], JSON_UNESCAPED_UNICODE),
             PageModel::schema_fields_LAYOUT_CONFIG => \json_encode($layout, JSON_UNESCAPED_UNICODE),
+            PageModel::schema_fields_RENDER_MODE => $renderMode,
+            PageModel::schema_fields_AI_LAYOUT => \json_encode(['blocks' => $virtualBlocks], JSON_UNESCAPED_UNICODE),
         ]);
         $page->setData('virtual_public_id', $publicId);
         $page->setData('virtual_page_type', $pageType);
