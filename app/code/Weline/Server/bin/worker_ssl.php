@@ -1851,7 +1851,7 @@ while (true) {
         }
         if ($af->isTerminated()) {
             if (isset($afData['context'])) {
-                $afData['context']->restore();
+                $afData['context']->restore(false);
             }
             $afResponse = '';
             try {
