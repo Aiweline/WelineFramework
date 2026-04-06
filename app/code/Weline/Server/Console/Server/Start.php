@@ -324,7 +324,7 @@ class Start extends CommandAbstract
             // 强制重启：先停旧 Master，其通过 IPC 广播 shutdown，子进程收后不复活
             if ($forceSwitch) {
                 $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
-                $this->stopExistingServer($instanceName, $port, $count);
+                $this->stopExistingServer($instanceName, $port, $count, true);
                 // Windows 下端口释放需要更长时间（TIME_WAIT 状态）
                 // 等待最多 3 秒让端口完全释放
                 $maxWaitMs = 3000;
@@ -586,7 +586,6 @@ class Start extends CommandAbstract
         
         // 显示启动信息
         // 使用 $useDirectMode 而非重新计算，确保与架构选择逻辑一致
-        $this->showStartupInfo($instanceName, $host, $port, $count, $daemon, $config['source'], $sslEnabled, $dispatcherEnabled, $workerPort, $httpRedirectPort, $useDirectMode);
 
         // 80/443 端口自我处理提示（特权端口、单端口建议）
         if (!$dispatcherEnabled && !$useDirectMode && $count > 1) {
@@ -697,7 +696,6 @@ class Start extends CommandAbstract
         $this->showOptimizationTips($count, $config['mode'] ?? 'io');
         
         // 显示使用说明（按实际协议显示 http/https）
-        $this->showUsageInfo($host, $port, $instanceName, $sslEnabled);
         
         // ========== 开发模式热重载支持 ==========
         $this->startHotReloadIfEnabled($config, $instanceName);
@@ -728,6 +726,19 @@ class Start extends CommandAbstract
             $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port);
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
+            $this->finalizeBackgroundStartupOutput(
+                $startupCompleted,
+                $instanceName,
+                $host,
+                $port,
+                $count,
+                (string) ($config['source'] ?? ''),
+                $sslEnabled,
+                $dispatcherEnabled,
+                $workerPort,
+                $httpRedirectPort,
+                $useDirectMode
+            );
             if ($startupCompleted) {
                 $this->printGoodbye(true, __('所有服务已就绪，可使用 %{1}php bin/w server:status%{2} 查看状态', ['<info>', '</info>']));
             }
@@ -892,13 +903,41 @@ class Start extends CommandAbstract
         
         $masterName = MasterProcess::getMasterProcessName($instanceName);
         if (IS_WIN) {
-            $bp = \str_replace("'", "''", BP);
-            $phpBin = \str_replace("'", "''", $phpBinary);
-            $scriptRel = 'bin' . DS . 'w';
-            $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
-            $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
-            $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
-            @\exec($fullCmd . ' 2>NUL');
+            $cmd = \sprintf(
+                '%s %s server:start %s --master-only --name=%s',
+                $phpBinary,
+                \escapeshellarg($script),
+                \escapeshellarg($instanceName),
+                \escapeshellarg($masterName)
+            );
+            if (\method_exists(Processer::class, 'createWindowsDetachedPhpArgv')) {
+                $argv = [
+                    $phpBinary,
+                    $script,
+                    'server:start',
+                    $instanceName,
+                    '--master-only',
+                    '--name=' . $masterName,
+                ];
+                $pid = Processer::createWindowsDetachedPhpArgv($argv, BP, $cmd);
+                if ($pid <= 0) {
+                    $bp = \str_replace("'", "''", BP);
+                    $phpBin = \str_replace("'", "''", $phpBinary);
+                    $scriptRel = 'bin' . DS . 'w';
+                    $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
+                    $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
+                    $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
+                    @\exec($fullCmd . ' 2>NUL');
+                }
+            } else {
+                $bp = \str_replace("'", "''", BP);
+                $phpBin = \str_replace("'", "''", $phpBinary);
+                $scriptRel = 'bin' . DS . 'w';
+                $argList = "'" . $scriptRel . "','server:start','" . \str_replace("'", "''", $instanceName) . "','--master-only','--name=" . \str_replace("'", "''", $masterName) . "'";
+                $psCmd = "Set-Location -LiteralPath '" . $bp . "'; Start-Process -FilePath '" . $phpBin . "' -ArgumentList " . $argList . " -WindowStyle Hidden -WorkingDirectory '" . $bp . "'";
+                $fullCmd = 'powershell -NoProfile -ExecutionPolicy Bypass -Command "' . \str_replace('"', '\"', $psCmd) . '"';
+                @\exec($fullCmd . ' 2>NUL');
+            }
         } else {
             $cmd = \sprintf('%s %s server:start %s --master-only --name=%s', $phpBinary, \escapeshellarg($script), \escapeshellarg($instanceName), \escapeshellarg($masterName));
             Processer::create($cmd, false);
@@ -2841,10 +2880,23 @@ class Start extends CommandAbstract
      * 委托给 server:stop 统一执行：先停 Master，再按进程名杀 Worker/Dispatcher 并清理 PID 文件，
      * 避免重复逻辑与 var/process/pid 残留。
      */
-    protected function stopExistingServer(string $instanceName, int $port, int $count): void
+    protected function stopExistingServer(string $instanceName, int $port, int $count, bool $fastLocal = false): void
     {
         $mainStop = ObjectManager::getInstance(MainStop::class);
-        $mainStop->execute([0 => 'server:stop', 1 => $instanceName, 'force' => true, 'f' => true], []);
+        $mainStop->execute($this->buildStopExistingServerArgs($instanceName, $fastLocal), []);
+    }
+
+    /**
+     * @return array<int|string, mixed>
+     */
+    protected function buildStopExistingServerArgs(string $instanceName, bool $fastLocal = false): array
+    {
+        $args = [0 => 'server:stop', 1 => $instanceName, 'force' => true, 'f' => true];
+        if ($fastLocal) {
+            $args['fast-local'] = true;
+        }
+
+        return $args;
     }
     
     /**
@@ -4467,6 +4519,67 @@ PHP;
             __('压力测试') => 'php bin/w server:benchmark',
             __('优化指南') => 'php bin/w server:doc',
         ], '→', 18);
+    }
+
+    protected function showServerInfoAfterStartupComplete(
+        string $instanceName,
+        string $host,
+        int $port,
+        int $count,
+        bool $daemon,
+        string $source = '',
+        bool $sslEnabled = false,
+        bool $dispatcherEnabled = false,
+        int $workerPort = 0,
+        int $httpRedirectPort = 0,
+        bool $directReusePortEnabled = false
+    ): void {
+        $this->showStartupInfo(
+            $instanceName,
+            $host,
+            $port,
+            $count,
+            $daemon,
+            $source,
+            $sslEnabled,
+            $dispatcherEnabled,
+            $workerPort,
+            $httpRedirectPort,
+            $directReusePortEnabled
+        );
+        $this->showUsageInfo($host, $port, $instanceName, $sslEnabled);
+    }
+
+    protected function finalizeBackgroundStartupOutput(
+        bool $startupCompleted,
+        string $instanceName,
+        string $host,
+        int $port,
+        int $count,
+        string $source = '',
+        bool $sslEnabled = false,
+        bool $dispatcherEnabled = false,
+        int $workerPort = 0,
+        int $httpRedirectPort = 0,
+        bool $directReusePortEnabled = false
+    ): void {
+        if (!$startupCompleted) {
+            return;
+        }
+
+        $this->showServerInfoAfterStartupComplete(
+            $instanceName,
+            $host,
+            $port,
+            $count,
+            true,
+            $source,
+            $sslEnabled,
+            $dispatcherEnabled,
+            $workerPort,
+            $httpRedirectPort,
+            $directReusePortEnabled
+        );
     }
     
     /**

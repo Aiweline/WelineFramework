@@ -15,7 +15,7 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const http = require('http');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { test, expect } = require('@playwright/test');
 
 const ROOT_DIR = path.resolve(__dirname, '../../../..');
@@ -171,6 +171,42 @@ function runPhp(args, env = {}, timeout = 120000) {
   return result;
 }
 
+function spawnPhp(args, env = {}) {
+  const child = spawn('php', args, {
+    cwd: ROOT_DIR,
+    env: { ...process.env, ...env },
+    stdio: 'ignore',
+    detached: true,
+  });
+  child.unref();
+
+  return {
+    child,
+  };
+}
+
+function waitForChildExit(child, timeoutMs = 30000) {
+  return new Promise((resolve, reject) => {
+    if (child.exitCode !== null) {
+      resolve(child.exitCode);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      reject(new Error(`child process did not exit within ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    child.once('exit', code => {
+      clearTimeout(timer);
+      resolve(code ?? 0);
+    });
+    child.once('error', error => {
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
+}
+
 function cleanupInstanceFiles(instanceName) {
   const instanceFile = path.join(ROOT_DIR, 'var', 'server', 'instances', `${instanceName}.json`);
   const configFile = path.join(ROOT_DIR, 'var', 'server', 'config', `${instanceName}.json`);
@@ -196,23 +232,21 @@ test.describe('WLS startup maintenance transition', () => {
     const origin = `http://${HOST}:${mainPort}`;
     const maintenanceDelayMs = Number(process.env.WLS_E2E_MAINTENANCE_READY_DELAY_MS || 2500);
     const workerDelayMs = Number(process.env.WLS_E2E_WORKER_READY_DELAY_MS || 9000);
-    const listenTimeoutMs = Math.max(60000, workerDelayMs + 30000);
+    const listenTimeoutMs = Math.max(120000, workerDelayMs + 60000);
 
     const env = {
       WLS_E2E_MAINTENANCE_READY_DELAY_MS: String(maintenanceDelayMs),
       WLS_E2E_WORKER_READY_DELAY_MS: String(workerDelayMs),
     };
 
+    const started = spawnPhp(
+      ['bin/w', 'server:start', instanceName, '-p', String(mainPort), '-c', '2', '--no-ssl', '--no-daemon'],
+      env
+    );
+
     try {
-      const startResult = runPhp(
-        ['bin/w', 'server:start', instanceName, '-p', String(mainPort), '-c', '2', '--no-ssl'],
-        env,
-        120000
-      );
-
-      expect(startResult.status, startResult.stderr || startResult.stdout || 'server:start failed').toBe(0);
-
       await waitForPortListening(mainPort, HOST, listenTimeoutMs);
+      expect(started.child.exitCode).toBeNull();
 
       const firstResponse = await requestText(origin, '/', 20000);
       expect(firstResponse.durationMs).toBeGreaterThanOrEqual(Math.max(1000, maintenanceDelayMs - 800));
@@ -233,6 +267,18 @@ test.describe('WLS startup maintenance transition', () => {
       expect(normalResponse.body.length).toBeGreaterThan(50);
     } finally {
       runPhp(['bin/w', 'server:stop', instanceName, '-f'], {}, 120000);
+      try {
+        await waitForChildExit(started.child, 30000);
+      } catch {
+        if (process.platform === 'win32' && started.child.pid) {
+          spawnSync('taskkill', ['/PID', String(started.child.pid), '/T', '/F'], {
+            cwd: ROOT_DIR,
+            stdio: 'ignore',
+          });
+        } else {
+          started.child.kill('SIGTERM');
+        }
+      }
       cleanupInstanceFiles(instanceName);
     }
   });

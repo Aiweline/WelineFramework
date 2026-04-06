@@ -1727,8 +1727,50 @@ class ServiceOrchestrator
                     'provider' => $provider,
                     'role' => $role,
                     'instance_id' => $i,
+                    'command_obj' => $command,
                 ];
             }
+        }
+
+        if ($this->shouldUseCooperativeSequentialProvidersStartupBatch(\count($prepared))) {
+            WlsLogger::info_(
+                '[Orchestrator] Windows phase-one startup falls back to cooperative sequential launch to keep IPC responsive'
+            );
+
+            foreach ($prepared as $key => $item) {
+                /** @var ServiceInstance $instance */
+                $instance = $item['instance'];
+                /** @var ServiceProviderInterface $provider */
+                $provider = $item['provider'];
+                /** @var ServiceCommand $command */
+                $command = $item['command_obj'];
+                $role = (string) $item['role'];
+                $instanceId = (int) $item['instance_id'];
+
+                $pid = $this->spawnProcess($command, $instance);
+                if ($this->shouldAbortStartupTransition()) {
+                    return $result;
+                }
+
+                if ($pid <= 0) {
+                    WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（非阻塞路径），等待 IPC register 确认");
+                }
+
+                $instance->pid = $pid > 0 ? $pid : 0;
+                $instance->state = ServiceInstance::STATE_STARTING;
+                $instance->startedAt = \microtime(true);
+                $this->registry->addInstance($instance);
+                $provider->onStarted($instance);
+                WlsLogger::info_("[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')');
+                $result[$role][] = $instance;
+
+                $this->drainControlPlaneAfterStartupStep();
+                if ($this->shouldAbortStartupTransition()) {
+                    return $result;
+                }
+            }
+
+            return $result;
         }
 
         $pids = Processer::batchCreate($commands);
@@ -1758,6 +1800,14 @@ class ServiceOrchestrator
         }
 
         return $result;
+    }
+
+    private function shouldUseCooperativeSequentialProvidersStartupBatch(int $plannedCount): bool
+    {
+        return \defined('IS_WIN') && IS_WIN
+            && $plannedCount > 1
+            && $this->childServicesBootstrapInProgress
+            && $this->controlServer !== null;
     }
 
     private function tryAdoptSharedSidecarInstance(
@@ -4828,11 +4878,11 @@ class ServiceOrchestrator
                     }
 
                     if ($uptime < $this->startupGracePeriod) {
-                        // 但如果已经有 IPC 连接，说明启动成功
                         if ($instance->ipcClientId !== null) {
-                            $instance->state = ServiceInstance::STATE_READY;
+                            // 仅建立 IPC 连接并不代表子进程已经显式 READY。
+                            // 提前标记 READY 会让 maintenance / business worker 在真正可服务前错误入池。
+                            $instance->lastHealthCheck = $now;
                             $this->registry->updateInstance($instance);
-                            WlsLogger::info_("[Orchestrator] 服务就绪: {$instance->role}#{$instance->instanceId} (via IPC, uptime={$uptime}s)");
                         }
                         continue;
                     }
