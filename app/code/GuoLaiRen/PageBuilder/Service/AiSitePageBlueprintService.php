@@ -112,7 +112,8 @@ final class AiSitePageBlueprintService
             $scope['user_description'] ?? null
         );
         if ($brief === '') {
-            return $siteTitle !== '' ? $siteTitle : 'AI Site';
+            $domain = $this->pickString($websiteProfile['target_domain'] ?? null, $scope['target_domain'] ?? null);
+            return $siteTitle !== '' ? $siteTitle : $this->deriveTitleFromDomain($domain);
         }
 
         if (\preg_match('/印度/u', $brief) === 1 && \preg_match('/棋牌/u', $brief) === 1) {
@@ -124,7 +125,8 @@ final class AiSitePageBlueprintService
 
         $candidate = \trim((string)\preg_replace('/\s+/', ' ', $brief));
         if ($candidate === '') {
-            return $siteTitle !== '' ? $siteTitle : 'AI Site';
+            $domain = $this->pickString($websiteProfile['target_domain'] ?? null, $scope['target_domain'] ?? null);
+            return $siteTitle !== '' ? $siteTitle : $this->deriveTitleFromDomain($domain);
         }
 
         return $this->clipText($candidate, 18);
@@ -667,5 +669,16 @@ final class AiSitePageBlueprintService
         }
 
         return \rtrim(\substr($value, 0, $limit - 1)) . '...';
+    }
+
+    private function deriveTitleFromDomain(string $targetDomain): string
+    {
+        $domain = \preg_replace('/^https?:\/\//i', '', \trim($targetDomain));
+        $domain = \explode('/', (string)$domain)[0] ?? '';
+        $domain = \explode('.', (string)$domain)[0] ?? '';
+        $domain = \str_replace(['-', '_'], ' ', (string)$domain);
+        $domain = \trim((string)\preg_replace('/\s+/', ' ', $domain));
+
+        return $domain !== '' ? $this->clipText(\ucwords($domain), 18) : '';
     }
 }
