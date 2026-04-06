@@ -1434,6 +1434,16 @@ while (true) {
     // 处理连接
     foreach ($read as $conn) {
         $connId = \get_resource_id($conn);
+
+        if (\Weline\Server\Service\ConnectionReadWriteGuard::shouldDeferRead(
+            $writeBuffers,
+            $pendingClose,
+            $connId,
+            isset($activeFibers[$connId])
+        )) {
+            continue;
+        }
+
         $readStep = wlsHttpReadStep(
             $conn,
             $connId,
@@ -2013,6 +2023,15 @@ function wlsHttpReadStep(
     array &$writableConnections,
     array &$pendingClose
 ): array {
+    if (\Weline\Server\Service\ConnectionReadWriteGuard::shouldDeferRead(
+        $writeBuffers,
+        $pendingClose,
+        $connId,
+        isset($activeFibers[$connId])
+    )) {
+        return ['closed' => false, 'request_ready' => false];
+    }
+
     $data = @\fread($conn, 65535);
     if ($data === false || $data === '') {
         @\fclose($conn);

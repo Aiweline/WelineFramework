@@ -2043,6 +2043,14 @@ while (true) {
         if (isset($pendingPeek[$connId])) {
             continue;
         }
+        if (\Weline\Server\Service\ConnectionReadWriteGuard::shouldDeferRead(
+            $writeBuffers,
+            $pendingClose,
+            $connId,
+            isset($activeFibers[$connId])
+        )) {
+            continue;
+        }
 
         // 注释掉 pendingHandshakes 检查
         /*
