@@ -607,7 +607,10 @@ class Page extends Model
     public function getBlogPosts(int $limit = 10, string $orderBy = 'published_at', string $orderDir = 'DESC'): array
     {
         try {
-            $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            $websiteId = (int)$this->getData(self::schema_fields_WEBSITE_ID);
+            if ($websiteId <= 0) {
+                $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            }
             $result = w_query('blog', 'getPostList', [
                 'site_id' => $websiteId,
                 'category_id' => null,
@@ -787,7 +790,10 @@ class Page extends Model
     public function getBlogCategories(): array
     {
         try {
-            $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            $websiteId = (int)$this->getData(self::schema_fields_WEBSITE_ID);
+            if ($websiteId <= 0) {
+                $websiteId = (int)\Weline\Websites\Data\WebsiteData::getWebsiteId();
+            }
             return w_query('blog', 'getCategoryList', ['site_id' => $websiteId]);
         } catch (\Throwable $e) {
             return [];
