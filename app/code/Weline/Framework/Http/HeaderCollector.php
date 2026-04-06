@@ -234,6 +234,42 @@ class HeaderCollector implements HeaderCollectorInterface
     {
         return $this->cookies;
     }
+
+    /**
+     * @return array{
+     *     headers: array<string, string|array>,
+     *     cookies: array<string, array<string, mixed>>,
+     *     status_code: int,
+     *     status_code_explicit: bool
+     * }
+     */
+    public function captureState(): array
+    {
+        return [
+            'headers' => $this->headers,
+            'cookies' => $this->cookies,
+            'status_code' => $this->statusCode,
+            'status_code_explicit' => $this->statusCodeExplicitlySet,
+        ];
+    }
+
+    /**
+     * @param array{
+     *     headers?: array<string, string|array>,
+     *     cookies?: array<string, array<string, mixed>>,
+     *     status_code?: int,
+     *     status_code_explicit?: bool
+     * } $state
+     */
+    public function restoreState(array $state): static
+    {
+        $this->headers = \is_array($state['headers'] ?? null) ? $state['headers'] : [];
+        $this->cookies = \is_array($state['cookies'] ?? null) ? $state['cookies'] : [];
+        $this->statusCode = (int) ($state['status_code'] ?? 200);
+        $this->statusCodeExplicitlySet = (bool) ($state['status_code_explicit'] ?? false);
+
+        return $this;
+    }
     
     /**
      * 发送所有响应头（FPM 模式使用）
