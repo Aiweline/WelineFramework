@@ -7,6 +7,7 @@ namespace Weline\Server\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\MasterProcess;
+use Weline\Server\Service\SharedStateServiceRegistry;
 use Weline\Server\Service\SharedStateServiceManager;
 
 final class SharedStateServiceManagerTest extends TestCase
@@ -438,6 +439,312 @@ final class SharedStateServiceManagerTest extends TestCase
         );
 
         self::assertSame("memory_server.{$resolvedPort}.token", $resolved);
+    }
+
+    public function testEnsureRegistersRequesterAsTrackedConsumer(): void
+    {
+        $env = self::sessionPortEnv();
+        $registry = new class extends SharedStateServiceRegistry {
+            public array $records = [];
+
+            public function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $current = $this->records[$role] ?? [];
+                $next = $updater($current);
+                $this->records[$role] = $next;
+
+                return $next;
+            }
+
+            public function removeRecord(string $role): void
+            {
+                unset($this->records[$role]);
+            }
+        };
+
+        $manager = new class($registry, $env) extends SharedStateServiceManager {
+            public array $runtimeFiles = [];
+
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry,
+                private readonly array $env
+            )
+            {
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->runtimeFiles[$role] ?? [];
+            }
+
+            protected function writeRuntimeFile(string $role, array $runtime): void
+            {
+                $this->runtimeFiles[$role] = $runtime;
+            }
+
+            protected function loadEnvConfig(): array
+            {
+                return $this->env;
+            }
+
+            protected function isPortOccupied(int $port): bool
+            {
+                return true;
+            }
+
+            protected function inspectRunningSharedService(array $definition, string $expectedTokenFileName): array
+            {
+                return [
+                    'reusable' => true,
+                    'pid' => 4321,
+                    'port' => (int) $definition['port'],
+                    'role' => (string) $definition['role'],
+                    'token_file_name' => $expectedTokenFileName,
+                    'process_name' => (string) $definition['process_name'],
+                    'instance_name' => (string) $definition['service_instance_name'],
+                ];
+            }
+
+            protected function probeRunningSharedService(array $definition, string $tokenFileName): bool
+            {
+                return true;
+            }
+        };
+
+        $runtime = $manager->ensure(ControlMessage::ROLE_SESSION_SERVER, [], self::sessionPortEnv(), 'consumer-a');
+
+        self::assertTrue((bool) ($runtime['registered'] ?? false));
+        self::assertSame(1, $runtime['consumer_count'] ?? null);
+        self::assertArrayHasKey('consumer-a', $registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER));
+        self::assertSame(1, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
+    }
+
+    public function testReleaseInstanceConsumersStopsSharedServiceWhenLastConsumerLeaves(): void
+    {
+        $env = self::sessionPortEnv();
+        $registry = new class extends SharedStateServiceRegistry {
+            public array $records = [];
+
+            public function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $current = $this->records[$role] ?? [];
+                $next = $updater($current);
+                $this->records[$role] = $next;
+
+                return $next;
+            }
+
+            public function removeRecord(string $role): void
+            {
+                unset($this->records[$role]);
+            }
+        };
+        $registry->touchConsumer(ControlMessage::ROLE_SESSION_SERVER, 'consumer-a');
+
+        $manager = new class($registry, $env) extends SharedStateServiceManager {
+            public array $runtimeFiles = [
+                ControlMessage::ROLE_SESSION_SERVER => [
+                    'host' => '127.0.0.1',
+                    'port' => 19970,
+                    'token_file_name' => 'session_server.token',
+                    'pid' => 4321,
+                ],
+            ];
+            public array $stopCalls = [];
+
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry,
+                private readonly array $env
+            )
+            {
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->runtimeFiles[$role] ?? [];
+            }
+
+            protected function writeRuntimeFile(string $role, array $runtime): void
+            {
+                $this->runtimeFiles[$role] = $runtime;
+            }
+
+            protected function removeRuntimeFile(string $role): void
+            {
+                unset($this->runtimeFiles[$role]);
+            }
+
+            protected function loadEnvConfig(): array
+            {
+                return $this->env;
+            }
+
+            protected function isPortOccupied(int $port): bool
+            {
+                unset($port);
+
+                return false;
+            }
+
+            protected function forceStopReusedService(array $definition, array $runtime): bool
+            {
+                $this->stopCalls[] = [$definition['role'], $runtime['pid'] ?? 0];
+                $this->removeRuntimeFile((string) $definition['role']);
+
+                return true;
+            }
+        };
+
+        $manager->releaseInstanceConsumers('consumer-a');
+
+        self::assertSame([[ControlMessage::ROLE_SESSION_SERVER, 4321]], $manager->stopCalls);
+        self::assertSame([], $registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER));
+        self::assertSame([], $manager->runtimeFiles);
+    }
+
+    public function testReleaseInstanceConsumersKeepsSharedServiceWhenAnotherConsumerStillUsesIt(): void
+    {
+        $env = self::sessionPortEnv();
+        $registry = new class extends SharedStateServiceRegistry {
+            public array $records = [];
+
+            public function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            public function getRecord(string $role): array
+            {
+                return $this->records[$role] ?? [];
+            }
+
+            public function updateRecord(string $role, callable $updater): array
+            {
+                $current = $this->records[$role] ?? [];
+                $next = $updater($current);
+                $this->records[$role] = $next;
+
+                return $next;
+            }
+
+            public function removeRecord(string $role): void
+            {
+                unset($this->records[$role]);
+            }
+        };
+        $registry->touchConsumer(ControlMessage::ROLE_SESSION_SERVER, 'consumer-a');
+        $registry->touchConsumer(ControlMessage::ROLE_SESSION_SERVER, 'consumer-b');
+
+        $manager = new class($registry, $env) extends SharedStateServiceManager {
+            public array $runtimeFiles = [
+                ControlMessage::ROLE_SESSION_SERVER => [
+                    'host' => '127.0.0.1',
+                    'port' => 19970,
+                    'token_file_name' => 'session_server.token',
+                    'pid' => 4321,
+                ],
+            ];
+            public int $stopCalls = 0;
+
+            public function __construct(
+                private readonly SharedStateServiceRegistry $registry,
+                private readonly array $env
+            )
+            {
+            }
+
+            protected function createRegistry(): SharedStateServiceRegistry
+            {
+                return $this->registry;
+            }
+
+            protected function withRoleLock(string $role, callable $callback): mixed
+            {
+                return $callback();
+            }
+
+            protected function readRuntimeFile(string $role): array
+            {
+                return $this->runtimeFiles[$role] ?? [];
+            }
+
+            protected function writeRuntimeFile(string $role, array $runtime): void
+            {
+                $this->runtimeFiles[$role] = $runtime;
+            }
+
+            protected function removeRuntimeFile(string $role): void
+            {
+                unset($this->runtimeFiles[$role]);
+            }
+
+            protected function loadEnvConfig(): array
+            {
+                return $this->env;
+            }
+
+            protected function isPortOccupied(int $port): bool
+            {
+                unset($port);
+
+                return false;
+            }
+
+            protected function forceStopReusedService(array $definition, array $runtime): bool
+            {
+                unset($definition, $runtime);
+                $this->stopCalls++;
+
+                return true;
+            }
+        };
+
+        $manager->releaseInstanceConsumers('consumer-a');
+
+        self::assertSame(0, $manager->stopCalls);
+        self::assertSame(['consumer-b'], \array_keys($registry->getConsumers(ControlMessage::ROLE_SESSION_SERVER)));
+        self::assertSame(1, $manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['consumer_count'] ?? null);
+        self::assertTrue((bool) ($manager->runtimeFiles[ControlMessage::ROLE_SESSION_SERVER]['registered'] ?? false));
     }
 
     public function testReleaseCompatibilityShellIsNoop(): void
