@@ -68,11 +68,11 @@ class AiSiteVisualUrlServiceTest extends TestCase
         $urls = $service->resolveVirtualUrls('pub_abc', 'home', 456);
 
         $this->assertSame(
-            'https://backend.test/pagebuilder/backend/preview/full?public_id=pub_abc&page_type=home&virtual_theme_id=456',
+            'https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&virtual_theme_id=456',
             $urls['preview_full_url']
         );
         $this->assertSame(
-            'https://backend.test/pagebuilder/backend/preview/full?public_id=pub_abc&page_type=home&visual_editor=1&virtual_theme_id=456',
+            'https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&visual_editor=1&virtual_theme_id=456',
             $urls['visual_preview_url']
         );
         $this->assertSame(
@@ -88,11 +88,11 @@ class AiSiteVisualUrlServiceTest extends TestCase
         $urls = $service->resolveVirtualUrls('pub_abc', 'home');
 
         $this->assertSame(
-            'https://backend.test/pagebuilder/backend/preview/full?public_id=pub_abc&page_type=home',
+            'https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home',
             $urls['preview_full_url']
         );
         $this->assertSame(
-            'https://backend.test/pagebuilder/backend/preview/full?public_id=pub_abc&page_type=home&visual_editor=1',
+            'https://backend.test/pagebuilder/backend/ai-site-agent/workspace-preview?public_id=pub_abc&page_type=home&visual_editor=1',
             $urls['visual_preview_url']
         );
         $this->assertSame(
