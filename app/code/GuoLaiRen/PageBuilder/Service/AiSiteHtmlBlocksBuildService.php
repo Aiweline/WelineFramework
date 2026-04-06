@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Service;
 
+use GuoLaiRen\PageBuilder\Model\Page;
 use Weline\Framework\Manager\ObjectManager;
 
 final class AiSiteHtmlBlocksBuildService
@@ -16,27 +17,112 @@ final class AiSiteHtmlBlocksBuildService
     /**
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $scope
-     * @return list<array{block_id:string,type:string,html:string}>
+     * @return list<array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}>
      */
     public function buildPlaceholderBlocksForPageType(string $pageType, array $websiteProfile, array $scope = []): array
     {
         $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
         $blueprint = $pageBlueprintService->buildPageBlueprint($pageType, $scope, $websiteProfile);
-        $blocks = [];
+        $blocks = [
+            $this->buildHeaderBlock($pageType, $websiteProfile, $scope),
+        ];
 
         foreach ($blueprint['sections'] as $section) {
             $blockId = \str_replace(['content/', '/'], ['', '-'], (string)$section['code']);
             $template = (string)($section['template'] ?? 'hero');
             $config = \is_array($section['config'] ?? null) ? $section['config'] : [];
-
-            $blocks[] = [
-                'block_id' => $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4))),
-                'type' => $template,
-                'html' => $this->renderBlockHtml($template, $config),
-            ];
+            $blocks[] = $this->buildBlockRecord(
+                $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4))),
+                $template,
+                $config
+            );
         }
 
+        $blocks[] = $this->buildFooterBlock($pageType, $websiteProfile, $scope);
+
         return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $configPatch
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    public function rebuildBlock(array $block, array $websiteProfile, array $scope = [], array $configPatch = []): array
+    {
+        $blockId = \trim((string)($block['block_id'] ?? ''));
+        $type = \trim((string)($block['type'] ?? 'hero'));
+        $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
+        $config = $this->normalizeBlockConfig($type, \array_replace_recursive($config, $configPatch), $websiteProfile, $scope);
+
+        return [
+            'block_id' => $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4))),
+            'type' => $type !== '' ? $type : 'hero',
+            'html' => $this->renderBlockHtml($type !== '' ? $type : 'hero', $config),
+            'config' => $config,
+            'field_schema' => $this->buildFieldSchema($type !== '' ? $type : 'hero'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    private function buildBlockRecord(string $blockId, string $template, array $config, array $websiteProfile = [], array $scope = []): array
+    {
+        $normalizedConfig = $this->normalizeBlockConfig($template, $config, $websiteProfile, $scope);
+
+        return [
+            'block_id' => $blockId,
+            'type' => $template,
+            'html' => $this->renderBlockHtml($template, $normalizedConfig),
+            'config' => $normalizedConfig,
+            'field_schema' => $this->buildFieldSchema($template),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    private function buildHeaderBlock(string $pageType, array $websiteProfile, array $scope): array
+    {
+        return $this->buildBlockRecord(
+            \str_replace('_', '-', $pageType) . '-site-header',
+            'site_header',
+            [
+                'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'site_tagline' => (string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
+                'current_page_label' => (string)(Page::getPageTypes()[$pageType] ?? $pageType),
+                'nav_items' => $this->buildNavItems($scope),
+            ],
+            $websiteProfile,
+            $scope
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    private function buildFooterBlock(string $pageType, array $websiteProfile, array $scope): array
+    {
+        return $this->buildBlockRecord(
+            \str_replace('_', '-', $pageType) . '-site-footer',
+            'site_footer',
+            [
+                'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'brief_description' => (string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
+                'domain' => (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
+                'nav_items' => $this->buildNavItems($scope),
+            ],
+            $websiteProfile,
+            $scope
+        );
     }
 
     /**
@@ -45,10 +131,87 @@ final class AiSiteHtmlBlocksBuildService
     private function renderBlockHtml(string $template, array $config): string
     {
         return match ($template) {
+            'site_header' => $this->renderHeaderBlock($config),
+            'site_footer' => $this->renderFooterBlock($config),
             'cards' => $this->renderCardsBlock($config),
             'checklist' => $this->renderChecklistBlock($config),
             'cta' => $this->renderCtaBlock($config),
             default => $this->renderHeroBlock($config),
+        };
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function buildFieldSchema(string $template): array
+    {
+        return match ($template) {
+            'site_header' => [
+                'identity' => [
+                    'label' => '页头信息',
+                    'fields' => [
+                        'site_title' => ['type' => 'text', 'label' => '站点名称'],
+                        'site_tagline' => ['type' => 'text', 'label' => '站点副标题'],
+                        'current_page_label' => ['type' => 'text', 'label' => '当前页标签'],
+                        'nav_items' => ['type' => 'textarea', 'label' => '导航项', 'format' => 'nav-items'],
+                    ],
+                ],
+            ],
+            'site_footer' => [
+                'identity' => [
+                    'label' => '页脚信息',
+                    'fields' => [
+                        'site_title' => ['type' => 'text', 'label' => '站点名称'],
+                        'brief_description' => ['type' => 'textarea', 'label' => '页脚简介'],
+                        'domain' => ['type' => 'text', 'label' => '展示域名'],
+                        'nav_items' => ['type' => 'textarea', 'label' => '底部链接', 'format' => 'nav-items'],
+                    ],
+                ],
+            ],
+            'cards' => [
+                'content' => [
+                    'label' => '内容信息',
+                    'fields' => [
+                        'section_title' => ['type' => 'text', 'label' => '分组标题'],
+                        'section_intro' => ['type' => 'textarea', 'label' => '分组说明'],
+                        'items' => ['type' => 'textarea', 'label' => '卡片列表', 'format' => 'card-items'],
+                    ],
+                ],
+            ],
+            'checklist' => [
+                'content' => [
+                    'label' => '内容信息',
+                    'fields' => [
+                        'section_title' => ['type' => 'text', 'label' => '分组标题'],
+                        'section_intro' => ['type' => 'textarea', 'label' => '分组说明'],
+                        'points' => ['type' => 'textarea', 'label' => '条目列表', 'format' => 'lines'],
+                    ],
+                ],
+            ],
+            'cta' => [
+                'content' => [
+                    'label' => '内容信息',
+                    'fields' => [
+                        'section_title' => ['type' => 'text', 'label' => '标题'],
+                        'section_text' => ['type' => 'textarea', 'label' => '说明文本'],
+                        'button_label' => ['type' => 'text', 'label' => '按钮文案'],
+                        'assist_text' => ['type' => 'text', 'label' => '辅助文案'],
+                    ],
+                ],
+            ],
+            default => [
+                'content' => [
+                    'label' => '内容信息',
+                    'fields' => [
+                        'eyebrow' => ['type' => 'text', 'label' => '上方标签'],
+                        'headline' => ['type' => 'text', 'label' => '主标题'],
+                        'description' => ['type' => 'textarea', 'label' => '描述文本'],
+                        'chips' => ['type' => 'textarea', 'label' => '标签列表', 'format' => 'lines'],
+                        'primary_cta' => ['type' => 'text', 'label' => '主按钮'],
+                        'secondary_note' => ['type' => 'text', 'label' => '辅助说明'],
+                    ],
+                ],
+            ],
         };
     }
 
@@ -70,6 +233,36 @@ final class AiSiteHtmlBlocksBuildService
             . $chips
             . ($cta !== '' ? '<div><span style="display:inline-flex;align-items:center;padding:12px 18px;border-radius:999px;background:#0f172a;color:#fff;font-size:14px;font-weight:700;">' . $cta . '</span></div>' : '')
             . '</section>';
+    }
+
+    /**
+     * @param list<array{label:string,href:string,active:bool}> $navItems
+     */
+    private function renderHeaderBlock(array $config): string
+    {
+        $siteTitle = $this->escape($config['site_title'] ?? 'AI Site');
+        $siteTagline = $this->escape($config['site_tagline'] ?? '');
+        $currentPageLabel = $this->escape($config['current_page_label'] ?? '');
+        $navItems = \is_array($config['nav_items'] ?? null) ? $config['nav_items'] : [];
+        $navHtml = [];
+        foreach ($navItems as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $navHtml[] = '<a href="' . $this->escape($item['href'] ?? '#') . '" style="color:' . (!empty($item['active']) ? '#0f172a' : '#475569') . ';font-size:14px;font-weight:' . (!empty($item['active']) ? '700' : '600') . ';text-decoration:none;">'
+                . $this->escape($item['label'] ?? '')
+                . '</a>';
+        }
+
+        return '<header class="ai-block ai-block-site-header" style="padding:18px 28px;border-bottom:1px solid #e5e7eb;background:rgba(255,255,255,0.94);backdrop-filter:blur(12px);display:flex;justify-content:space-between;align-items:center;gap:18px;flex-wrap:wrap;">'
+            . '<div style="display:grid;gap:4px;min-width:0;">'
+            . '<strong style="font-size:18px;line-height:1.2;color:#0f172a;">' . $siteTitle . '</strong>'
+            . ($siteTagline !== '' ? '<span style="font-size:13px;line-height:1.6;color:#64748b;">' . $siteTagline . '</span>' : '')
+            . '</div>'
+            . '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;">'
+            . \implode('', $navHtml)
+            . '<span style="display:inline-flex;align-items:center;padding:10px 14px;border-radius:999px;background:#0f172a;color:#fff;font-size:12px;font-weight:700;">' . $currentPageLabel . '</span>'
+            . '</div></header>';
     }
 
     /**
@@ -141,6 +334,198 @@ final class AiSiteHtmlBlocksBuildService
             . ($button !== '' ? '<span style="display:inline-flex;align-items:center;padding:12px 18px;border-radius:999px;background:#ffffff;color:#0f172a;font-size:14px;font-weight:700;">' . $button . '</span>' : '')
             . ($assist !== '' ? '<span style="font-size:13px;color:rgba(255,255,255,.72);">' . $assist . '</span>' : '')
             . '</div></div></section>';
+    }
+
+    /**
+     * @param list<array{label:string,href:string,active:bool}> $navItems
+     */
+    private function renderFooterBlock(array $config): string
+    {
+        $siteTitle = $this->escape($config['site_title'] ?? 'AI Site');
+        $brief = $this->escape($config['brief_description'] ?? '');
+        $domain = $this->escape($config['domain'] ?? '');
+        $navItems = \is_array($config['nav_items'] ?? null) ? $config['nav_items'] : [];
+        $linkHtml = [];
+        foreach ($navItems as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $linkHtml[] = '<a href="' . $this->escape($item['href'] ?? '#') . '" style="color:#cbd5e1;font-size:13px;text-decoration:none;">'
+                . $this->escape($item['label'] ?? '')
+                . '</a>';
+        }
+
+        return '<footer class="ai-block ai-block-site-footer" style="padding:28px;background:#020617;color:#e2e8f0;display:grid;gap:16px;">'
+            . '<div style="display:grid;gap:8px;">'
+            . '<strong style="font-size:18px;line-height:1.2;color:#fff;">' . $siteTitle . '</strong>'
+            . ($brief !== '' ? '<p style="margin:0;max-width:760px;font-size:14px;line-height:1.7;color:#94a3b8;">' . $brief . '</p>' : '')
+            . '</div>'
+            . '<div style="display:flex;flex-wrap:wrap;gap:14px 18px;">' . \implode('', $linkHtml) . '</div>'
+            . '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:#64748b;font-size:12px;">'
+            . '<span>© 2026 ' . $siteTitle . '</span>'
+            . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>Generated for the current customer brief</span>')
+            . '</div></footer>';
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function buildNavItems(array $scope): array
+    {
+        $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT];
+        $labels = Page::getPageTypes();
+        $items = [];
+
+        foreach ($pageTypes as $pageType) {
+            if (!\is_string($pageType) || $pageType === '') {
+                continue;
+            }
+
+            $href = $pageType === Page::TYPE_HOME ? '/' : '/' . Page::getDefaultHandleForType($pageType);
+            $items[] = [
+                'label' => (string)($labels[$pageType] ?? $pageType),
+                'href' => $href,
+                'active' => $pageType === Page::TYPE_HOME,
+            ];
+            if (\count($items) >= 5) {
+                break;
+            }
+        }
+
+        if ($items === []) {
+            $items[] = ['label' => '首页', 'href' => '/', 'active' => true];
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function normalizeBlockConfig(string $template, array $config, array $websiteProfile = [], array $scope = []): array
+    {
+        return match ($template) {
+            'site_header' => [
+                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'site_tagline' => (string)($config['site_tagline'] ?? $websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
+                'current_page_label' => (string)($config['current_page_label'] ?? ''),
+                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildNavItems($scope)),
+            ],
+            'site_footer' => [
+                'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? 'AI Site'),
+                'brief_description' => (string)($config['brief_description'] ?? $websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
+                'domain' => (string)($config['domain'] ?? $websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
+                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildNavItems($scope)),
+            ],
+            'cards' => [
+                'section_title' => (string)($config['section_title'] ?? ''),
+                'section_intro' => (string)($config['section_intro'] ?? ''),
+                'items' => $this->normalizeCardItems($config['items'] ?? []),
+            ],
+            'checklist' => [
+                'section_title' => (string)($config['section_title'] ?? ''),
+                'section_intro' => (string)($config['section_intro'] ?? ''),
+                'points' => $this->normalizeStringList($config['points'] ?? []),
+            ],
+            'cta' => [
+                'section_title' => (string)($config['section_title'] ?? ''),
+                'section_text' => (string)($config['section_text'] ?? ''),
+                'button_label' => (string)($config['button_label'] ?? ''),
+                'assist_text' => (string)($config['assist_text'] ?? ''),
+            ],
+            default => [
+                'eyebrow' => (string)($config['eyebrow'] ?? ''),
+                'headline' => (string)($config['headline'] ?? ''),
+                'description' => (string)($config['description'] ?? ''),
+                'chips' => $this->normalizeStringList($config['chips'] ?? []),
+                'primary_cta' => (string)($config['primary_cta'] ?? ''),
+                'secondary_note' => (string)($config['secondary_note'] ?? ''),
+            ],
+        };
+    }
+
+    /**
+     * @param mixed $items
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function normalizeNavItems(mixed $items): array
+    {
+        if (!\is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $label = \trim((string)($item['label'] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+            $normalized[] = [
+                'label' => $label,
+                'href' => \trim((string)($item['href'] ?? '#')),
+                'active' => !empty($item['active']),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param mixed $items
+     * @return list<array{eyebrow:string,title:string,description:string}>
+     */
+    private function normalizeCardItems(mixed $items): array
+    {
+        if (!\is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $title = \trim((string)($item['title'] ?? ''));
+            if ($title === '') {
+                continue;
+            }
+            $normalized[] = [
+                'eyebrow' => \trim((string)($item['eyebrow'] ?? '')),
+                'title' => $title,
+                'description' => \trim((string)($item['description'] ?? '')),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param mixed $items
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $items): array
+    {
+        if (!\is_array($items)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($items as $item) {
+            $text = \trim((string)$item);
+            if ($text === '') {
+                continue;
+            }
+            $normalized[] = $text;
+        }
+
+        return $normalized;
     }
 
     /**
