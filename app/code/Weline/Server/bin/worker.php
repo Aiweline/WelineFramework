@@ -1644,7 +1644,7 @@ function wlsProcessActiveFibersAfterTick(
         $af = $afData['fiber'];
         if ($af->isTerminated()) {
             if (isset($afData['context'])) {
-                $afData['context']->restore();
+                $afData['context']->restore(false);
             }
 
             $fiberScheduler->unregisterFiber();
