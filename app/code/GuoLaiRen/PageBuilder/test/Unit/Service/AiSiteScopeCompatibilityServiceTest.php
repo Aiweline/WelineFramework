@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Unit\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use PHPUnit\Framework\TestCase;
@@ -88,5 +89,54 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
         $this->assertSame(Page::TYPE_HOME, $scope['preview_page_type']);
         $this->assertCount(2, $scope['preview_page_options']);
         $this->assertSame(11, $scope['preview_page_options'][0]['page_id']);
+    }
+
+    public function testBuildVirtualPagesByTypeHydratesLegacySingleContentPageIntoBlocks(): void
+    {
+        $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->expects($this->once())
+            ->method('buildPlaceholderBlocksForPageType')
+            ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
+            ->willReturn([
+                ['block_id' => 'home-page-hero', 'type' => 'hero', 'html' => '<section>hero</section>'],
+                ['block_id' => 'home-page-highlights', 'type' => 'cards', 'html' => '<section>cards</section>'],
+            ]);
+
+        $service = new AiSiteScopeCompatibilityService(new LayoutConfigNormalizer(), $blocksBuilder);
+
+        $virtualPages = $service->buildVirtualPagesByType([Page::TYPE_HOME], [
+            'website_profile' => [
+                'site_title' => 'Legacy Demo',
+                'default_locale' => 'en_US',
+            ],
+            'page_type_layouts' => [
+                Page::TYPE_HOME => [
+                    'header' => ['component' => 'header/ai-site-header', 'config' => []],
+                    'content' => [
+                        [
+                            'code' => 'content/home-page',
+                            'enabled' => true,
+                            'config' => [],
+                            'instance_id' => '',
+                            'sort_order' => 10,
+                        ],
+                    ],
+                    'footer' => ['component' => 'footer/ai-site-footer', 'config' => []],
+                ],
+            ],
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'page_type' => Page::TYPE_HOME,
+                    'title' => '首页',
+                    'locale' => 'en_US',
+                    'style_code' => 'default',
+                    'ai_description' => 'legacy session',
+                    'blocks' => [],
+                ],
+            ],
+        ]);
+
+        self::assertCount(2, $virtualPages[Page::TYPE_HOME]['blocks']);
+        self::assertSame('home-page-hero', $virtualPages[Page::TYPE_HOME]['blocks'][0]['block_id']);
     }
 }

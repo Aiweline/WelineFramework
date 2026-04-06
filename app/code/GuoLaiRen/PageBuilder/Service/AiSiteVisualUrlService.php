@@ -72,8 +72,8 @@ class AiSiteVisualUrlService
         }
 
         return [
-            'preview_full_url' => $this->url->getBackendUrl('pagebuilder/backend/preview/full', $previewParams),
-            'visual_preview_url' => $this->url->getBackendUrl('pagebuilder/backend/preview/full', $visualPreviewParams),
+            'preview_full_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace-preview', $previewParams),
+            'visual_preview_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace-preview', $visualPreviewParams),
             'visual_edit_url' => $this->url->getBackendUrl('pagebuilder/backend/page/virtual-edit', $visualEditParams),
         ];
     }
