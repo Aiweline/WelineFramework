@@ -64,13 +64,14 @@ class Stop extends CommandAbstract
         $instanceName = $this->parseInstanceName($args);
         $stopAll = isset($args['all']) || isset($args['a']);
         $force = isset($args['force']) || isset($args['f']);
+        $fastLocal = isset($args['fast-local']) || isset($args['fast_local']);
 
         if ($stopAll) {
             $this->stopAllInstances($force);
             return;
         }
 
-        $this->stopInstance($instanceName, $force);
+        $this->stopInstance($instanceName, $force, $fastLocal);
     }
     
     /**
@@ -171,7 +172,7 @@ class Stop extends CommandAbstract
      * 2. Master 的 Orchestrator 会：广播 DRAIN → 广播 SHUTDOWN → 等待退出 → 清理
      * 3. 如果 IPC 超时，强制杀死 Master（Orchestrator 会处理残留）
      */
-    protected function stopInstance(string $name, bool $force = false): void
+    protected function stopInstance(string $name, bool $force = false, bool $fastLocal = false): void
     {
         // CLI 服务器委托给专用处理
         $nameLower = strtolower($name);
@@ -224,6 +225,24 @@ class Stop extends CommandAbstract
         // 显示实例信息
         $this->showInstanceInfo($instanceInfo);
         echo "\n";
+
+        if ($fastLocal) {
+            $this->printer->note(__('快速清场模式：跳过 IPC 排水，直接终止旧实例子进程...'));
+            if ($masterPid > 0) {
+                Processer::killProcessTreeByPid($masterPid, true);
+                SchedulerSystem::usleep(500000);
+            }
+            $this->runResidualCleanupPair($name, $instanceInfo);
+            $this->releaseSharedStateConsumersForInstance($name);
+            $manager->deleteInstance($name);
+            $this->cleanupPidFiles($name, $instanceInfo);
+            $this->releaseStartLock($name);
+            $this->cleanupAllWlsProcesses($name);
+            echo "\n";
+            $this->printer->success(__('实例 [%{1}] 已停止（快速清场） ✓', [$name]));
+            $this->printGoodbye(true);
+            return;
+        }
 
         if (
             $this->shouldBypassGracefulStopDuringBootstrap($startupPhase)
@@ -428,7 +447,7 @@ class Stop extends CommandAbstract
     /**
      * 按 PID + 进程名前缀各扫一遍，控制台只输出一组「清理残留进程」提示。
      */
-    private function runResidualCleanupPair(string $name, ServerInstanceInfo $info): void
+    protected function runResidualCleanupPair(string $name, ServerInstanceInfo $info): void
     {
         $this->printer->note(__('清理残留进程...'));
         $pids = \array_merge(
@@ -965,7 +984,7 @@ class Stop extends CommandAbstract
     /**
      * 停止实例时从共享服务 registry 移除消费者；残留清理因此不会误杀仍被其它 WLS 实例使用的 Session/Memory 进程。
      */
-    private function releaseSharedStateConsumersForInstance(string $instanceName): void
+    protected function releaseSharedStateConsumersForInstance(string $instanceName): void
     {
         try {
             (new SharedStateServiceManager())->releaseInstanceConsumers($instanceName);
