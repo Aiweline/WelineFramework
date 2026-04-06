@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\WlsFiberContext;
@@ -12,6 +13,7 @@ final class WlsFiberContextConcurrencyTest extends TestCase
 {
     protected function tearDown(): void
     {
+        HeaderCollector::reset();
         SseContext::reset();
         RequestContext::cleanup();
         parent::tearDown();
@@ -59,5 +61,49 @@ final class WlsFiberContextConcurrencyTest extends TestCase
         self::assertSame(['b' => '2'], $_POST);
         self::assertSame(['sid' => 'abc'], $_COOKIE);
         self::assertSame(['a' => '1', 'b' => '2'], $_REQUEST);
+    }
+
+    public function testRestoreReinstatesCapturedResponseProtocolState(): void
+    {
+        $collector = HeaderCollector::getInstance();
+        $collector->setHeader('Content-Type', 'text/html; charset=utf-8');
+        $collector->setHeader('X-WLS-Link-Protocol', 'doc/http');
+        $collector->setCookie('sid', 'doc-session', 0, '/');
+        $collector->setStatusCode(202);
+
+        $ctx = WlsFiberContext::capture();
+
+        $collector->setHeader('Content-Type', 'text/plain; charset=utf-8');
+        $collector->setHeader('X-WLS-Link-Protocol', 'text/http');
+        $collector->setCookie('sid', 'text-session', 0, '/');
+        $collector->setStatusCode(500);
+
+        $ctx->restore();
+
+        self::assertSame('text/html; charset=utf-8', $collector->getHeader('Content-Type'));
+        self::assertSame('doc/http', $collector->getHeader('X-WLS-Link-Protocol'));
+        self::assertSame(202, $collector->getStatusCode());
+        self::assertTrue($collector->hasExplicitStatusCode());
+        self::assertSame('doc-session', $collector->getCookies()['sid']['value'] ?? null);
+    }
+
+    public function testRestoreWithoutResponseStateDoesNotReplayStaleHeaders(): void
+    {
+        $collector = HeaderCollector::getInstance();
+        $collector->setHeader('Content-Type', 'text/html; charset=utf-8');
+        $collector->setHeader('X-WLS-Link-Protocol', 'doc/http');
+        $collector->setStatusCode(201);
+
+        $ctx = WlsFiberContext::capture();
+
+        $collector->setHeader('Content-Type', 'text/plain; charset=utf-8');
+        $collector->setHeader('X-WLS-Link-Protocol', 'text/http');
+        $collector->setStatusCode(500);
+
+        $ctx->restore(false);
+
+        self::assertSame('text/plain; charset=utf-8', $collector->getHeader('Content-Type'));
+        self::assertSame('text/http', $collector->getHeader('X-WLS-Link-Protocol'));
+        self::assertSame(500, $collector->getStatusCode());
     }
 }
