@@ -3,7 +3,7 @@
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { test, expect } = require('@playwright/test');
-const { buildBackendUrl, getRuntimeInfo } = require('../../framework');
+const { buildBackendUrl, getRuntimeInfo, moduleDescribe, moduleCase } = require('../../framework');
 const {
   buildWorkbenchUrl,
   consumeSseStream,
@@ -266,6 +266,36 @@ async function ensurePagebuilderExpertLayout(page) {
   await gotoStable(page, u.toString());
 
   await expect(page.locator('#pb-ai-draft-website-id')).toBeVisible({ timeout: 30000 });
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {string} backendRoot
+ */
+async function createDirectPagebuilderWorkspace(page, backendRoot) {
+  const createSessionUrl = normalizeToCurrentOrigin(
+    page,
+    new URL('pagebuilder/backend/ai-site-agent/post-create-session', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
+  );
+  const createPayload = await page.evaluate(async ({ url }) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error(`pagebuilder create-session: HTTP ${res.status} non-JSON body=${text.slice(0, 400)}`);
+    }
+  }, { url: createSessionUrl });
+  expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
+  expect(createPayload.workspace_url).toBeTruthy();
+  const workspaceUrl = normalizeToCurrentOrigin(page, String(createPayload.workspace_url));
+  await gotoStable(page, workspaceUrl);
+  await ensurePagebuilderExpertLayout(page);
+  return { createPayload, workspaceUrl };
 }
 
 /**
@@ -1129,4 +1159,181 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
     const storefrontHtml = await storefrontCheck.text();
     expect(storefrontHtml).toContain(uniqueSiteTitle);
   });
+});
+
+moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', () => {
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-LEGACY-001' },
+    'legacy single-content session auto-hydrates blocks and opens refine modal',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(480000);
+
+      const backendRoot = await loginAsAdmin(page);
+      const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
+
+      const suffix = Date.now().toString().slice(-8);
+      const localDomain = buildLocalDomain(`pb-legacy-${suffix}`);
+      const scopePatch = {
+        site_title: `E2E PB Legacy ${suffix}`,
+        site_tagline: 'legacy compatibility',
+        target_domain: localDomain,
+        brief_description: 'Legacy PageBuilder AI session compatibility check.',
+        user_description: 'Legacy PageBuilder AI session compatibility check.',
+        page_types: ['home_page'],
+      };
+
+      await page.fill('#pb-ai-site-title', scopePatch.site_title);
+      await page.fill('#pb-ai-site-tagline', scopePatch.site_tagline);
+      await page.fill('#pb-ai-target-domain', localDomain);
+      await page.fill('#pb-ai-brief-description', scopePatch.brief_description);
+      await mergePagebuilderScope(page, scopePatch);
+
+      const buildStart = await startPagebuilderBuild(page, backendRoot, { ...scopePatch });
+      const buildStream = await consumeSseStream(
+        page,
+        normalizeToCurrentOrigin(page, String(buildStart.stream_url)),
+        { timeoutMs: WORKSPACE_TIMEOUT }
+      );
+      expect(buildStream.ok, JSON.stringify(buildStream)).toBeTruthy();
+      expect(buildStream.eventNames).toContain('done');
+      expect(buildStream.lastDone && buildStream.lastDone.success !== false, JSON.stringify(buildStream)).toBeTruthy();
+
+      const legacyPatch = {
+        preview_page_type: 'home_page',
+        page_type_layouts: {
+          home_page: {
+            version: '1.0',
+            page_id: 0,
+            use_original_template: false,
+            header: { component: 'header/ai-site-header', config: [] },
+            content: [
+              {
+                code: 'content/home-page',
+                enabled: true,
+                config: [],
+                instance_id: '',
+                sort_order: 10,
+                style_code: '',
+              },
+            ],
+            footer: { component: 'footer/ai-site-footer', config: [] },
+          },
+        },
+        virtual_pages_by_type: {
+          home_page: {
+            page_type: 'home_page',
+            title: '首页',
+            handle: '',
+            locale: 'en_US',
+            style_code: 'default',
+            style_settings: [],
+            ai_description: 'Legacy compatibility smoke check',
+            blocks: [],
+            section_refinements: [],
+          },
+        },
+      };
+      await mergePagebuilderScope(page, legacyPatch);
+      await gotoStable(page, workspaceUrl);
+
+      const frame = page.frameLocator('#pb-ai-visual-preview-frame');
+      await expect(page.locator('#pb-ai-visual-preview-frame')).toBeVisible({ timeout: 60000 });
+      await expect
+        .poll(async () => await frame.locator('.pb-ai-block-wrapper').count(), {
+          timeout: 30000,
+        })
+        .toBeGreaterThan(1);
+
+      const targetBlock = frame.locator('.pb-ai-block-wrapper').nth(1);
+      await targetBlock.hover();
+      await expect(targetBlock.locator('.component-actions')).toBeVisible({ timeout: 10000 });
+      await targetBlock.locator('.component-action-refine').click({ force: true });
+
+      const refineModal = page.locator('#pb-ai-refine-component-modal');
+      await expect(refineModal).toHaveClass(/show/, { timeout: 10000 });
+      await expect(page.locator('.modal-backdrop')).toHaveCount(1, { timeout: 10000 });
+      await expect(page.locator('#pb-ai-refine-component-context')).not.toHaveText(/当前还没有选中的区块。/, {
+        timeout: 10000,
+      });
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-EDITOR-002' },
+    'block field editor updates content and header/footer without iframe reload',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(480000);
+
+      const backendRoot = await loginAsAdmin(page);
+      const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
+
+      const suffix = Date.now().toString().slice(-8);
+      const localDomain = buildLocalDomain(`pb-editor-${suffix}`);
+      const scopePatch = {
+        site_title: `E2E PB Editor ${suffix}`,
+        site_tagline: 'block field editor',
+        target_domain: localDomain,
+        brief_description: 'Block field editing E2E.',
+        user_description: 'Block field editing E2E.',
+        page_types: ['home_page'],
+      };
+
+      await page.fill('#pb-ai-site-title', scopePatch.site_title);
+      await page.fill('#pb-ai-site-tagline', scopePatch.site_tagline);
+      await page.fill('#pb-ai-target-domain', localDomain);
+      await page.fill('#pb-ai-brief-description', scopePatch.brief_description);
+      await mergePagebuilderScope(page, scopePatch);
+
+      const buildStart = await startPagebuilderBuild(page, backendRoot, { ...scopePatch });
+      const buildStream = await consumeSseStream(
+        page,
+        normalizeToCurrentOrigin(page, String(buildStart.stream_url)),
+        { timeoutMs: WORKSPACE_TIMEOUT }
+      );
+      expect(buildStream.ok, JSON.stringify(buildStream)).toBeTruthy();
+
+      await gotoStable(page, workspaceUrl);
+      const previewFrame = page.locator('#pb-ai-visual-preview-frame');
+      const frame = page.frameLocator('#pb-ai-visual-preview-frame');
+      await expect(previewFrame).toBeVisible({ timeout: 60000 });
+      await expect(frame.locator('.pb-ai-block-wrapper[data-region="header"]').first()).toBeVisible({ timeout: 30000 });
+      await expect(frame.locator('.pb-ai-block-wrapper[data-region="footer"]').first()).toBeVisible({ timeout: 30000 });
+
+      const srcBefore = await previewFrame.getAttribute('src');
+
+      const contentBlock = frame.locator('.pb-ai-block-wrapper[data-block-type="cards"]').first();
+      await contentBlock.hover();
+      await contentBlock.locator('.component-action-editor').click({ force: true });
+      await expect(page.locator('#pb-ai-edit-block-modal')).toHaveClass(/show/, { timeout: 10000 });
+      await page.locator('#pb-ai-edit-block-fields [data-field-key="section_title"]').fill('E2E Block Updated');
+      await page.locator('#pb-ai-edit-block-submit').click({ force: true });
+      await expect(page.locator('#pb-ai-edit-block-modal')).not.toHaveClass(/show/, { timeout: 10000 });
+      await expect(contentBlock).toContainText('E2E Block Updated', { timeout: 15000 });
+
+      const headerBlock = frame.locator('.pb-ai-block-wrapper[data-block-type="site_header"]').first();
+      await headerBlock.hover();
+      await headerBlock.locator('.component-action-editor').click({ force: true });
+      await expect(page.locator('#pb-ai-edit-block-modal')).toHaveClass(/show/, { timeout: 10000 });
+      await page.locator('#pb-ai-edit-block-fields [data-field-key="site_title"]').fill('Header E2E Title');
+      await page.locator('#pb-ai-edit-block-submit').click({ force: true });
+      await expect(page.locator('#pb-ai-edit-block-modal')).not.toHaveClass(/show/, { timeout: 10000 });
+      await expect(headerBlock).toContainText('Header E2E Title', { timeout: 15000 });
+
+      const footerBlock = frame.locator('.pb-ai-block-wrapper[data-block-type="site_footer"]').first();
+      await footerBlock.hover();
+      await footerBlock.locator('.component-action-editor').click({ force: true });
+      await expect(page.locator('#pb-ai-edit-block-modal')).toHaveClass(/show/, { timeout: 10000 });
+      await page.locator('#pb-ai-edit-block-fields [data-field-key="site_title"]').fill('Footer E2E Title');
+      await page.locator('#pb-ai-edit-block-submit').click({ force: true });
+      await expect(page.locator('#pb-ai-edit-block-modal')).not.toHaveClass(/show/, { timeout: 10000 });
+      await expect(footerBlock).toContainText('Footer E2E Title', { timeout: 15000 });
+
+      const srcAfter = await previewFrame.getAttribute('src');
+      expect(srcAfter).toBe(srcBefore);
+    }
+  );
 });
