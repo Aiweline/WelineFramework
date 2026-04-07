@@ -6661,7 +6661,7 @@ class ServiceOrchestrator
         if ($ports === []) {
             return;
         }
-        $this->notifyDispatcherSetWorkerPool($ports);
+        $this->notifyDispatcherSetWorkerPool($ports, ControlMessage::ROLE_MAINTENANCE);
     }
 
     /**
@@ -6679,7 +6679,7 @@ class ServiceOrchestrator
                 $timestamp = date('Y-m-d H:i:s');
                 $this->controlServer->sendTo(
                     $dispatcherInstance->ipcClientId,
-                    ControlMessage::setWorkerPool($maintenancePorts)
+                    ControlMessage::setWorkerPool($maintenancePorts, ControlMessage::ROLE_MAINTENANCE)
                 );
                 WlsLogger::info_(
                     "[IPC-Send] {$timestamp} → Dispatcher#{$dispatcherInstance->instanceId} (clientId={$dispatcherInstance->ipcClientId}) SET_WORKER_POOL (maintenance) ports="
@@ -6737,13 +6737,13 @@ class ServiceOrchestrator
      *
      * @param int[] $ports
      */
-    private function notifyDispatcherSetWorkerPool(array $ports): void
+    private function notifyDispatcherSetWorkerPool(array $ports, string $role = ControlMessage::ROLE_WORKER): void
     {
         $dispatchers = $this->registry->getInstancesByRole('dispatcher');
         if ($dispatchers === [] || $this->controlServer === null) {
             return;
         }
-        $msg = ControlMessage::setWorkerPool($ports);
+        $msg = ControlMessage::setWorkerPool($ports, $role);
         $timestamp = date('Y-m-d H:i:s');
         $portsStr = \implode(',', $ports);
 
@@ -6751,7 +6751,7 @@ class ServiceOrchestrator
             if ($dispatcher->ipcClientId !== null) {
                 $this->controlServer->sendTo($dispatcher->ipcClientId, $msg);
                 WlsLogger::info_(
-                    "[IPC-Send] {$timestamp} → Dispatcher#{$dispatcher->instanceId} (clientId={$dispatcher->ipcClientId}) SET_WORKER_POOL: {$portsStr}"
+                    "[IPC-Send] {$timestamp} → Dispatcher#{$dispatcher->instanceId} (clientId={$dispatcher->ipcClientId}) SET_WORKER_POOL(role={$role}): {$portsStr}"
                 );
             }
         }
@@ -7576,7 +7576,7 @@ class ServiceOrchestrator
         }
 
         if ($hasDispatcher) {
-            $this->notifyDispatcherSetWorkerPool($maintPorts);
+            $this->notifyDispatcherSetWorkerPool($maintPorts, ControlMessage::ROLE_MAINTENANCE);
             $this->controlServer?->poll(0, 150000);
         }
 
