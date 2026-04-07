@@ -60,6 +60,7 @@ class ServiceOrchestrator
     private bool $running = false;
     private bool $shuttingDown = false;
     private bool $stopAllInProgress = false;
+    private bool $childProcessStopInProgress = false;
     private ?string $pendingStopReason = null;
     private ?int $pendingStopProgressClientId = null;
     private string $stopStage = self::STOP_STAGE_IDLE;
@@ -224,6 +225,9 @@ class ServiceOrchestrator
      */
     private bool $childServicesBootstrapInProgress = false;
 
+    /** Windows 启动期是否启用协作式顺序拉起；默认关闭，正常路径改为全并发启动。 */
+    private bool $useCooperativeSequentialStartup = false;
+
     /** 单实例重启优先（可恢复角色 IPC 断开时先单实例重启） */
     private bool $singleRestartFirst = true;
 
@@ -332,6 +336,13 @@ class ServiceOrchestrator
             || $this->pendingStopReason !== null
             || $this->stopAllInProgress
             || $this->shuttingDown;
+    }
+
+    private function isRecoverySuspended(): bool
+    {
+        return $this->isStopFlowActive()
+            || $this->fullRestartRequested
+            || $this->childProcessStopInProgress;
     }
 
     private function setStopStage(string $stage): void
@@ -1152,6 +1163,7 @@ class ServiceOrchestrator
         $this->sweeperInterval = (float)$context->getConfig('wls.orchestrator.sweeper_interval_sec', 15.0);
         $this->periodicOrphanSweepEnabled = (bool)$context->getConfig('wls.orchestrator.periodic_orphan_sweep', false);
         $this->singleRestartFirst = (bool)$context->getConfig('wls.orchestrator.single_restart_first', true);
+        $this->useCooperativeSequentialStartup = (bool)($context->getConfig('wls.orchestrator.use_cooperative_sequential_startup', false) ?? false);
         $this->escalationWindowSec = (float)$context->getConfig('wls.orchestrator.escalation_window_sec', 60.0);
         $this->escalationThreshold = (int)$context->getConfig('wls.orchestrator.escalation_threshold', 3);
         $this->stabilizationSec = (float)$context->getConfig('wls.orchestrator.stabilization_sec', 15.0);
@@ -1323,7 +1335,6 @@ class ServiceOrchestrator
         $providers = $this->sortProvidersForStartup($this->registry->getAllProviders());
         $startedCount = 0;
         $startupAcceptance = [];
-        $phaseOneStartupAcceptance = [];
         $phaseOneProviders = [];
         $workerProviders = [];
 
@@ -1379,15 +1390,6 @@ class ServiceOrchestrator
                 }
             }
             $this->controlServer?->poll(0, 250000);
-            if ($this->shouldAbortStartupTransition()) {
-                return;
-            }
-            $phaseOneStartupAcceptance = $startupAcceptance;
-            $startupAcceptance = [];
-        }
-
-        if ($phaseOneStartupAcceptance !== []) {
-            $this->waitForStartupAcceptance($phaseOneStartupAcceptance, $context);
             if ($this->shouldAbortStartupTransition()) {
                 return;
             }
@@ -1560,7 +1562,7 @@ class ServiceOrchestrator
      *
      * @param array<string,array{displayName:string,expected:int,minReady:int}> $startupAcceptance
      */
-    private function waitForStartupAcceptance(array $startupAcceptance, ServiceContext $context): void
+    protected function waitForStartupAcceptance(array $startupAcceptance, ServiceContext $context): void
     {
         if ($this->controlServer === null) {
             return;
@@ -1732,7 +1734,13 @@ class ServiceOrchestrator
             }
         }
 
-        if ($this->shouldUseCooperativeSequentialProvidersStartupBatch(\count($prepared))) {
+        if ($this->shouldUseCooperativeSequentialProvidersStartupBatch(
+            \count($prepared),
+            \array_values(\array_unique(\array_map(
+                static fn (array $item): string => (string) ($item['role'] ?? ''),
+                $prepared
+            )))
+        )) {
             WlsLogger::info_(
                 '[Orchestrator] Windows phase-one startup falls back to cooperative sequential launch to keep IPC responsive'
             );
@@ -1773,6 +1781,44 @@ class ServiceOrchestrator
             return $result;
         }
 
+        if ($this->shouldUseWindowsDetachedFastStartupBatch(\count($prepared))) {
+            WlsLogger::info_(
+                '[Orchestrator] Windows startup uses detached fast-launch path for phase-one providers'
+            );
+
+            foreach ($prepared as $item) {
+                /** @var ServiceInstance $instance */
+                $instance = $item['instance'];
+                /** @var ServiceProviderInterface $provider */
+                $provider = $item['provider'];
+                /** @var ServiceCommand $command */
+                $command = $item['command_obj'];
+                $role = (string) $item['role'];
+                $instanceId = (int) $item['instance_id'];
+
+                $pid = $this->spawnProcess($command, $instance);
+                if ($this->shouldAbortStartupTransition()) {
+                    return $result;
+                }
+
+                if ($pid <= 0) {
+                    WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（非阻塞路径），等待 IPC register 确认");
+                }
+
+                $instance->pid = $pid > 0 ? $pid : 0;
+                $instance->state = ServiceInstance::STATE_STARTING;
+                $instance->startedAt = \microtime(true);
+                $this->registry->addInstance($instance);
+                $provider->onStarted($instance);
+                WlsLogger::info_("[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')');
+                $result[$role][] = $instance;
+            }
+
+            $this->controlServer?->poll(0, 200000);
+
+            return $result;
+        }
+
         $pids = Processer::batchCreate($commands);
         if ($this->shouldAbortStartupTransition()) {
             return $result;
@@ -1802,12 +1848,59 @@ class ServiceOrchestrator
         return $result;
     }
 
-    private function shouldUseCooperativeSequentialProvidersStartupBatch(int $plannedCount): bool
+    /**
+     * @param string[] $plannedRoles
+     */
+    private function shouldUseCooperativeSequentialProvidersStartupBatch(int $plannedCount, array $plannedRoles = []): bool
     {
-        return \defined('IS_WIN') && IS_WIN
-            && $plannedCount > 1
-            && $this->childServicesBootstrapInProgress
-            && $this->controlServer !== null;
+        if (!$this->useCooperativeSequentialStartup) {
+            return false;
+        }
+
+        if (!(\defined('IS_WIN') && IS_WIN)
+            || $plannedCount <= 1
+            || !$this->childServicesBootstrapInProgress
+            || $this->controlServer === null) {
+            return false;
+        }
+
+        if ($this->canConcurrentLaunchPhaseOneRoles($plannedRoles)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Dispatcher / maintenance / redirect are the small phase-one bootstrap
+     * set we intentionally keep concurrent so the entry services come up together.
+     *
+     * @param string[] $plannedRoles
+     */
+    private function canConcurrentLaunchPhaseOneRoles(array $plannedRoles): bool
+    {
+        if ($plannedRoles === []) {
+            return false;
+        }
+
+        $safeConcurrentRoles = [
+            ControlMessage::ROLE_DISPATCHER => true,
+            ControlMessage::ROLE_MAINTENANCE => true,
+            ControlMessage::ROLE_REDIRECT => true,
+        ];
+
+        foreach ($plannedRoles as $role) {
+            $role = \trim((string) $role);
+            if ($role === '') {
+                continue;
+            }
+
+            if (!isset($safeConcurrentRoles[$role])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function tryAdoptSharedSidecarInstance(
@@ -2327,7 +2420,7 @@ class ServiceOrchestrator
      * @param ServiceContext $context 服务上下文
      * @return array<ServiceInstance|null> 启动的实例列表
      */
-    private function startInstancesBatch(ServiceProviderInterface $provider, int $instanceCount, ServiceContext $context): array
+    protected function startInstancesBatch(ServiceProviderInterface $provider, int $instanceCount, ServiceContext $context): array
     {
         if ($instanceCount <= 0) {
             return [];
@@ -2464,10 +2557,21 @@ class ServiceOrchestrator
      */
     private function shouldUseCooperativeSequentialStartupBatch(array $instanceIds): bool
     {
-        return \defined('IS_WIN') && IS_WIN
+        return $this->useCooperativeSequentialStartup
+            && \defined('IS_WIN') && IS_WIN
             && \count($instanceIds) > 1
             && $this->childServicesBootstrapInProgress
             && $this->controlServer !== null;
+    }
+
+    private function shouldUseWindowsDetachedFastStartupBatch(int $plannedCount): bool
+    {
+        unset($plannedCount);
+
+        // Phase-one should now follow the normal batchCreate path on Windows.
+        // The old "detached fast-launch" branch still spawned each provider in a
+        // foreach loop, which preserved one-by-one startup timing in practice.
+        return false;
     }
 
     /**
@@ -4573,7 +4677,11 @@ class ServiceOrchestrator
      */
     private function shouldYieldPeriodicWork(bool $pollControlPlane = true): bool
     {
-        if (!$this->running || $this->shuttingDown || $this->stopAllInProgress || $this->pendingStopReason !== null) {
+        if (!$this->running
+            || $this->shuttingDown
+            || $this->stopAllInProgress
+            || $this->pendingStopReason !== null
+            || $this->childProcessStopInProgress) {
             return true;
         }
 
@@ -4581,17 +4689,22 @@ class ServiceOrchestrator
             $this->controlServer->poll(0, 0);
         }
 
-        if (!$this->running || $this->shuttingDown || $this->stopAllInProgress || $this->pendingStopReason !== null) {
+        if (!$this->running
+            || $this->shuttingDown
+            || $this->stopAllInProgress
+            || $this->pendingStopReason !== null
+            || $this->childProcessStopInProgress) {
             return true;
         }
 
         if ($this->suspendControlPreemption) {
-            return $this->fullRestartRequested;
+            return $this->fullRestartRequested || $this->childProcessStopInProgress;
         }
 
         $shouldYield = $this->activeControlOperation !== null
             || $this->pendingControlOperations !== []
-            || $this->fullRestartRequested;
+            || $this->fullRestartRequested
+            || $this->childProcessStopInProgress;
         if (!$shouldYield && SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null) {
             SchedulerSystem::yield();
         }
@@ -4828,7 +4941,7 @@ class ServiceOrchestrator
      */
     private function performHealthChecks(): void
     {
-        if ($this->isStopFlowActive()) {
+        if ($this->isRecoverySuspended()) {
             return;
         }
 
@@ -4955,7 +5068,7 @@ class ServiceOrchestrator
      */
     private function healthCheckRestartOrEscalate(ServiceInstance $instance, string $reason): void
     {
-        if ($this->isStopFlowActive()) {
+        if ($this->isRecoverySuspended()) {
             return;
         }
 
@@ -4980,8 +5093,10 @@ class ServiceOrchestrator
 
         $maxRestarts = 10;
         $provider = $this->registry->getProvider($instance->role);
-        $resurrectionPriority = $provider?->getResurrectionPriority() ?? 0;
-        if ($resurrectionPriority <= 0) {
+        if ($this->cleanupInactiveMaintenanceInstance($instance, '健康检查失败')) {
+            return;
+        }
+        if (!$this->canUseLocalSlotResurrection($instance, $provider)) {
             $this->requestFullRestart($reason);
 
             return;
@@ -4999,6 +5114,59 @@ class ServiceOrchestrator
             }
         }
         $this->scheduleResurrection($instance);
+    }
+
+    private function canUseLocalSlotResurrection(
+        ServiceInstance $instance,
+        ?ServiceProviderInterface $provider = null
+    ): bool {
+        $provider ??= $this->registry->getProvider($instance->role);
+        if ($provider === null) {
+            return false;
+        }
+
+        if ($instance->getUptime() < $this->startupGracePeriod) {
+            return true;
+        }
+
+        if ($provider->getResurrectionPriority() > 0) {
+            return true;
+        }
+
+        return $instance->role === ControlMessage::ROLE_MAINTENANCE
+            && $this->maintenanceMode;
+    }
+
+    private function clearMaintenanceResurrectQueue(?int $instanceId = null): void
+    {
+        if ($instanceId !== null) {
+            unset($this->resurrectQueue[ControlMessage::ROLE_MAINTENANCE . ':' . $instanceId]);
+            return;
+        }
+
+        foreach (\array_keys($this->resurrectQueue) as $key) {
+            if (\str_starts_with($key, ControlMessage::ROLE_MAINTENANCE . ':')) {
+                unset($this->resurrectQueue[$key]);
+            }
+        }
+    }
+
+    private function cleanupInactiveMaintenanceInstance(ServiceInstance $instance, string $trigger): bool
+    {
+        if ($instance->role !== ControlMessage::ROLE_MAINTENANCE || $this->maintenanceMode) {
+            return false;
+        }
+
+        $this->clearMaintenanceResurrectQueue($instance->instanceId);
+        $this->registry->removeInstance(ControlMessage::ROLE_MAINTENANCE, $instance->instanceId);
+        if ($this->context !== null) {
+            $this->persistServicesInfo($this->context);
+        }
+        WlsLogger::info_(
+            "[Orchestrator] maintenance#{$instance->instanceId} {$trigger}，但维护模式未激活，清理残留实例"
+        );
+
+        return true;
     }
 
     /**
@@ -5198,34 +5366,39 @@ class ServiceOrchestrator
     private function stopChildProcesses(string $reason): void
     {
         WlsLogger::info_("[Orchestrator] 开始停止子进程（保持 IPC），原因: {$reason}");
+        $this->childProcessStopInProgress = true;
 
-        $allInstances = $this->registry->getAllInstances();
-        if (\count($allInstances) === 0) {
-            WlsLogger::info_('[Orchestrator] 无运行中的子进程');
-            return;
+        try {
+            $allInstances = $this->registry->getAllInstances();
+            if (\count($allInstances) === 0) {
+                WlsLogger::info_('[Orchestrator] 无运行中的子进程');
+                return;
+            }
+
+            // 阶段 1：广播 DRAIN
+            WlsLogger::info_('[Orchestrator] 子进程停止阶段1: 广播 DRAIN');
+            $this->broadcastDrainToAll();
+
+            // 阶段 2：等待排水完成
+            WlsLogger::info_('[Orchestrator] 子进程停止阶段2: 等待排水完成');
+            $this->waitForAllDrained($this->drainTimeout, true);
+
+            // 阶段 3：广播 SHUTDOWN
+            WlsLogger::info_('[Orchestrator] 子进程停止阶段3: 广播 SHUTDOWN');
+            $this->broadcastShutdownToAll();
+
+            // 阶段 4：等待子进程 IPC 断开（与 stopAll 阶段 4 一致）
+            WlsLogger::info_('[Orchestrator] 子进程停止阶段4: 等待子服务 IPC 断开');
+            $this->waitForServiceIpcDisconnectAfterShutdown();
+
+            // 阶段 5：强制杀死残留子进程
+            WlsLogger::info_('[Orchestrator] 子进程停止阶段5: 校验并杀死残留');
+            $this->verifyAndKillRemainingProcesses();
+
+            WlsLogger::info_('[Orchestrator] 所有子进程已停止');
+        } finally {
+            $this->childProcessStopInProgress = false;
         }
-
-        // 阶段 1：广播 DRAIN
-        WlsLogger::info_('[Orchestrator] 子进程停止阶段1: 广播 DRAIN');
-        $this->broadcastDrainToAll();
-
-        // 阶段 2：等待排水完成
-        WlsLogger::info_('[Orchestrator] 子进程停止阶段2: 等待排水完成');
-        $this->waitForAllDrained($this->drainTimeout, true);
-
-        // 阶段 3：广播 SHUTDOWN
-        WlsLogger::info_('[Orchestrator] 子进程停止阶段3: 广播 SHUTDOWN');
-        $this->broadcastShutdownToAll();
-
-        // 阶段 4：等待子进程 IPC 断开（与 stopAll 阶段 4 一致）
-        WlsLogger::info_('[Orchestrator] 子进程停止阶段4: 等待子服务 IPC 断开');
-        $this->waitForServiceIpcDisconnectAfterShutdown();
-
-        // 阶段 5：强制杀死残留子进程
-        WlsLogger::info_('[Orchestrator] 子进程停止阶段5: 校验并杀死残留');
-        $this->verifyAndKillRemainingProcesses();
-
-        WlsLogger::info_('[Orchestrator] 所有子进程已停止');
     }
     
     /**
@@ -5311,7 +5484,7 @@ class ServiceOrchestrator
      */
     private function reconcileDesiredState(): void
     {
-        if ($this->context === null || empty($this->desiredState) || $this->isStopFlowActive()) {
+        if ($this->context === null || empty($this->desiredState) || $this->isRecoverySuspended()) {
             return;
         }
         if ($this->childServicesBootstrapInProgress) {
@@ -5385,9 +5558,8 @@ class ServiceOrchestrator
             return;
         }
 
-        $priority = $provider->getResurrectionPriority();
-        if ($priority <= 0) {
-            WlsLogger::info_("[Orchestrator] 服务 {$instance->role} 不参与复活");
+        if (!$this->canUseLocalSlotResurrection($instance, $provider)) {
+            WlsLogger::info_("[Orchestrator] 服务 {$instance->role} 不参与本地单槽复活");
             return;
         }
 
@@ -5428,7 +5600,7 @@ class ServiceOrchestrator
      */
     private function processResurrectQueue(?array $roles = null): void
     {
-        if (empty($this->resurrectQueue) || $this->isStopFlowActive()) {
+        if (empty($this->resurrectQueue) || $this->isRecoverySuspended()) {
             return;
         }
 
@@ -5445,6 +5617,11 @@ class ServiceOrchestrator
             }
             if ($this->shouldYieldPeriodicWork(true)) {
                 return;
+            }
+            if (($entry['role'] ?? '') === ControlMessage::ROLE_MAINTENANCE && !$this->maintenanceMode) {
+                unset($this->resurrectQueue[$key]);
+                WlsLogger::info_("[Orchestrator] 维护模式已关闭，取消 maintenance#{$entry['instanceId']} 待执行复活");
+                continue;
             }
             if ($now < $entry['scheduledAt']) {
                 continue;
@@ -5986,6 +6163,21 @@ class ServiceOrchestrator
             $instance->port = $reportedPort;
         }
 
+        $isDuplicateReadyFromSameClient = $instance->state === ServiceInstance::STATE_READY
+            && $instance->ipcClientId === $clientId;
+        $readyAlreadyRecorded = $instance->getMeta('ready_at') !== null;
+        if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded) {
+            $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
+            $this->controlServer?->sendTo($clientId, ControlMessage::ackReady($workerId));
+            WlsLogger::info_(
+                "[Orchestrator] 重复 READY 已幂等处理: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
+            );
+            if ($this->context !== null) {
+                $this->persistServicesInfo($this->context);
+            }
+            return;
+        }
+
         $instance->state = ServiceInstance::STATE_READY;
         $instance->setMeta('ready_at', \microtime(true));
         $this->registry->updateInstance($instance);
@@ -6208,7 +6400,7 @@ class ServiceOrchestrator
      */
     private function reconcileWorkerSlotsWithoutHa(): void
     {
-        if ($this->context === null || !$this->running || $this->isStopFlowActive()) {
+        if ($this->context === null || !$this->running || $this->isRecoverySuspended()) {
             return;
         }
         if ($this->childServicesBootstrapInProgress) {
@@ -6244,7 +6436,7 @@ class ServiceOrchestrator
      */
     private function runWorkerLivenessAudit(): void
     {
-        if ($this->context === null || $this->controlServer === null || !$this->running || $this->isStopFlowActive()) {
+        if ($this->context === null || $this->controlServer === null || !$this->running || $this->isRecoverySuspended()) {
             return;
         }
         if ($this->childServicesBootstrapInProgress) {
@@ -6496,9 +6688,12 @@ class ServiceOrchestrator
 
                 return;
             }
-            WlsLogger::warning_(
-                "[Orchestrator] 维护模式激活但无 READY maintenance 端口，Dispatcher#{$dispatcherInstance->instanceId} 初始化池保持现状"
-            );
+            $maintenancePoolMessage = "[Orchestrator] 维护模式激活但无 READY maintenance 端口，Dispatcher#{$dispatcherInstance->instanceId} 初始化池保持现状";
+            if ($this->childServicesBootstrapInProgress) {
+                WlsLogger::info_($maintenancePoolMessage . '（启动窗口期，等待 maintenance READY 后补发）');
+            } else {
+                WlsLogger::warning_($maintenancePoolMessage);
+            }
         }
 
         $workerPorts = [];
@@ -7503,6 +7698,7 @@ class ServiceOrchestrator
             $maintenanceProvider->disable();
         }
 
+        $this->clearMaintenanceResurrectQueue();
         $this->stopMaintenanceWorkers();
         $this->maintenanceMode = false;
         $this->maintenanceSticky = false;
@@ -8403,6 +8599,23 @@ class ServiceOrchestrator
             return;
         }
 
+        if ($this->fullRestartRequested || $this->childProcessStopInProgress) {
+            if (!\in_array($instance->state, [
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+            ], true)) {
+                $instance->state = ServiceInstance::STATE_STOPPING;
+                $this->registry->updateInstance($instance);
+            }
+            if ($this->context !== null) {
+                $this->persistServicesInfo($this->context);
+            }
+            WlsLogger::info_(
+                "[Orchestrator] 实例 {$instance->role}#{$instance->instanceId} 处于整组重启停机窗口，预期断开，跳过复活"
+            );
+            return;
+        }
+
         // 正在排水、停止中或已停止的实例（graceful reload 主动停止）→ 预期断开，不触发整组重启和复活
         // STATE_STOPPING：draining_complete 后、Worker 退出前，IPC 断开时应跳过（否则会重复安排延迟复活导致 Worker 数量翻倍）
         if (\in_array($instance->state, [
@@ -8417,6 +8630,10 @@ class ServiceOrchestrator
             return;
         }
 
+        if ($this->cleanupInactiveMaintenanceInstance($instance, 'IPC 断开')) {
+            return;
+        }
+
         if ($instance->role === ControlMessage::ROLE_SESSION_SERVER
             || $instance->role === ControlMessage::ROLE_MEMORY_SERVER) {
             $this->handleInfraServiceIpcDisconnect($instance);
@@ -8426,10 +8643,10 @@ class ServiceOrchestrator
 
         $now = \microtime(true);
         $processStillRunning = $instance->pid > 0 && $this->isProcessRunning($instance->pid);
-        $resurrectionPriority = $provider?->getResurrectionPriority() ?? 0;
+        $canResurrectLocally = $this->canUseLocalSlotResurrection($instance, $provider);
         $maxSlotRestarts = 10;
 
-        if ($resurrectionPriority > 0 && $instance->restarts >= $maxSlotRestarts) {
+        if ($canResurrectLocally && $instance->restarts >= $maxSlotRestarts) {
             WlsLogger::error_(
                 "[Orchestrator] {$instance->role}#{$instance->instanceId} 单槽重启已达上限 ({$instance->restarts})，整组重启"
             );
@@ -8441,7 +8658,7 @@ class ServiceOrchestrator
         }
 
         // 凡 Master 管理的、参与复活的子进程：进程已死则立即单槽拉起，不整组重启
-        if (!$processStillRunning && $resurrectionPriority > 0) {
+        if (!$processStillRunning && $canResurrectLocally) {
             WlsLogger::warning_(
                 "[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开且进程已退出，单实例复活"
             );
@@ -8450,7 +8667,7 @@ class ServiceOrchestrator
             return;
         }
 
-        if ($processStillRunning && $resurrectionPriority > 0) {
+        if ($processStillRunning && $canResurrectLocally) {
             $delay = \max(2.0, $this->ipcReconnectGraceSec);
             WlsLogger::warning_(
                 "[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开但进程仍存活，{$delay}s 后按复活队列处理（可重连或换进程）"
@@ -8461,7 +8678,7 @@ class ServiceOrchestrator
         }
 
         $isNewInstance = $instance->getUptime() < $this->stabilizationSec;
-        if ($resurrectionPriority > 0
+        if ($canResurrectLocally
             && $this->rollingRestartStabilizingUntil > 0
             && $now < $this->rollingRestartStabilizingUntil
             && $isNewInstance) {
@@ -8473,7 +8690,7 @@ class ServiceOrchestrator
             return;
         }
 
-        if ($resurrectionPriority > 0) {
+        if ($canResurrectLocally) {
             WlsLogger::warning_(
                 "[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开（无有效 PID 判定），单实例复活"
             );
@@ -8483,7 +8700,7 @@ class ServiceOrchestrator
         }
 
         WlsLogger::error_(
-            "[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开且该角色不参与单槽复活"
+            "[Orchestrator] {$instance->role}#{$instance->instanceId} IPC 断开且该角色不参与本地单槽复活"
         );
         $this->requestFullRestart("ipc_disconnect:no_resurrect:{$instance->role}#{$instance->instanceId}");
     }
@@ -8493,7 +8710,7 @@ class ServiceOrchestrator
      */
     private function scheduleResurrectionWithDelay(ServiceInstance $instance, float $delay): void
     {
-        if ($this->isStopFlowActive()) {
+        if ($this->isRecoverySuspended()) {
             return;
         }
 
@@ -8515,8 +8732,8 @@ class ServiceOrchestrator
         }
 
         $provider = $this->registry->getProvider($instance->role);
-        if ($provider === null || $provider->getResurrectionPriority() <= 0) {
-            WlsLogger::info_("[Orchestrator] 服务 {$instance->role} 不参与复活");
+        if (!$this->canUseLocalSlotResurrection($instance, $provider)) {
+            WlsLogger::info_("[Orchestrator] 服务 {$instance->role} 不参与本地单槽复活");
             return;
         }
 

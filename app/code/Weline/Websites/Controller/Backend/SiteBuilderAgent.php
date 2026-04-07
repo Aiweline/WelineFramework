@@ -50,6 +50,7 @@ class SiteBuilderAgent extends BackendController
         $this->assign('selected_provider_context', $this->extractProviderContext($providerConfig));
         $this->assign('selected_stage_guides', $this->buildStageGuides($providerConfig, $scope, 'prepare'));
         $this->assign('create_session_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/create-session'));
+        $this->assign('delete_session_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/delete-session'));
         $this->assign('recommend_domain_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/recommend-domain'));
         $this->assign('recommend_domain_sse_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/recommend-domain-sse'));
         $this->assign('check_domain_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/check-domain'));
@@ -114,6 +115,7 @@ class SiteBuilderAgent extends BackendController
         $this->assign('replace_scope_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/replace-scope'));
         $this->assign('set_stage_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/set-stage'));
         $this->assign('append_message_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/append-message'));
+        $this->assign('delete_session_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/delete-session'));
         $this->assign('start_domain_purchase_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/start-domain-purchase'));
         $this->assign('domain_purchase_sse_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/domain-purchase-sse'));
         $this->assign('generate_virtual_theme_sse_url', $this->getUrlHelper()->getBackendUrlPath('*/backend/site-builder-agent/generate-virtual-theme-sse'));
@@ -991,6 +993,31 @@ class SiteBuilderAgent extends BackendController
             'success' => true,
             'stage' => $stage,
             'stage_label' => $this->getStageLabel($stage),
+        ]);
+    }
+
+    #[Acl('Weline_Websites::site_builder_agent_delete_session', 'Delete Workspace Session', 'mdi mdi-delete-outline', 'Delete a resumable AI site workspace', 'Weline_Websites::site_builder_agent')]
+    public function postDeleteSession(): string
+    {
+        $adminId = $this->getAdminId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        if ($adminId <= 0 || $publicId === '') {
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+        }
+
+        $session = $this->getSessionService()->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无访问权限')]);
+        }
+
+        if (!$this->getSessionService()->deleteSessionById($session->getId(), $adminId)) {
+            return $this->fetchJson(['success' => false, 'message' => __('删除会话失败')]);
+        }
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('最近会话已删除'),
+            'public_id' => $publicId,
         ]);
     }
 

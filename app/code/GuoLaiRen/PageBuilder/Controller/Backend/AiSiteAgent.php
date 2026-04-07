@@ -17,6 +17,7 @@ use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
+use GuoLaiRen\PageBuilder\Service\QuickBuildAggregator;
 use Weline\Framework\App\State;
 use Weline\Admin\Controller\BaseController;
 use Weline\Framework\Acl\Acl;
@@ -27,16 +28,22 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
+use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
+use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService as WebsitesDomainPurchaseWorkbenchService;
+use Weline\Websites\Service\AiWorkbench\SessionService as WebsitesSessionService;
 
 #[Acl('GuoLaiRen_PageBuilder::ai_site_agent', 'AI 建站工作台', 'mdi-robot-outline', 'PageBuilder AI 建站会话与流水线', 'Weline_Backend::page_builder_group')]
 class AiSiteAgent extends BaseController
 {
     private const PARAMS_PUBLIC_ID = ['public_id'];
     private const PARAMS_OPERATION_SSE = ['public_id', 'execution_token'];
+    private const PARAMS_STREAM_LEASE = ['public_id', 'lease_token'];
     private const PARAMS_REGENERATE = ['public_id', 'page_type'];
     private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
+    private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
+    private const STREAM_LEASE_TTL_SEC = 60;
 
     private readonly AiSiteAgentSessionService $sessionService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
@@ -114,7 +121,36 @@ class AiSiteAgent extends BaseController
             return $this->fetch('workspace-error');
         }
 
+        $linkedWebsitesSession = $this->ensureLinkedWebsitesMirrorSession($session, $adminId);
+        if ($linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession) {
+            $this->syncPageBuilderScopeFromLinkedWebsitesSession($session, $linkedWebsitesSession, $adminId);
+        }
+        $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
         $state = $this->buildWorkspaceState($session, $adminId, 200, true);
+        $linkedWebsitesScope = $linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession
+            ? $linkedWebsitesSession->getScopeArray()
+            : [];
+        $domainPurchaseState = $linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession
+            ? $this->getWebsitesDomainPurchaseWorkbenchService()->buildViewState($linkedWebsitesSession)
+            : [];
+        $registrarAccounts = $this->buildRegistrarAccountOptions();
+        $recommendedDomainList = \is_array($linkedWebsitesScope['recommended_domain_list'] ?? null)
+            ? $linkedWebsitesScope['recommended_domain_list']
+            : (\is_array($state['scope']['recommended_domain_list'] ?? null) ? $state['scope']['recommended_domain_list'] : []);
+        $recommendedRegistrarLabel = \trim((string)($linkedWebsitesScope['recommended_registrar_label'] ?? $state['scope']['recommended_registrar_label'] ?? ''));
+        $preferredRegistrarAccountId = (int)($linkedWebsitesScope['preferred_registrar_account_id'] ?? $linkedWebsitesScope['registrar_account_id'] ?? $state['scope']['preferred_registrar_account_id'] ?? $state['scope']['registrar_account_id'] ?? 0);
+        if ($preferredRegistrarAccountId <= 0 && $registrarAccounts !== []) {
+            $preferredRegistrarAccountId = (int)($registrarAccounts[0]['account_id'] ?? 0);
+        }
+        if ($recommendedRegistrarLabel === '' && $preferredRegistrarAccountId > 0) {
+            foreach ($registrarAccounts as $account) {
+                if ((int)($account['account_id'] ?? 0) !== $preferredRegistrarAccountId) {
+                    continue;
+                }
+                $recommendedRegistrarLabel = \trim((string)($account['label'] ?? ''));
+                break;
+            }
+        }
 
         $this->assign('title', __('PageBuilder AI 建站工作台'));
         $this->assign('session', $session);
@@ -133,8 +169,19 @@ class AiSiteAgent extends BaseController
         $this->assign('start_publish_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-publish'));
         $this->assign('operation_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
         $this->assign('stream_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/stream-sse', ['public_id' => $publicId]));
+        $this->assign('touch_stream_lease_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-touch-stream-lease'));
         $this->assign('switch_preview_page_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-switch-preview-page'));
         $this->assign('publish_check_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-publish-checklist'));
+        $this->assign('delete_workspace_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-delete-workspace'));
+        $this->assign('recommend_domain_url', $this->url->getBackendUrl('websites/backend/site-builder-agent/recommend-domain'));
+        $this->assign('check_domain_url', $this->url->getBackendUrl('websites/backend/site-builder-agent/check-domain'));
+        $this->assign('start_domain_purchase_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-domain-purchase'));
+        $this->assign('domain_purchase_state', $domainPurchaseState);
+        $this->assign('recommended_domain_list', $recommendedDomainList);
+        $this->assign('recommended_registrar_label', $recommendedRegistrarLabel);
+        $this->assign('preferred_registrar_account_id', $preferredRegistrarAccountId);
+        $this->assign('registrar_accounts', $registrarAccounts);
+        $this->assign('linked_workbench_public_id', $linkedWebsitesSession?->getPublicId() ?? '');
         $this->assign('back_url', $this->url->getBackendUrl('websites/backend/site-builder-agent/index', ['provider' => 'pagebuilder']));
         $this->assign('stage_options', $this->getStageOptions());
 
@@ -450,8 +497,30 @@ SCRIPT;
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '发布前检查', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postPublishChecklist(): string { return $this->handlePublishChecklist(); }
 
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站工作台', 'mdi-robot-outline', '删除 AI 建站工作台会话', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postDeleteWorkspace(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        if ($adminId <= 0 || $publicId === '') {
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
+        }
+
+        if (!$this->sessionService->deleteSession($session->getId(), $adminId)) {
+            return $this->fetchJson(['success' => false, 'message' => __('删除工作区失败，请稍后重试')]);
+        }
+
+        return $this->fetchJson(['success' => true, 'message' => __('工作区已删除')]);
+    }
+
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_stream', 'AI 建站事件流', 'mdi-access-point', '订阅 AI 建站会话事件流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getStreamSse(): void { $this->handleStreamSse(); }
+    public function postTouchStreamLease(): string { return $this->touchStreamLease(); }
 
     /**
      * 测试 SSE 短轮询（无需认证）
@@ -496,9 +565,16 @@ SCRIPT;
             return $this->fetchJson(['success' => false, 'message' => __('未登录')]);
         }
 
+        $fakeMode = $this->getRequestBodyValue('fake_mode', '0');
+        $fakeModeEnabled = $fakeMode === true
+            || $fakeMode === 1
+            || $fakeMode === '1'
+            || $fakeMode === 'true';
+
         try {
             $session = $this->sessionService->createSession($adminId, [
                 'workspace_status' => AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PREPARING,
+                'fake_mode' => $fakeModeEnabled ? 1 : 0,
             ]);
         } catch (\Throwable $throwable) {
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
@@ -508,6 +584,59 @@ SCRIPT;
             'success' => true,
             'public_id' => $session->getPublicId(),
             'workspace_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $session->getPublicId()]),
+        ]);
+    }
+
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_domain_purchase', 'PageBuilder 域名购买', 'mdi-cart-arrow-down', '在 PageBuilder 工作台中代理 Websites 域名购买工作流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postStartDomainPurchase(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        if ($adminId <= 0 || $publicId === '') {
+            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
+        }
+
+        $linkedWebsitesSession = $this->ensureLinkedWebsitesMirrorSession($session, $adminId);
+        if (!$linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession) {
+            return $this->fetchJson(['success' => false, 'message' => __('鏆傛棤娉曞垱寤哄煙鍚嶈喘涔板伐浣滃尯')]);
+        }
+
+        $scopeError = '';
+        $scopePatch = $this->getRequestJsonObject('scope_patch', $scopeError);
+        if ($scopeError !== '') {
+            return $this->fetchJson(['success' => false, 'message' => $scopeError]);
+        }
+
+        $scopePatch = \array_replace($this->buildLinkedWebsitesScopeFromPageBuilderSession($session), $scopePatch);
+        $result = $this->getWebsitesDomainPurchaseWorkbenchService()->queuePurchase(
+            $linkedWebsitesSession->getId(),
+            $adminId,
+            $scopePatch
+        );
+
+        if (empty($result['success'])) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('鍔犲叆鍩熷悕璐拱闃熷垪澶辫触')),
+            ]);
+        }
+
+        $this->syncPageBuilderScopeFromLinkedWebsitesSession($session, $linkedWebsitesSession, $adminId);
+        $freshPageBuilderSession = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $freshWebsitesSession = $this->getWebsitesSessionService()->loadById($linkedWebsitesSession->getId(), $adminId) ?? $linkedWebsitesSession;
+        $state = $this->getWebsitesDomainPurchaseWorkbenchService()->buildViewState($freshWebsitesSession);
+
+        return $this->fetchJson([
+            'success' => true,
+            'message' => (string)($result['message'] ?? __('宸插姞鍏ュ煙鍚嶈喘涔伴槦鍒?')),
+            'state' => $state,
+            'pagebuilder_state' => $this->buildWorkspaceState($freshPageBuilderSession, $adminId, 80, true),
+            'linked_public_id' => $freshWebsitesSession->getPublicId(),
         ]);
     }
 
@@ -882,10 +1011,12 @@ SCRIPT;
         // 先验证认证和参数，避免启动 SSE 后再发现认证失败
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
+        $leaseToken = \trim((string)$this->request->getGet('lease_token', ''));
         $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
         $this->logStreamSse('request_received', [
             'admin_id' => $adminId,
             'public_id' => $publicId,
+            'lease_token_present' => $leaseToken !== '',
             'last_event_id' => $lastEventId,
         ]);
 
@@ -943,7 +1074,9 @@ SCRIPT;
         // 验证通过，启动 SSE 长连接
         @\set_time_limit(0);
         @\ignore_user_abort(true);
-
+        if ($leaseToken !== '') {
+            $this->touchStreamLeaseState($session, $adminId, $leaseToken);
+        }
         $sse = new SseWriter();
         $sse->start();
         $sse->sendEvent('start', ['message' => __('已连接 PageBuilder 工作区事件流')]);
@@ -973,6 +1106,13 @@ SCRIPT;
 
             // 检查连接是否还活着
             if (!$sse->isAlive()) {
+                break;
+            }
+            if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
+                $this->logStreamSse('stream_lease_expired', [
+                    'session_id' => $session->getId(),
+                    'loop_count' => $loopCount,
+                ], 'warning');
                 break;
             }
 
@@ -1025,6 +1165,7 @@ SCRIPT;
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
+        $leaseToken = \trim((string)$this->request->getGet('lease_token', ''));
         if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
             $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_OPERATION_SSE);
             $sse->complete(['success' => false]);
@@ -1037,6 +1178,9 @@ SCRIPT;
             return;
         }
 
+        if ($leaseToken !== '') {
+            $this->touchStreamLeaseState($session, $adminId, $leaseToken);
+        }
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
@@ -1456,6 +1600,7 @@ SCRIPT;
         $now = \date('Y-m-d H:i:s');
 
         foreach ($pageTypes as $pageType) {
+            $this->assertActiveStreamLeaseAlive($session, $adminId);
             $currentStep++;
             $progressPercent = (int)(($currentStep / $totalSteps) * 100);
             $pageLabel = (string)($pageTypeLabels[$pageType] ?? $pageType);
@@ -1530,6 +1675,7 @@ SCRIPT;
      */
     private function runBuildOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): array
     {
+        $this->assertActiveStreamLeaseAlive($session, $adminId);
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
@@ -1657,6 +1803,7 @@ SCRIPT;
      */
     private function runRegeneratePageOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId, string $pageType): array
     {
+        $this->assertActiveStreamLeaseAlive($session, $adminId);
         if ($pageType === '') {
             throw new \RuntimeException((string)__('缺少要重建的页面类型'));
         }
@@ -1757,6 +1904,7 @@ SCRIPT;
      */
     private function runPublishOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId): array
     {
+        $this->assertActiveStreamLeaseAlive($session, $adminId);
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
@@ -1815,6 +1963,7 @@ SCRIPT;
         ?string $workspaceStatus = null,
         ?string $publishStatus = null
     ): void {
+        $this->assertActiveStreamLeaseAlive($session, $adminId);
         if ($operationStatus === 'running' && $progressPercent >= 100) {
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
@@ -1879,6 +2028,70 @@ SCRIPT;
         $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
         if ($publishStatus !== null) {
             $this->sessionService->setPublishStatus($fresh->getId(), $adminId, $publishStatus);
+        }
+    }
+
+    private function touchStreamLease(): string
+    {
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $leaseToken = \trim((string)$this->getRequestBodyValue('lease_token', ''));
+        if ($adminId <= 0 || $publicId === '' || $leaseToken === '') {
+            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_STREAM_LEASE);
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_STREAM_LEASE);
+        }
+
+        $expiresAt = $this->touchStreamLeaseState($session, $adminId, $leaseToken);
+
+        return $this->fetchJson([
+            'success' => true,
+            'data' => [
+                'public_id' => $publicId,
+                'lease_token' => $leaseToken,
+                'expires_at' => $expiresAt,
+                'ttl_sec' => self::STREAM_LEASE_TTL_SEC,
+            ],
+        ]);
+    }
+
+    private function touchStreamLeaseState(AiSiteAgentSession $session, int $adminId, string $leaseToken): int
+    {
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $lease = \is_array($scope[self::STREAM_LEASE_SCOPE_KEY] ?? null) ? $scope[self::STREAM_LEASE_SCOPE_KEY] : [];
+        $expiresAt = \time() + self::STREAM_LEASE_TTL_SEC;
+        $lease['token'] = $leaseToken;
+        $lease['expires_at'] = $expiresAt;
+        $lease['updated_at'] = \date('Y-m-d H:i:s');
+        $scope[self::STREAM_LEASE_SCOPE_KEY] = $lease;
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+
+        return $expiresAt;
+    }
+
+    private function isStreamLeaseAlive(AiSiteAgentSession $session, int $adminId, string $leaseToken = ''): bool
+    {
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $lease = \is_array($scope[self::STREAM_LEASE_SCOPE_KEY] ?? null) ? $scope[self::STREAM_LEASE_SCOPE_KEY] : [];
+        if ($lease === []) {
+            return true;
+        }
+
+        if ($leaseToken !== '' && (string)($lease['token'] ?? '') !== $leaseToken) {
+            return false;
+        }
+
+        return (int)($lease['expires_at'] ?? 0) >= \time();
+    }
+
+    private function assertActiveStreamLeaseAlive(AiSiteAgentSession $session, int $adminId, string $leaseToken = ''): void
+    {
+        if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
+            throw new \RuntimeException((string)__('鍓嶇杩炴帴宸茶繃鏈燂紝宸叉彁鍓嶇粓姝?SSE 鎿嶄綔'));
         }
     }
 
@@ -2009,6 +2222,200 @@ SCRIPT;
             return [];
         }
         return $decoded;
+    }
+
+    private function getQuickBuildAggregator(): QuickBuildAggregator
+    {
+        return ObjectManager::getInstance(QuickBuildAggregator::class);
+    }
+
+    private function getWebsitesSessionService(): WebsitesSessionService
+    {
+        return ObjectManager::getInstance(WebsitesSessionService::class);
+    }
+
+    private function getWebsitesDomainPurchaseWorkbenchService(): WebsitesDomainPurchaseWorkbenchService
+    {
+        return ObjectManager::getInstance(WebsitesDomainPurchaseWorkbenchService::class);
+    }
+
+    /**
+     * @return list<array{account_id:int,label:string,registrar_name:string,registrar_code:string,account_name:string}>
+     */
+    private function buildRegistrarAccountOptions(): array
+    {
+        $rows = $this->getQuickBuildAggregator()->queryRegistrarAccounts(['status' => 'active']);
+        if (!\is_array($rows)) {
+            $rows = [];
+        }
+
+        $options = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $accountId = (int)($row['account_id'] ?? 0);
+            if ($accountId <= 0) {
+                continue;
+            }
+            $registrarName = \trim((string)($row['registrar_name'] ?? $row['registrar_code'] ?? ''));
+            $accountName = \trim((string)($row['account_name'] ?? ''));
+            $label = $registrarName !== ''
+                ? $registrarName . ($accountName !== '' ? (' - ' . $accountName) : '')
+                : ($accountName !== '' ? $accountName : (string)__('鏈嶅姟鍟?'));
+            $options[] = [
+                'account_id' => $accountId,
+                'label' => $label,
+                'registrar_name' => $registrarName,
+                'registrar_code' => (string)($row['registrar_code'] ?? ''),
+                'account_name' => $accountName,
+            ];
+        }
+
+        if ($options === []) {
+            $options = [
+                [
+                    'account_id' => 900001,
+                    'label' => (string)__('本地演示服务商 - 本地演示主账号'),
+                    'registrar_name' => (string)__('本地演示服务商'),
+                    'registrar_code' => 'local_demo',
+                    'account_name' => (string)__('本地演示主账号'),
+                ],
+                [
+                    'account_id' => 900002,
+                    'label' => (string)__('沙盒域名 - 本地演示备用账号'),
+                    'registrar_name' => (string)__('沙盒域名'),
+                    'registrar_code' => 'sandbox_demo',
+                    'account_name' => (string)__('本地演示备用账号'),
+                ],
+            ];
+        }
+
+        return $options;
+    }
+
+    private function ensureLinkedWebsitesMirrorSession(AiSiteAgentSession $session, int $adminId): ?WebsitesAiSiteBuilderSession
+    {
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $linkedPublicId = \trim((string)($scope['handoff_workspace_public_id'] ?? ''));
+        $websitesSessionService = $this->getWebsitesSessionService();
+        $linkedSession = $linkedPublicId !== ''
+            ? $websitesSessionService->loadByPublicId($linkedPublicId, $adminId)
+            : null;
+        $linkedScope = $this->buildLinkedWebsitesScopeFromPageBuilderSession($session);
+
+        if (!$linkedSession instanceof WebsitesAiSiteBuilderSession) {
+            $linkedSession = $websitesSessionService->createSession('pagebuilder', $adminId, $linkedScope, [], 'prepare');
+            $this->sessionService->mergeScope($session->getId(), $adminId, [
+                'handoff_workspace_public_id' => $linkedSession->getPublicId(),
+                'provider_handoff_mode' => 'pagebuilder_native_workspace',
+            ]);
+
+            return $linkedSession;
+        }
+
+        $websitesSessionService->mergeScope($linkedSession->getId(), $adminId, $linkedScope);
+
+        return $websitesSessionService->loadById($linkedSession->getId(), $adminId) ?? $linkedSession;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildLinkedWebsitesScopeFromPageBuilderSession(AiSiteAgentSession $session): array
+    {
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $targetDomain = \strtolower(\trim((string)($scope['target_domain'] ?? '')));
+        $brief = \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? ''));
+        $preferredRegistrarAccountId = (int)($scope['preferred_registrar_account_id'] ?? $scope['registrar_account_id'] ?? 0);
+        $recommendedRegistrarLabel = \trim((string)($scope['recommended_registrar_label'] ?? ''));
+        $recommendedDomainList = $this->normalizeStringList($scope['recommended_domain_list'] ?? []);
+        if ($recommendedDomainList === [] && $targetDomain !== '') {
+            $recommendedDomainList[] = $targetDomain;
+        }
+
+        return [
+            'handoff_source' => 'pagebuilder_native_workspace',
+            'provider_handoff_mode' => 'pagebuilder_native_workspace',
+            'pagebuilder_workspace_public_id' => $session->getPublicId(),
+            'pagebuilder_workspace_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $session->getPublicId()]),
+            'site_title' => (string)($scope['site_title'] ?? ''),
+            'site_tagline' => (string)($scope['site_tagline'] ?? ''),
+            'brief_description' => $brief,
+            'user_description' => $brief !== '' ? $brief : (string)($scope['user_description'] ?? ''),
+            'target_domain' => $targetDomain,
+            'selected_domain' => $targetDomain,
+            'preferred_registrar_account_id' => $preferredRegistrarAccountId,
+            'registrar_account_id' => $preferredRegistrarAccountId,
+            'recommended_registrar_label' => $recommendedRegistrarLabel,
+            'recommended_domain_list' => $recommendedDomainList,
+            'page_types' => \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [],
+            'recommended_pages' => \is_array($scope['recommended_pages'] ?? null) ? $scope['recommended_pages'] : (\is_array($scope['page_types'] ?? null) ? $scope['page_types'] : []),
+            'fake_mode' => !empty($scope['fake_mode']) ? 1 : 0,
+            'site_ready' => (int)($scope['site_ready'] ?? 1),
+        ];
+    }
+
+    private function syncPageBuilderScopeFromLinkedWebsitesSession(
+        AiSiteAgentSession $pageBuilderSession,
+        WebsitesAiSiteBuilderSession $websitesSession,
+        int $adminId
+    ): void {
+        $scope = $websitesSession->getScopeArray();
+        $patch = [
+            'handoff_workspace_public_id' => $websitesSession->getPublicId(),
+            'provider_handoff_mode' => 'pagebuilder_native_workspace',
+        ];
+
+        foreach ([
+            'target_domain',
+            'selected_domain',
+            'preferred_registrar_account_id',
+            'registrar_account_id',
+            'recommended_registrar_label',
+            'recommended_domain_list',
+            'fake_mode',
+            'site_ready',
+            'domain_purchase_status',
+            'domain_purchase_stage',
+            'domain_purchase_stage_label',
+            'domain_purchase_message',
+            'domain_purchase_order_id',
+        ] as $field) {
+            if (\array_key_exists($field, $scope)) {
+                $patch[$field] = $scope[$field];
+            }
+        }
+
+        $this->sessionService->mergeScope($pageBuilderSession->getId(), $adminId, $patch);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeStringList(mixed $raw): array
+    {
+        $values = [];
+        if (\is_array($raw)) {
+            $values = $raw;
+        } elseif (\is_string($raw) && $raw !== '') {
+            $decoded = \json_decode($raw, true);
+            $values = \is_array($decoded) ? $decoded : (\preg_split('/[\r\n,;]+/', $raw, -1, \PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+
+        $normalized = [];
+        foreach ($values as $value) {
+            if (!\is_scalar($value)) {
+                continue;
+            }
+            $item = \trim((string)$value);
+            if ($item === '' || \in_array($item, $normalized, true)) {
+                continue;
+            }
+            $normalized[] = $item;
+        }
+
+        return $normalized;
     }
 
     /**
