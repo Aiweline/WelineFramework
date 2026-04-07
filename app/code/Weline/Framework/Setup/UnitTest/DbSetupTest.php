@@ -1,37 +1,53 @@
 <?php
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
+declare(strict_types=1);
 
 namespace Weline\Framework\Setup\UnitTest;
 
-require __DIR__ . '/../../../../index.php';
-
-use Weline\Framework\Setup\Db\Setup;
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\DbManager\ConfigProviderInterface;
+use Weline\Framework\Setup\Db\Setup;
 
-class DbSetupTest extends TestCase
+final class DbSetupTest extends TestCase
 {
-    private ModelSetup $setup;
-
-    protected function setUp(): void
+    public function testGetTableAddsConfiguredPrefixOnce(): void
     {
-        $this->setup = new Setup();
+        $configProvider = $this->createMock(ConfigProviderInterface::class);
+        $configProvider->method('getPrefix')->willReturn('pre_');
+
+        $connector = $this->createMock(ConnectorInterface::class);
+        $connector->method('getConfigProvider')->willReturn($configProvider);
+
+        $setup = new Setup($connector);
+
+        self::assertSame('pre_table_name', $setup->getTable('table_name'));
+        self::assertSame('pre_table_name', $setup->getTable('pre_table_name'));
     }
 
-    protected function tearDown(): void
+    public function testTableExistDelegatesToConnectorUsingResolvedTableName(): void
     {
-        unset($this->setup);
+        $configProvider = $this->createMock(ConfigProviderInterface::class);
+        $configProvider->method('getPrefix')->willReturn('pre_');
+
+        $connector = $this->createMock(ConnectorInterface::class);
+        $connector->method('getConfigProvider')->willReturn($configProvider);
+        $connector->expects(self::once())
+            ->method('tableExist')
+            ->with('pre_aiweline_news')
+            ->willReturn(true);
+
+        $setup = new Setup($connector);
+
+        self::assertTrue($setup->tableExist('aiweline_news'));
     }
 
-    public function testIsExistTable()
+    public function testSetConnectorReturnsSameInstance(): void
     {
-        $result = $this->setup->tableExist('m_aiweline_news');
-        p($result);
-//        $this->assertEquals(4, $result);
+        $connector = $this->createMock(ConnectorInterface::class);
+        $setup = new Setup();
+
+        self::assertSame($setup, $setup->setConnector($connector));
+        self::assertSame($connector, $setup->getConnector());
     }
 }
