@@ -1298,6 +1298,26 @@ class Url implements UrlInterface
     }
     
     /**
+     * WLS 多 Fiber 交错时清理「随请求变化」的 Url 解析缓存。
+     *
+     * {@see self::$parserServer} 在首次 {@see parser()} 时从 $_SERVER 拷贝后会持续原地修改；
+     * 与 {@see WlsFiberContext} 只快照 $_SERVER 不同，静态解析态不会随 Fiber 切换而自动一致，
+     * 会导致 getBackendUrl()/getBaseHost 依赖的 HTTP_HOST、WELINE_WEBSITE_URL 等与当前连接错位
+     *（例如 SSE 长连接挂起期间其它请求改写 parserServer，恢复后仍沿用错误 host）。
+     *
+     * 调用点：WLS worker 中 Fiber 新请求入口 `wlsFiberRequestContextEnter`、
+     * {@see WlsFiberContext::restore}（恢复 $_SERVER 之后）。
+     *
+     * 不清空 parserSites/parserMatchs 等站点与路由表缓存，避免每次握手重复 detect_website。
+     */
+    public static function resetWlsFiberInterleavedParserScratch(): void
+    {
+        self::$parserServer = [];
+        self::$parserCache = [];
+        self::$parsingInProgress = false;
+    }
+
+    /**
      * 注册静态变量重置到 StateManager
      * 
      * 用于 WLS 模式下每个请求后自动清理静态缓存。
