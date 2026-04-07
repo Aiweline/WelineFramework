@@ -130,13 +130,8 @@ ErrorBootstrap::init($processTag, [
 // 确保即使 Windows 隐藏窗口或 Linux 重定向丢失，日志也不会丢
 $processLogFile = '';
 if ($processName) {
-    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
-    $processLogDir = \dirname($processLogFile);
-    if (!\is_dir($processLogDir)) {
-        @\mkdir($processLogDir, 0777, true);
-    }
+    $processLogFile = \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
     // 将 PHP error_log() 重定向到进程日志文件（追加模式）
-    \ini_set('error_log', $processLogFile);
 }
 
 // 预先读取 env.php 中的 deploy 配置（备用方案，用于在 App::init() 之前检测 DEV 模式）
@@ -696,6 +691,13 @@ $ackRetryCount = 0;
 $maxAckRetries = 3;
 $ackTimeout = 10.0;
 
+$ipcClient = null;
+$ipcSelfTag = null;
+$ipcDraining = false;
+$ipcReceivedShutdown = false;
+$drainStartTime = 0;
+$shouldExit = false;
+
 if ($controlPort > 0) {
     $ipcSelfTag = ($isMaintenanceWorker ? 'Maintenance' : 'Worker') . "#{$workerId}";
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
@@ -969,12 +971,12 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
     }
 };
 
-// 是否需要优雅退出（重载时设置为 true）
 $configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 1);
 if ($configuredLongLivedMaxActive >= 0) {
     $longLivedMaxActive = $configuredLongLivedMaxActive;
 }
-$shouldExit = false;
+
+// 是否需要优雅退出（重载时设置为 true）
 
 // ========== Session Server 自治连接状态 ==========
 $sessionClient = null;
