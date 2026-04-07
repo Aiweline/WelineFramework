@@ -45,6 +45,9 @@ class Reload extends CommandAbstract
 
     /** 等待模式最大硬超时（秒） */
     private const WAIT_MAX_TIMEOUT = 7200;
+
+    /** 等待模式无进度超时（秒）：超过后主动退出，避免 CLI 卡死。 */
+    private const WAIT_IDLE_TIMEOUT = 90;
     
     /**
      * @inheritDoc
@@ -163,6 +166,7 @@ class Reload extends CommandAbstract
     {
         $startTime = \microtime(true);
         $deadline = $startTime + $waitTimeout;
+        $lastMessageAt = $startTime;
         $buffer = '';
         $lastProgress = '';
         
@@ -184,10 +188,19 @@ class Reload extends CommandAbstract
                     return;
                 }
 
+                if ((\microtime(true) - $lastMessageAt) >= self::WAIT_IDLE_TIMEOUT) {
+                    @\fclose($conn);
+                    echo "\n";
+                    $this->printer->warning(__('等待重载进度超时（%{1}s 无新消息），已停止前台等待，Orchestrator 仍可能在后台执行', [self::WAIT_IDLE_TIMEOUT]));
+                    $this->printer->note(__('可执行 server:status 查看当前重载状态，或稍后再次执行 server:reload -n'));
+                    return;
+                }
+
                 SchedulerSystem::usleep(50000); // 50ms
                 continue;
             }
             
+            $lastMessageAt = \microtime(true);
             $buffer .= $data;
             $messages = ControlMessage::extractMessages($buffer);
             
