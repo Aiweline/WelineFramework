@@ -53,7 +53,7 @@ class SubscriptionAdminPageDataServiceTest extends TestCase
                 return $this->rows;
             }
 
-            public function getPagination(string $pagination_style = 'pagination-rounded', string $url_path = ''): string
+            public function getPagination(string $pagination_style = 'pagination-rounded', string $url_path = '', bool $use_backend_url = false): string
             {
                 return $this->paginationData;
             }

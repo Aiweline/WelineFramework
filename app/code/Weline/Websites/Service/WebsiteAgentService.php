@@ -205,8 +205,44 @@ class WebsiteAgentService
      * @param string $description 站点描述
      * @return array<string> 建议域名列表
      */
-    public function recommendAvailableDomain(string $description, int $accountId, string $preferredDomain = ''): array
+    public function recommendAvailableDomain(string $description, int $accountId, string $preferredDomain = '', bool $deferAvailabilityCheck = false): array
     {
+        if ($deferAvailabilityCheck && $accountId > 0 && $this->isLocalTestRegistrarAccount($accountId)) {
+            $fakeDomain = $this->buildLocalFlowDomainSuggestion($description, $preferredDomain);
+            return [
+                'success' => true,
+                'message' => (string)__('本地测试账号：已生成流程联调域名 %{domain}', ['domain' => $fakeDomain]),
+                'domain' => $fakeDomain,
+                'candidate_domains' => [$fakeDomain],
+                'checked_results' => [],
+                'simulated' => true,
+                'availability_deferred' => true,
+            ];
+        }
+
+        if ($deferAvailabilityCheck) {
+            $candidates = $this->buildRecommendationCandidates($description, $preferredDomain);
+            if ($candidates === []) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('请先描述建站目标，或先输入偏好域名。'),
+                    'candidate_domains' => [],
+                    'checked_results' => [],
+                ];
+            }
+
+            $domain = (string)$candidates[0];
+
+            return [
+                'success' => true,
+                'message' => (string)__('已生成域名建议；点击「确认并生成」时将检测可用性。'),
+                'domain' => $domain,
+                'candidate_domains' => $candidates,
+                'checked_results' => [],
+                'availability_deferred' => true,
+            ];
+        }
+
         if ($accountId <= 0) {
             return [
                 'success' => false,

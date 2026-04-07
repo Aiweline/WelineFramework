@@ -298,20 +298,30 @@ async function ensurePagebuilderExpertLayout(page) {
  * @param {string} backendRoot
  */
 async function createDirectPagebuilderWorkspace(page, backendRoot) {
+  if (!/^https?:/i.test(String(page.url() || ''))) {
+    const warmUrl = normalizeToCurrentOrigin(
+      page,
+      new URL('/', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
+    );
+    await gotoStable(page, warmUrl);
+  }
   const createSessionUrl = normalizeToCurrentOrigin(
     page,
     new URL('pagebuilder/backend/ai-site-agent/post-create-session', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
   );
-  const res = await page.request.post(createSessionUrl, {
-    headers: { 'X-Requested-With': 'XMLHttpRequest' },
-  });
-  const text = await res.text();
-  let createPayload;
-  try {
-    createPayload = JSON.parse(text);
-  } catch (error) {
-    throw new Error(`pagebuilder create-session: HTTP ${res.status()} non-JSON body=${text.slice(0, 400)}`);
-  }
+  const createPayload = await page.evaluate(async ({ url }) => {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+    });
+    const text = await res.text();
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      throw new Error(`pagebuilder create-session: HTTP ${res.status} non-JSON body=${text.slice(0, 400)}`);
+    }
+  }, { url: createSessionUrl });
   expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
   expect(createPayload.workspace_url).toBeTruthy();
   const workspaceUrl = normalizeToCurrentOrigin(page, String(createPayload.workspace_url));
@@ -1356,6 +1366,37 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
 
       const srcAfter = await previewFrame.getAttribute('src');
       expect(srcAfter).toBe(srcBefore);
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-LANG-003' },
+    'primary language selection persists in scope and hydrates after reload',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(240000);
+
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
+      const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
+      await gotoStable(page, workspaceUrl);
+      await ensurePagebuilderExpertLayout(page);
+
+      const localeSelect = page.locator('#pb-ai-default-locale-summary');
+      await expect(localeSelect).toBeVisible({ timeout: 30000 });
+      await localeSelect.selectOption('ja_JP');
+      await page.waitForTimeout(900); // auto-save debounce
+
+      const savedScope = await readJsonTextarea(page, '#pb-ai-scope-full');
+      expect(String(savedScope.default_locale || '')).toBe('ja_JP');
+      expect(
+        Boolean(savedScope.site_profile_manual && savedScope.site_profile_manual.default_locale),
+        'site_profile_manual.default_locale should be marked after manual selection'
+      ).toBeTruthy();
+
+      await gotoStable(page, workspaceUrl);
+      await ensurePagebuilderExpertLayout(page);
+      await expect(page.locator('#pb-ai-default-locale-summary')).toHaveValue('ja_JP', { timeout: 15000 });
     }
   );
 });

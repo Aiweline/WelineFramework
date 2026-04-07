@@ -135,6 +135,7 @@ class MasterControlServer
         );
 
         if (!$this->serverSocket) {
+            \Weline\Server\Log\WlsLogger::error_("[IPC-Master] stream_socket_server failed: ({$errno}) {$errstr}");
             return false;
         }
 

@@ -95,6 +95,11 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
         self::assertGreaterThan(0, (int)($buildResult['virtual_theme_id'] ?? 0));
         self::assertGreaterThanOrEqual(\count($pageTypes), $buildWriter->countEvents('progress'));
         self::assertCount(\count($pageTypes), $buildWriter->eventsByName('page_generated'));
+        self::assertSame(1, $buildWriter->countEvents('environment_ready'));
+        foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
+            $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
+            self::assertGreaterThan(0, (int)($payload['page_id'] ?? 0));
+        }
 
         $buildStatePayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/get-state-json',
@@ -117,6 +122,8 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
         self::assertContains($previewPageType, $pageTypes);
         self::assertSame(AiSiteAgentSession::PUBLISH_STATUS_DRAFT, (string)($buildState['publish_status'] ?? ''));
         self::assertSame('can_publish', (string)($buildState['workspace_status'] ?? ''));
+        self::assertCount(\count($pageTypes), (array)($buildState['pagebuilder_pages_by_type'] ?? []));
+        self::assertGreaterThan(0, (int)($buildState['preview_page_id'] ?? 0));
         self::assertCount(\count($pageTypes), (array)($buildState['virtual_pages_by_type'] ?? []));
         $virtualPages = (array)($buildState['virtual_pages_by_type'] ?? []);
         self::assertNotSame(
@@ -450,6 +457,7 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
             'postCreateSession' => $controller->postCreateSession(),
             'postMergeScope' => $controller->postMergeScope(),
             'postStartBuild' => $controller->postStartBuild(),
+            'postStartRefineComponent' => $controller->postStartRefineComponent(),
             'postPublishChecklist' => $controller->postPublishChecklist(),
             'postStartPublish' => $controller->postStartPublish(),
             'postSwitchPreviewPage' => $controller->postSwitchPreviewPage(),
@@ -583,6 +591,11 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
         self::assertGreaterThan(0, (int)($buildResult['virtual_theme_id'] ?? 0));
         self::assertGreaterThanOrEqual(\count($pageTypes), $buildWriter->countEvents('progress'));
         self::assertCount(\count($pageTypes), $buildWriter->eventsByName('page_generated'));
+        self::assertSame(1, $buildWriter->countEvents('environment_ready'));
+        foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
+            $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
+            self::assertGreaterThan(0, (int)($payload['page_id'] ?? 0));
+        }
 
         $buildStatePayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/get-state-json',

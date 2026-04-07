@@ -21,7 +21,10 @@ final class SubprocessControlKernelTest extends TestCase
             @\mkdir($instanceDir, 0777, true);
         }
 
-        \file_put_contents($instanceFile, \json_encode(['control_port' => 19091]));
+        \file_put_contents($instanceFile, \json_encode([
+            'control_port' => 19091,
+            'updated_at' => \time(),
+        ]));
         try {
             $resolved = SubprocessControlKernel::resolveControlPort($instanceName, 0);
             $this->assertSame(19091, $resolved);

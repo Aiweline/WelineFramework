@@ -7,8 +7,9 @@ namespace WeShop\Social\Test\Unit\Controller\Backend;
 use PHPUnit\Framework\TestCase;
 use WeShop\Social\Controller\Backend\Social;
 use WeShop\Social\Service\SocialService;
+use Weline\Framework\Http\Request;
 
-class SocialTest extends TestCase
+final class SocialTest extends TestCase
 {
     public function testIndexReturnsString(): void
     {
@@ -16,27 +17,32 @@ class SocialTest extends TestCase
         $socialService->expects($this->once())
             ->method('getFooterSocialLinks')
             ->willReturn([
-                [
-                    'platform' => 'facebook',
-                    'label' => 'Facebook',
-                    'icon' => 'facebook',
-                    'url' => 'https://facebook.com/example',
-                ],
-                [
-                    'platform' => 'x',
-                    'label' => 'X',
-                    'icon' => 'x',
-                    'url' => 'https://x.com/example',
-                ],
+                ['platform' => 'facebook', 'label' => 'Facebook', 'url' => 'https://facebook.com/example'],
+                ['platform' => 'x', 'label' => 'X', 'url' => 'https://x.com/example'],
             ]);
 
-        $controller = new Social();
+        $controller = $this->getMockBuilder(Social::class)
+            ->onlyMethods(['assign', 'fetch'])
+            ->getMock();
         $controller->setSocialService($socialService);
 
-        $result = $controller->index();
+        $assignments = [];
+        $controller->expects($this->exactly(4))
+            ->method('assign')
+            ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
+                $assignments[$key] = $value;
 
-        $this->assertIsString($result);
-        $this->assertStringContainsString('social-configuration', $result);
+                return $controller;
+            });
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_Social::templates/Backend/Social/Config/index.phtml')
+            ->willReturn('social-config-page');
+
+        self::assertSame('social-config-page', $controller->index());
+        self::assertSame('Social Configuration', $assignments['page_title'] ?? null);
+        self::assertArrayHasKey('facebook', $assignments['platforms'] ?? []);
+        self::assertCount(2, $assignments['footer_links'] ?? []);
     }
 
     public function testStatsReturnsPlatformCounts(): void
@@ -48,64 +54,37 @@ class SocialTest extends TestCase
 
         $controller = new Social();
         $controller->setSocialService($socialService);
-
-        $reflection = new \ReflectionClass($controller);
-        $requestProperty = $reflection->getProperty('request');
-        $requestProperty->setAccessible(true);
-
-        $request = $this->createMock(\Weline\Framework\Http\Request\Request::class);
-        $request->expects($this->any())
-            ->method('getParam')
-            ->willReturnCallback(function ($key, $default = null) {
-                return match ($key) {
-                    'product_id' => 123,
-                    default => $default,
-                };
-            });
-
-        $requestProperty->setValue($controller, $request);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'product_id' => 123,
+        ]));
 
         $result = $controller->stats();
 
-        $this->assertIsString($result);
-        $data = json_decode($result, true);
-        $this->assertTrue($data['success']);
-        $this->assertEquals(123, $data['data']['product_id']);
-        $this->assertEquals(58, $data['data']['total']);
-        $this->assertArrayHasKey('by_platform', $data['data']);
+        self::assertIsString($result);
+        $data = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+        self::assertTrue($data['success']);
+        self::assertSame(123, $data['data']['product_id']);
+        self::assertSame(58, $data['data']['total']);
+        self::assertArrayHasKey('by_platform', $data['data']);
     }
 
     public function testStatsWithInvalidProductIdReturnsError(): void
     {
         $socialService = $this->createMock(SocialService::class);
-        $socialService->expects($this->never())
-            ->method('getShareCount');
+        $socialService->expects($this->never())->method('getShareCount');
 
         $controller = new Social();
         $controller->setSocialService($socialService);
-
-        $reflection = new \ReflectionClass($controller);
-        $requestProperty = $reflection->getProperty('request');
-        $requestProperty->setAccessible(true);
-
-        $request = $this->createMock(\Weline\Framework\Http\Request\Request::class);
-        $request->expects($this->any())
-            ->method('getParam')
-            ->willReturnCallback(function ($key, $default = null) {
-                return match ($key) {
-                    'product_id' => 0,
-                    default => $default,
-                };
-            });
-
-        $requestProperty->setValue($controller, $request);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'product_id' => 0,
+        ]));
 
         $result = $controller->stats();
 
-        $this->assertIsString($result);
-        $data = json_decode($result, true);
-        $this->assertFalse($data['success']);
-        $this->assertStringContainsString('Invalid product ID', $data['message']);
+        self::assertIsString($result);
+        $data = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+        self::assertFalse($data['success']);
+        self::assertStringContainsString('Invalid product ID', (string) ($data['message'] ?? ''));
     }
 
     public function testJsonResponseReturnsValidJson(): void
@@ -124,8 +103,34 @@ class SocialTest extends TestCase
 
         $result = $method->invoke($controller, $data);
 
-        $this->assertIsString($result);
-        $decoded = json_decode($result, true);
-        $this->assertEquals($data, $decoded);
+        self::assertIsString($result);
+        self::assertSame($data, json_decode($result, true, 512, JSON_THROW_ON_ERROR));
+    }
+
+    private function createRequestMock(array $params = []): Request
+    {
+        $request = $this->getMockBuilder(Request::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getParam'])
+            ->getMock();
+        $request->method('getParam')
+            ->willReturnCallback(static fn (string $key, mixed $default = null): mixed => $params[$key] ?? $default);
+
+        return $request;
+    }
+
+    private function setControllerRequest(object $controller, Request $request): void
+    {
+        $reflection = new \ReflectionObject($controller);
+        while (!$reflection->hasProperty('request') && ($reflection = $reflection->getParentClass())) {
+        }
+
+        if (!$reflection instanceof \ReflectionClass) {
+            self::fail('Unable to locate request property.');
+        }
+
+        $property = $reflection->getProperty('request');
+        $property->setAccessible(true);
+        $property->setValue($controller, $request);
     }
 }

@@ -572,8 +572,10 @@ final class AiSitePageComponentGenerationService
 
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
         $styleDirection = $this->describeStyleDirection($styleCode);
+        $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
 
-        return "You are generating a PageBuilder website header component.\n"
+        return $langRule
+            . "You are generating a PageBuilder website header component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
@@ -595,8 +597,10 @@ final class AiSitePageComponentGenerationService
         $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
         $styleDirection = $this->describeStyleDirection($styleCode);
+        $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
 
-        return "You are generating a PageBuilder website footer component.\n"
+        return $langRule
+            . "You are generating a PageBuilder website footer component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
@@ -629,8 +633,10 @@ final class AiSitePageComponentGenerationService
         $blogPrompt = $this->buildBlogPromptAddon($pageType, $sectionKey, $scope);
         $styleCode = $this->resolvePromptStyleCode($scope, $pageType);
         $styleDirection = $this->describeStyleDirection($styleCode);
+        $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
 
-        return "You are generating a PageBuilder content component.\n"
+        return $langRule
+            . "You are generating a PageBuilder content component.\n"
             . "Page type: " . (string)($blueprint['page_label'] ?? $pageType) . " ({$pageType})\n"
             . "Section name: {$sectionName}\n"
             . "Section role: {$sectionKey}\n"
@@ -681,8 +687,10 @@ final class AiSitePageComponentGenerationService
         foreach ($pageTypes as $pageType) {
             $pageList[] = (string)($pageTypeLabels[$pageType] ?? $pageType);
         }
+        $langRule = $this->buildPrimaryLanguageRuleZh($websiteProfile, $scope);
 
-        return "你正在为 PageBuilder AI 建站工作台生成一个网站页头 header 组件。\n"
+        return $langRule
+            . "你正在为 PageBuilder AI 建站工作台生成一个网站页头 header 组件。\n"
             . "站点名称：{$siteDisplayName}\n"
             . "客户一句话需求：{$brief}\n"
             . "站点需要承载的页面：" . \implode('、', $pageList) . "\n"
@@ -704,8 +712,10 @@ final class AiSitePageComponentGenerationService
     private function buildFooterPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $footerConfig): string
     {
         $brief = $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null);
+        $langRule = $this->buildPrimaryLanguageRuleZh($websiteProfile, $scope);
 
-        return "你正在为 PageBuilder AI 建站工作台生成一个网站页脚 footer 组件。\n"
+        return $langRule
+            . "你正在为 PageBuilder AI 建站工作台生成一个网站页脚 footer 组件。\n"
             . "站点名称：{$siteDisplayName}\n"
             . "客户一句话需求：{$brief}\n"
             . "要求：\n"
@@ -738,8 +748,10 @@ final class AiSitePageComponentGenerationService
         $sectionConfig = \json_encode($section['config'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
         $refinement = $this->resolveSectionRefinement($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
         $blogPrompt = $this->buildBlogPromptAddon($pageType, $sectionKey, $scope);
+        $langRule = $this->buildPrimaryLanguageRuleZh($websiteProfile, $scope);
 
-        return "你正在为 PageBuilder AI 建站工作台生成一个内容区块 content 组件。\n"
+        return $langRule
+            . "你正在为 PageBuilder AI 建站工作台生成一个内容区块 content 组件。\n"
             . "页面类型：" . (string)($blueprint['page_label'] ?? $pageType) . " ({$pageType})\n"
             . "区块名称：{$sectionName}\n"
             . "区块角色：{$sectionKey}\n"
@@ -1049,5 +1061,58 @@ final class AiSitePageComponentGenerationService
     private function getPageModel(): Page
     {
         return $this->pageModel ?? ObjectManager::getInstance(Page::class);
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function resolvePrimaryLocale(array $websiteProfile, array $scope): string
+    {
+        return \trim((string)(
+            $scope['default_locale'] ?? $scope['default_language'] ?? $websiteProfile['default_locale'] ?? ''
+        ));
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function buildPrimaryLanguageRuleEn(array $websiteProfile, array $scope): string
+    {
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        if ($locale === '') {
+            return '';
+        }
+        $hint = $this->describeLocaleForAiPrompt($locale);
+
+        return "Primary language (locale {$locale} — {$hint}): all visitor-visible copy (headings, buttons, nav labels, body text, footer) must be written in this language.\n";
+    }
+
+    /**
+     * @param array<string,mixed> $websiteProfile
+     * @param array<string,mixed> $scope
+     */
+    private function buildPrimaryLanguageRuleZh(array $websiteProfile, array $scope): string
+    {
+        $locale = $this->resolvePrimaryLocale($websiteProfile, $scope);
+        if ($locale === '') {
+            return '';
+        }
+        $hint = $this->describeLocaleForAiPrompt($locale);
+
+        return "主语言（locale {$locale}，{$hint}）：所有面向访客可见的文案（标题、按钮、导航、段落、页脚等）均须使用该语言撰写。\n";
+    }
+
+    private function describeLocaleForAiPrompt(string $locale): string
+    {
+        return match ($locale) {
+            'zh_Hans_CN' => '简体中文',
+            'zh_Hant_TW' => '繁體中文',
+            'en_US' => 'English',
+            'ja_JP' => '日本語',
+            'ko_KR' => '한국어',
+            default => $locale,
+        };
     }
 }

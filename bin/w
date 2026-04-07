@@ -24,21 +24,43 @@ try {
      }
 } catch (Exception $e) {
     $chr = chr(27);
-    while ($e) {
-        $code = (in_array('getErrorCode', get_class_methods($e))) ? $e->getErrorCode() : '?????';
-        echo <<<CLI_E
+    $root = $e;
+    $code = '?????';
+    if (method_exists($root, 'getErrorCode')) {
+        try {
+            $code = (string) call_user_func([$root, 'getErrorCode']);
+        } catch (Throwable) {
+            $code = '?????';
+        }
+    }
+    $chainOutput = [];
+    $seen = [];
+    $cursor = $root;
+    while ($cursor) {
+        $fingerprint = get_class($cursor) . '|' . $cursor->getFile() . '|' . $cursor->getLine() . '|' . $cursor->getMessage();
+        if (!isset($seen[$fingerprint])) {
+            $seen[$fingerprint] = true;
+            $chainOutput[] = get_class($cursor) . ': ' . $cursor->getMessage();
+        }
+        $cursor = $cursor->getPrevious();
+    }
+    $causedBy = '';
+    if (count($chainOutput) > 1) {
+        $causedBy = PHP_EOL . "{$chr}[33mCaused by:" . PHP_EOL
+            . ' - ' . implode(PHP_EOL . ' - ', array_slice($chainOutput, 1))
+            . "{$chr}[31m";
+    }
+    echo <<<CLI_E
 {$chr}[31mCLI 异常
 {$chr}[36m代码
 {$code}
 {$chr}[31m追踪: 
-{$e->getTraceAsString()}
+{$root->getTraceAsString()}
 
-{$chr}[31m文件: {$e->getFile()}
-行数: {$e->getLine()}
-消息: {$e->getMessage()}
+{$chr}[31m文件: {$root->getFile()}
+行数: {$root->getLine()}
+消息: {$root->getMessage()}{$causedBy}
 CLI_E;
-        echo PHP_EOL."{$chr}[0m";
-        $e = $e->getPrevious();
-    }
+    echo PHP_EOL . "{$chr}[0m";
     exit(1);
 }
