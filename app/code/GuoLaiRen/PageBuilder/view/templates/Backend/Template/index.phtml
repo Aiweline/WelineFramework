@@ -136,11 +136,11 @@ $pages = $this->getData('pages') ?: [];
                     </h4>
                     <div class="list-stats">
                         <span class="stat-badge stat-total">
-                            <i class="mdi mdi-shape"></i> <?= __('共 %1 个模板', count($styles)) ?>
+                            <i class="mdi mdi-shape"></i> <?= __('共 %{1} 个模板', count($styles)) ?>
                         </span>
                         <?php if ($search): ?>
                         <span class="stat-badge stat-search">
-                            <i class="mdi mdi-filter"></i> <?= __('搜索: %1', htmlspecialchars($search)) ?>
+                            <i class="mdi mdi-filter"></i> <?= __('搜索: %{1}', htmlspecialchars($search)) ?>
                         </span>
                         <?php endif; ?>
                     </div>
@@ -157,7 +157,7 @@ $pages = $this->getData('pages') ?: [];
                             <?php endif; ?>
                         </p>
                         <?php if ($search): ?>
-                            <p class="text-muted"><?= __('关键词: %1', htmlspecialchars($search ?? '')) ?></p>
+                            <p class="text-muted"><?= __('关键词: %{1}', htmlspecialchars($search ?? '')) ?></p>
                             <p class="text-muted"><?= __('请尝试其他关键词或清空搜索条件') ?></p>
                         <?php endif; ?>
                     </div>
@@ -299,7 +299,7 @@ $pages = $this->getData('pages') ?: [];
                                                         <i class="mdi mdi-image-off"></i> <?= __('无预览') ?>
                                                     </span>
                                                 <?php endif; ?>
-                                                <span class="meta-item" title="<?= __('ID: %1', $style->getId()) ?>">
+                                                <span class="meta-item" title="<?= __('ID: %{1}', $style->getId()) ?>">
                                                     <i class="mdi mdi-tag"></i> #<?= $style->getId() ?>
                                                 </span>
                                             </div>

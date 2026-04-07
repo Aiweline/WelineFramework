@@ -100,8 +100,17 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $merged = $a;
         $merged['min_idle'] = \max((int)($a['min_idle'] ?? 0), (int)($incoming['min_idle'] ?? 0));
         $merged['max_size'] = \max((int)($a['max_size'] ?? 8), (int)($incoming['max_size'] ?? 8));
-        $merged['connect_timeout'] = \max((float)($a['connect_timeout'] ?? 1.0), (float)($incoming['connect_timeout'] ?? 1.0));
-        $merged['timeout'] = \max((float)($a['timeout'] ?? 2.0), (float)($incoming['timeout'] ?? 2.0));
+        // 连接/读超时取更小值：同池被探测端或慢参数污染后，后续业务请求应保持 fail-fast。
+        $merged['connect_timeout'] = self::mergeFloatOptionPreferLower(
+            $a['connect_timeout'] ?? null,
+            $incoming['connect_timeout'] ?? null,
+            1.0
+        );
+        $merged['timeout'] = self::mergeFloatOptionPreferLower(
+            $a['timeout'] ?? null,
+            $incoming['timeout'] ?? null,
+            2.0
+        );
         $merged['idle_timeout'] = \max((float)($a['idle_timeout'] ?? 300.0), (float)($incoming['idle_timeout'] ?? 300.0));
         $merged['pool_health_ping_idle'] = (bool)(($a['pool_health_ping_idle'] ?? false) || ($incoming['pool_health_ping_idle'] ?? false));
         $merged['log_connect_fail'] = (bool)(($a['log_connect_fail'] ?? true) || ($incoming['log_connect_fail'] ?? false));
@@ -488,6 +497,20 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             $options['max_size'] = (int)$options['pool_size'];
         }
         return $options;
+    }
+
+    private static function mergeFloatOptionPreferLower(mixed $current, mixed $incoming, float $fallback): float
+    {
+        $left = (float)($current ?? $fallback);
+        $right = (float)($incoming ?? $fallback);
+        if ($left <= 0.0) {
+            $left = $fallback;
+        }
+        if ($right <= 0.0) {
+            $right = $fallback;
+        }
+
+        return \min($left, $right);
     }
 
     /**

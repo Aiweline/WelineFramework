@@ -33,6 +33,11 @@ interface IpcControlGatewayInterface
     /**
      * @return array{success:bool,message:string,data:array}
      */
+    public function setMaintenanceMode(string $instanceName, bool $enabled, float $timeout = 6.0): array;
+
+    /**
+     * @return array{success:bool,message:string,data:array}
+     */
     public function getStatus(string $instanceName = 'default', float $timeout = 4.0): array;
 
     /**

@@ -218,7 +218,7 @@ class ServerManager extends BackendController
     public function postMaintenanceEnable(): array
     {
         $instance = (string)$this->request->getPost('instance', 'default');
-        $result = $this->ipcGateway->command($instance, ControlMessage::ACTION_MAINTENANCE_ENABLE, '', [], 8.0);
+        $result = $this->ipcGateway->setMaintenanceMode($instance, true, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('维护模式已启用')),
@@ -229,7 +229,7 @@ class ServerManager extends BackendController
     public function postMaintenanceDisable(): array
     {
         $instance = (string)$this->request->getPost('instance', 'default');
-        $result = $this->ipcGateway->command($instance, ControlMessage::ACTION_MAINTENANCE_DISABLE, '', [], 8.0);
+        $result = $this->ipcGateway->setMaintenanceMode($instance, false, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('维护模式已禁用')),

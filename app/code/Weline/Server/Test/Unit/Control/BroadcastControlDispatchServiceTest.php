@@ -10,7 +10,7 @@ use Weline\Server\Service\ServerInstanceManager;
 
 final class BroadcastControlDispatchServiceTest extends TestCase
 {
-    public function testCacheClearOnlyTargetsRunningInstancesAndAggregatesFailures(): void
+    public function testCacheClearOnlyTargetsIpcControllableInstancesAndAggregatesFailures(): void
     {
         $gateway = new class extends IpcControlGateway {
             public array $instances = [];
@@ -30,12 +30,12 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         $manager = new class extends ServerInstanceManager {
             public function listPersistedInstanceNames(): array
             {
-                return ['alpha', 'beta', 'stopped'];
+                return ['alpha', 'beta', 'stale-master'];
             }
 
-            public function isInstanceRunning(string $name): bool
+            public function isInstanceIpcControllable(string $name): bool
             {
-                return $name !== 'stopped';
+                return $name !== 'stale-master';
             }
         };
 
@@ -50,13 +50,18 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         $this->assertStringContainsString('beta: dispatcher offline', $result['message']);
     }
 
-    public function testReloadAsyncReportsStoppedTargetInstance(): void
+    public function testReloadAsyncReportsExplicitInstanceWithoutMasterIpcControl(): void
     {
         $gateway = new class extends IpcControlGateway {
         };
 
         $manager = new class extends ServerInstanceManager {
-            public function isInstanceRunning(string $name): bool
+            public function hasInstance(string $name): bool
+            {
+                return true;
+            }
+
+            public function isInstanceIpcControllable(string $name): bool
             {
                 return false;
             }
@@ -68,29 +73,33 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         $this->assertFalse($result['success']);
         $this->assertSame([], $result['attempted']);
         $this->assertSame([], $result['succeeded']);
-        $this->assertSame(['default' => '实例未运行'], $result['failed_by_instance']);
+        $this->assertSame(['default' => 'Master 未运行，无法通过 IPC 控制。'], $result['failed_by_instance']);
         $this->assertStringContainsString('default', $result['message']);
     }
-    public function testSetMaintenanceModeDelegatesToMatchingControlAction(): void
+
+    public function testSetMaintenanceModeDelegatesToAsyncGatewayMethod(): void
     {
         $gateway = new class extends IpcControlGateway {
             public array $calls = [];
 
-            public function command(
+            public function setMaintenanceMode(
                 string $instanceName,
-                string $action,
-                string $reloadType = '',
-                array $payload = [],
+                bool $enabled,
                 float $timeout = 6.0
             ): array {
-                $this->calls[] = [$instanceName, $action, $reloadType, $payload, $timeout];
+                $this->calls[] = [$instanceName, $enabled, $timeout];
 
                 return ['success' => true, 'message' => 'ok', 'data' => []];
             }
         };
 
         $manager = new class extends ServerInstanceManager {
-            public function isInstanceRunning(string $name): bool
+            public function hasInstance(string $name): bool
+            {
+                return $name === 'blue';
+            }
+
+            public function isInstanceIpcControllable(string $name): bool
             {
                 return $name === 'blue';
             }
@@ -102,13 +111,7 @@ final class BroadcastControlDispatchServiceTest extends TestCase
 
         $this->assertTrue($enableResult['success']);
         $this->assertTrue($disableResult['success']);
-        $this->assertSame(
-            ['blue', \Weline\Server\IPC\ControlMessage::ACTION_MAINTENANCE_ENABLE, '', [], 2.5],
-            $gateway->calls[0]
-        );
-        $this->assertSame(
-            ['blue', \Weline\Server\IPC\ControlMessage::ACTION_MAINTENANCE_DISABLE, '', [], 3.5],
-            $gateway->calls[1]
-        );
+        $this->assertSame(['blue', true, 2.5], $gateway->calls[0]);
+        $this->assertSame(['blue', false, 3.5], $gateway->calls[1]);
     }
 }
