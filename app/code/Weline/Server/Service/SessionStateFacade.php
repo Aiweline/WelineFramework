@@ -225,6 +225,13 @@ class SessionStateFacade implements SessionStateFacadeInterface
         }
 
         $runtime = $this->resolveConfiguredRuntime($config);
+        // 兼容直连快捷配置：允许用通用键覆盖 session 端点。
+        if (\array_key_exists('port', $config)) {
+            $runtime['port'] = (int) $config['port'];
+        }
+        if (\array_key_exists('token_file_name', $config)) {
+            $runtime['token_file_name'] = (string) $config['token_file_name'];
+        }
         $serviceOptions = $this->buildServiceOptions($config, $runtime);
         $host = (string) $runtime['host'];
         $port = (int) $runtime['port'];
