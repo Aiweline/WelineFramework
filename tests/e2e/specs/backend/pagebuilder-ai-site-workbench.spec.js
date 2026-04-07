@@ -302,19 +302,16 @@ async function createDirectPagebuilderWorkspace(page, backendRoot) {
     page,
     new URL('pagebuilder/backend/ai-site-agent/post-create-session', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
   );
-  const createPayload = await page.evaluate(async ({ url }) => {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      credentials: 'same-origin',
-    });
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch (error) {
-      throw new Error(`pagebuilder create-session: HTTP ${res.status} non-JSON body=${text.slice(0, 400)}`);
-    }
-  }, { url: createSessionUrl });
+  const res = await page.request.post(createSessionUrl, {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+  });
+  const text = await res.text();
+  let createPayload;
+  try {
+    createPayload = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`pagebuilder create-session: HTTP ${res.status()} non-JSON body=${text.slice(0, 400)}`);
+  }
   expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
   expect(createPayload.workspace_url).toBeTruthy();
   const workspaceUrl = normalizeToCurrentOrigin(page, String(createPayload.workspace_url));
@@ -1195,7 +1192,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       test.slow();
       test.setTimeout(480000);
 
-      const backendRoot = await loginAsAdmin(page);
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
       const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
 
       const suffix = Date.now().toString().slice(-8);
@@ -1293,7 +1290,7 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       test.slow();
       test.setTimeout(480000);
 
-      const backendRoot = await loginAsAdmin(page);
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
       const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
 
       const suffix = Date.now().toString().slice(-8);
