@@ -44,6 +44,28 @@ final class ReloadCommandInstanceParseTest extends TestCase
         self::assertSame('api', $instance);
     }
 
+    public function testParseInstanceNameIgnoresRestartShortFlagCompatibilityShape(): void
+    {
+        $reload = new Reload();
+
+        $instance = $this->invokeProtected($reload, 'parseInstanceName', [
+            'r' => true,
+        ]);
+
+        self::assertSame('default', $instance);
+    }
+
+    public function testParseInstanceNameIgnoresRestartLongFlagCompatibilityShape(): void
+    {
+        $reload = new Reload();
+
+        $instance = $this->invokeProtected($reload, 'parseInstanceName', [
+            'restart' => true,
+        ]);
+
+        self::assertSame('default', $instance);
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

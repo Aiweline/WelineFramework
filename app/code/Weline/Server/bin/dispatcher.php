@@ -60,13 +60,6 @@ foreach ($argv as $arg) {
     }
 }
 
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
-// resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
-if ($controlPort <= 0) {
-    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
-}
-
 // ========== 初始化 ==========
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
 if (!\defined('BP')) {
@@ -74,6 +67,16 @@ if (!\defined('BP')) {
 }
 if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
+}
+
+// resolveControlPort 依赖框架类与 BP 常量，必须先完成基础 bootstrap。
+require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
+// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
+// resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
+if ($controlPort <= 0) {
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
 }
 
 // 定义前端模式常量
@@ -89,8 +92,6 @@ if (!\defined('WLS_DEV_MODE')) {
     \define('WLS_DEV_MODE', $_wlsDevMode);
 }
 
-// 统一自动加载
-require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
