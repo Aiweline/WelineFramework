@@ -134,9 +134,17 @@ class SseWriter
             $this->writeWithRetry($headers);
         } else {
             // FPM/CLI 模式：使用 PHP 原生 header() 函数
+            // 尽可能关闭压缩与输出缓冲，避免 SSE 首包被 FPM/代理缓冲导致前端长期 pending。
+            @\ini_set('zlib.output_compression', '0');
+            @\ini_set('output_buffering', 'off');
+            @\ini_set('implicit_flush', '1');
+            if (\function_exists('apache_setenv')) {
+                @\apache_setenv('no-gzip', '1');
+            }
             if (!\headers_sent()) {
                 \header('Content-Type: text/event-stream');
-                \header('Cache-Control: no-cache');
+                \header('Cache-Control: no-cache, no-store, must-revalidate, no-transform');
+                \header('Pragma: no-cache');
                 \header('Connection: keep-alive');
                 \header('X-Accel-Buffering: no');
                 \header('Access-Control-Allow-Origin: *');
@@ -146,6 +154,8 @@ class SseWriter
             while (\ob_get_level() > 0) {
                 \ob_end_flush();
             }
+            // 预先输出一段注释填充，帮助 FPM/Nginx 及浏览器尽早刷新首包。
+            echo ':' . \str_repeat(' ', 2048) . "\n\n";
             \flush();
         }
 
