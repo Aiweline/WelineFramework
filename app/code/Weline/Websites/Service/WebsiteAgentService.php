@@ -15,12 +15,14 @@ namespace Weline\Websites\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrameworkQueryService;
+use Weline\Websites\Model\DomainRegistrarAccount;
 use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website;
 
 class WebsiteAgentService
 {
     private const DEV_SIM_DOMAIN = 'weline-dev.local';
+    private const RECOMMENDATION_MIN_LABEL_LENGTH = 10;
 
     public function __construct(
         private readonly DomainPurchaseService $purchaseService,
@@ -214,6 +216,24 @@ class WebsiteAgentService
             ];
         }
 
+        if ($this->isLocalTestRegistrarAccount($accountId)) {
+            $fakeDomain = $this->buildLocalFlowDomainSuggestion($description, $preferredDomain);
+            return [
+                'success' => true,
+                'message' => (string)__('本地测试账号：已生成流程联调域名 %{domain}', ['domain' => $fakeDomain]),
+                'domain' => $fakeDomain,
+                'candidate_domains' => [$fakeDomain],
+                'checked_results' => [
+                    [
+                        'domain' => $fakeDomain,
+                        'available' => true,
+                        'simulated' => true,
+                    ],
+                ],
+                'simulated' => true,
+            ];
+        }
+
         $candidates = $this->buildRecommendationCandidates($description, $preferredDomain);
         if ($candidates === []) {
             return [
@@ -344,7 +364,10 @@ class WebsiteAgentService
             $tokens = ['build'];
         }
 
-        $bases = $this->buildBrandBases($tokens);
+        $bases = \array_values(\array_unique(\array_merge(
+            $this->buildComplexBrandBases($tokens),
+            $this->buildBrandBases($tokens)
+        )));
         $tlds = ['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'];
         $suggestions = [];
 
@@ -381,8 +404,10 @@ class WebsiteAgentService
             if ($normalizedPreferred !== '') {
                 $appendCandidate($normalizedPreferred);
                 $base = (string)(\preg_replace('/\.[a-z]{2,}$/i', '', $normalizedPreferred) ?? '');
-                foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
-                    $appendCandidate($base . $suffix);
+                if (!$this->isWeakGenericBrandToken($base)) {
+                    foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
+                        $appendCandidate($base . $suffix);
+                    }
                 }
                 foreach ($this->expandPreferredBaseToLongTail($base, $businessTokens) as $expandedBase) {
                     foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
@@ -390,8 +415,10 @@ class WebsiteAgentService
                     }
                 }
             } elseif (\preg_match('/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/i', $preferredDomain)) {
-                foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
-                    $appendCandidate($preferredDomain . $suffix);
+                if (!$this->isWeakGenericBrandToken($preferredDomain)) {
+                    foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
+                        $appendCandidate($preferredDomain . $suffix);
+                    }
                 }
                 foreach ($this->expandPreferredBaseToLongTail($preferredDomain, $businessTokens) as $expandedBase) {
                     foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
@@ -427,11 +454,12 @@ class WebsiteAgentService
      */
     private function extractBrandTokens(string $text): array
     {
+        $localizedIntentTokens = $this->extractLocalizedIntentTokens($text);
         $normalized = \strtolower((string)\preg_replace('/[^a-z0-9]+/i', ' ', $text));
         $normalized = \trim((string)\preg_replace('/\s+/', ' ', $normalized));
         $locationTokens = $this->extractLocationTokens($text);
         if ($normalized === '') {
-            return $locationTokens;
+            return \array_values(\array_unique(\array_merge($locationTokens, $localizedIntentTokens)));
         }
 
         $stopWords = [
@@ -452,7 +480,7 @@ class WebsiteAgentService
             }
         }
 
-        return \array_values(\array_unique(\array_merge($locationTokens, $tokens)));
+        return \array_values(\array_unique(\array_merge($locationTokens, $localizedIntentTokens, $tokens)));
     }
 
     /**
@@ -515,6 +543,74 @@ class WebsiteAgentService
     }
 
     /**
+     * 组合更长、更少见的品牌词，优先 2-4 词组合并带可控短尾。
+     *
+     * @param list<string> $tokens
+     * @return list<string>
+     */
+    private function buildComplexBrandBases(array $tokens): array
+    {
+        $strongTokens = [];
+        foreach ($tokens as $token) {
+            $token = (string)\preg_replace('/[^a-z0-9]/', '', \strtolower(\trim($token)));
+            if ($token === '' || \strlen($token) < 3 || $this->isWeakGenericBrandToken($token)) {
+                continue;
+            }
+            if (!\in_array($token, $strongTokens, true)) {
+                $strongTokens[] = $token;
+            }
+            if (\count($strongTokens) >= 6) {
+                break;
+            }
+        }
+
+        if ($strongTokens === []) {
+            return [];
+        }
+
+        $bases = [];
+        $append = static function (string $base) use (&$bases): void {
+            $base = (string)\preg_replace('/[^a-z0-9-]/', '', \strtolower(\trim($base)));
+            if ($base === '' || \strlen($base) < self::RECOMMENDATION_MIN_LABEL_LENGTH || \strlen($base) > 63 || \in_array($base, $bases, true)) {
+                return;
+            }
+            $bases[] = $base;
+        };
+
+        $first = $strongTokens[0] ?? '';
+        $second = $strongTokens[1] ?? '';
+        $third = $strongTokens[2] ?? '';
+
+        if ($first !== '' && $second !== '') {
+            $append($first . $second);
+            $append($second . $first);
+        }
+        if ($first !== '' && $second !== '' && $third !== '') {
+            $append($first . $second . $third);
+            $append($second . $third . $first);
+        }
+
+        foreach (['hub', 'labs', 'works', 'studio', 'stack', 'global', 'online', 'world', 'zone'] as $suffix) {
+            if ($first !== '' && $second !== '') {
+                $append($first . $second . $suffix);
+            }
+            if ($first !== '' && $third !== '') {
+                $append($first . $third . $suffix);
+            }
+        }
+
+        $seed = \implode('-', $strongTokens);
+        $hash = \substr(\md5($seed), 0, 4);
+        if ($first !== '' && $second !== '') {
+            $append($first . $second . $hash);
+        } elseif ($first !== '') {
+            $append($first . 'hub' . $hash);
+        }
+
+        return \array_slice($bases, 0, 30);
+    }
+
+    /**
      * 将偏好短词扩展为更可注册的长尾品牌词，避免 apk/seo 这类高占用短词直接撞库。
      *
      * @param list<string> $tokens
@@ -542,7 +638,7 @@ class WebsiteAgentService
         $expansions = [];
         $appendExpansion = static function (string $value) use (&$expansions): void {
             $value = (string)\preg_replace('/[^a-z0-9-]/', '', \strtolower(\trim($value)));
-            if ($value === '' || \strlen($value) < 6 || \strlen($value) > 63 || \in_array($value, $expansions, true)) {
+            if ($value === '' || \strlen($value) < self::RECOMMENDATION_MIN_LABEL_LENGTH || \strlen($value) > 63 || \in_array($value, $expansions, true)) {
                 return;
             }
             $expansions[] = $value;
@@ -574,8 +670,102 @@ class WebsiteAgentService
     {
         return \in_array(\strtolower(\trim($token)), [
             'apk', 'seo', 'app', 'web', 'site', 'shop', 'store', 'ai',
-            'build', 'online', 'digital', 'marketing',
+            'build', 'online', 'digital', 'marketing', 'download',
+            'india', 'ind', 'desi', 'bharat', 'hindi',
         ], true);
+    }
+
+    /**
+     * 从中文/混合语言描述中提取业务与地域语义，避免仅依赖英文 token 导致推荐偏差。
+     *
+     * @return list<string>
+     */
+    private function extractLocalizedIntentTokens(string $text): array
+    {
+        $lowerText = \mb_strtolower($text);
+        $tokens = [];
+        $append = static function (string $token) use (&$tokens): void {
+            $token = \strtolower(\trim($token));
+            if ($token === '' || \strlen($token) < 2 || \in_array($token, $tokens, true)) {
+                return;
+            }
+            $tokens[] = $token;
+        };
+
+        $keywordMap = [
+            '印度' => ['india', 'ind', 'desi', 'bharat', 'hindi'],
+            'india' => ['india', 'ind', 'desi', 'bharat', 'hindi'],
+            'indian' => ['india', 'ind', 'desi', 'bharat', 'hindi'],
+            '棋牌' => ['cardgame', 'boardgame', 'rummy', 'poker', 'teenpatti'],
+            '棋牌室' => ['cardgame', 'rummy', 'teenpatti'],
+            '扑克' => ['poker', 'cardgame'],
+            '德州' => ['poker', 'texasholdem'],
+            '拉米' => ['rummy'],
+            'teen patti' => ['teenpatti', 'patti'],
+            'teenpatti' => ['teenpatti', 'patti'],
+            '下载' => ['download', 'getapp', 'install'],
+            '推广' => ['promo', 'growth'],
+        ];
+        foreach ($keywordMap as $keyword => $mappedTokens) {
+            if (\str_contains($lowerText, $keyword)) {
+                foreach ($mappedTokens as $mappedToken) {
+                    $append($mappedToken);
+                }
+            }
+        }
+
+        return $tokens;
+    }
+
+    private function isLocalTestRegistrarAccount(int $accountId): bool
+    {
+        if ($accountId >= 900000) {
+            return true;
+        }
+
+        try {
+            /** @var DomainRegistrarAccount $account */
+            $account = ObjectManager::getInstance(DomainRegistrarAccount::class);
+            $account->clearQuery();
+            $account->load($accountId);
+            if ($account->getAccountId() <= 0) {
+                return false;
+            }
+
+            $registrarCode = \strtolower(\trim((string)$account->getRegistrarCode()));
+            if (\in_array($registrarCode, ['local_demo', 'sandbox_demo', 'local', 'sandbox', 'mock'], true)) {
+                return true;
+            }
+
+            $accountName = \mb_strtolower(\trim($account->getAccountName()));
+            return \str_contains($accountName, '本地')
+                || \str_contains($accountName, '测试')
+                || \str_contains($accountName, 'demo')
+                || \str_contains($accountName, 'sandbox')
+                || \str_contains($accountName, 'local');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function buildLocalFlowDomainSuggestion(string $description, string $preferredDomain): string
+    {
+        $seed = \trim($preferredDomain) !== '' ? $preferredDomain : $description;
+        $slug = \strtolower((string)\preg_replace('/[^a-z0-9]+/i', '-', $seed));
+        $slug = \trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'local-flow';
+        }
+
+        $parts = \array_values(\array_filter(\explode('-', $slug), static fn (string $part): bool => $part !== ''));
+        $parts = \array_slice($parts, 0, 2);
+        $base = \implode('-', $parts);
+        if ($base === '' || \strlen($base) < 3) {
+            $base = 'local-flow';
+        }
+        $suffix = \substr(\md5($base . '-' . \microtime(true)), 0, 6);
+
+        return $base . '-' . $suffix . '.weline.local';
     }
 
     private function isDevSimulationDomain(string $domain): bool
