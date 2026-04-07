@@ -209,4 +209,45 @@ final class StateFacadeInitializationTest extends TestCase
 
         self::assertSame(0, $manager->ensureCalls);
     }
+
+    public function testMemoryFacadeUsesDirectConnectWhenPreferredAndHealthy(): void
+    {
+        $manager = new class extends SharedStateServiceManager {
+            public int $ensureCalls = 0;
+
+            public function ensure(
+                string $role,
+                array $config = [],
+                array $envConfig = [],
+                string $requesterInstanceName = 'system',
+                bool $frontend = false,
+                bool $forceRestart = false
+            ): array {
+                $this->ensureCalls++;
+
+                return [
+                    'host' => '127.0.0.1',
+                    'port' => 19971,
+                    'token_file_name' => 'memory_server.token',
+                ];
+            }
+        };
+
+        $shared = (new \ReflectionClass(SharedMemoryService::class))->newInstanceWithoutConstructor();
+        $cache = (new \ReflectionClass(CacheMemoryService::class))->newInstanceWithoutConstructor();
+        $client = (new \ReflectionClass(SharedStateClient::class))->newInstanceWithoutConstructor();
+
+        $facade = new MemoryStateFacade([
+            'consumer_code' => 'cli:direct-memory',
+            'prefer_direct_connect' => true,
+            'fail_fast_on_unhealthy' => true,
+            'port' => 20971,
+            'token_file_name' => 'memory_server.direct.token',
+        ], $manager, $shared, $cache, $client);
+
+        self::assertSame(0, $manager->ensureCalls);
+        self::assertSame(20971, $facade->getRuntime()['port'] ?? null);
+        self::assertSame('memory_server.direct.token', $facade->getRuntime()['token_file_name'] ?? null);
+        $facade->disconnect();
+    }
 }
