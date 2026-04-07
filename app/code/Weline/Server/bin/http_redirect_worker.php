@@ -37,12 +37,6 @@ foreach ($argv as $arg) {
     }
 }
 
-// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
-// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
-if ($controlPort <= 0) {
-    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
-}
-
 // 检测根目录
 $bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
 if (!\defined('BP')) {
@@ -52,8 +46,14 @@ if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
 
-// 统一自动加载
+// resolveControlPort 依赖框架类与 BP 常量，必须先完成基础 bootstrap。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
+// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
+if ($controlPort <= 0) {
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
+}
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 解析 --frontend 参数
