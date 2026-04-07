@@ -85,7 +85,7 @@ class WlsLogService
         return self::getLogDir($instanceName, $processTag, $configuredPath) . $safeName . '.log';
     }
 
-    public static function prepareProcessLogFile(
+    public static function ensureProcessLogFile(
         string $processName,
         ?string $instanceName = null,
         ?string $processTag = null,
@@ -100,6 +100,16 @@ class WlsLogService
             @\touch($logFile);
         }
 
+        return $logFile;
+    }
+
+    public static function prepareProcessLogFile(
+        string $processName,
+        ?string $instanceName = null,
+        ?string $processTag = null,
+        ?string $configuredPath = null
+    ): string {
+        $logFile = self::ensureProcessLogFile($processName, $instanceName, $processTag, $configuredPath);
         @\ini_set('error_log', $logFile);
         WlsLogger::getInstance()->setProcessLogFile($logFile);
 

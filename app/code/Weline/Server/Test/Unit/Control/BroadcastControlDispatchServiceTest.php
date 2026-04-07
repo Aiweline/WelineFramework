@@ -71,4 +71,44 @@ final class BroadcastControlDispatchServiceTest extends TestCase
         $this->assertSame(['default' => '实例未运行'], $result['failed_by_instance']);
         $this->assertStringContainsString('default', $result['message']);
     }
+    public function testSetMaintenanceModeDelegatesToMatchingControlAction(): void
+    {
+        $gateway = new class extends IpcControlGateway {
+            public array $calls = [];
+
+            public function command(
+                string $instanceName,
+                string $action,
+                string $reloadType = '',
+                array $payload = [],
+                float $timeout = 6.0
+            ): array {
+                $this->calls[] = [$instanceName, $action, $reloadType, $payload, $timeout];
+
+                return ['success' => true, 'message' => 'ok', 'data' => []];
+            }
+        };
+
+        $manager = new class extends ServerInstanceManager {
+            public function isInstanceRunning(string $name): bool
+            {
+                return $name === 'blue';
+            }
+        };
+
+        $service = new BroadcastControlDispatchService($gateway, $manager);
+        $enableResult = $service->setMaintenanceMode(true, 'blue', 2.5);
+        $disableResult = $service->setMaintenanceMode(false, 'blue', 3.5);
+
+        $this->assertTrue($enableResult['success']);
+        $this->assertTrue($disableResult['success']);
+        $this->assertSame(
+            ['blue', \Weline\Server\IPC\ControlMessage::ACTION_MAINTENANCE_ENABLE, '', [], 2.5],
+            $gateway->calls[0]
+        );
+        $this->assertSame(
+            ['blue', \Weline\Server\IPC\ControlMessage::ACTION_MAINTENANCE_DISABLE, '', [], 3.5],
+            $gateway->calls[1]
+        );
+    }
 }

@@ -99,6 +99,7 @@ class Reload extends CommandAbstract
         
         if ($forceMode) {
             $this->printer->warning(__('强制重载模式：批量杀死所有 Worker 后重新启动'));
+            $this->printer->warning(__('注意：-f 强制重载属于停机型更新，建议先开启维护模式；滚动重载不需要。'));
         } else {
             $this->printer->note(__('执行滚动重启（优雅重载）...'));
         }
@@ -482,12 +483,12 @@ class Reload extends CommandAbstract
             __('通知 Orchestrator 执行滚动重启。修改 Worker 代码后使用此命令即可生效。'),
             [
                 '[instance]' => __('实例名称（默认：default）'),
-                '-f, --force' => __('强制模式：批量杀死所有 Worker 后重新启动（不等待排水）'),
+                '-f, --force' => __('强制模式：批量杀死所有 Worker 后重新启动（停机型更新，不等待排水，建议先开启维护模式）'),
                 '-n, --no-wait' => __('不等待：发送命令后立即返回'),
             ],
             [
                 __('默认行为') => __('等待滚动重启完成后返回，显示进度'),
-                __('-f 强制模式') => __('批量重启：直接杀死所有 Worker，快速但会中断请求'),
+                __('-f 强制模式') => __('批量重启：直接杀死所有 Worker，属于停机型更新，快速但会中断请求'),
                 __('-n 不等待') => __('发送命令后立即返回，适合脚本调用'),
                 __('适用场景') => __('修改了 Worker 代码、业务代码、模板、配置等'),
                 __('不适用场景') => __('修改了 Dispatcher、Master 代码或启动参数（需用 server:start -r）'),

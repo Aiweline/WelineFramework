@@ -233,6 +233,7 @@ class SharedStateServiceManager
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
                 $runtime['reuse_existing'] = true;
                 $runtime['shared_service'] = true;
+                $this->ensureSharedProcessLogVisible($runtime, $requesterInstanceName);
 
                 $this->writeRuntimeFile((string) $definition['role'], $runtime);
                 WlsLogger::info_(
@@ -859,6 +860,7 @@ class SharedStateServiceManager
             '--instance-name=' . (string) $definition['service_instance_name'],
             '--token-file-name=' . (string) $definition['token_file_name'],
             '--bootstrap-instance=' . $requesterInstanceName,
+            '--log-instance-name=' . $requesterInstanceName,
             '--shared-service=1',
         ];
 
@@ -1153,6 +1155,7 @@ class SharedStateServiceManager
 
             $runtime = $this->mergeRuntimeWithRegistryMetadata($role, $runtime, $registry);
             if ($runtime !== []) {
+                $this->ensureSharedProcessLogVisible($runtime, $requesterInstanceName);
                 $this->writeRuntimeFile($role, $runtime);
             }
 
@@ -1178,6 +1181,46 @@ class SharedStateServiceManager
         $runtime['shutdown_due_at'] = $record['shutdown_due_at'] ?? null;
 
         return $runtime;
+    }
+
+    /**
+     * Reused shared sidecars may have been started before the current consumer
+     * instance existed, so make their existing process log visible from the
+     * consumer's WLS log directory as well.
+     *
+     * @param array<string, mixed> $runtime
+     */
+    protected function ensureSharedProcessLogVisible(array $runtime, string $requesterInstanceName): void
+    {
+        $processName = \trim((string) ($runtime['process_name'] ?? ''));
+        $requesterInstanceName = \trim($requesterInstanceName);
+        if ($processName === '' || $requesterInstanceName === '' || $requesterInstanceName === 'system') {
+            return;
+        }
+
+        try {
+            $targetLog = WlsLogService::ensureProcessLogFile($processName, $requesterInstanceName);
+            $sourceLog = Processer::getLogFile('--name=' . $processName);
+        } catch (\Throwable) {
+            return;
+        }
+
+        if (!\is_file($sourceLog) || \realpath($sourceLog) === \realpath($targetLog)) {
+            return;
+        }
+
+        $sourceSize = (int) (@\filesize($sourceLog) ?: 0);
+        $targetSize = (int) (@\filesize($targetLog) ?: 0);
+        if ($sourceSize <= 0 || $targetSize > 0) {
+            return;
+        }
+
+        $snapshot = @\file_get_contents($sourceLog);
+        if ($snapshot === false || $snapshot === '') {
+            return;
+        }
+
+        @\file_put_contents($targetLog, $snapshot, FILE_APPEND);
     }
 
     protected function syncRuntimeRegistryMetadata(string $role, ?SharedStateServiceRegistry $registry = null): void
