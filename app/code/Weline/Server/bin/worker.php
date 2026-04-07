@@ -58,10 +58,13 @@ foreach ($argv as $arg) {
     }
 }
 
-// IPC 控制端口（未显式传入时从实例文件推算）
+// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
+// 优先使用 --control-port= 参数，否则从实例文件自动发现
+// resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
 if (!isset($controlPort)) {
     $controlPort = 0;
 }
+$controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort, 6);
 // Master PID（用于孤儿检测）
 if (!isset($masterPid) || $masterPid <= 0) {
     $masterPid = 0;
@@ -102,8 +105,15 @@ require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 use Weline\Server\Log\Error\ErrorBootstrap;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Log\LogLevel;
+use Weline\Server\Service\InternalRequestLabel;
+use Weline\Server\Service\WorkerProcessLabel;
 
-$processTag = 'Worker#' . $workerId . ':' . $port . '@' . $instanceName;
+$processTag = WorkerProcessLabel::buildLogTag(false, $isMaintenanceWorker, $workerId, $port, $instanceName);
+if (\function_exists('cli_set_process_title')) {
+    @\cli_set_process_title(
+        WorkerProcessLabel::buildProcessTitle(false, $isMaintenanceWorker, $workerId, $port, $instanceName)
+    );
+}
 
 ErrorBootstrap::init($processTag, [
     'worker_id' => $workerId,
@@ -241,22 +251,31 @@ try {
         $memoryPort = 19971 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
     }
     $memoryTokenFileName = (string) ($memoryRuntime['token_file_name'] ?? 'memory_server.token');
-    $sessionClient = new \Weline\Server\Session\Client\SessionClient($sessionHost, $sessionPort, [
-        'connect_timeout' => 0.5,
-        'timeout' => 1.0,
-        'token_file_name' => $sessionTokenFileName,
-    ]);
-    $isWindows = defined('IS_WIN') && IS_WIN;
-    $sessionMaxRetries = $isWindows ? 30 : 60;  // 较长超时，由主循环后台重试
-    $sessionRetryInterval = $isWindows ? 0.5 : 1.0;
-    $sessionConnecting = true;
-    $sessionConnected = false;
-    $sessionAttempt = 0;
-    WlsLogger::info_("[Session] 自治模式：Session 服务连接将在后台进行 ({$sessionHost}:{$sessionPort})，Worker 先上报 READY");
+
+    // 注意：Worker 启动阶段不进行任何服务发现或连接尝试
+    // 所有连接将由首个请求到达时按需进行（Lazy Initialization）
+    // 连接池的预热由框架内部在首次使用时自动完成
+    WlsLogger::info_("[Session] Session 服务地址已预配置 {$sessionHost}:{$sessionPort}");
+    WlsLogger::info_("[Memory] Memory 服务地址已预配置 {$memoryHost}:{$memoryPort}");
+    WlsLogger::info_("[Worker] Worker 将快速启动并上报 READY，Session/Memory 连接由首个请求按需进行");
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
     WlsLogger::error_("框架运行时初始化失败: " . $e->getMessage());
     w_log_error('[WLS Worker] Bootstrap error: ' . $e->getMessage());
+}
+
+// Bootstrap 失败时仍补齐地址，避免后续代码访问未定义变量（维护 Worker 不做 Session/Memory 预检）
+if (!isset($sessionHost, $sessionPort, $memoryHost, $memoryPort)) {
+    $sessionHost = (string) ($sessionRuntime['host'] ?? '127.0.0.1');
+    $sessionPort = (int) ($sessionRuntime['port'] ?? 0);
+    if ($sessionPort <= 0) {
+        $sessionPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+    }
+    $memoryHost = (string) ($memoryRuntime['host'] ?? '127.0.0.1');
+    $memoryPort = (int) ($memoryRuntime['port'] ?? 0);
+    if ($memoryPort <= 0) {
+        $memoryPort = 19971 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+    }
 }
 
 // ========== Fiber 调度器初始化 ==========
@@ -575,18 +594,18 @@ WlsLogger::info_("Socket 创建成功，开始监听连接");
 
 \stream_set_blocking($socket, false);
 
-// ========== Worker 预热：确保能正常处理请求后再上报就绪 ==========
+// ========== Worker 健康检查：确保 Worker 本身能正常处理请求后再上报就绪 ==========
 if (!$isMaintenanceWorker) {
-    WlsLogger::info_("开始 Worker 预热...");
-    $warmupSuccess = false;
-    $warmupMaxRetries = 3;
+    WlsLogger::info_("开始 Worker 健康检查...");
+    $healthCheckSuccess = false;
+    $healthCheckMaxRetries = 3;
 
-    for ($warmupAttempt = 1; $warmupAttempt <= $warmupMaxRetries; $warmupAttempt++) {
+    for ($healthCheckAttempt = 1; $healthCheckAttempt <= $healthCheckMaxRetries; $healthCheckAttempt++) {
         try {
             // 等待 socket 就绪
             \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
 
-            $warmupConn = @\stream_socket_client(
+            $healthConn = @\stream_socket_client(
                 "tcp://{$host}:{$port}",
                 $errno,
                 $errstr,
@@ -594,40 +613,114 @@ if (!$isMaintenanceWorker) {
                 STREAM_CLIENT_CONNECT
             );
 
-            if (!$warmupConn) {
-                WlsLogger::warning_("预热连接失败 (尝试 {$warmupAttempt}/{$warmupMaxRetries}): {$errstr}");
+            if (!$healthConn) {
+                WlsLogger::warning_("健康检查连接失败 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries}): {$errstr}");
                 continue;
             }
 
-            \stream_set_blocking($warmupConn, true);
-            \stream_set_timeout($warmupConn, 2);
+            \stream_set_blocking($healthConn, true);
+            \stream_set_timeout($healthConn, 2);
 
-            $warmupRequest = "GET /_wls/health HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
-            @\fwrite($warmupConn, $warmupRequest);
+            $healthRequest = "GET /_wls/health HTTP/1.1\r\nHost: localhost\r\n"
+                . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HEALTH_PROBE)
+                . "Connection: close\r\n\r\n";
+            @\fwrite($healthConn, $healthRequest);
 
             // 读取响应（至少读到 HTTP 状态行）
-            $warmupResponse = @\fread($warmupConn, 1024);
-            @\fclose($warmupConn);
+            $healthResponse = @\fread($healthConn, 1024);
+            @\fclose($healthConn);
 
-            if ($warmupResponse && \str_contains($warmupResponse, 'HTTP/1.1 200')) {
-                $warmupSuccess = true;
-                WlsLogger::info_("Worker#{$workerId} 预热成功 (尝试 {$warmupAttempt}/{$warmupMaxRetries})");
+            if ($healthResponse && \str_contains($healthResponse, 'HTTP/1.1 200')) {
+                $healthCheckSuccess = true;
+                WlsLogger::info_("Worker#{$workerId} 健康检查成功 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries})");
                 break;
             } else {
-                WlsLogger::warning_("预热响应异常 (尝试 {$warmupAttempt}/{$warmupMaxRetries}): " . \substr($warmupResponse ?: '', 0, 100));
+                WlsLogger::warning_("健康检查响应异常 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries}): " . \substr($healthResponse ?: '', 0, 100));
             }
         } catch (\Throwable $e) {
-            WlsLogger::warning_("预热异常 (尝试 {$warmupAttempt}/{$warmupMaxRetries}): " . $e->getMessage());
+            WlsLogger::warning_("健康检查异常 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries}): " . $e->getMessage());
         }
 
-        if ($warmupAttempt < $warmupMaxRetries) {
+        if ($healthCheckAttempt < $healthCheckMaxRetries) {
             \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
         }
     }
 
-    if (!$warmupSuccess) {
-        WlsLogger::error_("Worker#{$workerId} 预热失败，无法正常处理请求，退出");
+    if (!$healthCheckSuccess) {
+        WlsLogger::error_("Worker#{$workerId} 健康检查失败，无法正常处理请求，退出");
         exit(1);
+    }
+}
+
+// ========== 上报 READY 前验证 Session/Memory 可用 ==========
+// 仅业务 Worker 预检共享服务；维护 Worker 不依赖 Session/Memory，避免并发启动阶段阻塞 IPC READY 注册
+$sessionReadyVerified = false;
+$memoryReadyVerified = false;
+
+if ($isMaintenanceWorker) {
+    WlsLogger::info_('[Session/Memory] 维护 Worker 跳过连接验证，直接进行 READY 注册');
+} elseif ($runtimeError !== null) {
+    WlsLogger::info_('[Session/Memory] 业务 Worker：runtime 未就绪，跳过连接验证');
+} elseif ($sessionPort <= 0 || $memoryPort <= 0) {
+    WlsLogger::warning_('[Session/Memory] 业务 Worker：Session/Memory 端口无效，跳过连接验证');
+} else {
+    WlsLogger::info_('[Session/Memory] 业务 Worker：验证连接可用性...');
+    $verifyMaxRetries = 5;  // 最多重试 5 次
+    $verifyRetryInterval = 1;  // 间隔 1 秒
+
+    for ($verifyAttempt = 1; $verifyAttempt <= $verifyMaxRetries; $verifyAttempt++) {
+        try {
+            // 尝试连接 Session
+            if (!$sessionReadyVerified) {
+                $sessionTestConn = @\stream_socket_client(
+                    "tcp://{$sessionHost}:{$sessionPort}",
+                    $errno,
+                    $errstr,
+                    1.0,
+                    STREAM_CLIENT_CONNECT
+                );
+                if ($sessionTestConn) {
+                    @\fclose($sessionTestConn);
+                    $sessionReadyVerified = true;
+                    WlsLogger::info_('[Session] 连接验证成功');
+                } else {
+                    WlsLogger::warning_("[Session] 连接验证失败：{$errstr}");
+                }
+            }
+
+            // 尝试连接 Memory
+            if (!$memoryReadyVerified) {
+                $memoryTestConn = @\stream_socket_client(
+                    "tcp://{$memoryHost}:{$memoryPort}",
+                    $errno,
+                    $errstr,
+                    1.0,
+                    STREAM_CLIENT_CONNECT
+                );
+                if ($memoryTestConn) {
+                    @\fclose($memoryTestConn);
+                    $memoryReadyVerified = true;
+                    WlsLogger::info_('[Memory] 连接验证成功');
+                } else {
+                    WlsLogger::warning_("[Memory] 连接验证失败：{$errstr}");
+                }
+            }
+
+            // 都验证成功则退出
+            if ($sessionReadyVerified && $memoryReadyVerified) {
+                WlsLogger::info_('[Session/Memory] 连接验证全部通过，可以上报 READY');
+                break;
+            }
+
+            if ($verifyAttempt < $verifyMaxRetries) {
+                WlsLogger::info_("[Session/Memory] 第 {$verifyAttempt} 次验证失败，{$verifyRetryInterval} 秒后重试...");
+                \Weline\Framework\Runtime\SchedulerSystem::sleep($verifyRetryInterval);
+            } else {
+                WlsLogger::warning_('[Session/Memory] 验证超过最大重试次数，将继续上报 READY（首请求时再连接）');
+            }
+        } catch (\Throwable $e) {
+            WlsLogger::warning_('[Session/Memory] 验证异常：' . $e->getMessage());
+        }
     }
 }
 
@@ -821,6 +914,7 @@ if ($controlPort > 0) {
         (\defined('DEV') && DEV) || (\defined('WLS_DEV_MODE') && WLS_DEV_MODE),
         $instanceName
     );
+    $ipcClient = $kernel->getClient();
     if ($kernel->connectAndRegister($controlPort)) {
         $ipcClient = $kernel->getClient();
         WlsLogger::info_("IPC 控制通道已连接 (控制端口: {$controlPort})");
@@ -836,7 +930,7 @@ if ($controlPort > 0) {
         }
     } else {
         WlsLogger::warning_("IPC 控制通道连接失败 (控制端口: {$controlPort})，继续独立运行");
-        $kernel = null;
+        $ipcClient = $kernel->getClient();
     }
 }
 // ========== IPC 控制通道结束 ==========
@@ -932,6 +1026,10 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
 };
 
 // 是否需要优雅退出（重载时设置为 true）
+$configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 1);
+if ($configuredLongLivedMaxActive >= 0) {
+    $longLivedMaxActive = $configuredLongLivedMaxActive;
+}
 $shouldExit = false;
 
 // ========== Session Server 自治连接状态 ==========
@@ -1129,52 +1227,9 @@ while (true) {
         }
     }
 
-    // ========== 自治 Session 连接（后台重试） ==========
-    // Worker 启动后立即上报 READY，Session 连接在后台异步进行
-    // 不阻塞 Worker 接收请求
-    if ($sessionConnecting && !$sessionConnected) {
-        $sessionAttempt++;
-        $elapsed = \microtime(true) - $readySentTime;
-        if ($sessionAttempt > $sessionMaxRetries) {
-            WlsLogger::error_("[Session] Session 服务连接超时（{$elapsed}s），Worker 退出");
-            $gracefulExit('Session 连接超时');
-        }
-        if ($sessionClient->connect()) {
-            $sessionConnected = true;
-            $sessionConnecting = false;
-            WlsLogger::info_("[Session] 第 {$sessionAttempt} 次尝试连接成功，Session 服务就绪");
-            if (\defined('STDOUT') && \is_resource(STDOUT)) {
-                \fwrite(STDOUT, "\033[32m    ✓ Session 服务连接成功\033[0m\n");
-            }
-            try {
-                $sessionOpts = [
-                    'connect_timeout' => 1.0,
-                    'timeout' => 2.0,
-                    'min_idle' => 1,
-                    'max_size' => 8,
-                    'token_file_name' => $sessionTokenFileName,
-                    'log_connect_fail' => false,
-                ];
-                $memoryOpts = [
-                    'connect_timeout' => 1.0,
-                    'timeout' => 2.0,
-                    'min_idle' => 1,
-                    'max_size' => 8,
-                    'token_file_name' => $memoryTokenFileName,
-                    'service_type' => 'Memory',
-                    'log_connect_fail' => false,
-                ];
-                \Weline\Server\Shared\Connection\ConnectionPoolManager::runWithFiberScheduler($fiberScheduler, function () use ($sessionHost, $sessionPort, $sessionOpts, $memoryHost, $memoryPort, $memoryOpts): void {
-                    \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, $sessionOpts);
-                    \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, $memoryOpts);
-                });
-            } catch (\Throwable) {
-                // 预热失败不阻塞 Worker，首请求时再建连
-            }
-        } elseif ($sessionAttempt % 10 === 0) {
-            WlsLogger::warning_("[Session] 第 {$sessionAttempt}/{$sessionMaxRetries} 次连接失败，继续重试...");
-        }
-    }
+    // ========== 连接延迟策略 ==========
+    // Worker 不在主循环中进行 Session/Memory 连接
+    // 所有连接由框架按需在首次使用时自动建立（Lazy Initialization）
     
     // 检查是否需要优雅退出（排水模式）
     if ($shouldExit) {
@@ -1485,6 +1540,10 @@ while (true) {
             $method = 'GET';
             if (\preg_match('/^(\w+)\s+/', $rawRequest, $matches)) {
                 $method = $matches[1];
+            }
+            $requestLogPrefix = InternalRequestLabel::buildLogPrefix($rawRequest);
+            if ($requestLogPrefix !== '') {
+                $method = $requestLogPrefix . $method;
             }
             WlsLogger::info_("收到请求: {$method} {$uri} (connId: {$connId}, requestCount: {$requestCount})");
         }
@@ -1967,32 +2026,6 @@ function wlsHttpEnqueueSseWriteAndAwaitDrain(
     $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $data;
     $writableConnections[$connId] = $conn;
     $connectionLastActivity[$connId] = \time();
-
-    $maxWaitSpins = 2000;
-    $spins = 0;
-    while (isset($connections[$connId]) && isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '') {
-        $spins++;
-        $streamStillOpen = \is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
-        if (!$streamStillOpen) {
-            unset(
-                $connections[$connId],
-                $requestBuffers[$connId],
-                $connectionLastActivity[$connId],
-                $requestLogged[$connId],
-                $writeBuffers[$connId],
-                $writableConnections[$connId],
-                $pendingClose[$connId]
-            );
-
-            return;
-        }
-
-        $connectionLastActivity[$connId] = \time();
-        if ($spins >= $maxWaitSpins) {
-            break;
-        }
-        \Weline\Framework\Runtime\SchedulerSystem::yield();
-    }
 }
 
 /**
@@ -2090,6 +2123,10 @@ function wlsHttpReadStep(
                 $method = $matches[1];
                 $uri = \parse_url($matches[2], PHP_URL_PATH) ?? '/';
                 $requestCount++;
+                $requestLogPrefix = InternalRequestLabel::buildLogPrefix($requestBuffers[$connId]);
+                if ($requestLogPrefix !== '') {
+                    $method = $requestLogPrefix . $method;
+                }
                 WlsLogger::info_("→ {$method} {$uri}");
                 if (\defined('STDOUT') && \is_resource(STDOUT)) {
                     \fflush(STDOUT);
