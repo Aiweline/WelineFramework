@@ -106,6 +106,52 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
     }
 
+    public function testDeferredSetWorkerPoolKeepsMaintenanceFallbackInactiveWhenPreviousPoolIsRetained(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getWorkerCount', 'getMaintenanceWorkerPorts', 'getWorkerHealthSummary'])
+            ->getMock();
+
+        $core->expects(self::atLeastOnce())
+            ->method('getWorkerCount')
+            ->willReturn(2);
+        $core->expects(self::atLeastOnce())
+            ->method('getMaintenanceWorkerPorts')
+            ->willReturn([17001]);
+        $core->expects(self::atLeastOnce())
+            ->method('getWorkerHealthSummary')
+            ->willReturn([
+                'healthy' => 2,
+                'total' => 2,
+            ]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'maintenanceFallbackActive', false);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', null);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiberKind', 'set_pool');
+
+        $fiber = new \Fiber(static function (): array {
+            return [
+                'accepted' => [],
+                'rejected' => [
+                    16901 => 'health tls handshake timeout',
+                    16902 => 'health tls handshake timeout',
+                ],
+            ];
+        });
+        $fiber->start();
+
+        $this->setProperty($dispatcher, 'deferredWorkerPoolFiber', $fiber);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'pumpDeferredWorkerPoolJobs');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher);
+
+        self::assertFalse((bool) $this->getProperty($dispatcher, 'maintenanceFallbackActive'));
+    }
+
     private function newDispatcherWithoutConstructor(): Dispatcher
     {
         $reflector = new \ReflectionClass(Dispatcher::class);

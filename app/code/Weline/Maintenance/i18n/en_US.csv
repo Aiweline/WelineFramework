@@ -1,4 +1,5 @@
 ﻿维护模式已关闭！,维护模式已关闭！
+"指定 WLS 实例名；省略则向当前所有运行中的实例同步维护入口","WLS instance name; omit to sync maintenance routing to all running instances"
 维护模式已开启！,"Maintenance mode has been enabled!"
 无效的请求方法,"Invalid request method"
 不支持的备份类型,"Unsupported backup type"
@@ -21,6 +22,9 @@ Cron自动备份未启用,"Cron auto backup is not enabled"
 自动备份任务执行失败：%{1},自动备份任务执行失败：%{1}
 维护模式,"Maintenance Mode"
 "在系统进入维护模式时触发，允许其他模块添加维护模式白名单URL。可以通过修改 white_urls 字段来添加白名单URL。","Triggered when the system enters maintenance mode, allowing other modules to add maintenance mode whitelist URLs. You can add whitelist URLs by modifying the white_urls field."
+"WLS 维护入口已同步：%{1}","WLS maintenance routing synced: %{1}"
+"WLS 维护入口同步未完全成功：%{1}","WLS maintenance routing sync incomplete: %{1}"
+"WLS 维护入口同步失败：%{1}","WLS maintenance routing sync failed: %{1}"
 创建完整备份失败：%{1},创建完整备份失败：%{1}
 数据库备份失败：%{1},数据库备份失败：%{1}
 代码备份失败：%{1},代码备份失败：%{1}
@@ -65,8 +69,3 @@ Cron自动备份未启用,"Cron auto backup is not enabled"
 失败,失败
 确定要删除此备份吗？,确定要删除此备份吗？
 操作失败,操作失败
-"No running WLS instance was found; only the framework maintenance flag was updated. To route traffic to maintenance workers, start WLS first, then run php bin/w server:maintenance enable, or re-run this command with -n <instance>.","No running WLS instance was found; only the framework maintenance flag was updated. To route traffic to maintenance workers, start WLS first, then run php bin/w server:maintenance enable, or re-run this command with -n <instance>."
-"WLS 维护入口已同步：%{1}","WLS maintenance routing synced: %{1}"
-"WLS 维护入口同步未完全成功：%{1}","WLS maintenance routing sync incomplete: %{1}"
-"WLS 维护入口同步失败：%{1}","WLS maintenance routing sync failed: %{1}"
-"指定 WLS 实例名；省略则向当前所有运行中的实例同步维护入口","WLS instance name; omit to sync maintenance routing to all running instances"

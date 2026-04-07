@@ -98,6 +98,19 @@ $guidedWorkspaceBrief = \trim((string)($websiteProfile['brief_description'] ?? $
 if ($guidedWorkspaceBrief === '' && $cfgDebugBrief !== '') {
     $guidedWorkspaceBrief = $cfgDebugBrief;
 }
+$guidedWorkspaceDefaultLocale = \trim((string)(
+    $scope['default_locale'] ?? $scope['default_language'] ?? $websiteProfile['default_locale'] ?? ''
+));
+if ($guidedWorkspaceDefaultLocale === '') {
+    $guidedWorkspaceDefaultLocale = 'zh_Hans_CN';
+}
+$pbAiPrimaryLocaleOptions = [
+    'zh_Hans_CN' => (string)__('简体中文'),
+    'en_US' => (string)__('English'),
+    'zh_Hant_TW' => (string)__('繁體中文'),
+    'ja_JP' => (string)__('日本語'),
+    'ko_KR' => (string)__('한국어'),
+];
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
 $pageTypeLabels = \GuoLaiRen\PageBuilder\Model\Page::getPageTypes();
@@ -202,6 +215,7 @@ $guidedScopeDefaults = [
     'site_tagline' => (string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
     'target_domain' => (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
     'brief_description' => $guidedWorkspaceBrief,
+    'default_locale' => $guidedWorkspaceDefaultLocale,
     'site_profile_manual' => \is_array($scope['site_profile_manual'] ?? null) ? $scope['site_profile_manual'] : [],
     'fake_mode' => $pbAiGuidedFakeMode ? 1 : 0,
 ];
@@ -210,6 +224,7 @@ $guidedSessionSummary = [
     'site_tagline' => (string)($guidedScopeDefaults['site_tagline'] ?? ''),
     'target_domain' => (string)($guidedScopeDefaults['target_domain'] ?? ''),
     'brief_description' => (string)($guidedScopeDefaults['brief_description'] ?? ''),
+    'default_locale' => (string)($guidedScopeDefaults['default_locale'] ?? ''),
     'page_types' => $selectedPageTypes,
 ];
 $domainStatus = (string)($domainPurchaseState['status'] ?? 'idle');
@@ -418,6 +433,44 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     color: var(--backend-color-primary, #2563eb) !important;
     border-color: var(--backend-color-input-focus-border, rgba(37, 99, 235, 0.35)) !important;
 }
+.pb-ai-build-guard {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.48);
+    backdrop-filter: blur(8px);
+    z-index: 1080;
+}
+.pb-ai-build-guard.d-none {
+    display: none !important;
+}
+.pb-ai-build-guard-card {
+    width: min(460px, 100%);
+    border-radius: 20px;
+    background: var(--backend-color-bg-primary, #fff);
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+    padding: 28px 28px 24px;
+    text-align: center;
+}
+.pb-ai-build-guard-spinner {
+    width: 48px;
+    height: 48px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    border: 4px solid rgba(37, 99, 235, 0.14);
+    border-top-color: var(--backend-color-primary, #2563eb);
+    animation: pb-ai-build-spin 1s linear infinite;
+}
+.pb-ai-preview-host-empty {
+    margin-bottom: 0;
+}
+@keyframes pb-ai-build-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
 </style>
 <?php if ($purchaseDialogJsUrl !== ''): ?>
     <script src="<?= htmlspecialchars($purchaseDialogJsUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
@@ -504,7 +557,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                             <i class="mdi mdi-account-voice text-primary"></i>
                             <?= htmlspecialchars((string)__('我的需求'), ENT_QUOTES, 'UTF-8') ?>
                         </h5>
-                        <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('站点名称、域名、描述与页面类型会直接影响生成结果，请优先填写完整。'), ENT_QUOTES, 'UTF-8') ?></p>
+                        <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('站点名称、主语言、域名、描述与页面类型会直接影响生成结果，请优先填写完整。'), ENT_QUOTES, 'UTF-8') ?></p>
                         <div class="row g-3">
                         <div class="col-md-8">
                             <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('站点名称'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -524,9 +577,18 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                                     <i class="mdi mdi-refresh-auto me-1" aria-hidden="true"></i><?= htmlspecialchars((string)__('AI 刷新'), ENT_QUOTES, 'UTF-8') ?>
                                 </button>
                             </div>
-                            <input class="form-control" id="pb-ai-target-domain" type="text"
+                            <input class="form-control pb-ai-target-domain-sync" id="pb-ai-target-domain" type="text"
                                    value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="<?= htmlspecialchars((string)__('如已有域名可填入；留空可由 AI 自动选择'), ENT_QUOTES, 'UTF-8') ?>">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="pb-ai-default-locale"><?= htmlspecialchars((string)__('主语言'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <select class="form-select pb-ai-default-locale-sync" id="pb-ai-default-locale" autocomplete="off">
+                                <?php foreach ($pbAiPrimaryLocaleOptions as $locCode => $locLabel): ?>
+                                    <option value="<?= htmlspecialchars((string)$locCode, ENT_QUOTES, 'UTF-8') ?>"<?= $guidedWorkspaceDefaultLocale === $locCode ? ' selected' : '' ?>><?= htmlspecialchars((string)$locLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text"><?= htmlspecialchars((string)__('AI 生成站点文案与区块内容时将优先使用该语言。'), ENT_QUOTES, 'UTF-8') ?></div>
                         </div>
                         <div class="col-12">
                             <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('一句话描述你的网站'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -809,6 +871,16 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                         <div class="summary-value<?= $guidedSessionSummary['target_domain'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['target_domain'] !== '' ? $guidedSessionSummary['target_domain'] : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
                     </div>
                     <div class="summary-item">
+                        <span class="summary-label"><?= htmlspecialchars((string)__('主语言'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php
+                        $summaryLocale = (string)($guidedSessionSummary['default_locale'] ?? '');
+                        $summaryLocaleLabel = $summaryLocale !== '' && isset($pbAiPrimaryLocaleOptions[$summaryLocale])
+                            ? (string)$pbAiPrimaryLocaleOptions[$summaryLocale]
+                            : $summaryLocale;
+                        ?>
+                        <div class="summary-value<?= $summaryLocale === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($summaryLocale !== '' ? $summaryLocaleLabel : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="summary-item">
                         <span class="summary-label"><?= htmlspecialchars((string)__('页面类型'), ENT_QUOTES, 'UTF-8') ?></span>
                         <?php if ($guidedSessionSummary['page_types'] !== []): ?>
                             <div class="summary-tags">
@@ -950,8 +1022,16 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                         <input class="form-control" id="pb-ai-site-tagline" type="text" value="<?= htmlspecialchars((string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
                     </div>
                     <div class="col-12">
-                        <label class="form-label" for="pb-ai-target-domain"><?= htmlspecialchars((string)__('目标域名'), ENT_QUOTES, 'UTF-8') ?></label>
-                        <input class="form-control" id="pb-ai-target-domain" type="text" value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="example.local.test">
+                        <label class="form-label" for="pb-ai-target-domain-summary"><?= htmlspecialchars((string)__('目标域名'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <input class="form-control pb-ai-target-domain-sync" id="pb-ai-target-domain-summary" type="text" value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="example.local.test">
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label" for="pb-ai-default-locale-summary"><?= htmlspecialchars((string)__('主语言'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <select class="form-select pb-ai-default-locale-sync" id="pb-ai-default-locale-summary" autocomplete="off">
+                            <?php foreach ($pbAiPrimaryLocaleOptions as $locCode => $locLabel): ?>
+                                <option value="<?= htmlspecialchars((string)$locCode, ENT_QUOTES, 'UTF-8') ?>"<?= $guidedWorkspaceDefaultLocale === $locCode ? ' selected' : '' ?>><?= htmlspecialchars((string)$locLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('需求描述'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -1006,8 +1086,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     </button>
                     <p class="small text-muted mb-0 mt-2"><?= htmlspecialchars((string)__('确认后将按新选择重新生成虚拟主题与页面（会覆盖当前生成结果）。'), ENT_QUOTES, 'UTF-8') ?></p>
                 </div>
-                <?php if ($previewPageOptions !== []): ?>
-                <div class="mb-3">
+                <div class="mb-3<?= $previewPageOptions === [] ? ' d-none' : '' ?>" id="pb-ai-preview-tabs-wrap">
                     <label class="form-label"><?= htmlspecialchars((string)__('当前预览页'), ENT_QUOTES, 'UTF-8') ?></label>
                     <ul class="nav nav-tabs pb-ai-preview-tabs" role="tablist">
                         <?php foreach ($previewPageOptions as $opt): ?>
@@ -1031,13 +1110,12 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                         <?php endforeach; ?>
                     </ul>
                 </div>
-                <?php endif; ?>
-                <div class="d-flex flex-wrap gap-2 mb-3">
+                <div class="d-flex flex-wrap gap-2 mb-3<?= ($embeddedVisualUrl === '' && $previewFullUrl === '') ? ' d-none' : '' ?>" id="pb-ai-visual-action-bar">
                     <?php if ($embeddedVisualUrl): ?>
-                        <button type="button" class="btn btn-primary pb-ai-focus-embedded-editor"><?= htmlspecialchars((string)__('当前页直接编辑'), ENT_QUOTES, 'UTF-8') ?></button>
+                        <button type="button" class="btn btn-primary pb-ai-focus-embedded-editor<?= $embeddedVisualUrl === '' ? ' d-none' : '' ?>" id="pb-ai-focus-embedded-editor-btn"><?= htmlspecialchars((string)__('当前页直接编辑'), ENT_QUOTES, 'UTF-8') ?></button>
                     <?php endif; ?>
                     <?php if ($previewFullUrl): ?>
-                        <a class="btn btn-outline-secondary" href="<?= htmlspecialchars($previewFullUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars((string)__('打开普通预览'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <a class="btn btn-outline-secondary<?= $previewFullUrl === '' ? ' d-none' : '' ?>" id="pb-ai-open-preview-full-link" href="<?= htmlspecialchars($previewFullUrl !== '' ? $previewFullUrl : '#', ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener"><?= htmlspecialchars((string)__('打开普通预览'), ENT_QUOTES, 'UTF-8') ?></a>
                     <?php endif; ?>
                 </div>
                 <?php if ($pagesByType !== []): ?>
@@ -1051,7 +1129,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 </div>
                 <?php endif; ?>
                 <?php if ($visualPreviewUrl === ''): ?>
-                    <div class="alert alert-info mt-3 mb-0"><?= htmlspecialchars((string)__('当前还没有可用的可视化预览地址，请先完成虚拟主题编排。'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <div class="alert alert-info mt-3 mb-0" id="pb-ai-visual-edit-empty-state"><?= htmlspecialchars((string)__('当前还没有可用的可视化预览地址，请先完成虚拟主题编排。'), ENT_QUOTES, 'UTF-8') ?></div>
+                <?php else: ?>
+                    <div class="alert alert-info mt-3 mb-0 d-none" id="pb-ai-visual-edit-empty-state"><?= htmlspecialchars((string)__('当前还没有可用的可视化预览地址，请先完成虚拟主题编排。'), ENT_QUOTES, 'UTF-8') ?></div>
                 <?php endif; ?>
             </div>
         </div>
@@ -1099,13 +1179,15 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 </p>
             </div>
             <div class="card-body p-4">
-                <?php if ($embeddedVisualUrl !== ''): ?>
-                    <iframe id="pb-ai-visual-preview-frame" title="<?= htmlspecialchars((string)__('PageBuilder 可视化预览'), ENT_QUOTES, 'UTF-8') ?>"
-                            src="<?= htmlspecialchars($embeddedVisualUrl, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" referrerpolicy="no-referrer"
-                            style="width:100%;min-height:860px;border:1px solid var(--backend-color-border-default, #e5e7eb);border-radius:16px;background:var(--backend-color-bg-primary, #fff);"></iframe>
-                <?php else: ?>
-                    <div class="alert alert-info mb-0"><?= htmlspecialchars((string)__('完成虚拟主题编排后，这里会直接显示真实的 PageBuilder 可视化预览。'), ENT_QUOTES, 'UTF-8') ?></div>
-                <?php endif; ?>
+                <div id="pb-ai-visual-preview-host">
+                    <?php if ($embeddedVisualUrl !== ''): ?>
+                        <iframe id="pb-ai-visual-preview-frame" title="<?= htmlspecialchars((string)__('PageBuilder 可视化预览'), ENT_QUOTES, 'UTF-8') ?>"
+                                src="<?= htmlspecialchars($embeddedVisualUrl, ENT_QUOTES, 'UTF-8') ?>" loading="lazy" referrerpolicy="no-referrer"
+                                style="width:100%;min-height:860px;border:1px solid var(--backend-color-border-default, #e5e7eb);border-radius:16px;background:var(--backend-color-bg-primary, #fff);"></iframe>
+                    <?php else: ?>
+                        <div class="alert alert-info mb-0 pb-ai-preview-host-empty"><?= htmlspecialchars((string)__('完成虚拟主题编排后，这里会直接显示真实的 PageBuilder 可视化预览。'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -1211,6 +1293,14 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     </div>
 </div>
 
+<div class="pb-ai-build-guard d-none" id="pb-ai-build-guard" aria-live="polite" aria-hidden="true">
+    <div class="pb-ai-build-guard-card">
+        <div class="pb-ai-build-guard-spinner" aria-hidden="true"></div>
+        <h5 class="mb-2"><?= htmlspecialchars((string)__('正在准备编辑环境'), ENT_QUOTES, 'UTF-8') ?></h5>
+        <p class="text-muted mb-0" id="pb-ai-build-guard-message"><?= htmlspecialchars((string)__('请稍候，系统正在创建可视化编辑所需环境并持续生成页面。'), ENT_QUOTES, 'UTF-8') ?></p>
+    </div>
+</div>
+
 <script>
 (function () {
     'use strict';
@@ -1237,6 +1327,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var currentEmbeddedVisualUrl = <?= \json_encode($embeddedVisualUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var currentPreviewPageType = <?= \json_encode($previewPageType, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var currentPreviewPageId = <?= \json_encode($previewPageId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var currentWorkspaceStage = <?= \json_encode($currentStage, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var buildNavigationGuardActive = false;
     var refineComponentState = {
         pageType: '',
         componentCode: '',
@@ -1272,10 +1364,15 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         refineContextFallback: <?= \json_encode((string)__('当前还没有选中的区块。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时没有可编辑字段'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        buildPreparing: <?= \json_encode((string)__('正在准备可视化编辑环境，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        buildReady: <?= \json_encode((string)__('编辑环境已就绪，可先开始调整已生成页面。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        leaveDuringBuild: <?= \json_encode((string)__('页面仍在生成中，离开后会中断当前生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         domainNeedBrief: <?= \json_encode((string)__('请先填写网站名称或需求描述，再让 AI 推荐域名。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         domainNeedRegistrar: <?= \json_encode((string)__('请先选择购买服务商账号。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-        domainRecommendLoading: <?= \json_encode((string)__('AI 正在推荐并检测域名可用性...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        domainRecommendLoading: <?= \json_encode((string)__('AI 正在生成域名建议…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         domainRecommendEmpty: <?= \json_encode((string)__('当前还没有推荐域名，请先点击“推荐域名”。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        domainCheckNeedRegistrar: <?= \json_encode((string)__('已填写目标域名，请先选择购买服务商账号后再确认生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        domainConfirmCheckFailed: <?= \json_encode((string)__('域名校验未通过，请修改目标域名或稍后再试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         domainPurchaseFailed: <?= \json_encode((string)__('购买域名失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         domainPurchaseDialogLoadFailed: <?= \json_encode((string)__('购买弹窗加载失败，请刷新页面后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         domainPurchaseQueued: <?= \json_encode((string)__('域名购买请求已提交'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -1304,10 +1401,255 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         }).then(function (r) { return r.json(); });
     }
 
+    function setBuildNavigationGuard(active) {
+        buildNavigationGuardActive = !!active;
+    }
+
+    function showBuildGuard(message) {
+        var guard = document.getElementById('pb-ai-build-guard');
+        var messageEl = document.getElementById('pb-ai-build-guard-message');
+        if (messageEl) {
+            messageEl.textContent = String(message || messages.buildPreparing || '');
+        }
+        if (guard) {
+            guard.classList.remove('d-none');
+            guard.setAttribute('aria-hidden', 'false');
+        }
+    }
+
+    function hideBuildGuard() {
+        var guard = document.getElementById('pb-ai-build-guard');
+        if (guard) {
+            guard.classList.add('d-none');
+            guard.setAttribute('aria-hidden', 'true');
+        }
+    }
+
+    function updateStageButtons(nextStage) {
+        document.querySelectorAll('.pb-ai-set-stage').forEach(function (btn) {
+            var stage = String(btn.getAttribute('data-stage') || '');
+            btn.classList.toggle('btn-primary', stage === nextStage);
+            btn.classList.toggle('btn-outline-primary', stage !== nextStage);
+        });
+        var stageLabelEl = document.getElementById('pb-ai-current-stage');
+        if (stageLabelEl) {
+            var activeBtn = document.querySelector('.pb-ai-set-stage[data-stage="' + nextStage + '"]');
+            stageLabelEl.textContent = activeBtn ? String(activeBtn.textContent || '').trim() : nextStage;
+        }
+    }
+
+    function updateGuidedSteps(nextStage) {
+        var orderedStages = ['virtual_theme', 'visual_edit', 'publish'];
+        var activeIndex = orderedStages.indexOf(nextStage);
+        if (activeIndex < 0) {
+            activeIndex = 0;
+        }
+        document.querySelectorAll('.pb-guided-step').forEach(function (step, index) {
+            step.classList.toggle('active', index === activeIndex);
+            step.classList.toggle('done', index < activeIndex);
+        });
+    }
+
+    function switchWorkspaceStage(nextStage) {
+        currentWorkspaceStage = String(nextStage || 'virtual_theme');
+        document.querySelectorAll('[data-stage-panel]').forEach(function (panel) {
+            var stage = String(panel.getAttribute('data-stage-panel') || '');
+            panel.classList.toggle('d-none', stage !== currentWorkspaceStage);
+        });
+        updateStageButtons(currentWorkspaceStage);
+        updateGuidedSteps(currentWorkspaceStage);
+    }
+
+    function getVisualPreviewHost() {
+        return document.getElementById('pb-ai-visual-preview-host');
+    }
+
+    function ensureVisualPreviewFrame() {
+        var host = getVisualPreviewHost();
+        if (!host) {
+            return null;
+        }
+        var frame = host.querySelector('#pb-ai-visual-preview-frame');
+        if (frame) {
+            return frame;
+        }
+        host.innerHTML = '';
+        frame = document.createElement('iframe');
+        frame.id = 'pb-ai-visual-preview-frame';
+        frame.title = 'PageBuilder 可视化预览';
+        frame.loading = 'lazy';
+        frame.referrerPolicy = 'no-referrer';
+        frame.style.cssText = 'width:100%;min-height:860px;border:1px solid var(--backend-color-border-default, #e5e7eb);border-radius:16px;background:var(--backend-color-bg-primary, #fff);';
+        host.appendChild(frame);
+        return frame;
+    }
+
+    function renderVisualPreviewHost(url) {
+        var host = getVisualPreviewHost();
+        var emptyState = document.getElementById('pb-ai-visual-edit-empty-state');
+        if (!host) {
+            return null;
+        }
+        if (url) {
+            if (emptyState) {
+                emptyState.classList.add('d-none');
+            }
+            return ensureVisualPreviewFrame();
+        }
+        host.innerHTML = '<div class="alert alert-info mb-0 pb-ai-preview-host-empty"><?= htmlspecialchars((string)__('完成虚拟主题编排后，这里会直接显示真实的 PageBuilder 可视化预览。'), ENT_QUOTES, 'UTF-8') ?></div>';
+        if (emptyState) {
+            emptyState.classList.remove('d-none');
+        }
+        return null;
+    }
+
+    function ensurePreviewTabsList() {
+        var wrapper = document.getElementById('pb-ai-preview-tabs-wrap');
+        if (!wrapper) {
+            return null;
+        }
+        var list = wrapper.querySelector('.pb-ai-preview-tabs');
+        if (!list) {
+            list = document.createElement('ul');
+            list.className = 'nav nav-tabs pb-ai-preview-tabs';
+            list.setAttribute('role', 'tablist');
+            wrapper.appendChild(list);
+        }
+        wrapper.classList.remove('d-none');
+        return list;
+    }
+
+    function ensureMaterializedPagesCard() {
+        var card = document.getElementById('pb-ai-materialized-pages-card');
+        if (card) {
+            return card;
+        }
+        var anchor = document.getElementById('pb-ai-visual-edit-empty-state');
+        var container = anchor && anchor.parentNode ? anchor.parentNode : document.querySelector('[data-stage-panel="visual_edit"] .card-body');
+        if (!container) {
+            return null;
+        }
+        card = document.createElement('div');
+        card.className = 'border rounded p-3 d-none';
+        card.id = 'pb-ai-materialized-pages-card';
+        card.innerHTML = '<div class="fw-semibold mb-2">已物化页面</div><div class="d-flex flex-wrap gap-2" id="pb-ai-materialized-pages-list"></div>';
+        container.insertBefore(card, anchor || null);
+        return card;
+    }
+
+    function renderMaterializedPagesByType(pagesByType) {
+        var card = ensureMaterializedPagesCard();
+        if (!card) {
+            return;
+        }
+        var list = document.getElementById('pb-ai-materialized-pages-list');
+        if (!list) {
+            return;
+        }
+        list.innerHTML = '';
+        var hasRows = false;
+        Object.keys(pagesByType || {}).forEach(function (pageType) {
+            var pageData = pagesByType[pageType] && typeof pagesByType[pageType] === 'object' ? pagesByType[pageType] : {};
+            var pageId = parseInt(pageData.page_id || 0, 10) || 0;
+            if (!pageId) {
+                return;
+            }
+            hasRows = true;
+            var badge = document.createElement('span');
+            badge.className = 'badge bg-soft-info text-info';
+            badge.textContent = normalizePageTypeLabel(pageType) + '#' + pageId;
+            list.appendChild(badge);
+        });
+        card.classList.toggle('d-none', !hasRows);
+    }
+
+    function syncVisualActionBar(workspaceState) {
+        var actionBar = document.getElementById('pb-ai-visual-action-bar');
+        if (!actionBar) {
+            return;
+        }
+        var visualUrl = workspaceState && workspaceState.visual_preview_url ? String(workspaceState.visual_preview_url) : '';
+        var previewUrl = workspaceState && workspaceState.preview_full_url ? String(workspaceState.preview_full_url) : '';
+        var focusBtn = document.getElementById('pb-ai-focus-embedded-editor-btn');
+        var previewLink = document.getElementById('pb-ai-open-preview-full-link');
+        if (!focusBtn) {
+            focusBtn = document.createElement('button');
+            focusBtn.type = 'button';
+            focusBtn.className = 'btn btn-primary pb-ai-focus-embedded-editor';
+            focusBtn.id = 'pb-ai-focus-embedded-editor-btn';
+            focusBtn.textContent = messages.focusEmbeddedPreview;
+            actionBar.insertBefore(focusBtn, actionBar.firstChild || null);
+        }
+        if (focusBtn && focusBtn.dataset.pbFocusBound !== '1') {
+            focusBtn.dataset.pbFocusBound = '1';
+            focusBtn.addEventListener('click', function () {
+                focusEmbeddedEditor();
+            });
+        }
+        if (!previewLink) {
+            previewLink = document.createElement('a');
+            previewLink.className = 'btn btn-outline-secondary';
+            previewLink.id = 'pb-ai-open-preview-full-link';
+            previewLink.target = '_blank';
+            previewLink.rel = 'noopener';
+            previewLink.textContent = '打开普通预览';
+            actionBar.appendChild(previewLink);
+        }
+        actionBar.classList.toggle('d-none', visualUrl === '' && previewUrl === '');
+        if (focusBtn) {
+            focusBtn.classList.toggle('d-none', visualUrl === '');
+        }
+        if (previewLink) {
+            previewLink.classList.toggle('d-none', previewUrl === '');
+            previewLink.setAttribute('href', previewUrl || '#');
+        }
+    }
+
+    window.addEventListener('beforeunload', function (event) {
+        if (!buildNavigationGuardActive) {
+            return;
+        }
+        var message = messages.leaveDuringBuild || '页面仍在生成中，离开后会中断当前生成。';
+        event.preventDefault();
+        event.returnValue = message;
+        return message;
+    });
+
+    function getTargetDomainInputs() {
+        return document.querySelectorAll('.pb-ai-target-domain-sync');
+    }
+
+    function getTargetDomainTrimmed() {
+        var nodes = getTargetDomainInputs();
+        return nodes.length ? String(nodes[0].value || '').trim() : '';
+    }
+
+    function setAllTargetDomainInputs(value) {
+        var v = String(value || '');
+        getTargetDomainInputs().forEach(function (el) {
+            el.value = v;
+        });
+    }
+
+    function getDefaultLocaleInputs() {
+        return document.querySelectorAll('.pb-ai-default-locale-sync');
+    }
+
+    function getPrimaryDefaultLocaleValue() {
+        var nodes = getDefaultLocaleInputs();
+        return nodes.length ? String(nodes[0].value || '').trim() : '';
+    }
+
+    function setAllDefaultLocaleSelects(value) {
+        var v = String(value || '');
+        getDefaultLocaleInputs().forEach(function (el) {
+            el.value = v;
+        });
+    }
+
     var recommendDomainUrl = document.getElementById('site-builder-api-recommend-domain') ? document.getElementById('site-builder-api-recommend-domain').value : '';
     var checkDomainUrl = document.getElementById('site-builder-api-check-domain') ? document.getElementById('site-builder-api-check-domain').value : '';
     var startDomainPurchaseUrl = document.getElementById('site-builder-api-start-domain-purchase') ? document.getElementById('site-builder-api-start-domain-purchase').value : '';
-    var domainInputEl = document.getElementById('pb-ai-target-domain');
     var briefInputEl = document.getElementById('pb-ai-brief-description');
     var titleInputEl = document.getElementById('pb-ai-site-title');
     var recommendationBoxEl = document.getElementById('pb-ai-domain-recommendation');
@@ -1368,11 +1710,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             btn.setAttribute('data-domain', value);
             btn.textContent = value;
             btn.addEventListener('click', function () {
-                if (domainInputEl) {
-                    domainInputEl.value = value;
-                    siteProfileManual.target_domain = true;
-                    autoSaveScope();
-                }
+                setAllTargetDomainInputs(value);
+                siteProfileManual.target_domain = true;
+                autoSaveScope();
             });
             recommendationListEl.appendChild(btn);
         });
@@ -1402,7 +1742,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             messageEl.textContent = String(domainPurchaseState.message || '');
         }
         if (domainEl) {
-            domainEl.textContent = String(domainPurchaseState.domain || (domainInputEl ? domainInputEl.value : ''));
+            domainEl.textContent = String(domainPurchaseState.domain || getTargetDomainTrimmed());
         }
         if (stageEl) {
             stageEl.textContent = String(domainPurchaseState.stage_label || '购买域名');
@@ -1422,7 +1762,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         }
         var registrarSelection = getRegistrarSelection();
         var patch = Object.assign({
-            target_domain: domainInputEl ? String(domainInputEl.value || '').trim() : '',
+            target_domain: getTargetDomainTrimmed(),
             preferred_registrar_account_id: registrarSelection.accountId,
             recommended_registrar_label: registrarSelection.label
         }, extraPatch || {});
@@ -1437,9 +1777,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         return f === 1 || f === true || f === '1' || f === 'true';
     }
 
-    function recommendDomainsFromWorkbench(options) {
-        options = options || {};
-        var fillAlways = options.fillAlways === true;
+    function recommendDomainsFromWorkbench() {
         var registrarSelection = getRegistrarSelection();
         var description = (briefInputEl ? String(briefInputEl.value || '').trim() : '') || (titleInputEl ? String(titleInputEl.value || '').trim() : '');
         if (!description) {
@@ -1447,10 +1785,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             return;
         }
         var fakeSession = isGuidedFakeModeSession();
-        if (!registrarSelection.accountId && !fakeSession) {
-            toast('warning', messages.domainNeedRegistrar);
-            return;
-        }
         if (!recommendDomainUrl) {
             toast('error', messages.networkError);
             return;
@@ -1459,9 +1793,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         setDomainRecommendationState('info', messages.domainRecommendLoading);
         postForm(recommendDomainUrl, {
             description: description,
-            domain: domainInputEl ? String(domainInputEl.value || '').trim() : '',
+            domain: getTargetDomainTrimmed(),
             account_id: registrarSelection.accountId > 0 ? String(registrarSelection.accountId) : '0',
-            fake_mode: fakeSession ? '1' : '0'
+            fake_mode: fakeSession ? '1' : '0',
+            defer_availability_check: '1'
         }).then(function (data) {
             if (!data || !data.success) {
                 setDomainRecommendationState('warning', (data && data.message) ? String(data.message) : messages.domainRecommendEmpty);
@@ -1469,17 +1804,18 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             }
             var recommendedDomain = String(data.domain || '').trim();
             var candidates = Array.isArray(data.candidate_domains) ? data.candidate_domains : (recommendedDomain ? [recommendedDomain] : []);
-            if (recommendedDomain && domainInputEl && (fillAlways || !String(domainInputEl.value || '').trim())) {
-                domainInputEl.value = recommendedDomain;
+            if (recommendedDomain) {
+                setAllTargetDomainInputs(recommendedDomain);
             }
             renderRecommendedDomains(candidates);
             setDomainRecommendationState('success', String(data.message || recommendedDomain));
             persistDomainSelection({
-                target_domain: domainInputEl ? String(domainInputEl.value || '').trim() : recommendedDomain,
+                target_domain: getTargetDomainTrimmed() || recommendedDomain,
                 recommended_domain_list: candidates,
                 preferred_registrar_account_id: registrarSelection.accountId,
                 recommended_registrar_label: registrarSelection.label
             });
+            autoSaveScope();
         }).catch(function () {
             setDomainRecommendationState('error', messages.networkError);
         });
@@ -1494,7 +1830,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
     function startDomainPurchaseFromWorkbench() {
         var registrarSelection = getRegistrarSelection();
-        var domain = domainInputEl ? String(domainInputEl.value || '').trim() : '';
+        var domain = getTargetDomainTrimmed();
         if (!domain) {
             toast('warning', messages.domainRecommendEmpty);
             return;
@@ -1528,7 +1864,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     startLifecycle: <?= \json_encode((string)__('Start Domain Lifecycle'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     startLifecycleHint: <?= \json_encode((string)__('After the purchase starts, the system can continue DNS and HTTPS related follow-up processing.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     confirm: <?= \json_encode((string)__('Confirm Purchase'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cancel: <?= \json_encode((string)__('Cancel'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    cancel: <?= \json_encode((string)__('Cancel'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     <?php /* ?>
                     title: <?= \json_encode((string)__('购买域名'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     description: <?= \json_encode((string)__('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -1547,7 +1883,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     startLifecycle: <?= \json_encode((string)__('启动全流程状态跟踪'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     startLifecycleHint: <?= \json_encode((string)__('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     confirm: <?= \json_encode((string)__('确认购买'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cancel: <?= \json_encode((string)__('取消'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    cancel: <?= \json_encode((string)__('取消'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     <?php */ ?>
                 },
                 defaults: {
@@ -1628,13 +1964,13 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var recommendDomainBtn = document.getElementById('pb-ai-recommend-domain-btn');
     if (recommendDomainBtn) {
         recommendDomainBtn.addEventListener('click', function () {
-            recommendDomainsFromWorkbench({ fillAlways: false });
+            recommendDomainsFromWorkbench();
         });
     }
     var targetDomainAiRefreshBtn = document.getElementById('pb-ai-target-domain-ai-refresh');
     if (targetDomainAiRefreshBtn) {
         targetDomainAiRefreshBtn.addEventListener('click', function () {
-            recommendDomainsFromWorkbench({ fillAlways: true });
+            recommendDomainsFromWorkbench();
         });
     }
     var startDomainPurchaseBtn = document.getElementById('site-builder-start-domain-purchase');
@@ -1683,7 +2019,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             site_title: false,
             site_tagline: false,
             target_domain: false,
-            brief_description: false
+            brief_description: false,
+            default_locale: false
         };
         if (!raw || typeof raw !== 'object') {
             return flags;
@@ -1701,7 +2038,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         [
             ['pb-ai-site-title', 'site_title'],
             ['pb-ai-site-tagline', 'site_tagline'],
-            ['pb-ai-target-domain', 'target_domain'],
             ['pb-ai-brief-description', 'brief_description']
         ].forEach(function (pair) {
             var el = document.getElementById(pair[0]);
@@ -1714,6 +2050,14 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 el.value = fallbackValue;
             }
         });
+        var fallbackDomain = typeof fb.target_domain === 'string' ? String(fb.target_domain).trim() : '';
+        if (fallbackDomain !== '' && getTargetDomainTrimmed() === '') {
+            setAllTargetDomainInputs(fallbackDomain);
+        }
+        var fbLocale = typeof fb.default_locale === 'string' ? String(fb.default_locale).trim() : '';
+        if (fbLocale !== '' && getPrimaryDefaultLocaleValue() === '') {
+            setAllDefaultLocaleSelects(fbLocale);
+        }
     }
 
     function buildVirtualThemePatch() {
@@ -1721,12 +2065,14 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         var pageTypes = selectedPageTypes();
         var titleEl = document.getElementById('pb-ai-site-title');
         var taglineEl = document.getElementById('pb-ai-site-tagline');
-        var domainEl = document.getElementById('pb-ai-target-domain');
         var briefEl = document.getElementById('pb-ai-brief-description');
+        var domainVal = getTargetDomainTrimmed();
+        var localeVal = getPrimaryDefaultLocaleValue();
         return {
             site_title: titleEl ? titleEl.value : (fb.site_title || ''),
             site_tagline: taglineEl ? taglineEl.value : (fb.site_tagline || ''),
-            target_domain: domainEl ? domainEl.value : (fb.target_domain || ''),
+            target_domain: domainVal !== '' ? domainVal : (fb.target_domain || ''),
+            default_locale: localeVal !== '' ? localeVal : (fb.default_locale || ''),
             brief_description: briefEl ? briefEl.value : (fb.brief_description || ''),
             user_description: briefEl ? briefEl.value : (fb.brief_description || ''),
             page_types: pageTypes,
@@ -1747,6 +2093,40 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         }
 
         return true;
+    }
+
+    function ensureTargetDomainOkBeforeBuild() {
+        var domain = getTargetDomainTrimmed();
+        if (domain === '') {
+            return Promise.resolve(true);
+        }
+        if (/\.weline\.local$/i.test(domain)) {
+            return Promise.resolve(true);
+        }
+        if (isGuidedFakeModeSession()) {
+            return Promise.resolve(true);
+        }
+        var registrarSelection = getRegistrarSelection();
+        if (registrarSelection.accountId <= 0) {
+            toast('warning', messages.domainCheckNeedRegistrar);
+            return Promise.resolve(false);
+        }
+        if (!checkDomainUrl) {
+            return Promise.resolve(true);
+        }
+        return postForm(checkDomainUrl, {
+            domain: domain,
+            account_id: String(registrarSelection.accountId)
+        }).then(function (data) {
+            if (data && data.success && data.available) {
+                return true;
+            }
+            toast('warning', (data && data.message) ? String(data.message) : messages.domainConfirmCheckFailed);
+            return false;
+        }).catch(function () {
+            toast('error', messages.networkError);
+            return false;
+        });
     }
 
     function resetBuildStartUi() {
@@ -1781,7 +2161,12 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
     var tabClickLocked = false;
     function getPreviewTabContainers() {
-        return Array.from(document.querySelectorAll('.pb-ai-preview-tabs'));
+        var containers = Array.from(document.querySelectorAll('.pb-ai-preview-tabs'));
+        if (containers.length > 0) {
+            return containers;
+        }
+        var ensured = ensurePreviewTabsList();
+        return ensured ? [ensured] : [];
     }
 
     function normalizePageTypeLabel(pageType) {
@@ -1894,10 +2279,15 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         }
         if (workspaceState.visual_preview_url) {
             currentEmbeddedVisualUrl = String(workspaceState.visual_preview_url);
+            renderVisualPreviewHost(currentEmbeddedVisualUrl);
             setPreviewFrameUrl(currentEmbeddedVisualUrl);
         } else if (!currentEmbeddedVisualUrl && workspaceState.visual_edit_url) {
             currentEmbeddedVisualUrl = String(workspaceState.visual_edit_url);
+            renderVisualPreviewHost(currentEmbeddedVisualUrl);
             setPreviewFrameUrl(currentEmbeddedVisualUrl);
+        } else if (!workspaceState.visual_preview_url && !workspaceState.visual_edit_url) {
+            currentEmbeddedVisualUrl = '';
+            renderVisualPreviewHost('');
         }
         if (workspaceState.preview_page_type) {
             currentPreviewPageType = String(workspaceState.preview_page_type);
@@ -1911,6 +2301,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         var pagesByType = workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object'
             ? workspaceState.pagebuilder_pages_by_type
             : {};
+        renderMaterializedPagesByType(pagesByType);
+        syncVisualActionBar(workspaceState);
         Object.keys(pagesByType).forEach(function (pageType) {
             var pageData = pagesByType[pageType] && typeof pagesByType[pageType] === 'object' ? pagesByType[pageType] : {};
             var pageId = parseInt(pageData.page_id || 0, 10) || 0;
@@ -2822,11 +3214,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var siteProfileManualFieldMap = {
         'pb-ai-site-title': 'site_title',
         'pb-ai-site-tagline': 'site_tagline',
-        'pb-ai-target-domain': 'target_domain',
         'pb-ai-brief-description': 'brief_description'
     };
 
-    ['pb-ai-site-title', 'pb-ai-site-tagline', 'pb-ai-target-domain', 'pb-ai-brief-description'].forEach(function (id) {
+    ['pb-ai-site-title', 'pb-ai-site-tagline', 'pb-ai-brief-description'].forEach(function (id) {
         var el = document.getElementById(id);
         if (!el) {
             return;
@@ -2844,6 +3235,36 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         });
         el.addEventListener('change', function () {
             markManual();
+            autoSaveScope();
+        });
+    });
+
+    getTargetDomainInputs().forEach(function (el) {
+        el.addEventListener('input', function () {
+            var v = String(el.value || '');
+            getTargetDomainInputs().forEach(function (peer) {
+                if (peer !== el) {
+                    peer.value = v;
+                }
+            });
+            siteProfileManual.target_domain = true;
+            autoSaveScope();
+        });
+        el.addEventListener('change', function () {
+            siteProfileManual.target_domain = true;
+            autoSaveScope();
+        });
+    });
+
+    getDefaultLocaleInputs().forEach(function (el) {
+        el.addEventListener('change', function () {
+            var v = String(el.value || '');
+            getDefaultLocaleInputs().forEach(function (peer) {
+                if (peer !== el) {
+                    peer.value = v;
+                }
+            });
+            siteProfileManual.default_locale = true;
             autoSaveScope();
         });
     });
@@ -2993,11 +3414,24 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 return;
             }
 
+            var self = this;
+            ensureTargetDomainOkBeforeBuild().then(function (ok) {
+                if (!ok) {
+                    return;
+                }
+                pbAiConfirmGenerateThemeContinue(self, selectedTypes);
+            });
+        });
+    }
+
+    function pbAiConfirmGenerateThemeContinue(confirmBtn, selectedTypes) {
             if (!runVirtualThemeUrl) {
                 toast('error', messages.missingRunVirtualTheme);
                 return;
             }
             queueGenerationStatus(selectedTypes);
+            showBuildGuard(messages.buildPreparing);
+            setBuildNavigationGuard(true);
 
             // 同步回源选择器
             document.querySelectorAll('.pb-ai-page-type-check').forEach(function(checkbox) {
@@ -3024,6 +3458,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 scope_patch: JSON.stringify(buildVirtualThemePatch())
             }).then(function (data) {
                 if (!data || !data.success) {
+                    hideBuildGuard();
+                    setBuildNavigationGuard(false);
                     setRunVirtualThemeButtonsDisabled(false);
                     if (confirmBtn) {
                         confirmBtn.disabled = false;
@@ -3040,13 +3476,16 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     }
                 }
 
+                hideBuildGuard();
+                setBuildNavigationGuard(false);
                 resetBuildStartUi();
                 toast('error', messages.operationStreamMissing);
             }).catch(function () {
+                hideBuildGuard();
+                setBuildNavigationGuard(false);
                 resetBuildStartUi();
                 toast('error', messages.networkError);
             });
-        });
     }
 
     window.PbAiWorkspacePreview = {
@@ -3066,6 +3505,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         markPageGenerationStatus: markPageGenerationStatus,
         queueGenerationStatus: queueGenerationStatus,
         syncPreviewMetaFromState: syncPreviewMetaFromState,
+        switchWorkspaceStage: switchWorkspaceStage,
+        showBuildGuard: showBuildGuard,
+        hideBuildGuard: hideBuildGuard,
+        setBuildNavigationGuard: setBuildNavigationGuard,
         updateVirtualBlockState: updateVirtualBlockState,
         replaceCurrentBlockHtml: replaceCurrentBlockHtml,
         bindEmbeddedPreviewFrameBridge: bindEmbeddedPreviewFrameBridge,
@@ -3449,6 +3892,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         pageType: '',
         blockId: ''
     };
+    var buildStartupPending = false;
 
     function relayoutExpertWorkspaceWithRightLog() {
         if (isGuidedUi) {
@@ -3627,6 +4071,13 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
     function resetOperationUiOnFailure(operation) {
         if (String(operation || '') === 'build') {
+            buildStartupPending = false;
+            if (typeof previewBridge.hideBuildGuard === 'function') {
+                previewBridge.hideBuildGuard();
+            }
+            if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                previewBridge.setBuildNavigationGuard(false);
+            }
             if (typeof previewBridge.resetBuildStartUi === 'function') {
                 previewBridge.resetBuildStartUi();
             }
@@ -3695,6 +4146,21 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         blockRefreshState.blockId = '';
     }
 
+    function hydrateWorkspaceFromState(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return;
+        }
+        if (typeof previewBridge.syncPreviewMetaFromState === 'function') {
+            previewBridge.syncPreviewMetaFromState(workspaceState);
+        }
+        if (workspaceState.stage && typeof previewBridge.switchWorkspaceStage === 'function') {
+            previewBridge.switchWorkspaceStage(String(workspaceState.stage));
+        }
+        if (typeof previewBridge.bindEmbeddedPreviewFrameBridge === 'function') {
+            previewBridge.bindEmbeddedPreviewFrameBridge();
+        }
+    }
+
     function startOperationStream(streamUrl, operation, executionToken) {
         if (!streamUrl) {
             return false;
@@ -3703,6 +4169,16 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         var operationKey = String(operation || '') + ':' + String(executionToken || '');
         if (runningSource && runningOperationKey === operationKey) {
             return true;
+        }
+
+        if (String(operation || '') === 'build') {
+            buildStartupPending = true;
+            if (typeof previewBridge.showBuildGuard === 'function') {
+                previewBridge.showBuildGuard(messages.buildPreparing);
+            }
+            if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                previewBridge.setBuildNavigationGuard(true);
+            }
         }
 
         closeOperationSource();
@@ -3732,6 +4208,18 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             }
         });
 
+        source.addEventListener('environment_ready', function (event) {
+            var payload = parsePayload(event);
+            if (payload && payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+            }
+            buildStartupPending = false;
+            if (typeof previewBridge.hideBuildGuard === 'function') {
+                previewBridge.hideBuildGuard();
+            }
+            toast('success', (payload && payload.message) ? String(payload.message) : (messages.buildReady || '编辑环境已就绪'));
+        });
+
         source.addEventListener('progress', function (event) {
             var payload = parsePayload(event);
             if (!payload || !payload.message) {
@@ -3752,7 +4240,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
             // 实时更新预览 iframe（如果存在）
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
-            if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active) {
+            if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === String(currentPreviewPageType || ''))) {
                 // 页面生成完成，刷新预览
                 window.setTimeout(function() {
                     if (previewFrame.src) {
@@ -3767,20 +4255,26 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             if (!payload || !payload.page_type) {
                 return;
             }
+            if (payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+            }
             logOperationToWorkspaceTerminal('page_generated', payload, 'done', <?= \json_encode((string)__('页面已完成真实 AI 生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
 
             if (window.PbAiWorkspacePreview) {
                 var pageType = String(payload.page_type);
                 var pageLabel = String(payload.page_label || pageTypeLabelMap[pageType] || pageType);
                 var pageId = parseInt(payload.page_id || 0, 10) || 0;
-                window.PbAiWorkspacePreview.upsertPreviewTab(pageType, pageLabel, pageId, true);
+                var shouldActivate = buildStartupPending || !document.querySelector('.pb-ai-preview-tab.active');
+                window.PbAiWorkspacePreview.upsertPreviewTab(pageType, pageLabel, pageId, shouldActivate);
                 window.PbAiWorkspacePreview.markPageGenerationStatus(pageType, 'done', <?= \json_encode((string)__('已生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
-                window.PbAiWorkspacePreview.switchPreviewByType(pageType);
+                if (shouldActivate) {
+                    window.PbAiWorkspacePreview.switchPreviewByType(pageType);
+                }
             }
 
             // 页面生成完成，实时刷新预览
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
-            if (previewFrame && previewFrame.src && !blockRefreshState.active) {
+            if (previewFrame && previewFrame.src && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === String(currentPreviewPageType || ''))) {
                 window.setTimeout(function() {
                     // 刷新 iframe 以显示新生成的页面
                     previewFrame.src = previewFrame.src;
@@ -3813,6 +4307,23 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
             toast('success', (payload && payload.message) ? String(payload.message) : <?= \json_encode((string)__('操作执行完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
             logOperationToWorkspaceTerminal('done', payload, 'done', '工作区操作执行完成');
+            if (String(operation || '') === 'build') {
+                buildStartupPending = false;
+                if (payload && payload.state) {
+                    hydrateWorkspaceFromState(payload.state);
+                }
+                if (typeof previewBridge.hideBuildGuard === 'function') {
+                    previewBridge.hideBuildGuard();
+                }
+                if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                    previewBridge.setBuildNavigationGuard(false);
+                }
+                clearBlockStreamingState();
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                return;
+            }
             if (
                 blockRefreshState.active
                 && String(operation || '') === 'regenerate_page'

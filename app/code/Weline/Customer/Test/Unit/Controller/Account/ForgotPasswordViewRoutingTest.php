@@ -24,7 +24,23 @@ class ForgotPasswordViewRoutingTest extends TestCase
             ->getMock();
 
         $controller->expects($this->once())->method('isLoggedIn')->willReturn(false);
-        $controller->expects($this->exactly(5))->method('assign')->willReturnSelf();
+        $assignCalls = 0;
+        $controller->expects($this->exactly(7))
+            ->method('assign')
+            ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): ForgotPassword {
+                $expectedKeys = [
+                    'reset_token',
+                    'is_reset_mode',
+                    'login_url',
+                    'register_url',
+                    'title',
+                    'error_message',
+                    'success_message',
+                ];
+                TestCase::assertSame($expectedKeys[$assignCalls], $key);
+                $assignCalls++;
+                return $controller;
+            });
         $controller->expects($this->once())
             ->method('fetch')
             ->with('Weline_Customer::templates/frontend/account/forgot-password.phtml')

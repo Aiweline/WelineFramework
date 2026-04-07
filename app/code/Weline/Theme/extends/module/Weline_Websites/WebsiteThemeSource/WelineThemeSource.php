@@ -58,7 +58,7 @@ class WelineThemeSource implements WebsiteThemeSourceInterface
      */
     public function listThemes(array $context = []): array
     {
-        $themes = $this->themeQueryProvider->invoke([], 'scanThemeLayoutsByType', [
+        $themes = $this->themeQueryProvider->execute('scanThemeLayoutsByType', [
             'theme_type' => 'frontend',
             'is_active' => null,
         ]);
@@ -130,7 +130,7 @@ class WelineThemeSource implements WebsiteThemeSourceInterface
                 continue;
             }
 
-            $themeLayouts = $this->themeQueryProvider->invoke([], 'scanThemeLayoutsByType', [
+            $themeLayouts = $this->themeQueryProvider->execute('scanThemeLayoutsByType', [
                 'theme_id' => $themeId,
                 'layout_type' => $pageType,
             ]);

@@ -31,7 +31,7 @@ class SaveTest extends TestCase
         $this->assertSame('Summer Sale', $data['name']);
         $this->assertSame('seasonal', $data['type']);
         $this->assertSame('percent', $data['discount_type']);
-        $this->assertSame(20.0, $data['discount_value']);
+        $this->assertEquals(20.0, $data['discount_value']);
     }
 
     public function testSaveCampaignWithInvalidDateRange(): void

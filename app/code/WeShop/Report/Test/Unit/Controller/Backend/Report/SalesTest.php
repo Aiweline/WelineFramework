@@ -5,11 +5,11 @@ declare(strict_types=1);
 namespace WeShop\Report\Test\Unit\Controller\Backend\Report;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Http\Request;
 use WeShop\Report\Controller\Backend\Report\Sales;
 use WeShop\Report\Service\ReportService;
+use Weline\Framework\Http\Request;
 
-class SalesTest extends TestCase
+final class SalesTest extends TestCase
 {
     public function testIndexUsesDateRangeAndRendersTemplate(): void
     {
@@ -26,34 +26,61 @@ class SalesTest extends TestCase
             ->willReturn($expectedReport);
 
         $controller = $this->getMockBuilder(Sales::class)
-            ->onlyMethods(['createReportService', 'fetch'])
+            ->onlyMethods(['createReportService', 'assign', 'fetch'])
             ->getMock();
         $controller->expects($this->once())
             ->method('createReportService')
             ->willReturn($service);
+
+        $assignments = [];
+        $controller->expects($this->exactly(4))
+            ->method('assign')
+            ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
+                $assignments[$key] = $value;
+
+                return $controller;
+            });
         $controller->expects($this->once())
             ->method('fetch')
-            ->with('report/sales/index')
+            ->with('WeShop_Report::templates/Backend/Report/Sales/index.phtml')
             ->willReturn('rendered');
 
-        $request = $this->createMock(Request::class);
-        $request->expects($this->exactly(2))
-            ->method('getParam')
-            ->willReturnOnConsecutiveCalls('2026-03-31', '2026-03-01');
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'start' => '2026-03-01',
+            'end' => '2026-03-31',
+        ]));
 
-        $this->setProtectedProperty($controller, 'request', $request);
-
-        $this->assertSame('rendered', $controller->index());
+        self::assertSame('rendered', $controller->index());
+        self::assertSame('Sales Report', $assignments['title'] ?? null);
+        self::assertSame($expectedReport, $assignments['report'] ?? null);
+        self::assertSame('2026-03-01', $assignments['start_date'] ?? null);
+        self::assertSame('2026-03-31', $assignments['end_date'] ?? null);
     }
 
-    private function setProtectedProperty(object $target, string $property, mixed $value): void
+    private function createRequestMock(array $params = []): Request
     {
-        $reflection = new \ReflectionObject($target);
-        while (!$reflection->hasProperty($property) && ($reflection = $reflection->getParentClass())) {
+        $request = $this->getMockBuilder(Request::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getParam'])
+            ->getMock();
+        $request->method('getParam')
+            ->willReturnCallback(static fn (string $key, mixed $default = null): mixed => $params[$key] ?? $default);
+
+        return $request;
+    }
+
+    private function setControllerRequest(object $controller, Request $request): void
+    {
+        $reflection = new \ReflectionObject($controller);
+        while (!$reflection->hasProperty('request') && ($reflection = $reflection->getParentClass())) {
         }
 
-        $reflectionProperty = $reflection->getProperty($property);
-        $reflectionProperty->setAccessible(true);
-        $reflectionProperty->setValue($target, $value);
+        if (!$reflection instanceof \ReflectionClass) {
+            self::fail('Unable to locate request property.');
+        }
+
+        $property = $reflection->getProperty('request');
+        $property->setAccessible(true);
+        $property->setValue($controller, $request);
     }
 }

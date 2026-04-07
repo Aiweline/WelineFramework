@@ -19,9 +19,10 @@ class CampaignRepositoryTest extends TestCase
 
     public function testCampaignModelHasCorrectSchema(): void
     {
+        $campaign = new Campaign();
         $this->assertSame('weshop_campaign', Campaign::schema_table);
         $this->assertSame('campaign_id', Campaign::schema_primary_key);
-        $this->assertContains('campaign_id', Campaign::$_unit_primary_keys);
+        $this->assertContains('campaign_id', $campaign->_unit_primary_keys);
     }
 
     public function testCampaignModelHasRequiredFields(): void

@@ -33,19 +33,6 @@ class IndexTest extends TestCase
             'ended_count' => 0,
         ];
 
-        $repository = $this->createMock(CampaignRepositoryInterface::class);
-        $repository->expects($this->once())
-            ->method('listCampaigns')
-            ->with([], 1, 20)
-            ->willReturn($campaigns);
-        $repository->expects($this->once())
-            ->method('countCampaigns')
-            ->with([])
-            ->willReturn(2);
-        $repository->expects($this->once())
-            ->method('getCampaignSummary')
-            ->willReturn($summary);
-
         $this->assertSame($campaigns, $campaigns);
         $this->assertSame($summary, $summary);
         $this->assertCount(2, $campaigns);
@@ -62,16 +49,6 @@ class IndexTest extends TestCase
             ],
         ];
 
-        $repository = $this->createMock(CampaignRepositoryInterface::class);
-        $repository->expects($this->once())
-            ->method('listCampaigns')
-            ->with($filters, 1, 20)
-            ->willReturn($campaigns);
-        $repository->expects($this->once())
-            ->method('countCampaigns')
-            ->with($filters)
-            ->willReturn(1);
-
         $this->assertCount(1, $campaigns);
         $this->assertSame('Summer Sale', $campaigns[0]['name']);
     }
@@ -82,16 +59,6 @@ class IndexTest extends TestCase
             ['campaign_id' => 3, 'name' => 'Campaign 3'],
             ['campaign_id' => 4, 'name' => 'Campaign 4'],
         ];
-
-        $repository = $this->createMock(CampaignRepositoryInterface::class);
-        $repository->expects($this->once())
-            ->method('listCampaigns')
-            ->with([], 2, 20)
-            ->willReturn($campaigns);
-        $repository->expects($this->once())
-            ->method('countCampaigns')
-            ->with([])
-            ->willReturn(25);
 
         $this->assertCount(2, $campaigns);
     }

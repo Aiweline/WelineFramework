@@ -97,9 +97,13 @@ class ProviderTest extends TestCase
         $command = $provider->buildCommand(0, $this->context);
 
         $this->assertStringContainsString('dispatcher.php', $command->script);
-        $this->assertContains('--port=443', $command->arguments);
-        $this->assertContains('--ssl=1', $command->arguments);
-        $this->assertContains('--instance=test-instance', $command->arguments);
+        $this->assertContains('127.0.0.1', $command->arguments);
+        $this->assertContains('443', $command->arguments);
+        $this->assertContains('10443', $command->arguments);
+        $this->assertContains('4', $command->arguments);
+        $this->assertContains('test-instance', $command->arguments);
+        $this->assertContains('--control-port=19000', $command->arguments);
+        $this->assertContains('--master-pid=12345', $command->arguments);
     }
 
     public function testDispatcherProviderPort(): void
