@@ -701,6 +701,12 @@ class ThemeEditor extends BackendController
         
         $themeId = (int)($data['theme_id'] ?? $this->request->getParam('theme_id', 0));
         $slotIds = $data['slot_ids'] ?? $this->request->getParam('slot_ids', []);
+        $pageType = (string)($data['page_type']
+            ?? $this->request->getParam('page_type', $this->request->getParam('layout_type', ThemeLayout::PAGE_TYPE_HOME)));
+        $status = (string)($data['status'] ?? $this->request->getParam('status', ThemeLayout::STATUS_DRAFT));
+        if ($status !== ThemeLayout::STATUS_DRAFT && $status !== ThemeLayout::STATUS_PUBLISHED) {
+            $status = ThemeLayout::STATUS_DRAFT;
+        }
         
         if (!$themeId || empty($slotIds)) {
             return $this->fetchJson([
@@ -718,6 +724,8 @@ class ThemeEditor extends BackendController
                 // 先验证目标数据存在
                 $existsBefore = $this->themeLayout->clearQuery()
                     ->where('theme_id', $themeId)
+                    ->where('page_type', $pageType)
+                    ->where('status', $status)
                     ->where('slot_id', $slotId)
                     ->select()
                     ->fetchArray();
@@ -725,6 +733,8 @@ class ThemeEditor extends BackendController
 
                 $this->themeLayout->clearQuery()
                     ->where('theme_id', $themeId)
+                    ->where('page_type', $pageType)
+                    ->where('status', $status)
                     ->where('slot_id', $slotId)
                     ->delete()
                     ->fetch();
@@ -732,6 +742,8 @@ class ThemeEditor extends BackendController
                 // 验证删除后是否还存在
                 $existsAfter = $this->themeLayout->clearQuery()
                     ->where('theme_id', $themeId)
+                    ->where('page_type', $pageType)
+                    ->where('status', $status)
                     ->where('slot_id', $slotId)
                     ->select()
                     ->fetchArray();
