@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Test\Unit\Service\AiWorkbench;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\AiWorkbench\ArtifactService;
+use Weline\Websites\Service\AiWorkbench\EventStreamService;
+use Weline\Websites\Service\AiWorkbench\MessageService;
+
 class SessionServiceTest extends AbstractAiWorkbenchPersistenceCase
 {
     public function testCreateAndMutateSession(): void
@@ -45,5 +50,37 @@ class SessionServiceTest extends AbstractAiWorkbenchPersistenceCase
 
         $this->assertGreaterThan(0, $session->getId());
         $this->assertSame('visual_edit', $session->getCurrentStage());
+    }
+
+    public function testDeleteSessionRemovesSessionAndRelatedRecords(): void
+    {
+        $session = $this->createTrackedSession('websites_default', 1, ['site_title' => 'Delete Demo']);
+        /** @var MessageService $messageService */
+        $messageService = ObjectManager::getInstance(MessageService::class);
+        /** @var ArtifactService $artifactService */
+        $artifactService = ObjectManager::getInstance(ArtifactService::class);
+        /** @var EventStreamService $eventStreamService */
+        $eventStreamService = ObjectManager::getInstance(EventStreamService::class);
+
+        $this->assertTrue($messageService->appendMessage($session->getId(), 1, 'user', 'delete me'));
+        $this->assertTrue($artifactService->upsertArtifact($session->getId(), 1, 'workspace', 'snapshot', ['ok' => true], 'Delete Demo'));
+        $this->assertGreaterThan(0, $eventStreamService->appendEvent($session->getId(), 1, 'brief', 'created', ['ok' => true]));
+
+        $this->assertTrue($this->sessionService->deleteSessionByPublicId($session->getPublicId(), 1));
+        $this->assertNull($this->sessionService->loadByPublicId($session->getPublicId(), 1));
+        $this->assertFalse($this->sessionService->deleteSessionByPublicId($session->getPublicId(), 1));
+
+        $this->assertSame([], $this->messageModel->clearData()->clearQuery()
+            ->where(\Weline\Websites\Model\AiSiteBuilderMessage::schema_fields_SESSION_ID, $session->getId())
+            ->select()
+            ->fetchArray());
+        $this->assertSame([], $this->artifactModel->clearData()->clearQuery()
+            ->where(\Weline\Websites\Model\AiSiteBuilderArtifact::schema_fields_SESSION_ID, $session->getId())
+            ->select()
+            ->fetchArray());
+        $this->assertSame([], $this->eventModel->clearData()->clearQuery()
+            ->where(\Weline\Websites\Model\AiSiteBuilderEvent::schema_fields_SESSION_ID, $session->getId())
+            ->select()
+            ->fetchArray());
     }
 }
