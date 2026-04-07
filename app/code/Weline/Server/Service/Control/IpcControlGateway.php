@@ -77,6 +77,18 @@ class IpcControlGateway implements IpcControlGatewayInterface
         );
     }
 
+    public function setMaintenanceMode(string $instanceName, bool $enabled, float $timeout = 6.0): array
+    {
+        return $this->commandAsync(
+            $instanceName,
+            $enabled ? ControlMessage::ACTION_MAINTENANCE_ENABLE : ControlMessage::ACTION_MAINTENANCE_DISABLE,
+            '',
+            [],
+            $timeout,
+            $enabled ? 'Maintenance enable queued' : 'Maintenance disable queued'
+        );
+    }
+
     public function routingCacheClear(string $instanceName, float $timeout = 5.0): array
     {
         return $this->commandAsync(

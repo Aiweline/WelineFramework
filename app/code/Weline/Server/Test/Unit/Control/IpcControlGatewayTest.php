@@ -42,6 +42,38 @@ final class IpcControlGatewayTest extends TestCase
         );
     }
 
+    public function testSetMaintenanceModeDelegatesToAsyncCommand(): void
+    {
+        $gateway = new class extends IpcControlGateway {
+            public array $calls = [];
+
+            protected function commandAsync(
+                string $instanceName,
+                string $action,
+                string $reloadType = '',
+                array $payload = [],
+                float $timeout = 5.0,
+                string $acceptedMessage = 'Command queued'
+            ): array {
+                $this->calls[] = [$instanceName, $action, $reloadType, $payload, $timeout, $acceptedMessage];
+
+                return ['success' => true, 'message' => 'ok', 'data' => []];
+            }
+        };
+
+        $gateway->setMaintenanceMode('blue', true, 2.5);
+        $gateway->setMaintenanceMode('blue', false, 3.5);
+
+        $this->assertSame(
+            ['blue', ControlMessage::ACTION_MAINTENANCE_ENABLE, '', [], 2.5, 'Maintenance enable queued'],
+            $gateway->calls[0]
+        );
+        $this->assertSame(
+            ['blue', ControlMessage::ACTION_MAINTENANCE_DISABLE, '', [], 3.5, 'Maintenance disable queued'],
+            $gateway->calls[1]
+        );
+    }
+
     public function testReadCommandResultReturnsAcceptedWithoutWaitingForReloadCompletion(): void
     {
         $gateway = new IpcControlGateway();
