@@ -23,6 +23,8 @@ $editor_area = $this->getData('editor_area') ?: 'frontend';
 $theme_has_backend = (bool)$this->getData('theme_has_backend');
 $layout = $this->getData('layout') ?: [];
 $available_widgets = $this->getData('available_widgets') ?: [];
+$preview_context = $this->getData('preview_context') ?: [];
+$preview_status = is_array($preview_context) ? (string)($preview_context['status'] ?? 'draft') : 'draft';
 
 // 根据后台配置获取文件管理器连接器 URL
 $fileManagerCode = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Model\BackendUserConfig::class)->getConfig('file_manager') ?: 'weline_media';
@@ -67,6 +69,7 @@ $getWidgetIcon = function ($type) {
 <div class="theme-editor-container" id="themeEditor" 
      data-theme-id="<?= $theme_id ?>"
      data-editor-area="<?= htmlspecialchars($editor_area) ?>"
+     data-preview-status="<?= htmlspecialchars($preview_status) ?>"
      data-theme-has-backend="<?= $theme_has_backend ? '1' : '0' ?>"
      data-file-manager-connector-base="<?= $fileManagerConnectorUrl ?>" 
      data-page-type="<?= htmlspecialchars((string)($page_type ?? 'homepage')) ?>"
@@ -92,7 +95,13 @@ $getWidgetIcon = function ($type) {
      data-api-rename-version="<?= $this->getUrl('theme/backend/theme-editor/rename-version') ?>"
      data-api-start-preview="<?= $this->getUrl('theme/backend/theme-editor/start-preview') ?>"
      data-api-exit-preview="<?= $this->getUrl('theme/backend/theme-editor/exit-preview') ?>"
-     data-api-publish-and-exit="<?= $this->getUrl('theme/backend/theme-editor/publish-and-exit') ?>">
+     data-api-publish-and-exit="<?= $this->getUrl('theme/backend/theme-editor/publish-and-exit') ?>"
+     data-api-check-lock="<?= $this->getUrl('theme/backend/theme-editor/check-lock') ?>"
+     data-api-release-lock="<?= $this->getUrl('theme/backend/theme-editor/release-lock') ?>"
+     data-api-update-activity="<?= $this->getUrl('theme/backend/theme-editor/update-activity') ?>"
+     data-api-request-takeover="<?= $this->getUrl('theme/backend/theme-editor/request-takeover') ?>"
+     data-api-check-takeover-request="<?= $this->getUrl('theme/backend/theme-editor/check-takeover-request') ?>"
+     data-api-force-takeover="<?= $this->getUrl('theme/backend/theme-editor/force-takeover') ?>">
     <!-- 顶部工具栏 -->
     <div class="editor-toolbar">
         <div class="toolbar-left">
@@ -232,7 +241,7 @@ $getWidgetIcon = function ($type) {
                 <!-- iframe 实时预览（编译后的布局页面） -->
                 <div class="preview-view preview-view-preview active" id="previewViewPreview">
                     <iframe id="previewFrame" 
-                            src="<?= $theme_id ? $this->getUrl('theme/backend/theme-editor/layout-preview', ['theme_id' => $theme_id, 'layout_type' => 'homepage', 'layout_option' => 'default', 'editor_mode' => '1', 'status' => 'draft', 'editor_area' => $editor_area]) : 'about:blank' ?>"
+                            src="<?= $theme_id ? $this->getUrl('theme/backend/theme-editor/layout-preview', ['theme_id' => $theme_id, 'page_type' => $page_type, 'layout_type' => $page_type, 'layout_option' => 'default', 'editor_mode' => '1', 'status' => $preview_status, 'editor_area' => $editor_area]) : 'about:blank' ?>"
                             class="preview-iframe"></iframe>
                     <div class="preview-loading" id="previewLoading">
                         <div class="spinner-border text-light" role="status">

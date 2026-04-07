@@ -33,6 +33,7 @@ $role = 'session_server';
 $tokenFileName = '';
 $bootstrapInstance = '';
 $sharedService = false;
+$logInstanceName = '';
 
 foreach ($argv as $arg) {
     $arg = (string) $arg;
@@ -57,6 +58,8 @@ foreach ($argv as $arg) {
         $tokenFileName = $normalizeArgValue((string)\substr($arg, 18));
     } elseif (\str_starts_with($arg, '--bootstrap-instance=')) {
         $bootstrapInstance = $normalizeArgValue((string)\substr($arg, 21));
+    } elseif (\str_starts_with($arg, '--log-instance-name=')) {
+        $logInstanceName = $normalizeArgValue((string)\substr($arg, 20));
     } elseif ($arg === '--shared-service=1' || $arg === '--shared-service' || $arg === '-shared-service') {
         $sharedService = true;
     } elseif ($arg === '--frontend' || $arg === '-f') {
@@ -103,7 +106,8 @@ WlsLogger::getInstance()
     ->setProcessTag($processTag);
 
 if ($processName) {
-    \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
+    $processLogInstanceName = $logInstanceName !== '' ? $logInstanceName : $instanceName;
+    \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $processLogInstanceName, $processTag);
 }
 
 if ($processName) {
