@@ -19,7 +19,7 @@ class AiSiteProfileGenerationService
      * @param array<string, mixed> $scope
      * @return array<string, mixed>
      */
-    public function generate(array $scope): array
+    public function generate(array $scope, bool $allowAi = true): array
     {
         $existing = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
         $manualFlags = $this->normalizeManualFlags($scope['site_profile_manual'] ?? null);
@@ -79,7 +79,8 @@ class AiSiteProfileGenerationService
                 $lockedTagline,
                 $lockedBrief,
                 $lockedLogo,
-                $lockedIcon
+                $lockedIcon,
+                $allowAi
             );
 
         $siteTitle = ($titleLocked || $lockedTitle !== '')
@@ -366,26 +367,29 @@ class AiSiteProfileGenerationService
         string $lockedTagline,
         string $lockedBrief,
         string $lockedLogo,
-        string $lockedIcon
+        string $lockedIcon,
+        bool $allowAi
     ): array {
         $fallbackTitle = $lockedTitle !== '' ? $lockedTitle : $this->deriveSiteTitleFromBrief($sourceBrief, $targetDomain);
         $fallbackTagline = $lockedTagline !== '' ? $lockedTagline : $this->deriveSiteTaglineFromBrief($sourceBrief, $fallbackTitle);
         $fallbackBrief = $lockedBrief !== '' ? $lockedBrief : $sourceBrief;
 
         $generated = [];
-        try {
-            $generated = $this->getAiProfileGenerator()->generateProfile([
-                'brief_description' => $sourceBrief,
-                'target_domain' => $targetDomain,
-                'default_locale' => $defaultLocale,
-                'locked_site_title' => $lockedTitle,
-                'locked_site_tagline' => $lockedTagline,
-                'locked_brief_description' => $lockedBrief,
-                'locked_logo' => $lockedLogo,
-                'locked_icon' => $lockedIcon,
-            ]);
-        } catch (\Throwable) {
-            $generated = [];
+        if ($allowAi) {
+            try {
+                $generated = $this->getAiProfileGenerator()->generateProfile([
+                    'brief_description' => $sourceBrief,
+                    'target_domain' => $targetDomain,
+                    'default_locale' => $defaultLocale,
+                    'locked_site_title' => $lockedTitle,
+                    'locked_site_tagline' => $lockedTagline,
+                    'locked_brief_description' => $lockedBrief,
+                    'locked_logo' => $lockedLogo,
+                    'locked_icon' => $lockedIcon,
+                ]);
+            } catch (\Throwable) {
+                $generated = [];
+            }
         }
 
         $siteTitle = $this->pickString($generated['site_title'] ?? null, $fallbackTitle);

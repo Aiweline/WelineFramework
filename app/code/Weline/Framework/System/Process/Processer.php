@@ -557,6 +557,34 @@ class Processer
         // $enableLog=false: stdout/stderr 丢弃（输出到 NUL / /dev/null）
         $logFile = $enableLog ? self::getLogFile($pname) : '';
         $nullDevice = IS_WIN ? 'NUL' : '/dev/null';
+
+        // Windows 后台默认优先走 argv 快速路径（Start-Process ArgumentList 数组），
+        // 失败时再回退到旧脚本路径，兼容历史行为。
+        if (IS_WIN && !$foreground) {
+            $argv = self::buildWindowsDetachedPhpArgvFromCommand($pname);
+            if ($argv !== []) {
+                $fastPathStart = \microtime(true);
+                $pid = self::createWindowsDetachedPhpArgv($argv, BP, $pname, $enableLog);
+                $fastPathCostMs = (int) \round((\microtime(true) - $fastPathStart) * 1000);
+                if ($pid > 0) {
+                    if ($enableLog) {
+                        self::setOutput(
+                            $pname,
+                            "[INFO] windows argv fast path success: pid={$pid}, cost_ms={$fastPathCostMs}" . PHP_EOL,
+                            true
+                        );
+                    }
+                    return $pid;
+                }
+                if ($enableLog) {
+                    self::setOutput(
+                        $pname,
+                        "[WARN] windows argv fast path failed (cost_ms={$fastPathCostMs}), fallback to legacy start script" . PHP_EOL,
+                        true
+                    );
+                }
+            }
+        }
         
         # ===== Windows 后台模式：proc_open(PowerShell Start-Process) =====
         # 通过 proc_open 调用 PowerShell Start-Process 创建真正独立的子进程。
@@ -813,14 +841,44 @@ class Processer
         if (\is_resource($psProcess)) {
             $output = '';
             $stderr = '';
+            // 非阻塞读取 PID 回传，避免 PowerShell 脚本异常挂起拖慢 Master 启动编排。
             if (isset($psPipes[1])) {
-                $output = \trim((string) \stream_get_contents($psPipes[1]));
-                $output = \preg_replace('/^\xEF\xBB\xBF/', '', $output) ?? $output;
+                @\stream_set_blocking($psPipes[1], false);
+            }
+            if (isset($psPipes[2])) {
+                @\stream_set_blocking($psPipes[2], false);
+            }
+            $deadline = \microtime(true) + 0.35;
+            while (\microtime(true) < $deadline) {
+                if (isset($psPipes[1])) {
+                    $chunk = @\fread($psPipes[1], 256);
+                    if (\is_string($chunk) && $chunk !== '') {
+                        $output .= $chunk;
+                    }
+                }
+                if (isset($psPipes[2])) {
+                    $chunkErr = @\fread($psPipes[2], 256);
+                    if (\is_string($chunkErr) && $chunkErr !== '') {
+                        $stderr .= $chunkErr;
+                    }
+                }
+                if (\str_contains($output, "\n")) {
+                    break;
+                }
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
+            }
+            $output = \trim($output);
+            $output = \preg_replace('/^\xEF\xBB\xBF/', '', $output) ?? $output;
+            $stderr = \trim($stderr);
+            if (isset($psPipes[1])) {
                 @\fclose($psPipes[1]);
             }
             if (isset($psPipes[2])) {
-                $stderr = \trim((string) \stream_get_contents($psPipes[2]));
                 @\fclose($psPipes[2]);
+            }
+            $status = @\proc_get_status($psProcess);
+            if (($status['running'] ?? false) === true) {
+                @\proc_terminate($psProcess);
             }
             @\proc_close($psProcess);
             @\unlink($scriptPath);
@@ -2033,6 +2091,22 @@ class Processer
             return [$key => $pid];
         }
 
+        // Windows 快速路径：对“后台非阻塞”命令直接逐个 detached 启动，
+        // 避免 batchCreateWindows 的 PowerShell 批量脚本在高压场景下阻塞几十秒。
+        if (IS_WIN && self::shouldUseWindowsFastDetachedBatchCreate($commands)) {
+            $results = [];
+            foreach ($commands as $key => $config) {
+                $results[$key] = self::create(
+                    (string) ($config['command'] ?? ''),
+                    false,
+                    false,
+                    $config['enableLog'] ?? null
+                );
+            }
+
+            return $results;
+        }
+
         $optimizedResults = self::tryBatchCreateOptimized($commands);
         if ($optimizedResults !== null) {
             return $optimizedResults;
@@ -2053,6 +2127,27 @@ class Processer
         }
 
         return $results;
+    }
+
+    /**
+     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null}> $commands
+     */
+    private static function shouldUseWindowsFastDetachedBatchCreate(array $commands): bool
+    {
+        foreach ($commands as $config) {
+            $command = (string) ($config['command'] ?? '');
+            if ($command === '') {
+                return false;
+            }
+            if ((bool) ($config['block'] ?? false)) {
+                return false;
+            }
+            if ((bool) ($config['foreground'] ?? false)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -2893,6 +2988,49 @@ CMD;
         }
 
         return [$phpBinary, $arguments];
+    }
+
+    /**
+     * 将完整命令行拆为 argv 列表，供 Windows Start-Process ArgumentList 使用。
+     *
+     * @return list<string>
+     */
+    private static function buildWindowsDetachedPhpArgvFromCommand(string $command): array
+    {
+        [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($command);
+        $tokens = self::tokenizeCommandLineArguments($arguments);
+        if ($tokens === []) {
+            return [];
+        }
+
+        return [$phpBinary, ...$tokens];
+    }
+
+    /**
+     * 命令行参数轻量分词（支持双引号包裹参数）。
+     *
+     * @return list<string>
+     */
+    private static function tokenizeCommandLineArguments(string $arguments): array
+    {
+        $arguments = \trim($arguments);
+        if ($arguments === '') {
+            return [];
+        }
+
+        \preg_match_all('/"((?:[^"\\\\]|\\\\.)*)"|(\\S+)/', $arguments, $matches, \PREG_SET_ORDER);
+        $tokens = [];
+        foreach ($matches as $m) {
+            if (isset($m[1]) && $m[1] !== '') {
+                $tokens[] = \stripcslashes($m[1]);
+                continue;
+            }
+            if (isset($m[2]) && $m[2] !== '') {
+                $tokens[] = $m[2];
+            }
+        }
+
+        return $tokens;
     }
     
     /**
