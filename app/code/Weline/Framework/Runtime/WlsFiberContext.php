@@ -5,6 +5,7 @@ namespace Weline\Framework\Runtime;
 
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -17,6 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
  * 审计提示：未纳入快照的进程级状态仍可能串请求，须注册 StateManager::registerResetCallback
  * / registerStaticReset，或改为 RequestContext::set（Fiber 下走 WeakMap）。
  * 典型风险：仅用 static 存请求缓存、Session 引用缓存、HeaderCollector 以外的自定义单例。
+ * Url 解析可变静态见 {@see Url::resetWlsFiberInterleavedParserScratch()}。
  */
 class WlsFiberContext
 {
@@ -104,6 +106,8 @@ class WlsFiberContext
         $_COOKIE = $this->cookieVars;
         $_REQUEST = $this->requestVars;
         $_FILES = $this->filesVars;
+
+        Url::resetWlsFiberInterleavedParserScratch();
 
         RequestContext::syncFromServer();
 
