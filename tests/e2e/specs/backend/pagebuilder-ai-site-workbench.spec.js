@@ -101,6 +101,7 @@ async function startPagebuilderBuild(page, backendRoot, scopePatch) {
 
   expect(payload && payload.success, JSON.stringify(payload)).toBeTruthy();
   expect(payload.stream_url).toBeTruthy();
+  await page.goto('about:blank', { waitUntil: 'load', timeout: 30000 }).catch(() => {});
   return payload;
 }
 
@@ -131,6 +132,9 @@ async function requestPagebuilderPublish(page) {
     throw new Error(`pagebuilder post-start-publish: HTTP ${res.status()} non-JSON body=${text.slice(0, 400)}`);
   }
 
+  if (payload && payload.success) {
+    await page.goto('about:blank', { waitUntil: 'load', timeout: 30000 }).catch(() => {});
+  }
   return payload;
 }
 

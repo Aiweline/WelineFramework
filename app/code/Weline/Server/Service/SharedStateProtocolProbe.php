@@ -6,7 +6,6 @@ namespace Weline\Server\Service;
 
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Session\Server\SessionProtocol;
-use Weline\Server\Shared\Client\SharedStateClient;
 
 /**
  * 不依赖「进程可识别为 Weline」与 token 文件名猜测：直连 Session/Memory 协议探测是否可复用。
@@ -15,7 +14,7 @@ final class SharedStateProtocolProbe
 {
     /**
      * 单次 TCP 直连 + 读 token + 鉴权后 PING（不经 ConnectionPool）。
-     * 用于共享侧车就绪轮询，避免连接池构造阶段抢先建连、与 discardPool 交叉关闭导致误判。
+     * 用于共享侧车就绪轮询，避免连接池失败退避带来的探测抖动与额外等待。
      */
     public static function pingWithTokenBasename(string $host, int $port, string $tokenBasename): bool
     {
@@ -40,21 +39,7 @@ final class SharedStateProtocolProbe
             return false;
         }
 
-        try {
-            $client = new SharedStateClient($host, $port, [
-                'token_file_name' => $tokenBasename,
-                'min_idle' => 0,
-                'max_size' => 4,
-                'connect_timeout' => 1.0,
-                'timeout' => 2.0,
-                'acquire_timeout' => 0.35,
-                'log_connect_fail' => false,
-            ]);
-
-            return $client->ping();
-        } catch (\Throwable) {
-            return false;
-        }
+        return self::rawAuthThenPing($host, $port, $secret);
     }
 
     public static function findWorkingTokenBasename(string $host, int $port, string $defaultBasename): ?string
