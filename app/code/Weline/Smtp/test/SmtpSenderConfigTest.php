@@ -6,14 +6,14 @@ namespace Weline\Smtp\test;
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\SMTP;
 use ReflectionClass;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
 
 class SmtpSenderConfigTest extends \Weline\Framework\UnitTest\TestCore
 {
     public function testCreateMailerReturnsFreshInstanceWithDebugOff(): void
     {
-        $sender = ObjectManager::getInstance(SmtpSender::class);
+        $sender = new SmtpSender($this->createMock(Data::class));
         $reflection = new ReflectionClass($sender);
         $createMailer = $reflection->getMethod('createMailer');
         $createMailer->setAccessible(true);
@@ -25,12 +25,12 @@ class SmtpSenderConfigTest extends \Weline\Framework\UnitTest\TestCore
 
         self::assertNotSame($mailA, $mailB);
         self::assertSame(SMTP::DEBUG_OFF, $mailA->SMTPDebug);
-        self::assertTrue($mailA->isSMTP());
+        self::assertSame('smtp', $mailA->Mailer);
     }
 
     public function testConfigureTransportRespectsAuthAndEncryption(): void
     {
-        $sender = ObjectManager::getInstance(SmtpSender::class);
+        $sender = new SmtpSender($this->createMock(Data::class));
         $reflection = new ReflectionClass($sender);
         $createMailer = $reflection->getMethod('createMailer');
         $createMailer->setAccessible(true);
@@ -51,7 +51,7 @@ class SmtpSenderConfigTest extends \Weline\Framework\UnitTest\TestCore
 
     public function testResolveSmtpSecureSupportsExplicitNone(): void
     {
-        $sender = ObjectManager::getInstance(SmtpSender::class);
+        $sender = new SmtpSender($this->createMock(Data::class));
         $reflection = new ReflectionClass($sender);
         $resolve = $reflection->getMethod('resolveSmtpSecure');
         $resolve->setAccessible(true);

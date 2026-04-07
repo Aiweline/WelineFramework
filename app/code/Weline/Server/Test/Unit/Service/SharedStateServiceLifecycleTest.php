@@ -24,7 +24,8 @@ final class SharedStateServiceLifecycleTest extends TestCase
                 array $config = [],
                 array $envConfig = [],
                 string $requesterInstanceName = 'system',
-                bool $frontend = false
+                bool $frontend = false,
+                bool $forceRestart = false
             ): array {
                 $this->ensureInvocations[] = [$role, $config, $envConfig, $requesterInstanceName, $frontend];
 
@@ -52,7 +53,8 @@ final class SharedStateServiceLifecycleTest extends TestCase
                 array $config = [],
                 array $envConfig = [],
                 string $requesterInstanceName = 'system',
-                bool $frontend = false
+                bool $frontend = false,
+                bool $forceRestart = false
             ): array {
                 $this->ensureCalls++;
 

@@ -19,7 +19,10 @@ class View extends BackendController
      */
     public function index(): string
     {
-        $rmaId = (int)($this->request->getParam('id') ?? $this->request->getParam('rma_id') ?? 0);
+        $rmaId = (int) $this->request->getParam('id', 0);
+        if ($rmaId <= 0) {
+            $rmaId = (int) $this->request->getParam('rma_id', 0);
+        }
 
         if (!$rmaId) {
             $this->redirect($this->_url->getBackendUrl('*/backend/rma'));

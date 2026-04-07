@@ -26,7 +26,7 @@ class QA extends BaseController
         $this->assign('approve_url', $this->_url->getBackendUrl('*/backend/qa/approve'));
         $this->assign('reject_url', $this->_url->getBackendUrl('*/backend/qa/reject'));
 
-        return $this->fetch('WeShop_QA', 'backend/qa/index/index');
+        return $this->fetch('WeShop_QA::templates/Backend/QA/Index/index.phtml');
     }
 
     #[Acl('WeShop_QA::qa_view', 'View Q&A Detail', 'mdi mdi-eye', 'View question detail')]
@@ -55,7 +55,7 @@ class QA extends BaseController
         $this->assign('reject_url', $this->_url->getBackendUrl('*/backend/qa/reject'));
         $this->assign('back_url', $this->_url->getBackendUrl('*/backend/qa'));
 
-        return $this->fetch('WeShop_QA', 'backend/qa/view/index');
+        return $this->fetch('WeShop_QA::templates/Backend/QA/View/index.phtml');
     }
 
     public function approve(): string

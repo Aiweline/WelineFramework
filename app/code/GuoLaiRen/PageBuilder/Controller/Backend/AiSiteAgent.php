@@ -9,6 +9,7 @@ use GuoLaiRen\PageBuilder\Model\AiSiteAgentSessionEvent;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
 use GuoLaiRen\PageBuilder\Service\AiSiteDraftWebsiteService;
+use GuoLaiRen\PageBuilder\Service\AiSiteMaterializationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePublishService;
@@ -56,6 +57,7 @@ class AiSiteAgent extends BaseController
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
     private readonly AiSiteProfileGenerationService $profileGenerationService;
     private readonly AiSiteDraftWebsiteService $draftWebsiteService;
+    private readonly AiSiteMaterializationService $materializationService;
     private readonly AiSiteVirtualThemeService $virtualThemeService;
     private readonly AiSitePublishService $publishService;
     private readonly AiSiteVisualUrlService $visualUrlService;
@@ -68,6 +70,7 @@ class AiSiteAgent extends BaseController
         ?AiSiteScopeCompatibilityService $scopeCompatibilityService = null,
         ?AiSiteProfileGenerationService $profileGenerationService = null,
         ?AiSiteDraftWebsiteService $draftWebsiteService = null,
+        ?AiSiteMaterializationService $materializationService = null,
         ?AiSiteVirtualThemeService $virtualThemeService = null,
         ?AiSitePublishService $publishService = null,
         ?AiSiteVisualUrlService $visualUrlService = null,
@@ -82,6 +85,8 @@ class AiSiteAgent extends BaseController
             ?? ObjectManager::getInstance(AiSiteProfileGenerationService::class);
         $this->draftWebsiteService = $draftWebsiteService
             ?? ObjectManager::getInstance(AiSiteDraftWebsiteService::class);
+        $this->materializationService = $materializationService
+            ?? ObjectManager::getInstance(AiSiteMaterializationService::class);
         $this->virtualThemeService = $virtualThemeService
             ?? ObjectManager::getInstance(AiSiteVirtualThemeService::class);
         $this->publishService = $publishService
@@ -539,7 +544,13 @@ SCRIPT;
     }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_stream', 'AI 建站事件流', 'mdi-access-point', '订阅 AI 建站会话事件流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
-    public function getStreamSse(): void { $this->handleStreamSse(); }
+    public function getStreamSse(): void
+    {
+        if (\defined('DEV') && DEV && !\headers_sent()) {
+            \header('X-AiSite-Sse-Debug: getStreamSse-entered');
+        }
+        $this->handleStreamSse();
+    }
     public function postTouchStreamLease(): string { return $this->touchStreamLease(); }
 
     /**
@@ -680,7 +691,7 @@ SCRIPT;
             $scopePatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
         $siteProfileManual = \is_array($scopePatch['site_profile_manual'] ?? null) ? $scopePatch['site_profile_manual'] : [];
-        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description'] as $manualField) {
+        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale'] as $manualField) {
             if (\array_key_exists($manualField, $scopePatch) && !\array_key_exists($manualField, $siteProfileManual)) {
                 $siteProfileManual[$manualField] = true;
             }
@@ -688,11 +699,16 @@ SCRIPT;
         if ($siteProfileManual !== []) {
             $scopePatch['site_profile_manual'] = $siteProfileManual;
         }
+        $startStage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
+        if ($startStage !== AiSiteAgentSession::STAGE_VISUAL_EDIT) {
+            $startStage = AiSiteAgentSession::STAGE_VIRTUAL_THEME;
+        }
+
         return $this->fetchJson($this->startOperation(
             $session,
             $adminId,
             'build',
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            $startStage,
             $scopePatch,
             '',
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
@@ -1030,6 +1046,10 @@ SCRIPT;
     {
         // 先验证认证和参数，避免启动 SSE 后再发现认证失败
         $adminId = (int)$this->getLoginUserId();
+        $this->releasePhpSessionLockForSse();
+        if (\defined('DEV') && DEV && !\headers_sent()) {
+            \header('X-AiSite-Sse-Debug-Stage: auth-checked');
+        }
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $leaseToken = \trim((string)$this->request->getGet('lease_token', ''));
         $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
@@ -1072,7 +1092,19 @@ SCRIPT;
             return;
         }
 
-        // 会话不存在：返回 HTTP 404，不启动 SSE
+        // 先启动 SSE，尽快向客户端发送首字节，避免被网关判定为首包超时。
+        // 后续若校验失败，也通过 SSE 协议返回 error/done，保证前端可感知结束态。
+        $sse = new SseWriter();
+        $sse->start();
+        if (\defined('DEV') && DEV && !\headers_sent()) {
+            \header('X-AiSite-Sse-Debug-Stage: sse-started');
+        }
+        $sse->sendEvent('start', [
+            'message' => __('正在建立 PageBuilder 工作区事件流...'),
+            'lease_ttl_sec' => self::STREAM_LEASE_TTL_SEC,
+        ]);
+
+        // 会话不存在：通过 SSE 返回错误并完成
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
             $this->logStreamSse('request_rejected', [
@@ -1080,14 +1112,12 @@ SCRIPT;
                 'admin_id' => $adminId,
                 'public_id' => $publicId,
             ], 'warning');
-            $response = $this->request->getResponse();
-            $response->setHttpResponseCode(404);
-            $response->setHeader('Content-Type', 'application/json');
-            $response->setBody(\json_encode([
+            $sse->sendEvent('error', [
                 'error' => 'SESSION_NOT_FOUND',
                 'message' => (string)__('会话不存在或无权访问'),
                 'param' => self::PARAMS_PUBLIC_ID,
-            ], JSON_UNESCAPED_UNICODE));
+            ]);
+            $sse->complete(['success' => false]);
             return;
         }
 
@@ -1097,8 +1127,6 @@ SCRIPT;
         if ($leaseToken !== '') {
             $this->touchStreamLeaseState($session, $adminId, $leaseToken);
         }
-        $sse = new SseWriter();
-        $sse->start();
         $sse->sendEvent('start', [
             'message' => __('已连接 PageBuilder 工作区事件流'),
             'lease_ttl_sec' => self::STREAM_LEASE_TTL_SEC,
@@ -1533,6 +1561,103 @@ SCRIPT;
     }
 
     /**
+     * @param list<string> $pageTypes
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, array<string, mixed>> $pageTypeLayouts
+     * @param array<string, array<string, mixed>> $virtualPagesByType
+     * @return array{
+     *   pagebuilder_pages_by_type:array<string, array<string, mixed>>,
+     *   preview_page_id:int,
+     *   preview_page_type:string
+     * }
+     */
+    private function materializeGeneratedPages(
+        string $workspaceTrack,
+        int $websiteId,
+        array $websiteProfile,
+        array $pageTypes,
+        array $pageTypeLayouts,
+        array $virtualPagesByType
+    ): array {
+        if ($websiteId <= 0 || $pageTypes === [] || $virtualPagesByType === []) {
+            return [
+                'pagebuilder_pages_by_type' => [],
+                'preview_page_id' => 0,
+                'preview_page_type' => '',
+            ];
+        }
+
+        $pageTypes = $this->scopeCompatibilityService->normalizePageTypes($pageTypes);
+
+        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
+            return $this->materializationService->materializeHtml(
+                $websiteId,
+                $websiteProfile,
+                $pageTypes,
+                $virtualPagesByType
+            );
+        }
+
+        return $this->materializationService->materialize(
+            $websiteId,
+            $websiteProfile,
+            $pageTypes,
+            $pageTypeLayouts,
+            $virtualPagesByType
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array{
+     *   pagebuilder_pages_by_type?:array<string, array<string, mixed>>,
+     *   preview_page_id?:int,
+     *   preview_page_type?:string
+     * } $materialized
+     * @return array<string, mixed>
+     */
+    private function mergeMaterializedPagesIntoScope(array $scope, array $materialized): array
+    {
+        $scope['pagebuilder_pages_by_type'] = \is_array($materialized['pagebuilder_pages_by_type'] ?? null)
+            ? $materialized['pagebuilder_pages_by_type']
+            : [];
+
+        $previewPageType = \trim((string)($materialized['preview_page_type'] ?? ''));
+        if ($previewPageType !== '') {
+            $scope['preview_page_type'] = $previewPageType;
+        }
+
+        $previewPageId = (int)($materialized['preview_page_id'] ?? 0);
+        if ($previewPageId > 0) {
+            $scope['preview_page_id'] = $previewPageId;
+        }
+
+        return $scope;
+    }
+
+    private function emitBuildEnvironmentReady(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $pageType,
+        string $pageLabel,
+        int $pageId,
+        int $virtualThemeId
+    ): void {
+        $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceState($fresh, $adminId, 80, true);
+        $sse->sendEvent('environment_ready', [
+            'message' => (string)__('编辑环境已准备好，可先调整已生成页面'),
+            'page_type' => $pageType,
+            'page_label' => $pageLabel,
+            'page_id' => $pageId,
+            'virtual_theme_id' => $virtualThemeId,
+            'state' => $state,
+        ]);
+    }
+
+    /**
      * @param array<string, mixed> $scopePatch
      * @return array<string, mixed>
      */
@@ -1642,6 +1767,7 @@ SCRIPT;
 
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
         $now = \date('Y-m-d H:i:s');
+        $environmentReadyEmitted = false;
 
         foreach ($pageTypes as $pageType) {
             $this->assertActiveStreamLeaseAlive($session, $adminId);
@@ -1675,10 +1801,25 @@ SCRIPT;
             $scope['virtual_pages_by_type'] = $virtualPages;
             $scope['virtual_theme_id'] = 0;
             $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? ''));
+            $materialized = $this->materializeGeneratedPages(
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
+                (int)$draftWebsite['website_id'],
+                $scope['website_profile'],
+                \array_keys($virtualPages),
+                [],
+                $virtualPages
+            );
+            $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            $pageId = (int)($scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? 0);
+            if (!$environmentReadyEmitted && $pageId > 0) {
+                $environmentReadyEmitted = true;
+                $this->emitBuildEnvironmentReady($sse, $session, $adminId, $pageType, $pageLabel, $pageId, 0);
+            }
             $sse->sendEvent('page_generated', [
                 'page_type' => $pageType,
                 'page_label' => $pageLabel,
+                'page_id' => $pageId,
                 'virtual_theme_id' => 0,
                 'progress_percent' => $progressPercent,
                 'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
@@ -1749,6 +1890,7 @@ SCRIPT;
         $pageTypeLayouts = [];
         $virtualPages = [];
         $now = \date('Y-m-d H:i:s');
+        $environmentReadyEmitted = false;
 
         // 步骤 3-N: 逐个生成每个页面类型
         foreach ($pageTypes as $pageType) {
@@ -1799,13 +1941,36 @@ SCRIPT;
             // 实时更新 scope，让前端可以立即看到新生成的页面
             $scope['virtual_pages_by_type'] = $virtualPages;
             $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? ''));
+            $materialized = $this->materializeGeneratedPages(
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+                (int)$draftWebsite['website_id'],
+                $scope['website_profile'],
+                \array_keys($virtualPages),
+                $scope['page_type_layouts'] ?? [],
+                $virtualPages
+            );
+            $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
             $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)$theme['virtual_theme_id']);
+            $pageId = (int)($scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? 0);
+            if (!$environmentReadyEmitted && $pageId > 0) {
+                $environmentReadyEmitted = true;
+                $this->emitBuildEnvironmentReady(
+                    $sse,
+                    $session,
+                    $adminId,
+                    $pageType,
+                    $pageLabel,
+                    $pageId,
+                    (int)$theme['virtual_theme_id']
+                );
+            }
 
             // 发送页面生成完成事件
             $sse->sendEvent('page_generated', [
                 'page_type' => $pageType,
                 'page_label' => $pageLabel,
+                'page_id' => $pageId,
                 'virtual_theme_id' => (int)$theme['virtual_theme_id'],
                 'progress_percent' => $progressPercent,
                 'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
@@ -1876,6 +2041,15 @@ SCRIPT;
             $virtualPages[$pageType] = $row;
             $scope['virtual_pages_by_type'] = $virtualPages;
             $scope['preview_page_type'] = $pageType;
+            $materialized = $this->materializeGeneratedPages(
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS,
+                \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
+                $scope['website_profile'],
+                \array_keys($virtualPages),
+                [],
+                $virtualPages
+            );
+            $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
             $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
             $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('页面区块已重建')]);
             $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -1917,8 +2091,17 @@ SCRIPT;
         $virtualPages[$pageType]['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($virtualPages[$pageType]['meta_keywords'] ?? ''));
         $virtualPages[$pageType]['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
         $scope['virtual_pages_by_type'] = $virtualPages;
-        $scope['preview_page_type'] = $pageType;
-        $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            $scope['preview_page_type'] = $pageType;
+            $materialized = $this->materializeGeneratedPages(
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+                \max((int)($scope['draft_website_id'] ?? 0), (int)($scope['website_id'] ?? 0), (int)$session->getWebsiteId()),
+                $scope['website_profile'],
+                \array_keys($virtualPages),
+                $scope['page_type_layouts'] ?? [],
+                $virtualPages
+            );
+            $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => \date('Y-m-d H:i:s'), 'message' => (string)__('页面重建完成')]);
 
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -2078,6 +2261,7 @@ SCRIPT;
     private function touchStreamLease(): string
     {
         $adminId = (int)$this->getLoginUserId();
+        $this->releasePhpSessionLockForSse();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $leaseToken = \trim((string)$this->getRequestBodyValue('lease_token', ''));
         if ($adminId <= 0 || $publicId === '' || $leaseToken === '') {
@@ -2265,7 +2449,7 @@ SCRIPT;
             $payload[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
         }
         $siteProfileManual = \is_array($payload['site_profile_manual'] ?? null) ? $payload['site_profile_manual'] : [];
-        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description'] as $manualField) {
+        foreach (['site_title', 'site_tagline', 'target_domain', 'brief_description', 'default_locale'] as $manualField) {
             if (\array_key_exists($manualField, $payload) && !\array_key_exists($manualField, $siteProfileManual)) {
                 $siteProfileManual[$manualField] = true;
             }
@@ -2467,6 +2651,7 @@ SCRIPT;
             'pagebuilder_workspace_url' => $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $session->getPublicId()]),
             'site_title' => (string)($scope['site_title'] ?? ''),
             'site_tagline' => (string)($scope['site_tagline'] ?? ''),
+            'default_locale' => \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? '')),
             'brief_description' => $brief,
             'user_description' => $brief !== '' ? $brief : (string)($scope['user_description'] ?? ''),
             'target_domain' => $targetDomain,
@@ -2607,5 +2792,16 @@ SCRIPT;
             'error' => WlsLogger::error_($message, $context),
             default => WlsLogger::info_($message, $context),
         };
+    }
+
+    /**
+     * FPM 场景下，SSE 长连接需要尽快释放 session 文件锁，
+     * 避免同一用户的并发请求（含 EventSource 重连）互相阻塞。
+     */
+    private function releasePhpSessionLockForSse(): void
+    {
+        if (\function_exists('session_status') && \session_status() === \PHP_SESSION_ACTIVE) {
+            @\session_write_close();
+        }
     }
 }

@@ -8,8 +8,9 @@ use PHPUnit\Framework\TestCase;
 use WeShop\Customer\Api\CustomerContextInterface;
 use WeShop\Report\Controller\Frontend\Report\Sales;
 use WeShop\Report\Service\ReportService;
+use Weline\Framework\Http\Request;
 
-class SalesTest extends TestCase
+final class SalesTest extends TestCase
 {
     public function testIndexRedirectsToLoginWhenNotAuthenticated(): void
     {
@@ -22,18 +23,14 @@ class SalesTest extends TestCase
             ->setConstructorArgs([$customerContext])
             ->onlyMethods(['redirect', 'getStorefrontLoginRoute'])
             ->getMock();
-
         $controller->expects($this->once())
             ->method('getStorefrontLoginRoute')
             ->willReturn('weshop/customer/account/login');
-
         $controller->expects($this->once())
             ->method('redirect')
             ->with('weshop/customer/account/login');
 
-        $result = $controller->index();
-
-        $this->assertSame('', $result);
+        self::assertSame('', $controller->index());
     }
 
     public function testIndexReturnsReportDataWhenAuthenticated(): void
@@ -56,33 +53,31 @@ class SalesTest extends TestCase
 
         $controller = $this->getMockBuilder(Sales::class)
             ->setConstructorArgs([$customerContext])
-            ->onlyMethods(['createReportService', 'fetch', 'getParam'])
+            ->onlyMethods(['createReportService', 'assign', 'fetch'])
             ->getMock();
-
         $controller->expects($this->once())
             ->method('createReportService')
             ->willReturn($service);
 
+        $assignments = [];
+        $controller->expects($this->exactly(5))
+            ->method('assign')
+            ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
+                $assignments[$key] = $value;
+
+                return $controller;
+            });
         $controller->expects($this->once())
             ->method('fetch')
-            ->willReturnCallback(function (string $template) use ($expectedReport) {
-                $this->assertSame('WeShop_Report::templates/Frontend/Report/Sales/index.phtml', $template);
-                return 'rendered content';
-            });
+            ->with('WeShop_Report::templates/Frontend/Report/Sales/index.phtml')
+            ->willReturn('rendered content');
 
-        $controller->expects($this->any())
-            ->method('getParam')
-            ->willReturnCallback(function (string $key, $default = null) {
-                return match ($key) {
-                    'start' => '',
-                    'end' => '',
-                    default => $default,
-                };
-            });
+        $this->setControllerRequest($controller, $this->createRequestMock());
 
-        $result = $controller->index();
-
-        $this->assertSame('rendered content', $result);
+        self::assertSame('rendered content', $controller->index());
+        self::assertSame('My Sales Report', $assignments['title'] ?? null);
+        self::assertSame('Sales Report', $assignments['page_title'] ?? null);
+        self::assertSame($expectedReport, $assignments['report'] ?? null);
     }
 
     public function testIndexUsesProvidedDateRange(): void
@@ -106,30 +101,24 @@ class SalesTest extends TestCase
 
         $controller = $this->getMockBuilder(Sales::class)
             ->setConstructorArgs([$customerContext])
-            ->onlyMethods(['createReportService', 'fetch', 'getParam'])
+            ->onlyMethods(['createReportService', 'assign', 'fetch'])
             ->getMock();
-
         $controller->expects($this->once())
             ->method('createReportService')
             ->willReturn($service);
-
+        $controller->expects($this->exactly(5))
+            ->method('assign')
+            ->willReturnCallback(static fn (string $key, mixed $value) => $controller);
         $controller->expects($this->once())
             ->method('fetch')
             ->willReturn('rendered');
 
-        $controller->expects($this->exactly(2))
-            ->method('getParam')
-            ->willReturnCallback(function (string $key, $default = null) {
-                return match ($key) {
-                    'start' => '2026-01-01',
-                    'end' => '2026-01-31',
-                    default => $default,
-                };
-            });
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'start' => '2026-01-01',
+            'end' => '2026-01-31',
+        ]));
 
-        $result = $controller->index();
-
-        $this->assertSame('rendered', $result);
+        self::assertSame('rendered', $controller->index());
     }
 
     public function testLayoutTypeIsAccount(): void
@@ -141,6 +130,33 @@ class SalesTest extends TestCase
         $customerContext = $this->createMock(CustomerContextInterface::class);
         $controller = new Sales($customerContext);
 
-        $this->assertSame('account', $property->getValue($controller));
+        self::assertSame('account', $property->getValue($controller));
+    }
+
+    private function createRequestMock(array $params = []): Request
+    {
+        $request = $this->getMockBuilder(Request::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getParam'])
+            ->getMock();
+        $request->method('getParam')
+            ->willReturnCallback(static fn (string $key, mixed $default = null): mixed => $params[$key] ?? $default);
+
+        return $request;
+    }
+
+    private function setControllerRequest(object $controller, Request $request): void
+    {
+        $reflection = new \ReflectionObject($controller);
+        while (!$reflection->hasProperty('request') && ($reflection = $reflection->getParentClass())) {
+        }
+
+        if (!$reflection instanceof \ReflectionClass) {
+            self::fail('Unable to locate request property.');
+        }
+
+        $property = $reflection->getProperty('request');
+        $property->setAccessible(true);
+        $property->setValue($controller, $request);
     }
 }
