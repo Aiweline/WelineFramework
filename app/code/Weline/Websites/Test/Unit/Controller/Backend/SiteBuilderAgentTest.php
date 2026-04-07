@@ -22,6 +22,7 @@ class SiteBuilderAgentTest extends TestCase
         $this->assertTrue(\method_exists(SiteBuilderAgent::class, 'getStageInfo'));
         $this->assertTrue(\method_exists(SiteBuilderAgent::class, 'getStateJson'));
         $this->assertTrue(\method_exists(SiteBuilderAgent::class, 'postCreateSession'));
+        $this->assertTrue(\method_exists(SiteBuilderAgent::class, 'postDeleteSession'));
         $this->assertTrue(\method_exists(SiteBuilderAgent::class, 'postSetStage'));
     }
 
@@ -42,6 +43,7 @@ class SiteBuilderAgentTest extends TestCase
     public function testSessionServiceHasLoadByPublicIdMethod(): void
     {
         $this->assertTrue(\method_exists(SessionService::class, 'loadByPublicId'));
+        $this->assertTrue(\method_exists(SessionService::class, 'deleteSessionByPublicId'));
     }
 
     /**

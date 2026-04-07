@@ -116,6 +116,19 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertFalse($this->invokePrivateMethod($core, 'isWorkerPortInPool', 100));
     }
 
+    public function testShouldReuseCachedWorkerRouteRejectsSaturatedWorker(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 2);
+
+        self::assertTrue($this->invokePrivateMethod($core, 'shouldReuseCachedWorkerRoute', 19982));
+
+        $core->setWorkerSaturation(19982, 1, 1);
+        self::assertFalse($this->invokePrivateMethod($core, 'shouldReuseCachedWorkerRoute', 19982));
+
+        $core->clearWorkerSaturation(19982);
+        self::assertTrue($this->invokePrivateMethod($core, 'shouldReuseCachedWorkerRoute', 19982));
+    }
+
     public function testNormalizeExcludePortClearsWhenPoolHasSingleWorker(): void
     {
         $core = new PassthroughCore('127.0.0.1', 19981, 2);
@@ -266,6 +279,28 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame([19982, 19983], $result['accepted']);
         self::assertSame([], $result['rejected']);
         self::assertSame([19982, 19983], $core->getWorkerPorts());
+    }
+
+    public function testBuildWorkerHealthRequestMarksInternalHealthProbe(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 1);
+
+        $request = (string) $this->invokePrivateMethod($core, 'buildWorkerHealthRequest');
+
+        self::assertStringContainsString("GET /_wls/health HTTP/1.1\r\n", $request);
+        self::assertStringContainsString("Host: 127.0.0.1\r\n", $request);
+        self::assertStringContainsString("X-WLS-Internal-Request: health-probe\r\n", $request);
+    }
+
+    public function testBuildWorkerHomepageWarmupRequestMarksInternalWarmup(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 1);
+
+        $request = (string) $this->invokePrivateMethod($core, 'buildWorkerHomepageWarmupRequest');
+
+        self::assertStringContainsString("GET / HTTP/1.1\r\n", $request);
+        self::assertStringContainsString("Host: localhost\r\n", $request);
+        self::assertStringContainsString("X-WLS-Internal-Request: homepage-warmup\r\n", $request);
     }
 
     public function testWarmupWaitSliceFallsBackOutsideFiberEvenWhenCallbackIsRegistered(): void

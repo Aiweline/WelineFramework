@@ -30,6 +30,7 @@ namespace Weline\Server\Dispatcher;
 
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\InternalRequestLabel;
 
 // 确保 SOCKET_EAGAIN 常量存在（Windows 兼容）
 if (!\defined('SOCKET_EAGAIN')) {
@@ -108,6 +109,16 @@ class PassthroughCore
      * @var int[]
      */
     private array $workerPorts = [];
+
+    /**
+     * 维护 Worker 端口列表（动态注册，Worker 启动时以 ROLE_MAINTENANCE 身份注册）
+     * 
+     * 当业务 Worker 全部失败或池为空时，Dispatcher 会尝试连接维护 Worker 池中的端口
+     * 以便向用户返回友好的维护页面而非冷断开连接
+     * 
+     * @var int[]
+     */
+    private array $maintenanceWorkerPorts = [];
 
     /**
      * 可选：探活/预热过程中协作式让出（仅应在 Dispatcher 的入池 Fiber 内注册为 Fiber::suspend）。
@@ -284,7 +295,7 @@ class PassthroughCore
      *
      * PHP 8.4 优化：类型化统计数组提升性能
      *
-     * @var array{total_connections: int, active_connections: int, cache_routed: int, round_robin_routed: int, failover_routed: int, saturated_fallback_routed: int, sni_extractions: int, bytes_in: int, bytes_out: int, worker_failures: int, all_workers_down: int, backend_pool_reused: int, backend_pool_released: int, backend_pool_discarded: int}
+     * @var array{total_connections: int, active_connections: int, cache_routed: int, round_robin_routed: int, failover_routed: int, maintenance_routed: int, saturated_fallback_routed: int, sni_extractions: int, bytes_in: int, bytes_out: int, worker_failures: int, all_workers_down: int, backend_pool_reused: int, backend_pool_released: int, backend_pool_discarded: int}
      */
     private array $stats = [
         'total_connections' => 0,
@@ -292,6 +303,7 @@ class PassthroughCore
         'cache_routed' => 0,
         'round_robin_routed' => 0,
         'failover_routed' => 0,
+        'maintenance_routed' => 0,
         'saturated_fallback_routed' => 0,
         'sni_extractions' => 0,
         'bytes_in' => 0,
@@ -523,6 +535,12 @@ class PassthroughCore
         }
 
         // 5. 如果有缓存路由，先尝试连接该 Worker
+        if ($workerPort !== null && !$this->shouldReuseCachedWorkerRoute((int) $workerPort)) {
+            $this->routingCache->removeConnection($connId);
+            $this->routingCache->purgeRouteCache($clientIp, $sni);
+            $workerPort = null;
+            $fromCache = false;
+        }
         if ($workerPort !== null) {
             // 检查缓存路由的 Worker 是否在黑名单中
             if (!$this->isWorkerBlacklisted($workerPort)) {
@@ -538,6 +556,20 @@ class PassthroughCore
             if ($fromCache) {
                 $this->routingCache->removeConnection($connId);
             }
+        }
+        
+        // 5.5 维护模式快速通道：若当前只有 1 个 Worker 端口（维护模式），即使在黑名单中也应快速尝试，
+        //     避免"已下发维护命令却进不了维护 Worker"的死锁。
+        if ($this->workerCount === 1) {
+            $maintenancePort = $this->workerPorts[0];
+            $maintenanceSocket = $this->connectToWorker($maintenancePort);
+            if ($maintenanceSocket !== false) {
+                // 维护 Worker 成功，记录成功并直接注册连接
+                $this->recordWorkerSuccess($maintenancePort);
+                return $this->registerConnection($connId, $clientSocket, $maintenanceSocket, $maintenancePort, $clientIp, $sni);
+            }
+            // 维护 Worker 连接失败（极端情况：维护 Worker 尚未启动完成），记录失败但继续自旋等待
+            $this->recordWorkerFailure($maintenancePort);
         }
         
         // 6. 故障转移：尝试所有可用 Worker（跳过黑名单中的）
@@ -583,7 +615,22 @@ class PassthroughCore
             }
         }
         
-        // 所有 Worker 均不可用（含自旋等待后仍失败）
+        // 9. 业务 Worker 池为空（未就绪）或全部失败后，检测是否有维护 Worker 备选
+        //    （维护模式或启动阶段）→ 尝试转接到维护 Worker 池以提供友好页面
+        if (!empty($this->maintenanceWorkerPorts)) {
+            foreach ($this->maintenanceWorkerPorts as $maintenancePort) {
+                $maintenanceSocket = $this->connectToWorker($maintenancePort);
+                if ($maintenanceSocket !== false) {
+                    $this->recordWorkerSuccess($maintenancePort);
+                    $this->stats['maintenance_routed']++;
+                    return $this->registerConnection($connId, $clientSocket, $maintenanceSocket, $maintenancePort, $clientIp, $sni);
+                }
+                // 维护 Worker 连接失败，尝试下一个
+                $this->recordWorkerFailure($maintenancePort);
+            }
+        }
+        
+        // 所有 Worker 均不可用（业务 Worker 全失败，维护 Worker 也无可用）
         $this->stats['all_workers_down']++;
         return false;
     }
@@ -594,6 +641,23 @@ class PassthroughCore
      * - 池为空：短窗口 min(spin_wait_max, empty_pool_spin)，避免无端口时长时间占死事件循环。
      * - 池非空：使用完整 spin_wait_max（含「有维护端口但尚未 listen」：此前误判为可分配而不自旋，导致永远进不了维护 Worker）。
      */
+    private function shouldReuseCachedWorkerRoute(int $workerPort): bool
+    {
+        if ($workerPort <= 0) {
+            return false;
+        }
+
+        if ($this->isWorkerBlacklisted($workerPort)) {
+            return false;
+        }
+
+        if ($this->isWorkerSaturated($workerPort)) {
+            return false;
+        }
+
+        return true;
+    }
+
     private function resolvePostFailureSpinBudgetSeconds(): float
     {
         if ($this->spinWaitMaxSeconds <= 0.0) {
@@ -891,13 +955,17 @@ class PassthroughCore
                 }
             }
             
-            // 连接超时过短会在高并发下放大「全部不可用」误判；限制在 1~3s 间折中。
+            // 连接超时不能太长，否则高并发下会因等待导致级联超时。限制在 0.3~0.5s 内，
+            // 失败则依赖连接池的指数退避策略在后续请求恢复。
             $write = [$workerSocket];
             $read = null;
             $except = null;
-            $failoverTimeout = \max(1, \min($this->connectTimeout, 3));
+            $failoverTimeout = \max(0.3, \min($this->connectTimeout, 0.5));
             
-            $ready = @\socket_select($read, $write, $except, $failoverTimeout);
+            // socket_select 第4参数需要整数秒，第5参数为微秒
+            $seconds = (int)$failoverTimeout;
+            $microseconds = (int)(($failoverTimeout - $seconds) * 1000000);
+            $ready = @\socket_select($read, $write, $except, $seconds, $microseconds);
             
             if ($ready <= 0) {
                 \socket_close($workerSocket);
@@ -1016,6 +1084,8 @@ class PassthroughCore
      * 
      * 由 Dispatcher 定期调用，用于提前发现已恢复的 Worker，
      * 而不是等到有新请求时才尝试。
+     * 
+     * 优化：对于只有 1 个 Worker（维护模式）的情况，立即尝试探活而不等待恢复时间。
      *
      * @return array 恢复的 Worker 端口列表
      */
@@ -1023,7 +1093,22 @@ class PassthroughCore
     {
         $recovered = [];
         $now = \microtime(true);
+        
+        // 维护模式快速恢复：若当前只有 1 个 Worker 且在黑名单中，立即探活
+        if ($this->workerCount === 1) {
+            $maintenancePort = $this->workerPorts[0];
+            $health = $this->workerHealth[$maintenancePort] ?? null;
+            if ($health !== null && ($health['blacklisted_at'] ?? 0.0) > 0) {
+                // 跳过等待时间，立即探活
+                if ($this->probeWorkerApplicationHealth($maintenancePort)) {
+                    $this->recordWorkerSuccess($maintenancePort);
+                    $recovered[] = $maintenancePort;
+                }
+            }
+            return $recovered;
+        }
 
+        // 正常多 Worker 场景：只恢复超过等待时间的 Worker
         foreach ($this->workerHealth as $port => $health) {
             if (($health['blacklisted_at'] ?? 0.0) <= 0) {
                 continue;
@@ -1281,6 +1366,14 @@ class PassthroughCore
         return ['success' => false, 'error' => $lastError];
     }
 
+    private function buildWorkerHomepageWarmupRequest(): string
+    {
+        return "GET / HTTP/1.1\r\n"
+            . "Host: localhost\r\n"
+            . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HOMEPAGE_WARMUP)
+            . "Connection: close\r\n\r\n";
+    }
+
     /**
      * 严格预热（较长连接/响应窗口，多次重试）。供非 IPC 就绪语义场景或子类测试桩覆盖。
      */
@@ -1446,7 +1539,7 @@ class PassthroughCore
 
                 // 发送真实的首页请求来触发框架初始化（而不是简单的健康检查）
                 // 这样可以预热框架、数据库连接、缓存等，避免第一个用户请求过慢
-                $request = "GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+                $request = $this->buildWorkerHomepageWarmupRequest();
                 $writeOffset = 0;
                 $writeDeadline = \microtime(true) + \max(0.2, $writeTimeoutSeconds);
                 while ($writeOffset < \strlen($request)) {
@@ -1699,9 +1792,7 @@ class PassthroughCore
                 }
             }
 
-            $request = "GET " . self::WORKER_HEALTH_PATH . " HTTP/1.1\r\n"
-                . "Host: {$this->workerHost}\r\n"
-                . "Connection: close\r\n\r\n";
+            $request = $this->buildWorkerHealthRequest();
             $writeOffset = 0;
             $writeDeadline = \microtime(true) + \max(0.3, \min($responseTimeout, 2.0));
             $requestLen = \strlen($request);
@@ -1797,6 +1888,14 @@ class PassthroughCore
         } finally {
             @\fclose($conn);
         }
+    }
+
+    private function buildWorkerHealthRequest(): string
+    {
+        return "GET " . self::WORKER_HEALTH_PATH . " HTTP/1.1\r\n"
+            . "Host: {$this->workerHost}\r\n"
+            . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HEALTH_PROBE)
+            . "Connection: close\r\n\r\n";
     }
 
     private function logWarmup(string $message, string $level = 'INFO'): void
@@ -1996,7 +2095,91 @@ class PassthroughCore
     }
     
     /**
-     * 获取 Worker 健康状态摘要
+     * 添加维护 Worker 端口
+     * 
+     * 维护 Worker 以 ROLE_MAINTENANCE 身份向 Dispatcher 注册，
+     * 当业务 Worker 不就位时自动转接请求到维护 Worker。
+     * 
+     * @param int $port 维护 Worker 端口
+     * @return array{success: bool, error?: string}
+     */
+    public function addMaintenanceWorkerPort(int $port): array
+    {
+        if ($port <= 0) {
+            return ['success' => false, 'error' => '维护 Worker 端口无效: ' . $port];
+        }
+        
+        if (\in_array($port, $this->maintenanceWorkerPorts, true)) {
+            return ['success' => true, 'message' => '维护 Worker 端口已存在: ' . $port];
+        }
+        
+        // 快速探活，确认维护 Worker 已启动
+        $probe = $this->probeWorkerApplicationHealth($port);
+        if (!$probe) {
+            return ['success' => false, 'error' => "维护 Worker {$port} 探活失败，可能未启动"];
+        }
+        
+        $this->maintenanceWorkerPorts[] = $port;
+        $this->writeStderr("[PassthroughCore] 维护 Worker 端口已注册: {$port}\n");
+        
+        return ['success' => true, 'message' => '维护 Worker 端口已注册'];
+    }
+    
+    /**
+     * 移除维护 Worker 端口
+     * 
+     * @param int $port 维护 Worker 端口
+     */
+    public function removeMaintenanceWorkerPort(int $port): void
+    {
+        $key = \array_search($port, $this->maintenanceWorkerPorts, true);
+        if ($key !== false) {
+            unset($this->maintenanceWorkerPorts[$key]);
+            $this->maintenanceWorkerPorts = \array_values($this->maintenanceWorkerPorts);
+            $this->writeStderr("[PassthroughCore] 维护 Worker 端口已移除: {$port}\n");
+        }
+    }
+    
+    /**
+     * 获取维护 Worker 端口列表
+     * 
+     * @return int[]
+     */
+    public function getMaintenanceWorkerPorts(): array
+    {
+        return $this->maintenanceWorkerPorts;
+    }
+    
+    /**
+     * 设置维护 Worker 端口
+     * 
+     * 当业务 Worker 不就位或全部失败时，Dispatcher 会尝试连接维护 Worker
+     * 以提供友好的"启动中"页面或维护提示。
+     * 
+     * @param int $port 维护 Worker 端口，0 表示禁用
+     */
+    public function setMaintenancePort(int $port): void
+    {
+        if ($port < 0) {
+            $port = 0;
+        }
+        $this->maintenancePort = $port;
+        if ($port > 0) {
+            $this->writeStderr("[PassthroughCore] 维护 Worker 端口已设置: {$port}\n");
+        } else {
+            $this->writeStderr("[PassthroughCore] 维护 Worker 端口已禁用\n");
+        }
+    }
+    
+    /**
+     * 获取维护 Worker 端口
+     */
+    public function getMaintenancePort(): int
+    {
+        return $this->maintenancePort;
+    }
+    
+    /**
      *
      * @return array{healthy: int, blacklisted: int, saturated: int, total: int, details: array}
      */

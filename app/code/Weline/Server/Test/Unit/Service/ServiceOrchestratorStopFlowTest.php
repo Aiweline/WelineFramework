@@ -347,6 +347,52 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         self::assertSame(ServiceInstance::STATE_STOPPING, $worker->state);
     }
 
+    public function testHandleIpcDisconnectSkipsRecoveryWhenFullRestartAlreadyRequested(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->setProperty($orchestrator, 'fullRestartRequested', true);
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: 'worker',
+            instanceId: 1,
+            pid: 202,
+            ipcClientId: 22,
+            state: ServiceInstance::STATE_READY
+        ));
+
+        $orchestrator->handleIpcDisconnect(22, [], $this->createMock(MasterControlServer::class));
+
+        $worker = $registry->getInstance('worker', 1);
+        self::assertInstanceOf(ServiceInstance::class, $worker);
+        self::assertNull($worker->ipcClientId);
+        self::assertSame(ServiceInstance::STATE_STOPPING, $worker->state);
+        self::assertSame([], $this->readProperty($orchestrator, 'resurrectQueue'));
+    }
+
+    public function testProcessResurrectQueueSkipsDuringFullRestartChildStopWindow(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->setProperty($orchestrator, 'childProcessStopInProgress', true);
+        $queue = [
+            'worker:1' => [
+                'role' => 'worker',
+                'instanceId' => 1,
+                'maxRestarts' => 10,
+                'restartDelay' => 0.0,
+                'scheduledAt' => \microtime(true) - 1.0,
+                'delayed' => false,
+                'pid' => 0,
+                'port' => 16895,
+            ],
+        ];
+        $this->setProperty($orchestrator, 'resurrectQueue', $queue);
+
+        $this->invokePrivate($orchestrator, 'processResurrectQueue');
+
+        self::assertSame($queue, $this->readProperty($orchestrator, 'resurrectQueue'));
+    }
+
     public function testStopAllFinalizesMasterExitAfterNormalStopFlow(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
@@ -411,5 +457,13 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         $reflection = new \ReflectionProperty($object, $property);
         $reflection->setAccessible(true);
         $reflection->setValue($object, $value);
+    }
+
+    private function readProperty(object $object, string $property): mixed
+    {
+        $reflection = new \ReflectionProperty($object, $property);
+        $reflection->setAccessible(true);
+
+        return $reflection->getValue($object);
     }
 }

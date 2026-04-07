@@ -83,18 +83,20 @@ class AiSiteAgentSessionService
         return $session->getId() > 0 ? $session : null;
     }
 
-    public function loadById(int $sessionId, int $forAdminUserId): ?AiSiteAgentSession
+    public function deleteSession(int $sessionId, int $forAdminUserId): bool
     {
-        if ($sessionId <= 0 || $forAdminUserId <= 0) {
-            return null;
+        $session = $this->loadById($sessionId, $forAdminUserId);
+        if ($session === null) {
+            return false;
         }
-        $session = clone $this->sessionModel;
-        $session->clearData()->clearQuery()
-            ->where(AiSiteAgentSession::schema_fields_ID, $sessionId)
-            ->where(AiSiteAgentSession::schema_fields_ADMIN_USER_ID, $forAdminUserId)
-            ->find()
+
+        $eventModel = clone $this->eventModel;
+        $eventModel->clearData()->clearQuery()
+            ->where(AiSiteAgentSessionEvent::schema_fields_AGENT_SESSION_ID, $sessionId)
+            ->delete()
             ->fetch();
-        return $session->getId() > 0 ? $session : null;
+
+        return (bool)$session->delete()->fetch();
     }
 
     /**

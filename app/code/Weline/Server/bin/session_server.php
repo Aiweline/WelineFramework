@@ -169,9 +169,46 @@ WlsLogger::info_("Config: max_sessions=" . ($sessionConfig['max_sessions'] ?? 50
     ", session_ttl=" . ($sessionConfig['session_ttl'] ?? 3600) . "s");
 WlsLogger::info_("Persist file: " . ($sessionConfig['persist_file_name'] ?? 'wls_session_store.dat'));
 
+/**
+ * 更新实例 JSON 中的服务端口信息
+ * 供 Worker 启动时动态发现 Session/Memory 服务端口
+ */
+$updateServicePortInInstanceJson = static function (string $serviceRole, int $servicePort) use ($instanceName): void {
+    $instanceFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances' . DIRECTORY_SEPARATOR . $instanceName . '.json';
+    $dir = \dirname($instanceFile);
+    if (!\is_dir($dir)) {
+        @\mkdir($dir, 0755, true);
+    }
+
+    // 读取现有数据并合并
+    $existingData = [];
+    if (\is_file($instanceFile)) {
+        $content = @\file_get_contents($instanceFile);
+        if ($content !== false) {
+            $existingData = \json_decode($content, true) ?: [];
+        }
+    }
+
+    // 根据不同的角色，更新对应的字段
+    if ($serviceRole === 'session_server') {
+        $existingData['session_port'] = $servicePort;
+        $existingData['session_service_updated_at'] = \time();
+    } elseif ($serviceRole === 'memory_server') {
+        $existingData['memory_port'] = $servicePort;
+        $existingData['memory_service_updated_at'] = \time();
+    }
+
+    @\file_put_contents($instanceFile, \json_encode($existingData, JSON_PRETTY_PRINT));
+};
+
 $ipcReceivedShutdown = false;
 $kernel = null;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
+// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
+// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
+if ($controlPort <= 0) {
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
+}
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
 if ($controlPort > 0) {
     $identity = new \Weline\Server\IPC\ChildControl\ChildProcessIdentity(
@@ -206,6 +243,9 @@ if ($controlPort > 0) {
     );
     if ($kernel->connectAndRegister($controlPort)) {
         WlsLogger::info_("Connected to Master IPC on port {$controlPort}");
+        // 更新实例 JSON 中的服务端口信息，供 Worker 启动时发现
+        $updateServicePortInInstanceJson($role, $port);
+        WlsLogger::info_("Service port {$role}={$port} registered to instance JSON");
         if (\Weline\Server\Log\LogConfig::isDevMode()) {
             $client = $kernel->getClient();
             if ($client !== null) {
@@ -218,7 +258,8 @@ if ($controlPort > 0) {
         }
     } else {
         WlsLogger::warning_("Failed to connect to Master IPC on port {$controlPort}");
-        $kernel = null;
+        // 即使连接失败也需要注册端口，供 Worker 查询
+        $updateServicePortInInstanceJson($role, $port);
     }
 }
 

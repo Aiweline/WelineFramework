@@ -48,4 +48,16 @@ class AiServiceMergeConfigTest extends TestCase
         $this->assertSame(0.3, $providerConfig['temperature'] ?? null);
         $this->assertFalse($providerConfig['stream'] ?? true);
     }
+
+    public function testShouldRetryWithAnotherAccountForAuthAndBalanceErrors(): void
+    {
+        $reflection = new \ReflectionClass(AiService::class);
+        $method = $reflection->getMethod('shouldRetryWithAnotherAccount');
+        $method->setAccessible(true);
+
+        $this->assertTrue($method->invoke($this->service, new \Exception('HTTP 402 Insufficient Balance')));
+        $this->assertTrue($method->invoke($this->service, new \Exception('Invalid API key or unauthorized')));
+        $this->assertTrue($method->invoke($this->service, new \Exception('余额不足')));
+        $this->assertFalse($method->invoke($this->service, new \Exception('Invalid prompt format')));
+    }
 }
