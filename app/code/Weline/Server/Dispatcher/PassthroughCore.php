@@ -1997,7 +1997,7 @@ class PassthroughCore
      * @param int[] $ports
      * @return array{accepted: int[], rejected: array<int, string>}
      */
-    public function setWorkerPorts(array $ports): array
+    public function setWorkerPorts(array $ports, bool $preservePreviousOnTotalReject = true): array
     {
         $previousPorts = $this->workerPorts;
         $previousHealth = $this->workerHealth;
@@ -2066,7 +2066,7 @@ class PassthroughCore
 
         // 关键保护：若 Master 下发了新池但所有端口都因瞬时探活失败被拒绝，
         // 不清空现有可用池，避免入口瞬断为 0/0。
-        if ($candidatePorts !== [] && $acceptedPorts === [] && $previousPorts !== []) {
+        if ($preservePreviousOnTotalReject && $candidatePorts !== [] && $acceptedPorts === [] && $previousPorts !== []) {
             $this->applyWorkerPoolTransition($previousPorts, $previousHealth);
             $this->logWarmup(
                 'SET_WORKER_POOL 新端口全量预热失败，保留旧池: ' . \implode(',', $previousPorts),
