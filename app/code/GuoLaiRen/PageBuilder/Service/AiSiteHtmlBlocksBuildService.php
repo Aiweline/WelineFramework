@@ -23,21 +23,10 @@ class AiSiteHtmlBlocksBuildService
     public function buildPlaceholderBlocksForPageType(string $pageType, array $websiteProfile, array $scope = []): array
     {
         $generationService = $this->pageComponentGenerationService ?? ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
-        $sharedComponents = \is_array($scope['_ai_generated_shared_components'] ?? null)
-            ? $scope['_ai_generated_shared_components']
-            : $generationService->generateSharedComponents($websiteProfile, $scope);
         $pageSections = $generationService->generatePageSections($pageType, $websiteProfile, $scope);
 
         $blocks = [
-            $this->buildGeneratedBlockRecord(
-                \str_replace('_', '-', $pageType) . '-site-header',
-                'ai_generated_header',
-                (string)($sharedComponents['header']['html'] ?? ''),
-                \array_replace(
-                    ['region' => 'header', 'html_content' => (string)($sharedComponents['header']['html'] ?? '')],
-                    \is_array($sharedComponents['header']['default_config'] ?? null) ? $sharedComponents['header']['default_config'] : []
-                )
-            ),
+            $this->buildHeaderBlock($pageType, $websiteProfile, $scope),
         ];
 
         foreach (($pageSections['sections'] ?? []) as $section) {
@@ -59,15 +48,7 @@ class AiSiteHtmlBlocksBuildService
             );
         }
 
-        $blocks[] = $this->buildGeneratedBlockRecord(
-            \str_replace('_', '-', $pageType) . '-site-footer',
-            'ai_generated_footer',
-            (string)($sharedComponents['footer']['html'] ?? ''),
-            \array_replace(
-                ['region' => 'footer', 'html_content' => (string)($sharedComponents['footer']['html'] ?? '')],
-                \is_array($sharedComponents['footer']['default_config'] ?? null) ? $sharedComponents['footer']['default_config'] : []
-            )
-        );
+        $blocks[] = $this->buildFooterBlock($pageType, $websiteProfile, $scope);
 
         return $blocks !== [] ? $blocks : [
             $this->buildHeaderBlock($pageType, $websiteProfile, $scope),
@@ -192,6 +173,7 @@ class AiSiteHtmlBlocksBuildService
     private function buildFooterBlock(string $pageType, array $websiteProfile, array $scope): array
     {
         $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
+        $footerGroups = $this->buildFooterLinkGroups($scope);
         return $this->buildBlockRecord(
             \str_replace('_', '-', $pageType) . '-site-footer',
             'site_footer',
@@ -199,7 +181,12 @@ class AiSiteHtmlBlocksBuildService
                 'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'brief_description' => $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope),
                 'domain' => (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
-                'nav_items' => $this->buildFooterNavItems($scope),
+                'links.column1_title' => (string)($footerGroups['column1_title'] ?? 'Featured'),
+                'links.column1_items' => $footerGroups['column1_items'] ?? [],
+                'links.column2_title' => (string)($footerGroups['column2_title'] ?? 'Policies'),
+                'links.column2_items' => $footerGroups['column2_items'] ?? [],
+                'links.column3_title' => (string)($footerGroups['column3_title'] ?? 'All Pages'),
+                'links.column3_items' => $footerGroups['column3_items'] ?? [],
             ],
             $websiteProfile,
             $scope
@@ -385,7 +372,7 @@ class AiSiteHtmlBlocksBuildService
         };
     }
 
-    /**
+        /**
      * @return array<string, mixed>
      */
     public function buildFieldSchema(string $template): array
@@ -395,75 +382,80 @@ class AiSiteHtmlBlocksBuildService
             'ai_generated_section',
             'ai_generated_footer' => [
                 'content' => [
-                    'label' => 'AI 生成结果',
+                    'label' => 'AI Generated Result',
                     'fields' => [
-                        'html_content' => ['type' => 'textarea', 'label' => 'HTML 内容'],
+                        'html_content' => ['type' => 'textarea', 'label' => 'HTML Content'],
                     ],
                 ],
             ],
             'site_header' => [
                 'identity' => [
-                    'label' => '页头信息',
+                    'label' => 'Header Fields',
                     'fields' => [
-                        'site_title' => ['type' => 'text', 'label' => '站点名称'],
-                        'site_tagline' => ['type' => 'text', 'label' => '站点副标题'],
-                        'current_page_label' => ['type' => 'text', 'label' => '当前页标签'],
-                        'nav_items' => ['type' => 'textarea', 'label' => '导航项', 'format' => 'nav-items'],
+                        'site_title' => ['type' => 'text', 'label' => 'Site Title'],
+                        'site_tagline' => ['type' => 'text', 'label' => 'Site Tagline'],
+                        'current_page_label' => ['type' => 'text', 'label' => 'Current Page'],
+                        'nav_items' => ['type' => 'textarea', 'label' => 'Header Links', 'format' => 'nav-items'],
                     ],
                 ],
             ],
             'site_footer' => [
                 'identity' => [
-                    'label' => '页脚信息',
+                    'label' => 'Footer Fields',
                     'fields' => [
-                        'site_title' => ['type' => 'text', 'label' => '站点名称'],
-                        'brief_description' => ['type' => 'textarea', 'label' => '页脚简介'],
-                        'domain' => ['type' => 'text', 'label' => '展示域名'],
-                        'nav_items' => ['type' => 'textarea', 'label' => '底部链接', 'format' => 'nav-items'],
+                        'site_title' => ['type' => 'text', 'label' => 'Site Title'],
+                        'brief_description' => ['type' => 'textarea', 'label' => 'Footer Summary'],
+                        'domain' => ['type' => 'text', 'label' => 'Domain'],
+                        'links.column1_title' => ['type' => 'text', 'label' => 'Group 1 Title'],
+                        'links.column1_items' => ['type' => 'textarea', 'label' => 'Group 1 Links', 'format' => 'nav-items'],
+                        'links.column2_title' => ['type' => 'text', 'label' => 'Group 2 Title'],
+                        'links.column2_items' => ['type' => 'textarea', 'label' => 'Group 2 Links', 'format' => 'nav-items'],
+                        'links.column3_title' => ['type' => 'text', 'label' => 'Group 3 Title'],
+                        'links.column3_items' => ['type' => 'textarea', 'label' => 'Group 3 Links', 'format' => 'nav-items'],
                     ],
                 ],
             ],
             'cards' => [
                 'content' => [
-                    'label' => '内容信息',
+                    'label' => 'Content Fields',
                     'fields' => [
-                        'section_title' => ['type' => 'text', 'label' => '分组标题'],
-                        'section_intro' => ['type' => 'textarea', 'label' => '分组说明'],
-                        'items' => ['type' => 'textarea', 'label' => '卡片列表', 'format' => 'card-items'],
+                        'section_title' => ['type' => 'text', 'label' => 'Section Title'],
+                        'section_intro' => ['type' => 'textarea', 'label' => 'Section Intro'],
+                        'items' => ['type' => 'textarea', 'label' => 'Cards', 'format' => 'card-items'],
                     ],
                 ],
             ],
             'checklist' => [
                 'content' => [
-                    'label' => '内容信息',
+                    'label' => 'Content Fields',
                     'fields' => [
-                        'section_title' => ['type' => 'text', 'label' => '分组标题'],
-                        'section_intro' => ['type' => 'textarea', 'label' => '分组说明'],
-                        'points' => ['type' => 'textarea', 'label' => '条目列表', 'format' => 'lines'],
+                        'section_title' => ['type' => 'text', 'label' => 'Section Title'],
+                        'section_intro' => ['type' => 'textarea', 'label' => 'Section Intro'],
+                        'points' => ['type' => 'textarea', 'label' => 'Checklist Items', 'format' => 'lines'],
                     ],
                 ],
             ],
             'cta' => [
                 'content' => [
-                    'label' => '内容信息',
+                    'label' => 'CTA Fields',
                     'fields' => [
-                        'section_title' => ['type' => 'text', 'label' => '标题'],
-                        'section_text' => ['type' => 'textarea', 'label' => '说明文本'],
-                        'button_label' => ['type' => 'text', 'label' => '按钮文案'],
-                        'assist_text' => ['type' => 'text', 'label' => '辅助文案'],
+                        'section_title' => ['type' => 'text', 'label' => 'Title'],
+                        'section_text' => ['type' => 'textarea', 'label' => 'Text'],
+                        'button_label' => ['type' => 'text', 'label' => 'Button Label'],
+                        'assist_text' => ['type' => 'text', 'label' => 'Assist Text'],
                     ],
                 ],
             ],
             default => [
                 'content' => [
-                    'label' => '内容信息',
+                    'label' => 'Content Fields',
                     'fields' => [
-                        'eyebrow' => ['type' => 'text', 'label' => '上方标签'],
-                        'headline' => ['type' => 'text', 'label' => '主标题'],
-                        'description' => ['type' => 'textarea', 'label' => '描述文本'],
-                        'chips' => ['type' => 'textarea', 'label' => '标签列表', 'format' => 'lines'],
-                        'primary_cta' => ['type' => 'text', 'label' => '主按钮'],
-                        'secondary_note' => ['type' => 'text', 'label' => '辅助说明'],
+                        'eyebrow' => ['type' => 'text', 'label' => 'Eyebrow'],
+                        'headline' => ['type' => 'text', 'label' => 'Headline'],
+                        'description' => ['type' => 'textarea', 'label' => 'Description'],
+                        'chips' => ['type' => 'textarea', 'label' => 'Chips', 'format' => 'lines'],
+                        'primary_cta' => ['type' => 'text', 'label' => 'Primary CTA'],
+                        'secondary_note' => ['type' => 'text', 'label' => 'Secondary Note'],
                     ],
                 ],
             ],
@@ -599,25 +591,53 @@ class AiSiteHtmlBlocksBuildService
         $siteTitle = $this->escape($config['site_title'] ?? '');
         $brief = $this->escape($config['brief_description'] ?? '');
         $domain = $this->escape($config['domain'] ?? '');
-        $navItems = \is_array($config['nav_items'] ?? null) ? $config['nav_items'] : [];
-        $linkHtml = [];
-        foreach ($navItems as $item) {
-            if (!\is_array($item)) {
+        $groups = [
+            [
+                'title' => (string)($config['links.column1_title'] ?? 'Featured'),
+                'items' => \is_array($config['links.column1_items'] ?? null) ? $config['links.column1_items'] : [],
+            ],
+            [
+                'title' => (string)($config['links.column2_title'] ?? 'Policies'),
+                'items' => \is_array($config['links.column2_items'] ?? null) ? $config['links.column2_items'] : [],
+            ],
+            [
+                'title' => (string)($config['links.column3_title'] ?? 'All Pages'),
+                'items' => \is_array($config['links.column3_items'] ?? null) ? $config['links.column3_items'] : [],
+            ],
+        ];
+
+        $groupHtml = [];
+        foreach ($groups as $group) {
+            $items = [];
+            foreach (($group['items'] ?? []) as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $label = $this->escape($item['label'] ?? '');
+                if ($label === '') {
+                    continue;
+                }
+                $items[] = '<a href="' . $this->escape($item['href'] ?? '#') . '" style="color:#cbd5e1;font-size:13px;line-height:1.7;text-decoration:none;">'
+                    . $label
+                    . '</a>';
+            }
+            if ($items === []) {
                 continue;
             }
-            $linkHtml[] = '<a href="' . $this->escape($item['href'] ?? '#') . '" style="color:#cbd5e1;font-size:13px;text-decoration:none;">'
-                . $this->escape($item['label'] ?? '')
-                . '</a>';
+            $groupHtml[] = '<div style="display:grid;gap:10px;min-width:180px;">'
+                . '<strong style="font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#f8fafc;">' . $this->escape($group['title'] ?? '') . '</strong>'
+                . '<div style="display:grid;gap:8px;">' . \implode('', $items) . '</div>'
+                . '</div>';
         }
 
-        return '<footer class="ai-block ai-block-site-footer" style="padding:28px;background:#020617;color:#e2e8f0;display:grid;gap:16px;">'
+        return '<footer class="ai-block ai-block-site-footer" style="padding:28px;background:#020617;color:#e2e8f0;display:grid;gap:20px;">'
             . '<div style="display:grid;gap:8px;">'
             . '<strong style="font-size:18px;line-height:1.2;color:#fff;">' . $siteTitle . '</strong>'
             . ($brief !== '' ? '<p style="margin:0;max-width:760px;font-size:14px;line-height:1.7;color:#94a3b8;">' . $brief . '</p>' : '')
             . '</div>'
-            . '<div style="display:flex;flex-wrap:wrap;gap:14px 18px;">' . \implode('', $linkHtml) . '</div>'
+            . '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:18px 24px;">' . \implode('', $groupHtml) . '</div>'
             . '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:#64748b;font-size:12px;">'
-            . '<span>© 2026 ' . $siteTitle . '</span>'
+            . '<span>漏 2026 ' . $siteTitle . '</span>'
             . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>Always improving the visitor experience</span>')
             . '</div></footer>';
     }
@@ -626,9 +646,18 @@ class AiSiteHtmlBlocksBuildService
      * @param array<string, mixed> $scope
      * @return list<array{label:string,href:string,active:bool}>
      */
-    private function buildNavItems(array $scope): array
+    private function buildHeaderNavItems(array $scope): array
     {
         return $this->buildScopedNavItems($scope, true);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function buildNavItems(array $scope): array
+    {
+        return $this->buildScopedNavItems($scope, false);
     }
 
     /**
@@ -642,20 +671,71 @@ class AiSiteHtmlBlocksBuildService
 
     /**
      * @param array<string, mixed> $scope
-     * @return list<array{label:string,href:string,active:bool}>
+     * @return array{column1_title:string,column1_items:list<array{label:string,href:string,active:bool}>,column2_title:string,column2_items:list<array{label:string,href:string,active:bool}>,column3_title:string,column3_items:list<array{label:string,href:string,active:bool}>}
+     */
+    private function buildFooterLinkGroups(array $scope): array
+    {
+        $allItems = $this->buildScopedNavItems($scope, false);
+        $legalTypes = [
+            Page::TYPE_PRIVACY_POLICY,
+            Page::TYPE_TERMS_OF_SERVICE,
+            Page::TYPE_REFUND_POLICY,
+            Page::TYPE_SHIPPING_POLICY,
+            Page::TYPE_COOKIE_POLICY,
+        ];
+        $legalTypeMap = \array_flip($legalTypes);
+        $featuredTypeMap = \array_flip([
+            Page::TYPE_HOME,
+            Page::TYPE_ABOUT,
+            Page::TYPE_CONTACT,
+            Page::TYPE_BLOG_LIST,
+            Page::TYPE_CUSTOM,
+        ]);
+
+        $featured = [];
+        $legal = [];
+        foreach ($allItems as $item) {
+            $type = (string)($item['type'] ?? '');
+            if (isset($featuredTypeMap[$type])) {
+                $featured[] = $item;
+            }
+            if (isset($legalTypeMap[$type])) {
+                $legal[] = $item;
+            }
+        }
+
+        if ($featured === []) {
+            $featured = \array_slice($allItems, 0, 4);
+        }
+        if ($legal === []) {
+            $legal = \array_slice($allItems, \min(1, \count($allItems)), 3);
+        }
+
+        return [
+            'column1_title' => 'Featured Pages',
+            'column1_items' => $featured,
+            'column2_title' => 'Policy Info',
+            'column2_items' => $legal,
+            'column3_title' => 'All Pages',
+            'column3_items' => $allItems,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{label:string,href:string,active:bool,type:string}>
      */
     private function buildScopedNavItems(array $scope, bool $headerOnly): array
     {
         $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT];
         $labels = Page::getPageTypes();
-        $headerTypeMap = \array_flip(Page::getHeaderMenuTypes());
         $items = [];
 
         foreach ($pageTypes as $pageType) {
             if (!\is_string($pageType) || $pageType === '') {
                 continue;
             }
-            if ($headerOnly && !isset($headerTypeMap[$pageType])) {
+            if (\in_array($pageType, [Page::TYPE_BLOG, Page::TYPE_BLOG_CATEGORY], true)) {
                 continue;
             }
 
@@ -664,17 +744,74 @@ class AiSiteHtmlBlocksBuildService
                 'label' => (string)($labels[$pageType] ?? $pageType),
                 'href' => $href,
                 'active' => $pageType === Page::TYPE_HOME,
+                'type' => $pageType,
             ];
-            if ($headerOnly && \count($items) >= 5) {
+        }
+
+        if ($items === []) {
+            $items[] = ['label' => '首页', 'href' => '/', 'active' => true, 'type' => Page::TYPE_HOME];
+        }
+
+        if (!$headerOnly) {
+            return $items;
+        }
+
+        $byType = [];
+        foreach ($items as $item) {
+            $type = (string)($item['type'] ?? '');
+            if ($type !== '') {
+                $byType[$type] = $item;
+            }
+        }
+
+        $headerItems = [];
+        foreach ([Page::TYPE_HOME, Page::TYPE_ABOUT] as $type) {
+            if (isset($byType[$type])) {
+                $headerItems[] = $byType[$type];
+            }
+        }
+
+        $policyTarget = null;
+        foreach ([Page::TYPE_PRIVACY_POLICY, Page::TYPE_TERMS_OF_SERVICE, Page::TYPE_REFUND_POLICY, Page::TYPE_SHIPPING_POLICY, Page::TYPE_COOKIE_POLICY] as $type) {
+            if (!isset($byType[$type])) {
+                continue;
+            }
+            $policyTarget = $byType[$type];
+            break;
+        }
+        if ($policyTarget !== null) {
+            $headerItems[] = [
+                'label' => 'Policy Info',
+                'href' => (string)($policyTarget['href'] ?? '#'),
+                'active' => false,
+                'type' => 'policy_info',
+            ];
+        }
+
+        foreach ([Page::TYPE_BLOG_LIST, Page::TYPE_CONTACT] as $type) {
+            if (isset($byType[$type])) {
+                $headerItems[] = $byType[$type];
+            }
+        }
+
+        $existingHeaderTypes = \array_flip(\array_map(
+            static fn(array $entry): string => (string)($entry['type'] ?? ''),
+            $headerItems
+        ));
+
+        foreach ($items as $item) {
+            $type = (string)($item['type'] ?? '');
+            if ($type === '' || isset($existingHeaderTypes[$type])) {
+                continue;
+            }
+            $headerItems[] = $item;
+            $existingHeaderTypes[$type] = true;
+            if (\count($headerItems) >= 5) {
                 break;
             }
         }
 
-        if ($items === []) {
-            $items[] = ['label' => '首页', 'href' => '/', 'active' => true];
-        }
-
-        return $items;
+        return \array_slice($headerItems !== [] ? $headerItems : $items, 0, 5);
     }
 
     /**
@@ -692,12 +829,18 @@ class AiSiteHtmlBlocksBuildService
                 'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'site_tagline' => (string)($config['site_tagline'] ?? $websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
                 'current_page_label' => (string)($config['current_page_label'] ?? ''),
-                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildNavItems($scope)),
+                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildHeaderNavItems($scope)),
             ],
             'site_footer' => [
                 'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
                 'brief_description' => (string)($config['brief_description'] ?? $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope)),
                 'domain' => (string)($config['domain'] ?? $websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
+                'links.column1_title' => (string)($config['links.column1_title'] ?? 'Featured Pages'),
+                'links.column1_items' => $this->normalizeNavItems($config['links.column1_items'] ?? []),
+                'links.column2_title' => (string)($config['links.column2_title'] ?? 'Policy Info'),
+                'links.column2_items' => $this->normalizeNavItems($config['links.column2_items'] ?? []),
+                'links.column3_title' => (string)($config['links.column3_title'] ?? 'All Pages'),
+                'links.column3_items' => $this->normalizeNavItems($config['links.column3_items'] ?? $this->buildFooterNavItems($scope)),
                 'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildFooterNavItems($scope)),
             ],
             'cards' => [
@@ -742,13 +885,13 @@ class AiSiteHtmlBlocksBuildService
             if (!\is_array($item)) {
                 continue;
             }
-            $label = \trim((string)($item['label'] ?? ''));
+            $label = \trim((string)($item['label'] ?? $item['text'] ?? $item['title'] ?? ''));
             if ($label === '') {
                 continue;
             }
             $normalized[] = [
                 'label' => $label,
-                'href' => \trim((string)($item['href'] ?? '#')),
+                'href' => \trim((string)($item['href'] ?? $item['url'] ?? '#')),
                 'active' => !empty($item['active']),
             ];
         }
@@ -836,3 +979,4 @@ class AiSiteHtmlBlocksBuildService
         return \htmlspecialchars(\trim((string)$value), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
     }
 }
+
