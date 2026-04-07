@@ -50,59 +50,102 @@ class SharedStateServiceManager
         bool $frontend = false,
         bool $forceRestart = false
     ): array {
-        // Session / Memory 分角色短锁内仅「探测→必要时停止→拉起子进程」，就绪等待放到锁外并对多角色统一轮询，
-        // 使两个共享侧车进程能并行启动，缩短 server:start -r 等场景的总耗时。
+        // Session / Memory 并发启动：
+        // 1. 先快速探测两个服务是否已存在且健康
+        // 2. 对于需要启动的服务，使用 Fiber 并发执行锁内操作
+        // 3. 等待阶段真正并发探活，不再串行等待
+
         $sessionDefinition = $this->buildRoleDefinition(
             ControlMessage::ROLE_SESSION_SERVER,
             $requesterInstanceName,
             $config,
             $envConfig
         );
-        $sessionPrepare = $this->withRoleLock((string) $sessionDefinition['role'], function () use (
-            $sessionDefinition,
-            $requesterInstanceName,
-            $frontend,
-            $forceRestart
-        ): array {
-            return $this->prepareSharedServiceUnderLock(
-                $sessionDefinition,
-                $requesterInstanceName,
-                $frontend,
-                $forceRestart
-            );
-        });
-
-        $memoryPrepare = null;
-        if ($this->isMemoryEnabled($config, $envConfig)) {
-            $memoryDefinition = $this->buildRoleDefinition(
+        $memoryDefinition = $this->isMemoryEnabled($config, $envConfig)
+            ? $this->buildRoleDefinition(
                 ControlMessage::ROLE_MEMORY_SERVER,
                 $requesterInstanceName,
                 $config,
                 $envConfig
-            );
-            $memoryPrepare = $this->withRoleLock((string) $memoryDefinition['role'], function () use (
-                $memoryDefinition,
-                $requesterInstanceName,
-                $frontend,
-                $forceRestart
-            ): array {
-                return $this->prepareSharedServiceUnderLock(
+            )
+            : null;
+
+        // 快速探测阶段 - 不需要锁，只需检查服务是否已健康
+        $sessionProbe = $this->quickProbe($sessionDefinition);
+        $memoryProbe = $memoryDefinition !== null ? $this->quickProbe($memoryDefinition) : null;
+
+        // 分析哪些服务需要启动
+        $sessionNeedsStartup = ($sessionProbe['status'] ?? '') !== 'ready';
+        $memoryNeedsStartup = $memoryProbe !== null && ($memoryProbe['status'] ?? '') !== 'ready';
+
+        // 如果两个服务都无需启动，直接复用
+        if (!$sessionNeedsStartup && !$memoryNeedsStartup) {
+            WlsLogger::info_('[SharedStateServiceManager] Session 和 Memory 均已就绪，直接复用');
+            return $this->buildRuntimeFromQuickProbe($sessionProbe, $memoryProbe, $requesterInstanceName);
+        }
+
+        // 需要启动的服务使用 Fiber 并发执行（关键优化：让两个服务的锁操作同时进行）
+        $fiberSession = null;
+        $fiberMemory = null;
+
+        if ($sessionNeedsStartup) {
+            $fiberSession = new \Fiber(function () use ($sessionDefinition, $requesterInstanceName, $frontend, $forceRestart): array {
+                return $this->withRoleLock((string) $sessionDefinition['role'], function () use (
+                    $sessionDefinition,
+                    $requesterInstanceName,
+                    $frontend,
+                    $forceRestart
+                ): array {
+                    return $this->prepareSharedServiceUnderLock(
+                        $sessionDefinition,
+                        $requesterInstanceName,
+                        $frontend,
+                        $forceRestart
+                    );
+                });
+            });
+        }
+
+        if ($memoryNeedsStartup && $memoryDefinition !== null) {
+            $fiberMemory = new \Fiber(function () use ($memoryDefinition, $requesterInstanceName, $frontend, $forceRestart): array {
+                return $this->withRoleLock((string) $memoryDefinition['role'], function () use (
                     $memoryDefinition,
                     $requesterInstanceName,
                     $frontend,
                     $forceRestart
-                );
+                ): array {
+                    return $this->prepareSharedServiceUnderLock(
+                        $memoryDefinition,
+                        $requesterInstanceName,
+                        $frontend,
+                        $forceRestart
+                    );
+                });
             });
         }
 
+        // 启动所有 Fiber
+        $sessionPrepare = $sessionNeedsStartup ? $fiberSession->start() : $sessionProbe;
+        $memoryPrepare = $memoryNeedsStartup && $fiberMemory !== null ? $fiberMemory->start() : $memoryProbe;
+
+        // 等待 Fiber 完成（如果它们还在运行）
+        if ($sessionNeedsStartup && $fiberSession !== null && !$fiberSession->isTerminated()) {
+            $sessionPrepare = $fiberSession->get();
+        }
+        if ($memoryNeedsStartup && $fiberMemory !== null && !$fiberMemory->isTerminated()) {
+            $memoryPrepare = $fiberMemory->get();
+        }
+
+        // 收集所有需要等待就绪的服务
         $pendingDefinitions = [];
         if (($sessionPrepare['status'] ?? '') === 'pending') {
             $pendingDefinitions[] = $sessionPrepare['definition'];
         }
-        if ($memoryPrepare !== null && (($memoryPrepare['status'] ?? '') === 'pending')) {
+        if ($memoryPrepare !== null && ($memoryPrepare['status'] ?? '') === 'pending') {
             $pendingDefinitions[] = $memoryPrepare['definition'];
         }
 
+        // 并发等待所有 pending 服务就绪（关键优化：真正并发探活）
         $batchReady = [];
         if ($pendingDefinitions !== []) {
             $roleLabels = [];
@@ -116,13 +159,14 @@ class SharedStateServiceManager
             $batchReady = $this->waitUntilSharedServicesReadyBatch($pendingDefinitions);
         }
 
+        // 组装结果
         $runtime = [
             'session' => ($sessionPrepare['status'] ?? '') === 'ready'
                 ? $sessionPrepare['runtime']
                 : ($batchReady[(string) $sessionDefinition['role']] ?? []),
         ];
 
-        if ($this->isMemoryEnabled($config, $envConfig)) {
+        if ($memoryDefinition !== null) {
             $memoryRole = ControlMessage::ROLE_MEMORY_SERVER;
             $runtime['memory'] = ($memoryPrepare !== null && ($memoryPrepare['status'] ?? '') === 'ready')
                 ? $memoryPrepare['runtime']
@@ -145,7 +189,7 @@ class SharedStateServiceManager
             $runtime['session'],
             $requesterInstanceName
         );
-        if ($this->isMemoryEnabled($config, $envConfig)) {
+        if ($memoryDefinition !== null) {
             $runtime['memory'] = $this->finalizeEnsuredRuntime(
                 ControlMessage::ROLE_MEMORY_SERVER,
                 $runtime['memory'],
@@ -155,6 +199,51 @@ class SharedStateServiceManager
             $runtime['memory'] = $this->mergeRuntimeWithRegistryMetadata(
                 ControlMessage::ROLE_MEMORY_SERVER,
                 $runtime['memory']
+            );
+        }
+
+        return $runtime;
+    }
+
+    /**
+     * 快速探测服务状态，无需锁
+     */
+    private function quickProbe(array $definition): array
+    {
+        $probe = $this->probeDefinition($definition);
+        if ((bool) ($probe['healthy'] ?? false)) {
+            $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
+            $runtime['reuse_existing'] = true;
+            $runtime['shared_service'] = true;
+            return ['status' => 'ready', 'runtime' => $runtime];
+        }
+        return ['status' => 'pending', 'definition' => $definition];
+    }
+
+    /**
+     * 从快速探测结果构建运行时数据
+     */
+    private function buildRuntimeFromQuickProbe(array $sessionProbe, ?array $memoryProbe, string $requesterInstanceName): array
+    {
+        $runtime = [
+            'session' => $sessionProbe['runtime'] ?? [],
+        ];
+        if ($memoryProbe !== null) {
+            $runtime['memory'] = $memoryProbe['runtime'] ?? [];
+        } else {
+            $runtime['memory'] = ['enabled' => false, 'healthy' => false, 'shared_service' => false];
+        }
+
+        $runtime['session'] = $this->finalizeEnsuredRuntime(
+            ControlMessage::ROLE_SESSION_SERVER,
+            $runtime['session'],
+            $requesterInstanceName
+        );
+        if ($memoryProbe !== null) {
+            $runtime['memory'] = $this->finalizeEnsuredRuntime(
+                ControlMessage::ROLE_MEMORY_SERVER,
+                $runtime['memory'],
+                $requesterInstanceName
             );
         }
 
@@ -226,9 +315,7 @@ class SharedStateServiceManager
                     $definition,
                     \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []
                 );
-                if (\defined('IS_WIN') && IS_WIN) {
-                    SchedulerSystem::usleep(500_000);
-                }
+                // 注意：不再在锁内等待，给其他服务并发启动的机会
             } else {
                 $runtime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
                 $runtime['reuse_existing'] = true;
@@ -257,9 +344,7 @@ class SharedStateServiceManager
 
         if ((bool) ($probe['reusable_but_unhealthy'] ?? false)) {
             $this->forceStopReusedService($definition, \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : []);
-            if (\defined('IS_WIN') && IS_WIN) {
-                SchedulerSystem::usleep(500_000);
-            }
+            // 注意：不再在锁内等待，给其他服务并发启动的机会
         }
         WlsLogger::info_(
             '[SharedStateServiceManager] 启动共享服务 (角色: ' . (string) $definition['role']
@@ -307,7 +392,7 @@ class SharedStateServiceManager
             $pending[$roleKey] = $definition;
         }
 
-        $pollIntervals = [50_000, 100_000, 150_000, 200_000];
+        $pollIntervals = [10_000, 20_000, 50_000, 100_000];  // 优化：加快探活频率
         $pollIndex = 0;
         $done = [];
 
@@ -385,9 +470,7 @@ class SharedStateServiceManager
 
         $prepare = $this->withRoleLock((string) $definition['role'], function () use ($definition, $requesterInstanceName, $frontend): array {
             $this->forceStopReusedService($definition, []);
-            if (\defined('IS_WIN') && IS_WIN) {
-                SchedulerSystem::usleep(500_000);
-            }
+            // 注意：不再在锁内等待，给其他服务并发启动的机会
             WlsLogger::info_(
                 "[SharedStateServiceManager] 启动共享服务 (角色: " . (string) $definition['role']
                 . ", 请求者实例名称: $requesterInstanceName, 前台模式: " . ($frontend ? '是' : '否') . ')'
@@ -1037,8 +1120,8 @@ class SharedStateServiceManager
                     $locked = true;
                     break;
                 }
-                // 等待 100ms 后重试
-                SchedulerSystem::usleep(100_000);
+                // 等待 20ms 后重试（优化：加快锁竞争响应）
+                SchedulerSystem::usleep(20_000);
             }
 
             if (!$locked) {
