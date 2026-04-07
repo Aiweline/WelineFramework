@@ -65,7 +65,7 @@ class SessionStateFacade implements SessionStateFacadeInterface
             }
 
             $client = $sessionClient ?? $this->createSessionClient($host, $port, $serviceOptions);
-            $client->connect();
+            // 延迟到首个真实请求时再走连接池获取，避免构造阶段重复探测。
             $this->sessionClient = $client;
         } catch (\Throwable $throwable) {
             $this->cleanupInitializationFailure();

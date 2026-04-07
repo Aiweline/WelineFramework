@@ -68,4 +68,16 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertTrue((bool) $event->getData('result'));
         self::assertSame(1, $gateway->statusCalls);
     }
+
+    public function testMaintenanceWorkerRuntimeFlagIsWiredIntoWorkerEntriesAndInterceptor(): void
+    {
+        $workerSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/bin/worker.php');
+        $workerSslSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/bin/worker_ssl.php');
+        $interceptorSource = (string) \file_get_contents(BP . 'app/code/Weline/Maintenance/Observer/MaintenanceInterceptor.php');
+
+        self::assertStringContainsString("define('WLS_MAINTENANCE_WORKER', true)", $workerSource);
+        self::assertStringContainsString("define('WLS_MAINTENANCE_WORKER', true)", $workerSslSource);
+        self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $interceptorSource);
+        self::assertStringContainsString('sendMaintenanceResponse()', $interceptorSource);
+    }
 }

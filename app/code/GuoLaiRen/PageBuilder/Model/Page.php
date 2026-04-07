@@ -545,10 +545,10 @@ class Page extends Model
         return [
             self::TYPE_HOME,
             self::TYPE_ABOUT,
+            self::TYPE_PRIVACY_POLICY,
+            self::TYPE_TERMS_OF_SERVICE,
             self::TYPE_BLOG_LIST,
             self::TYPE_CONTACT,
-            self::TYPE_TERMS_OF_SERVICE,
-            self::TYPE_PRIVACY_POLICY,
         ];
     }
 

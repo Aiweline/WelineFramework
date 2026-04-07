@@ -25,13 +25,13 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
     {
         $themeMock = $this->createMock(WelineTheme::class);
         $layoutService = $this->createMock(ThemeLayoutService::class);
-        $versionService = $this->createMock(ThemeLayoutVersionService::class);
         $cacheGenerator = $this->createMock(ThemeCacheGenerator::class);
         $positionResolver = $this->createMock(WidgetPositionResolver::class);
         $widgetRegistry = $this->createMock(WidgetRegistry::class);
         $meta = $this->createMock(Meta::class);
-        $previewTokenService = $this->createMock(PreviewTokenService::class);
         $editorLockService = $this->createMock(EditorLockService::class);
+        $versionService = ObjectManager::getInstance(ThemeLayoutVersionService::class);
+        $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
 
         $controller = new ThemeEditor(
             $themeMock,
@@ -64,7 +64,8 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
 
         $themeLayout = $this->getMockBuilder(ThemeLayout::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['clearQuery', 'where', 'select', 'fetchArray', 'delete', 'fetch'])
+            ->onlyMethods(['delete'])
+            ->addMethods(['clearQuery', 'where', 'select', 'fetchArray', 'fetch'])
             ->getMock();
 
         $themeLayout->method('clearQuery')->willReturnSelf();
