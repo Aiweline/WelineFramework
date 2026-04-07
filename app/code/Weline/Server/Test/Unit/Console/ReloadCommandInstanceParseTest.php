@@ -66,6 +66,16 @@ final class ReloadCommandInstanceParseTest extends TestCase
         self::assertSame('default', $instance);
     }
 
+    public function testHelpMentionsMaintenanceRecommendationForForceReload(): void
+    {
+        $reload = new Reload();
+        $help = (string) $reload->help();
+
+        self::assertStringContainsString('维护模式', $help);
+        self::assertStringContainsString('停机型更新', $help);
+        self::assertStringContainsString('server:reload -f', $help);
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);

@@ -75,4 +75,36 @@ class AiSitePageBlueprintServiceTest extends TestCase
             (string)($heroSection['config']['description'] ?? '')
         );
     }
+    public function testBuildPageBlueprintDoesNotLeakInternalBriefOrPromptMarkers(): void
+    {
+        $service = new AiSitePageBlueprintService();
+        $rawBrief = '我想做一个印度市场的棋牌网站，推广apk，并且希望首页突出下载转化。';
+        $scope = [
+            'brief_description' => $rawBrief,
+            'user_description' => $rawBrief,
+            'virtual_pages_by_type' => [
+                Page::TYPE_HOME => [
+                    'ai_description' => "首页 页面重点：{$rawBrief}\n站点简报：{$rawBrief}",
+                ],
+            ],
+        ];
+        $websiteProfile = [
+            'site_title' => 'AI Site',
+            'site_tagline' => 'Fast play, clear start',
+            'brief_description' => $rawBrief,
+            'target_domain' => '',
+        ];
+
+        $homeBlueprint = $service->buildPageBlueprint(Page::TYPE_HOME, $scope, $websiteProfile);
+        $heroSection = $homeBlueprint['sections'][0] ?? [];
+        $heroDescription = (string)($heroSection['config']['description'] ?? '');
+
+        self::assertStringNotContainsString('我想做', $homeBlueprint['ai_description']);
+        self::assertStringNotContainsString('页面重点', $homeBlueprint['ai_description']);
+        self::assertStringNotContainsString('站点简报', $homeBlueprint['ai_description']);
+        self::assertStringNotContainsString('推广apk', $homeBlueprint['ai_description']);
+        self::assertStringContainsString('印度市场', $homeBlueprint['ai_description']);
+        self::assertStringNotContainsString('我想做', $heroDescription);
+        self::assertStringNotContainsString('推广apk', $heroDescription);
+    }
 }
