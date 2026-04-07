@@ -56,6 +56,16 @@ if (!$session instanceof \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession) {
 $publicId = $session->getPublicId();
 $currentStage = (string)($state['stage'] ?? \GuoLaiRen\PageBuilder\Model\AiSiteAgentSession::STAGE_VIRTUAL_THEME);
 $websiteProfile = \is_array($state['website_profile'] ?? null) ? $state['website_profile'] : [];
+$cfgDebugSiteTitle = \trim((string)($this->getData('ai_site_debug_default_site_title') ?? ''));
+$cfgDebugBrief = \trim((string)($this->getData('ai_site_debug_default_brief') ?? ''));
+$guidedWorkspaceSiteTitle = \trim((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''));
+if ($guidedWorkspaceSiteTitle === '' && $cfgDebugSiteTitle !== '') {
+    $guidedWorkspaceSiteTitle = $cfgDebugSiteTitle;
+}
+$guidedWorkspaceBrief = \trim((string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''));
+if ($guidedWorkspaceBrief === '' && $cfgDebugBrief !== '') {
+    $guidedWorkspaceBrief = $cfgDebugBrief;
+}
 $pageTypes = $scope['page_types'] ?? [];
 $pageTypes = \is_array($pageTypes) ? $pageTypes : [];
 $pageTypeLabels = \GuoLaiRen\PageBuilder\Model\Page::getPageTypes();
@@ -152,10 +162,10 @@ foreach ($guidedSteps as $i => $s) {
 ?>
 <?php
 $guidedScopeDefaults = [
-    'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
+    'site_title' => $guidedWorkspaceSiteTitle,
     'site_tagline' => (string)($websiteProfile['site_tagline'] ?? $scope['site_tagline'] ?? ''),
     'target_domain' => (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
-    'brief_description' => (string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
+    'brief_description' => $guidedWorkspaceBrief,
     'site_profile_manual' => \is_array($scope['site_profile_manual'] ?? null) ? $scope['site_profile_manual'] : [],
 ];
 $guidedSessionSummary = [
@@ -184,21 +194,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         ? (string)((int)($domainPurchaseState['purchase_order_id'] ?? 0))
         : (string)__('暂未生成'));
 ?>
-<!--
-$domainActionLabel = match ($domainStatus) {
-    'completed' => (string)__('宸茶喘涔?),
-    'queued', 'running' => (string)__('璐拱杩涜涓?),
-    'failed' => (string)__('閲嶆柊璐拱'),
-    default => (string)__('纭璐拱鍩熷悕'),
-};
-$domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
-    ? (string)((int)($domainPurchaseState['order_id'] ?? 0))
-    : ((int)($domainPurchaseState['purchase_order_id'] ?? 0) > 0
-        ? (string)((int)($domainPurchaseState['purchase_order_id'] ?? 0))
-        : (string)__('绛夊緟鐢熸垚'));
--->
-<?php
-?>
 <?php if ($guidedUi): ?>
 <?php /* ============================================================
    GUIDED UI（默认，快速模式）
@@ -216,9 +211,15 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 .pb-guided-steps { display: flex; gap: 0; margin: 1.5rem 0 1rem; border-radius: 12px; overflow: hidden; background: var(--backend-color-bg-secondary, #f0f2f5); padding: 4px; }
 .pb-guided-header,
 .pb-guided-steps,
-.pb-guided-session-summary,
 .pb-guided > .card.bg-soft-info {
     grid-column: 1 / -1;
+}
+.pb-guided-body {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 360px;
+    gap: 1rem 1.25rem;
+    align-items: start;
 }
 .pb-guided-step { flex: 1; display: flex; align-items: center; gap: .5rem; padding: .6rem 1rem; border-radius: 8px; font-size: .875rem; font-weight: 500; color: var(--backend-color-text-secondary, #6b7280); cursor: default; transition: all .2s; }
 .pb-guided-step.active { background: var(--backend-color-bg-primary, #fff); color: var(--backend-color-primary, #2563eb); box-shadow: 0 1px 4px rgba(0,0,0,.1); }
@@ -230,14 +231,35 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 .pb-guided-panel {
     grid-column: 1;
     width: 100%;
-    max-width: 980px;
-    justify-self: center;
+    max-width: 100%;
+    justify-self: stretch;
+    min-width: 0;
 }
-.pb-guided .pb-ai-workspace-log-panel {
+.pb-guided-sidebar {
     grid-column: 2;
-    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     position: sticky;
     top: 24px;
+    align-self: start;
+    min-width: 0;
+}
+.pb-guided .pb-ai-workspace-log-panel {
+    margin-bottom: 0;
+}
+.pb-guided-sidebar .pb-guided-session-summary {
+    margin-bottom: 0;
+}
+.pb-guided-sidebar .pb-guided-session-summary .summary-grid {
+    grid-template-columns: 1fr;
+}
+.pb-guided-sidebar .pb-guided-session-summary .card-body {
+    padding: 1rem !important;
+}
+.pb-guided-sidebar .pb-ai-workspace-log-panel .card-body.pt-0 {
+    max-height: min(50vh, 380px);
+    overflow: auto;
 }
 @keyframes pb-guided-fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 .pb-guided-main { display: flex; flex-direction: column; gap: 1rem; }
@@ -304,12 +326,21 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     .pb-guided {
         grid-template-columns: 1fr;
     }
+    .pb-guided-body {
+        grid-template-columns: 1fr;
+    }
     .pb-guided-panel,
-    .pb-guided .pb-ai-workspace-log-panel {
+    .pb-guided-sidebar {
         grid-column: 1;
         max-width: none;
         justify-self: stretch;
         position: static;
+    }
+    .pb-guided-sidebar {
+        order: 2;
+    }
+    .pb-guided-panel {
+        order: 1;
     }
 }
 .pb-guided-preview-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 320px; background: var(--backend-color-bg-secondary, #f8fafc); border-radius: 16px; border: 2px dashed var(--backend-color-border-default, #e2e8f0); color: var(--backend-color-text-tertiary, #94a3b8); gap: .75rem; }
@@ -392,45 +423,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         <?php endforeach; ?>
     </div>
 
-    <div class="pb-guided-session-summary">
-        <div class="card-body p-4">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                <div>
-                    <h6 class="mb-1"><?= htmlspecialchars((string)__('已恢复会话信息'), ENT_QUOTES, 'UTF-8') ?></h6>
-                    <p class="text-muted mb-0"><?= htmlspecialchars((string)__('重新打开会话时，这里会保留你之前填写的站点名称、域名、需求摘要和页面类型。'), ENT_QUOTES, 'UTF-8') ?></p>
-                </div>
-                <span class="badge bg-soft-info text-info"><?= htmlspecialchars((string)__('public_id: %{1}', [\substr($publicId, 0, 8) . '...']), ENT_QUOTES, 'UTF-8') ?></span>
-            </div>
-            <div class="summary-grid">
-                <div class="summary-item">
-                    <span class="summary-label"><?= htmlspecialchars((string)__('站点名称'), ENT_QUOTES, 'UTF-8') ?></span>
-                    <div class="summary-value<?= $guidedSessionSummary['site_title'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['site_title'] !== '' ? $guidedSessionSummary['site_title'] : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label"><?= htmlspecialchars((string)__('一句话定位'), ENT_QUOTES, 'UTF-8') ?></span>
-                    <div class="summary-value<?= $guidedSessionSummary['site_tagline'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['site_tagline'] !== '' ? $guidedSessionSummary['site_tagline'] : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label"><?= htmlspecialchars((string)__('目标域名'), ENT_QUOTES, 'UTF-8') ?></span>
-                    <div class="summary-value<?= $guidedSessionSummary['target_domain'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['target_domain'] !== '' ? $guidedSessionSummary['target_domain'] : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label"><?= htmlspecialchars((string)__('页面类型'), ENT_QUOTES, 'UTF-8') ?></span>
-                    <?php if ($guidedSessionSummary['page_types'] !== []): ?>
-                        <div class="summary-tags">
-                            <?php foreach ($guidedSessionSummary['page_types'] as $summaryPageType): ?>
-                                <span class="summary-tag"><?= htmlspecialchars((string)($pageTypeLabels[$summaryPageType] ?? $summaryPageType), ENT_QUOTES, 'UTF-8') ?></span>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="summary-value is-empty"><?= htmlspecialchars((string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
-                    <?php endif; ?>
-                </div>
-            </div>
-            <div class="summary-brief"><?= htmlspecialchars($guidedSessionSummary['brief_description'] !== '' ? $guidedSessionSummary['brief_description'] : (string)__('还没有保存需求摘要。'), ENT_QUOTES, 'UTF-8') ?></div>
-        </div>
-    </div>
-
     <div class="card border-0 shadow-sm mb-3 bg-soft-info">
         <div class="card-body py-3 px-3">
             <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
@@ -457,27 +449,23 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         </div>
     </div>
 
-    <?php /* 主内容区 */ ?>
-    <details class="card border-0 shadow-sm mb-3 pb-ai-workspace-log-panel" open>
-        <summary class="card-body fw-semibold d-flex align-items-center justify-content-between" style="cursor:pointer;list-style:none;">
-            <span><?= htmlspecialchars((string)__('工作区日志'), ENT_QUOTES, 'UTF-8') ?></span>
-            <span class="text-muted small"><?= htmlspecialchars((string)__('可在任意阶段展开查看构建进度'), ENT_QUOTES, 'UTF-8') ?></span>
-        </summary>
-        <div class="card-body pt-0">
-            <w:theme:sse-terminal id="pagebuilder-workspace-terminal" title="@lang{工作区日志}" height="420px" events="start,snapshot,log,done,error,warning,info" show-start-toggle="false" />
-        </div>
-    </details>
-
+    <div class="pb-guided-body">
     <div class="pb-guided-panel">
         <?php if ($currentStage === 'virtual_theme'): ?>
         <div class="pb-guided-main">
             <div class="card">
                 <div class="card-body p-4">
-                    <div class="row g-3">
+                    <div class="pb-guided-needs-section mb-1">
+                        <h5 class="fw-semibold mb-2 d-flex align-items-center gap-2">
+                            <i class="mdi mdi-account-voice text-primary"></i>
+                            <?= htmlspecialchars((string)__('我的需求'), ENT_QUOTES, 'UTF-8') ?>
+                        </h5>
+                        <p class="text-muted small mb-3"><?= htmlspecialchars((string)__('站点名称、域名、描述与页面类型会直接影响生成结果，请优先填写完整。'), ENT_QUOTES, 'UTF-8') ?></p>
+                        <div class="row g-3">
                         <div class="col-md-8">
                             <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('站点名称'), ENT_QUOTES, 'UTF-8') ?></label>
                             <input class="form-control" id="pb-ai-site-title" type="text"
-                                   value="<?= htmlspecialchars((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                   value="<?= htmlspecialchars($guidedWorkspaceSiteTitle, ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="<?= htmlspecialchars((string)__('例如：时尚精品店'), ENT_QUOTES, 'UTF-8') ?>">
                         </div>
                         <div class="col-md-4">
@@ -486,93 +474,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                                    value="<?= htmlspecialchars((string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
                                    placeholder="<?= htmlspecialchars((string)__('如已有域名可填入'), ENT_QUOTES, 'UTF-8') ?>">
                         </div>
-                        <div class="col-md-8">
-                            <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('Registrar Account'), ENT_QUOTES, 'UTF-8') ?></label>
-                            <?php /* ?>
-                            <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('注册商账户'), ENT_QUOTES, 'UTF-8') ?></label>
-                            <?php */ ?>
-                            <!--
-                            <?php /* ?>
-                            <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('璐拱鏈嶅姟鍟嗚处鍙?), ENT_QUOTES, 'UTF-8') ?></label>
-                            <?php */ ?>
-                            -->
-                            <select class="form-select" id="pb-ai-registrar-account">
-                                <option value=""><?= htmlspecialchars((string)__('Auto Select by AI'), ENT_QUOTES, 'UTF-8') ?></option>
-                                <?php /* ?>
-                                <option value=""><?= htmlspecialchars((string)__('由 AI 自动选择'), ENT_QUOTES, 'UTF-8') ?></option>
-                                <?php */ ?>
-                                <!--
-                                <?php /* ?>
-                                <option value=""><?= htmlspecialchars((string)__('璁?AI 缁х画鎺ㄨ崘'), ENT_QUOTES, 'UTF-8') ?></option>
-                                <?php */ ?>
-                                -->
-                                <?php foreach ($registrarAccounts as $account): ?>
-                                    <?php $accountId = (int)($account['account_id'] ?? 0); if ($accountId <= 0) { continue; } ?>
-                                    <option value="<?= $accountId ?>"<?= $accountId === $preferredRegistrarAccountId ? ' selected' : '' ?> data-label="<?= htmlspecialchars((string)($account['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                        <?= htmlspecialchars((string)($account['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <div class="form-text" id="pb-ai-registrar-help">
-                                <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI recommends: {label}', ['label' => $recommendedRegistrarLabel]) : (string)__('If no registrar account is chosen, AI will use the default available account.'), ENT_QUOTES, 'UTF-8') ?>
-                                <?php /* ?>
-                                <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI 褰撳墠鎺ㄨ崘锛?{label}', ['label' => $recommendedRegistrarLabel]) : (string)__('鍙厛鐐瑰嚮鈥滄帹鑽愬煙鍚嶁€濓紝AI 浼氫竴璧风粰鍑烘洿閫傚悎鐨勬湇鍔″晢鎺ㄨ崘銆?), ENT_QUOTES, 'UTF-8') ?>
-                                <?php */ ?>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="border rounded p-3 bg-light">
-                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                    <div>
-                                        <div class="fw-semibold"><?= htmlspecialchars((string)__('AI 鎺ㄨ崘鍩熷悕'), ENT_QUOTES, 'UTF-8') ?></div>
-                                        <div class="text-muted small"><?= htmlspecialchars((string)__('鍏堟帹鑽愬彲鐢ㄥ煙鍚嶏紝纭鍚庡啀璐拱锛岄伩鍏嶆墜鍔ㄦ嬁涓嶅噯銆?), ENT_QUOTES, 'UTF-8') ?></div>
-                                    </div>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-recommend-domain-btn">
-                                        <i class="mdi mdi-auto-fix me-1"></i><?= htmlspecialchars((string)__('鎺ㄨ崘鍩熷悕'), ENT_QUOTES, 'UTF-8') ?>
-                                    </button>
-                                </div>
-                                <div class="alert alert-light border d-none mb-2" id="pb-ai-domain-recommendation" role="status"></div>
-                                <div class="d-flex flex-wrap gap-2" id="pb-ai-recommended-domain-list">
-                                    <?php foreach ($recommendedDomainList as $recommendedDomain): ?>
-                                        <button type="button" class="btn btn-sm btn-soft-secondary pb-ai-domain-suggestion" data-domain="<?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>">
-                                            <?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>
-                                        </button>
-                                    <?php endforeach; ?>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="border rounded p-3">
-                                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
-                                    <div>
-                                        <span class="badge <?= htmlspecialchars($domainStatusBadgeClass, ENT_QUOTES, 'UTF-8') ?>" id="site-builder-domain-status-badge"><?= htmlspecialchars((string)($domainPurchaseState['status_label'] ?? __('寰呭惎鍔?)), ENT_QUOTES, 'UTF-8') ?></span>
-                                        <div class="fw-semibold mt-2"><?= htmlspecialchars((string)__('购买域名'), ENT_QUOTES, 'UTF-8') ?></div>
-                                        <div class="text-muted small" id="site-builder-domain-message"><?= htmlspecialchars((string)($domainPurchaseState['message'] ?? __('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。')), ENT_QUOTES, 'UTF-8') ?></div>
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-sm" id="site-builder-start-domain-purchase"<?= \in_array($domainStatus, ['queued', 'running'], true) ? ' disabled' : '' ?>>
-                                        <?= htmlspecialchars($domainActionLabel, ENT_QUOTES, 'UTF-8') ?>
-                                    </button>
-                                </div>
-                                <div class="row g-2 mt-1">
-                                    <div class="col-md-5">
-                                        <div class="small text-muted"><?= htmlspecialchars((string)__('目标域名'), ENT_QUOTES, 'UTF-8') ?></div>
-                                        <strong id="site-builder-domain-progress-domain"><?= htmlspecialchars((string)($domainPurchaseState['domain'] ?? ($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? __('寰呯‘璁?))), ENT_QUOTES, 'UTF-8') ?></strong>
-                                    </div>
-                                    <div class="col-md-4">
-                                        <div class="small text-muted"><?= htmlspecialchars((string)__('当前阶段'), ENT_QUOTES, 'UTF-8') ?></div>
-                                        <strong id="site-builder-domain-stage"><?= htmlspecialchars((string)($domainPurchaseState['stage_label'] ?? __('购买域名')), ENT_QUOTES, 'UTF-8') ?></strong>
-                                    </div>
-                                    <div class="col-md-3">
-                                        <div class="small text-muted"><?= htmlspecialchars((string)__('流程订单'), ENT_QUOTES, 'UTF-8') ?></div>
-                                        <strong id="site-builder-domain-order-id"><?= htmlspecialchars($domainOrderDisplay, ENT_QUOTES, 'UTF-8') ?></strong>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         <div class="col-12">
                             <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('一句话描述你的网站'), ENT_QUOTES, 'UTF-8') ?></label>
                             <textarea class="form-control" id="pb-ai-brief-description" rows="3"
-                                      placeholder="<?= htmlspecialchars((string)__('描述网站的主题、风格和主要功能，越详细 AI 生成效果越好'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                                      placeholder="<?= htmlspecialchars((string)__('描述网站的主题、风格和主要功能，越详细 AI 生成效果越好'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($guidedWorkspaceBrief, ENT_QUOTES, 'UTF-8') ?></textarea>
                         </div>
                         <div class="col-12">
                             <label class="form-label d-block"><?= htmlspecialchars((string)__('需要的页面'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -599,6 +504,88 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                                 <?php endforeach; ?>
                             </div>
                             <?php endif; ?>
+                        </div>
+                        </div>
+                    </div>
+                    <hr class="my-4 opacity-25">
+                    <div class="pb-guided-domain-section">
+                        <h5 class="fw-semibold mb-3 d-flex align-items-center gap-2">
+                            <i class="mdi mdi-earth text-primary"></i>
+                            <?= htmlspecialchars((string)__('域名与注册商'), ENT_QUOTES, 'UTF-8') ?>
+                        </h5>
+                        <div class="row g-3">
+                        <div class="col-md-8">
+                            <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('Registrar Account'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <?php /* ?>
+                            <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('注册商账户'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <?php */ ?>
+                            <select class="form-select" id="pb-ai-registrar-account">
+                                <option value=""><?= htmlspecialchars((string)__('Auto Select by AI'), ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php /* ?>
+                                <option value=""><?= htmlspecialchars((string)__('由 AI 自动选择'), ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php */ ?>
+                                <?php foreach ($registrarAccounts as $account): ?>
+                                    <?php $accountId = (int)($account['account_id'] ?? 0); if ($accountId <= 0) { continue; } ?>
+                                    <option value="<?= $accountId ?>"<?= $accountId === $preferredRegistrarAccountId ? ' selected' : '' ?> data-label="<?= htmlspecialchars((string)($account['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                        <?= htmlspecialchars((string)($account['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text" id="pb-ai-registrar-help">
+                                <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI recommends: {label}', ['label' => $recommendedRegistrarLabel]) : (string)__('If no registrar account is chosen, AI will use the default available account.'), ENT_QUOTES, 'UTF-8') ?>
+                                <?php /* 中文文案见 i18n：AI 当前推荐：{label} / 可先点击「推荐域名」… */ ?>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-3 bg-light">
+                                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                    <div>
+                                        <span class="badge <?= htmlspecialchars($domainStatusBadgeClass, ENT_QUOTES, 'UTF-8') ?>" id="site-builder-domain-status-badge"><?= htmlspecialchars((string)($domainPurchaseState['status_label'] ?? __('Pending')), ENT_QUOTES, 'UTF-8') ?></span>
+                                        <div class="fw-semibold mt-2"><?= htmlspecialchars((string)__('Purchase Domain'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="text-muted small" id="site-builder-domain-message"><?= htmlspecialchars((string)($domainPurchaseState['message'] ?? __('After confirmation, the system will continue DNS, CDN, and follow-up status handling.')), ENT_QUOTES, 'UTF-8') ?></div>
+                                    </div>
+                                    <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-recommend-domain-btn">
+                                        <i class="mdi mdi-auto-fix me-1"></i><?= htmlspecialchars((string)__('推荐域名'), ENT_QUOTES, 'UTF-8') ?>
+                                    </button>
+                                </div>
+                                <div class="alert alert-light border d-none mb-2" id="pb-ai-domain-recommendation" role="status"></div>
+                                <div class="d-flex flex-wrap gap-2" id="pb-ai-recommended-domain-list">
+                                    <?php foreach ($recommendedDomainList as $recommendedDomain): ?>
+                                        <button type="button" class="btn btn-sm btn-soft-secondary pb-ai-domain-suggestion" data-domain="<?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars((string)$recommendedDomain, ENT_QUOTES, 'UTF-8') ?>
+                                        </button>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="border rounded p-3">
+                                <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                                    <div>
+                                        <span class="badge <?= htmlspecialchars($domainStatusBadgeClass, ENT_QUOTES, 'UTF-8') ?>" id="site-builder-domain-status-badge"><?= htmlspecialchars((string)($domainPurchaseState['status_label'] ?? __('Pending')), ENT_QUOTES, 'UTF-8') ?></span>
+                                        <div class="fw-semibold mt-2"><?= htmlspecialchars((string)__('Purchase Domain'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <div class="text-muted small" id="site-builder-domain-message"><?= htmlspecialchars((string)($domainPurchaseState['message'] ?? __('After confirmation, the system will continue DNS, CDN, and follow-up status handling.')), ENT_QUOTES, 'UTF-8') ?></div>
+                                    </div>
+                                    <button type="button" class="btn btn-primary btn-sm" id="site-builder-start-domain-purchase"<?= \in_array($domainStatus, ['queued', 'running'], true) ? ' disabled' : '' ?>>
+                                        <?= htmlspecialchars($domainActionLabel, ENT_QUOTES, 'UTF-8') ?>
+                                    </button>
+                                </div>
+                                <div class="row g-2 mt-1">
+                                    <div class="col-md-5">
+                                        <div class="small text-muted"><?= htmlspecialchars((string)__('Target Domain'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <strong id="site-builder-domain-progress-domain"><?= htmlspecialchars((string)($domainPurchaseState['domain'] ?? ($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? __('Pending'))), ENT_QUOTES, 'UTF-8') ?></strong>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="small text-muted"><?= htmlspecialchars((string)__('当前阶段'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <strong id="site-builder-domain-stage"><?= htmlspecialchars((string)($domainPurchaseState['stage_label'] ?? __('购买域名')), ENT_QUOTES, 'UTF-8') ?></strong>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="small text-muted"><?= htmlspecialchars((string)__('流程订单'), ENT_QUOTES, 'UTF-8') ?></div>
+                                        <strong id="site-builder-domain-order-id"><?= htmlspecialchars($domainOrderDisplay, ENT_QUOTES, 'UTF-8') ?></strong>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                         </div>
                     </div>
 
@@ -760,6 +747,56 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         </div>
         <?php endif; ?>
     </div>
+    <aside class="pb-guided-sidebar">
+        <div class="pb-guided-session-summary">
+            <div class="card-body p-4">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                    <div>
+                        <h6 class="mb-1"><?= htmlspecialchars((string)__('已恢复会话信息'), ENT_QUOTES, 'UTF-8') ?></h6>
+                        <p class="text-muted small mb-0"><?= htmlspecialchars((string)__('与当前表单同步的只读摘要，便于对照。'), ENT_QUOTES, 'UTF-8') ?></p>
+                    </div>
+                    <span class="badge bg-soft-info text-info text-wrap"><?= htmlspecialchars((string)__('public_id: %{1}', [\substr($publicId, 0, 8) . '...']), ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+                <div class="summary-grid">
+                    <div class="summary-item">
+                        <span class="summary-label"><?= htmlspecialchars((string)__('站点名称'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <div class="summary-value<?= $guidedSessionSummary['site_title'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['site_title'] !== '' ? $guidedSessionSummary['site_title'] : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label"><?= htmlspecialchars((string)__('一句话定位'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <div class="summary-value<?= $guidedSessionSummary['site_tagline'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['site_tagline'] !== '' ? $guidedSessionSummary['site_tagline'] : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label"><?= htmlspecialchars((string)__('目标域名'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <div class="summary-value<?= $guidedSessionSummary['target_domain'] === '' ? ' is-empty' : '' ?>"><?= htmlspecialchars($guidedSessionSummary['target_domain'] !== '' ? $guidedSessionSummary['target_domain'] : (string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label"><?= htmlspecialchars((string)__('页面类型'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php if ($guidedSessionSummary['page_types'] !== []): ?>
+                            <div class="summary-tags">
+                                <?php foreach ($guidedSessionSummary['page_types'] as $summaryPageType): ?>
+                                    <span class="summary-tag"><?= htmlspecialchars((string)($pageTypeLabels[$summaryPageType] ?? $summaryPageType), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="summary-value is-empty"><?= htmlspecialchars((string)__('未填写'), ENT_QUOTES, 'UTF-8') ?></div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+                <div class="summary-brief"><?= htmlspecialchars($guidedSessionSummary['brief_description'] !== '' ? $guidedSessionSummary['brief_description'] : (string)__('还没有保存需求摘要。'), ENT_QUOTES, 'UTF-8') ?></div>
+            </div>
+        </div>
+        <details class="card border-0 shadow-sm mb-0 pb-ai-workspace-log-panel" open>
+            <summary class="card-body fw-semibold d-flex align-items-center justify-content-between py-3" style="cursor:pointer;list-style:none;">
+                <span><?= htmlspecialchars((string)__('工作区日志'), ENT_QUOTES, 'UTF-8') ?></span>
+                <span class="text-muted small"><?= htmlspecialchars((string)__('构建进度'), ENT_QUOTES, 'UTF-8') ?></span>
+            </summary>
+            <div class="card-body pt-0">
+                <w:theme:sse-terminal id="pagebuilder-workspace-terminal" title="@lang{工作区日志}" height="320px" events="start,snapshot,log,done,error,warning,info" show-start-toggle="false" />
+            </div>
+        </details>
+    </aside>
+    </div>
 </div>
 
 <?php else: ?>
@@ -868,7 +905,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 <div class="row g-3">
                     <div class="col-12">
                         <label class="form-label" for="pb-ai-site-title"><?= htmlspecialchars((string)__('站点标题'), ENT_QUOTES, 'UTF-8') ?></label>
-                        <input class="form-control" id="pb-ai-site-title" type="text" value="<?= htmlspecialchars((string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                        <input class="form-control" id="pb-ai-site-title" type="text" value="<?= htmlspecialchars($guidedWorkspaceSiteTitle, ENT_QUOTES, 'UTF-8') ?>">
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="pb-ai-site-tagline"><?= htmlspecialchars((string)__('一句话定位'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -880,7 +917,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     </div>
                     <div class="col-12">
                         <label class="form-label" for="pb-ai-brief-description"><?= htmlspecialchars((string)__('需求描述'), ENT_QUOTES, 'UTF-8') ?></label>
-                        <textarea class="form-control" id="pb-ai-brief-description" rows="5"><?= htmlspecialchars((string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''), ENT_QUOTES, 'UTF-8') ?></textarea>
+                        <textarea class="form-control" id="pb-ai-brief-description" rows="5"><?= htmlspecialchars($guidedWorkspaceBrief, ENT_QUOTES, 'UTF-8') ?></textarea>
                     </div>
                     <div class="col-12">
                         <label class="form-label d-block"><?= htmlspecialchars((string)__('页面类型'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -1423,24 +1460,44 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         ensurePurchaseDialogLoaded().then(function (dialog) {
             return dialog.open({
                 labels: {
+                    title: <?= \json_encode((string)__('Purchase Domain'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    description: <?= \json_encode((string)__('After confirming the purchase, the system will continue DNS, CDN, resolve, and follow-up lifecycle handling.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsChoice: <?= \json_encode((string)__('DNS Mode'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsFollowRegistrar: <?= \json_encode((string)__('Follow Registrar'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsCustomNameservers: <?= \json_encode((string)__('Custom Nameserver'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsNameservers: <?= \json_encode((string)__('Nameserver List'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsNameserversPlaceholder: <?= \json_encode((string)__('ns1.example.com, ns2.example.com'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnChoice: <?= \json_encode((string)__('CDN Mode'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnFollowRegistrar: <?= \json_encode((string)__('Follow Registrar'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnNone: <?= \json_encode((string)__('No CDN'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    resolveToLocal: <?= \json_encode((string)__('Resolve to Local Deployment'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    resolveHint: <?= \json_encode((string)__('Support @ and www host records when mapping the purchased domain to the current local deployment.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    subdomains: <?= \json_encode((string)__('Host Records'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    subdomainsPlaceholder: <?= \json_encode((string)__('@,www'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    startLifecycle: <?= \json_encode((string)__('Start Domain Lifecycle'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    startLifecycleHint: <?= \json_encode((string)__('After the purchase starts, the system can continue DNS and HTTPS related follow-up processing.'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    confirm: <?= \json_encode((string)__('Confirm Purchase'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cancel: <?= \json_encode((string)__('Cancel'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    <?php /* ?>
                     title: <?= \json_encode((string)__('购买域名'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     description: <?= \json_encode((string)__('确认购买后，系统会按所选策略处理 DNS、CDN、解析与后续状态跟踪。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsChoice: <?= \json_encode((string)__('DNS 绛栫暐'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsFollowRegistrar: <?= \json_encode((string)__('璺熼殢鍩熷悕鍟?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsCustomNameservers: <?= \json_encode((string)__('鑷畾涔?Nameserver'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    dnsNameservers: <?= \json_encode((string)__('Nameserver 鍒楄〃'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsChoice: <?= \json_encode((string)__('DNS 策略'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsFollowRegistrar: <?= \json_encode((string)__('跟随注册商'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsCustomNameservers: <?= \json_encode((string)__('自定义 Nameserver'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    dnsNameservers: <?= \json_encode((string)__('Nameserver 列表'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     dnsNameserversPlaceholder: <?= \json_encode((string)__('ns1.example.com, ns2.example.com'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cdnChoice: <?= \json_encode((string)__('CDN 绛栫暐'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cdnFollowRegistrar: <?= \json_encode((string)__('璺熼殢鍩熷悕鍟?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    cdnNone: <?= \json_encode((string)__('鏆備笉閰嶇疆 CDN'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    resolveToLocal: <?= \json_encode((string)__('鑷姩瑙ｆ瀽鍒版湰鏈嶅姟鍣?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    resolveHint: <?= \json_encode((string)__('榛樿浼氳В鏋?@ 鍜?www锛屽苟鎸佺画妫€鏌ュ煙鍚嶇姸鎬併€?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    subdomains: <?= \json_encode((string)__('鑷姩瑙ｆ瀽瀛愬煙鍚?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnChoice: <?= \json_encode((string)__('CDN 策略'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnFollowRegistrar: <?= \json_encode((string)__('跟随注册商'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    cdnNone: <?= \json_encode((string)__('暂不配置 CDN'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    resolveToLocal: <?= \json_encode((string)__('自动解析到本服务器'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    resolveHint: <?= \json_encode((string)__('默认会解析 @ 与 www，并持续检查域名状态。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    subdomains: <?= \json_encode((string)__('自动解析子域名'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     subdomainsPlaceholder: <?= \json_encode((string)__('@,www'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    startLifecycle: <?= \json_encode((string)__('鍚姩鍏ㄦ祦绋嬬姸鎬佽窡韪?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                    startLifecycleHint: <?= \json_encode((string)__('璐拱鍚庤嚜鍔ㄨ窡韪喘涔般€丏NS銆侀獙璇併€丠TTPS 绛夋楠ゃ€?), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    startLifecycle: <?= \json_encode((string)__('启动全流程状态跟踪'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                    startLifecycleHint: <?= \json_encode((string)__('购买后自动跟踪购买、DNS、验证、HTTPS 等步骤。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     confirm: <?= \json_encode((string)__('确认购买'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
                     cancel: <?= \json_encode((string)__('取消'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    <?php */ ?>
                 },
                 defaults: {
                     dnsChoice: 'follow_registrar',
@@ -2942,6 +2999,17 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         updateVirtualBlockState: updateVirtualBlockState,
         replaceCurrentBlockHtml: replaceCurrentBlockHtml,
         bindEmbeddedPreviewFrameBridge: bindEmbeddedPreviewFrameBridge,
+        pauseWorkspaceStream: function () {
+            if (terminal && typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
+            }
+        },
+        resumeWorkspaceStream: function () {
+            if (terminal && typeof terminal.isRunning === 'function' && terminal.isRunning()) {
+                return;
+            }
+            startWorkspaceStream();
+        },
         setVirtualPagesByType: function (pages) {
             if (pages && typeof pages === 'object') {
                 virtualPagesByTypeState = pages;
@@ -3211,6 +3279,21 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         }
         if (data && data.last_event_id) {
             lastEventId = parseInt(data.last_event_id, 10) || lastEventId;
+        }
+        if (data && data.lease_expired) {
+            if (streamLeaseTimer) {
+                window.clearInterval(streamLeaseTimer);
+                streamLeaseTimer = null;
+            }
+            reconnectAttempts = reconnectAttemptsMax;
+            var leaseMsg = (data && data.message) ? String(data.message) : '';
+            if (leaseMsg) {
+                terminal.log(leaseMsg, 'warning');
+                if (window.BackendToast && typeof window.BackendToast.warning === 'function') {
+                    window.BackendToast.warning(leaseMsg);
+                }
+            }
+            return;
         }
         reconnectAttempts = 0;
         suppressTransportErrorUntil = Date.now() + 1500;
