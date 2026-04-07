@@ -1331,11 +1331,6 @@ class Url implements UrlInterface
         
         \Weline\Framework\Runtime\StateManager::registerStaticResets(self::class, [
             'parserServer' => [],
-            'parserSites' => [],
-            'parserCurrencies' => [],
-            'parserLanguages' => [],
-            'parserMatchs' => [],
-            'parserSiteMatchs' => [],
             'parserUrlCache' => [],
             'splitUrlCache' => [],
             'parserCache' => [],
