@@ -262,6 +262,8 @@ class Dispatcher
     private ?string $deferredWorkerPoolFiberKind = null;
     private bool $spinWaitTickInProgress = false;
     private int $maintenanceTakeoverRetryTicks = 3;
+    private float $lastMaintenanceOperationLogAt = 0.0;
+    private string $lastMaintenanceOperationSignature = '';
     
     /**
      * 封禁拦截日志限流记录（IP => 上次记录时间）
@@ -440,6 +442,57 @@ class Dispatcher
             default => LogLevel::INFO,
         };
         WlsLogger::log_($logLevel, $message);
+    }
+
+    private function formatMaintenanceRoutingContext(): string
+    {
+        $workerPoolSize = $this->passthroughCore->getWorkerCount();
+        $maintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+        $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+        $healthy = (int) ($healthSummary['healthy'] ?? 0);
+        $total = (int) ($healthSummary['total'] ?? 0);
+
+        return 'maintenance_fallback_active=' . ($this->maintenanceFallbackActive ? 'true' : 'false')
+            . ', worker_pool_size=' . $workerPoolSize
+            . ', maintenance_candidates=' . ($maintenancePorts !== [] ? \implode(',', $maintenancePorts) : '(none)')
+            . ", health={$healthy}/{$total}";
+    }
+
+    private function logMaintenanceOperation(
+        string $message,
+        string $level = 'INFO',
+        ?string $signature = null,
+        float $throttleSec = 10.0
+    ): void {
+        $signature ??= $message;
+        $now = \microtime(true);
+        if (
+            $signature === $this->lastMaintenanceOperationSignature
+            && ($now - $this->lastMaintenanceOperationLogAt) < $throttleSec
+        ) {
+            return;
+        }
+
+        $this->lastMaintenanceOperationSignature = $signature;
+        $this->lastMaintenanceOperationLogAt = $now;
+        $this->log('[MaintenanceFlow] ' . $message, $level);
+    }
+
+    private function updateMaintenanceFallbackState(bool $active, string $reason): void
+    {
+        $previous = $this->maintenanceFallbackActive;
+        $this->maintenanceFallbackActive = $active;
+
+        $state = $active ? 'ACTIVE' : 'INACTIVE';
+        $transition = $previous !== $active ? '切换' : '保持';
+        $context = $this->formatMaintenanceRoutingContext();
+        $level = $active ? 'WARN' : 'INFO';
+
+        $this->logMaintenanceOperation(
+            "维护兜底{$transition}为 {$state}，reason={$reason}，{$context}",
+            $level,
+            "{$transition}:{$state}:{$reason}:{$context}"
+        );
     }
 
     private function socketId($socket): int
@@ -734,7 +787,10 @@ class Dispatcher
             $result = \is_array($payload) ? $payload : [];
             $acceptedPorts = \is_array($result['accepted'] ?? null) ? $result['accepted'] : [];
             $rejectedPorts = \is_array($result['rejected'] ?? null) ? $result['rejected'] : [];
-            $this->maintenanceFallbackActive = $acceptedPorts === [];
+            $this->updateMaintenanceFallbackState(
+                $acceptedPorts === [],
+                'SET_WORKER_POOL accepted=' . \count($acceptedPorts) . ', rejected=' . \count($rejectedPorts)
+            );
             $this->log('SET_WORKER_POOL: ' . \implode(',', $acceptedPorts), 'INFO');
             if ($rejectedPorts !== []) {
                 $items = [];
@@ -750,7 +806,10 @@ class Dispatcher
             $acceptedPorts = \is_array($payload['accepted_ports'] ?? null) ? $payload['accepted_ports'] : [];
             $rejectedParts = \is_array($payload['rejected_parts'] ?? null) ? $payload['rejected_parts'] : [];
             if ($acceptedPorts !== []) {
-                $this->maintenanceFallbackActive = false;
+                $this->updateMaintenanceFallbackState(
+                    false,
+                    'ADD_WORKER accepted=' . \implode(',', $acceptedPorts)
+                );
                 $this->log(
                     '已添加 Worker 端口到负载均衡池: ' . \implode(',', $acceptedPorts)
                     . ', 当前总数: ' . $this->passthroughCore->getWorkerCount(),
@@ -870,9 +929,34 @@ class Dispatcher
                 $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
                 if (\is_array($ports)) {
                     if ($role === ControlMessage::ROLE_MAINTENANCE) {
+                        $normalizedPorts = [];
                         foreach ($ports as $port) {
-                            $this->passthroughCore->addMaintenanceWorkerPort((int)$port);
+                            $p = (int)$port;
+                            if ($p > 0) {
+                                $normalizedPorts[$p] = $p;
+                            }
                         }
+                        $normalizedPorts = \array_values($normalizedPorts);
+
+                        // maintenance 池只更新维护端口，不得覆盖业务 worker 池，
+                        // 否则会出现业务流量在“维护/正常”之间抖动。
+                        $currentMaintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+                        foreach ($currentMaintenancePorts as $currentPort) {
+                            if (!\in_array((int)$currentPort, $normalizedPorts, true)) {
+                                $this->passthroughCore->removeMaintenanceWorkerPort((int)$currentPort);
+                            }
+                        }
+                        foreach ($normalizedPorts as $port) {
+                            $result = $this->passthroughCore->addMaintenanceWorkerPort((int)$port);
+                            if (!$result['success']) {
+                                $this->log("SET_WORKER_POOL 维护端口注册失败: {$port} - {$result['error']}", 'WARN');
+                            }
+                        }
+                        $this->log(
+                            '收到 SET_WORKER_POOL（maintenance）: 维护端口已同步，端口数: ' . \count($normalizedPorts),
+                            'INFO'
+                        );
+                        break;
                     }
                     $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports, 'role' => $role];
                     $this->log('收到 SET_WORKER_POOL（已入队异步入池），候选端口数: ' . \count($ports) . ', role: ' . $role, 'INFO');
@@ -933,6 +1017,12 @@ class Dispatcher
         $workerCount = $this->passthroughCore->getStats()['active_connections'] ?? 0;
         $this->log("Started on tcp://0.0.0.0:{$this->port}", 'INFO');
         $this->log("Instance: {$this->instanceName}, TCP Proxy Mode, DEV=" . ($this->isDevMode ? 'ON' : 'OFF'), 'INFO');
+        $this->logMaintenanceOperation(
+            'Dispatcher 启动后的维护路由初始状态：' . $this->formatMaintenanceRoutingContext(),
+            'INFO',
+            'dispatcher_start:' . $this->formatMaintenanceRoutingContext(),
+            0.0
+        );
         
         // 设置服务器 socket 为非阻塞
         \socket_set_nonblock($this->serverSocket);
@@ -1444,7 +1534,14 @@ class Dispatcher
                             ? 'worker pool is empty'
                             : 'all workers unavailable';
                         $this->log("所有 Worker 不可用! {$clientIp} (connId: {$connId}), "
-                            . "healthy: {$healthy}/{$total}, {$detail}", $logLevel);
+                            . "healthy: {$healthy}/{$total}, {$detail}, "
+                            . $this->formatMaintenanceRoutingContext(), $logLevel);
+                        $this->logMaintenanceOperation(
+                            "请求命中维护/启动兜底前置条件：client={$clientIp}, connId={$connId}, detail={$detail}, "
+                            . $this->formatMaintenanceRoutingContext(),
+                            $logLevel,
+                            "all_workers_unavailable:{$detail}:" . $this->formatMaintenanceRoutingContext()
+                        );
                         $this->lastAllWorkersUnavailableLogAt = $now;
                     }
                 }
@@ -1512,6 +1609,13 @@ class Dispatcher
             return false;
         }
 
+        $this->logMaintenanceOperation(
+            "开始尝试维护接管：client={$clientIp}, connId={$connId}, retry_ticks={$this->maintenanceTakeoverRetryTicks}, "
+            . $this->formatMaintenanceRoutingContext(),
+            'INFO',
+            'maintenance_takeover_attempt:' . $this->formatMaintenanceRoutingContext()
+        );
+
         $ticks = \max(1, $this->maintenanceTakeoverRetryTicks);
         for ($i = 0; $i < $ticks; $i++) {
             $this->pumpSpinWaitControlTick();
@@ -1524,6 +1628,12 @@ class Dispatcher
                 return true;
             }
         }
+
+        $this->logMaintenanceOperation(
+            "维护接管未成功：client={$clientIp}, connId={$connId}, {$this->formatMaintenanceRoutingContext()}",
+            'WARN',
+            'maintenance_takeover_failed:' . $this->formatMaintenanceRoutingContext()
+        );
 
         return false;
     }
