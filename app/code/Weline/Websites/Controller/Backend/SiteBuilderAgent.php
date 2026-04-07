@@ -526,6 +526,7 @@ class SiteBuilderAgent extends BackendController
         $description = \trim((string)$this->getRequestBodyValue('description', ''));
         $preferredDomain = \strtolower(\trim((string)$this->getRequestBodyValue('domain', '')));
         $accountId = (int)$this->getRequestBodyValue('account_id', 0);
+        $deferAvailability = \in_array(\strtolower(\trim((string)$this->getRequestBodyValue('defer_availability_check', ''))), ['1', 'true', 'yes', 'on'], true);
 
         if ($description === '' && $preferredDomain === '') {
             return $this->fetchJson([
@@ -551,6 +552,12 @@ class SiteBuilderAgent extends BackendController
                 ],
                 'fake_mode' => true,
             ]);
+        }
+
+        if ($deferAvailability) {
+            return $this->fetchJson(
+                $this->getWebsiteAgentService()->recommendAvailableDomain($description, $accountId, $preferredDomain, true)
+            );
         }
 
         if ($accountId <= 0) {
@@ -580,6 +587,22 @@ class SiteBuilderAgent extends BackendController
                 'success' => false,
                 'available' => false,
                 'message' => __('请先输入目标域名。'),
+            ]);
+        }
+        if ($this->isLocalWelineSubdomain($domain)) {
+            return $this->fetchJson([
+                'success' => true,
+                'available' => true,
+                'domain' => $domain,
+                'message' => __('本地测试域名 %{domain} 已强制通过可用性检查。', ['domain' => $domain]),
+                'checked_results' => [
+                    [
+                        'domain' => $domain,
+                        'available' => true,
+                        'simulated' => true,
+                    ],
+                ],
+                'simulated' => true,
             ]);
         }
         if ($accountId <= 0) {
@@ -3309,6 +3332,12 @@ class SiteBuilderAgent extends BackendController
         }
 
         return $this->isTruthyFlag($this->getRequestBodyValue('fake_mode', false));
+    }
+
+    private function isLocalWelineSubdomain(string $domain): bool
+    {
+        $domain = \strtolower(\trim($domain));
+        return $domain !== '' && \str_ends_with($domain, '.weline.local');
     }
 
     private function isTruthyFlag(mixed $value): bool

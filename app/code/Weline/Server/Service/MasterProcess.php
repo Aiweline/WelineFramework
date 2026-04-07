@@ -330,6 +330,18 @@ class MasterProcess
                 $this->log(__('  控制端口: %{1}', [$this->controlPort]));
             }
 
+            // ========== 启动前清理：检查端口占用并清理僵尸进程 ==========
+            $this->log(__('检查控制端口是否被占用...'));
+            if (!MasterCleanupBootstrap::preBoot($this->instanceName, $this->controlPort)) {
+                throw new \RuntimeException(
+                    "无法清理控制端口 {$this->controlPort}，该端口被其他进程占用。" .
+                    "请确保没有其他 WLS 实例运行，或手动杀死占用该端口的进程。"
+                );
+            }
+            
+            // 清理陈旧的锁文件（Master 上次崩溃留下的）
+            MasterCleanupBootstrap::cleanupLockFiles($this->instanceName);
+
             // 构建 ServiceContext
             $this->context = $this->buildContext();
 
@@ -355,7 +367,29 @@ class MasterProcess
             WlsLogger::error_('[Master] 启动异常: ' . $e->getMessage(), ['exception' => $e]);
             throw $e;
         } finally {
+            // 终止阶段清理：注销 Master PID 并清理子进程
             $this->unregisterMasterPid();
+            
+            // 尝试优雅关闭 Orchestrator（停止所有子进程）
+            try {
+                if ($this->orchestrator !== null && $this->orchestrator->isRunning()) {
+                    $this->log(__('Master 正在关闭，通知所有子进程...'));
+                    $this->orchestrator->stopAll('master_shutdown', null);
+                }
+            } catch (\Throwable $shutdownError) {
+                WlsLogger::warning_('[Master] 关闭子进程过程中出现错误: ' . $shutdownError->getMessage());
+            }
+            
+            // 清理 IPC 控制服务器
+            try {
+                $controlServer = $this->orchestrator?->getControlServer();
+                if ($controlServer !== null) {
+                    $controlServer->close();
+                    WlsLogger::info_('[Master] IPC 控制服务器已关闭');
+                }
+            } catch (\Throwable $ipcError) {
+                WlsLogger::debug_('[Master] IPC 关闭过程中出现错误: ' . $ipcError->getMessage());
+            }
         }
     }
     
@@ -795,7 +829,9 @@ class MasterProcess
         // 合并：保留现有配置（如 worker_port、count、ssl_enabled 等）并更新 Master 状态
         $data = \array_merge($existingData, $masterData);
 
-        @\file_put_contents($instanceFile, \json_encode($data, JSON_PRETTY_PRINT));
+        // 使用原子写入确保与Start.php的并发写入不产生竞态条件
+        // （Start.php的saveInstanceInfo()也使用了atomicWriteJsonStatic）
+        \Weline\Server\Service\ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $data, 10);
     }
 
     /**

@@ -3614,6 +3614,9 @@ class Start extends CommandAbstract
             'frontend' => $frontend,
             // 进程日志开关（-log 参数或 env 配置 system.processer.log）
             'enable_log' => $enableLog,
+            // IPC 控制端口（由 Master 进程计算并更新）
+            // 初始值设为 0，Master 启动时会根据 main_port 计算真实端口并覆盖此值
+            'control_port' => 0,
         ];
 
         // 设置 Master 运行模式
