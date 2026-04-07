@@ -1467,7 +1467,11 @@ class Dispatcher
 
     private function tryRouteToMaintenanceWorker($clientSocket, string $clientIp, int $connId): bool
     {
-        if (!$this->shouldServeMaintenanceFallback()) {
+        // 维护 Worker 已通过 ADD_WORKER(role=maintenance) 注册时，即使池已非空、启动保护已过期
+        // （shouldServeMaintenanceFallback=false），首次 handleNewConnection 仍可能因瞬时不可连失败。
+        // 此处必须继续自旋重试；否则 HTTPS 会落入 tryRespondServiceUnavailable→TLS 无法写 503→直接关断，
+        // 浏览器表现为 ERR_CONNECTION_ABORTED。
+        if (!$this->shouldAttemptMaintenanceWorkerRouting()) {
             return false;
         }
 
@@ -1485,6 +1489,18 @@ class Dispatcher
         }
 
         return false;
+    }
+
+    /**
+     * 是否应对失败连接做「维护 Worker 接管」重试（含控制面 tick + 再次 handleNewConnection）。
+     */
+    private function shouldAttemptMaintenanceWorkerRouting(): bool
+    {
+        if ($this->shouldServeMaintenanceFallback()) {
+            return true;
+        }
+
+        return $this->passthroughCore->getMaintenanceWorkerPorts() !== [];
     }
 
     private function shouldApplyStartupProtection(): bool
