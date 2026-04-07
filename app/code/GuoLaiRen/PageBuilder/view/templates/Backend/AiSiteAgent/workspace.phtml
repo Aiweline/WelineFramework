@@ -3626,6 +3626,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         closeOperationSource();
         runningOperationKey = operationKey;
         ensureWorkspaceTerminalVisible(operation);
+        if (typeof previewBridge.pauseWorkspaceStream === 'function') {
+            previewBridge.pauseWorkspaceStream();
+        }
 
         var settled = false;
         var lastServerError = '';
