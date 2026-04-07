@@ -60,6 +60,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
             'unhealthy' => 0,
             'saturated' => 0,
         ]);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'maintenanceFallbackActive', false);
@@ -74,6 +75,49 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
 
         self::assertFalse($ok);
         self::assertSame(0, $this->getProperty($dispatcher, 'requestCount'));
+
+        \fclose($socket);
+    }
+
+    public function testTryRouteToMaintenanceWorkerRunsWhenRegisteredMaintenancePortsEvenIfFallbackOff(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->expects(self::once())
+            ->method('getMaintenanceWorkerPorts')
+            ->willReturn([19002]);
+
+        $core->expects(self::exactly(2))
+            ->method('handleNewConnection')
+            ->willReturnOnConsecutiveCalls(false, true);
+
+        $core->expects(self::once())
+            ->method('getConnectionWorkerPort')
+            ->willReturn(19002);
+
+        $core->expects(self::once())
+            ->method('getWorkerHealthSummary')
+            ->willReturn([
+                'total' => 1,
+                'healthy' => 1,
+                'unhealthy' => 0,
+                'saturated' => 0,
+            ]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'maintenanceFallbackActive', false);
+        $this->setProperty($dispatcher, 'startupProtectionEnabled', false);
+        $this->setProperty($dispatcher, 'maintenanceTakeoverRetryTicks', 2);
+
+        $socket = \tmpfile();
+        self::assertIsResource($socket);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'tryRouteToMaintenanceWorker');
+        $method->setAccessible(true);
+        $ok = $method->invoke($dispatcher, $socket, '127.0.0.1', 9529);
+
+        self::assertTrue($ok);
 
         \fclose($socket);
     }

@@ -65,6 +65,20 @@ class BroadcastControlDispatchService
      *     message:string
      * }
      */
+    public function setMaintenanceMode(bool $enabled, ?string $instanceName = null, float $timeout = 6.0): array
+    {
+        $action = $enabled
+            ? ControlMessage::ACTION_MAINTENANCE_ENABLE
+            : ControlMessage::ACTION_MAINTENANCE_DISABLE;
+        $label = $enabled ? (string) __('启用维护模式') : (string) __('禁用维护模式');
+
+        return $this->dispatchToRunningInstances(
+            $instanceName,
+            $label,
+            fn(string $name): array => $this->ipcControlGateway->command($name, $action, '', [], $timeout)
+        );
+    }
+
     public function reloadSslCert(array $domains = [], ?string $instanceName = null): array
     {
         return $this->dispatchToRunningInstances(
