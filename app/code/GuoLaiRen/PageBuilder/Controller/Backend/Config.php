@@ -9,6 +9,7 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Controller\Backend;
 
+use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceDebugDefaults;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
@@ -23,6 +24,9 @@ class Config extends BackendController
     private const AREA = SystemConfig::area_BACKEND;
     private const CONFIG_KEY_AI_ENABLED = 'ai_enabled';
     private const CONFIG_KEY_I18N_ENABLED = 'i18n_enabled';
+    /** AI 建站工作台（快速模式）调试预填：会话无数据时使用，留空则不生效 */
+    private const CONFIG_KEY_AI_SITE_AGENT_DEBUG_SITE_TITLE = 'ai_site_agent_debug_site_title';
+    private const CONFIG_KEY_AI_SITE_AGENT_DEBUG_BRIEF = 'ai_site_agent_debug_brief_description';
 
     /**
      * 配置页面
@@ -40,8 +44,19 @@ class Config extends BackendController
         $i18nEnabled = $systemConfig->getConfig(self::CONFIG_KEY_I18N_ENABLED, self::MODULE, self::AREA);
         $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
 
+        $rawDebugTitle = $systemConfig->getConfig(self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_SITE_TITLE, self::MODULE, self::AREA);
+        $debugSiteTitle = $rawDebugTitle === null
+            ? AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE
+            : \trim((string)$rawDebugTitle);
+        $rawDebugBrief = $systemConfig->getConfig(self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_BRIEF, self::MODULE, self::AREA);
+        $debugBrief = $rawDebugBrief === null
+            ? AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION
+            : \trim((string)$rawDebugBrief);
+
         $this->assign('ai_enabled', $aiEnabled);
         $this->assign('i18n_enabled', $i18nEnabled);
+        $this->assign('ai_site_agent_debug_site_title', $debugSiteTitle);
+        $this->assign('ai_site_agent_debug_brief_description', $debugBrief);
         $this->assign('page_title', __('页面构建器配置'));
         $this->assign('breadcrumb_parent', __('页面管理'));
         $this->assign('breadcrumb_current', __('配置'));
@@ -64,6 +79,8 @@ class Config extends BackendController
         try {
             $aiEnabled = $this->request->getPost('ai_enabled', '0');
             $i18nEnabled = $this->request->getPost('i18n_enabled', '0');
+            $debugSiteTitle = \trim((string)$this->request->getPost('ai_site_agent_debug_site_title', ''));
+            $debugBrief = \trim((string)$this->request->getPost('ai_site_agent_debug_brief_description', ''));
             
             /** @var SystemConfig $systemConfig */
             $systemConfig = ObjectManager::getInstance(SystemConfig::class);
@@ -80,6 +97,19 @@ class Config extends BackendController
             $systemConfig->setConfig(
                 self::CONFIG_KEY_I18N_ENABLED,
                 $i18nEnabled === '1' ? '1' : '0',
+                self::MODULE,
+                self::AREA
+            );
+
+            $systemConfig->setConfig(
+                self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_SITE_TITLE,
+                $debugSiteTitle,
+                self::MODULE,
+                self::AREA
+            );
+            $systemConfig->setConfig(
+                self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_BRIEF,
+                $debugBrief,
                 self::MODULE,
                 self::AREA
             );
