@@ -78,6 +78,19 @@ foreach ($argv as $arg) {
     }
 }
 
+// 检测根目录
+$bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
+if (!\defined('BP')) {
+    \define('BP', $bp);
+}
+if (!\defined('DS')) {
+    \define('DS', DIRECTORY_SEPARATOR);
+}
+
+// 统一自动加载必须早于 resolveControlPort：
+// 该 helper 位于框架命名空间，且内部依赖 BP 常量读取实例文件。
+require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用 --control-port= 参数，否则从实例文件自动发现
 // resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
@@ -94,9 +107,6 @@ if (!isset($isMaintenanceWorker)) {
     $isMaintenanceWorker = false;
 }
 
-// 检测根目录
-$bp = \dirname(__DIR__, 5) . DIRECTORY_SEPARATOR;
-
 // 将相对路径转换为绝对路径
 if ($sslCert && !\preg_match('/^[a-zA-Z]:[\\\\\\/]|^\//', $sslCert)) {
     $sslCert = $bp . \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $sslCert);
@@ -105,12 +115,6 @@ if ($sslKey && !\preg_match('/^[a-zA-Z]:[\\\\\\/]|^\//', $sslKey)) {
     $sslKey = $bp . \str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $sslKey);
 }
 
-if (!\defined('BP')) {
-    \define('BP', $bp);
-}
-if (!\defined('DS')) {
-    \define('DS', DIRECTORY_SEPARATOR);
-}
 
 // 定义前端模式常量（供 WlsRuntime 使用）
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
@@ -126,8 +130,6 @@ if (!\defined('WLS_DEV_MODE')) {
 }
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
 
-// 统一自动加载：app/code 优先于 vendor（与 app/bootstrap.php 共用 app/autoload.php）
-require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
@@ -1159,64 +1161,6 @@ if ($useReusePort && $supportsReusePort && $deferSsl && \function_exists('socket
 WlsLogger::info_("Socket 创建成功，开始监听连接");
 
 \stream_set_blocking($socket, false);
-
-// ========== Worker SSL 健康检查：确保 Worker 本身能正常处理请求后再上报就绪 ==========
-if (!$isMaintenanceWorker) {
-    WlsLogger::info_("开始 Worker SSL 健康检查...");
-    $healthCheckSuccess = false;
-    $healthCheckMaxRetries = 3;
-
-    for ($healthCheckAttempt = 1; $healthCheckAttempt <= $healthCheckMaxRetries; $healthCheckAttempt++) {
-        try {
-            // 等待 socket 就绪
-            \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
-
-            $healthConn = @\stream_socket_client(
-                "ssl://{$host}:{$port}",
-                $errno,
-                $errstr,
-                2.0,
-                STREAM_CLIENT_CONNECT
-            );
-
-            if (!$healthConn) {
-                WlsLogger::warning_("SSL 健康检查连接失败 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries}): {$errstr}");
-                continue;
-            }
-
-            \stream_set_blocking($healthConn, true);
-            \stream_set_timeout($healthConn, 2);
-
-            $healthRequest = "GET /_wls/health HTTP/1.1\r\nHost: localhost\r\n"
-                . InternalRequestLabel::buildHeaderLine(InternalRequestLabel::HEALTH_PROBE)
-                . "Connection: close\r\n\r\n";
-            @\fwrite($healthConn, $healthRequest);
-
-            // 读取响应（至少读到 HTTP 状态行）
-            $healthResponse = @\fread($healthConn, 1024);
-            @\fclose($healthConn);
-
-            if ($healthResponse && \str_contains($healthResponse, 'HTTP/1.1 200')) {
-                $healthCheckSuccess = true;
-                WlsLogger::info_("Worker SSL #{$workerId} 健康检查成功 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries})");
-                break;
-            } else {
-                WlsLogger::warning_("SSL 健康检查响应异常 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries}): " . \substr($healthResponse ?: '', 0, 100));
-            }
-        } catch (\Throwable $e) {
-            WlsLogger::warning_("SSL 健康检查异常 (尝试 {$healthCheckAttempt}/{$healthCheckMaxRetries}): " . $e->getMessage());
-        }
-
-        if ($healthCheckAttempt < $healthCheckMaxRetries) {
-            \Weline\Framework\Runtime\SchedulerSystem::sleep(1);
-        }
-    }
-
-    if (!$healthCheckSuccess) {
-        WlsLogger::error_("Worker SSL #{$workerId} 健康检查失败，无法正常处理请求，退出");
-        exit(1);
-    }
-}
 
 // ========== 上报 READY 前验证 Session/Memory 可用 ==========
 // 仅业务 Worker 预检共享服务；维护 Worker 不依赖 Session/Memory，避免并发启动阶段阻塞 IPC READY 注册
