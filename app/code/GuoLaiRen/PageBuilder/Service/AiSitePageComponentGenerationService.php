@@ -56,6 +56,7 @@ final class AiSitePageComponentGenerationService
             'site' => $siteDisplayName,
             'brief' => $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null),
             'pages' => $this->resolveScopedPageTypes($scope),
+            'style' => $this->resolvePromptStyleCode($scope, Page::TYPE_HOME),
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
         static $sharedCache = [];
         if (isset($sharedCache[$cacheKey]) && \is_array($sharedCache[$cacheKey])) {
@@ -70,7 +71,7 @@ final class AiSitePageComponentGenerationService
                 'header/ai-site-header',
                 'AI Site Header',
                 'header',
-                $this->buildHeaderPrompt($websiteProfile, $scope, $siteDisplayName, $headerConfig),
+                $this->buildHeaderGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $headerConfig),
                 $headerConfig,
                 $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $headerConfig)
             ),
@@ -78,7 +79,7 @@ final class AiSitePageComponentGenerationService
                 'footer/ai-site-footer',
                 'AI Site Footer',
                 'footer',
-                $this->buildFooterPrompt($websiteProfile, $scope, $siteDisplayName, $footerConfig),
+                $this->buildFooterGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $footerConfig),
                 $footerConfig,
                 $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig)
             ),
@@ -131,7 +132,7 @@ final class AiSitePageComponentGenerationService
                     $sectionCode,
                     (string)($section['name'] ?? $sectionCode),
                     'content',
-                    $this->buildSectionPrompt($pageType, $section, $blueprint, $websiteProfile, $scope),
+                    $this->buildSectionGenerationPrompt($pageType, $section, $blueprint, $websiteProfile, $scope),
                     $defaultConfig,
                     $this->buildRenderContext($pageType, $websiteProfile, $scope, $defaultConfig)
                 )
@@ -521,6 +522,117 @@ final class AiSitePageComponentGenerationService
      * @param array<string,mixed> $scope
      * @param array<string,mixed> $headerConfig
      */
+    private function buildHeaderGenerationPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $headerConfig): string
+    {
+        $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
+        $pageTypes = $this->resolveScopedPageTypes($scope);
+        $pageTypeLabels = Page::getPageTypes();
+        $pageList = [];
+        foreach ($pageTypes as $pageType) {
+            $pageList[] = (string)($pageTypeLabels[$pageType] ?? $pageType);
+        }
+
+        $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
+        $styleDirection = $this->describeStyleDirection($styleCode);
+
+        return "You are generating a PageBuilder website header component.\n"
+            . "Site name: {$siteDisplayName}\n"
+            . "Visitor-facing brand summary: {$siteSummary}\n"
+            . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . "Selected pages: " . \implode(', ', $pageList) . "\n"
+            . "Current navigation fallback: " . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE) . "\n"
+            . "Rules:\n"
+            . "1. Output only one header component, never a full page.\n"
+            . "2. The copy must read like finished website copy for visitors.\n"
+            . "3. Never expose internal wording such as customer brief, prompt text, page focus, requirements, or 'I want to build'.\n"
+            . "4. Navigation must be compatible with real page links; when real page nav exists it should win over fallback items.\n"
+            . "5. Keep the structure practical: logo area, navigation, optional CTA, mobile-friendly behavior.\n"
+            . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
+            . "7. Return pure JSON only. No markdown. No explanation.\n"
+            . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.";
+    }
+
+    private function buildFooterGenerationPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $footerConfig): string
+    {
+        $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
+        $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
+        $styleDirection = $this->describeStyleDirection($styleCode);
+
+        return "You are generating a PageBuilder website footer component.\n"
+            . "Site name: {$siteDisplayName}\n"
+            . "Visitor-facing brand summary: {$siteSummary}\n"
+            . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . "Footer link fallback: " . \json_encode([
+                'column1' => $footerConfig['links.column1_items'] ?? '',
+                'column2' => $footerConfig['links.column2_items'] ?? '',
+            ], \JSON_UNESCAPED_UNICODE) . "\n"
+            . "Rules:\n"
+            . "1. Output only one footer component, never a full page.\n"
+            . "2. The copy must read like real customer-facing site copy, not internal notes.\n"
+            . "3. Never print customer brief text, prompt instructions, or requirement wording on the page.\n"
+            . "4. Keep footer structure practical: brand area, grouped links, support/legal text, optional extra column or subscription area.\n"
+            . "5. Footer links should be compatible with real page nav logic and the fallback link groups.\n"
+            . "6. Style should follow the reference theme direction without naming the theme in visible text.\n"
+            . "7. Return pure JSON only. No markdown. No explanation.\n"
+            . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.";
+    }
+
+    private function buildSectionGenerationPrompt(string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string
+    {
+        $siteSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
+        $pageInstructionMap = Page::getPageTypePromptInstructionsMap();
+        $pageInstruction = (string)($pageInstructionMap[$pageType] ?? '');
+        $sectionName = (string)($section['name'] ?? $section['code'] ?? '');
+        $sectionKey = (string)($section['key'] ?? '');
+        $sectionTemplate = (string)($section['template'] ?? 'hero');
+        $sectionConfig = \json_encode($section['config'] ?? [], \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT);
+        $refinement = $this->resolveSectionRefinement($scope, $pageType, (string)($section['code'] ?? ''), $sectionKey);
+        $blogPrompt = $this->buildBlogPromptAddon($pageType, $sectionKey, $scope);
+        $styleCode = $this->resolvePromptStyleCode($scope, $pageType);
+        $styleDirection = $this->describeStyleDirection($styleCode);
+
+        return "You are generating a PageBuilder content component.\n"
+            . "Page type: " . (string)($blueprint['page_label'] ?? $pageType) . " ({$pageType})\n"
+            . "Section name: {$sectionName}\n"
+            . "Section role: {$sectionKey}\n"
+            . "Suggested structure: {$sectionTemplate}\n"
+            . "Visitor-facing brand summary: {$siteSummary}\n"
+            . "Page guidance: {$pageInstruction}\n"
+            . "Suggested section config: {$sectionConfig}\n"
+            . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . ($refinement !== '' ? "Latest refine instruction for this section: {$refinement}\n" : '')
+            . ($blogPrompt !== '' ? $blogPrompt . "\n" : '')
+            . "Rules:\n"
+            . "1. Output only one content component, never a full page document.\n"
+            . "2. Write finished visitor-facing copy. Do not expose internal prompts, briefs, requirement wording, or phrases such as 'page focus' and 'site summary'.\n"
+            . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
+            . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
+            . "5. Return pure JSON only. No markdown. No explanation.\n"
+            . "6. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "7. If real blog data variables are provided, prefer them over invented articles or categories.";
+    }
+
+    private function resolvePromptStyleCode(array $scope, string $pageType): string
+    {
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+        $styleCode = \trim((string)($virtualPage['style_code'] ?? $scope['style_code'] ?? 'default'));
+
+        return $styleCode !== '' ? $styleCode : 'default';
+    }
+
+    private function describeStyleDirection(string $styleCode): string
+    {
+        return match ($styleCode) {
+            'fintech-hub' => 'clean, data-driven, premium, trustworthy, high-contrast calls to action',
+            'saas-starter' => 'modern product marketing, concise, structured, conversion-oriented',
+            'fitness-pro' => 'energetic, bold, motivating, performance-focused',
+            'sattaking', 'poker-arena', 'ludo-empire', 'rummy-royal' => 'high-energy gaming style, vivid contrast, strong CTA rhythm',
+            'tpmst' => 'practical, service-focused, trustworthy, content-forward',
+            default => 'clean editorial structure, clear hierarchy, practical CTA emphasis',
+        };
+    }
+
     private function buildHeaderPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $headerConfig): string
     {
         $brief = $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null);
@@ -685,6 +797,7 @@ final class AiSitePageComponentGenerationService
     private function buildFooterDefaultConfig(array $websiteProfile, array $scope, string $siteDisplayName): array
     {
         $navigationPages = $this->buildNavigationPages($scope);
+        $brandSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
         $legalLines = [];
         $primaryLines = [];
 
@@ -704,7 +817,7 @@ final class AiSitePageComponentGenerationService
         return [
             'brand.name' => $siteDisplayName,
             'brand.logo' => (string)($websiteProfile['logo'] ?? ''),
-            'brand.description' => (string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
+            'brand.description' => $brandSummary,
             'links.column1_title' => 'Quick Links',
             'links.column1_items' => \implode("\n", $primaryLines),
             'links.column2_title' => 'Legal',
