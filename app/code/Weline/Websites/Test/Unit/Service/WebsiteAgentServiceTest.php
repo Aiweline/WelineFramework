@@ -126,6 +126,40 @@ class WebsiteAgentServiceTest extends TestCase
         $this->assertSame('registry timeout', $siteResult['error'] ?? '');
     }
 
+    public function testRecommendationCandidatesPreferBusinessAndMarketTokensForChineseBrief(): void
+    {
+        $service = $this->createService($this->createMock(FrameworkQueryService::class));
+        $candidates = $service->getRecommendationCandidates(
+            '我想做一个印度市场的棋牌网站，推广棋牌apk下载的seo网站',
+            'apk'
+        );
+
+        $this->assertNotEmpty($candidates);
+        $firstEight = \array_slice($candidates, 0, 8);
+        $this->assertTrue(
+            \array_reduce(
+                $firstEight,
+                static fn (bool $carry, string $domain): bool =>
+                    $carry || \str_contains($domain, 'india')
+                    || \str_contains($domain, 'desi')
+                    || \str_contains($domain, 'rummy')
+                    || \str_contains($domain, 'teenpatti')
+                    || \str_contains($domain, 'cardgame'),
+                false
+            )
+        );
+
+        $firstTwelve = \array_slice($candidates, 0, 12);
+        $longCount = 0;
+        foreach ($firstTwelve as $domain) {
+            $label = (string)(\explode('.', $domain)[0] ?? '');
+            if (\strlen($label) >= 10) {
+                $longCount++;
+            }
+        }
+        $this->assertGreaterThanOrEqual(8, $longCount);
+    }
+
     private function createService(FrameworkQueryService $queryService): WebsiteAgentService
     {
         return new WebsiteAgentService(

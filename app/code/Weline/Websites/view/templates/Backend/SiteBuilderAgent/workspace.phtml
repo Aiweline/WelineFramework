@@ -2404,6 +2404,16 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         }).filter(Boolean);
     }
 
+    function isLocalFlowDomain(domainName) {
+        var normalized = String(domainName || '').trim().toLowerCase();
+        if (!normalized) {
+            return false;
+        }
+        return normalized === 'localhost'
+            || normalized.endsWith('.local')
+            || normalized.endsWith('.localhost');
+    }
+
     if (languageUtils && typeof languageUtils.bindDefaultToMultiple === 'function') {
         languageUtils.bindDefaultToMultiple({
             singleId: 'site_builder_default_language_selector',
@@ -2422,6 +2432,13 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
     var startDomainPurchaseBtn = document.getElementById('site-builder-start-domain-purchase');
     function triggerDomainPurchaseQueue(silentMode) {
+        var currentDomain = String((domainPurchaseState && domainPurchaseState.domain) || '').trim();
+        if (isLocalFlowDomain(currentDomain)) {
+            if (!silentMode) {
+                toast('info', '<?= addslashes((string)__('本地域名无需购买，已跳过购买流程。')) ?>');
+            }
+            return;
+        }
         if (!startDomainPurchaseUrl) {
             if (!silentMode) {
                 toast('error', messages.domainPurchaseQueueFailed);
@@ -2470,7 +2487,10 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
     if (autoStartDomainPurchase) {
         var currentDomainPurchaseStatus = String((domainPurchaseState && domainPurchaseState.status) || 'idle').trim() || 'idle';
-        if (['queued', 'running', 'completed'].indexOf(currentDomainPurchaseStatus) === -1) {
+        var currentDomainPurchaseDomain = String((domainPurchaseState && domainPurchaseState.domain) || '').trim();
+        if (isLocalFlowDomain(currentDomainPurchaseDomain)) {
+            toast('info', '<?= addslashes((string)__('检测到本地域名，已自动跳过购买环节。')) ?>');
+        } else if (['queued', 'running', 'completed'].indexOf(currentDomainPurchaseStatus) === -1) {
             triggerDomainPurchaseQueue(true);
         }
     }

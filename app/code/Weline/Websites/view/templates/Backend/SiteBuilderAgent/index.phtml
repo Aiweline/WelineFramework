@@ -1420,6 +1420,16 @@ body[data-topbar="dark"] .site-workbench-page {
             scopePatch.preview_url = payload.preview_url;
         }
 
+        function isLocalFlowDomain(domainName) {
+            var normalized = String(domainName || '').trim().toLowerCase();
+            if (!normalized) {
+                return false;
+            }
+            return normalized === 'localhost'
+                || normalized.endsWith('.local')
+                || normalized.endsWith('.localhost');
+        }
+
         var fd = new FormData();
         fd.append('provider_code', selectedProviderCode || 'websites_default');
         fd.append('description', description);
@@ -1459,8 +1469,10 @@ body[data-topbar="dark"] .site-workbench-page {
             }
             if (nextUrl.indexOf('/site-builder-agent/workspace') > -1) {
                 nextUrl += (nextUrl.indexOf('?') > -1 ? '&' : '?')
-                    + 'auto_start_domain_purchase=1'
-                    + '&next_step=virtual_theme_edit';
+                    + 'next_step=virtual_theme_edit';
+                if (!isLocalFlowDomain(domain)) {
+                    nextUrl += '&auto_start_domain_purchase=1';
+                }
             }
             toast('info', messages.workspaceFlowHint);
             window.location.href = nextUrl;
