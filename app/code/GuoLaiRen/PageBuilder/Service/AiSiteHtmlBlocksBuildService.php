@@ -191,14 +191,15 @@ class AiSiteHtmlBlocksBuildService
      */
     private function buildFooterBlock(string $pageType, array $websiteProfile, array $scope): array
     {
+        $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
         return $this->buildBlockRecord(
             \str_replace('_', '-', $pageType) . '-site-footer',
             'site_footer',
             [
                 'site_title' => (string)($websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
-                'brief_description' => (string)($websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
+                'brief_description' => $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope),
                 'domain' => (string)($websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
-                'nav_items' => $this->buildNavItems($scope),
+                'nav_items' => $this->buildFooterNavItems($scope),
             ],
             $websiteProfile,
             $scope
@@ -343,13 +344,16 @@ class AiSiteHtmlBlocksBuildService
      */
     private function summarizeStaticSectionText(array $section, array $websiteProfile, array $scope): string
     {
+        $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
+        $sectionConfig = \is_array($section['config'] ?? null) ? $section['config'] : [];
         $candidates = [
+            $sectionConfig['description'] ?? null,
+            $sectionConfig['section_intro'] ?? null,
+            $sectionConfig['section_text'] ?? null,
             $section['description'] ?? null,
             $section['prompt_instruction'] ?? null,
             $section['prompt'] ?? null,
-            $websiteProfile['brief_description'] ?? null,
-            $scope['brief_description'] ?? null,
-            $scope['user_description'] ?? null,
+            $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope),
         ];
 
         foreach ($candidates as $candidate) {
@@ -614,7 +618,7 @@ class AiSiteHtmlBlocksBuildService
             . '<div style="display:flex;flex-wrap:wrap;gap:14px 18px;">' . \implode('', $linkHtml) . '</div>'
             . '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;color:#64748b;font-size:12px;">'
             . '<span>© 2026 ' . $siteTitle . '</span>'
-            . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>Generated for the current customer brief</span>')
+            . ($domain !== '' ? '<span>' . $domain . '</span>' : '<span>Always improving the visitor experience</span>')
             . '</div></footer>';
     }
 
@@ -624,12 +628,34 @@ class AiSiteHtmlBlocksBuildService
      */
     private function buildNavItems(array $scope): array
     {
+        return $this->buildScopedNavItems($scope, true);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function buildFooterNavItems(array $scope): array
+    {
+        return $this->buildScopedNavItems($scope, false);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function buildScopedNavItems(array $scope, bool $headerOnly): array
+    {
         $pageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [Page::TYPE_HOME, Page::TYPE_ABOUT, Page::TYPE_CONTACT];
         $labels = Page::getPageTypes();
+        $headerTypeMap = \array_flip(Page::getHeaderMenuTypes());
         $items = [];
 
         foreach ($pageTypes as $pageType) {
             if (!\is_string($pageType) || $pageType === '') {
+                continue;
+            }
+            if ($headerOnly && !isset($headerTypeMap[$pageType])) {
                 continue;
             }
 
@@ -639,7 +665,7 @@ class AiSiteHtmlBlocksBuildService
                 'href' => $href,
                 'active' => $pageType === Page::TYPE_HOME,
             ];
-            if (\count($items) >= 5) {
+            if ($headerOnly && \count($items) >= 5) {
                 break;
             }
         }
@@ -659,6 +685,8 @@ class AiSiteHtmlBlocksBuildService
      */
     private function normalizeBlockConfig(string $template, array $config, array $websiteProfile = [], array $scope = []): array
     {
+        $pageBlueprintService = $this->pageBlueprintService ?? ObjectManager::getInstance(AiSitePageBlueprintService::class);
+
         return match ($template) {
             'site_header' => [
                 'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
@@ -668,9 +696,9 @@ class AiSiteHtmlBlocksBuildService
             ],
             'site_footer' => [
                 'site_title' => (string)($config['site_title'] ?? $websiteProfile['site_title'] ?? $scope['site_title'] ?? ''),
-                'brief_description' => (string)($config['brief_description'] ?? $websiteProfile['brief_description'] ?? $scope['brief_description'] ?? $scope['user_description'] ?? ''),
+                'brief_description' => (string)($config['brief_description'] ?? $pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope)),
                 'domain' => (string)($config['domain'] ?? $websiteProfile['target_domain'] ?? $scope['target_domain'] ?? ''),
-                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildNavItems($scope)),
+                'nav_items' => $this->normalizeNavItems($config['nav_items'] ?? $this->buildFooterNavItems($scope)),
             ],
             'cards' => [
                 'section_title' => (string)($config['section_title'] ?? ''),

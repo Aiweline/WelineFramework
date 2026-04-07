@@ -119,13 +119,13 @@ class WlsLoggerTest extends TestCase
         $this->assertNotEmpty($logDir);
         
         $mainLog = LogConfig::getMainLogFile();
-        $this->assertStringContainsString('wls.log', $mainLog);
+        $this->assertStringContainsString('wls-' . \date('Y-m-d') . '.log', $mainLog);
         
         $errorLog = LogConfig::getErrorLogFile();
-        $this->assertStringContainsString('error.log', $errorLog);
+        $this->assertStringContainsString('error-' . \date('Y-m-d') . '.log', $errorLog);
         
         $crashLog = LogConfig::getCrashLogFile();
-        $this->assertStringContainsString('crash.log', $crashLog);
+        $this->assertStringContainsString('crash-' . \date('Y-m-d') . '.log', $crashLog);
     }
 
     public function testLoggerChainableConfiguration(): void
@@ -167,5 +167,21 @@ class WlsLoggerTest extends TestCase
         $normalized = \str_replace('\\', '/', \rtrim($logDir, '/')) . '/';
 
         $this->assertStringContainsString('/wls/demo-instance/', $normalized);
+    }
+
+    public function testProcessLogFileMirrorsBufferedLines(): void
+    {
+        $processLog = $this->testLogDir . 'worker-process.log';
+        $logger = WlsLogger::getInstance()
+            ->setProcessTag('Worker#1:9981@test-process-log')
+            ->setStdoutEnabled(false)
+            ->setFileEnabled(true)
+            ->setProcessLogFile($processLog);
+
+        $logger->info('process mirror line');
+        $logger->flush(true);
+
+        $this->assertFileExists($processLog);
+        $this->assertStringContainsString('process mirror line', (string)\file_get_contents($processLog));
     }
 }
