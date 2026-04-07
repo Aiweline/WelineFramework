@@ -58,10 +58,12 @@ final class SessionClient
      */
     public function connect(): bool
     {
-        $this->connected = $this->stateClient->isHealthy();
-        if (!$this->connected) {
-            return false;
+        // Worker 常驻+连接池复用场景下，不做额外 health probe：
+        // 实际连通性由 request() 的 acquire/send/read 成败决定。
+        if ($this->connected) {
+            return true;
         }
+        $this->connected = true;
         $this->authenticated = true;
         return true;
     }

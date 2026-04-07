@@ -1069,6 +1069,19 @@ class ServerInstanceManager
     }
 
     /**
+     * Check whether an instance can currently receive Master IPC control commands.
+     */
+    public function isInstanceIpcControllable(string $name): bool
+    {
+        $info = $this->getPersistedInstanceInfo($name);
+        if ($info === null || $info->controlPort <= 0) {
+            return false;
+        }
+
+        return $info->isMasterRunning();
+    }
+
+    /**
      * 统计实例中真正运行的 Worker 数量
      */
     public function countRunningWorkers(string $name): int
