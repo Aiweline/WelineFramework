@@ -694,8 +694,6 @@ class AiService
                 return $bal2 <=> $bal1;
             });
 
-            // 3. 获取提供者实例一次
-            $provider = null;
             $lastError = null;
 
             foreach ($candidateAccounts as $accData) {
@@ -706,10 +704,7 @@ class AiService
 
                 // 注入账户配置并尝试请求
                 $this->injectAccountConfig($model, $accModel);
-
-                if ($provider === null) {
-                    $provider = $this->providerFactory->getProvider($model);
-                }
+                $provider = $this->providerFactory->getProvider($model);
 
                 try {
                     $result = $provider->generate($model, $prompt, $params);
@@ -743,13 +738,7 @@ class AiService
                     return $result['content'];
                 } catch (\Exception $eTry) {
                     $lastError = $eTry;
-                    $msg = $eTry->getMessage();
-                    // 遇到认证失败/密钥无效时继续尝试下一个账户；其它错误直接抛出
-                    $isAuthError = stripos($msg, 'Authentication') !== false
-                        || stripos($msg, 'api key') !== false
-                        || stripos($msg, 'unauthorized') !== false
-                        || stripos($msg, '401') !== false;
-                    if (!$isAuthError) {
+                    if (!$this->shouldRetryWithAnotherAccount($eTry)) {
                         throw $eTry;
                     }
                     // 继续下一账户
@@ -838,7 +827,6 @@ class AiService
                 return $bal2 <=> $bal1;
             });
 
-            $provider = null;
             $lastError = null;
 
             foreach ($candidateAccounts as $accData) {
@@ -847,10 +835,7 @@ class AiService
                 $accModel->setData($accData);
 
                 $this->injectAccountConfig($model, $accModel);
-
-                if ($provider === null) {
-                    $provider = $this->providerFactory->getProvider($model);
-                }
+                $provider = $this->providerFactory->getProvider($model);
 
                 try {
                     $result = $provider->generate($model, $prompt, $params);
@@ -871,12 +856,7 @@ class AiService
                     return $result;
                 } catch (\Exception $eTry) {
                     $lastError = $eTry;
-                    $msg = $eTry->getMessage();
-                    $isAuthError = stripos($msg, 'Authentication') !== false
-                        || stripos($msg, 'api key') !== false
-                        || stripos($msg, 'unauthorized') !== false
-                        || stripos($msg, '401') !== false;
-                    if (!$isAuthError) {
+                    if (!$this->shouldRetryWithAnotherAccount($eTry)) {
                         throw $eTry;
                     }
                 }
@@ -905,6 +885,37 @@ class AiService
     }
 
     /**
+     * 是否应继续尝试其他供应商账户
+     *
+     * @param \Throwable $e
+     * @return bool
+     */
+    private function shouldRetryWithAnotherAccount(\Throwable $e): bool
+    {
+        $message = strtolower($e->getMessage());
+        $keywords = [
+            'authentication',
+            'api key',
+            'unauthorized',
+            'insufficient balance',
+            '余额不足',
+            '额度不足',
+            'quota',
+            'rate limit',
+            'request rate',
+            '429',
+            '401',
+            '402'
+        ];
+        foreach ($keywords as $keyword) {
+            if (strpos($message, $keyword) !== false) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 流式调用模型API
      * 
      * @param AiModel $model 模型
@@ -916,19 +927,18 @@ class AiService
      * @return void
      */
     private function callModelApiStream(
-        AiModel $model, 
-        string $prompt, 
-        callable $callback, 
-        ?string $scenarioCode, 
-        ?string $locale, 
+        AiModel $model,
+        string $prompt,
+        callable $callback,
+        ?string $scenarioCode,
+        ?string $locale,
         array $params
     ): void {
         $startTime = microtime(true);
         $account = null;
         $usage = [];
-        
+
         try {
-            // 1. 获取供应商代码
             $providerCode = (string)$model->getData(AiModel::schema_fields_SUPPLIER);
             if ($providerCode === '') {
                 $providerCode = $this->accountService->getProviderByModelCode((string)$model->getData(AiModel::schema_fields_MODEL_CODE)) ?? '';
@@ -936,20 +946,35 @@ class AiService
             if (!$providerCode) {
                 throw new Exception('无法确定模型的供应商');
             }
-            
-            // 2. 获取可用的供应商账户
-            $account = $this->accountService->getAvailableAccount($providerCode);
-            if (!$account) {
+
+            $allAccounts = $this->accountService->getProviderAccounts($providerCode);
+            if (empty($allAccounts)) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
-            
-            // 3. 将账户配置注入到模型中
-            $this->injectAccountConfig($model, $account);
-            
-            // 4. 获取合适的提供者
-            $provider = $this->providerFactory->getProvider($model);
 
-            // 4.1 包装 callback：流式 chunk 写入 ai_activity.log
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) {
+                return ((int)($acc['is_active'] ?? 0) === 1)
+                    && (($acc['connection_status'] ?? '') === 'success')
+                    && (float)($acc['balance'] ?? 0) > 0;
+            }));
+            if (empty($candidateAccounts)) {
+                throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink(
+                    __('没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）', ['provider' => $providerCode]),
+                    'provider',
+                    ['provider_code' => $providerCode]
+                ));
+            }
+            usort($candidateAccounts, function ($a, $b) {
+                $d1 = (int)($a['is_default'] ?? 0);
+                $d2 = (int)($b['is_default'] ?? 0);
+                if ($d1 !== $d2) {
+                    return $d2 <=> $d1;
+                }
+                $bal1 = (float)($a['balance'] ?? 0);
+                $bal2 = (float)($b['balance'] ?? 0);
+                return $bal2 <=> $bal1;
+            });
+
             $modelCode = $model->getData(AiModel::schema_fields_MODEL_CODE) ?? '';
             $wrappedCallback = function ($chunk) use ($callback, $modelCode) {
                 $line = '[' . date('Y-m-d H:i:s') . '][stream] model=' . $modelCode . ' chunk=' . (is_string($chunk) && mb_strlen($chunk) > 500 ? mb_substr($chunk, 0, 500) . '...' : (is_string($chunk) ? $chunk : json_encode($chunk, JSON_UNESCAPED_UNICODE)));
@@ -957,30 +982,48 @@ class AiService
                     $line = mb_substr($line, 0, 2000) . '...';
                 }
                 Env::log('ai_activity.log', $line, 'INFO', true, true, 0);
-                // CRITICAL-FIX-2026-04-02: Must return callback result to propagate SSE connection state
-                // Returning false signals Provider to abort curl stream (fixes Worker crash on page refresh)
                 return $callback($chunk);
             };
-            
-            // 5. 流式调用API
-            $result = $provider->generateStream($model, $prompt, $wrappedCallback, $params);
-            $usage = $result['usage'] ?? [];
-            
-            // 6. 记录使用量（兼容旧系统）
-            $this->logUsage($model, $usage, $params);
-            
-            // 7. 记录到新的供应商使用记录
-            $requestTime = (int)((microtime(true) - $startTime) * 1000);
-            $this->accountService->recordUsage($account, $model, $usage, [
-                'request_type' => 'stream',
-                'user_id' => $params['user_id'] ?? null,
-                'user_name' => $params['user_name'] ?? null,
-                'request_time' => $requestTime,
-                'status' => 'success'
-            ]);
-            
+
+            $lastError = null;
+            foreach ($candidateAccounts as $accData) {
+                /** @var Account $accModel */
+                $accModel = ObjectManager::getInstance(Account::class);
+                $accModel->setData($accData);
+                $account = $accModel;
+
+                $this->injectAccountConfig($model, $accModel);
+                $provider = $this->providerFactory->getProvider($model);
+
+                try {
+                    $result = $provider->generateStream($model, $prompt, $wrappedCallback, $params);
+                    $usage = $result['usage'] ?? [];
+
+                    $this->logUsage($model, $usage, $params);
+                    $requestTime = (int)((microtime(true) - $startTime) * 1000);
+                    $this->accountService->recordUsage($accModel, $model, $usage, [
+                        'request_type' => 'stream',
+                        'user_id' => $params['user_id'] ?? null,
+                        'user_name' => $params['user_name'] ?? null,
+                        'request_time' => $requestTime,
+                        'status' => 'success'
+                    ]);
+
+                    return;
+                } catch (\Exception $eTry) {
+                    $lastError = $eTry;
+                    if (!$this->shouldRetryWithAnotherAccount($eTry)) {
+                        throw $eTry;
+                    }
+                }
+            }
+
+            if ($lastError) {
+                throw $lastError;
+            }
+
+            throw new Exception('未能使用任何账户完成请求');
         } catch (\Exception $e) {
-            // 记录错误到供应商使用记录
             if ($account) {
                 $requestTime = (int)((microtime(true) - $startTime) * 1000);
                 $this->accountService->recordUsage($account, $model, $usage, [
@@ -992,10 +1035,8 @@ class AiService
                     'error_message' => $e->getMessage()
                 ]);
             }
-            
-            // 记录错误（保留原始信息用于日志）
+
             w_log_error("AI流式API调用失败: " . $e->getMessage());
-            // 清理 ANSI 颜色码后再抛出，避免前端显示乱码
             $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
             throw new Exception("AI流式生成失败: " . $cleanMessage);
         }
