@@ -39,6 +39,7 @@ use Weline\Framework\Setup\Data\Context as SetupContext;
 use Weline\Framework\System\Text;
 use Weline\Framework\Router\Service\RouteUpdateService;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Framework\Console\ParseModuleArgsTrait;
 
 class Upgrade implements \Weline\Framework\Console\CommandInterface
@@ -411,6 +412,28 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         }
     }
 
+    private function syncWlsMaintenanceMode(bool $enabled): void
+    {
+        try {
+            /** @var BroadcastControlDispatchService $dispatchService */
+            $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
+            $result = $dispatchService->setMaintenanceMode($enabled, null);
+
+            if (($result['attempted'] ?? []) === []) {
+                return;
+            }
+
+            if (!empty($result['success'])) {
+                $this->printing->note(__('WLS 维护模式已同步：%{1}', [$result['message'] ?? 'ok']));
+                return;
+            }
+
+            $this->printing->warning(__('WLS 维护模式同步未完全成功：%{1}', [$result['message'] ?? 'unknown']));
+        } catch (\Throwable $throwable) {
+            $this->printing->warning(__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]));
+        }
+    }
+
     /**
      * 严格校验 setup:upgrade 参数，避免误传参数被静默忽略
      *
@@ -667,6 +690,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         
         // 1. 启用维护模式
         Env::getInstance()->setConfig('system.maintenance', true);
+        $this->syncWlsMaintenanceMode(true);
         $maintenanceEnabled = true;
         $this->printing->note(__('系统已设置为维护模式，开始执行升级...'));
         
@@ -1060,6 +1084,7 @@ class Upgrade implements \Weline\Framework\Console\CommandInterface
         if ($maintenanceEnabled) {
             try {
                 $result = Env::getInstance()->setConfig('system.maintenance', false);
+                $this->syncWlsMaintenanceMode(false);
                 if ($result) {
                     $this->printing->note(__('维护模式已关闭。'));
                 } else {
