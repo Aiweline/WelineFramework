@@ -978,7 +978,7 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
     }
 };
 
-$configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 1);
+$configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 4);
 if ($configuredLongLivedMaxActive >= 0) {
     $longLivedMaxActive = $configuredLongLivedMaxActive;
 }
