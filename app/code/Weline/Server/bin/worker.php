@@ -1486,6 +1486,7 @@ while (true) {
             $fiberScheduler,
             $runtime,
             $runtimeError,
+            $asyncBizAdapters,
             $instanceName,
             $workerId,
             $port,
@@ -2100,6 +2101,7 @@ function wlsDispatchRequestFiberStep(
     \Weline\Server\Scheduler\FiberScheduler $fiberScheduler,
     mixed $runtime,
     mixed $runtimeError,
+    \Weline\Server\Runtime\Async\AsyncBizAdapters $asyncBizAdapters,
     string $instanceName,
     int $workerId,
     int $port,
@@ -2151,9 +2153,28 @@ function wlsDispatchRequestFiberStep(
         WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
 
         if ($longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+            $isWorkspaceStreamSse = $isSseProtocolRequest && \str_contains($rawRequest, '/stream-sse');
+            if ($isWorkspaceStreamSse) {
+                $waitDeadline = \microtime(true) + 1.2;
+                while (\microtime(true) < $waitDeadline && \count($longLivedConnections) >= $longLivedMaxActive) {
+                    foreach (\array_keys($longLivedConnections) as $llConnId) {
+                        $llConn = $connections[$llConnId] ?? null;
+                        if (!$llConn || !\is_resource($llConn)) {
+                            unset($longLivedConnections[$llConnId]);
+                        }
+                    }
+                    if (\count($longLivedConnections) < $longLivedMaxActive) {
+                        break;
+                    }
+                    \usleep(50_000);
+                }
+            }
+        }
+
+        if ($longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
             $activeRequests--;
-            $body = 'Service Unavailable - Too Many Long Connections';
-            $resp = "HTTP/1.1 503 Service Unavailable\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
+            $body = 'Too Many Long Connections - Retry Shortly';
+            $resp = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain; charset=utf-8\r\nRetry-After: 2\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
             @\fwrite($conn, $resp);
             @\fclose($conn);
             unset(
