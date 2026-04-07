@@ -26,6 +26,12 @@
         apiStartPreview: '',
         apiExitPreview: '',
         apiPublishAndExit: '',
+        apiCheckLock: '',
+        apiReleaseLock: '',
+        apiUpdateActivity: '',
+        apiRequestTakeover: '',
+        apiCheckTakeoverRequest: '',
+        apiForceTakeover: '',
     };
 
     // 状态管理
@@ -50,6 +56,10 @@
         publishedVersionId: null, // 已发布版本ID
         versionPanelOpen: false, // 版本面板是否展开
         // 嵌套距离：elementsFromPoint 得到的层级栈 [0]=最外，lastHoverPoint 为 iframe 内坐标
+        lockHeld: false,
+        lockHeartbeatTimer: null,
+        lockLifecycleBound: false,
+        lockConflictInfo: null,
         nestStack: [],
         nestIndex: 0,
         lastHoverPoint: null,
@@ -85,6 +95,103 @@
     function iconSvg(name) {
         var svg = TE_ICONS[name];
         return svg ? '<span class="te-icon te-icon-' + name + '">' + svg + '</span>' : '';
+    }
+    function getCurrentPageType() {
+        return state.pageType || state.layoutType || 'homepage';
+    }
+
+    function getCurrentWindowUrl() {
+        return new URL(window.location.href);
+    }
+
+    function getCurrentWindowParam(key) {
+        return getCurrentWindowUrl().searchParams.get(key) || '';
+    }
+
+    function buildEditorUrl(overrides = {}) {
+        const currentUrl = getCurrentWindowUrl();
+        const url = new URL(config.apiBase || currentUrl.pathname, window.location.origin);
+
+        currentUrl.searchParams.forEach((value, key) => {
+            url.searchParams.set(key, value);
+        });
+
+        const params = Object.assign({
+            theme_id: state.themeId || 0,
+            page_type: getCurrentPageType(),
+            editor_area: state.editorArea || 'frontend',
+            status: state.previewStatus || 'draft',
+        }, overrides || {});
+
+        Object.entries(params).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === '') {
+                url.searchParams.delete(key);
+                return;
+            }
+
+            url.searchParams.set(key, String(value));
+        });
+
+        url.searchParams.set('_t', String(Date.now()));
+        return url.toString();
+    }
+
+    function buildLayoutPreviewUrl(overrides = {}) {
+        elements.previewFrame.src = buildLayoutPreviewUrl();
+        fetchLayoutSlots();
+        return;
+
+        const url = new URL(config.apiLayoutPreview, window.location.origin);
+        const currentUrl = getCurrentWindowUrl();
+        const layoutType = (typeof overrides.layout_type === 'string' && overrides.layout_type)
+            ? overrides.layout_type
+            : (state.layoutType || getCurrentPageType() || 'homepage');
+        const pageType = (typeof overrides.page_type === 'string' && overrides.page_type)
+            ? overrides.page_type
+            : (state.pageType || layoutType || 'homepage');
+        const layoutOption = (typeof overrides.layout_option === 'string' && overrides.layout_option)
+            ? overrides.layout_option
+            : (state.layoutOption || 'default');
+        const previewStatus = (typeof overrides.status === 'string' && overrides.status)
+            ? overrides.status
+            : (state.previewStatus || 'draft');
+        const editorArea = (typeof overrides.editor_area === 'string' && overrides.editor_area)
+            ? overrides.editor_area
+            : (state.editorArea || 'frontend');
+        const themeId = overrides.theme_id || state.themeId || 0;
+
+        url.searchParams.set('theme_id', String(themeId));
+        url.searchParams.set('page_type', pageType);
+        url.searchParams.set('layout_type', layoutType);
+        url.searchParams.set('layout_option', layoutOption);
+        url.searchParams.set('editor_mode', String(overrides.editor_mode || '1'));
+        url.searchParams.set('preview_mode', String(overrides.preview_mode || 'live'));
+        url.searchParams.set('status', previewStatus);
+        url.searchParams.set('editor_area', editorArea);
+
+        ['frontend_theme_id', 'backend_theme_id', 'scope', 'version_id'].forEach((key) => {
+            const overrideValue = Object.prototype.hasOwnProperty.call(overrides, key) ? overrides[key] : currentUrl.searchParams.get(key);
+            if (overrideValue !== null && overrideValue !== undefined && overrideValue !== '') {
+                url.searchParams.set(key, String(overrideValue));
+            }
+        });
+
+        url.searchParams.set('_t', String(overrides._t || Date.now()));
+        return url.toString();
+    }
+
+    function navigateEditorShell(overrides = {}) {
+        const targetUrl = buildEditorUrl(overrides);
+        const finalize = () => {
+            window.location.href = targetUrl;
+        };
+
+        if (state.lockHeld) {
+            releaseCurrentEditorLock().finally(finalize);
+            return;
+        }
+
+        finalize();
     }
 
     // 注意：pageType 和 layoutType 现在是同一个概念
@@ -129,6 +236,12 @@
         config.apiStartPreview = container.dataset.apiStartPreview || `${config.apiBase}/start-preview`;
         config.apiExitPreview = container.dataset.apiExitPreview || `${config.apiBase}/exit-preview`;
         config.apiPublishAndExit = container.dataset.apiPublishAndExit || `${config.apiBase}/publish-and-exit`;
+        config.apiCheckLock = container.dataset.apiCheckLock || `${config.apiBase}/check-lock`;
+        config.apiReleaseLock = container.dataset.apiReleaseLock || `${config.apiBase}/release-lock`;
+        config.apiUpdateActivity = container.dataset.apiUpdateActivity || `${config.apiBase}/update-activity`;
+        config.apiRequestTakeover = container.dataset.apiRequestTakeover || `${config.apiBase}/request-takeover`;
+        config.apiCheckTakeoverRequest = container.dataset.apiCheckTakeoverRequest || `${config.apiBase}/check-takeover-request`;
+        config.apiForceTakeover = container.dataset.apiForceTakeover || `${config.apiBase}/force-takeover`;
 
         // Preview-related endpoints and call sites (baseline for TDD)
         // - apiRenderWidget: used by renderWidgetPreview()/preview render flows
@@ -140,6 +253,7 @@
         state.themeId = parseInt(container.dataset.themeId) || 0;
         state.pageType = container.dataset.pageType || 'default';
         state.editorArea = container.dataset.editorArea || 'frontend';
+        state.previewStatus = container.dataset.previewStatus || getCurrentWindowParam('status') || 'draft';
 
         // 缓存 DOM 元素
         elements = {
@@ -203,6 +317,9 @@
             pageType: state.pageType,
             layoutType: state.layoutType
         });
+
+        updatePreviewStatusUI(state.previewStatus);
+        initializeEditorLock();
     }
 
     /**
@@ -214,8 +331,11 @@
             elements.themeSelect.addEventListener('change', function() {
                 const themeId = this.value;
                 if (themeId) {
-                    const params = new URLSearchParams({ theme_id: themeId, page_type: state.pageType, editor_area: 'frontend' });
-                    window.location.href = `${config.apiBase}?${params.toString()}`;
+                    navigateEditorShell({
+                        theme_id: themeId,
+                        page_type: getCurrentPageType(),
+                        editor_area: 'frontend',
+                    });
                 }
             });
         }
@@ -225,11 +345,11 @@
             elements.editorAreaSelect.addEventListener('change', function() {
                 const area = this.value;
                 if (state.themeId && area) {
-                    const params = new URLSearchParams(window.location.search);
-                    params.set('theme_id', state.themeId);
-                    params.set('page_type', state.pageType);
-                    params.set('editor_area', area);
-                    window.location.href = `${config.apiBase}?${params.toString()}`;
+                    navigateEditorShell({
+                        theme_id: state.themeId,
+                        page_type: getCurrentPageType(),
+                        editor_area: area,
+                    });
                 }
             });
         }
@@ -239,6 +359,11 @@
             elements.pageTypeSelect.addEventListener('change', function() {
                 const pageType = this.value;
                 if (state.themeId && pageType) {
+                    navigateEditorShell({
+                        page_type: pageType,
+                        version_id: null,
+                    });
+                    return;
                     // 更新状态
                     state.pageType = pageType;
                     state.layoutType = pageType; // pageType 和 layoutType 是同一个概念
@@ -3018,6 +3143,10 @@
      * 切换预览视图
      */
     function switchPreviewView(viewType) {
+        if (viewType === 'structure' && state.previewStatus !== 'draft') {
+            showToast('已发布预览下仅支持实时预览视图', 'info');
+            viewType = 'preview';
+        }
         // 更新标签状态
         document.querySelectorAll('.preview-tab').forEach(tab => {
             tab.classList.toggle('active', tab.dataset.view === viewType);
@@ -6446,7 +6575,11 @@
                 },
                 body: JSON.stringify({
                     theme_id: state.themeId,
+                    frontend_theme_id: getCurrentWindowParam('frontend_theme_id') || state.themeId,
+                    backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
+                    editor_area: state.editorArea || 'frontend',
                     page_type: state.pageType,
+                    status: state.previewStatus || 'draft',
                 }),
             });
 
@@ -6479,8 +6612,7 @@
 
         // 使用 preview_mode=1 参数以读取草稿数据（前台预览）
         // 可以额外添加 status 参数来明确指定版本
-        const status = state.previewStatus || 'draft';
-        window.open(`${config.apiPreview}?theme_id=${state.themeId}&page_type=${state.pageType}&preview_mode=1&status=${status}`, '_blank');
+        window.open(buildLayoutPreviewUrl(), '_blank');
     }
     
     /**
@@ -6534,7 +6666,7 @@
         }
 
         // 使用 status=published 明确指定查看已发布版本
-        window.open(`${config.apiPreview}?theme_id=${state.themeId}&page_type=${state.pageType}&status=published`, '_blank');
+        window.open(buildLayoutPreviewUrl({status: 'published'}), '_blank');
     }
     
     /**
@@ -6549,6 +6681,12 @@
         }
         
         state.previewStatus = status;
+        clearSlotSelection();
+        deselectArea();
+        deselectWidget();
+        if (status !== 'draft') {
+            switchPreviewView('preview');
+        }
         
         // 刷新编辑器 iframe 预览
         refreshPreview();
@@ -6567,6 +6705,13 @@
         if (statusIndicator) {
             statusIndicator.textContent = status === 'draft' ? '草稿' : '已发布';
             statusIndicator.className = `preview-status-indicator status-${status}`;
+        }
+        const structureTab = document.querySelector('.preview-tab[data-view="structure"]');
+        if (structureTab) {
+            const enabled = status === 'draft';
+            structureTab.disabled = !enabled;
+            structureTab.classList.toggle('disabled', !enabled);
+            structureTab.setAttribute('aria-disabled', enabled ? 'false' : 'true');
         }
         
         // 更新切换按钮状态
@@ -7231,6 +7376,9 @@
         }
 
         // 刷新 iframe（添加时间戳避免缓存）
+        elements.previewFrame.src = buildLayoutPreviewUrl();
+        return;
+
         const currentSrc = elements.previewFrame.src;
         const url = new URL(currentSrc, window.location.origin);
         url.searchParams.set('_t', Date.now());
@@ -7357,6 +7505,13 @@
                 }
                 
                 // 构建预览 URL
+                showToast(`宸插垏鎹㈠埌 ${pageType} 甯冨眬`, 'info');
+                console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType);
+                navigateEditorShell({
+                    page_type: pageType,
+                });
+                return;
+
                 const previewUrl = new URL(config.apiLayoutPreview, currentOrigin);
                 previewUrl.searchParams.set('theme_id', state.themeId);
                 previewUrl.searchParams.set('layout_type', layoutType);
@@ -7433,8 +7588,11 @@
         try {
             const url = new URL(config.apiCompileLayout, window.location.origin);
             url.searchParams.set('theme_id', state.themeId);
+            url.searchParams.set('page_type', getCurrentPageType());
             url.searchParams.set('layout_type', state.layoutType);
             url.searchParams.set('layout_option', state.layoutOption);
+            url.searchParams.set('editor_area', state.editorArea || 'frontend');
+            url.searchParams.set('status', state.previewStatus || 'draft');
 
             const response = await fetch(url);
             const contentType = response.headers.get('Content-Type') || '';
