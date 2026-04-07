@@ -449,11 +449,15 @@ async function loginAsAdmin(page, options = {}) {
   const password = options.password || process.env.PLAYWRIGHT_ADMIN_PASSWORD || 'admin';
   const timeout = options.timeout || 120000;
   let bootstrapFailure = null;
+  const bootstrapOnly = options.bootstrapOnly === true;
 
   for (const mode of (options.bootstrapModes || getAdminSessionBootstrapModes(options))) {
     try {
       const sessionInfo = bootstrapAdminSession(mode, options);
       await applyAdminSessionCookie(page, sessionInfo, options);
+      if (bootstrapOnly) {
+        return getBackendRoot(options);
+      }
       await gotoBackend(page, 'admin', {
         waitUntil: 'domcontentloaded',
         timeout,
