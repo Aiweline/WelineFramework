@@ -7,6 +7,7 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Service\Layout\LayoutConfigNormalizer;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 class AiSiteScopeCompatibilityService
 {
@@ -18,6 +19,9 @@ class AiSiteScopeCompatibilityService
     public const WORKSPACE_STATUS_PUBLISHING = 'publishing';
     public const WORKSPACE_STATUS_PUBLISHED = 'published';
     public const WORKSPACE_STATUS_FAILED = 'failed';
+    /** AI 占位回退日志去重：同一进程只记录一次，避免 402 刷屏。 */
+    private static bool $workspacePlaceholderFallbackLogged = false;
+    private const REQUEST_KEY_PLACEHOLDER_FORCE_STATIC = 'pagebuilder.workspace.placeholder.force_static';
 
     public function __construct(
         private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
@@ -395,15 +399,23 @@ class AiSiteScopeCompatibilityService
         array $websiteProfile,
         array $scope
     ): array {
+        if ((bool)RequestContext::get(self::REQUEST_KEY_PLACEHOLDER_FORCE_STATIC, false)) {
+            return $blocksBuilder->buildStaticPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
+        }
+
         try {
             return $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
         } catch (\Throwable $throwable) {
             if (!$this->shouldFallbackToStaticBlocks($throwable)) {
                 throw $throwable;
             }
+            RequestContext::set(self::REQUEST_KEY_PLACEHOLDER_FORCE_STATIC, true);
 
             $message = \trim(\strip_tags($throwable->getMessage()));
-            w_log_error('AI Site workspace placeholder fallback: ' . ($message !== '' ? $message : 'unknown error'));
+            if (!self::$workspacePlaceholderFallbackLogged) {
+                self::$workspacePlaceholderFallbackLogged = true;
+                w_log_error('AI Site workspace placeholder fallback: ' . ($message !== '' ? $message : 'unknown error'));
+            }
 
             return $blocksBuilder->buildStaticPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
         }
