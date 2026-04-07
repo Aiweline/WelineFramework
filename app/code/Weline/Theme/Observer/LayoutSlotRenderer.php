@@ -322,6 +322,8 @@ HTML;
             const orphanSlots = JSON.parse(btn.getAttribute('data-orphan-slots') || '[]');
             const urlParams = new URLSearchParams(window.location.search);
             const themeId = urlParams.get('theme_id') || '';
+            const pageType = urlParams.get('page_type') || urlParams.get('layout_type') || 'homepage';
+            const status = urlParams.get('status') || 'draft';
             
             // 鏄剧ず澶勭悊涓?
             confirmMessage.style.display = 'none';
@@ -341,7 +343,9 @@ HTML;
                 },
                 body: JSON.stringify({
                     theme_id: themeId,
-                    slot_ids: orphanSlots
+                    slot_ids: orphanSlots,
+                    page_type: pageType,
+                    status: status
                 })
             })
             .then(response => response.json())
