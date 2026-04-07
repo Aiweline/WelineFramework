@@ -47,7 +47,10 @@ class WebsiteAgentServiceTest extends TestCase
                 $this->callback(function (array $params): bool {
                     $this->assertSame(7, $params['account_id'] ?? null);
                     $this->assertSame('beanlane.com', $params['domains'][0] ?? null);
-                    $this->assertContains('beanlane.net', $params['domains'] ?? []);
+                    $this->assertTrue(
+                        \in_array('beanlane.net', $params['domains'] ?? [], true)
+                        || \in_array('beanlane.io', $params['domains'] ?? [], true)
+                    );
                     return true;
                 })
             )

@@ -14,7 +14,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->createMock(PassthroughCore::class);
 
-        $core->expects(self::once())
+        $core->expects(self::atLeastOnce())
             ->method('getWorkerCount')
             ->willReturn(0);
 
@@ -84,7 +84,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $dispatcher = $this->newDispatcherWithoutConstructor();
         $core = $this->createMock(PassthroughCore::class);
 
-        $core->expects(self::once())
+        $core->expects(self::atLeastOnce())
             ->method('getMaintenanceWorkerPorts')
             ->willReturn([19002]);
 
@@ -96,7 +96,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
             ->method('getConnectionWorkerPort')
             ->willReturn(19002);
 
-        $core->expects(self::once())
+        $core->expects(self::atLeastOnce())
             ->method('getWorkerHealthSummary')
             ->willReturn([
                 'total' => 1,
@@ -197,6 +197,53 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         self::assertStringContainsString('HTTP/1.1 503 Service Unavailable', $response);
         self::assertStringContainsString('WLS正在启动中', $response);
         self::assertStringContainsString('业务 Worker 正在初始化', $response);
+    }
+
+    public function testFormatMaintenanceRoutingContextIncludesFallbackStateAndCandidates(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->method('getWorkerCount')->willReturn(0);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([19002, 19003]);
+        $core->method('getWorkerHealthSummary')->willReturn([
+            'healthy' => 0,
+            'total' => 0,
+        ]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'maintenanceFallbackActive', true);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'formatMaintenanceRoutingContext');
+        $method->setAccessible(true);
+        $context = (string) $method->invoke($dispatcher);
+
+        self::assertStringContainsString('maintenance_fallback_active=true', $context);
+        self::assertStringContainsString('worker_pool_size=0', $context);
+        self::assertStringContainsString('maintenance_candidates=19002,19003', $context);
+        self::assertStringContainsString('health=0/0', $context);
+    }
+
+    public function testUpdateMaintenanceFallbackStateSwitchesFlag(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->method('getWorkerCount')->willReturn(0);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
+        $core->method('getWorkerHealthSummary')->willReturn([
+            'healthy' => 0,
+            'total' => 0,
+        ]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'maintenanceFallbackActive', false);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'updateMaintenanceFallbackState');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, true, 'SET_WORKER_POOL accepted=0, rejected=0');
+
+        self::assertTrue((bool) $this->getProperty($dispatcher, 'maintenanceFallbackActive'));
     }
 
     private function newDispatcherWithoutConstructor(): Dispatcher

@@ -288,6 +288,8 @@ class PassthroughCore
      * 上次输出「workerPorts 为空」到 stderr 的时间（节流，避免启动时刷屏）
      */
     private float $lastEmptyWorkerPortsStderrAt = 0.0;
+    /** @var array<string, float> */
+    private array $maintenanceDecisionLoggedAt = [];
     private $spinWaitTickCallback = null;
 
     /**
@@ -1908,6 +1910,35 @@ class PassthroughCore
             default => WlsLogger::info_($message),
         };
         $this->writeStderr($message . "\n");
+    }
+
+    private function logMaintenanceDecision(
+        string $key,
+        string $message,
+        string $level = 'INFO',
+        float $throttleSec = 10.0
+    ): void
+    {
+        $now = \microtime(true);
+        $lastLoggedAt = (float) ($this->maintenanceDecisionLoggedAt[$key] ?? 0.0);
+        if ($throttleSec > 0.0 && ($now - $lastLoggedAt) < $throttleSec) {
+            return;
+        }
+
+        $this->maintenanceDecisionLoggedAt[$key] = $now;
+        $this->logWarmup($message, $level);
+    }
+
+    private function formatMaintenanceLogContext(): string
+    {
+        $businessPorts = $this->workerPorts;
+        $maintenancePorts = $this->maintenanceWorkerPorts;
+        \sort($businessPorts, SORT_NUMERIC);
+        \sort($maintenancePorts, SORT_NUMERIC);
+
+        return 'business_pool=' . ($businessPorts !== [] ? \implode(',', $businessPorts) : '(empty)')
+            . ', maintenance_candidates=' . ($maintenancePorts !== [] ? \implode(',', $maintenancePorts) : '(none)')
+            . ', maintenance_port=' . ($this->maintenancePort > 0 ? (string) $this->maintenancePort : '(none)');
     }
 
     public function getWorkerPorts(): array
