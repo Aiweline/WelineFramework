@@ -86,6 +86,9 @@ if (!isset($masterPid) || $masterPid <= 0) {
 if (!isset($isMaintenanceWorker)) {
     $isMaintenanceWorker = false;
 }
+if ($isMaintenanceWorker && !\defined('WLS_MAINTENANCE_WORKER')) {
+    \define('WLS_MAINTENANCE_WORKER', true);
+}
 
 // 定义前端模式常量（供 WlsRuntime 使用）
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
@@ -211,42 +214,18 @@ try {
     $runtime->bootstrap();
     WlsLogger::info_("框架运行时初始化成功");
 
-    // 共享服务提前并发 ensure：拿到最新 host/port/token，避免沿用陈旧 runtime 导致认证失败
-    try {
-        $sharedRuntime = (new \Weline\Server\Service\SharedStateServiceManager())->ensureRuntime(
-            $instanceName,
-            [],
-            $envConfig,
-            $isFrontend,
-            false
-        );
-        if (\is_array($sharedRuntime['session'] ?? null)) {
-            $sessionRuntime = \array_replace($sessionRuntime, $sharedRuntime['session']);
-        }
-        if (\is_array($sharedRuntime['memory'] ?? null)) {
-            $memoryRuntime = \array_replace($memoryRuntime, $sharedRuntime['memory']);
-        }
-        WlsLogger::info_('[SharedState] Session/Memory 共享服务已提前并发就绪');
-    } catch (\Throwable $sharedEnsureError) {
-        WlsLogger::warning_('[SharedState] 提前确保共享服务失败，继续按本地 runtime 尝试: ' . $sharedEnsureError->getMessage());
-    }
+    // 共享服务检查延迟到后台进行，不阻塞 IPC 连接
+    // IPC 连接应该尽快建立，让 Master 能立即感知到 Worker
+    // SharedState 的 session/memory 信息在首次请求时通过 ConnectionPool 自动获取
+    // 不再在这里同步等待 SharedStateServiceManager::ensureRuntime()
 
-    // 自治连接 Session Server（批量启动优化）：
-    // Worker 启动后立即上报 READY，Session 连接在后台异步进行
-    // 不再阻塞等待 Session 连接，所有 Worker 可同时启动
-    // Master 会等待所有 Worker READY 后才认为启动完成
-    $sessionHost = (string) ($sessionRuntime['host'] ?? '127.0.0.1');
-    $sessionPort = (int) ($sessionRuntime['port'] ?? 0);
-    if ($sessionPort <= 0) {
-        $sessionPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
-    }
-    $sessionTokenFileName = (string) ($sessionRuntime['token_file_name'] ?? 'session_server.token');
-    $memoryHost = (string) ($memoryRuntime['host'] ?? '127.0.0.1');
-    $memoryPort = (int) ($memoryRuntime['port'] ?? 0);
-    if ($memoryPort <= 0) {
-        $memoryPort = 19971 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
-    }
-    $memoryTokenFileName = (string) ($memoryRuntime['token_file_name'] ?? 'memory_server.token');
+    // 使用默认地址，实际地址在首次请求时由 ConnectionPool 自动发现
+    $sessionHost = '127.0.0.1';
+    $sessionPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+    $sessionTokenFileName = 'session_server.token';
+    $memoryHost = '127.0.0.1';
+    $memoryPort = 19971 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+    $memoryTokenFileName = 'memory_server.token';
 
     // 注意：Worker 启动阶段不进行任何服务发现或连接尝试
     // 所有连接将由首个请求到达时按需进行（Lazy Initialization）
@@ -254,6 +233,24 @@ try {
     WlsLogger::info_("[Session] Session 服务地址已预配置 {$sessionHost}:{$sessionPort}");
     WlsLogger::info_("[Memory] Memory 服务地址已预配置 {$memoryHost}:{$memoryPort}");
     WlsLogger::info_("[Worker] Worker 将快速启动并上报 READY，Session/Memory 连接由首个请求按需进行");
+
+    // 异步预热连接池：调用 getInstance 触发后台连接建立
+    // min_idle=1 确保连接池在后台异步建立到 Session/Memory 的长连接
+    try {
+        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($sessionHost, $sessionPort, [
+            'token_file_name' => $sessionTokenFileName,
+            'min_idle' => 1,
+            'log_pool_lifecycle' => false,
+        ]);
+        \Weline\Server\Shared\Connection\ConnectionPoolManager::getInstance($memoryHost, $memoryPort, [
+            'token_file_name' => $memoryTokenFileName,
+            'min_idle' => 1,
+            'log_pool_lifecycle' => false,
+        ]);
+        WlsLogger::info_('[ConnectionPool] 连接池已在后台异步预热，首次请求时即可用');
+    } catch (\Throwable $e) {
+        WlsLogger::warning_('[ConnectionPool] 预热失败，将在首次请求时重试: ' . $e->getMessage());
+    }
 } catch (\Throwable $e) {
     $runtimeError = $e->getMessage();
     WlsLogger::error_("框架运行时初始化失败: " . $e->getMessage());
@@ -590,76 +587,17 @@ WlsLogger::info_("Socket 创建成功，开始监听连接");
 
 \stream_set_blocking($socket, false);
 
-// ========== 上报 READY 前验证 Session/Memory 可用 ==========
-// 仅业务 Worker 预检共享服务；维护 Worker 不依赖 Session/Memory，避免并发启动阶段阻塞 IPC READY 注册
+// ========== 上报 READY 前跳过 Session/Memory 验证（按需连接） ==========
+// Session/Memory 是共享服务，连接在首次使用时自动建立，无需在启动时预验证
+// 这样可以大幅缩短 Worker 启动时间，避免启动阶段阻塞
 $sessionReadyVerified = false;
 $memoryReadyVerified = false;
 
 if ($isMaintenanceWorker) {
-    WlsLogger::info_('[Session/Memory] 维护 Worker 跳过连接验证，直接进行 READY 注册');
-} elseif ($runtimeError !== null) {
-    WlsLogger::info_('[Session/Memory] 业务 Worker：runtime 未就绪，跳过连接验证');
-} elseif ($sessionPort <= 0 || $memoryPort <= 0) {
-    WlsLogger::warning_('[Session/Memory] 业务 Worker：Session/Memory 端口无效，跳过连接验证');
+    WlsLogger::info_('[Session/Memory] 维护 Worker 跳过连接验证（按需连接）');
 } else {
-    WlsLogger::info_('[Session/Memory] 业务 Worker：验证连接可用性...');
-    $verifyMaxRetries = 5;  // 最多重试 5 次
-    $verifyRetryInterval = 1;  // 间隔 1 秒
-
-    for ($verifyAttempt = 1; $verifyAttempt <= $verifyMaxRetries; $verifyAttempt++) {
-        try {
-            // 尝试连接 Session
-            if (!$sessionReadyVerified) {
-                $sessionTestConn = @\stream_socket_client(
-                    "tcp://{$sessionHost}:{$sessionPort}",
-                    $errno,
-                    $errstr,
-                    1.0,
-                    STREAM_CLIENT_CONNECT
-                );
-                if ($sessionTestConn) {
-                    @\fclose($sessionTestConn);
-                    $sessionReadyVerified = true;
-                    WlsLogger::info_('[Session] 连接验证成功');
-                } else {
-                    WlsLogger::warning_("[Session] 连接验证失败：{$errstr}");
-                }
-            }
-
-            // 尝试连接 Memory
-            if (!$memoryReadyVerified) {
-                $memoryTestConn = @\stream_socket_client(
-                    "tcp://{$memoryHost}:{$memoryPort}",
-                    $errno,
-                    $errstr,
-                    1.0,
-                    STREAM_CLIENT_CONNECT
-                );
-                if ($memoryTestConn) {
-                    @\fclose($memoryTestConn);
-                    $memoryReadyVerified = true;
-                    WlsLogger::info_('[Memory] 连接验证成功');
-                } else {
-                    WlsLogger::warning_("[Memory] 连接验证失败：{$errstr}");
-                }
-            }
-
-            // 都验证成功则退出
-            if ($sessionReadyVerified && $memoryReadyVerified) {
-                WlsLogger::info_('[Session/Memory] 连接验证全部通过，可以上报 READY');
-                break;
-            }
-
-            if ($verifyAttempt < $verifyMaxRetries) {
-                WlsLogger::info_("[Session/Memory] 第 {$verifyAttempt} 次验证失败，{$verifyRetryInterval} 秒后重试...");
-                \Weline\Framework\Runtime\SchedulerSystem::sleep($verifyRetryInterval);
-            } else {
-                WlsLogger::warning_('[Session/Memory] 验证超过最大重试次数，将继续上报 READY（首请求时再连接）');
-            }
-        } catch (\Throwable $e) {
-            WlsLogger::warning_('[Session/Memory] 验证异常：' . $e->getMessage());
-        }
-    }
+    // 业务 Worker 也跳过验证，Session/Memory 连接在 ConnectionPool 首次使用时自动建立
+    WlsLogger::info_('[Session/Memory] 业务 Worker 跳过连接验证（连接在首次使用时自动建立）');
 }
 
 // ========== IPC 控制通道：连接 Master 并注册 + 上报就绪 ==========
@@ -687,6 +625,7 @@ if ($isMaintenanceWorker) {
 
 // 获取控制端口
 $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, $controlPort);
+$instanceInfoGateway = new \Weline\Server\IPC\ChildControl\InstanceInfoGateway($instanceName);
 $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTENANCE : \Weline\Server\IPC\ControlMessage::ROLE_WORKER;
 $waitingForAck = false;
 $readySentTime = 0.0;
@@ -882,8 +821,13 @@ if ($controlPort > 0) {
             });
         }
     } else {
-        WlsLogger::warning_("IPC 控制通道连接失败 (控制端口: {$controlPort})，继续独立运行");
+        WlsLogger::error_("[IPC] IPC 控制通道初始连接失败 (控制端口: {$controlPort})");
+        WlsLogger::error_("[IPC] 可能原因: Master 未正确启动、IPC 服务故障或网络隔离");
+        WlsLogger::warning_("[IPC] Worker 将标记为孤立模式，进入重连循环");
         $ipcClient = $kernel->getClient();
+        $ipcReconnectAttempts = 0;
+        $ipcReconnectMaxAttempts = 30;
+        $ipcReconnectDueTime = \microtime(true) + 5.0;
     }
 }
 // ========== IPC 控制通道结束 ==========
@@ -1151,6 +1095,30 @@ while (true) {
     }
     
     // ========== IPC 控制通道处理 ==========
+    // 如果初始连接失败，定期尝试与 Master 重新连接（自愈机制）
+    if (isset($ipcReconnectDueTime) && \microtime(true) >= $ipcReconnectDueTime && $ipcReconnectAttempts < $ipcReconnectMaxAttempts) {
+        $ipcReconnectAttempts++;
+        
+        // 🔑 每次重连都读取最新的 instance 信息，以获得 Master 可能更新的 control_port
+        $latestControlPort = $instanceInfoGateway->getLatestControlPort($controlPort);
+        if ($latestControlPort !== $controlPort) {
+            WlsLogger::warning_("[IPC] 检测到 control_port 已更新: {$controlPort} → {$latestControlPort}");
+            $controlPort = $latestControlPort;
+        }
+        
+        WlsLogger::warning_("[IPC] 第 {$ipcReconnectAttempts}/{$ipcReconnectMaxAttempts} 次尝试与 Master 重新连接 (端口: {$controlPort})");
+        if ($kernel->connectAndRegister($controlPort)) {
+            $ipcClient = $kernel->getClient();
+            unset($ipcReconnectDueTime, $ipcReconnectAttempts, $ipcReconnectMaxAttempts);
+            WlsLogger::info_("[IPC] 成功重新连接到 Master，已上报就绪状态");
+            $waitingForAck = true;
+            $readySentTime = \microtime(true);
+        } else {
+            $nextRetryDelay = 5 + \min($ipcReconnectAttempts, 10);
+            $ipcReconnectDueTime = \microtime(true) + $nextRetryDelay;
+        }
+    }
+    
     if ($ipcClient && !$ipcClient->isConnected() && !$ipcReceivedShutdown) {
         $ipcClient->tryReconnect();
     }
