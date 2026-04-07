@@ -853,6 +853,11 @@ class SharedStateServiceManager
      */
     protected function buildLaunchCommand(array $definition, string $requesterInstanceName): ServiceCommand
     {
+        $sharedLogInstanceName = (string) ($definition['service_instance_name'] ?? $requesterInstanceName);
+        if (\trim($sharedLogInstanceName) === '') {
+            $sharedLogInstanceName = 'default';
+        }
+
         $arguments = [
             (string) $definition['host'],
             (string) $definition['port'],
@@ -860,7 +865,7 @@ class SharedStateServiceManager
             '--instance-name=' . (string) $definition['service_instance_name'],
             '--token-file-name=' . (string) $definition['token_file_name'],
             '--bootstrap-instance=' . $requesterInstanceName,
-            '--log-instance-name=' . $requesterInstanceName,
+            '--log-instance-name=' . $sharedLogInstanceName,
             '--shared-service=1',
         ];
 
@@ -1193,13 +1198,16 @@ class SharedStateServiceManager
     protected function ensureSharedProcessLogVisible(array $runtime, string $requesterInstanceName): void
     {
         $processName = \trim((string) ($runtime['process_name'] ?? ''));
-        $requesterInstanceName = \trim($requesterInstanceName);
-        if ($processName === '' || $requesterInstanceName === '' || $requesterInstanceName === 'system') {
+        $sharedLogInstanceName = \trim((string) ($runtime['service_instance_name'] ?? $runtime['instance_name'] ?? ''));
+        if ($sharedLogInstanceName === '') {
+            $sharedLogInstanceName = 'default';
+        }
+        if ($processName === '') {
             return;
         }
 
         try {
-            $targetLog = WlsLogService::ensureProcessLogFile($processName, $requesterInstanceName);
+            $targetLog = WlsLogService::ensureProcessLogFile($processName, $sharedLogInstanceName);
             $sourceLog = Processer::getLogFile('--name=' . $processName);
         } catch (\Throwable) {
             return;
