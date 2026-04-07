@@ -20,6 +20,10 @@
  if (!defined('DEV')) {
      define('DEV', true);
  }
+ // Keep PHPUnit translations stable regardless of local default language.
+ $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? 'en_US';
+ $_COOKIE['WELINE_USER_LANG'] = $_COOKIE['WELINE_USER_LANG'] ?? 'en_US';
+ $_COOKIE['WELINE-WEBSITE-LANG'] = $_COOKIE['WELINE-WEBSITE-LANG'] ?? 'en_US';
 
  // 临时抑制 PHP 8.1+ 的弃用警告（Pest 1.x 兼容性问题）
  // 这些警告来自 Pest 1.x 和 Collision 库，不影响功能
@@ -27,6 +31,9 @@
  error_reporting($originalErrorReporting & ~E_DEPRECATED);
 
  require __DIR__ . '/bootstrap.php';
- 
+ $_SERVER['WELINE_USER_LANG'] = 'en_US';
+ $_COOKIE['WELINE_USER_LANG'] = 'en_US';
+ $_COOKIE['WELINE-WEBSITE-LANG'] = 'en_US';
+
  // 恢复原始错误报告级别
  error_reporting($originalErrorReporting);

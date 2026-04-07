@@ -21,6 +21,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Http\Sse\SseContext;
 
 /**
  * FPM 运行时
@@ -129,6 +130,12 @@ class FpmRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('run_after', (microtime(true) - $runAfterStart) * 1000, 'framework');
+            }
+
+            // SSE 模式下，响应已经通过 SseWriter 直接流式输出；
+            // FPM 运行时不应再走普通 HTML/JSON 收口，避免覆盖为 text/html。
+            if (SseContext::isSseEnabled()) {
+                return '';
             }
             
             if (\is_array($result)) {

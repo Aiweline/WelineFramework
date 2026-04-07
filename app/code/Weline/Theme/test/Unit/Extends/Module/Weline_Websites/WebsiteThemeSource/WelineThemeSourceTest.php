@@ -49,7 +49,7 @@ class WelineThemeSourceTest extends TestCase
     {
         $this->mockQueryProvider
             ->expects($this->once())
-            ->method('invoke')
+            ->method('execute')
             ->willReturn([]);
 
         $result = $this->source->listThemes();
@@ -61,7 +61,7 @@ class WelineThemeSourceTest extends TestCase
     {
         $this->mockQueryProvider
             ->expects($this->once())
-            ->method('invoke')
+            ->method('execute')
             ->willReturn([
                 ['theme_id' => 1, 'theme_name' => 'Valid Theme', 'theme_path' => '/valid', 'layout_count' => 5],
                 ['theme_id' => 0, 'theme_name' => 'Invalid Theme'],
@@ -110,7 +110,7 @@ class WelineThemeSourceTest extends TestCase
     {
         $this->mockQueryProvider
             ->expects($this->once())
-            ->method('invoke')
+            ->method('execute')
             ->willReturn([]);
 
         $result = $this->source->getLayoutsForPageType('home_page');
@@ -122,7 +122,7 @@ class WelineThemeSourceTest extends TestCase
     {
         $this->mockQueryProvider
             ->expects($this->once())
-            ->method('invoke')
+            ->method('execute')
             ->willReturn([
                 [
                     'theme_id' => 5,
