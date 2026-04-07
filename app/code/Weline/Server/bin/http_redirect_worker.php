@@ -84,12 +84,7 @@ WlsLogger::getInstance()
 
 // 进程日志文件（持久化，跨重启保留）
 if ($processName) {
-    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
-    $processLogDir = \dirname($processLogFile);
-    if (!\is_dir($processLogDir)) {
-        @\mkdir($processLogDir, 0777, true);
-    }
-    \ini_set('error_log', $processLogFile);
+    \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
 }
 
 // 注册 PID 到进程管理器

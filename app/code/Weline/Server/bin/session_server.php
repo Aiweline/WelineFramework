@@ -103,12 +103,7 @@ WlsLogger::getInstance()
     ->setProcessTag($processTag);
 
 if ($processName) {
-    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
-    $processLogDir = \dirname($processLogFile);
-    if (!\is_dir($processLogDir)) {
-        @\mkdir($processLogDir, 0777, true);
-    }
-    \ini_set('error_log', $processLogFile);
+    \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
 }
 
 if ($processName) {
