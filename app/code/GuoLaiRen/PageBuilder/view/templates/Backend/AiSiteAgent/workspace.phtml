@@ -1398,7 +1398,23 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
             body: fd
-        }).then(function (r) { return r.json(); });
+        }).then(function (response) {
+            if (!response.ok) {
+                return response.text().then(function (text) {
+                    var errMsg = '网络错误: ' + response.status + ' ' + response.statusText;
+                    try {
+                        var j = JSON.parse(text);
+                        if (j && (j.message || j.error)) {
+                            errMsg = String(j.message || j.error);
+                        }
+                    } catch (e) {
+                        // 如果不是 JSON，使用原始错误信息
+                    }
+                    throw new Error(errMsg);
+                });
+            }
+            return response.json();
+        });
     }
 
     function setBuildNavigationGuard(active) {
@@ -3527,9 +3543,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             if (terminal && typeof terminal.isRunning === 'function' && terminal.isRunning()) {
                 return;
             }
-            touchStreamLease().finally(function () {
-                startWorkspaceStream();
-            });
+            startWorkspaceStream();
         },
         setVirtualPagesByType: function (pages) {
             if (pages && typeof pages === 'object') {
@@ -3589,7 +3603,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = <?= \json_encode($streamSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var touchStreamLeaseUrl = <?= \json_encode($touchStreamLeaseUrl ?? '', \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var lastEventId = <?= (int)$initialLastEventId ?>;
     var reconnectTimer = null;
     var reconnectAttempts = 0;
@@ -3600,12 +3613,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var suppressTransportErrorUntil = 0;
     var hasActiveOperation = false;
     var lastActivityTime = Date.now();
-    var streamLeaseTimer = null;
     var workspaceStreamPaused = false;
-    var streamLeaseToken = (window.crypto && typeof window.crypto.randomUUID === 'function')
-        ? window.crypto.randomUUID()
-        : ('lease-' + Date.now() + '-' + Math.random().toString(16).slice(2));
-    window.PbAiWorkspaceStreamLeaseToken = streamLeaseToken;
+    var workspaceStreamFatal = false; // 402 等不可恢复错误后停止重连
 
     if (!terminal || !streamBaseUrl || !publicId) {
         return;
@@ -3618,24 +3627,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         try { return JSON.parse(event.data); } catch (error) { return {}; }
     }
 
-    function postLeaseForm(url, fields) {
-        var formData = new FormData();
-        Object.keys(fields || {}).forEach(function (key) {
-            formData.append(key, fields[key]);
-        });
-        return fetch(url, {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin',
-            body: formData
-        }).then(function (response) { return response.json(); });
-    }
-
     function buildWorkspaceStreamUrl() {
         try {
             var requestUrl = new URL(streamBaseUrl, window.location.origin);
             requestUrl.searchParams.set('public_id', publicId);
-            requestUrl.searchParams.set('lease_token', streamLeaseToken);
             if (lastEventId > 0) {
                 requestUrl.searchParams.set('last_event_id', String(lastEventId));
             } else {
@@ -3645,33 +3640,11 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         } catch (error) {
             var separator = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
             var url = streamBaseUrl + separator + 'public_id=' + encodeURIComponent(publicId);
-            url += '&lease_token=' + encodeURIComponent(streamLeaseToken);
             if (lastEventId > 0) {
                 url += '&last_event_id=' + encodeURIComponent(String(lastEventId));
             }
             return url;
         }
-    }
-
-    function touchStreamLease() {
-        if (!touchStreamLeaseUrl || !publicId || !streamLeaseToken) {
-            return Promise.resolve({ success: false });
-        }
-        return postLeaseForm(touchStreamLeaseUrl, {
-            public_id: publicId,
-            lease_token: streamLeaseToken
-        }).catch(function () {
-            return { success: false };
-        });
-    }
-
-    function ensureStreamLeaseHeartbeat() {
-        if (streamLeaseTimer) {
-            return;
-        }
-        streamLeaseTimer = window.setInterval(function () {
-            touchStreamLease();
-        }, 20000);
     }
 
     function startWorkspaceStream() {
@@ -3726,7 +3699,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     }
 
     function scheduleReconnect() {
-        if (workspaceStreamPaused || reconnectTimer || reconnectAttempts >= reconnectAttemptsMax) {
+        if (workspaceStreamPaused || workspaceStreamFatal || reconnectTimer || reconnectAttempts >= reconnectAttemptsMax) {
             return;
         }
         reconnectAttempts++;
@@ -3741,9 +3714,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             if (workspaceStreamPaused || terminal.isRunning()) {
                 return;
             }
-            touchStreamLease().finally(function () {
-                startWorkspaceStream();
-            });
+            startWorkspaceStream();
         }, reconnectDelay);
     }
 
@@ -3805,21 +3776,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         if (data && data.last_event_id) {
             lastEventId = parseInt(data.last_event_id, 10) || lastEventId;
         }
-        if (data && data.lease_expired) {
-            if (streamLeaseTimer) {
-                window.clearInterval(streamLeaseTimer);
-                streamLeaseTimer = null;
-            }
-            reconnectAttempts = reconnectAttemptsMax;
-            var leaseMsg = (data && data.message) ? String(data.message) : '';
-            if (leaseMsg) {
-                terminal.log(leaseMsg, 'warning');
-                if (window.BackendToast && typeof window.BackendToast.warning === 'function') {
-                    window.BackendToast.warning(leaseMsg);
-                }
-            }
-            return;
-        }
         reconnectAttempts = 0;
         suppressTransportErrorUntil = Date.now() + 1500;
         if (data && data.message) {
@@ -3839,6 +3795,29 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         var message = (data && data.message) ? String(data.message) : '';
         if (message) {
             terminal.log(message, 'error');
+            var httpCode = parseInt(data.http_code || data.code || 0, 10) || 0;
+            var lowerMessage = message.toLowerCase();
+            var fatal402 = httpCode === 402
+                || lowerMessage.indexOf('http 402') >= 0
+                || lowerMessage.indexOf('402') >= 0
+                || lowerMessage.indexOf('insufficient balance') >= 0
+                || lowerMessage.indexOf('余额不足') >= 0
+                || lowerMessage.indexOf('额度不足') >= 0;
+            if (fatal402) {
+                workspaceStreamFatal = true;
+                if (reconnectTimer) {
+                    window.clearTimeout(reconnectTimer);
+                    reconnectTimer = null;
+                }
+                if (terminal && typeof terminal.stop === 'function') {
+                    terminal.stop({ suppressTransportError: true });
+                }
+                terminal.log('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>', 'error');
+                if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+                    window.BackendToast.error('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>');
+                }
+                return;
+            }
             if (message.indexOf('会话不存在') >= 0 || message.indexOf('无访问权限') >= 0 || message.indexOf('参数无效') >= 0) {
                 reconnectAttempts = 0;
                 return;
@@ -3850,22 +3829,11 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             if (workspaceStreamPaused || terminal.isRunning()) {
                 return;
             }
-            touchStreamLease().finally(function () {
-                startWorkspaceStream();
-            });
+            startWorkspaceStream();
         }, 2000);
     });
 
-    ensureStreamLeaseHeartbeat();
-    touchStreamLease().finally(function () {
-        startWorkspaceStream();
-    });
-    window.addEventListener('beforeunload', function () {
-        if (streamLeaseTimer) {
-            window.clearInterval(streamLeaseTimer);
-            streamLeaseTimer = null;
-        }
-    });
+    startWorkspaceStream();
 })();
 </script>
 
@@ -3880,7 +3848,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var startPublishUrl = <?= \json_encode($startPublishUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var streamLeaseToken = window.PbAiWorkspaceStreamLeaseToken || '';
     var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var workspaceTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
@@ -3956,7 +3923,23 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             headers: { 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
             body: formData
-        }).then(function (response) { return response.json(); });
+        }).then(function (response) {
+            if (!response.ok) {
+                return response.text().then(function (text) {
+                    var errMsg = '网络错误: ' + response.status + ' ' + response.statusText;
+                    try {
+                        var j = JSON.parse(text);
+                        if (j && (j.message || j.error)) {
+                            errMsg = String(j.message || j.error);
+                        }
+                    } catch (e) {
+                        // 如果不是 JSON，使用原始错误信息
+                    }
+                    throw new Error(errMsg);
+                });
+            }
+            return response.json();
+        });
     }
 
     function parsePayload(event) {
@@ -4028,15 +4011,13 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             var requestUrl = new URL(operationSseBaseUrl, window.location.origin);
             requestUrl.searchParams.set('public_id', publicId);
             requestUrl.searchParams.set('execution_token', executionToken);
-            requestUrl.searchParams.set('lease_token', streamLeaseToken);
             return requestUrl.toString();
         } catch (error) {
             var separator = operationSseBaseUrl.indexOf('?') >= 0 ? '&' : '?';
             return operationSseBaseUrl
                 + separator
                 + 'public_id=' + encodeURIComponent(publicId)
-                + '&execution_token=' + encodeURIComponent(executionToken)
-                + '&lease_token=' + encodeURIComponent(streamLeaseToken);
+                + '&execution_token=' + encodeURIComponent(executionToken);
         }
     }
 
