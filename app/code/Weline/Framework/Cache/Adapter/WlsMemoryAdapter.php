@@ -243,7 +243,10 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     private function memoryFacade(): MemoryStateFacade
     {
         if ($this->memoryFacade === null) {
-            $this->memoryFacade = new MemoryStateFacade($this->config);
+            $config = $this->config;
+            $config['prefer_direct_connect'] = $config['prefer_direct_connect'] ?? true;
+            $config['fail_fast_on_unhealthy'] = $config['fail_fast_on_unhealthy'] ?? false;
+            $this->memoryFacade = new MemoryStateFacade($config);
         }
 
         return $this->memoryFacade;
