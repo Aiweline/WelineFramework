@@ -32,6 +32,46 @@ final class StartForceSwitchStopArgsTest extends TestCase
         self::assertTrue((bool) ($args['f'] ?? false));
     }
 
+    public function testMaintenanceModeHelpersSyncFrameworkAndWlsForTargetInstance(): void
+    {
+        $start = new class extends Start {
+            public array $calls = [];
+
+            protected function setFrameworkMaintenanceMode(bool $enabled): void
+            {
+                $this->calls[] = ['framework', $enabled];
+            }
+
+            protected function syncWlsMaintenanceMode(?string $instanceName, bool $enabled): void
+            {
+                $this->calls[] = ['wls', $instanceName, $enabled];
+            }
+        };
+
+        $this->invokeProtected($start, 'enableMaintenanceMode', 'api');
+        $this->invokeProtected($start, 'disableMaintenanceMode', 'api');
+
+        self::assertSame(
+            [
+                ['framework', true],
+                ['wls', 'api', true],
+                ['framework', false],
+                ['wls', 'api', false],
+            ],
+            $start->calls
+        );
+    }
+
+    public function testHelpMentionsMaintenanceForForceSwitch(): void
+    {
+        $start = new Start();
+        $help = (string) $start->help();
+
+        self::assertStringContainsString('维护模式', $help);
+        self::assertStringContainsString('停机型更新', $help);
+        self::assertStringContainsString('-r -f', $help);
+    }
+
     private function invokeProtected(object $object, string $method, mixed ...$args): mixed
     {
         $reflection = new \ReflectionMethod($object, $method);
