@@ -3146,6 +3146,7 @@ function logSslHandshakeFailure(string $peerName, int $connId, string $errorMsg)
 function wlsFiberRequestContextEnter(mixed $conn): void
 {
     \Weline\Framework\Runtime\RequestContext::cleanup();
+    \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
     \Weline\Framework\Http\Sse\SseContext::reset();
     \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
     \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
