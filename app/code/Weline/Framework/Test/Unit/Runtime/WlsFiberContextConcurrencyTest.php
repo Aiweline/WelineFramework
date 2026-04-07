@@ -5,6 +5,7 @@ namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\HeaderCollector;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\WlsFiberContext;
@@ -16,6 +17,7 @@ final class WlsFiberContextConcurrencyTest extends TestCase
         HeaderCollector::reset();
         SseContext::reset();
         RequestContext::cleanup();
+        Url::resetWlsFiberInterleavedParserScratch();
         parent::tearDown();
     }
 
@@ -105,5 +107,28 @@ final class WlsFiberContextConcurrencyTest extends TestCase
         self::assertSame('text/plain; charset=utf-8', $collector->getHeader('Content-Type'));
         self::assertSame('text/http', $collector->getHeader('X-WLS-Link-Protocol'));
         self::assertSame(500, $collector->getStatusCode());
+    }
+
+    public function testRestoreClearsUrlInterleavedParserScratch(): void
+    {
+        $_SERVER['HTTP_HOST'] = 'sess-a.test:9001';
+        $_SERVER['REQUEST_URI'] = '/a';
+        Url::$parserServer = [
+            'HTTP_HOST' => 'sess-a.test:9001',
+            'WELINE_WEBSITE_URL' => 'http://sess-a.test:9001',
+        ];
+        Url::$parserCache = ['/backend/foo' => ['server' => ['stub' => true]]];
+
+        $ctx = WlsFiberContext::capture();
+
+        Url::$parserServer = ['HTTP_HOST' => 'sess-b.test:9002'];
+        Url::$parserCache = ['/other' => []];
+        $_SERVER['HTTP_HOST'] = 'sess-b.test:9002';
+
+        $ctx->restore();
+
+        self::assertSame([], Url::$parserServer);
+        self::assertSame([], Url::$parserCache);
+        self::assertSame('sess-a.test:9001', $_SERVER['HTTP_HOST']);
     }
 }

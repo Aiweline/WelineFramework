@@ -137,10 +137,6 @@
     }
 
     function buildLayoutPreviewUrl(overrides = {}) {
-        elements.previewFrame.src = buildLayoutPreviewUrl();
-        fetchLayoutSlots();
-        return;
-
         const url = new URL(config.apiLayoutPreview, window.location.origin);
         const currentUrl = getCurrentWindowUrl();
         const layoutType = (typeof overrides.layout_type === 'string' && overrides.layout_type)
@@ -2563,6 +2559,11 @@
             const result = await fetchWidgetsData();
 
             if (result.success) {
+                navigateEditorShell({
+                    page_type: state.pageType,
+                    version_id: null,
+                });
+                return;
                 // 查找匹配的部件
                 let widgetMeta = null;
                 for (const type in result.data) {
@@ -7562,6 +7563,10 @@
         }
 
         // 构建预览 URL
+        elements.previewFrame.src = buildLayoutPreviewUrl();
+        fetchLayoutSlots();
+        return;
+
         const url = new URL(config.apiLayoutPreview, window.location.origin);
         url.searchParams.set('theme_id', state.themeId);
         url.searchParams.set('layout_type', state.layoutType);
@@ -8034,6 +8039,193 @@
     /**
      * 格式化日期
      */
+    function renderEditorLockOverlay(lockInfo) {
+        if (!elements.container) {
+            return;
+        }
+
+        let overlay = document.getElementById('themeEditorLockOverlay');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'themeEditorLockOverlay';
+            overlay.style.cssText = `
+                position: absolute;
+                inset: 0;
+                z-index: 2000;
+                background: rgba(15, 23, 42, 0.72);
+                backdrop-filter: blur(2px);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                padding: 24px;
+            `;
+            elements.container.style.position = 'relative';
+            elements.container.appendChild(overlay);
+        }
+
+        const userName = lockInfo && lockInfo.user_name ? lockInfo.user_name : '其他用户';
+        overlay.innerHTML = `
+            <div style="max-width: 460px; width: 100%; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.22);">
+                <h3 style="margin: 0 0 12px; font-size: 20px; color: #1f2937;">当前页面正在被编辑</h3>
+                <p style="margin: 0 0 10px; color: #4b5563; line-height: 1.6;">
+                    ${escapeHtml(userName)} 正在编辑当前主题页面。为了避免互相覆盖，当前会话已被锁定为只读等待状态。
+                </p>
+                <p style="margin: 0 0 18px; color: #6b7280; line-height: 1.6;">
+                    对方释放后刷新页面即可重新进入编辑。
+                </p>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" id="themeEditorLockReload" class="btn btn-primary">刷新重试</button>
+                </div>
+            </div>
+        `;
+
+        overlay.querySelector('#themeEditorLockReload')?.addEventListener('click', () => {
+            window.location.reload();
+        });
+    }
+
+    function clearEditorLockOverlay() {
+        document.getElementById('themeEditorLockOverlay')?.remove();
+    }
+
+    function stopLockHeartbeat() {
+        if (state.lockHeartbeatTimer) {
+            clearInterval(state.lockHeartbeatTimer);
+            state.lockHeartbeatTimer = null;
+        }
+    }
+
+    async function refreshEditorLockActivity() {
+        if (!state.lockHeld || !config.apiUpdateActivity || !state.themeId) {
+            return false;
+        }
+
+        try {
+            const response = await fetch(config.apiUpdateActivity, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    theme_id: state.themeId,
+                    page_type: getCurrentPageType(),
+                }),
+            });
+
+            const result = await response.json();
+            if (!(result && result.success)) {
+                state.lockHeld = false;
+                stopLockHeartbeat();
+                renderEditorLockOverlay(state.lockConflictInfo);
+                return false;
+            }
+
+            return true;
+        } catch (error) {
+            console.warn('[ThemeEditor] Lock heartbeat failed:', error);
+            return false;
+        }
+    }
+
+    function startLockHeartbeat() {
+        stopLockHeartbeat();
+        state.lockHeartbeatTimer = setInterval(() => {
+            refreshEditorLockActivity();
+        }, 60000);
+    }
+
+    function bindLockLifecycle() {
+        if (state.lockLifecycleBound) {
+            return;
+        }
+
+        window.addEventListener('beforeunload', () => {
+            releaseCurrentEditorLock({ keepalive: true });
+        });
+
+        state.lockLifecycleBound = true;
+    }
+
+    async function releaseCurrentEditorLock(options = {}) {
+        if (!state.lockHeld || !config.apiReleaseLock || !state.themeId) {
+            return false;
+        }
+
+        const keepalive = options.keepalive === true;
+        const payload = JSON.stringify({
+            theme_id: state.themeId,
+            page_type: getCurrentPageType(),
+        });
+
+        state.lockHeld = false;
+        stopLockHeartbeat();
+
+        try {
+            if (keepalive) {
+                fetch(config.apiReleaseLock, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: payload,
+                    keepalive: true,
+                });
+                return true;
+            }
+
+            const response = await fetch(config.apiReleaseLock, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: payload,
+            });
+
+            return response.ok;
+        } catch (error) {
+            console.warn('[ThemeEditor] Release lock failed:', error);
+            return false;
+        }
+    }
+
+    async function initializeEditorLock() {
+        if (!state.themeId || !config.apiCheckLock) {
+            return;
+        }
+
+        try {
+            const url = new URL(config.apiCheckLock, window.location.origin);
+            url.searchParams.set('theme_id', String(state.themeId));
+            url.searchParams.set('page_type', getCurrentPageType());
+
+            const response = await fetch(url.toString(), {
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            const result = await response.json();
+
+            if (result && result.success) {
+                state.lockHeld = true;
+                state.lockConflictInfo = null;
+                clearEditorLockOverlay();
+                startLockHeartbeat();
+                bindLockLifecycle();
+                return;
+            }
+
+            state.lockHeld = false;
+            state.lockConflictInfo = (result && result.data && result.data.lock_info) ? result.data.lock_info : null;
+            renderEditorLockOverlay(state.lockConflictInfo);
+            showToast(result?.message || '当前页面正被其他用户编辑', 'warning');
+        } catch (error) {
+            console.warn('[ThemeEditor] Failed to initialize editor lock:', error);
+        }
+    }
+
     function formatDate(dateStr) {
         if (!dateStr) return '';
         const date = new Date(dateStr);
