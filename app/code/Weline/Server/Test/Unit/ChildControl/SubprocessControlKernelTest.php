@@ -119,5 +119,34 @@ final class SubprocessControlKernelTest extends TestCase
             @\fclose($server);
         }
     }
+
+    public function testChildEntryScriptsLoadFrameworkBootstrapBeforeResolvingControlPort(): void
+    {
+        $scripts = [
+            'worker.php',
+            'worker_ssl.php',
+            'dispatcher.php',
+            'http_redirect_worker.php',
+        ];
+
+        foreach ($scripts as $script) {
+            $path = BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+                . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . $script;
+            $source = \file_get_contents($path);
+
+            self::assertNotFalse($source, "failed to read {$script}");
+
+            $bpPos = \strpos($source, "\\define('BP', \$bp);");
+            $autoloadPos = \strpos($source, "require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';");
+            $resolvePos = \strpos($source, 'SubprocessControlKernel::resolveControlPort');
+
+            self::assertNotFalse($bpPos, "{$script} should define BP before resolving control port");
+            self::assertNotFalse($autoloadPos, "{$script} should load app/autoload.php");
+            self::assertNotFalse($resolvePos, "{$script} should resolve the control port");
+
+            self::assertLessThan($resolvePos, $bpPos, "{$script} should define BP before resolveControlPort");
+            self::assertLessThan($resolvePos, $autoloadPos, "{$script} should load app/autoload.php before resolveControlPort");
+        }
+    }
 }
 

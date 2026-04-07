@@ -422,6 +422,8 @@ class Reload extends CommandAbstract
         $optionKeys = [
             'f' => true,
             'force' => true,
+            'r' => true,
+            'restart' => true,
             'n' => true,
             'no-wait' => true,
             'instance' => true,
