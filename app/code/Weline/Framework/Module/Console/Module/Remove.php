@@ -18,6 +18,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Handle;
 use Weline\Framework\Module\Helper\Data;
 use Weline\Framework\Registry\Service\RegistryUpdateService;
+use Weline\Framework\Setup\Model\ModuleTable;
 use Weline\Framework\Uninstall\UninstallService;
 
 class Remove extends CommandAbstract
@@ -61,7 +62,7 @@ class Remove extends CommandAbstract
      */
     public function execute(array $args = [], array $data = [])
     {
-        array_shift($args);
+        $args = $this->normalizeModuleArgs($args);
 
         // 获得模块列表
         $module_list = Env::getInstance()->getModuleList();
@@ -69,7 +70,7 @@ class Remove extends CommandAbstract
             throw new ConsoleException('缺少模块名参数。示例：module:remove Aiweline_demo Aiweline_Test');
         }
         
-        $this->printer->setup(__('提示：此命令将执行以下模块的卸载程序。'));
+        $this->printer->setup(__('提示：此命令将执行以下模块的卸载或清理程序。'));
         
         // 分类模块：正常存在的模块、代码不存在但已注册的模块、未注册的模块
         $normalModules = [];
@@ -89,8 +90,8 @@ class Remove extends CommandAbstract
             }
         }
         
-        // 合并可卸载的模块（正常模块 + 代码不存在的模块）
-        $removableModules = array_merge($normalModules, $codeNotExistModules);
+        // 合并可处理模块（正常模块 + 代码不存在模块 + 未注册模块）
+        $removableModules = array_merge($normalModules, $codeNotExistModules, $notRegisteredModules);
         
         if (empty($removableModules)) {
             $this->printer->error(__('无可卸载模块'));
@@ -100,9 +101,13 @@ class Remove extends CommandAbstract
         // 统一批量确认，不再逐个询问
         $this->printer->setup(__('以下模块将被卸载：'));
         foreach ($removableModules as $module) {
-            $suffix = in_array($module, $codeNotExistModules) 
-                ? __('（仅清理注册信息）') 
-                : __('（执行卸载程序）');
+            if (in_array($module, $notRegisteredModules, true)) {
+                $suffix = __('（仅清理 module_table 残留）');
+            } elseif (in_array($module, $codeNotExistModules, true)) {
+                $suffix = __('（仅清理注册信息）');
+            } else {
+                $suffix = __('（执行卸载程序）');
+            }
             $this->printer->note('  - ' . $module . ' ' . $suffix);
         }
         
@@ -122,11 +127,21 @@ class Remove extends CommandAbstract
         $uninstalledCount = 0;
         
         foreach ($removableModules as $module) {
-            $isCodeNotExist = in_array($module, $codeNotExistModules);
+            $isNotRegistered = in_array($module, $notRegisteredModules, true);
+            $isCodeNotExist = in_array($module, $codeNotExistModules, true);
+
+            if ($isNotRegistered) {
+                // 未注册模块无法执行卸载流程，仅尝试清理 module_table 残留
+                $this->printer->note(__('模块 %{1} 未注册，尝试清理 module_table 残留...', [$module]));
+                $this->cleanupModuleTableRecords($module);
+                $uninstalledCount++;
+                continue;
+            }
             
             if ($isCodeNotExist) {
                 // 代码不存在的模块，仅清理注册信息
                 $this->printer->note(__('清理模块 %{1} 的注册信息...', [$module]));
+                $this->cleanupModuleTableRecords($module);
                 unset($module_list[$module]);
                 $this->printer->success(__('模块 %{1} 注册信息已清理', [$module]));
                 $uninstalledCount++;
@@ -194,6 +209,7 @@ class Remove extends CommandAbstract
             
             // 执行实际的卸载逻辑（数据库操作等）
             $this->handle->remove($module);
+            $this->cleanupModuleTableRecords($module);
             // 卸载数组中模块
             unset($module_list[$module]);
             $uninstalledCount++;
@@ -292,6 +308,53 @@ class Remove extends CommandAbstract
             'result' => null,
         ];
         $eventsManager->dispatch('Weline_Framework_Module::remove_acl_diff_cleanup', $aclDiffCleanupEventData);
+    }
+
+    /**
+     * 标准化命令行参数，避免把 module:remove 本身识别为模块名。
+     *
+     * @param array<int|string, mixed> $args
+     * @return array<int, string>
+     */
+    private function normalizeModuleArgs(array $args): array
+    {
+        if (isset($args[0]) && is_string($args[0]) && str_starts_with($args[0], 'module:')) {
+            array_shift($args);
+        }
+
+        $modules = [];
+        foreach ($args as $arg) {
+            if (!is_scalar($arg)) {
+                continue;
+            }
+            $value = trim((string) $arg);
+            if ($value === '' || str_starts_with($value, '-')) {
+                continue;
+            }
+            if ($value === 'module:remove') {
+                continue;
+            }
+            $modules[] = $value;
+        }
+
+        return array_values(array_unique($modules));
+    }
+
+    /**
+     * 卸载模块后同步清理 weline_module_table 中的模块归属记录。
+     */
+    private function cleanupModuleTableRecords(string $moduleName): void
+    {
+        try {
+            /** @var ModuleTable $moduleTable */
+            $moduleTable = ObjectManager::getInstance(ModuleTable::class);
+            $moduleTable->clearData()->clearQuery()
+                ->where(ModuleTable::schema_fields_module_name, $moduleName)
+                ->delete();
+            $this->printer->note(__('已清理模块 %{1} 的 module_table 记录。', [$moduleName]));
+        } catch (\Throwable $e) {
+            $this->printer->warning(__('清理模块 %{1} 的 module_table 记录失败：%{2}', [$moduleName, $e->getMessage()]));
+        }
     }
 
     public function help(): array|string

@@ -175,37 +175,47 @@ class Reload extends CommandAbstract
                 $this->printer->warning(__('连接异常断开'));
                 return;
             }
-            
-            if ($data !== '') {
-                $buffer .= $data;
-                $messages = ControlMessage::extractMessages($buffer);
-                
-                foreach ($messages as $msg) {
-                    $type = $msg['type'] ?? '';
-                    
-                    switch ($type) {
-                        case ControlMessage::TYPE_RELOAD_COMPLETED:
-                            $this->handleReloadCompleted($msg, $conn, $totalWorkers);
-                            return;
-                            
-                        case ControlMessage::TYPE_RELOAD_FAILED:
-                            $this->handleReloadFailed($msg, $conn);
-                            return;
-                            
-                        case ControlMessage::TYPE_RELOAD_PROGRESS:
-                            $lastProgress = $this->handleReloadProgress($msg, $totalWorkers, $lastProgress);
-                            break;
-                            
-                        case ControlMessage::TYPE_COMMAND_RESULT:
-                            // handleCommandResult 返回 true 表示最终结果，false 表示继续等待
-                            if ($this->handleCommandResult($msg, $conn, $totalWorkers)) {
-                                return;
-                            }
-                            break;
-                    }
+
+            if ($data === '') {
+                if (@\feof($conn)) {
+                    @\fclose($conn);
+                    echo "\n";
+                    $this->printer->warning(__('控制连接已断开，Orchestrator 可能仍在后台继续执行；请用 server:status 查看结果'));
+                    return;
                 }
+
+                SchedulerSystem::usleep(50000); // 50ms
+                continue;
             }
             
+            $buffer .= $data;
+            $messages = ControlMessage::extractMessages($buffer);
+            
+            foreach ($messages as $msg) {
+                $type = $msg['type'] ?? '';
+                
+                switch ($type) {
+                    case ControlMessage::TYPE_RELOAD_COMPLETED:
+                        $this->handleReloadCompleted($msg, $conn, $totalWorkers);
+                        return;
+                        
+                    case ControlMessage::TYPE_RELOAD_FAILED:
+                        $this->handleReloadFailed($msg, $conn);
+                        return;
+                        
+                    case ControlMessage::TYPE_RELOAD_PROGRESS:
+                        $lastProgress = $this->handleReloadProgress($msg, $totalWorkers, $lastProgress);
+                        break;
+                        
+                    case ControlMessage::TYPE_COMMAND_RESULT:
+                        // handleCommandResult 返回 true 表示最终结果，false 表示继续等待
+                        if ($this->handleCommandResult($msg, $conn, $totalWorkers)) {
+                            return;
+                        }
+                        break;
+                }
+            }
+
             SchedulerSystem::usleep(50000); // 50ms
         }
         
