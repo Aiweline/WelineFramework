@@ -183,9 +183,24 @@ if (!function_exists('w_log_exception')) {
      */
     function w_log_exception(\Throwable $exception, ?string $message = null, ?string $channel = null): void
     {
+        $exceptionMessage = (string)$exception->getMessage();
+        $lowerMessage = \strtolower($exceptionMessage);
+        $is402BalanceError = \str_contains($lowerMessage, 'http 402')
+            || \str_contains($lowerMessage, 'insufficient balance')
+            || \str_contains($lowerMessage, '余额不足')
+            || \str_contains($lowerMessage, '额度不足');
+        if ($is402BalanceError) {
+            static $last402ExceptionLogAt = 0.0;
+            $now = \microtime(true);
+            if (($now - $last402ExceptionLogAt) < 45.0) {
+                return;
+            }
+            $last402ExceptionLogAt = $now;
+        }
+
         $context = [
             '_exception_class' => get_class($exception),
-            '_exception_message' => $exception->getMessage(),
+            '_exception_message' => $exceptionMessage,
             '_exception_code' => $exception->getCode(),
             '_exception_file' => $exception->getFile(),
             '_exception_line' => $exception->getLine(),

@@ -1051,12 +1051,10 @@ SCRIPT;
             \header('X-AiSite-Sse-Debug-Stage: auth-checked');
         }
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
-        $leaseToken = \trim((string)$this->request->getGet('lease_token', ''));
         $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
         $this->logStreamSse('request_received', [
             'admin_id' => $adminId,
             'public_id' => $publicId,
-            'lease_token_present' => $leaseToken !== '',
             'last_event_id' => $lastEventId,
         ]);
 
@@ -1101,7 +1099,6 @@ SCRIPT;
         }
         $sse->sendEvent('start', [
             'message' => __('正在建立 PageBuilder 工作区事件流...'),
-            'lease_ttl_sec' => self::STREAM_LEASE_TTL_SEC,
         ]);
 
         // 会话不存在：通过 SSE 返回错误并完成
@@ -1124,12 +1121,8 @@ SCRIPT;
         // 验证通过，启动 SSE 长连接
         @\set_time_limit(0);
         @\ignore_user_abort(true);
-        if ($leaseToken !== '') {
-            $this->touchStreamLeaseState($session, $adminId, $leaseToken);
-        }
         $sse->sendEvent('start', [
             'message' => __('已连接 PageBuilder 工作区事件流'),
-            'lease_ttl_sec' => self::STREAM_LEASE_TTL_SEC,
         ]);
         $this->logStreamSse('stream_started', [
             'session_id' => $session->getId(),
@@ -1144,40 +1137,27 @@ SCRIPT;
             'top_log_count' => \count(\is_array($snapshot['top_logs'] ?? null) ? $snapshot['top_logs'] : []),
         ]);
         $sse->sendEvent('snapshot', $snapshot);
+        if ($this->shouldFastFailWorkspaceStream($snapshot)) {
+            $this->logStreamSse('stream_fast_failed', [
+                'session_id' => $session->getId(),
+                'reason' => 'fatal_error_detected_in_snapshot',
+            ], 'warning');
+            $sse->complete(['success' => false, 'last_event_id' => $lastEventId, 'fatal_error' => true]);
+            return;
+        }
 
-        // 使用 Fiber 协程支持长连接模式
-        // 每秒轮询一次新事件，30 秒后主动断开让客户端重连（探活续约）
-        $maxDuration = 30;  // 最大连接时长 30 秒
+        // 使用 Fiber 协程支持长连接模式（标准 SSE）。
         $pollInterval = 1000;  // 每秒轮询一次
         $startTime = \time();
         $loopCount = 0;
-        $streamStoppedForLeaseExpiry = false;
 
-        while ((\time() - $startTime) < $maxDuration) {
+        while (true) {
             $loopCount++;
 
             // 检查连接是否还活着
             if (!$sse->isAlive()) {
                 break;
             }
-            if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
-                if ($this->isThisWorkspaceStreamLeaseExpired($session, $adminId, $leaseToken)) {
-                    $this->cancelWorkspaceWorkAfterStreamLeaseExpired($session, $adminId, $leaseToken);
-                    $streamStoppedForLeaseExpiry = true;
-                    $this->logStreamSse('stream_lease_expired', [
-                        'session_id' => $session->getId(),
-                        'loop_count' => $loopCount,
-                        'cleanup' => true,
-                    ], 'warning');
-                } else {
-                    $this->logStreamSse('stream_lease_mismatch', [
-                        'session_id' => $session->getId(),
-                        'loop_count' => $loopCount,
-                    ], 'info');
-                }
-                break;
-            }
-
             $newEvents = $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80);
 
             if (!empty($newEvents)) {
@@ -1207,24 +1187,53 @@ SCRIPT;
             SchedulerSystem::yieldDelay($pollInterval);
         }
 
-        // 30 秒探活时间到：正常轮询结束，静默断开让客户端自动重连；续约超时则带 lease_expired 且不再重连
-        if ($streamStoppedForLeaseExpiry) {
-            $sse->complete([
-                'success' => false,
-                'last_event_id' => $lastEventId,
-                'lease_expired' => true,
-                'message' => (string)__('工作区连接已超时未续约，相关任务已终止'),
-            ]);
-        } else {
-            $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
-        }
+        $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
         $this->logStreamSse('stream_completed', [
             'session_id' => $session->getId(),
             'loop_count' => $loopCount,
             'last_event_id' => $lastEventId,
             'duration_sec' => \max(0, \time() - $startTime),
-            'lease_expired' => $streamStoppedForLeaseExpiry,
         ]);
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     */
+    private function shouldFastFailWorkspaceStream(array $snapshot): bool
+    {
+        $messages = [];
+        $collect = static function (mixed $rows) use (&$messages): void {
+            if (!\is_array($rows)) {
+                return;
+            }
+            foreach ($rows as $row) {
+                if (!\is_array($row)) {
+                    continue;
+                }
+                $msg = \trim((string)($row['message'] ?? ''));
+                if ($msg !== '') {
+                    $messages[] = $msg;
+                }
+            }
+        };
+        $collect($snapshot['top_logs'] ?? []);
+        $collect($snapshot['events'] ?? []);
+        $collect($snapshot['scope']['top_logs'] ?? []);
+
+        foreach ($messages as $message) {
+            $normalized = \strtolower($message);
+            if (
+                \str_contains($normalized, '没有满足条件的')
+                && \str_contains($normalized, '供应商账户')
+            ) {
+                return true;
+            }
+            if (\str_contains($normalized, 'insufficient balance') || \str_contains($normalized, 'http 402')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function handleOperationSse(): void
@@ -1237,7 +1246,6 @@ SCRIPT;
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $executionToken = \trim((string)$this->request->getGet('execution_token', ''));
-        $leaseToken = \trim((string)$this->request->getGet('lease_token', ''));
         if ($adminId <= 0 || $publicId === '' || $executionToken === '') {
             $this->sendSseContractError($sse, 'INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_OPERATION_SSE);
             $sse->complete(['success' => false]);
@@ -1250,9 +1258,6 @@ SCRIPT;
             return;
         }
 
-        if ($leaseToken !== '') {
-            $this->touchStreamLeaseState($session, $adminId, $leaseToken);
-        }
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $operation = \trim((string)($activeOperation['operation'] ?? ''));
@@ -1280,9 +1285,33 @@ SCRIPT;
             $failedStatus = $operation === 'publish' ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
             $this->updateActiveOperation($session, $adminId, ['status' => 'error', 'message' => $throwable->getMessage()], $failedStatus, $operation === 'publish' ? AiSiteAgentSession::PUBLISH_STATUS_FAILED : null);
             $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_failed', (string)__('操作执行失败：%{message}', ['message' => $throwable->getMessage()]), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? ''), 'details' => ['exception' => $throwable->getMessage()]], AiSiteAgentSessionEvent::LEVEL_ERROR);
-            $sse->sendError($throwable->getMessage());
+            $httpCode = $this->inferThrowableHttpCode($throwable);
+            $sse->sendError($throwable->getMessage(), $httpCode);
+            if ($httpCode === 402) {
+                $sse->close();
+                return;
+            }
             $sse->complete(['success' => false, 'message' => $throwable->getMessage(), 'operation' => $operation]);
         }
+    }
+
+    private function inferThrowableHttpCode(\Throwable $throwable): int
+    {
+        for ($cursor = $throwable; $cursor !== null; $cursor = $cursor->getPrevious()) {
+            $message = \strtolower(\trim(\strip_tags($cursor->getMessage())));
+            if ($message === '') {
+                continue;
+            }
+            if (\str_contains($message, 'http 402')
+                || \str_contains($message, 'insufficient balance')
+                || \str_contains($message, '余额不足')
+                || \str_contains($message, '额度不足')
+            ) {
+                return 402;
+            }
+        }
+
+        return 500;
     }
 
     /**
@@ -1320,7 +1349,8 @@ SCRIPT;
         bool $persist = false
     ): array {
         $normalized = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        $normalized['website_profile'] = $this->profileGenerationService->generate($normalized);
+        // 读取工作区状态时避免触发外部 AI 生成，防止首开/轮询被远程调用阻塞。
+        $normalized['website_profile'] = $this->profileGenerationService->generate($normalized, false);
         $normalized['page_types'] = $this->scopeCompatibilityService->resolveScopedPageTypes($normalized);
         $normalized['page_type_layouts'] = $this->scopeCompatibilityService->normalizePageTypeLayouts(
             $normalized['page_type_layouts'] ?? [],
@@ -2260,28 +2290,10 @@ SCRIPT;
 
     private function touchStreamLease(): string
     {
-        $adminId = (int)$this->getLoginUserId();
-        $this->releasePhpSessionLockForSse();
-        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
-        $leaseToken = \trim((string)$this->getRequestBodyValue('lease_token', ''));
-        if ($adminId <= 0 || $publicId === '' || $leaseToken === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_STREAM_LEASE);
-        }
-
-        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
-        if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_STREAM_LEASE);
-        }
-
-        $expiresAt = $this->touchStreamLeaseState($session, $adminId, $leaseToken);
-
         return $this->fetchJson([
             'success' => true,
             'data' => [
-                'public_id' => $publicId,
-                'lease_token' => $leaseToken,
-                'expires_at' => $expiresAt,
-                'ttl_sec' => self::STREAM_LEASE_TTL_SEC,
+                'mode' => 'standard_sse',
             ],
         ]);
     }
@@ -2400,9 +2412,7 @@ SCRIPT;
 
     private function assertActiveStreamLeaseAlive(AiSiteAgentSession $session, int $adminId, string $leaseToken = ''): void
     {
-        if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
-            throw new \RuntimeException((string)__('前端连接已过期，SSE 操作已终止'));
-        }
+        // 标准 SSE 模式下不做 lease 校验，连接生命周期由浏览器/TCP 自然管理。
     }
 
     /**
