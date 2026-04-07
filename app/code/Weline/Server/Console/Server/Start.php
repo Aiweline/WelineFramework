@@ -28,6 +28,7 @@ use Weline\Server\Service\SharedStateRuntimeResolver;
 use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
+use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Strategy\ServerConfig;
 use Weline\Server\Strategy\ServerStrategyFactory;
 use Weline\Server\Strategy\ServerStrategyInterface;
@@ -324,6 +325,7 @@ class Start extends CommandAbstract
             // 强制重启：先停旧 Master，其通过 IPC 广播 shutdown，子进程收后不复活
             if ($forceSwitch) {
                 $this->printer->warning(__('检测到服务器已运行，-f 直接切换（不等待）...'));
+                $this->printer->warning(__('注意：-f 强制切换属于停机型更新，不会自动等待请求排空；如需对外升级，请先确认维护模式已开启。滚动模式不需要。'));
                 $this->stopExistingServer($instanceName, $port, $count, true);
                 // Windows 下端口释放需要更长时间（TIME_WAIT 状态）
                 // 等待最多 3 秒让端口完全释放
@@ -340,7 +342,7 @@ class Start extends CommandAbstract
                 }
             } else {
                 $this->printer->warning(__('检测到服务器已运行，平滑重启：先开启维护模式，通过健康检查等待请求处理完成...'));
-                $this->enableMaintenanceMode();
+                $this->enableMaintenanceMode($instanceName);
                 $maintenanceEnabledByUs = true;
                 
                 // 通过健康检查接口智能等待
@@ -601,14 +603,14 @@ class Start extends CommandAbstract
             // Dispatcher 模式：检查主端口（Dispatcher 用）+ Worker 内网端口
             if (!$this->checkAndReleasePort($host, $port, $forceRestart, 'Dispatcher', $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
-                    $this->disableMaintenanceMode();
+                    $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
                 }
                 return;
             }
             if (!$this->checkAndReleasePorts($host, $workerPort, $count, $forceRestart, $instanceName)) {
                 if (!empty($maintenanceEnabledByUs)) {
-                    $this->disableMaintenanceMode();
+                    $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
                 }
                 return;
@@ -622,7 +624,7 @@ class Start extends CommandAbstract
                 : $this->checkAndReleasePorts($host, $port, $count, $forceRestart, $instanceName);
             if (!$checkResult) {
                 if (!empty($maintenanceEnabledByUs)) {
-                    $this->disableMaintenanceMode();
+                    $this->disableMaintenanceMode($instanceName);
                     $this->printer->note(__('维护模式已关闭（端口检查未通过）。'));
                 }
                 return;
@@ -703,7 +705,7 @@ class Start extends CommandAbstract
         
         // 平滑重启时由我们开启的维护模式，启动完成后关闭
         if (!empty($maintenanceEnabledByUs)) {
-            $this->disableMaintenanceMode();
+            $this->disableMaintenanceMode($instanceName);
             $this->printer->success(__('维护模式已关闭。'));
         }
         
@@ -1694,17 +1696,46 @@ class Start extends CommandAbstract
      * 
      * 使用框架的维护模式配置，框架会自动处理维护页面显示
      */
-    protected function enableMaintenanceMode(): void
+    protected function enableMaintenanceMode(string $instanceName): void
     {
-        Env::getInstance()->setConfig('system.maintenance', true);
+        $this->setFrameworkMaintenanceMode(true);
+        $this->syncWlsMaintenanceMode($instanceName, true);
     }
 
     /**
      * 关闭维护模式（平滑重启完成后关闭）
      */
-    protected function disableMaintenanceMode(): void
+    protected function disableMaintenanceMode(string $instanceName): void
     {
-        Env::getInstance()->setConfig('system.maintenance', false);
+        $this->setFrameworkMaintenanceMode(false);
+        $this->syncWlsMaintenanceMode($instanceName, false);
+    }
+
+    protected function setFrameworkMaintenanceMode(bool $enabled): void
+    {
+        Env::getInstance()->setConfig('system.maintenance', $enabled);
+    }
+
+    protected function syncWlsMaintenanceMode(?string $instanceName, bool $enabled): void
+    {
+        try {
+            /** @var BroadcastControlDispatchService $dispatchService */
+            $dispatchService = ObjectManager::getInstance(BroadcastControlDispatchService::class);
+            $result = $dispatchService->setMaintenanceMode($enabled, $instanceName);
+
+            if (($result['attempted'] ?? []) === []) {
+                return;
+            }
+
+            if (!empty($result['success'])) {
+                $this->printer->note(__('WLS 维护模式已同步：%{1}', [$result['message'] ?? 'ok']));
+                return;
+            }
+
+            $this->printer->warning(__('WLS 维护模式同步未完全成功：%{1}', [$result['message'] ?? 'unknown']));
+        } catch (\Throwable $throwable) {
+            $this->printer->warning(__('WLS 维护模式同步失败：%{1}', [$throwable->getMessage()]));
+        }
     }
     
     /**
@@ -4812,7 +4843,7 @@ PHP;
                 '--no-daemon' => __('前台运行（查看实时日志）'),
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
                 '-r, --restart' => __('平滑重启：开维护模式（新请求返回503）、通过健康检查等待现有请求完成后切换'),
-                '-f' => __('与 -r 同用时直接切换（不开维护模式、不等待）；仅 --cli 时 -f 表示前台运行'),
+                '-f' => __('与 -r 同用时直接切换（停机型更新，不等待排空，建议先开启维护模式）；仅 --cli 时 -f 表示前台运行'),
                 '--wait <秒>' => __('平滑重启最长等待秒数，默认 30（实际会通过健康检查尽快切换）'),
                 '--no-ssl' => __('仅 HTTP，不启用 HTTPS（Windows 下可不装 event 扩展）'),
                 '--ssl-cert <path>' => __('SSL 证书文件路径（启用 HTTPS）'),
@@ -4845,7 +4876,7 @@ PHP;
                 __('启动 8 个进程') => 'php bin/w server:start -c 8',
                 __('CPU密集模式') => 'php bin/w server:start -m cpu',
                 __('平滑重启') => 'php bin/w server:start -r',
-                __('强制重启（不等待）') => 'php bin/w server:start -r -f',
+                __('强制重启（停机型更新）') => 'php bin/w server:start -r -f',
                 __('启用 HTTPS') => 'php bin/w server:start --ssl-cert /path/to/cert.pem --ssl-key /path/to/key.pem',
                 __('Windows 无 HTTPS 运行') => 'php bin/w server:start --no-ssl',
                 __('策略模式（跨平台优化）') => 'php bin/w server:start --strategy',
