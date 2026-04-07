@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Server\Log\Error\ErrorContext;
+use Weline\Server\Log\WlsLogger;
 
 class WlsLogService
 {
@@ -82,6 +83,27 @@ class WlsLogService
     ): string {
         $safeName = self::sanitizeFilename($processName, 'process');
         return self::getLogDir($instanceName, $processTag, $configuredPath) . $safeName . '.log';
+    }
+
+    public static function prepareProcessLogFile(
+        string $processName,
+        ?string $instanceName = null,
+        ?string $processTag = null,
+        ?string $configuredPath = null
+    ): string {
+        $logFile = self::getProcessLogFile($processName, $instanceName, $processTag, $configuredPath);
+        $logDir = \dirname($logFile);
+        if (!\is_dir($logDir)) {
+            @\mkdir($logDir, 0777, true);
+        }
+        if (!\is_file($logFile)) {
+            @\touch($logFile);
+        }
+
+        @\ini_set('error_log', $logFile);
+        WlsLogger::getInstance()->setProcessLogFile($logFile);
+
+        return $logFile;
     }
 
     /**
