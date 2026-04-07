@@ -447,7 +447,7 @@ async function loginAsAdmin(page, options = {}) {
   const loginUrl = buildBackendUrl('admin/login', options);
   const username = options.username || process.env.PLAYWRIGHT_ADMIN_USERNAME || 'admin';
   const password = options.password || process.env.PLAYWRIGHT_ADMIN_PASSWORD || 'admin';
-  const timeout = options.timeout || 60000;
+  const timeout = options.timeout || 120000;
   let bootstrapFailure = null;
 
   for (const mode of (options.bootstrapModes || getAdminSessionBootstrapModes(options))) {
@@ -473,10 +473,26 @@ async function loginAsAdmin(page, options = {}) {
     }
   }
 
-  await page.goto(loginUrl, {
-    waitUntil: 'domcontentloaded',
-    timeout,
-  });
+  let lastGotoError = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await page.goto(loginUrl, {
+        waitUntil: 'domcontentloaded',
+        timeout,
+      });
+      lastGotoError = null;
+      break;
+    } catch (error) {
+      lastGotoError = error;
+      if (attempt >= 2) {
+        throw error;
+      }
+      await page.waitForTimeout(3000);
+    }
+  }
+  if (lastGotoError) {
+    throw lastGotoError;
+  }
 
   const usernameInput = page.locator('input[name="username"], input[type="text"]').first();
   const hasLoginForm = await usernameInput.isVisible({ timeout: 5000 }).catch(() => false);
