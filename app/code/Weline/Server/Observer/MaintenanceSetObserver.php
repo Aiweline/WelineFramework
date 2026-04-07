@@ -6,7 +6,6 @@ namespace Weline\Server\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Service\Control\IpcControlGateway;
 
 /**
@@ -21,10 +20,7 @@ class MaintenanceSetObserver implements ObserverInterface
         try {
             /** @var IpcControlGateway $gateway */
             $gateway = ObjectManager::getInstance(IpcControlGateway::class);
-            $action = $enabled
-                ? ControlMessage::ACTION_MAINTENANCE_ENABLE
-                : ControlMessage::ACTION_MAINTENANCE_DISABLE;
-            $result = $gateway->command($instance, $action, '', [], 6.0);
+            $result = $gateway->setMaintenanceMode($instance, $enabled, 6.0);
             if (!empty($result['success'])) {
                 $event->setData('handled', true);
             }

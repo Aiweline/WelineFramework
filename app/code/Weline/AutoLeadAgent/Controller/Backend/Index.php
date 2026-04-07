@@ -1211,7 +1211,7 @@ class Index extends BackendController
                     $translated = $this->translateWithGoogle($keyword, $targetLang);
                     if (empty($translated)) {
                         // 如果单个关键词翻译也失败，抛出异常而不是使用原关键词
-                        throw new \Exception(__('无法翻译关键词：%1', [$keyword]));
+                        throw new \Exception(__('无法翻译关键词：%{1}', [$keyword]));
                     }
                     $translatedKeywords[] = $translated;
                 }
@@ -1234,7 +1234,7 @@ class Index extends BackendController
         } catch (\Throwable $e) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => __('翻译失败：%1', [$e->getMessage()]),
+                'message' => __('翻译失败：%{1}', [$e->getMessage()]),
             ]);
         }
     }

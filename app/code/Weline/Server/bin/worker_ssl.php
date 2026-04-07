@@ -120,7 +120,6 @@ if ($sslKey && !\preg_match('/^[a-zA-Z]:[\\\\\\/]|^\//', $sslKey)) {
 if ($isFrontend && !\defined('WLS_FRONTEND_MODE')) {
     \define('WLS_FRONTEND_MODE', true);
 }
-
 // 预读 env.php 判断开发模式（在框架初始化前定义，供 WlsRequest 等使用）
 $_wlsEnvFile = BP . 'app' . DIRECTORY_SEPARATOR . 'etc' . DIRECTORY_SEPARATOR . 'env.php';
 $_wlsEnvConfig = \is_file($_wlsEnvFile) ? @include $_wlsEnvFile : [];
@@ -1249,6 +1248,10 @@ $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 if ($isMaintenanceWorker) {
     try {
         \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
+        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
+            'system' => ['maintenance' => true],
+        ]);
+        \Weline\Framework\App\Env::refreshMaintenanceCache();
         WlsLogger::info_("维护 Worker 模式已启用");
     } catch (\Throwable $e) {
         WlsLogger::warning_("设置维护模式失败: " . $e->getMessage());
@@ -1421,6 +1424,10 @@ if ($controlPort > 0) {
                         if (!empty($msg['immediate_ack'])) {
                             try {
                                 \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
+                                \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
+                                    'system' => ['maintenance' => true],
+                                ]);
+                                \Weline\Framework\App\Env::refreshMaintenanceCache();
                             } catch (\Throwable $e) {
                                 WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
                             }
@@ -1440,6 +1447,10 @@ if ($controlPort > 0) {
                     $pendingMaintDrainReqId = null;
                     try {
                         \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', false);
+                        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
+                            'system' => ['maintenance' => false],
+                        ]);
+                        \Weline\Framework\App\Env::refreshMaintenanceCache();
                         WlsLogger::info_("IPC 维护信号 enabled=false request_id={$mReqId}");
                     } catch (\Throwable $e) {
                         WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
@@ -1689,6 +1700,10 @@ while (true) {
         && empty($connections) && empty($pendingHandshakes)) {
         try {
             \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
+            \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
+                'system' => ['maintenance' => true],
+            ]);
+            \Weline\Framework\App\Env::refreshMaintenanceCache();
         } catch (\Throwable $e) {
             WlsLogger::warning_('维护标志应用失败: ' . $e->getMessage());
         }
@@ -3628,7 +3643,6 @@ function handleRequest(
             'HTTPS' => 'on',
             'REQUEST_SCHEME' => 'https',
         ]);
-        
         $result = $asyncBizAdapters->dispatch(
             static fn() => $runtime->handle($request)
         );

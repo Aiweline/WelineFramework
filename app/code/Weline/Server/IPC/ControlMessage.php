@@ -446,11 +446,12 @@ class ControlMessage
     /**
      * @param int[] $ports
      */
-    public static function setWorkerPool(array $ports): string
+    public static function setWorkerPool(array $ports, string $role = self::ROLE_WORKER): string
     {
         return self::encode([
             'type'  => self::TYPE_SET_WORKER_POOL,
             'ports' => \array_values(\array_map('intval', $ports)),
+            'role' => $role,
         ]);
     }
 
