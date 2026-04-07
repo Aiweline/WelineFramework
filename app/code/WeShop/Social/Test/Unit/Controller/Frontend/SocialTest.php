@@ -5,42 +5,56 @@ declare(strict_types=1);
 namespace WeShop\Social\Test\Unit\Controller\Frontend;
 
 use PHPUnit\Framework\TestCase;
-use WeShop\Social\Controller\Frontend\Social;
-use WeShop\Social\Service\SocialService;
-use WeShop\Customer\Session\CustomerSession;
 use WeShop\Customer\Model\Customer;
+use WeShop\Customer\Session\CustomerSession;
+use WeShop\Social\Controller\Frontend\Social;
+use WeShop\Social\Model\SocialShare;
+use WeShop\Social\Service\SocialService;
+use Weline\Framework\Http\Request;
 
-class SocialTest extends TestCase
+final class SocialTest extends TestCase
 {
     public function testIndexReturnsString(): void
     {
         $socialService = $this->createMock(SocialService::class);
         $socialService->expects($this->once())
             ->method('getProductShareUrls')
+            ->with('https://example.com', 'Demo Product', ['facebook', 'x', 'linkedin', 'whatsapp', 'pinterest'])
             ->willReturn([
-                [
-                    'platform' => 'facebook',
-                    'label' => 'Facebook',
-                    'url' => 'https://www.facebook.com/sharer/sharer.php?u=https%3A%2F%2Fexample.com',
-                ],
-                [
-                    'platform' => 'x',
-                    'label' => 'X',
-                    'url' => 'https://twitter.com/intent/tweet?url=https%3A%2F%2Fexample.com',
-                ],
+                ['platform' => 'facebook', 'label' => 'Facebook', 'url' => 'https://facebook.example'],
+                ['platform' => 'x', 'label' => 'X', 'url' => 'https://x.example'],
             ]);
 
         $customerSession = $this->createMock(CustomerSession::class);
-        $customerSession->expects($this->once())
-            ->method('getCustomer')
-            ->willReturn(null);
+        $controller = $this->getMockBuilder(Social::class)
+            ->setConstructorArgs([$socialService, $customerSession])
+            ->onlyMethods(['assign', 'fetch'])
+            ->getMock();
 
-        $controller = new Social($socialService, $customerSession);
+        $assignments = [];
+        $controller->expects($this->exactly(5))
+            ->method('assign')
+            ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
+                $assignments[$key] = $value;
 
-        $result = $controller->index();
+                return $controller;
+            });
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_Social::templates/Frontend/Social/index.phtml')
+            ->willReturn('social-page');
 
-        $this->assertIsString($result);
-        $this->assertStringContainsString('social-share-page', $result);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'url' => 'https://example.com',
+            'title' => 'Demo Product',
+            'product_id' => 456,
+        ]));
+
+        self::assertSame('social-page', $controller->index());
+        self::assertSame('Demo Product', $assignments['page_title'] ?? null);
+        self::assertSame('https://example.com', $assignments['target_url'] ?? null);
+        self::assertSame(456, $assignments['product_id'] ?? null);
+        self::assertCount(2, $assignments['share_urls'] ?? []);
     }
 
     public function testIndexWithEmptyUrlReturnsEmptyShares(): void
@@ -48,24 +62,37 @@ class SocialTest extends TestCase
         $socialService = $this->createMock(SocialService::class);
         $socialService->expects($this->once())
             ->method('getProductShareUrls')
+            ->with('', '', ['facebook', 'x', 'linkedin', 'whatsapp', 'pinterest'])
             ->willReturn([]);
 
         $customerSession = $this->createMock(CustomerSession::class);
-        $customerSession->expects($this->once())
-            ->method('getCustomer')
-            ->willReturn(null);
+        $controller = $this->getMockBuilder(Social::class)
+            ->setConstructorArgs([$socialService, $customerSession])
+            ->onlyMethods(['assign', 'fetch'])
+            ->getMock();
 
-        $controller = new Social($socialService, $customerSession);
+        $assignments = [];
+        $controller->expects($this->exactly(5))
+            ->method('assign')
+            ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
+                $assignments[$key] = $value;
 
-        $result = $controller->index();
+                return $controller;
+            });
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->willReturn('social-empty-page');
 
-        $this->assertIsString($result);
-        $this->assertStringContainsString('social-share__empty', $result);
+        $this->setControllerRequest($controller, $this->createRequestMock());
+
+        self::assertSame('social-empty-page', $controller->index());
+        self::assertSame('Share This Page', $assignments['page_title'] ?? null);
+        self::assertSame([], $assignments['share_urls'] ?? null);
     }
 
     public function testRecordShareReturnsSuccess(): void
     {
-        $shareModel = $this->createMock(\WeShop\Social\Model\SocialShare::class);
+        $shareModel = $this->createMock(SocialShare::class);
         $shareModel->expects($this->once())
             ->method('getId')
             ->willReturn(1);
@@ -73,10 +100,15 @@ class SocialTest extends TestCase
         $socialService = $this->createMock(SocialService::class);
         $socialService->expects($this->once())
             ->method('recordShare')
+            ->with([
+                'platform' => 'facebook',
+                'customer_id' => 123,
+                'product_id' => 456,
+            ])
             ->willReturn($shareModel);
 
         $customer = $this->createMock(Customer::class);
-        $customer->expects($this->once())
+        $customer->expects($this->exactly(2))
             ->method('getId')
             ->willReturn(123);
 
@@ -86,70 +118,41 @@ class SocialTest extends TestCase
             ->willReturn($customer);
 
         $controller = new Social($socialService, $customerSession);
-
-        $reflection = new \ReflectionClass($controller);
-        $requestProperty = $reflection->getProperty('request');
-        $requestProperty->setAccessible(true);
-
-        $request = $this->createMock(\Weline\Framework\Http\Request\Request::class);
-        $request->expects($this->any())
-            ->method('getParam')
-            ->willReturnCallback(function ($key, $default = null) {
-                return match ($key) {
-                    'platform' => 'facebook',
-                    'url' => 'https://example.com',
-                    'product_id' => 456,
-                    default => $default,
-                };
-            });
-
-        $requestProperty->setValue($controller, $request);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'platform' => 'facebook',
+            'url' => 'https://example.com',
+            'product_id' => 456,
+        ]));
 
         $result = $controller->record();
 
-        $this->assertIsString($result);
-        $data = json_decode($result, true);
-        $this->assertTrue($data['success']);
-        $this->assertEquals(1, $data['data']['share_id']);
+        self::assertIsString($result);
+        $data = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+        self::assertTrue($data['success']);
+        self::assertSame(1, $data['data']['share_id']);
     }
 
     public function testRecordShareWithoutPlatformReturnsError(): void
     {
         $socialService = $this->createMock(SocialService::class);
-        $socialService->expects($this->never())
-            ->method('recordShare');
+        $socialService->expects($this->never())->method('recordShare');
 
         $customerSession = $this->createMock(CustomerSession::class);
-        $customerSession->expects($this->once())
-            ->method('getCustomer')
-            ->willReturn(null);
+        $customerSession->expects($this->never())->method('getCustomer');
 
         $controller = new Social($socialService, $customerSession);
-
-        $reflection = new \ReflectionClass($controller);
-        $requestProperty = $reflection->getProperty('request');
-        $requestProperty->setAccessible(true);
-
-        $request = $this->createMock(\Weline\Framework\Http\Request\Request::class);
-        $request->expects($this->any())
-            ->method('getParam')
-            ->willReturnCallback(function ($key, $default = null) {
-                return match ($key) {
-                    'platform' => '',
-                    'url' => 'https://example.com',
-                    'product_id' => 0,
-                    default => $default,
-                };
-            });
-
-        $requestProperty->setValue($controller, $request);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'platform' => '',
+            'url' => 'https://example.com',
+            'product_id' => 0,
+        ]));
 
         $result = $controller->record();
 
-        $this->assertIsString($result);
-        $data = json_decode($result, true);
-        $this->assertFalse($data['success']);
-        $this->assertStringContainsString('platform', $data['message']);
+        self::assertIsString($result);
+        $data = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+        self::assertFalse($data['success']);
+        self::assertStringContainsString('platform', (string) ($data['message'] ?? ''));
     }
 
     public function testCountsReturnsShareCount(): void
@@ -161,64 +164,62 @@ class SocialTest extends TestCase
             ->willReturn(42);
 
         $customerSession = $this->createMock(CustomerSession::class);
-
         $controller = new Social($socialService, $customerSession);
-
-        $reflection = new \ReflectionClass($controller);
-        $requestProperty = $reflection->getProperty('request');
-        $requestProperty->setAccessible(true);
-
-        $request = $this->createMock(\Weline\Framework\Http\Request\Request::class);
-        $request->expects($this->any())
-            ->method('getParam')
-            ->willReturnCallback(function ($key, $default = null) {
-                return match ($key) {
-                    'product_id' => 123,
-                    default => $default,
-                };
-            });
-
-        $requestProperty->setValue($controller, $request);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'product_id' => 123,
+        ]));
 
         $result = $controller->counts();
 
-        $this->assertIsString($result);
-        $data = json_decode($result, true);
-        $this->assertTrue($data['success']);
-        $this->assertEquals(42, $data['data']['count']);
+        self::assertIsString($result);
+        $data = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+        self::assertTrue($data['success']);
+        self::assertSame(42, $data['data']['count']);
     }
 
     public function testCountsWithInvalidProductIdReturnsError(): void
     {
         $socialService = $this->createMock(SocialService::class);
-        $socialService->expects($this->never())
-            ->method('getShareCount');
+        $socialService->expects($this->never())->method('getShareCount');
 
         $customerSession = $this->createMock(CustomerSession::class);
-
         $controller = new Social($socialService, $customerSession);
-
-        $reflection = new \ReflectionClass($controller);
-        $requestProperty = $reflection->getProperty('request');
-        $requestProperty->setAccessible(true);
-
-        $request = $this->createMock(\Weline\Framework\Http\Request\Request::class);
-        $request->expects($this->any())
-            ->method('getParam')
-            ->willReturnCallback(function ($key, $default = null) {
-                return match ($key) {
-                    'product_id' => 0,
-                    default => $default,
-                };
-            });
-
-        $requestProperty->setValue($controller, $request);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'product_id' => 0,
+        ]));
 
         $result = $controller->counts();
 
-        $this->assertIsString($result);
-        $data = json_decode($result, true);
-        $this->assertFalse($data['success']);
-        $this->assertStringContainsString('Invalid product ID', $data['message']);
+        self::assertIsString($result);
+        $data = json_decode($result, true, 512, JSON_THROW_ON_ERROR);
+        self::assertFalse($data['success']);
+        self::assertStringContainsString('Invalid product ID', (string) ($data['message'] ?? ''));
+    }
+
+    private function createRequestMock(array $params = []): Request
+    {
+        $request = $this->getMockBuilder(Request::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getParam'])
+            ->getMock();
+        $request->method('getParam')
+            ->willReturnCallback(static fn (string $key, mixed $default = null): mixed => $params[$key] ?? $default);
+
+        return $request;
+    }
+
+    private function setControllerRequest(object $controller, Request $request): void
+    {
+        $reflection = new \ReflectionObject($controller);
+        while (!$reflection->hasProperty('request') && ($reflection = $reflection->getParentClass())) {
+        }
+
+        if (!$reflection instanceof \ReflectionClass) {
+            self::fail('Unable to locate request property.');
+        }
+
+        $property = $reflection->getProperty('request');
+        $property->setAccessible(true);
+        $property->setValue($controller, $request);
     }
 }

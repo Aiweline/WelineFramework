@@ -126,6 +126,49 @@ class WebsiteAgentServiceTest extends TestCase
         $this->assertSame('registry timeout', $siteResult['error'] ?? '');
     }
 
+    public function testRecommendAvailableDomainDeferSkipsRegistrarAvailabilityQuery(): void
+    {
+        $queryService = $this->createMock(FrameworkQueryService::class);
+        $queryService->expects($this->never())->method('execute');
+
+        $service = $this->createService($queryService);
+        $result = $service->recommendAvailableDomain(
+            'Coffee brand storefront',
+            0,
+            'beanlane.com',
+            true
+        );
+
+        $this->assertTrue($result['success']);
+        $this->assertNotEmpty($result['domain'] ?? '');
+        $this->assertSame('beanlane.com', $result['candidate_domains'][0] ?? '');
+        $this->assertSame([], $result['checked_results'] ?? null);
+        $this->assertTrue(!empty($result['availability_deferred']));
+    }
+
+    public function testRecommendAvailableDomainDeferReturnsLocalRandomSubdomainForLocalAccount(): void
+    {
+        $queryService = $this->createMock(FrameworkQueryService::class);
+        $queryService->expects($this->never())->method('execute');
+
+        $service = $this->createService($queryService);
+        $result = $service->recommendAvailableDomain(
+            'Local demo storefront',
+            900001,
+            '',
+            true
+        );
+
+        $this->assertTrue($result['success']);
+        $domain = (string)($result['domain'] ?? '');
+        $this->assertNotSame('', $domain);
+        $this->assertTrue(\str_ends_with($domain, '.weline.local'));
+        $this->assertSame([$domain], $result['candidate_domains'] ?? []);
+        $this->assertSame([], $result['checked_results'] ?? null);
+        $this->assertTrue(!empty($result['availability_deferred']));
+        $this->assertTrue(!empty($result['simulated']));
+    }
+
     public function testRecommendationCandidatesPreferBusinessAndMarketTokensForChineseBrief(): void
     {
         $service = $this->createService($this->createMock(FrameworkQueryService::class));

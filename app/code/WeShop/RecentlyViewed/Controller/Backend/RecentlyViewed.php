@@ -34,7 +34,7 @@ class RecentlyViewed extends BaseController
         $this->assign(array_merge(
             [
                 'title' => (string) __('Recently Viewed Management'),
-                'indexUrl' => $this->getBackendUrl('*/backend/recentlyViewed'),
+                'indexUrl' => $this->_url->getBackendUrl('*/backend/recentlyViewed'),
                 'statistics' => $statistics,
             ],
             $this->adminPageDataService->getListData($page, $pageSize, $filters)

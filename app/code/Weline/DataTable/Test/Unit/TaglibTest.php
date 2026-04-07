@@ -64,7 +64,7 @@ class TaglibTest extends TestCore
         
         // 测试缺少必需参数的情况
         $this->expectException(\Exception::class);
-        $this->expectExceptionMessage('d-table标签必须指定model属性');
+        $this->expectExceptionMessage('d-table tag must specify model attribute!');
         
         $result = $callback('d-table', [], ['', '', ''], []);
     }

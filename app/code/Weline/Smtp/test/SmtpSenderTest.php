@@ -1,42 +1,33 @@
 <?php
-declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 作者：Admin
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- * 日期：2022/11/5 01:00:35
- */
+declare(strict_types=1);
 
 namespace Weline\Smtp\test;
 
+use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Exception;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Smtp\Helper\Data;
 use Weline\Smtp\Helper\SmtpSender;
 
-class SmtpSenderTest extends \Weline\Framework\UnitTest\TestCore
+final class SmtpSenderTest extends TestCase
 {
-    private Data $data;
-
-    function setUp(): void
+    public function testSendWithConfigRejectsIncompleteSenderConfiguration(): void
     {
-        parent::setUp();
-        $this->data = ObjectManager::getInstance(Data::class);
-    }
+        $data = $this->createMock(Data::class);
+        $sender = new SmtpSender($data);
 
-    function testSmtpSender()
-    {
-        /**@var SmtpSender $smtpSender */
-        $smtpSender = ObjectManager::getInstance(SmtpSender::class);
-        $condition = $smtpSender->sender(
-            ['email' => 'Aiweline@qq.com', 'name' => '发送者'],
-            ['email' => 'Aiweline@qq.com', 'name' => '接收者'],
-            'WelineFramework 框架Smtp测试！',
-            'WelineFramework 框架Smtp测试！这只是一个测试邮件。'
+        $this->expectException(Exception::class);
+        $this->expectExceptionMessage('host');
+
+        $sender->sendWithConfig(
+            ['email' => 'from@example.com', 'name' => 'Sender'],
+            ['email' => 'to@example.com', 'name' => 'Receiver'],
+            'Subject',
+            'Body',
+            config: [
+                'smtp_host' => '',
+                'smtp_username' => '',
+            ]
         );
-        self::assertTrue($condition, '邮件发送');
     }
 }

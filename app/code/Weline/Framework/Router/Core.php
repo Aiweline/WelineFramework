@@ -18,6 +18,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
@@ -1054,6 +1055,14 @@ class Core
         try {
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
             // 检测是否是流式响应（SSE）- 如果是，直接返回，不进行后续处理
+            // 仅依赖 headers_list 在部分 FPM 场景会失效，因此优先检查 SseContext 开关。
+            if (SseContext::isSseEnabled()) {
+                while (ob_get_level() > 0) {
+                    ob_end_flush();
+                }
+                $this->is_match = true;
+                return;
+            }
             $currentHeaders = headers_list();
             $acceptHeader = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
             $isSseAcceptRequest = str_contains($acceptHeader, 'text/event-stream');
