@@ -173,6 +173,19 @@ $domainStatusBadgeClass = match ($domainStatus) {
     default => 'bg-soft-secondary text-muted',
 };
 $domainActionLabel = match ($domainStatus) {
+    'completed' => (string)__('已购买完成'),
+    'queued', 'running' => (string)__('正在购买域名'),
+    'failed' => (string)__('重新发起购买'),
+    default => (string)__('购买域名并建站'),
+};
+$domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
+    ? (string)((int)($domainPurchaseState['order_id'] ?? 0))
+    : ((int)($domainPurchaseState['purchase_order_id'] ?? 0) > 0
+        ? (string)((int)($domainPurchaseState['purchase_order_id'] ?? 0))
+        : (string)__('暂未生成'));
+?>
+<!--
+$domainActionLabel = match ($domainStatus) {
     'completed' => (string)__('宸茶喘涔?),
     'queued', 'running' => (string)__('璐拱杩涜涓?),
     'failed' => (string)__('閲嶆柊璐拱'),
@@ -183,6 +196,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     : ((int)($domainPurchaseState['purchase_order_id'] ?? 0) > 0
         ? (string)((int)($domainPurchaseState['purchase_order_id'] ?? 0))
         : (string)__('绛夊緟鐢熸垚'));
+-->
+<?php
 ?>
 <?php if ($guidedUi): ?>
 <?php /* ============================================================
@@ -472,9 +487,25 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                                    placeholder="<?= htmlspecialchars((string)__('如已有域名可填入'), ENT_QUOTES, 'UTF-8') ?>">
                         </div>
                         <div class="col-md-8">
+                            <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('Registrar Account'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <?php /* ?>
+                            <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('注册商账户'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <?php */ ?>
+                            <!--
+                            <?php /* ?>
                             <label class="form-label" for="pb-ai-registrar-account"><?= htmlspecialchars((string)__('璐拱鏈嶅姟鍟嗚处鍙?), ENT_QUOTES, 'UTF-8') ?></label>
+                            <?php */ ?>
+                            -->
                             <select class="form-select" id="pb-ai-registrar-account">
+                                <option value=""><?= htmlspecialchars((string)__('Auto Select by AI'), ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php /* ?>
+                                <option value=""><?= htmlspecialchars((string)__('由 AI 自动选择'), ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php */ ?>
+                                <!--
+                                <?php /* ?>
                                 <option value=""><?= htmlspecialchars((string)__('璁?AI 缁х画鎺ㄨ崘'), ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php */ ?>
+                                -->
                                 <?php foreach ($registrarAccounts as $account): ?>
                                     <?php $accountId = (int)($account['account_id'] ?? 0); if ($accountId <= 0) { continue; } ?>
                                     <option value="<?= $accountId ?>"<?= $accountId === $preferredRegistrarAccountId ? ' selected' : '' ?> data-label="<?= htmlspecialchars((string)($account['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
@@ -483,7 +514,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                                 <?php endforeach; ?>
                             </select>
                             <div class="form-text" id="pb-ai-registrar-help">
+                                <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI recommends: {label}', ['label' => $recommendedRegistrarLabel]) : (string)__('If no registrar account is chosen, AI will use the default available account.'), ENT_QUOTES, 'UTF-8') ?>
+                                <?php /* ?>
                                 <?= htmlspecialchars($recommendedRegistrarLabel !== '' ? (string)__('AI 褰撳墠鎺ㄨ崘锛?{label}', ['label' => $recommendedRegistrarLabel]) : (string)__('鍙厛鐐瑰嚮鈥滄帹鑽愬煙鍚嶁€濓紝AI 浼氫竴璧风粰鍑烘洿閫傚悎鐨勬湇鍔″晢鎺ㄨ崘銆?), ENT_QUOTES, 'UTF-8') ?>
+                                <?php */ ?>
                             </div>
                         </div>
                         <div class="col-12">
@@ -2889,6 +2923,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     }
 
     window.PbAiWorkspacePreview = {
+        isGuidedUi: isGuidedUi,
+        messages: messages,
+        toast: toast,
+        resetBuildStartUi: resetBuildStartUi,
         upsertPreviewTab: upsertPreviewTab,
         switchPreviewByType: function (pageType) {
             var tab = document.querySelector('.pb-ai-preview-tab[data-page-type="' + pageType + '"]');
@@ -2900,7 +2938,15 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         },
         markPageGenerationStatus: markPageGenerationStatus,
         queueGenerationStatus: queueGenerationStatus,
-        syncPreviewMetaFromState: syncPreviewMetaFromState
+        syncPreviewMetaFromState: syncPreviewMetaFromState,
+        updateVirtualBlockState: updateVirtualBlockState,
+        replaceCurrentBlockHtml: replaceCurrentBlockHtml,
+        bindEmbeddedPreviewFrameBridge: bindEmbeddedPreviewFrameBridge,
+        setVirtualPagesByType: function (pages) {
+            if (pages && typeof pages === 'object') {
+                virtualPagesByTypeState = pages;
+            }
+        }
     };
 
     var publishBtn = document.getElementById('pb-ai-run-publish-check');
@@ -3219,6 +3265,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 (function () {
     'use strict';
 
+    var previewBridge = window.PbAiWorkspacePreview || {};
+    var isGuidedUi = !!previewBridge.isGuidedUi;
+    var messages = (previewBridge.messages && typeof previewBridge.messages === 'object') ? previewBridge.messages : {};
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var startPublishUrl = <?= \json_encode($startPublishUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
@@ -3275,16 +3324,18 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
     relayoutExpertWorkspaceWithRightLog();
 
-    function toast(type, message) {
-        if (!message) {
-            return;
-        }
-        if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
-            window.BackendToast[type](message);
-            return;
-        }
-        console[type === 'error' ? 'error' : 'log'](message);
-    }
+    var toast = typeof previewBridge.toast === 'function'
+        ? previewBridge.toast
+        : function (type, message) {
+            if (!message) {
+                return;
+            }
+            if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+                window.BackendToast[type](message);
+                return;
+            }
+            console[type === 'error' ? 'error' : 'log'](message);
+        };
 
     function postForm(url, fields) {
         var formData = new FormData();
@@ -3411,7 +3462,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
     function resetOperationUiOnFailure(operation) {
         if (String(operation || '') === 'build') {
-            resetBuildStartUi();
+            if (typeof previewBridge.resetBuildStartUi === 'function') {
+                previewBridge.resetBuildStartUi();
+            }
         }
         if (String(operation || '') === 'publish') {
             var publishBtn = document.getElementById('pb-ai-start-publish');
@@ -3446,6 +3499,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         var wrapper = doc.querySelector(selector);
         if (!wrapper) {
             return;
+        }
+        if (!wrapper.style.position) {
+            wrapper.style.position = 'relative';
         }
         var overlay = wrapper.querySelector('.pb-ai-inline-stream-state');
         if (!overlay) {
@@ -3528,7 +3584,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
             // 实时更新预览 iframe（如果存在）
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
-            if (previewFrame && payload.page_type && payload.progress_percent >= 100) {
+            if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active) {
                 // 页面生成完成，刷新预览
                 window.setTimeout(function() {
                     if (previewFrame.src) {
@@ -3556,7 +3612,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
             // 页面生成完成，实时刷新预览
             var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
-            if (previewFrame && previewFrame.src) {
+            if (previewFrame && previewFrame.src && !blockRefreshState.active) {
                 window.setTimeout(function() {
                     // 刷新 iframe 以显示新生成的页面
                     previewFrame.src = previewFrame.src;
@@ -3593,17 +3649,27 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 && payload.state
                 && payload.state.virtual_pages_by_type
             ) {
-                virtualPagesByTypeState = payload.state.virtual_pages_by_type;
+                if (typeof previewBridge.setVirtualPagesByType === 'function') {
+                    previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);
+                }
                 var pageState = payload.state.virtual_pages_by_type[blockRefreshState.pageType] || null;
                 var nextBlock = pageState && Array.isArray(pageState.blocks)
                     ? pageState.blocks.find(function (item) { return String(item.block_id || '') === String(blockRefreshState.blockId || ''); })
                     : null;
                 if (nextBlock) {
-                    updateVirtualBlockState(blockRefreshState.pageType, nextBlock);
-                    replaceCurrentBlockHtml(blockRefreshState.pageType, nextBlock);
-                    bindEmbeddedPreviewFrameBridge();
+                    if (typeof previewBridge.updateVirtualBlockState === 'function') {
+                        previewBridge.updateVirtualBlockState(blockRefreshState.pageType, nextBlock);
+                    }
+                    var replaced = typeof previewBridge.replaceCurrentBlockHtml === 'function'
+                        ? previewBridge.replaceCurrentBlockHtml(blockRefreshState.pageType, nextBlock)
+                        : false;
+                    if (replaced && typeof previewBridge.bindEmbeddedPreviewFrameBridge === 'function') {
+                        previewBridge.bindEmbeddedPreviewFrameBridge();
+                    }
                     clearBlockStreamingState();
-                    return;
+                    if (replaced) {
+                        return;
+                    }
                 }
             }
             clearBlockStreamingState();

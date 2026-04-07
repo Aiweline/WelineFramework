@@ -160,13 +160,8 @@ ErrorBootstrap::init($processTag, [
 // 确保即使 Windows 隐藏窗口或 Linux 重定向丢失，日志也不会丢
 $processLogFile = '';
 if ($processName) {
-    $processLogFile = \Weline\Server\Service\WlsLogService::getProcessLogFile($processName, $instanceName, $processTag);
-    $processLogDir = \dirname($processLogFile);
-    if (!\is_dir($processLogDir)) {
-        @\mkdir($processLogDir, 0777, true);
-    }
+    $processLogFile = \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
     // 将 PHP error_log() 重定向到进程日志文件（追加模式）
-    \ini_set('error_log', $processLogFile);
 }
 
 // 预先读取 env.php 中的 deploy 配置（备用方案，用于在 App::init() 之前检测 DEV 模式）
@@ -1235,6 +1230,12 @@ if ($isMaintenanceWorker) {
 }
 
 // ========== IPC 控制通道：连接 Master 并注册 + 上报就绪 ==========
+$ipcClient = null;
+$ipcSelfTag = null;
+$ipcDraining = false;
+$ipcReceivedShutdown = false;
+$drainStartTime = 0;
+$shouldExit = false;
 $maxDrainTime = 10;     // 由 Master drain/reload 消息或默认覆盖
 $pendingMaintDrainReqId = null; // 维护：先排空本 Worker 存量连接再 ACK
 $waitingForAck = false;
@@ -1543,7 +1544,6 @@ $logReload = function (string $method) use ($workerId, $instanceName) {
 };
 
 // 是否需要优雅退出（重载时设置为 true）
-$shouldExit = false;
 
 // Worker 优雅退出函数
 $gracefulExit = function (string $reason = '') use ($socket, &$connections, &$requestBuffers, &$connectionLastActivity, $processName, &$ipcClient, $workerId, $port, $isMaintenanceWorker) {

@@ -148,5 +148,23 @@ final class SubprocessControlKernelTest extends TestCase
             self::assertLessThan($resolvePos, $autoloadPos, "{$script} should load app/autoload.php before resolveControlPort");
         }
     }
+
+    public function testWorkerEntryScriptsInitializeIpcShutdownStateBeforeOrphanGuardChecks(): void
+    {
+        foreach (['worker.php', 'worker_ssl.php'] as $script) {
+            $path = BP . 'app' . DIRECTORY_SEPARATOR . 'code' . DIRECTORY_SEPARATOR . 'Weline'
+                . DIRECTORY_SEPARATOR . 'Server' . DIRECTORY_SEPARATOR . 'bin' . DIRECTORY_SEPARATOR . $script;
+            $source = \file_get_contents($path);
+
+            self::assertNotFalse($source, "failed to read {$script}");
+
+            $shutdownInitPos = \strpos($source, '$ipcReceivedShutdown = false;');
+            $guardPos = \strpos($source, '$orphanGuard->shouldExit(');
+
+            self::assertNotFalse($shutdownInitPos, "{$script} should initialize \$ipcReceivedShutdown");
+            self::assertNotFalse($guardPos, "{$script} should check orphan guard");
+            self::assertLessThan($guardPos, $shutdownInitPos, "{$script} should initialize \$ipcReceivedShutdown before orphan guard checks");
+        }
+    }
 }
 
