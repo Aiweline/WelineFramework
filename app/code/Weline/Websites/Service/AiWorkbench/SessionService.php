@@ -7,12 +7,18 @@ namespace Weline\Websites\Service\AiWorkbench;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\AiSiteBuilderArtifact;
+use Weline\Websites\Model\AiSiteBuilderEvent;
+use Weline\Websites\Model\AiSiteBuilderMessage;
 use Weline\Websites\Model\AiSiteBuilderSession;
 
 class SessionService
 {
     public function __construct(
         private readonly AiSiteBuilderSession $sessionModel,
+        private readonly ?AiSiteBuilderMessage $messageModel = null,
+        private readonly ?AiSiteBuilderArtifact $artifactModel = null,
+        private readonly ?AiSiteBuilderEvent $eventModel = null,
     ) {
     }
 
@@ -117,6 +123,43 @@ class SessionService
             ->fetch();
 
         return $session->getId() > 0 ? $session : null;
+    }
+
+    public function deleteSessionByPublicId(string $publicId, int $adminUserId): bool
+    {
+        $session = $this->loadByPublicId($publicId, $adminUserId);
+        if ($session === null) {
+            return false;
+        }
+
+        return $this->deleteSessionById($session->getId(), $adminUserId);
+    }
+
+    public function deleteSessionById(int $sessionId, int $adminUserId): bool
+    {
+        $session = $this->loadById($sessionId, $adminUserId);
+        if ($session === null) {
+            return false;
+        }
+
+        $this->getMessageModel()->clearData()->clearQuery()
+            ->where(AiSiteBuilderMessage::schema_fields_SESSION_ID, $session->getId())
+            ->delete();
+
+        $this->getArtifactModel()->clearData()->clearQuery()
+            ->where(AiSiteBuilderArtifact::schema_fields_SESSION_ID, $session->getId())
+            ->delete();
+
+        $this->getEventModel()->clearData()->clearQuery()
+            ->where(AiSiteBuilderEvent::schema_fields_SESSION_ID, $session->getId())
+            ->delete();
+
+        $this->sessionModel->clearData()->clearQuery()
+            ->where(AiSiteBuilderSession::schema_fields_ID, $session->getId())
+            ->where(AiSiteBuilderSession::schema_fields_ADMIN_USER_ID, $adminUserId)
+            ->delete();
+
+        return true;
     }
 
     /**
@@ -287,6 +330,21 @@ class SessionService
         }
 
         return $sessions;
+    }
+
+    private function getMessageModel(): AiSiteBuilderMessage
+    {
+        return $this->messageModel ?? ObjectManager::getInstance(AiSiteBuilderMessage::class);
+    }
+
+    private function getArtifactModel(): AiSiteBuilderArtifact
+    {
+        return $this->artifactModel ?? ObjectManager::getInstance(AiSiteBuilderArtifact::class);
+    }
+
+    private function getEventModel(): AiSiteBuilderEvent
+    {
+        return $this->eventModel ?? ObjectManager::getInstance(AiSiteBuilderEvent::class);
     }
 
     private function isPgsqlAiSiteBuilderSessionPrimaryKeyBroken(\Throwable $e): bool

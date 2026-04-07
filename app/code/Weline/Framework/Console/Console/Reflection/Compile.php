@@ -461,7 +461,7 @@ class Compile extends CommandAbstract
             } else {
                 $args = [];
                 foreach ($constructor['params'] as $param) {
-                    if ($param['isClass'] ?? false) {
+                    if (($param['isClass'] ?? false) && empty($param['hasDefault'])) {
                         $depClass = $param['typeName'] ?? '';
                         if ($depClass !== '') {
                             // getInstance 参数在单引号字符串中，反斜杠需要转义

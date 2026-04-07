@@ -9,7 +9,9 @@ use Weline\Server\IPC\MasterControlServer;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Contract\ServiceInstance;
+use Weline\Server\Service\Contract\ServiceProviderInterface;
 use Weline\Server\Service\Provider\DispatcherProvider;
+use Weline\Server\Service\Provider\HttpRedirectProvider;
 use Weline\Server\Service\Provider\MaintenanceWorkerProvider;
 use Weline\Server\Service\Provider\MemoryServerProvider;
 use Weline\Server\Service\Provider\SessionServerProvider;
@@ -814,6 +816,188 @@ class ServiceOrchestratorStartupTest extends TestCase
         }
     }
 
+    public function testStartupPhaseOneBatchesDispatcherRedirectAndMaintenanceTogether(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var list<list<string>> */
+            public array $phaseOneRoleBatches = [];
+
+            protected function startProvidersBatch(array $providers, ServiceContext $context): array
+            {
+                unset($context);
+                $this->phaseOneRoleBatches[] = array_values(array_map(
+                    static fn ($p) => $p->getRole(),
+                    $providers
+                ));
+
+                return [];
+            }
+
+            protected function waitForStartupAcceptance(array $startupAcceptance, ServiceContext $context): void
+            {
+                unset($startupAcceptance, $context);
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->registerProvider(new DispatcherProvider());
+        $registry->registerProvider(new HttpRedirectProvider());
+        $registry->registerProvider(new MaintenanceWorkerProvider());
+        $registry->registerProvider(new class extends WorkerProvider {
+            public function getInstanceCount(ServiceContext $context): int
+            {
+                return 0;
+            }
+        });
+
+        $context = new ServiceContext(
+            instanceName: 'ai-u-phase-one-all-together',
+            epoch: 8,
+            controlPort: 37984,
+            masterPid: 424245,
+            host: '127.0.0.1',
+            mainPort: 18443,
+            sslEnabled: true,
+            sslCert: 'cert.pem',
+            sslKey: 'key.pem',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'wls' => [
+                    'worker' => ['count' => 0],
+                ],
+            ],
+            httpRedirectPort: 18080,
+            dispatcherEnabled: true,
+            workerCount: 0,
+            workerBasePort: 28183,
+            workerPort: 28183,
+        );
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $this->invokePrivateWithArgs($orchestrator, 'autoStartMaintenanceMode', [$context]);
+        $this->invokePrivateWithArgs($orchestrator, 'startAllChildServicesBody', [$context]);
+
+        self::assertSame([[
+            ControlMessage::ROLE_DISPATCHER,
+            ControlMessage::ROLE_REDIRECT,
+            ControlMessage::ROLE_MAINTENANCE,
+        ]], $orchestrator->phaseOneRoleBatches);
+    }
+
+    public function testWorkersLaunchBeforeStartupAcceptanceWaitsForPhaseOneReadiness(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            /** @var list<string> */
+            public array $events = [];
+
+            protected function startProvidersBatch(array $providers, ServiceContext $context): array
+            {
+                $this->events[] = 'phase_one_batch';
+                $result = [];
+                foreach ($providers as $provider) {
+                    $role = $provider->getRole();
+                    $count = $provider->getInstanceCount($context);
+                    $result[$role] = [];
+                    for ($i = 1; $i <= $count; $i++) {
+                        $instance = new ServiceInstance(
+                            role: $role,
+                            instanceId: $i,
+                            epoch: $context->epoch,
+                            launchId: 'phase-one-launch',
+                            port: $provider->getPort($i, $context),
+                            state: ServiceInstance::STATE_READY,
+                            startedAt: \microtime(true),
+                            ipcClientId: $role === ControlMessage::ROLE_DISPATCHER ? 401 : null,
+                        );
+                        $this->getRegistry()->addInstance($instance);
+                        $result[$role][] = $instance;
+                    }
+                }
+
+                return $result;
+            }
+
+            protected function startInstancesBatch(ServiceProviderInterface $provider, int $instanceCount, ServiceContext $context): array
+            {
+                $this->events[] = 'worker_batch:' . $provider->getRole();
+                $instances = [];
+                for ($i = 1; $i <= $instanceCount; $i++) {
+                    $instance = new ServiceInstance(
+                        role: $provider->getRole(),
+                        instanceId: $i,
+                        epoch: $context->epoch,
+                        launchId: 'worker-launch',
+                        port: $provider->getPort($i, $context),
+                        state: ServiceInstance::STATE_STARTING,
+                        startedAt: \microtime(true),
+                    );
+                    $this->getRegistry()->addInstance($instance);
+                    $instances[] = $instance;
+                }
+
+                return $instances;
+            }
+
+            protected function waitForStartupAcceptance(array $startupAcceptance, ServiceContext $context): void
+            {
+                unset($context);
+                $this->events[] = 'wait:' . \implode(',', \array_keys($startupAcceptance));
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->registerProvider(new DispatcherProvider());
+        $registry->registerProvider(new MaintenanceWorkerProvider());
+        $registry->registerProvider(new class extends WorkerProvider {
+            public function getInstanceCount(ServiceContext $context): int
+            {
+                return 2;
+            }
+        });
+
+        $context = new ServiceContext(
+            instanceName: 'ai-u-concurrent-start',
+            epoch: 21,
+            controlPort: 37990,
+            masterPid: 424250,
+            host: '127.0.0.1',
+            mainPort: 18444,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 28190,
+            workerPort: 28190,
+        );
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        });
+
+        $this->invokePrivateWithArgs($orchestrator, 'autoStartMaintenanceMode', [$context]);
+        $this->invokePrivateWithArgs($orchestrator, 'startAllChildServicesBody', [$context]);
+
+        self::assertSame('phase_one_batch', $orchestrator->events[0] ?? null);
+        self::assertSame('worker_batch:worker', $orchestrator->events[1] ?? null);
+        self::assertSame('wait:maintenance', $orchestrator->events[2] ?? null);
+    }
+
     public function testSharedCriticalInfraEnsureStartsBeforePhaseOneBatchKickoff(): void
     {
         $events = new \ArrayObject();
@@ -1088,6 +1272,84 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame([$maintPort], $poolSent['ports'] ?? null);
     }
 
+    public function testDuplicateReadyFromSameClientIsIdempotent(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+
+        $dispatcher = new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dup-ready',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201,
+        );
+        $registry->addInstance($dispatcher);
+
+        $maintenance = new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dup-ready',
+            port: 29339,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 202,
+        );
+        $maintenance->setMeta('worker_id', 1);
+        $maintenance->setMeta('ready_at', \microtime(true) - 1.0);
+        $registry->addInstance($maintenance);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
+            'epoch' => $context->epoch,
+            'launch_id' => 'dup-ready',
+            'port' => 29339,
+            'role' => ControlMessage::ROLE_MAINTENANCE,
+        ], 202]);
+
+        $setPoolMessages = 0;
+        $ackMessages = 0;
+        foreach ($mockControl->sent as $entry) {
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (!\is_array($decoded)) {
+                continue;
+            }
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
+                $setPoolMessages++;
+            }
+            if ($entry['clientId'] === 202 && ($decoded['type'] ?? '') === ControlMessage::TYPE_ACK_READY) {
+                $ackMessages++;
+            }
+        }
+
+        self::assertSame(0, $setPoolMessages, 'duplicate READY should not repush maintenance worker pool');
+        self::assertSame(1, $ackMessages, 'duplicate READY should still receive ACK_READY');
+    }
+
     public function testAutoStartMaintenanceModeUsesRuntimeWorkerCount(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -1150,11 +1412,100 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame(ServiceInstance::STATE_STARTING, $instance->state);
     }
 
+    public function testHandleIpcDisconnectCleansInactiveMaintenanceWorkerWithoutFullRestart(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            pid: 0,
+            port: 29333,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 902,
+        ));
+
+        $orchestrator->handleIpcDisconnect(902, [], $this->createMock(MasterControlServer::class));
+
+        self::assertNull($registry->getInstance(ControlMessage::ROLE_MAINTENANCE, 1));
+        self::assertSame([], $this->readPrivate($orchestrator, 'resurrectQueue'));
+        self::assertFalse($this->readPrivateBool($orchestrator, 'fullRestartRequested'));
+    }
+
+    public function testHandleIpcDisconnectSchedulesLocalRecoveryForActiveMaintenanceWorker(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            pid: 0,
+            port: 29333,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 903,
+            startedAt: \microtime(true) - 20.0,
+        ));
+
+        $orchestrator->handleIpcDisconnect(903, [], $this->createMock(MasterControlServer::class));
+
+        $instance = $registry->getInstance(ControlMessage::ROLE_MAINTENANCE, 1);
+        self::assertInstanceOf(ServiceInstance::class, $instance);
+        self::assertNull($instance->ipcClientId);
+        self::assertSame(ServiceInstance::STATE_FAILED, $instance->state);
+        self::assertSame(1, $instance->restarts);
+        self::assertArrayHasKey('maintenance:1', $this->readPrivate($orchestrator, 'resurrectQueue'));
+        self::assertFalse($this->readPrivateBool($orchestrator, 'fullRestartRequested'));
+    }
+
+    public function testHealthCheckRestartOrEscalateSchedulesLocalRecoveryForActiveMaintenanceWorker(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_MAINTENANCE,
+            instanceId: 1,
+            pid: 0,
+            port: 29333,
+            state: ServiceInstance::STATE_READY,
+            startedAt: \microtime(true) - 20.0,
+        ));
+
+        $instance = $registry->getInstance(ControlMessage::ROLE_MAINTENANCE, 1);
+        self::assertInstanceOf(ServiceInstance::class, $instance);
+
+        $this->invokePrivateWithArgs($orchestrator, 'healthCheckRestartOrEscalate', [
+            $instance,
+            'dead_without_ipc:maintenance#1',
+        ]);
+
+        $instance = $registry->getInstance(ControlMessage::ROLE_MAINTENANCE, 1);
+        self::assertInstanceOf(ServiceInstance::class, $instance);
+        self::assertSame(ServiceInstance::STATE_FAILED, $instance->state);
+        self::assertSame(1, $instance->restarts);
+        self::assertArrayHasKey('maintenance:1', $this->readPrivate($orchestrator, 'resurrectQueue'));
+        self::assertFalse($this->readPrivateBool($orchestrator, 'fullRestartRequested'));
+    }
+
     public function testCooperativeSequentialStartupBatchEnabledDuringWindowsBootstrap(): void
     {
         $orchestrator = new ServiceOrchestrator();
 
         $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
         $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
             public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
             {
@@ -1176,6 +1527,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator = new ServiceOrchestrator();
 
         $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
         $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
             public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
             {
@@ -1186,10 +1538,36 @@ class ServiceOrchestratorStartupTest extends TestCase
         $enabled = $this->invokePrivateWithArgs(
             $orchestrator,
             'shouldUseCooperativeSequentialProvidersStartupBatch',
-            [2]
+            [2, ['custom_phase_one', ControlMessage::ROLE_DISPATCHER]]
         );
 
         self::assertSame(\defined('IS_WIN') && IS_WIN, $enabled);
+    }
+
+    public function testCooperativeSequentialProvidersStartupBatchDisabledForDispatcherMaintenanceRedirectSet(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        });
+
+        $enabled = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldUseCooperativeSequentialProvidersStartupBatch',
+            [3, [
+                ControlMessage::ROLE_DISPATCHER,
+                ControlMessage::ROLE_MAINTENANCE,
+                ControlMessage::ROLE_REDIRECT,
+            ]]
+        );
+
+        self::assertFalse($enabled);
     }
 
     public function testCooperativeSequentialProvidersStartupBatchDisabledForSingleLaunch(): void
@@ -1197,6 +1575,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator = new ServiceOrchestrator();
 
         $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
         $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
             public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
             {
@@ -1207,7 +1586,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         $enabled = $this->invokePrivateWithArgs(
             $orchestrator,
             'shouldUseCooperativeSequentialProvidersStartupBatch',
-            [1]
+            [1, [ControlMessage::ROLE_DISPATCHER]]
         );
 
         self::assertFalse($enabled);
@@ -1224,6 +1603,48 @@ class ServiceOrchestratorStartupTest extends TestCase
             $orchestrator,
             'shouldUseCooperativeSequentialStartupBatch',
             [[1, 2]]
+        );
+
+        self::assertFalse($enabled);
+    }
+
+    public function testCooperativeSequentialStartupBatchDisabledByDefaultDuringWindowsBootstrap(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        });
+
+        $enabled = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldUseCooperativeSequentialStartupBatch',
+            [[1, 2]]
+        );
+
+        self::assertFalse($enabled);
+    }
+
+    public function testWindowsDetachedFastStartupBatchDisabledByDefaultDuringWindowsBootstrap(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        });
+
+        $enabled = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldUseWindowsDetachedFastStartupBatch',
+            [3]
         );
 
         self::assertFalse($enabled);

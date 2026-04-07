@@ -196,6 +196,13 @@ if (!function_exists('w_log_exception')) {
             $context['_previous_exception'] = get_class($exception->getPrevious()) . ': ' . $exception->getPrevious()->getMessage();
         }
 
+        // 兼容日志占位符替换：异常助手保留 underscore 上下文，同时提供可插值的 plain key
+        $context['exception_class'] = $context['_exception_class'];
+        $context['exception_message'] = $context['_exception_message'];
+        $context['exception_code'] = $context['_exception_code'];
+        $context['exception_file'] = $context['_exception_file'];
+        $context['exception_line'] = $context['_exception_line'];
+
         $logMessage = $message ?? 'Exception occurred: {_exception_class}';
         
         w_log('error', $logMessage, $context, $channel ?? 'exception');
