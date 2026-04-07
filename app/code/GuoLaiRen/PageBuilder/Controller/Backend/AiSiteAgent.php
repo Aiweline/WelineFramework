@@ -14,6 +14,7 @@ use GuoLaiRen\PageBuilder\Service\AiSitePageBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSitePublishService;
 use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
 use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
+use GuoLaiRen\PageBuilder\Service\AiSiteAgentWorkspaceDebugDefaults;
 use GuoLaiRen\PageBuilder\Service\AiSiteVirtualThemeService;
 use GuoLaiRen\PageBuilder\Service\AiSiteVisualUrlService;
 use GuoLaiRen\PageBuilder\Service\AiSiteHtmlBlocksBuildService;
@@ -26,6 +27,7 @@ use Weline\Framework\Http\Sse\LastEventIdResolver;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
@@ -43,6 +45,11 @@ class AiSiteAgent extends BaseController
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
+    /**
+     * 工作区 stream-sse 续约窗口：超过此时间未收到续约请求（POST post-touch-stream-lease）则视为断连，
+     * 服务端将结束事件流并清理与本 lease 关联的排队/运行中操作。
+     * 前端心跳间隔应显著小于本值（当前页面约 20s 一次 POST 续约）。
+     */
     private const STREAM_LEASE_TTL_SEC = 60;
 
     private readonly AiSiteAgentSessionService $sessionService;
@@ -195,6 +202,19 @@ class AiSiteAgent extends BaseController
             'workspace_guided_url',
             $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/workspace', ['public_id' => $publicId])
         );
+
+        /** @var SystemConfig $systemConfig */
+        $systemConfig = ObjectManager::getInstance(SystemConfig::class);
+        $rawTitle = $systemConfig->getConfig('ai_site_agent_debug_site_title', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $effectiveDebugTitle = $rawTitle === null
+            ? AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE
+            : \trim((string)$rawTitle);
+        $rawBrief = $systemConfig->getConfig('ai_site_agent_debug_brief_description', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
+        $effectiveDebugBrief = $rawBrief === null
+            ? AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION
+            : \trim((string)$rawBrief);
+        $this->assign('ai_site_debug_default_site_title', $effectiveDebugTitle);
+        $this->assign('ai_site_debug_default_brief', $effectiveDebugBrief);
 
         return $this->fetch();
     }
@@ -1079,7 +1099,10 @@ SCRIPT;
         }
         $sse = new SseWriter();
         $sse->start();
-        $sse->sendEvent('start', ['message' => __('已连接 PageBuilder 工作区事件流')]);
+        $sse->sendEvent('start', [
+            'message' => __('已连接 PageBuilder 工作区事件流'),
+            'lease_ttl_sec' => self::STREAM_LEASE_TTL_SEC,
+        ]);
         $this->logStreamSse('stream_started', [
             'session_id' => $session->getId(),
             'stage' => $session->getStage(),
@@ -1100,6 +1123,7 @@ SCRIPT;
         $pollInterval = 1000;  // 每秒轮询一次
         $startTime = \time();
         $loopCount = 0;
+        $streamStoppedForLeaseExpiry = false;
 
         while ((\time() - $startTime) < $maxDuration) {
             $loopCount++;
@@ -1109,10 +1133,20 @@ SCRIPT;
                 break;
             }
             if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
-                $this->logStreamSse('stream_lease_expired', [
-                    'session_id' => $session->getId(),
-                    'loop_count' => $loopCount,
-                ], 'warning');
+                if ($this->isThisWorkspaceStreamLeaseExpired($session, $adminId, $leaseToken)) {
+                    $this->cancelWorkspaceWorkAfterStreamLeaseExpired($session, $adminId, $leaseToken);
+                    $streamStoppedForLeaseExpiry = true;
+                    $this->logStreamSse('stream_lease_expired', [
+                        'session_id' => $session->getId(),
+                        'loop_count' => $loopCount,
+                        'cleanup' => true,
+                    ], 'warning');
+                } else {
+                    $this->logStreamSse('stream_lease_mismatch', [
+                        'session_id' => $session->getId(),
+                        'loop_count' => $loopCount,
+                    ], 'info');
+                }
                 break;
             }
 
@@ -1145,13 +1179,23 @@ SCRIPT;
             SchedulerSystem::yieldDelay($pollInterval);
         }
 
-        // 30 秒探活时间到，静默断开让客户端自动重连（不显示消息）
-        $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
+        // 30 秒探活时间到：正常轮询结束，静默断开让客户端自动重连；续约超时则带 lease_expired 且不再重连
+        if ($streamStoppedForLeaseExpiry) {
+            $sse->complete([
+                'success' => false,
+                'last_event_id' => $lastEventId,
+                'lease_expired' => true,
+                'message' => (string)__('工作区连接已超时未续约，相关任务已终止'),
+            ]);
+        } else {
+            $sse->complete(['success' => true, 'last_event_id' => $lastEventId]);
+        }
         $this->logStreamSse('stream_completed', [
             'session_id' => $session->getId(),
             'loop_count' => $loopCount,
             'last_event_id' => $lastEventId,
             'duration_sec' => \max(0, \time() - $startTime),
+            'lease_expired' => $streamStoppedForLeaseExpiry,
         ]);
     }
 
@@ -2037,12 +2081,12 @@ SCRIPT;
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $leaseToken = \trim((string)$this->getRequestBodyValue('lease_token', ''));
         if ($adminId <= 0 || $publicId === '' || $leaseToken === '') {
-            return $this->jsonError('INVALID_PARAMS', (string)__('鍙傛暟鏃犳晥'), self::PARAMS_STREAM_LEASE);
+            return $this->jsonError('INVALID_PARAMS', (string)__('参数无效'), self::PARAMS_STREAM_LEASE);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->jsonError('SESSION_NOT_FOUND', (string)__('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶'), self::PARAMS_STREAM_LEASE);
+            return $this->jsonError('SESSION_NOT_FOUND', (string)__('会话不存在或无权访问'), self::PARAMS_STREAM_LEASE);
         }
 
         $expiresAt = $this->touchStreamLeaseState($session, $adminId, $leaseToken);
@@ -2088,10 +2132,92 @@ SCRIPT;
         return (int)($lease['expires_at'] ?? 0) >= \time();
     }
 
+    /**
+     * 当前连接持有的 lease 是否因过期而失效（排除「scope 已被其它标签页改写 token」的情况）。
+     */
+    private function isThisWorkspaceStreamLeaseExpired(AiSiteAgentSession $session, int $adminId, string $leaseToken): bool
+    {
+        if ($leaseToken === '') {
+            return false;
+        }
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $lease = \is_array($scope[self::STREAM_LEASE_SCOPE_KEY] ?? null) ? $scope[self::STREAM_LEASE_SCOPE_KEY] : [];
+        if ($lease === []) {
+            return false;
+        }
+        if ((string)($lease['token'] ?? '') !== $leaseToken) {
+            return false;
+        }
+
+        return (int)($lease['expires_at'] ?? 0) < \time();
+    }
+
+    /**
+     * 工作区 stream-sse 续约超时：取消仍绑定本会话的排队/运行中操作，避免无人值守的后台继续占用。
+     */
+    private function cancelWorkspaceWorkAfterStreamLeaseExpired(AiSiteAgentSession $session, int $adminId, string $leaseToken): void
+    {
+        if ($leaseToken === '') {
+            return;
+        }
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $lease = \is_array($scope[self::STREAM_LEASE_SCOPE_KEY] ?? null) ? $scope[self::STREAM_LEASE_SCOPE_KEY] : [];
+        if ((string)($lease['token'] ?? '') !== $leaseToken) {
+            return;
+        }
+
+        $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $status = \trim((string)($active['status'] ?? ''));
+        if (!\in_array($status, ['queued', 'running'], true)) {
+            return;
+        }
+
+        $operation = \trim((string)($active['operation'] ?? ''));
+        $stageCode = $this->scopeCompatibilityService->normalizeStage($fresh->getStage());
+        $cancelMessage = (string)__('工作区事件流已断开（未及时续约），操作已终止');
+
+        $publishStatus = null;
+        if ($operation === 'publish') {
+            if ($status === 'running') {
+                $publishStatus = AiSiteAgentSession::PUBLISH_STATUS_FAILED;
+                $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_FAILED;
+            } else {
+                $publishStatus = AiSiteAgentSession::PUBLISH_STATUS_DRAFT;
+                $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            }
+        } else {
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+        }
+
+        $scope['active_operation'] = [
+            'operation' => $operation,
+            'execution_token' => (string)($active['execution_token'] ?? ''),
+            'status' => 'cancelled',
+            'page_type' => (string)($active['page_type'] ?? ''),
+            'updated_at' => \date('Y-m-d H:i:s'),
+            'message' => $cancelMessage,
+        ];
+
+        $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
+        if ($publishStatus !== null) {
+            $this->sessionService->setPublishStatus($fresh->getId(), $adminId, $publishStatus);
+        }
+        $this->appendWorkspaceEvent(
+            $fresh->getId(),
+            $adminId,
+            $stageCode,
+            'operation_cancelled',
+            (string)__('由于工作区连接超时未续约，已终止后台操作'),
+            ['details' => ['reason' => 'stream_lease_expired', 'operation' => $operation]]
+        );
+    }
+
     private function assertActiveStreamLeaseAlive(AiSiteAgentSession $session, int $adminId, string $leaseToken = ''): void
     {
         if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
-            throw new \RuntimeException((string)__('鍓嶇杩炴帴宸茶繃鏈燂紝宸叉彁鍓嶇粓姝?SSE 鎿嶄綔'));
+            throw new \RuntimeException((string)__('前端连接已过期，SSE 操作已终止'));
         }
     }
 
