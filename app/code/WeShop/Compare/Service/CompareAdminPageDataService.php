@@ -111,9 +111,13 @@ class CompareAdminPageDataService
             return [];
         }
 
-        $productRows = w_query('product', 'getProductByIds', [
-            'product_ids' => array_values(array_unique($productIds)),
-        ]);
+        try {
+            $productRows = w_query('product', 'getProductByIds', [
+                'product_ids' => array_values(array_unique($productIds)),
+            ]);
+        } catch (\Throwable) {
+            return [];
+        }
 
         if (!is_array($productRows)) {
             return [];
@@ -143,9 +147,13 @@ class CompareAdminPageDataService
             return [];
         }
 
-        $customerRows = w_query('customer', 'getCustomersInfo', [
-            'customer_ids' => array_values(array_unique($customerIds)),
-        ]);
+        try {
+            $customerRows = w_query('customer', 'getCustomersInfo', [
+                'customer_ids' => array_values(array_unique($customerIds)),
+            ]);
+        } catch (\Throwable) {
+            return [];
+        }
 
         if (!is_array($customerRows)) {
             return [];

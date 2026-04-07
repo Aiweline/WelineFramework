@@ -21,7 +21,7 @@ class AiSiteProfileAiGenerationService
             return [];
         }
 
-        $systemPrompt = $this->buildSystemPrompt();
+        $systemPrompt = $this->buildSystemPrompt($context);
         $userPrompt = $this->buildUserPrompt($context);
 
         $response = AiService::generateText(
@@ -46,9 +46,18 @@ class AiSiteProfileAiGenerationService
         return $this->normalizeGeneratedPayload($decoded);
     }
 
-    private function buildSystemPrompt(): string
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function buildSystemPrompt(array $context = []): string
     {
-        return <<<'PROMPT'
+        $locale = \trim((string)($context['default_locale'] ?? ''));
+        $localeRule = '';
+        if ($locale !== '') {
+            $localeRule = "\n- Primary locale is \"{$locale}\". All customer-facing strings (titles, taglines, descriptions, meta fields, and any visible SVG text) MUST be written in that language: zh_Hans_CN → Simplified Chinese; zh_Hant_TW → Traditional Chinese; en_US → English; ja_JP → Japanese; ko_KR → Korean; otherwise use the closest natural match for the locale code.";
+        }
+
+        return <<<PROMPT
 You are a brand strategist, copywriter, and SVG logo designer for website creation.
 Generate polished, customer-ready website profile data from the customer brief.
 
@@ -76,7 +85,7 @@ Rules:
 - logo_svg must be a clean inline SVG with width 160 height 48 and viewBox "0 0 160 48".
 - icon_svg must be a clean inline SVG with width 64 height 64 and viewBox "0 0 64 64".
 - SVG must not contain script, foreignObject, animation, external URLs, or embedded raster images.
-- Prefer simple geometric shapes, gradients, paths, circles, rectangles, and optional text.
+- Prefer simple geometric shapes, gradients, paths, circles, rectangles, and optional text.{$localeRule}
 PROMPT;
     }
 

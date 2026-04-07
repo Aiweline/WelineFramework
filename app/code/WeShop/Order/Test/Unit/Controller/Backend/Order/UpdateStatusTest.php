@@ -28,6 +28,10 @@ class UpdateStatusTest extends TestCase
     {
         $orderService = $this->createMock(OrderService::class);
         $orderService->expects($this->once())
+            ->method('isValidStatus')
+            ->with('processing')
+            ->willReturn(true);
+        $orderService->expects($this->once())
             ->method('updateOrderStatus')
             ->with(77, 'processing');
 

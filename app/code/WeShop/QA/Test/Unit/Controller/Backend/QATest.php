@@ -6,54 +6,49 @@ namespace WeShop\QA\Test\Unit\Controller\Backend;
 
 use PHPUnit\Framework\TestCase;
 use WeShop\QA\Controller\Backend\QA;
+use WeShop\QA\Model\Question;
 use WeShop\QA\Service\QAService;
-use WShop\QA\Model\Question;
-use Weline\Framework\Http\Request\Request;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Message\Manager as MessageManager;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\MessageManager;
 
-class QATest extends TestCase
+final class QATest extends TestCase
 {
     private QAService $qaService;
-    private QA $controller;
 
     protected function setUp(): void
     {
         $this->qaService = $this->createMock(QAService::class);
-        $this->controller = new QA($this->qaService);
     }
 
     public function testIndexReturnsQAManagementPage(): void
     {
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])
-            ->onlyMethods(['assign', 'fetch', 'getMessageManager', 'fetchBase'])
+            ->onlyMethods(['assign', 'fetch'])
             ->getMock();
 
-        $controller->expects($this->exactly(5))->method('assign')->willReturnCallback(
-            function (string $key, mixed $value) use (&$assignments) {
+        $assignments = [];
+        $controller->expects($this->exactly(5))
+            ->method('assign')
+            ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
                 $assignments[$key] = $value;
-                return $this;
-            }
-        );
-        $controller->expects($this->once())->method('fetch')->willReturn('page_html');
 
-        $this->setProtectedProperty($controller, '_objectManager', ObjectManager::getInstance());
-        $this->setProtectedProperty($controller, '_url', new class {
-            public function getBackendUrl(string $path): string
-            {
-                return '/backend/' . ltrim($path, '*/');
-            }
-        });
+                return $controller;
+            });
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_QA::templates/Backend/QA/Index/index.phtml')
+            ->willReturn('qa-index-page');
 
-        $result = $controller->index();
+        $this->setControllerUrl($controller);
 
-        $this->assertSame('page_html', $result);
-        $this->assertArrayHasKey('page_title', $assignments);
-        $this->assertArrayHasKey('list_url', $assignments);
-        $this->assertArrayHasKey('view_url', $assignments);
-        $this->assertArrayHasKey('approve_url', $assignments);
-        $this->assertArrayHasKey('reject_url', $assignments);
+        self::assertSame('qa-index-page', $controller->index());
+        self::assertSame('Q&A Management', $assignments['page_title'] ?? null);
+        self::assertSame('/backend/backend/qa/index', $assignments['list_url'] ?? null);
+        self::assertSame('/backend/backend/qa/view', $assignments['view_url'] ?? null);
+        self::assertSame('/backend/backend/qa/approve', $assignments['approve_url'] ?? null);
+        self::assertSame('/backend/backend/qa/reject', $assignments['reject_url'] ?? null);
     }
 
     public function testViewWithInvalidIdAddsErrorMessage(): void
@@ -61,35 +56,18 @@ class QATest extends TestCase
         $messageManager = $this->createMock(MessageManager::class);
         $messageManager->expects($this->once())
             ->method('addError')
-            ->with($this->isType('string'));
+            ->with('Invalid question ID.');
 
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])
-            ->onlyMethods(['assign', 'fetch', 'getMessageManager', 'redirect', 'fetchBase'])
+            ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $controller->expects($this->never())->method('fetch');
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 0]));
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 0,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
-        $this->setProtectedProperty($controller, '_url', new class {
-            public function getBackendUrl(string $path): string
-            {
-                return '/backend/' . ltrim($path, '*/');
-            }
-        });
-
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->view();
+        self::assertSame('', $controller->view());
     }
 
     public function testViewWithNonExistentQuestionAddsErrorMessage(): void
@@ -106,31 +84,14 @@ class QATest extends TestCase
 
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])
-            ->onlyMethods(['assign', 'fetch', 'getMessageManager', 'redirect', 'fetchBase'])
+            ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $controller->expects($this->never())->method('fetch');
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 999]));
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 999,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
-        $this->setProtectedProperty($controller, '_url', new class {
-            public function getBackendUrl(string $path): string
-            {
-                return '/backend/' . ltrim($path, '*/');
-            }
-        });
-
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->view();
+        self::assertSame('', $controller->view());
     }
 
     public function testViewWithValidQuestionReturnsViewPage(): void
@@ -145,74 +106,61 @@ class QATest extends TestCase
             'created_at' => '2026-03-29 10:00:00',
         ];
 
-        $questionMock = $this->createMock(Question::class);
-        $questionMock->expects($this->once())
+        $question = $this->createMock(Question::class);
+        $question->expects($this->once())
             ->method('getData')
             ->willReturn($questionData);
 
         $this->qaService->expects($this->once())
             ->method('getQuestion')
             ->with(5)
-            ->willReturn($questionMock);
+            ->willReturn($question);
 
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])
-            ->onlyMethods(['assign', 'fetch', 'getMessageManager', 'redirect', 'fetchBase'])
+            ->onlyMethods(['assign', 'fetch'])
             ->getMock();
 
-        $controller->expects($this->exactly(6))->method('assign')->willReturnCallback(
-            function (string $key, mixed $value) use (&$assignments) {
+        $assignments = [];
+        $controller->expects($this->exactly(6))
+            ->method('assign')
+            ->willReturnCallback(static function (string $key, mixed $value) use (&$assignments, $controller) {
                 $assignments[$key] = $value;
-                return $this;
-            }
-        );
-        $controller->expects($this->once())->method('fetch')->willReturn('view_page_html');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 5,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_url', new class {
-            public function getBackendUrl(string $path): string
-            {
-                return '/backend/' . ltrim($path, '*/');
-            }
-        });
+                return $controller;
+            });
+        $controller->expects($this->once())
+            ->method('fetch')
+            ->with('WeShop_QA::templates/Backend/QA/View/index.phtml')
+            ->willReturn('qa-view-page');
 
-        $result = $controller->view();
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 5]));
+        $this->setControllerUrl($controller);
 
-        $this->assertSame('view_page_html', $result);
-        $this->assertSame(5, $assignments['question_id']);
-        $this->assertSame($questionData, $assignments['question']);
-        $this->assertSame('Q&A Detail', $assignments['page_title']);
+        self::assertSame('qa-view-page', $controller->view());
+        self::assertSame('Q&A Detail', $assignments['page_title'] ?? null);
+        self::assertSame($questionData, $assignments['question'] ?? null);
+        self::assertSame(5, $assignments['question_id'] ?? null);
+        self::assertSame('/backend/backend/qa/approve', $assignments['approve_url'] ?? null);
+        self::assertSame('/backend/backend/qa/reject', $assignments['reject_url'] ?? null);
+        self::assertSame('/backend/backend/qa', $assignments['back_url'] ?? null);
     }
 
     public function testApproveWithInvalidRequestMethodAddsError(): void
     {
         $messageManager = $this->createMock(MessageManager::class);
-        $messageManager->expects($this->once())
-            ->method('addError')
-            ->with('Invalid request method.');
+        $messageManager->expects($this->once())->method('addError')->with('Invalid request method.');
 
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return false; }
-            public function getParam(string $key, mixed $default = null): mixed { return $default; }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock([], false));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->approve();
+        self::assertSame('', $controller->approve());
     }
 
     public function testApproveWithInvalidQuestionIdAddsError(): void
@@ -226,22 +174,12 @@ class QATest extends TestCase
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return true; }
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 0,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 0], true));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->approve();
+        self::assertSame('', $controller->approve());
     }
 
     public function testApproveSuccessfullyApprovesQuestion(): void
@@ -260,23 +198,15 @@ class QATest extends TestCase
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return true; }
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 5,
-                    'answer' => 'This is the answer.',
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock([
+            'id' => 5,
+            'answer' => 'This is the answer.',
+        ], true));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->approve();
+        self::assertSame('', $controller->approve());
     }
 
     public function testApproveHandlesServiceException(): void
@@ -294,45 +224,29 @@ class QATest extends TestCase
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return true; }
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 5,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 5], true));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->approve();
+        self::assertSame('', $controller->approve());
     }
 
     public function testRejectWithInvalidRequestMethodAddsError(): void
     {
         $messageManager = $this->createMock(MessageManager::class);
-        $messageManager->expects($this->once())
-            ->method('addError')
-            ->with('Invalid request method.');
+        $messageManager->expects($this->once())->method('addError')->with('Invalid request method.');
 
         $controller = $this->getMockBuilder(QA::class)
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return false; }
-            public function getParam(string $key, mixed $default = null): mixed { return $default; }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock([], false));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->reject();
+        self::assertSame('', $controller->reject());
     }
 
     public function testRejectWithInvalidQuestionIdAddsError(): void
@@ -346,22 +260,12 @@ class QATest extends TestCase
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return true; }
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 0,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 0], true));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->reject();
+        self::assertSame('', $controller->reject());
     }
 
     public function testRejectSuccessfullyRejectsQuestion(): void
@@ -380,22 +284,12 @@ class QATest extends TestCase
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return true; }
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 5,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 5], true));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->reject();
+        self::assertSame('', $controller->reject());
     }
 
     public function testRejectHandlesServiceException(): void
@@ -413,32 +307,61 @@ class QATest extends TestCase
             ->setConstructorArgs([$this->qaService])
             ->onlyMethods(['getMessageManager', 'redirect'])
             ->getMock();
+        $controller->method('getMessageManager')->willReturn($messageManager);
+        $controller->expects($this->once())->method('redirect')->with('*/backend/qa');
 
-        $this->setProtectedProperty($controller, '_request', new class {
-            public function isPost(): bool { return true; }
-            public function getParam(string $key, mixed $default = null): mixed
-            {
-                return match ($key) {
-                    'id' => 5,
-                    default => $default
-                };
-            }
-        });
-        $this->setProtectedProperty($controller, '_messageManager', $messageManager);
+        $this->setControllerRequest($controller, $this->createRequestMock(['id' => 5], true));
 
-        $controller->expects($this->once())->method('redirect');
-
-        $controller->reject();
+        self::assertSame('', $controller->reject());
     }
 
-    private function setProtectedProperty(object $target, string $property, mixed $value): void
+    private function createRequestMock(array $params = [], bool $isPost = true): Request
     {
-        $reflection = new \ReflectionObject($target);
-        while (!$reflection->hasProperty($property) && ($reflection = $reflection->getParentClass())) {
+        $request = $this->getMockBuilder(Request::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getParam', 'isPost'])
+            ->getMock();
+        $request->method('getParam')
+            ->willReturnCallback(static fn (string $key, mixed $default = null): mixed => $params[$key] ?? $default);
+        $request->method('isPost')->willReturn($isPost);
+
+        return $request;
+    }
+
+    private function setControllerRequest(object $controller, Request $request): void
+    {
+        $reflection = new \ReflectionObject($controller);
+        while (!$reflection->hasProperty('request') && ($reflection = $reflection->getParentClass())) {
         }
 
-        $reflectionProperty = $reflection->getProperty($property);
-        $reflectionProperty->setAccessible(true);
-        $reflectionProperty->setValue($target, $value);
+        if (!$reflection instanceof \ReflectionClass) {
+            self::fail('Unable to locate request property.');
+        }
+
+        $property = $reflection->getProperty('request');
+        $property->setAccessible(true);
+        $property->setValue($controller, $request);
+    }
+
+    private function setControllerUrl(object $controller): void
+    {
+        $url = $this->getMockBuilder(Url::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getBackendUrl'])
+            ->getMock();
+        $url->method('getBackendUrl')
+            ->willReturnCallback(static fn (string $path): string => '/backend/' . ltrim($path, '*/'));
+
+        $reflection = new \ReflectionObject($controller);
+        while (!$reflection->hasProperty('_url') && ($reflection = $reflection->getParentClass())) {
+        }
+
+        if (!$reflection instanceof \ReflectionClass) {
+            self::fail('Unable to locate _url property.');
+        }
+
+        $property = $reflection->getProperty('_url');
+        $property->setAccessible(true);
+        $property->setValue($controller, $url);
     }
 }

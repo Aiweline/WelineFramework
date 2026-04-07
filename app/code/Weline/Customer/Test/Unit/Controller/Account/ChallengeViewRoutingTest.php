@@ -51,7 +51,21 @@ class ChallengeViewRoutingTest extends TestCase
             ->setConstructorArgs([$this->createMock(Template::class), $service])
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
-        $controller->expects($this->exactly(3))->method('assign')->willReturnSelf();
+        $assignCalls = 0;
+        $controller->expects($this->exactly(5))
+            ->method('assign')
+            ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): Challenge {
+                $expectedKeys = [
+                    'challenge_token',
+                    'expires_at',
+                    'title',
+                    'error_message',
+                    'success_message',
+                ];
+                TestCase::assertSame($expectedKeys[$assignCalls], $key);
+                $assignCalls++;
+                return $controller;
+            });
         $controller->expects($this->once())
             ->method('fetch')
             ->with('Weline_Customer::templates/frontend/account/challenge.phtml')
