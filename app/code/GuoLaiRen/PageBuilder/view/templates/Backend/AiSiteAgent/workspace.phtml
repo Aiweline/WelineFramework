@@ -3723,6 +3723,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || '工作区操作执行失败');
                 toast('error', (payload && payload.message) ? String(payload.message) : lastServerError || <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
                 resetOperationUiOnFailure(operation);
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
                 return;
             }
 
@@ -3754,11 +3757,17 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     }
                     clearBlockStreamingState();
                     if (replaced) {
+                        if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                            previewBridge.resumeWorkspaceStream();
+                        }
                         return;
                     }
                 }
             }
             clearBlockStreamingState();
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
             finishOperation(payload);
         });
 
@@ -3771,6 +3780,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 settled = true;
                 closeOperationSource(source);
                 resetOperationUiOnFailure(operation);
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
             }
         };
 
