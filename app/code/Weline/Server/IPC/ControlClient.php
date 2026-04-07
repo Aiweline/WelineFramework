@@ -332,6 +332,35 @@ class ControlClient
         return $this->send(ControlMessage::register($role, $pid, $port, $workerId, $epoch, $launchId, $processKind, $moduleCode, $instanceCode));
     }
 
+    public function rememberRegistration(
+        string $role,
+        int $pid,
+        int $port = 0,
+        int $workerId = 0,
+        int $epoch = 0,
+        string $launchId = '',
+        string $processKind = ControlMessage::PROCESS_KIND_FRAMEWORK,
+        string $moduleCode = '',
+        string $instanceCode = ''
+    ): void {
+        $this->registerInfo = [
+            'role'          => $role,
+            'pid'           => $pid,
+            'port'          => $port,
+            'worker_id'     => $workerId,
+            'epoch'         => $epoch,
+            'launch_id'     => $launchId,
+            'process_kind'  => $processKind,
+            'module_code'   => $moduleCode,
+            'instance_code' => $instanceCode,
+        ];
+    }
+
+    public function markReadyState(bool $isReady = true): void
+    {
+        $this->isReady = $isReady;
+    }
+
     /**
      * 发送 ready 消息（框架初始化 + 端口监听完成后调用）
      */
@@ -454,7 +483,7 @@ class ControlClient
             }
         } while ($this->writeBuffer !== '' && $deadline > 0.0 && \microtime(true) < $deadline);
 
-        return $this->isConnected();
+        return $this->isConnected() && $this->writeBuffer === '';
     }
 
     private function enqueueWrite(string $message): bool

@@ -5,7 +5,9 @@ namespace Weline\Server\Test\Unit\ChildControl;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\IPC\ChildControl\ChildProcessIdentity;
 use Weline\Server\IPC\ChildControl\MasterOrphanGuard;
+use Weline\Server\IPC\ChildControl\RoleControlHandlerInterface;
 use Weline\Server\IPC\ChildControl\SubprocessControlKernel;
 
 final class SubprocessControlKernelTest extends TestCase
@@ -61,6 +63,60 @@ final class SubprocessControlKernelTest extends TestCase
         } finally {
             \putenv('WLS_E2E_WORKER_READY_DELAY_MS');
             \putenv('WLS_E2E_MAINTENANCE_READY_DELAY_MS');
+        }
+    }
+
+    public function testConnectAndRegisterFailureStillAllowsLaterReconnect(): void
+    {
+        $probeServer = \stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        self::assertIsResource($probeServer, (string) $errstr);
+        $probeName = \stream_socket_get_name($probeServer, false);
+        self::assertIsString($probeName);
+        $parts = \explode(':', $probeName);
+        $port = (int) \end($parts);
+        @\fclose($probeServer);
+
+        $identity = new ChildProcessIdentity(
+            ControlMessage::ROLE_WORKER,
+            \getmypid(),
+            19091,
+            1,
+            7,
+            'ut-reconnect-launch'
+        );
+        $handler = new class implements RoleControlHandlerInterface {
+            public function onMessage(array $message, SubprocessControlKernel $kernel): void
+            {
+            }
+
+            public function onDisconnect(bool $receivedShutdown, SubprocessControlKernel $kernel): void
+            {
+            }
+        };
+
+        $kernel = new SubprocessControlKernel($identity, $handler, 'UT-Kernel', false, 'ut-instance');
+
+        self::assertFalse($kernel->connectAndRegister($port));
+        self::assertNotNull($kernel->getClient(), 'kernel should keep client state for later reconnect');
+
+        $server = \stream_socket_server("tcp://127.0.0.1:{$port}", $errno, $errstr);
+        self::assertIsResource($server, (string) $errstr);
+
+        try {
+            self::assertTrue($kernel->reconnect());
+
+            $conn = \stream_socket_accept($server, 1.0);
+            self::assertIsResource($conn);
+            \stream_set_timeout($conn, 1);
+            \usleep(100000);
+            $payload = (string) \stream_get_contents($conn);
+            @\fclose($conn);
+
+            self::assertStringContainsString('"type":"register"', $payload);
+            self::assertStringContainsString('"type":"ready"', $payload);
+            self::assertTrue($kernel->isConnected());
+        } finally {
+            @\fclose($server);
         }
     }
 }
