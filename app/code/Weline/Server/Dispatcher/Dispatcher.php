@@ -489,9 +489,34 @@ class Dispatcher
         $this->ipcClient->setSelfTag('Dispatcher');
         // DEV 模式下输出详细 IPC SEND/RECV 明细
         $this->ipcClient->setVerboseLog($this->isDevMode);
+        $this->ipcClient->rememberRegistration(
+            ControlMessage::ROLE_DISPATCHER,
+            \getmypid(),
+            $this->port,
+            0,
+            $this->orchestratorEpoch,
+            $this->orchestratorLaunchId,
+            ControlMessage::PROCESS_KIND_FRAMEWORK,
+            '',
+            $this->instanceName
+        );
+        $this->ipcClient->markReadyState(true);
+        $this->ipcClient->onMessage(function (array $msg, ControlClient $client) {
+            $this->handleIpcMessage($msg);
+        });
+        
+        // 设置断开处理器
+        $this->ipcClient->onDisconnect(function (bool $receivedShutdown, ControlClient $client) {
+            // 已收到 shutdown 或正在退出，不做任何复活/重连操作
+            if ($receivedShutdown || $this->ipcReceivedShutdown || !$this->running) {
+                $this->log('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
+                return;
+            }
+            $this->log('Master 连接意外断开，控制面已收口，不执行子进程复活。', 'WARN');
+            $client->tryReconnect();
+        });
         if (!$this->ipcClient->connect('127.0.0.1', $this->controlPort)) {
-            $this->log("IPC 控制通道连接失败 (端口: {$this->controlPort})", 'WARN');
-            $this->ipcClient = null;
+            $this->log("IPC 控制通道初次连接失败 (端口: {$this->controlPort})，将在启动宽限期内自动重连", 'WARN');
             return;
         }
         
@@ -507,22 +532,6 @@ class Dispatcher
             $this->instanceName
         );
         $this->log("IPC 控制通道已连接 (端口: {$this->controlPort})", 'INFO');
-        
-        // 设置消息处理器
-        $this->ipcClient->onMessage(function (array $msg, ControlClient $client) {
-            $this->handleIpcMessage($msg);
-        });
-        
-        // 设置断开处理器
-        $this->ipcClient->onDisconnect(function (bool $receivedShutdown, ControlClient $client) {
-            // 已收到 shutdown 或正在退出，不做任何复活/重连操作
-            if ($receivedShutdown || $this->ipcReceivedShutdown || !$this->running) {
-                $this->log('Master 连接断开（已收到 shutdown，不复活）', 'INFO');
-                return;
-            }
-            $this->log('Master 连接意外断开，控制面已收口，不执行子进程复活。', 'WARN');
-            $client->tryReconnect();
-        });
         
         // 上报就绪
         $this->ipcClient->sendReady(
@@ -797,7 +806,8 @@ class Dispatcher
                 
             case ControlMessage::TYPE_ADD_WORKER:
                 $ports = $msg['ports'] ?? [];
-                $this->log('收到 ADD_WORKER 消息（已入队异步入池）: ' . \json_encode($ports), 'INFO');
+                $role = $msg['role'] ?? ControlMessage::ROLE_WORKER;
+                $this->log('收到 ADD_WORKER 消息（已入队异步入池）: ' . \json_encode($ports) . ' role: ' . $role, 'INFO');
                 $norm = [];
                 foreach (\is_array($ports) ? $ports : [] as $port) {
                     $p = (int) $port;
@@ -806,26 +816,44 @@ class Dispatcher
                     }
                 }
                 if ($norm !== []) {
-                    $this->deferredWorkerPoolJobs[] = ['type' => 'add_workers', 'ports' => $norm];
+                    if ($role === ControlMessage::ROLE_MAINTENANCE) {
+                        // 维护 Worker 注册
+                        foreach ($norm as $port) {
+                            $result = $this->passthroughCore->addMaintenanceWorkerPort($port);
+                            if ($result['success']) {
+                                $this->log("维护 Worker 端口已注册: {$port}", 'INFO');
+                            } else {
+                                $this->log("维护 Worker 端口注册失败: {$port} - {$result['error']}", 'WARN');
+                            }
+                        }
+                    } else {
+                        // 业务 Worker 注册（原有逻辑）
+                        $this->deferredWorkerPoolJobs[] = ['type' => 'add_workers', 'ports' => $norm];
+                    }
                 }
                 break;
                 
             case ControlMessage::TYPE_REMOVE_WORKER:
                 // 从负载均衡池移除端口，并关闭所有使用该 Worker 的客户端连接
                 $ports = $msg['ports'] ?? [];
+                $role = $msg['role'] ?? null;
                 $totalAffectedConns = 0;
                 foreach ($ports as $port) {
-                    $affectedConnIds = $this->passthroughCore->removeWorkerPort((int)$port);
-                    foreach ($affectedConnIds as $connId) {
-                        $this->closeConnection($connId, 'worker_removed');
-                        $totalAffectedConns++;
+                    $p = (int) $port;
+                    if ($role === ControlMessage::ROLE_MAINTENANCE) {
+                        // 从维护 Worker 池移除
+                        $this->passthroughCore->removeMaintenanceWorkerPort($p);
+                        $this->log("从维护 Worker 池移除端口: {$p}", 'INFO');
+                    } else {
+                        // 从业务 Worker 池移除
+                        $affectedConnIds = $this->passthroughCore->removeWorkerPort($p);
+                        foreach ($affectedConnIds as $connId) {
+                            $this->closeConnection($connId, 'worker_removed');
+                            $totalAffectedConns++;
+                        }
+                        $this->log("从业务 Worker 池移除端口: {$p}, 关闭受影响的客户端连接: " . \count($affectedConnIds), 'INFO');
                     }
                 }
-                $this->log(
-                    '移除 Worker 端口: ' . \implode(',', $ports) .
-                    ', 关闭受影响的客户端连接: ' . $totalAffectedConns,
-                    'WARN'
-                );
                 break;
 
             case ControlMessage::TYPE_SET_WORKER_POOL:
@@ -1524,7 +1552,7 @@ class Dispatcher
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WLS启动中...</title>
+    <title>WLS正在启动中...</title>
     <style>
         :root {
             color-scheme: light;
@@ -1600,11 +1628,11 @@ class Dispatcher
 </head>
 <body>
     <main class="panel">
-        <div class="badge"><span class="dot"></span><span>维护接管准备中</span></div>
-        <h1>WLS启动中...</h1>
-        <p>维护 Worker 正在启动并准备接管请求。</p>
-        <p>当前入口已进入保护窗口，请稍后刷新页面。</p>
-        <p class="hint">系统会在维护页就绪后自动返回友好的维护信息。</p>
+        <div class="badge"><span class="dot"></span><span>业务 Worker 启动中</span></div>
+        <h1>WLS正在启动中...</h1>
+        <p>业务 Worker 正在初始化，系统正在检测维护 Worker 并切换入口。</p>
+        <p>如果已有维护 Worker 就绪，请求会自动转接；否则请稍后刷新页面。</p>
+        <p class="hint">这是一个临时提示。系统启动完成后会自动恢复正常服务。</p>
     </main>
 </body>
 </html>

@@ -988,10 +988,13 @@ class Start extends CommandAbstract
         if ($masterStarted) {
             if ($lastStartupPhase !== 'running') {
                 $this->printer->note(__('Master 已启动，等待所有服务就绪...'));
+                $backgroundStartupData = $this->readBackgroundStartupData($instanceFile);
+                $readyWaitMs = $this->resolveBackgroundStartupReadyWaitMs($backgroundStartupData);
                 $readyResult = $this->waitForBackgroundStartupReady(
                     $instanceFile,
-                    $this->resolveBackgroundStartupReadyWaitMs(),
-                    $waitStepMs
+                    $readyWaitMs,
+                    $waitStepMs,
+                    $this->resolveBackgroundStartupReadyHardWaitMs($backgroundStartupData)
                 );
                 $startupCompleted = $readyResult['ready'];
                 $lastStartupPhase = (string) ($readyResult['data']['startup_phase'] ?? $lastStartupPhase);
@@ -1004,8 +1007,8 @@ class Start extends CommandAbstract
                 $this->printer->success(__('所有服务已就绪，启动完成。'));
                 $this->printer->note(__('使用 php bin/w server:status 查看状态，php bin/w server:stop 停止服务。'));
             } else {
-                $phaseLabel = $lastStartupPhase !== '' ? $lastStartupPhase : 'bootstrapping';
-                $readyWaitSec = (int) \round($this->resolveBackgroundStartupReadyWaitMs() / 1000);
+                $phaseLabel = $this->normalizeBackgroundStartupPhase($lastStartupPhase !== '' ? $lastStartupPhase : 'bootstrapping');
+                $readyWaitSec = \max(1, (int) \ceil(((int) ($readyResult['waited_ms'] ?? 0)) / 1000));
                 $this->printer->warning(__('Master 已在后台运行（PID: %{1}, 控制端口: %{2}），但未在 %{3} 秒内等到所有服务就绪（当前阶段：%{4}）。', [$lastMasterPid, $lastControlPort, $readyWaitSec, $phaseLabel]));
                 $this->printer->note(__('本次启动未视为完成，请稍后执行以下命令检查状态：'));
                 $this->printer->note(__('  php bin/w server:status'));
@@ -1043,37 +1046,110 @@ class Start extends CommandAbstract
         return $startupCompleted;
     }
 
-    protected function resolveBackgroundStartupReadyWaitMs(): int
+    protected function resolveBackgroundStartupReadyWaitMs(array $instanceData = []): int
     {
-        $timeoutSec = (float) (Env::get('wls.orchestrator.startup_timeout_sec', 30.0) ?? 30.0);
-        $timeoutSec = \max(10.0, \min(180.0, $timeoutSec + 20.0));
+        $configuredSec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_ready_wait_sec', 0.0) ?? 0.0);
+        if ($configuredSec > 0.0) {
+            return (int) \round(\max(5.0, \min(900.0, $configuredSec)) * 1000);
+        }
+
+        $startupTimeoutSec = (float) ($this->getEnvironmentValue('wls.orchestrator.startup_timeout_sec', 30.0) ?? 30.0);
+        $startupTimeoutSec = \max(10.0, \min(300.0, $startupTimeoutSec));
+
+        $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
+        $dispatcherEnabled = (bool) ($instanceData['dispatcher_enabled'] ?? false);
+        $sslEnabled = (bool) ($instanceData['ssl_enabled'] ?? false);
+        $sharedState = $instanceData['shared_state'] ?? [];
+        $sharedServiceCount = 0;
+        if (\is_array($sharedState)) {
+            foreach (['session', 'memory'] as $sharedRole) {
+                if (!empty($sharedState[$sharedRole])) {
+                    $sharedServiceCount++;
+                }
+            }
+        }
+
+        $timeoutSec = $startupTimeoutSec
+            + \max(0, $workerCount - 1) * 4.0
+            + ($dispatcherEnabled ? 8.0 : 0.0)
+            + ($sslEnabled ? 5.0 : 0.0)
+            + $sharedServiceCount * 3.0;
+        $timeoutSec = \max(15.0, \min(180.0, $timeoutSec));
 
         return (int) \round($timeoutSec * 1000);
     }
 
-    /**
-     * @return array{ready: bool, data: array<string, mixed>}
-     */
-    protected function waitForBackgroundStartupReady(string $instanceFile, int $maxWaitMs, int $waitStepMs = 200): array
+    protected function resolveBackgroundStartupReadyHardWaitMs(array $instanceData = []): int
     {
-        $waitStepMs = \max(50, $waitStepMs);
-        $waited = 0;
-        $lastData = $this->readBackgroundStartupData($instanceFile);
-
-        if ($this->isBackgroundStartupReady($lastData)) {
-            return ['ready' => true, 'data' => $lastData];
+        $configuredSec = (float) ($this->getEnvironmentValue('wls.orchestrator.background_ready_max_wait_sec', 0.0) ?? 0.0);
+        if ($configuredSec > 0.0) {
+            return (int) \round(\max(10.0, \min(1800.0, $configuredSec)) * 1000);
         }
 
-        while ($waited < $maxWaitMs) {
+        $idleWaitMs = $this->resolveBackgroundStartupReadyWaitMs($instanceData);
+        $workerCount = \max(1, (int) ($instanceData['count'] ?? $instanceData['worker_count'] ?? 1));
+        $hardWaitSec = \max(
+            90.0 + \max(0, $workerCount - 1) * 15.0,
+            \ceil($idleWaitMs / 1000) * 2.0
+        );
+
+        return (int) \round(\max(30.0, \min(600.0, $hardWaitSec)) * 1000);
+    }
+
+    protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+    {
+        return Env::get($path, $default);
+    }
+
+    /**
+     * @return array{ready: bool, data: array<string, mixed>, waited_ms: int}
+     */
+    protected function waitForBackgroundStartupReady(string $instanceFile, int $maxWaitMs, int $waitStepMs = 200, ?int $hardMaxWaitMs = null): array
+    {
+        $waitStepMs = \max(50, $waitStepMs);
+        $maxWaitMs = \max($waitStepMs, $maxWaitMs);
+        $hardMaxWaitMs = $hardMaxWaitMs === null
+            ? \min(600000, \max($maxWaitMs, $maxWaitMs * 3))
+            : \max($maxWaitMs, $hardMaxWaitMs);
+        $waited = 0;
+        $lastData = $this->readBackgroundStartupData($instanceFile);
+        $progressDeadlineMs = \min($hardMaxWaitMs, $maxWaitMs);
+        $lastProgressToken = $this->buildBackgroundStartupProgressToken($lastData);
+        $lastProgress = $this->formatBackgroundStartupProgress($lastData, $waited);
+
+        if ($this->isBackgroundStartupReady($lastData)) {
+            return ['ready' => true, 'data' => $lastData, 'waited_ms' => 0];
+        }
+
+        if ($lastProgress !== '') {
+            $this->emitBackgroundStartupProgress($lastProgress, '');
+        }
+
+        while ($waited < $hardMaxWaitMs && $waited < $progressDeadlineMs) {
             SchedulerSystem::usleep($waitStepMs * 1000);
             $waited += $waitStepMs;
             $lastData = $this->readBackgroundStartupData($instanceFile);
+            $progress = $this->formatBackgroundStartupProgress($lastData, $waited);
+            if ($progress !== '') {
+                $this->emitBackgroundStartupProgress($progress, $lastProgress);
+                $lastProgress = $progress;
+            }
+
+            $progressToken = $this->buildBackgroundStartupProgressToken($lastData);
+            if ($progressToken !== $lastProgressToken) {
+                $lastProgressToken = $progressToken;
+                $progressDeadlineMs = \min($hardMaxWaitMs, $waited + $maxWaitMs);
+            }
+
             if ($this->isBackgroundStartupReady($lastData)) {
-                return ['ready' => true, 'data' => $lastData];
+                $this->finishBackgroundStartupProgress($lastProgress);
+                return ['ready' => true, 'data' => $lastData, 'waited_ms' => $waited];
             }
         }
 
-        return ['ready' => false, 'data' => $lastData];
+        $this->finishBackgroundStartupProgress($lastProgress);
+
+        return ['ready' => false, 'data' => $lastData, 'waited_ms' => $waited];
     }
 
     /**
@@ -1101,6 +1177,133 @@ class Start extends CommandAbstract
     protected function isBackgroundStartupReady(array $instanceData): bool
     {
         return \trim((string) ($instanceData['startup_phase'] ?? '')) === 'running';
+    }
+
+    protected function normalizeBackgroundStartupPhase(string $phase): string
+    {
+        $phase = \trim($phase);
+
+        return match ($phase) {
+            'bootstrapping' => (string) __('启动准备'),
+            'starting' => (string) __('启动服务'),
+            'waiting_ready' => (string) __('等待就绪'),
+            'running' => (string) __('运行中'),
+            '' => 'bootstrapping',
+            default => $phase,
+        };
+    }
+
+    protected function formatBackgroundStartupProgress(array $instanceData, int $waitedMs): string
+    {
+        $phase = $this->normalizeBackgroundStartupPhase((string) ($instanceData['startup_phase'] ?? 'bootstrapping'));
+        $summary = $this->summarizeBackgroundStartupServices($instanceData);
+        $parts = [
+            (string) __('启动中'),
+            (string) __('阶段：%{1}', [$phase]),
+        ];
+
+        if ($summary['total'] > 0) {
+            $parts[] = (string) __('服务就绪：%{1}/%{2}', [$summary['ready'], $summary['total']]);
+            if ($summary['pending_detail'] !== '') {
+                $parts[] = (string) __('待完成：%{1}', [$summary['pending_detail']]);
+            }
+        }
+
+        $parts[] = (string) __('已等待 %{1} 秒', [\max(0, (int) \ceil($waitedMs / 1000))]);
+
+        return \implode(' | ', $parts);
+    }
+
+    /**
+     * @return array{ready:int,total:int,pending_detail:string}
+     */
+    protected function summarizeBackgroundStartupServices(array $instanceData): array
+    {
+        $services = $instanceData['services'] ?? [];
+        if (!\is_array($services)) {
+            return ['ready' => 0, 'total' => 0, 'pending_detail' => ''];
+        }
+
+        $ready = 0;
+        $total = 0;
+        $pendingDetails = [];
+
+        foreach ($services as $role => $roleData) {
+            if (!\is_array($roleData)) {
+                continue;
+            }
+
+            $instances = $roleData['instances'] ?? [];
+            if (!\is_array($instances)) {
+                continue;
+            }
+
+            $roleReady = 0;
+            $roleTotal = 0;
+            foreach ($instances as $instance) {
+                if (!\is_array($instance)) {
+                    continue;
+                }
+
+                $state = \trim((string) ($instance['state'] ?? ''));
+                if ($state === '') {
+                    continue;
+                }
+
+                $roleTotal++;
+                if ($state === 'ready') {
+                    $roleReady++;
+                }
+            }
+
+            if ($roleTotal === 0) {
+                continue;
+            }
+
+            $ready += $roleReady;
+            $total += $roleTotal;
+
+            if ($roleReady < $roleTotal) {
+                $displayName = \trim((string) ($roleData['display_name'] ?? $role));
+                $pendingDetails[] = $displayName . ' ' . $roleReady . '/' . $roleTotal;
+            }
+        }
+
+        return [
+            'ready' => $ready,
+            'total' => $total,
+            'pending_detail' => \implode(', ', \array_slice($pendingDetails, 0, 3)),
+        ];
+    }
+
+    protected function buildBackgroundStartupProgressToken(array $instanceData): string
+    {
+        $summary = $this->summarizeBackgroundStartupServices($instanceData);
+
+        return \json_encode([
+            'phase' => \trim((string) ($instanceData['startup_phase'] ?? '')),
+            'ready' => $summary['ready'],
+            'total' => $summary['total'],
+            'pending' => $summary['pending_detail'],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+    }
+
+    protected function emitBackgroundStartupProgress(string $progress, string $lastProgress): void
+    {
+        if ($progress === $lastProgress) {
+            return;
+        }
+
+        $clearLen = \max(\strlen($lastProgress), \strlen($progress)) + 10;
+        echo "\r" . \str_repeat(' ', $clearLen) . "\r";
+        echo '  ' . $progress;
+    }
+
+    protected function finishBackgroundStartupProgress(string $lastProgress): void
+    {
+        if ($lastProgress !== '') {
+            echo "\n";
+        }
     }
     
     /**

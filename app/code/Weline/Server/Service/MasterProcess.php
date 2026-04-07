@@ -248,6 +248,10 @@ class MasterProcess
             $this->log(__('  已注册 Master PID'));
             $this->logger->flush(true);
 
+            // 清理孤儿实例文件（超过 60 秒未更新的实例 JSON，说明对应的 Master 已死亡）
+            $this->cleanupStaleInstanceFiles();
+            $this->logger->flush(true);
+
             // 初始化控制端口：
             // 1) 优先使用 server.control_port（手动配置，不扫描）
             // 2) 未配置时：20000 + main_port + project_offset 为首选，若被占用则顺延（仅非其它 WLS 实例声明的占用）
@@ -371,13 +375,72 @@ class MasterProcess
     }
 
     /**
-     * 从进程索引移除 Master PID。
+     * 从进程索引移除 Master PID 并清理实例 JSON 文件
      */
     private function unregisterMasterPid(): void
     {
         $masterName = '--name=' . self::getMasterProcessName($this->instanceName);
         Processer::removePidFile($masterName);
         $this->log(__('Master PID 索引已移除'));
+        
+        // 清理实例 JSON 文件（正常关闭时删除）
+        $instanceFile = $this->getInstanceFile();
+        if (\is_file($instanceFile)) {
+            @\unlink($instanceFile);
+            $this->log(__('实例文件已清理: %{1}', [$instanceFile]));
+        }
+    }
+
+    /**
+     * 清理孤儿实例文件（启动时调用）
+     *
+     * 删除所有 updated_at 超过 60 秒未更新的实例 JSON 文件，
+     * 说明对应的 Master 进程已经死亡或崩溃。
+     */
+    private function cleanupStaleInstanceFiles(): void
+    {
+        $instanceDir = Env::VAR_DIR . 'server' . DS . 'instances' . DS;
+        if (!\is_dir($instanceDir)) {
+            return;
+        }
+
+        $now = \time();
+        $staleThreshold = 60;  // 60 秒未更新即为陈旧
+        $cleaned = 0;
+
+        try {
+            $files = @\glob($instanceDir . '*.json') ?: [];
+            foreach ($files as $file) {
+                if (!\is_file($file)) {
+                    continue;
+                }
+
+                $data = @\json_decode((string)@\file_get_contents($file), true);
+                if (!\is_array($data)) {
+                    continue;
+                }
+
+                // 检查 updated_at 时间戳
+                $updatedAt = (int)($data['updated_at'] ?? 0);
+                if ($updatedAt <= 0) {
+                    continue;  // 没有时间戳，不清理
+                }
+
+                $age = $now - $updatedAt;
+                if ($age > $staleThreshold) {
+                    @\unlink($file);
+                    $cleaned++;
+                    $instanceName = (string)($data['instance_name'] ?? \basename($file, '.json'));
+                    $this->log(__('  清理孤儿实例文件: %{1}（已过期 %{2} 秒）', [$instanceName, $age]));
+                }
+            }
+
+            if ($cleaned > 0) {
+                $this->log(__('共清理 %{1} 个孤儿实例文件', [$cleaned]));
+            }
+        } catch (\Throwable $e) {
+            $this->log(__('孤儿实例清理过程出错: %{1}', [$e->getMessage()]));
+        }
     }
 
     /**
@@ -726,6 +789,7 @@ class MasterProcess
             'startup_phase' => $startupPhase,
             'instance_name' => $this->instanceName,
             'orchestrator_mode' => true,
+            'updated_at' => \time(),  // 心跳时间戳（用于检测 Master 是否存活）
         ];
 
         // 合并：保留现有配置（如 worker_port、count、ssl_enabled 等）并更新 Master 状态
