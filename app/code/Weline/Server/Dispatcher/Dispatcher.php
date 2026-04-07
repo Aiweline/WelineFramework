@@ -210,6 +210,7 @@ class Dispatcher
     private float $startupProtectionReadyRatio = 0.0;
     private int $startupProtectionMinReady = 1;
     private int $expectedWorkerCount = 0;
+    private float $backendRouteWaitTimeoutSec = 3.0;
     
     // ========== IPC 控制通道 ==========
     
@@ -412,6 +413,12 @@ class Dispatcher
         }
         if ($this->startupProtectionMinReady < 1) {
             $this->startupProtectionMinReady = 1;
+        }
+        if (isset($config['backend_route_wait_timeout_sec'])) {
+            $this->backendRouteWaitTimeoutSec = (float)$config['backend_route_wait_timeout_sec'];
+        }
+        if ($this->backendRouteWaitTimeoutSec < 0.0) {
+            $this->backendRouteWaitTimeoutSec = 0.0;
         }
     }
     
@@ -1503,6 +1510,13 @@ class Dispatcher
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
                 $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
             } else {
+                if ($this->tryWaitAndRouteUnavailableBackend($clientSocket, $clientIp, $connId)) {
+                    $accepted++;
+                    if (($accepted % 10) === 0) {
+                        $this->pumpSpinWaitControlTick();
+                    }
+                    continue;
+                }
                 if ($this->shouldRespondWithStartupProtectionBeforeMaintenanceRouting()) {
                     $this->respondWithStartupProtection($clientSocket);
                     $accepted++;
@@ -1646,11 +1660,18 @@ class Dispatcher
      */
     private function shouldAttemptMaintenanceWorkerRouting(): bool
     {
+        // 只有存在维护 Worker 端口时，维护接管重试才有意义。
+        // 无维护候选时由 startup fallback/503 分支兜底，避免空转刷日志。
+        $maintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+        if ($maintenancePorts === []) {
+            return false;
+        }
+
         if ($this->shouldServeMaintenanceFallback()) {
             return true;
         }
 
-        return $this->passthroughCore->getMaintenanceWorkerPorts() !== [];
+        return true;
     }
 
     private function shouldApplyStartupProtection(): bool
@@ -1725,6 +1746,36 @@ class Dispatcher
         }
 
         return true;
+    }
+
+    /**
+     * 在后端尚未可路由的短窗口内，先等待并重试一次路由，避免 TLS 请求立即断开导致 ERR_CONNECTION_ABORTED。
+     *
+     * @param \Socket|resource $clientSocket
+     */
+    private function tryWaitAndRouteUnavailableBackend($clientSocket, string $clientIp, int $connId): bool
+    {
+        if ($this->backendRouteWaitTimeoutSec <= 0.0) {
+            return false;
+        }
+        if (!$this->shouldServeMaintenanceFallback()) {
+            return false;
+        }
+
+        $deadline = \microtime(true) + $this->backendRouteWaitTimeoutSec;
+        while (\microtime(true) < $deadline) {
+            $this->pumpSpinWaitControlTick();
+            if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
+                $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
+                return true;
+            }
+            if ($this->tryRouteToMaintenanceWorker($clientSocket, $clientIp, $connId)) {
+                return true;
+            }
+            SchedulerSystem::usleep(50_000);
+        }
+
+        return false;
     }
 
     private function buildFriendlyStartupMaintenancePage(): string

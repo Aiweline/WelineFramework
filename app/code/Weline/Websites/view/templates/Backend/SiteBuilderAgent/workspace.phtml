@@ -3237,6 +3237,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         var sseLastEventTime = Date.now();
         var sseHeartbeatInterval = null;
         var sseConnectionTimeout = 15000; // 15秒超时（缩短以更快释放连接槽）
+        var sseFatalStop = false; // 命中不可恢复错误（如 402）后停止所有重连
         var generatedPages = {}; // 记录已生成的页面，避免重复处理
         var isGenerationComplete = false; // 标记生成是否完成
 
@@ -3282,7 +3283,28 @@ body[data-topbar="dark"] .site-builder-workspace-page {
             eventSource.addEventListener('error', function(e) {
                 sseLastEventTime = Date.now();
                 var data = e.data ? JSON.parse(e.data) : {};
-                terminal.log(data.message || '<?= __('生成过程中发生错误') ?>', 'error');
+                var message = data.message || '<?= __('生成过程中发生错误') ?>';
+                terminal.log(message, 'error');
+                var httpCode = parseInt(data.http_code || data.code || 0, 10) || 0;
+                var lowerMessage = String(message).toLowerCase();
+                var isFatal402 = httpCode === 402
+                    || lowerMessage.indexOf('http 402') >= 0
+                    || lowerMessage.indexOf('402') >= 0
+                    || lowerMessage.indexOf('insufficient balance') >= 0
+                    || lowerMessage.indexOf('余额不足') >= 0
+                    || lowerMessage.indexOf('额度不足') >= 0;
+                if (isFatal402) {
+                    sseFatalStop = true;
+                    if (eventSource) {
+                        try { eventSource.close(); } catch (ignore) {}
+                        eventSource = null;
+                    }
+                    if (sseHeartbeatInterval) {
+                        clearInterval(sseHeartbeatInterval);
+                        sseHeartbeatInterval = null;
+                    }
+                    terminal.log('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>', 'error');
+                }
             });
 
             eventSource.addEventListener('done', function(e) {
@@ -3313,6 +3335,9 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
             // 连接错误处理 - 自动重连
             eventSource.onerror = function(e) {
+                if (sseFatalStop) {
+                    return;
+                }
                 terminal.log('<?= __('SSE连接异常，准备重连...') ?>', 'warning');
 
                 if (sseReconnectCount < maxReconnectAttempts) {
@@ -3343,6 +3368,9 @@ body[data-topbar="dark"] .site-builder-workspace-page {
             sseHeartbeatInterval = setInterval(function() {
                 var now = Date.now();
                 var elapsed = now - sseLastEventTime;
+                if (sseFatalStop) {
+                    return;
+                }
                 if (elapsed > sseConnectionTimeout) {
                     terminal.log('<?= __('SSE连接超时，正在重新连接...') ?>', 'warning');
                     if (eventSource) {
