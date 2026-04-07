@@ -11,7 +11,17 @@ final class StartBackgroundStartupReadyTest extends TestCase
     public function testWaitForBackgroundStartupReadyRequiresRunningPhase(): void
     {
         $file = $this->createTempInstanceFile(['startup_phase' => 'bootstrapping']);
-        $start = new Start();
+        $start = new class extends Start {
+            protected function emitBackgroundStartupProgress(string $progress, string $lastProgress): void
+            {
+                unset($progress, $lastProgress);
+            }
+
+            protected function finishBackgroundStartupProgress(string $lastProgress): void
+            {
+                unset($lastProgress);
+            }
+        };
 
         $result = $this->invokeProtected($start, 'waitForBackgroundStartupReady', $file, 20, 10);
 
@@ -28,6 +38,104 @@ final class StartBackgroundStartupReadyTest extends TestCase
 
         self::assertTrue($result['ready']);
         self::assertSame('running', $result['data']['startup_phase']);
+    }
+
+    public function testResolveBackgroundStartupReadyWaitMsScalesWithStartupShape(): void
+    {
+        $start = new class extends Start {
+            protected function getEnvironmentValue(string $path, mixed $default = null): mixed
+            {
+                unset($path);
+                return $default;
+            }
+        };
+
+        $singleWorkerWait = $this->invokeProtected($start, 'resolveBackgroundStartupReadyWaitMs', [
+            'count' => 1,
+            'dispatcher_enabled' => false,
+            'ssl_enabled' => false,
+            'shared_state' => [],
+        ]);
+        $multiServiceWait = $this->invokeProtected($start, 'resolveBackgroundStartupReadyWaitMs', [
+            'count' => 4,
+            'dispatcher_enabled' => true,
+            'ssl_enabled' => true,
+            'shared_state' => [
+                'session' => ['port' => 19970],
+                'memory' => ['port' => 19971],
+            ],
+        ]);
+
+        self::assertGreaterThan($singleWorkerWait, $multiServiceWait);
+    }
+
+    public function testWaitForBackgroundStartupReadyExtendsIdleDeadlineWhenProgressAdvances(): void
+    {
+        $start = new class extends Start {
+            public array $frames = [
+                ['startup_phase' => 'bootstrapping'],
+                [
+                    'startup_phase' => 'bootstrapping',
+                    'services' => [
+                        'worker' => [
+                            'display_name' => 'HTTP Worker',
+                            'instances' => [
+                                ['state' => 'starting'],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'startup_phase' => 'bootstrapping',
+                    'services' => [
+                        'worker' => [
+                            'display_name' => 'HTTP Worker',
+                            'instances' => [
+                                ['state' => 'ready'],
+                            ],
+                        ],
+                    ],
+                ],
+                [
+                    'startup_phase' => 'running',
+                    'services' => [
+                        'worker' => [
+                            'display_name' => 'HTTP Worker',
+                            'instances' => [
+                                ['state' => 'ready'],
+                            ],
+                        ],
+                    ],
+                ],
+            ];
+            public array $progressMessages = [];
+
+            protected function readBackgroundStartupData(string $instanceFile): array
+            {
+                unset($instanceFile);
+                return \array_shift($this->frames) ?? ['startup_phase' => 'bootstrapping'];
+            }
+
+            protected function emitBackgroundStartupProgress(string $progress, string $lastProgress): void
+            {
+                unset($lastProgress);
+                $this->progressMessages[] = $progress;
+            }
+
+            protected function finishBackgroundStartupProgress(string $lastProgress): void
+            {
+                unset($lastProgress);
+            }
+        };
+
+        $result = $this->invokeProtected($start, 'waitForBackgroundStartupReady', 'ignored', 50, 10, 200);
+
+        self::assertTrue($result['ready']);
+        self::assertSame('running', $result['data']['startup_phase']);
+        self::assertGreaterThan(50, $result['waited_ms']);
+        self::assertNotEmpty($start->progressMessages);
+        self::assertStringContainsString('阶段：启动准备', $start->progressMessages[0]);
+        self::assertStringContainsString('服务就绪：1/1', $start->progressMessages[\count($start->progressMessages) - 1]);
     }
 
     public function testFinalizeBackgroundStartupOutputDefersServerInfoUntilStartupCompleted(): void

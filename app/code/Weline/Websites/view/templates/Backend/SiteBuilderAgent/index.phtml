@@ -8,6 +8,7 @@
  * @var list<array{code:string,label:string,title:string,description:string,ai_recommendation_title:string,ai_recommendation:string,confirm_label:string,previous_label:string,next_stage:string,previous_stage:string,tool_codes:list<string>,scope_patch:array<string,mixed>,key_points:list<string>}> $selected_stage_guides
  * @var string $selected_provider
  * @var string $create_session_url
+ * @var string $delete_session_url
  * @var string $recommend_domain_url
  * @var string $recommend_domain_sse_url
  * @var string $current_entry_url
@@ -27,6 +28,7 @@ $selected_stage_guides = $this->getData('selected_stage_guides');
 $selected_stage_guides = \is_array($selected_stage_guides) ? $selected_stage_guides : [];
 $selected_provider = (string)($this->getData('selected_provider') ?? 'websites_default');
 $create_session_url = (string)($this->getData('create_session_url') ?? '');
+$delete_session_url = (string)($this->getData('delete_session_url') ?? '');
 $recommend_domain_url = (string)($this->getData('recommend_domain_url') ?? '');
 $recommend_domain_sse_url = (string)($this->getData('recommend_domain_sse_url') ?? '');
 $check_domain_url = (string)($this->getData('check_domain_url') ?? '');
@@ -157,11 +159,23 @@ $quickBuildRegistrarDisplay = '';
                     <?php } else { ?>
                         <div class="site-recent-list">
                             <?php foreach (\array_slice($recent_sessions, 0, 3) as $recent) { ?>
-                                <a class="site-recent-item" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
-                                    <strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
-                                    <span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
-                                    <small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
-                                </a>
+                                <div class="site-recent-card" data-recent-session-item="1" data-public-id="<?= htmlspecialchars((string)($recent['public_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                    <a class="site-recent-item" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                                        <strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong>
+                                        <span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
+                                        <small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small>
+                                    </a>
+                                    <div class="site-recent-actions">
+                                        <button type="button"
+                                                class="site-recent-delete"
+                                                data-recent-session-delete="1"
+                                                data-public-id="<?= htmlspecialchars((string)($recent['public_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"
+                                                aria-label="<?= htmlspecialchars((string)__('删除最近会话'), ENT_QUOTES, 'UTF-8') ?>"
+                                                title="<?= htmlspecialchars((string)__('删除最近会话'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <i class="mdi mdi-trash-can-outline"></i>
+                                        </button>
+                                    </div>
+                                </div>
                             <?php } ?>
                         </div>
                     <?php } ?>
@@ -463,7 +477,7 @@ body[data-topbar="dark"] .site-workbench-page {
 .site-stage-preview-card,
 .site-provider-focus,
 .site-provider-card,
-.site-recent-item {
+.site-recent-card {
     border-radius: 18px;
     border: 1px solid var(--site-workbench-border);
     background: var(--site-workbench-surface);
@@ -530,16 +544,24 @@ body[data-topbar="dark"] .site-workbench-page {
     gap: 0.75rem;
 }
 
-.site-recent-item {
+.site-recent-card {
     display: grid;
-    gap: 0.2rem;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.75rem;
+    align-items: start;
     padding: 0.85rem 0.95rem;
-    text-decoration: none;
-    color: inherit;
     transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, background-color 0.18s ease;
 }
 
-.site-recent-item:hover,
+.site-recent-item {
+    display: grid;
+    gap: 0.2rem;
+    text-decoration: none;
+    color: inherit;
+    min-width: 0;
+}
+
+.site-recent-card:hover,
 .site-provider-card:hover,
 .site-provider-focus:hover {
     border-color: var(--site-workbench-border-strong);
@@ -551,6 +573,30 @@ body[data-topbar="dark"] .site-workbench-page {
 .site-recent-item small,
 .site-recent-empty {
     color: var(--site-workbench-text-muted);
+}
+
+.site-recent-actions {
+    display: flex;
+    align-items: center;
+}
+
+.site-recent-delete {
+    border: 0;
+    background: rgba(220, 53, 69, 0.08);
+    color: #c2354e;
+    border-radius: 999px;
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.18s ease, background 0.18s ease, color 0.18s ease;
+}
+
+.site-recent-delete:hover {
+    background: rgba(220, 53, 69, 0.14);
+    color: #a61e36;
+    transform: translateY(-1px);
 }
 
 .site-provider-card {
@@ -608,6 +654,7 @@ body[data-topbar="dark"] .site-workbench-page {
     var terminalUnlocked = true;
     var nextStepTriggered = false;
     var createSessionUrl = <?= json_encode($create_session_url, JSON_THROW_ON_ERROR) ?>;
+    var deleteSessionUrl = <?= json_encode($delete_session_url, JSON_THROW_ON_ERROR) ?>;
     var recommendDomainUrl = <?= json_encode($recommend_domain_url, JSON_THROW_ON_ERROR) ?>;
     var recommendDomainSseUrl = <?= json_encode($recommend_domain_sse_url, JSON_THROW_ON_ERROR) ?>;
     var checkDomainUrl = <?= json_encode($check_domain_url, JSON_THROW_ON_ERROR) ?>;
@@ -660,6 +707,10 @@ body[data-topbar="dark"] .site-workbench-page {
         nextStepFailed: <?= json_encode((string)__('规划已完成，请手动点击“先保存成工作区”进入下一步。'), JSON_THROW_ON_ERROR) ?>,
         workspaceFlowHint: <?= json_encode((string)__('将自动开始域名购买并展示进度（不阻塞后续虚拟主题流程）。'), JSON_THROW_ON_ERROR) ?>
     };
+
+    messages.deleteSessionConfirm = <?= json_encode((string)__('确定删除这条最近会话吗？'), JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionSuccess = <?= json_encode((string)__('最近会话已删除'), JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionFailed = <?= json_encode((string)__('删除最近会话失败'), JSON_THROW_ON_ERROR) ?>;
 
     function toast(type, message) {
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
@@ -1426,6 +1477,55 @@ body[data-topbar="dark"] .site-workbench-page {
         });
     }
 
+    function removeRecentSessionCard(publicId) {
+        if (!publicId) {
+            return;
+        }
+        document.querySelectorAll('[data-recent-session-item="1"]').forEach(function (node) {
+            if ((node.getAttribute('data-public-id') || '') === publicId) {
+                node.remove();
+            }
+        });
+        document.querySelectorAll('.site-recent-list').forEach(function (list) {
+            if (list.children.length > 0) {
+                return;
+            }
+            var empty = document.createElement('div');
+            empty.className = 'site-recent-empty';
+            empty.textContent = '<?= addslashes((string)__('还没有历史工作区，创建后会显示在这里。')) ?>';
+            list.replaceWith(empty);
+        });
+    }
+
+    function deleteRecentSession(publicId) {
+        if (!deleteSessionUrl || !publicId) {
+            toast('error', messages.deleteSessionFailed);
+            return;
+        }
+        if (!window.confirm(messages.deleteSessionConfirm)) {
+            return;
+        }
+        var fd = new FormData();
+        fd.append('public_id', publicId);
+        fetch(deleteSessionUrl, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.json();
+        }).then(function (data) {
+            if (data && data.success) {
+                removeRecentSessionCard(publicId);
+                toast('success', data.message || messages.deleteSessionSuccess);
+                return;
+            }
+            toast('error', (data && data.message) ? data.message : messages.deleteSessionFailed);
+        }).catch(function () {
+            toast('error', messages.networkError);
+        });
+    }
+
     function createFallbackTerminal() {
         var terminalBody = document.getElementById('site-builder-agent-terminal_body');
         var terminalContent = document.getElementById('site-builder-agent-terminal_content');
@@ -1756,6 +1856,13 @@ body[data-topbar="dark"] .site-workbench-page {
     bindCreateButton(createWorkspaceBtn);
     bindCreateButton(inlineCreateWorkspaceBtn);
     document.querySelectorAll('.site-create-session-btn').forEach(bindCreateButton);
+    document.querySelectorAll('[data-recent-session-delete="1"]').forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            deleteRecentSession(button.getAttribute('data-public-id') || '');
+        });
+    });
 
     if (!startBtn) {
         return;

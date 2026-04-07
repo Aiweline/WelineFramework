@@ -40,7 +40,7 @@ if ($workerCount <= 0) {
 // 解析 --name、--frontend、--control-port 参数
 $processName = '';
 $isFrontend = false;
-$controlPort = 0;
+$controlPort = 0;  // 初始化为 0，会在下方从实例文件发现
 $masterPid = 0;
 $orchestratorEpoch = 0;
 $orchestratorLaunchId = '';
@@ -58,6 +58,13 @@ foreach ($argv as $arg) {
     } elseif (\str_starts_with($arg, '--launch-id=')) {
         $orchestratorLaunchId = (string)\substr($arg, 12);
     }
+}
+
+// IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
+// 优先使用命令行参数 --control-port=，否则从实例文件自动发现
+// resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
+if ($controlPort <= 0) {
+    $controlPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort($instanceName, 0, 6);
 }
 
 // ========== 初始化 ==========
