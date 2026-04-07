@@ -605,7 +605,7 @@ WlsLogger::info_(
 
 // Worker 不进行连接池预热
 // 连接池将在首次被使用时自动初始化并预热到 min_idle 个连接
-$configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 1);
+$configuredLongLivedMaxActive = (int)($wlsInstance['fiber']['long_lived_max_active'] ?? $wls['fiber']['long_lived_max_active'] ?? 4);
 if ($configuredLongLivedMaxActive >= 0) {
     $longLivedMaxActive = $configuredLongLivedMaxActive;
 }
