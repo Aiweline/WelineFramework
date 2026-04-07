@@ -17,6 +17,7 @@ class WlsLogger
     private bool $fileEnabled = true;
     private string $logDir = '';
     private ?string $devDebugLogFile = null;
+    private ?string $processLogFile = null;
     private string $buffer = '';
     private int $bufferSize = 0;
     private int $maxBufferBytes = 65536; // 从 8KB 增加到 64KB，减少刷新频率
@@ -124,6 +125,31 @@ class WlsLogger
         return $this;
     }
 
+    public function setProcessLogFile(?string $path): self
+    {
+        $path = $path !== null ? \trim($path) : '';
+        if ($path === '') {
+            $this->processLogFile = null;
+            return $this;
+        }
+
+        $dir = \dirname($path);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        if (!\is_file($path)) {
+            @\touch($path);
+        }
+
+        $this->processLogFile = $path;
+        return $this;
+    }
+
+    public function getProcessLogFile(): ?string
+    {
+        return $this->processLogFile;
+    }
+
     /**
      * @param callable|null $sink function(string $line, string $level, string $processTag): void
      */
@@ -191,6 +217,7 @@ class WlsLogger
         }
 
         @\file_put_contents($mainLog, $line, FILE_APPEND);
+        $this->writeProcessLogMirror($line);
 
         if (LogLevel::isAtLeast($level, LogLevel::ERROR)) {
             $this->writeErrorLog($line);
@@ -401,6 +428,7 @@ class WlsLogger
         // 移除 LOCK_EX 避免锁竞争，使用非阻塞写入提升性能
         // 在 WLS 多 Worker 模式下，各 Worker 写入自己的日志文件，不会产生冲突
         @\file_put_contents($mainLog, $this->buffer, FILE_APPEND);
+        $this->writeProcessLogMirror($this->buffer);
 
         // 日志轮转：清理过期日志文件
         $this->rotateOldLogs();
@@ -424,6 +452,20 @@ class WlsLogger
         }
 
         @\file_put_contents($this->devDebugLogFile, $line, FILE_APPEND);
+    }
+
+    private function writeProcessLogMirror(string $content): void
+    {
+        if ($this->processLogFile === null || $content === '') {
+            return;
+        }
+
+        $logDir = \dirname($this->processLogFile);
+        if (!\is_dir($logDir)) {
+            @\mkdir($logDir, 0755, true);
+        }
+
+        @\file_put_contents($this->processLogFile, $content, FILE_APPEND);
     }
 
     public function writeErrorLog(string $line): void

@@ -106,12 +106,17 @@ ErrorBootstrap::init($processTag, [
     'worker_base_port' => $workerBasePort,
     'worker_count' => $workerCount,
     'instance' => $instanceName,
+    'process_name' => $processName,
 ]);
 
 // 所有进程都启用 stdout 输出（便于调试和监控）
 WlsLogger::getInstance()
     ->setStdoutEnabled(true)
     ->setProcessTag($processTag);
+
+if ($processName) {
+    \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
+}
 
 // Daemon 下向已关闭连接写数据会触发 SIGPIPE 导致进程退出，与 Nginx 一致忽略 SIGPIPE
 if (\function_exists('pcntl_signal') && \defined('SIGPIPE')) {
