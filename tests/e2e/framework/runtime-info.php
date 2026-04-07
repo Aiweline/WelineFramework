@@ -474,11 +474,20 @@ if ($overrideOrigin !== '') {
     // 当 var/server/instances 下存在可用实例元数据时，始终使用该实例推导的 origin。
     // 避免因端口探测瞬时失败而回落到 cli_server，导致 Playwright 主进程与 worker 之间 target_origin 不一致（https:443 ↔ http:9981）。
     if ($instance !== null) {
-        $targetScheme = $instanceScheme;
-        $targetHost = $instanceHost;
-        $targetPort = $instancePort;
-        $targetSource = $instanceReachable ? 'wls_instance' : 'wls_instance_unreachable';
-        $targetReachable = $instanceReachable;
+        $loopbackReachable = isReachableEndpointWithRetry('127.0.0.1', $instancePort);
+        if (!$instanceReachable && $loopbackReachable) {
+            $targetScheme = $instanceScheme;
+            $targetHost = '127.0.0.1';
+            $targetPort = $instancePort;
+            $targetSource = 'wls_instance_loopback_fallback';
+            $targetReachable = true;
+        } else {
+            $targetScheme = $instanceScheme;
+            $targetHost = $instanceHost;
+            $targetPort = $instancePort;
+            $targetSource = $instanceReachable ? 'wls_instance' : 'wls_instance_unreachable';
+            $targetReachable = $instanceReachable;
+        }
     } elseif ($configTarget !== null && $configReachable) {
         $targetScheme = $configTarget['scheme'];
         $targetHost = $configTarget['host'];

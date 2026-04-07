@@ -249,7 +249,16 @@ function expectBuildSseCoveredAllPageTypes(buildStream, selectedPageTypes) {
  * @param {string} href
  */
 function normalizeToCurrentOrigin(page, href) {
-  const base = new URL(page.url());
+  let base;
+  try {
+    base = new URL(page.url());
+    if (!/^https?:$/i.test(base.protocol)) {
+      throw new Error('non-http page url');
+    }
+  } catch (error) {
+    const runtime = getRuntimeInfo();
+    base = new URL(String(runtime.runtime?.target_origin || 'https://127.0.0.1'));
+  }
   const target = new URL(href, base.toString());
   if (target.origin === base.origin) {
     return target.toString();

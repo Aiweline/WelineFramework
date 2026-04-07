@@ -348,8 +348,9 @@ class WebsiteAgentService
         $tlds = ['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'];
         $suggestions = [];
 
-        foreach ($bases as $base) {
-            foreach ($tlds as $tld) {
+        // 先按后缀分组轮询，避免短热门词在前几位占满不同后缀。
+        foreach ($tlds as $tld) {
+            foreach ($bases as $base) {
                 $suggestions[] = $base . $tld;
                 if (\count($suggestions) >= 30) {
                     break 2;
@@ -360,8 +361,9 @@ class WebsiteAgentService
         return \array_values(\array_unique($suggestions));
     }
 
-    private function buildRecommendationCandidates(string $description, string $preferredDomain = '', int $maxCandidates = 12): array
+    private function buildRecommendationCandidates(string $description, string $preferredDomain = '', int $maxCandidates = 24): array
     {
+        $maxCandidates = $maxCandidates > 0 ? $maxCandidates : 24;
         $candidates = [];
         $appendCandidate = function (string $candidate) use (&$candidates): void {
             $normalized = $this->normalizeRecommendationCandidate($candidate);
@@ -372,6 +374,7 @@ class WebsiteAgentService
             $candidates[] = $normalized;
         };
 
+        $businessTokens = $this->extractBrandTokens($description);
         $preferredDomain = \strtolower(\trim($preferredDomain));
         if ($preferredDomain !== '') {
             $normalizedPreferred = $this->normalizeRecommendationCandidate($preferredDomain);
@@ -381,9 +384,19 @@ class WebsiteAgentService
                 foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
                     $appendCandidate($base . $suffix);
                 }
+                foreach ($this->expandPreferredBaseToLongTail($base, $businessTokens) as $expandedBase) {
+                    foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
+                        $appendCandidate($expandedBase . $suffix);
+                    }
+                }
             } elseif (\preg_match('/^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/i', $preferredDomain)) {
                 foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
                     $appendCandidate($preferredDomain . $suffix);
+                }
+                foreach ($this->expandPreferredBaseToLongTail($preferredDomain, $businessTokens) as $expandedBase) {
+                    foreach (['.com', '.io', '.ai', '.co', '.net', '.site', '.cn'] as $suffix) {
+                        $appendCandidate($expandedBase . $suffix);
+                    }
                 }
             }
         }
@@ -396,7 +409,7 @@ class WebsiteAgentService
             $appendCandidate($suggestion);
         }
 
-        return \array_slice($candidates, 0, $maxCandidates > 0 ? $maxCandidates : 12);
+        return \array_slice($candidates, 0, $maxCandidates);
     }
 
     private function normalizeRecommendationCandidate(string $candidate): string
@@ -462,7 +475,9 @@ class WebsiteAgentService
         };
 
         foreach ($tokens as $token) {
-            $appendBase($token);
+            if (!$this->isWeakGenericBrandToken($token)) {
+                $appendBase($token);
+            }
         }
 
         $first = $tokens[0] ?? 'build';
@@ -497,6 +512,70 @@ class WebsiteAgentService
         }
 
         return \array_slice($bases, 0, 20);
+    }
+
+    /**
+     * 将偏好短词扩展为更可注册的长尾品牌词，避免 apk/seo 这类高占用短词直接撞库。
+     *
+     * @param list<string> $tokens
+     * @return list<string>
+     */
+    private function expandPreferredBaseToLongTail(string $base, array $tokens): array
+    {
+        $base = \strtolower(\trim($base));
+        $base = (string)\preg_replace('/[^a-z0-9-]/', '', $base);
+        if ($base === '' || \strlen($base) < 3) {
+            return [];
+        }
+
+        $normalizedTokens = [];
+        foreach ($tokens as $token) {
+            $token = (string)\preg_replace('/[^a-z0-9]/', '', \strtolower(\trim($token)));
+            if ($token === '' || \strlen($token) < 3 || $this->isWeakGenericBrandToken($token)) {
+                continue;
+            }
+            if (!\in_array($token, $normalizedTokens, true)) {
+                $normalizedTokens[] = $token;
+            }
+        }
+
+        $expansions = [];
+        $appendExpansion = static function (string $value) use (&$expansions): void {
+            $value = (string)\preg_replace('/[^a-z0-9-]/', '', \strtolower(\trim($value)));
+            if ($value === '' || \strlen($value) < 6 || \strlen($value) > 63 || \in_array($value, $expansions, true)) {
+                return;
+            }
+            $expansions[] = $value;
+        };
+
+        foreach ($normalizedTokens as $token) {
+            if ($token === $base) {
+                continue;
+            }
+            $appendExpansion($token . $base);
+            $appendExpansion($base . $token);
+            $appendExpansion($token . $base . 'hub');
+        }
+
+        foreach (['hub', 'labs', 'works', 'studio', 'flow', 'stack', 'cloud', 'bridge', 'forge'] as $suffix) {
+            $appendExpansion($base . $suffix);
+        }
+
+        $hash = \substr(\md5($base . '-' . \implode('-', $normalizedTokens)), 0, 3);
+        $appendExpansion($base . $hash);
+        if (($normalizedTokens[0] ?? '') !== '') {
+            $appendExpansion($normalizedTokens[0] . $base . $hash);
+        }
+
+        return \array_slice($expansions, 0, 24);
+    }
+
+    private function isWeakGenericBrandToken(string $token): bool
+    {
+        return \in_array(\strtolower(\trim($token)), [
+            'apk', 'seo', 'app', 'web', 'site', 'shop', 'store', 'ai',
+            'build', 'online', 'digital', 'marketing',
+        ], true);
     }
 
     private function isDevSimulationDomain(string $domain): bool

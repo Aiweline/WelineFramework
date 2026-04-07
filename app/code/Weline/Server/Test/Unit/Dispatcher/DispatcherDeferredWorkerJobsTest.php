@@ -6,6 +6,7 @@ namespace Weline\Server\Test\Unit\Dispatcher;
 use PHPUnit\Framework\TestCase;
 use Weline\Server\Dispatcher\Dispatcher;
 use Weline\Server\Dispatcher\PassthroughCore;
+use Weline\Server\IPC\ControlMessage;
 
 class DispatcherDeferredWorkerJobsTest extends TestCase
 {
@@ -69,6 +70,39 @@ class DispatcherDeferredWorkerJobsTest extends TestCase
         self::assertNull($yieldCallbacks[1]);
         self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiber'));
         self::assertNull($this->getProperty($dispatcher, 'deferredWorkerPoolFiberKind'));
+        self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
+    }
+
+    public function testMaintenanceSetWorkerPoolDoesNotQueueBusinessSetPoolJob(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->getMockBuilder(PassthroughCore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getMaintenanceWorkerPorts', 'removeMaintenanceWorkerPort', 'addMaintenanceWorkerPort'])
+            ->getMock();
+
+        $core->expects(self::once())
+            ->method('getMaintenanceWorkerPorts')
+            ->willReturn([16999, 17000]);
+        $core->expects(self::once())
+            ->method('removeMaintenanceWorkerPort')
+            ->with(17000);
+        $core->expects(self::once())
+            ->method('addMaintenanceWorkerPort')
+            ->with(16999)
+            ->willReturn(['success' => true]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'deferredWorkerPoolJobs', []);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'handleIpcMessage');
+        $method->setAccessible(true);
+        $method->invoke($dispatcher, [
+            'type' => ControlMessage::TYPE_SET_WORKER_POOL,
+            'role' => ControlMessage::ROLE_MAINTENANCE,
+            'ports' => [16999],
+        ]);
+
         self::assertSame([], $this->getProperty($dispatcher, 'deferredWorkerPoolJobs'));
     }
 
