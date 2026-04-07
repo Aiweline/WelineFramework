@@ -701,8 +701,10 @@ SQL;
      */
     public function buildDropIndexSql(string $table, string $indexName): string
     {
-        $n = $this->getDialect()->quoteIdentifier($indexName);
-        return "ALTER TABLE {$table} DROP CONSTRAINT IF EXISTS {$n} CASCADE;\nDROP INDEX IF EXISTS {$n}";
+        $d = $this->getDialect();
+        $t = $d->quoteTable($table);
+        $n = $d->quoteIdentifier($indexName);
+        return "ALTER TABLE {$t} DROP CONSTRAINT IF EXISTS {$n} CASCADE;\nDROP INDEX IF EXISTS {$n}";
     }
 
     /** @inheritDoc */
