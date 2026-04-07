@@ -30,6 +30,7 @@ use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * AI服务核心类
@@ -52,6 +53,10 @@ class AiService
      * 服务模式：PHP服务模式
      */
     public const MODE_PHP = 'php';
+    private const REQUEST_KEY_STREAM_402_TRIPPED = 'ai.stream.402.tripped';
+    private const STREAM_402_COOLDOWN_SEC = 45.0;
+    private static float $stream402CooldownUntilAt = 0.0;
+    private static float $stream402LastLogAt = 0.0;
 
     /**
      * @var AiModel
@@ -934,6 +939,12 @@ class AiService
         ?string $locale,
         array $params
     ): void {
+        $now = \microtime(true);
+        if ((bool)RequestContext::get(self::REQUEST_KEY_STREAM_402_TRIPPED, false)
+            || $now < self::$stream402CooldownUntilAt) {
+            throw new Exception('AI流式生成失败: AI API 错误 (HTTP 402, unknown_error): Insufficient Balance');
+        }
+
         $startTime = microtime(true);
         $account = null;
         $usage = [];
@@ -1011,6 +1022,9 @@ class AiService
 
                     return;
                 } catch (\Exception $eTry) {
+                    if ($this->isInsufficientBalanceError($eTry)) {
+                        $this->markAccountBalanceDepleted($accModel);
+                    }
                     $lastError = $eTry;
                     if (!$this->shouldRetryWithAnotherAccount($eTry)) {
                         throw $eTry;
@@ -1036,9 +1050,41 @@ class AiService
                 ]);
             }
 
-            w_log_error("AI流式API调用失败: " . $e->getMessage());
+            if ($this->isInsufficientBalanceError($e)) {
+                RequestContext::set(self::REQUEST_KEY_STREAM_402_TRIPPED, true);
+                self::$stream402CooldownUntilAt = \microtime(true) + self::STREAM_402_COOLDOWN_SEC;
+                if ((\microtime(true) - self::$stream402LastLogAt) >= self::STREAM_402_COOLDOWN_SEC) {
+                    self::$stream402LastLogAt = \microtime(true);
+                    w_log_error("AI流式API调用失败: " . $e->getMessage());
+                }
+            } else {
+                w_log_error("AI流式API调用失败: " . $e->getMessage());
+            }
             $cleanMessage = preg_replace('/\x1b\[[0-9;]*m/', '', $e->getMessage());
             throw new Exception("AI流式生成失败: " . $cleanMessage);
+        }
+    }
+
+    private function isInsufficientBalanceError(\Throwable $throwable): bool
+    {
+        $message = \strtolower((string)$throwable->getMessage());
+        return \str_contains($message, 'http 402')
+            || \str_contains($message, 'insufficient balance')
+            || \str_contains($message, '余额不足')
+            || \str_contains($message, '额度不足');
+    }
+
+    private function markAccountBalanceDepleted(Account $account): void
+    {
+        try {
+            $balance = (float)$account->getData(Account::schema_fields_BALANCE);
+            if ($balance <= 0.0) {
+                return;
+            }
+            $account->setData(Account::schema_fields_BALANCE, 0);
+            $account->save();
+        } catch (\Throwable) {
+            // 余额兜底更新失败不影响主流程
         }
     }
 
