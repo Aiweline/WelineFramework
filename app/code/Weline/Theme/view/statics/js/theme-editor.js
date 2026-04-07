@@ -2559,11 +2559,7 @@
             const result = await fetchWidgetsData();
 
             if (result.success) {
-                navigateEditorShell({
-                    page_type: state.pageType,
-                    version_id: null,
-                });
-                return;
+                
                 // 查找匹配的部件
                 let widgetMeta = null;
                 for (const type in result.data) {
@@ -7378,6 +7374,7 @@
 
         // 刷新 iframe（添加时间戳避免缓存）
         elements.previewFrame.src = buildLayoutPreviewUrl();
+        fetchLayoutSlots();
         return;
 
         const currentSrc = elements.previewFrame.src;
@@ -7831,6 +7828,11 @@
             const result = await response.json();
 
             if (result.success) {
+                navigateEditorShell({
+                    page_type: state.pageType,
+                    version_id: null,
+                });
+                return;
                 showToast(result.message || '已切换版本', 'success');
 
                 // 刷新版本列表
