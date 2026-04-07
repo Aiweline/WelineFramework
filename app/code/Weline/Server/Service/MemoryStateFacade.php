@@ -37,6 +37,9 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
     ) {
         $this->manager = $manager ?? new SharedStateServiceManager();
         $this->consumerCode = $this->resolveConsumerCode($config);
+        if ($this->attemptDirectBootstrap($config, $manager, $sharedMemoryService, $cacheMemoryService, $stateClient)) {
+            return;
+        }
         $this->runtime = $this->manager->ensure(
             ControlMessage::ROLE_MEMORY_SERVER,
             $config,
@@ -255,7 +258,11 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
             'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.2),
             'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
             'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
-            'token_file_name' => (string) ($this->runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
+            'token_file_name' => (string) (
+                $config['token_file_name']
+                ?? $this->runtime['token_file_name']
+                ?? $this->resolveConfiguredRuntime($config)['token_file_name']
+            ),
             'service_type' => 'Memory',
             // Master/CLI 门面默认静默逐条 CONN-*，避免与 Memory 侧车/token 就绪竞态时刷屏；排障可设 log_pool_lifecycle=true
             'log_pool_lifecycle' => (bool) ($config['log_pool_lifecycle'] ?? false),
@@ -293,6 +300,70 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         }
 
         $this->released = true;
+    }
+
+    private function attemptDirectBootstrap(
+        array $config,
+        ?SharedStateServiceManager $manager,
+        ?SharedMemoryService $sharedMemoryService,
+        ?CacheMemoryService $cacheMemoryService,
+        ?SharedStateClient $stateClient
+    ): bool {
+        if (!(bool)($config['prefer_direct_connect'] ?? true)) {
+            return false;
+        }
+
+        $allowDirectBootstrap = $manager === null
+            || ($sharedMemoryService !== null && $cacheMemoryService !== null && $stateClient !== null);
+        if (!$allowDirectBootstrap) {
+            return false;
+        }
+
+        $runtime = $this->resolveConfiguredRuntime($config);
+        if (\array_key_exists('port', $config)) {
+            $runtime['port'] = (int)$config['port'];
+        }
+        if (\array_key_exists('token_file_name', $config)) {
+            $runtime['token_file_name'] = (string)$config['token_file_name'];
+        }
+        $serviceOptions = $this->buildServiceOptions(\array_merge($config, $runtime));
+        $host = (string)$runtime['host'];
+        $port = (int)$runtime['port'];
+
+        try {
+            $this->sharedMemoryService = $sharedMemoryService ?? $this->createSharedMemoryService($host, $port, $serviceOptions);
+            $this->cacheMemoryService = $cacheMemoryService ?? $this->createCacheMemoryService($this->sharedMemoryService);
+            $this->stateClient = $stateClient ?? $this->createStateClient($host, $port, $serviceOptions);
+
+            $this->runtime = [
+                'host' => $host,
+                'port' => $port,
+                'token_file_name' => (string)$runtime['token_file_name'],
+                'reuse_existing' => true,
+                'direct_connect' => true,
+            ];
+
+            return true;
+        } catch (\Throwable $throwable) {
+            $this->cleanupDirectBootstrapState();
+            if (!(bool)($config['fail_fast_on_unhealthy'] ?? false)) {
+                return false;
+            }
+            throw new \RuntimeException('Shared memory facade is not healthy', 0, $throwable);
+        }
+    }
+
+    private function cleanupDirectBootstrapState(): void
+    {
+        if (isset($this->stateClient)) {
+            unset($this->stateClient);
+        }
+        if (isset($this->cacheMemoryService)) {
+            unset($this->cacheMemoryService);
+        }
+        if (isset($this->sharedMemoryService)) {
+            unset($this->sharedMemoryService);
+        }
     }
 
     /**
