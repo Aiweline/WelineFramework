@@ -35,6 +35,13 @@ use Weline\Server\Service\StatusLogService;
 class Dispatcher
 {
     /**
+     * Worker 切换窗口内，主动开启 TCP keep-alive，减少中间设备对空闲连接的误回收。
+     */
+    private const CLIENT_TCP_KEEPALIVE_IDLE_SEC = 20;
+    private const CLIENT_TCP_KEEPALIVE_INTERVAL_SEC = 8;
+    private const CLIENT_TCP_KEEPALIVE_PROBES = 3;
+
+    /**
      * 服务器 socket
      * @var \Socket|resource
      */
@@ -642,17 +649,19 @@ class Dispatcher
     }
 
     /**
-     * @param array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers', ports?: int[]} $job
+     * @param array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers', ports?: int[], role?: string} $job
      */
     private function createDeferredWorkerPoolFiber(array $job): \Fiber
     {
         if ($job['type'] === 'set_pool') {
             $ports = $job['ports'];
+            $role = (string)($job['role'] ?? ControlMessage::ROLE_WORKER);
+            $preserveOnReject = $role !== ControlMessage::ROLE_MAINTENANCE;
 
-            return new \Fiber(function () use ($ports): array {
+            return new \Fiber(function () use ($ports, $preserveOnReject): array {
                 $this->passthroughCore->setWarmupCooperativeYield($this->createWarmupCooperativeYieldCallback());
                 try {
-                    return $this->passthroughCore->setWorkerPorts($ports);
+                    return $this->passthroughCore->setWorkerPorts($ports, $preserveOnReject);
                 } finally {
                     $this->passthroughCore->setWarmupCooperativeYield(null);
                 }
@@ -858,9 +867,15 @@ class Dispatcher
 
             case ControlMessage::TYPE_SET_WORKER_POOL:
                 $ports = $msg['ports'] ?? [];
+                $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
                 if (\is_array($ports)) {
-                    $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports];
-                    $this->log('收到 SET_WORKER_POOL（已入队异步入池），候选端口数: ' . \count($ports), 'INFO');
+                    if ($role === ControlMessage::ROLE_MAINTENANCE) {
+                        foreach ($ports as $port) {
+                            $this->passthroughCore->addMaintenanceWorkerPort((int)$port);
+                        }
+                    }
+                    $this->deferredWorkerPoolJobs[] = ['type' => 'set_pool', 'ports' => $ports, 'role' => $role];
+                    $this->log('收到 SET_WORKER_POOL（已入队异步入池），候选端口数: ' . \count($ports) . ', role: ' . $role, 'INFO');
                 }
                 break;
 
@@ -1453,6 +1468,7 @@ class Dispatcher
 
     private function registerAcceptedClientConnection($clientSocket, string $clientIp, int $connId): void
     {
+        $this->applyClientSocketKeepAlive($clientSocket);
         $this->clientConnections[$connId] = $clientSocket;
         $this->connectionAcceptTime[$connId] = \microtime(true);
         $this->connectionLastActivity[$connId] = \microtime(true);
@@ -1462,6 +1478,27 @@ class Dispatcher
         $workerPort = $this->passthroughCore->getConnectionWorkerPort($clientSocket);
         if ($this->isDevMode) {
             $this->log("新连接: {$clientIp} (connId: {$connId}) → Worker:{$workerPort}", 'ROUTE');
+        }
+    }
+
+    /**
+     * @param \Socket|resource $clientSocket
+     */
+    private function applyClientSocketKeepAlive($clientSocket): void
+    {
+        try {
+            @\socket_set_option($clientSocket, \SOL_SOCKET, \SO_KEEPALIVE, 1);
+            if (\defined('TCP_KEEPIDLE')) {
+                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_KEEPIDLE, self::CLIENT_TCP_KEEPALIVE_IDLE_SEC);
+            }
+            if (\defined('TCP_KEEPINTVL')) {
+                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_KEEPINTVL, self::CLIENT_TCP_KEEPALIVE_INTERVAL_SEC);
+            }
+            if (\defined('TCP_KEEPCNT')) {
+                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_KEEPCNT, self::CLIENT_TCP_KEEPALIVE_PROBES);
+            }
+        } catch (\Throwable) {
+            // keep-alive 仅为增强项；平台不支持时保持原有转发路径。
         }
     }
 
@@ -1556,8 +1593,17 @@ class Dispatcher
 
     private function shouldRespondWithStartupProtectionBeforeMaintenanceRouting(): bool
     {
-        return $this->shouldServeMaintenanceFallback()
-            && $this->passthroughCore->getWorkerCount() <= 0;
+        if (!$this->shouldServeMaintenanceFallback() || $this->passthroughCore->getWorkerCount() > 0) {
+            return false;
+        }
+        // 已注册维护 Worker 端口时必须先走 tryRouteToMaintenanceWorker（含自旋重试），
+        // 不得在此处对明文 HTTP 写死 503；否则维护 Worker 已 listen 仍永远接不到连接，
+        // HTTPS 还会在后续 tryRespondServiceUnavailable 失败后直接关断 → ERR_CONNECTION_ABORTED。
+        if ($this->passthroughCore->getMaintenanceWorkerPorts() !== []) {
+            return false;
+        }
+
+        return true;
     }
 
     private function buildFriendlyStartupMaintenancePage(): string

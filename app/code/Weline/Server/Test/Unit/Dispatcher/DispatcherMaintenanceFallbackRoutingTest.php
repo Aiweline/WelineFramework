@@ -130,6 +130,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $core->expects(self::exactly(2))
             ->method('getWorkerCount')
             ->willReturn(0);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'maintenanceFallbackActive', true);
@@ -138,6 +139,23 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $method->setAccessible(true);
 
         self::assertTrue($method->invoke($dispatcher));
+    }
+
+    public function testStartupProtectionSkippedWhenPoolEmptyButMaintenanceWorkerPortsRegistered(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->method('getWorkerCount')->willReturn(0);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([19003]);
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+        $this->setProperty($dispatcher, 'maintenanceFallbackActive', true);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'shouldRespondWithStartupProtectionBeforeMaintenanceRouting');
+        $method->setAccessible(true);
+
+        self::assertFalse($method->invoke($dispatcher));
     }
 
     public function testStartupProtectionIsNotPreferredWhenPoolHasMaintenancePort(): void
@@ -156,6 +174,7 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
                 'unhealthy' => 0,
                 'saturated' => 0,
             ]);
+        $core->method('getMaintenanceWorkerPorts')->willReturn([]);
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);
         $this->setProperty($dispatcher, 'maintenanceFallbackActive', true);
@@ -176,9 +195,8 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $response = (string) $method->invoke($dispatcher);
 
         self::assertStringContainsString('HTTP/1.1 503 Service Unavailable', $response);
-        self::assertStringContainsString('WLS启动中...', $response);
-        self::assertStringContainsString('维护 Worker 正在启动并准备接管请求。', $response);
-        self::assertStringContainsString('系统会在维护页就绪后自动返回友好的维护信息。', $response);
+        self::assertStringContainsString('WLS正在启动中', $response);
+        self::assertStringContainsString('业务 Worker 正在初始化', $response);
     }
 
     private function newDispatcherWithoutConstructor(): Dispatcher
