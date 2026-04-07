@@ -119,6 +119,7 @@ class PassthroughCore
      * @var int[]
      */
     private array $maintenanceWorkerPorts = [];
+    private int $maintenancePort = 0;
 
     /**
      * 可选：探活/预热过程中协作式让出（仅应在 Dispatcher 的入池 Fiber 内注册为 Fiber::suspend）。
@@ -452,6 +453,7 @@ class PassthroughCore
             'open_time' => \microtime(true),
             'request_sent_at' => 0.0,
             'worker_responded' => false,
+            'expects_event_stream' => false,
         ];
         
         $this->stats['active_connections']++;
@@ -566,12 +568,21 @@ class PassthroughCore
             $maintenancePort = $this->workerPorts[0];
             $maintenanceSocket = $this->connectToWorker($maintenancePort);
             if ($maintenanceSocket !== false) {
-                // 维护 Worker 成功，记录成功并直接注册连接
                 $this->recordWorkerSuccess($maintenancePort);
+                $this->logMaintenanceDecision(
+                    'single_worker_maintenance_success:' . $maintenancePort,
+                    "单 Worker 维护直连成功：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
+                    'INFO',
+                    0.0
+                );
                 return $this->registerConnection($connId, $clientSocket, $maintenanceSocket, $maintenancePort, $clientIp, $sni);
             }
-            // 维护 Worker 连接失败（极端情况：维护 Worker 尚未启动完成），记录失败但继续自旋等待
             $this->recordWorkerFailure($maintenancePort);
+            $this->logMaintenanceDecision(
+                'single_worker_maintenance_failed:' . $maintenancePort,
+                "单 Worker 维护直连失败：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
+                'WARN'
+            );
         }
         
         // 6. 故障转移：尝试所有可用 Worker（跳过黑名单中的）
@@ -625,15 +636,29 @@ class PassthroughCore
                 if ($maintenanceSocket !== false) {
                     $this->recordWorkerSuccess($maintenancePort);
                     $this->stats['maintenance_routed']++;
+                    $this->logMaintenanceDecision(
+                        'maintenance_route_success:' . $maintenancePort,
+                        "维护候选接管成功：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
+                        'INFO',
+                        0.0
+                    );
                     return $this->registerConnection($connId, $clientSocket, $maintenanceSocket, $maintenancePort, $clientIp, $sni);
                 }
-                // 维护 Worker 连接失败，尝试下一个
                 $this->recordWorkerFailure($maintenancePort);
+                $this->logMaintenanceDecision(
+                    'maintenance_route_failed:' . $maintenancePort,
+                    "维护候选接管失败：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
+                    'WARN'
+                );
             }
         }
-        
-        // 所有 Worker 均不可用（业务 Worker 全失败，维护 Worker 也无可用）
+
         $this->stats['all_workers_down']++;
+        $this->logMaintenanceDecision(
+            'all_workers_down',
+            '业务 Worker 与维护 Worker 均不可用，' . $this->formatMaintenanceLogContext(),
+            'WARN'
+        );
         return false;
     }
 
@@ -714,6 +739,7 @@ class PassthroughCore
             'open_time' => \microtime(true),
             'request_sent_at' => 0.0,
             'worker_responded' => false,
+            'expects_event_stream' => false,
         ];
         
         $this->stats['active_connections']++;
@@ -742,6 +768,11 @@ class PassthroughCore
                 $this->writeStderr("[PassthroughCore] 没有可用 Worker 端口！workerPorts 为空\n");
                 $this->lastEmptyWorkerPortsStderrAt = $now;
             }
+            $this->logMaintenanceDecision(
+                'empty_worker_pool',
+                '业务 Worker 池为空，当前无法分配端口，' . $this->formatMaintenanceLogContext(),
+                'WARN'
+            );
             return false;
         }
 
@@ -2137,21 +2168,44 @@ class PassthroughCore
     public function addMaintenanceWorkerPort(int $port): array
     {
         if ($port <= 0) {
+            $this->logMaintenanceDecision(
+                'maintenance_port_invalid:' . $port,
+                '维护 Worker 端口无效: ' . $port . '，' . $this->formatMaintenanceLogContext(),
+                'WARN',
+                0.0
+            );
             return ['success' => false, 'error' => '维护 Worker 端口无效: ' . $port];
         }
         
         if (\in_array($port, $this->maintenanceWorkerPorts, true)) {
+            $this->logMaintenanceDecision(
+                'maintenance_port_duplicate:' . $port,
+                '维护 Worker 端口已存在: ' . $port . '，' . $this->formatMaintenanceLogContext(),
+                'INFO',
+                0.0
+            );
             return ['success' => true, 'message' => '维护 Worker 端口已存在: ' . $port];
         }
         
-        // 快速探活，确认维护 Worker 已启动
         $probe = $this->probeWorkerApplicationHealth($port);
         if (!$probe) {
+            $this->logMaintenanceDecision(
+                'maintenance_port_probe_failed:' . $port,
+                "维护 Worker {$port} 探活失败，可能未启动，" . $this->formatMaintenanceLogContext(),
+                'WARN',
+                0.0
+            );
             return ['success' => false, 'error' => "维护 Worker {$port} 探活失败，可能未启动"];
         }
         
         $this->maintenanceWorkerPorts[] = $port;
         $this->writeStderr("[PassthroughCore] 维护 Worker 端口已注册: {$port}\n");
+        $this->logMaintenanceDecision(
+            'maintenance_port_added:' . $port,
+            '维护 Worker 端口已注册: ' . $port . '，' . $this->formatMaintenanceLogContext(),
+            'INFO',
+            0.0
+        );
         
         return ['success' => true, 'message' => '维护 Worker 端口已注册'];
     }
@@ -2168,6 +2222,12 @@ class PassthroughCore
             unset($this->maintenanceWorkerPorts[$key]);
             $this->maintenanceWorkerPorts = \array_values($this->maintenanceWorkerPorts);
             $this->writeStderr("[PassthroughCore] 维护 Worker 端口已移除: {$port}\n");
+            $this->logMaintenanceDecision(
+                'maintenance_port_removed:' . $port,
+                '维护 Worker 端口已移除: ' . $port . '，' . $this->formatMaintenanceLogContext(),
+                'INFO',
+                0.0
+            );
         }
     }
     
@@ -2200,6 +2260,12 @@ class PassthroughCore
         } else {
             $this->writeStderr("[PassthroughCore] 维护 Worker 端口已禁用\n");
         }
+        $this->logMaintenanceDecision(
+            'maintenance_port_set:' . $port,
+            '维护 Worker 端口' . ($port > 0 ? ('已设置: ' . $port) : '已禁用') . '，' . $this->formatMaintenanceLogContext(),
+            $port > 0 ? 'INFO' : 'WARN',
+            0.0
+        );
     }
     
     /**
@@ -2306,6 +2372,19 @@ class PassthroughCore
         
         $length = \strlen($data);
         $this->stats['bytes_in'] += $length;
+        if (
+            isset($this->connections[$connId])
+            && empty($this->connections[$connId]['expects_event_stream'])
+            && \str_contains($data, "\r\n")
+        ) {
+            $headerProbe = \strtolower(\substr($data, 0, 2048));
+            if (
+                \str_contains($headerProbe, 'accept: text/event-stream')
+                || \str_contains($headerProbe, '/stream-sse')
+            ) {
+                $this->connections[$connId]['expects_event_stream'] = true;
+            }
+        }
         
         // 转发到 Worker（完整写入循环，处理部分写入）
         $totalWritten = 0;
@@ -2494,7 +2573,7 @@ class PassthroughCore
      * actually forwarded upstream. Browser preconnect / idle sockets should not
      * blacklist a healthy worker.
      *
-     * @param array{request_sent_at?: float} $conn
+     * @param array{request_sent_at?: float, expects_event_stream?: bool} $conn
      */
     private function shouldTreatSilentWorkerAsFailure(array $conn, int $totalBytesForwarded): bool
     {
@@ -2507,7 +2586,12 @@ class PassthroughCore
             return false;
         }
 
-        return (\microtime(true) - $requestSentAt) >= $this->firstByteTimeoutSeconds;
+        $timeout = $this->firstByteTimeoutSeconds;
+        if (!empty($conn['expects_event_stream'])) {
+            $timeout = \max($timeout, 15.0);
+        }
+
+        return (\microtime(true) - $requestSentAt) >= $timeout;
     }
 
     private function markWorkerResponsive(int $connId, int $workerPort): void

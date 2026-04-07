@@ -109,6 +109,10 @@ final class SchemaMigrationExecutor
                                 $connector->query($sql)->fetch();
                                 continue;
                             }
+                            if ($this->healPgsqlConstraintBackedIndexDrop($connector, $op, $e)) {
+                                $connector->query($sql)->fetch();
+                                continue;
+                            }
                             $colName = ($op->payload instanceof \Weline\Framework\Database\Schema\ColumnDefinition)
                                 ? $op->payload->name : '';
                             $ctx = "table={$op->tableName} kind={$op->kind}" . ($colName !== '' ? " col={$colName}" : '');
@@ -146,10 +150,51 @@ final class SchemaMigrationExecutor
     /** 按 ";\n" 拆分 DDL，供需多条语句的方言（如 Pgsql 自增列 SET DEFAULT）使用 */
     private function splitDdlStatements(string $sql): array
     {
-        if (!str_contains($sql, ";\n")) {
-            return [$sql];
+        $normalized = str_replace("\r\n", "\n", $sql);
+        if (!str_contains($normalized, ";\n")) {
+            return [$normalized];
         }
-        return explode(";\n", $sql);
+        return explode(";\n", $normalized);
+    }
+
+    /**
+     * PostgreSQL：唯一约束会生成“索引”，DROP INDEX 会报 2BP01；需先 DROP CONSTRAINT。
+     * 若 DDL 中 ALTER 未命中（约束在其它表、或名不一致），根据错误信息补一刀后重试原语句。
+     */
+    private function healPgsqlConstraintBackedIndexDrop(ConnectorInterface $connector, SchemaDiffOp $op, \Throwable $e): bool
+    {
+        if ($op->kind !== SchemaDiffOp::KIND_DROP_INDEX || !$op->payload instanceof IndexDefinition) {
+            return false;
+        }
+        if ($connector->getConfigProvider()->getDbType() !== 'pgsql') {
+            return false;
+        }
+        $msg = $e->getMessage();
+        if (!str_contains($msg, 'cannot drop index') || !str_contains($msg, 'because constraint')) {
+            return false;
+        }
+        $constraintTable = null;
+        $constraintName = null;
+        if (preg_match(
+            '/cannot drop index\s+(\S+)\s+because constraint\s+(\S+)\s+on table\s+(\S+)\s+requires it/i',
+            $msg,
+            $m
+        )) {
+            $constraintName = trim($m[2], '"`');
+            $constraintTable = trim($m[3], '"`');
+        }
+        if ($constraintTable === null || $constraintTable === '' || $constraintName === null || $constraintName === '') {
+            return false;
+        }
+        $qt = $connector->quoteTable($constraintTable);
+        $qn = $connector->quoteIdentifier($constraintName);
+        $healSql = "ALTER TABLE {$qt} DROP CONSTRAINT IF EXISTS {$qn} CASCADE";
+        try {
+            $connector->query($healSql)->fetch();
+        } catch (\Throwable) {
+            return false;
+        }
+        return true;
     }
 
     private function moduleNameFromClass(?string $modelClass): string
