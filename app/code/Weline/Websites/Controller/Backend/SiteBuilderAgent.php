@@ -527,13 +527,6 @@ class SiteBuilderAgent extends BackendController
         $preferredDomain = \strtolower(\trim((string)$this->getRequestBodyValue('domain', '')));
         $accountId = (int)$this->getRequestBodyValue('account_id', 0);
 
-        if ($accountId <= 0) {
-            return $this->fetchJson([
-                'success' => false,
-                'message' => __('检测实时可用性前，请先选择服务商账号。'),
-            ]);
-        }
-
         if ($description === '' && $preferredDomain === '') {
             return $this->fetchJson([
                 'success' => false,
@@ -542,24 +535,28 @@ class SiteBuilderAgent extends BackendController
         }
 
         if ($this->isFakeModeRequested()) {
-            $suggestions = $this->buildDomainSuggestions(
-                $description !== '' ? $description : $preferredDomain,
-                $preferredDomain
-            );
-            $domain = $suggestions[0] ?? $this->buildFakeDomainSuggestion($description !== '' ? $description : 'smart site');
+            $seed = $description !== '' ? $description : $preferredDomain;
+            $suggestions = $this->buildFakeWelineLocalDomains($seed);
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('本地演示模式下，AI 找到可用域名：%{domain}', ['domain' => $domain]),
-                'domain' => $domain,
+                'message' => __('本地演示模式下，AI 找到可用域名：%{domain}', ['domain' => $suggestions[0]]),
+                'domain' => $suggestions[0],
                 'candidate_domains' => $suggestions,
                 'checked_results' => [
                     [
-                        'domain' => $domain,
+                        'domain' => $suggestions[0],
                         'available' => true,
                     ],
                 ],
                 'fake_mode' => true,
+            ]);
+        }
+
+        if ($accountId <= 0) {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('检测实时可用性前，请先选择服务商账号。'),
             ]);
         }
 
@@ -692,12 +689,6 @@ class SiteBuilderAgent extends BackendController
         $preferredDomain = \strtolower(\trim((string)$this->request->getGet('domain', '')));
         $accountId = (int)$this->request->getGet('account_id', 0);
 
-        if ($accountId <= 0) {
-            $sse->sendError((string)__('检测实时可用性前，请先选择服务商账号。'));
-            $sse->complete(['success' => false]);
-            return;
-        }
-
         if ($description === '' && $preferredDomain === '') {
             $sse->sendError((string)__('请先描述建站目标，或先输入偏好域名。'));
             $sse->complete(['success' => false]);
@@ -705,11 +696,8 @@ class SiteBuilderAgent extends BackendController
         }
 
         if ($this->isFakeModeRequested()) {
-            $agentService = $this->getWebsiteAgentService();
-            $candidates = $agentService->getRecommendationCandidates($description, $preferredDomain, 40);
-            if ($candidates === []) {
-                $candidates = [$this->buildFakeDomainSuggestion($description !== '' ? $description : $preferredDomain)];
-            }
+            $seed = $description !== '' ? $description : $preferredDomain;
+            $candidates = $this->buildFakeWelineLocalDomains($seed);
             $domain = $candidates[0];
             $sse->sendEvent('success', [
                 'message' => (string)__('本地演示模式下，AI 找到可用域名：%{domain}', ['domain' => $domain]),
@@ -719,6 +707,12 @@ class SiteBuilderAgent extends BackendController
                 'fake_mode' => true,
             ]);
             $sse->complete(['success' => true, 'domain' => $domain]);
+            return;
+        }
+
+        if ($accountId <= 0) {
+            $sse->sendError((string)__('检测实时可用性前，请先选择服务商账号。'));
+            $sse->complete(['success' => false]);
             return;
         }
 
@@ -873,10 +867,13 @@ class SiteBuilderAgent extends BackendController
             'You are an expert naming assistant for domain availability checks.',
             'Task: propose domain candidates for one retry round.',
             'Requirements:',
-            '- Prefer .com as first priority.',
-            '- Avoid short/generic one-word names.',
+            '- Derive market intent from the brief first; if a country/region is explicit (e.g. India), include local trust TLDs (e.g. .in, .co.in) together with global options.',
+            '- Keep .com in the list, but do not output mostly .com variants of the same root.',
+            '- Avoid short/generic one-word names and overused generic roots like apk, app, seo, web, ai as standalone labels.',
             '- Domain label (before TLD) must be at least ' . $minLabelLength . ' chars.',
-            '- Use 2-4 combined semantic words; include context from brief and location hints (like "in", "at", "near") when useful.',
+            '- Use 2-4 combined semantic words and strongly align with the user brief (industry, market, language, intent).',
+            '- Prioritize brandable combinations over dictionary-single-word domains.',
+            '- Ensure diversity: avoid repeating the same label with many different TLDs.',
             '- Output only domain names, one per line, no numbering, no explanation.',
             '- Provide up to ' . $targetCount . ' domains.',
             'Round: ' . $round,
@@ -903,7 +900,7 @@ class SiteBuilderAgent extends BackendController
     private function extractDomainCandidatesFromText(string $text, int $minLabelLength, int $limit = 20): array
     {
         $found = [];
-        if (\preg_match_all('/\b([a-z0-9][a-z0-9-]{1,62}\.(?:com|io|ai|co|net|site|cn))\b/i', $text, $matches) !== 1) {
+        if (\preg_match_all('/\b([a-z0-9][a-z0-9-]{1,62}\.(?:com|io|ai|co|net|site|cn|in|org|app|online|xyz|co\.in))\b/i', $text, $matches) !== 1) {
             return [];
         }
 
@@ -915,13 +912,13 @@ class SiteBuilderAgent extends BackendController
             if ($domain === '' || \in_array($domain, $found, true)) {
                 continue;
             }
-            $label = (string)\preg_replace('/\.[a-z]{2,}$/i', '', $domain);
+            $label = (string)\preg_replace('/\.(?:co\.in|[a-z]{2,})$/i', '', $domain);
             $label = \str_replace('-', '', $label);
             if (\strlen($label) < $minLabelLength) {
                 continue;
             }
             // 避免极度泛化短词（如 apk.com）。
-            if (\preg_match('/^[a-z]{2,5}\.(?:com|io|ai|co|net|site|cn)$/', $domain) === 1) {
+            if (\preg_match('/^[a-z]{2,5}\.(?:com|io|ai|co|net|site|cn|in|org|app|online|xyz|co\.in)$/', $domain) === 1) {
                 continue;
             }
             $found[] = $domain;
@@ -3337,6 +3334,35 @@ class SiteBuilderAgent extends BackendController
         }
 
         return $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/index', $params);
+    }
+
+    /**
+     * 本地 fake / 演示模式：生成若干 *.weline.local 候选，便于联调与 E2E（无需真实注册商可用性）。
+     *
+     * @return list<string>
+     */
+    private function buildFakeWelineLocalDomains(string $brief, int $count = 5): array
+    {
+        $slug = \strtolower((string)\preg_replace('/[^a-z0-9]+/i', '-', $brief));
+        $slug = \trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'demo';
+        }
+        $parts = \array_values(\array_filter(\explode('-', $slug), static fn (string $p): bool => $p !== ''));
+        $parts = \array_slice($parts, 0, 2);
+        $base = \implode('-', $parts);
+        if ($base === '') {
+            $base = 'demo';
+        }
+        $digits = \preg_replace('/\D/', '', (string)\microtime(true)) ?? '';
+        $ts = \substr($digits !== '' ? $digits : (string)\random_int(10000000, 99999999), -8);
+        $out = [];
+        for ($i = 0; $i < \max(1, $count); $i += 1) {
+            $suffix = $i === 0 ? $ts : $ts . '-' . $i;
+            $out[] = $base . '-' . $suffix . '.weline.local';
+        }
+
+        return $out;
     }
 
     private function buildFakeDomainSuggestion(string $brief): string
