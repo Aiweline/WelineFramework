@@ -51,6 +51,7 @@ $generate_virtual_theme_sse_url = (string)($this->getData('generate_virtual_them
 $save_virtual_theme_url = (string)($this->getData('save_virtual_theme_url') ?? '');
 $save_page_type_layout_url = (string)($this->getData('save_page_type_layout_url') ?? '');
 $save_virtual_component_url = (string)($this->getData('save_virtual_component_url') ?? '');
+$delete_session_url = (string)($this->getData('delete_session_url') ?? '');
 $pagebuilder_handoff_url = (string)($this->getData('pagebuilder_handoff_url') ?? '');
 $provider_native_url = (string)($this->getData('provider_native_url') ?? '');
 $provider_handoff_label = (string)($this->getData('provider_handoff_label') ?? __('打开 provider 原生入口'));
@@ -686,7 +687,7 @@ $domainOrderDisplay = (int)($domain_purchase_state['order_id'] ?? 0) > 0
         <div class="card border-0 shadow-sm mt-3">
             <div class="card-header bg-transparent border-0 px-4 pt-4 pb-0"><h5 class="card-title mb-1"><lang>最近工作区</lang></h5></div>
             <div class="card-body p-4">
-                <?php if ($recent_sessions === []) { ?><div class="wb-empty"><lang>暂无其他最近会话。</lang></div><?php } else { ?><div class="wb-list wb-scroll-y"><?php foreach ($recent_sessions as $recent) { ?><a class="wb-link" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small></a><?php } ?></div><?php } ?>
+                <?php if ($recent_sessions === []) { ?><div class="wb-empty"><lang>暂无其他最近会话。</lang></div><?php } else { ?><div class="wb-list wb-scroll-y" id="site-builder-recent-session-list"><?php foreach ($recent_sessions as $recent) { ?><div class="wb-link-card" data-recent-session-item="1" data-public-id="<?= htmlspecialchars((string)($recent['public_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><a class="wb-link" href="<?= htmlspecialchars((string)($recent['workspace_url'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><strong><?= htmlspecialchars((string)($recent['provider_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></strong><span><?= htmlspecialchars((string)($recent['stage_label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></span><small><?= htmlspecialchars((string)($recent['summary'] ?? ''), ENT_QUOTES, 'UTF-8') ?></small></a><div class="wb-link-actions"><button type="button" class="wb-link-delete" data-recent-session-delete="1" data-public-id="<?= htmlspecialchars((string)($recent['public_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars((string)__('删除最近会话'), ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars((string)__('删除最近会话'), ENT_QUOTES, 'UTF-8') ?>"><i class="mdi mdi-trash-can-outline"></i></button></div></div><?php } ?></div><?php } ?>
             </div>
         </div>
     </div>
@@ -846,7 +847,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 .wb-tool,
 .wb-message,
 .wb-event,
-.wb-link,
+.wb-link-card,
 .wb-note-box {
     border-radius: 18px;
     border: 1px solid var(--wb-border);
@@ -928,7 +929,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
 
 .wb-message,
 .wb-event,
-.wb-link {
+.wb-link-card {
     padding: .9rem 1rem;
 }
 
@@ -945,17 +946,49 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     margin-bottom: .5rem;
 }
 
+.wb-link-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .85rem;
+    align-items: start;
+}
+
 .wb-link {
     display: grid;
     gap: .2rem;
     color: inherit;
     text-decoration: none;
+    min-width: 0;
 }
 
-.wb-link:hover,
+.wb-link-card:hover,
 .wb-tool:hover {
     border-color: var(--wb-border-strong);
     box-shadow: var(--wb-shadow);
+}
+
+.wb-link-actions {
+    display: flex;
+    align-items: center;
+}
+
+.wb-link-delete {
+    border: 0;
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: rgba(220, 53, 69, 0.08);
+    color: #c2354e;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform .18s ease, background .18s ease, color .18s ease;
+}
+
+.wb-link-delete:hover {
+    background: rgba(220, 53, 69, 0.14);
+    color: #a61e36;
+    transform: translateY(-1px);
 }
 
 .wb-empty {
@@ -1140,6 +1173,7 @@ body[data-topbar="dark"] .site-builder-workspace-page {
     var replaceScopeUrl = <?= json_encode($replace_scope_url, JSON_THROW_ON_ERROR) ?>;
     var setStageUrl = <?= json_encode($set_stage_url, JSON_THROW_ON_ERROR) ?>;
     var appendMessageUrl = <?= json_encode($append_message_url, JSON_THROW_ON_ERROR) ?>;
+    var deleteSessionUrl = <?= json_encode($delete_session_url, JSON_THROW_ON_ERROR) ?>;
     var startDomainPurchaseUrl = <?= json_encode($start_domain_purchase_url, JSON_THROW_ON_ERROR) ?>;
     var domainPurchaseSseBaseUrl = <?= json_encode($domain_purchase_sse_url, JSON_THROW_ON_ERROR) ?>;
     var generateVirtualThemeSseBaseUrl = <?= json_encode($generate_virtual_theme_sse_url, JSON_THROW_ON_ERROR) ?>;
@@ -1470,6 +1504,10 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         }
     }
 
+    messages.deleteSessionConfirm = <?= json_encode((string)__('确定删除这条最近会话吗？'), JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionSuccess = <?= json_encode((string)__('最近会话已删除'), JSON_THROW_ON_ERROR) ?>;
+    messages.deleteSessionFailed = <?= json_encode((string)__('删除最近会话失败'), JSON_THROW_ON_ERROR) ?>;
+
     function toast(type, message) {
         if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
             window.BackendToast[type](message);
@@ -1508,6 +1546,44 @@ body[data-topbar="dark"] .site-builder-workspace-page {
             credentials: 'same-origin'
         }).then(function (response) {
             return response.json();
+        });
+    }
+
+    function removeRecentSessionCard(publicId) {
+        if (!publicId) {
+            return;
+        }
+        document.querySelectorAll('[data-recent-session-item="1"]').forEach(function (node) {
+            if ((node.getAttribute('data-public-id') || '') === publicId) {
+                node.remove();
+            }
+        });
+        var list = document.getElementById('site-builder-recent-session-list');
+        if (list && list.children.length === 0) {
+            var empty = document.createElement('div');
+            empty.className = 'wb-empty';
+            empty.textContent = '<?= addslashes((string)__('暂无其他最近会话。')) ?>';
+            list.replaceWith(empty);
+        }
+    }
+
+    function deleteRecentSession(publicId) {
+        if (!deleteSessionUrl || !publicId) {
+            toast('error', messages.deleteSessionFailed);
+            return;
+        }
+        if (!window.confirm(messages.deleteSessionConfirm)) {
+            return;
+        }
+        postForm(deleteSessionUrl, { public_id: publicId }).then(function (data) {
+            if (data && data.success) {
+                removeRecentSessionCard(publicId);
+                toast('success', data.message || messages.deleteSessionSuccess);
+                return;
+            }
+            toast('error', (data && data.message) ? data.message : messages.deleteSessionFailed);
+        }).catch(function () {
+            toast('error', messages.networkError);
         });
     }
 
@@ -3092,6 +3168,14 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         }
     });
 
+    document.querySelectorAll('[data-recent-session-delete="1"]').forEach(function (button) {
+        button.addEventListener('click', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            deleteRecentSession(button.getAttribute('data-public-id') || '');
+        });
+    });
+
     function startProgressiveGeneration() {
         var selectedTypes = [];
         var checkboxes = document.querySelectorAll('#pageTypeSelectorModal input[type="checkbox"]:checked');
@@ -3510,4 +3594,3 @@ body[data-topbar="dark"] .site-builder-workspace-page {
         <iframe id="visualEditorFrame" style="width:100%; height:800px; border:none;" onload="if(window.visualEditorFrameLoaded) window.visualEditorFrameLoaded();"></iframe>
     </div>
 </div>
-
