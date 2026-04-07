@@ -86,7 +86,7 @@ class AiSiteMaterializationService
 
             $pageId = (int)$page->getId();
             if ($pageId <= 0) {
-                throw new \RuntimeException((string)__('Failed to materialize PageBuilder page: %1', [$pageType]));
+                throw new \RuntimeException((string)__('Failed to materialize PageBuilder page: %{1}', [$pageType]));
             }
 
             if ($pageType === Page::TYPE_HOME) {
@@ -188,7 +188,7 @@ class AiSiteMaterializationService
 
             $pageId = (int)$page->getId();
             if ($pageId <= 0) {
-                throw new \RuntimeException((string)__('Failed to materialize PageBuilder page: %1', [$pageType]));
+                throw new \RuntimeException((string)__('Failed to materialize PageBuilder page: %{1}', [$pageType]));
             }
 
             if ($pageType === Page::TYPE_HOME) {
