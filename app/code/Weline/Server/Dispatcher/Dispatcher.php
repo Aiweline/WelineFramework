@@ -787,9 +787,12 @@ class Dispatcher
             $result = \is_array($payload) ? $payload : [];
             $acceptedPorts = \is_array($result['accepted'] ?? null) ? $result['accepted'] : [];
             $rejectedPorts = \is_array($result['rejected'] ?? null) ? $result['rejected'] : [];
+            $currentWorkerPoolSize = $this->passthroughCore->getWorkerCount();
             $this->updateMaintenanceFallbackState(
-                $acceptedPorts === [],
-                'SET_WORKER_POOL accepted=' . \count($acceptedPorts) . ', rejected=' . \count($rejectedPorts)
+                $currentWorkerPoolSize === 0,
+                'SET_WORKER_POOL accepted=' . \count($acceptedPorts)
+                . ', rejected=' . \count($rejectedPorts)
+                . ', current_pool=' . $currentWorkerPoolSize
             );
             $this->log('SET_WORKER_POOL: ' . \implode(',', $acceptedPorts), 'INFO');
             if ($rejectedPorts !== []) {
@@ -1695,6 +1698,14 @@ class Dispatcher
         $total = (int)($healthSummary['total'] ?? 0);
         if ($total <= 0) {
             // 还没有任何可路由后端（启动窗口/池未下发）→ 返回维护页而非断开连接
+            return true;
+        }
+
+        // 增强：如果业务 Worker 健康数量为 0，且存在维护 Worker 端口（已注册但可能未就绪），
+        // 且在启动保护窗口内，应返回维护页面友好提示，而非关闭连接
+        $healthy = (int)($healthSummary['healthy'] ?? 0);
+        $maintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+        if ($healthy <= 0 && $maintenancePorts !== [] && $this->shouldApplyStartupProtection()) {
             return true;
         }
 
