@@ -70,6 +70,12 @@ function buildWelineLocalSubdomain(prefix) {
 }
 
 async function startPagebuilderBuild(page, backendRoot, scopePatch) {
+  await page.evaluate(() => {
+    const bridge = window.PbAiWorkspacePreview || null;
+    if (bridge && typeof bridge.pauseWorkspaceStream === 'function') {
+      bridge.pauseWorkspaceStream();
+    }
+  }).catch(() => {});
   const current = new URL(page.url());
   current.search = '';
   current.hash = '';
@@ -99,6 +105,12 @@ async function startPagebuilderBuild(page, backendRoot, scopePatch) {
 }
 
 async function requestPagebuilderPublish(page) {
+  await page.evaluate(() => {
+    const bridge = window.PbAiWorkspacePreview || null;
+    if (bridge && typeof bridge.pauseWorkspaceStream === 'function') {
+      bridge.pauseWorkspaceStream();
+    }
+  }).catch(() => {});
   const current = new URL(page.url());
   current.search = '';
   current.hash = '';
