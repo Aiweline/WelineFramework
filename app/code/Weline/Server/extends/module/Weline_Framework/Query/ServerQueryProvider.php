@@ -555,7 +555,7 @@ class ServerQueryProvider implements QueryProviderInterface
     private function maintenanceEnable(array $params): array
     {
         $instance = (string)($params['instance'] ?? 'default');
-        $result = $this->ipcControlGateway->command($instance, ControlMessage::ACTION_MAINTENANCE_ENABLE, '', [], 8.0);
+        $result = $this->ipcControlGateway->setMaintenanceMode($instance, true, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('维护模式已启用')),
@@ -566,7 +566,7 @@ class ServerQueryProvider implements QueryProviderInterface
     private function maintenanceDisable(array $params): array
     {
         $instance = (string)($params['instance'] ?? 'default');
-        $result = $this->ipcControlGateway->command($instance, ControlMessage::ACTION_MAINTENANCE_DISABLE, '', [], 8.0);
+        $result = $this->ipcControlGateway->setMaintenanceMode($instance, false, 8.0);
         return [
             'success' => (bool)($result['success'] ?? false),
             'message' => (string)($result['message'] ?? __('维护模式已禁用')),

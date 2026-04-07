@@ -84,6 +84,13 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
             return;
         }
 
+        // maintenance worker 专职承接维护流量。
+        // 一旦请求已经进入 maintenance worker，就应直接按维护模式处理，
+        // 不再反向依赖 Orchestrator / Env IPC 查询结果，避免启动窗口或状态不同步时漏拦截。
+        if (\defined('WLS_MAINTENANCE_WORKER') && WLS_MAINTENANCE_WORKER) {
+            $this->sendMaintenanceResponse();
+        }
+
         // 检查维护模式配置
         if (!Env::system('maintenance')) {
             return;
