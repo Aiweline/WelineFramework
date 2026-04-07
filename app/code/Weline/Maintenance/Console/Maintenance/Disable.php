@@ -18,6 +18,7 @@ use Weline\Framework\Console\CommandInterface;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Maintenance\Helper\WlsMaintenanceSync;
 
 class Disable implements \Weline\Framework\Console\CommandInterface
 {
@@ -45,6 +46,7 @@ class Disable implements \Weline\Framework\Console\CommandInterface
     {
         Env::getInstance()->setConfig('system.maintenance', false);
         $this->printing->success(__('维护模式已关闭！'));
+        WlsMaintenanceSync::syncAfterCliToggle($this->printing, false, $args);
     }
 
     /**
@@ -63,6 +65,7 @@ class Disable implements \Weline\Framework\Console\CommandInterface
             $this->tip(),
             [
                 '-h, --help' => '显示帮助信息',
+                '-n, --name' => __('指定 WLS 实例名；省略则向当前所有运行中的实例同步维护入口'),
             ],
             [],
             []
