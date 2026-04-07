@@ -67,15 +67,12 @@ class BroadcastControlDispatchService
      */
     public function setMaintenanceMode(bool $enabled, ?string $instanceName = null, float $timeout = 6.0): array
     {
-        $action = $enabled
-            ? ControlMessage::ACTION_MAINTENANCE_ENABLE
-            : ControlMessage::ACTION_MAINTENANCE_DISABLE;
         $label = $enabled ? (string) __('启用维护模式') : (string) __('禁用维护模式');
 
         return $this->dispatchToRunningInstances(
             $instanceName,
             $label,
-            fn(string $name): array => $this->ipcControlGateway->command($name, $action, '', [], $timeout)
+            fn(string $name): array => $this->ipcControlGateway->setMaintenanceMode($name, $enabled, $timeout)
         );
     }
 
@@ -119,7 +116,7 @@ class BroadcastControlDispatchService
                 continue;
             }
 
-            $failedByInstance[$targetInstance] = (string)($result['message'] ?? 'unknown');
+            $failedByInstance[$targetInstance] = (string) ($result['message'] ?? 'unknown');
         }
 
         return [
@@ -139,8 +136,13 @@ class BroadcastControlDispatchService
     {
         $instanceName = $instanceName !== null ? \trim($instanceName) : null;
         if ($instanceName !== null && $instanceName !== '') {
-            if (!$this->serverInstanceManager->isInstanceRunning($instanceName)) {
+            if (!$this->serverInstanceManager->hasInstance($instanceName)) {
                 $failedByInstance[$instanceName] = '实例未运行';
+                return [];
+            }
+
+            if (!$this->serverInstanceManager->isInstanceIpcControllable($instanceName)) {
+                $failedByInstance[$instanceName] = 'Master 未运行，无法通过 IPC 控制。';
                 return [];
             }
 
@@ -149,7 +151,7 @@ class BroadcastControlDispatchService
 
         $instances = [];
         foreach ($this->serverInstanceManager->listPersistedInstanceNames() as $name) {
-            if ($this->serverInstanceManager->isInstanceRunning($name)) {
+            if ($this->serverInstanceManager->isInstanceIpcControllable($name)) {
                 $instances[] = $name;
             }
         }
@@ -171,18 +173,18 @@ class BroadcastControlDispatchService
     ): string {
         if ($attempted === []) {
             if ($instanceName !== null && $instanceName !== '' && isset($failedByInstance[$instanceName])) {
-                return (string)__('WLS 实例 %{1} 未运行：%{2}', [$instanceName, $failedByInstance[$instanceName]]);
+                return (string) __('WLS 实例 %{1} 未运行：%{2}', [$instanceName, $failedByInstance[$instanceName]]);
             }
 
-            return (string)__('未发现运行中的 WLS 实例，已跳过 %{1}', [$actionLabel]);
+            return (string) __('未发现运行中的 WLS 实例，已跳过 %{1}', [$actionLabel]);
         }
 
         if ($failedByInstance === []) {
             if ($instanceName !== null && $instanceName !== '' && \count($succeeded) === 1) {
-                return (string)__('已向 WLS 实例 %{1} 发送%{2}', [$succeeded[0], $actionLabel]);
+                return (string) __('已向 WLS 实例 %{1} 发送 %{2}', [$succeeded[0], $actionLabel]);
             }
 
-            return (string)__('已向 %{1} 个运行中的 WLS 实例发送%{2}', [\count($succeeded), $actionLabel]);
+            return (string) __('已向 %{1} 个运行中的 WLS 实例发送 %{2}', [\count($succeeded), $actionLabel]);
         }
 
         $failedParts = [];
@@ -192,10 +194,10 @@ class BroadcastControlDispatchService
         $failedSummary = \implode('；', $failedParts);
 
         if ($succeeded === []) {
-            return (string)__('WLS 在运行，但 %{1} 派发失败：%{2}', [$actionLabel, $failedSummary]);
+            return (string) __('WLS 在运行，但 %{1} 派发失败：%{2}', [$actionLabel, $failedSummary]);
         }
 
-        return (string)__('已向 %{1}/%{2} 个运行中的 WLS 实例发送%{3}，失败：%{4}', [
+        return (string) __('已向 %{1}/%{2} 个运行中的 WLS 实例发送 %{3}，失败：%{4}', [
             \count($succeeded),
             \count($attempted),
             $actionLabel,

@@ -430,7 +430,6 @@ final class AiSitePageComponentGenerationService
     private function buildHeaderNavigationPages(array $scope): array
     {
         $navigationPages = $this->buildNavigationPages($scope);
-        $allowedTypes = Page::getHeaderMenuTypes();
         $byType = [];
 
         foreach ($navigationPages as $item) {
@@ -444,9 +443,48 @@ final class AiSitePageComponentGenerationService
         }
 
         $items = [];
-        foreach ($allowedTypes as $type) {
+        foreach ([Page::TYPE_HOME, Page::TYPE_ABOUT] as $type) {
             if (isset($byType[$type])) {
                 $items[] = $byType[$type];
+            }
+        }
+
+        foreach ([Page::TYPE_PRIVACY_POLICY, Page::TYPE_TERMS_OF_SERVICE, Page::TYPE_REFUND_POLICY, Page::TYPE_SHIPPING_POLICY, Page::TYPE_COOKIE_POLICY] as $type) {
+            if (!isset($byType[$type])) {
+                continue;
+            }
+            $items[] = [
+                'title' => 'Policy Info',
+                'handle' => (string)($byType[$type]['handle'] ?? ''),
+                'url' => (string)($byType[$type]['url'] ?? '#'),
+                'type' => 'policy_info',
+                'page_id' => (int)($byType[$type]['page_id'] ?? 0),
+            ];
+            break;
+        }
+
+        foreach ([Page::TYPE_BLOG_LIST, Page::TYPE_CONTACT] as $type) {
+            if (isset($byType[$type])) {
+                $items[] = $byType[$type];
+            }
+        }
+
+        $existingTypes = \array_flip(\array_map(
+            static fn(array $entry): string => (string)($entry['type'] ?? ''),
+            $items
+        ));
+        foreach ($navigationPages as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $type = (string)($item['type'] ?? '');
+            if ($type === '' || isset($existingTypes[$type])) {
+                continue;
+            }
+            $items[] = $item;
+            $existingTypes[$type] = true;
+            if (\count($items) >= 5) {
+                break;
             }
         }
 
@@ -565,6 +603,7 @@ final class AiSitePageComponentGenerationService
             . "Footer link fallback: " . \json_encode([
                 'column1' => $footerConfig['links.column1_items'] ?? '',
                 'column2' => $footerConfig['links.column2_items'] ?? '',
+                'column3' => $footerConfig['links.column3_items'] ?? '',
             ], \JSON_UNESCAPED_UNICODE) . "\n"
             . "Rules:\n"
             . "1. Output only one footer component, never a full page.\n"
@@ -799,7 +838,15 @@ final class AiSitePageComponentGenerationService
         $navigationPages = $this->buildNavigationPages($scope);
         $brandSummary = $this->getPageBlueprintService()->buildSiteMarketingSummary($websiteProfile, $scope);
         $legalLines = [];
-        $primaryLines = [];
+        $featuredLines = [];
+        $allLines = [];
+        $featuredTypeMap = \array_flip([
+            Page::TYPE_HOME,
+            Page::TYPE_ABOUT,
+            Page::TYPE_CONTACT,
+            Page::TYPE_BLOG_LIST,
+            Page::TYPE_CUSTOM,
+        ]);
 
         foreach ($navigationPages as $item) {
             if (!\is_array($item)) {
@@ -807,21 +854,32 @@ final class AiSitePageComponentGenerationService
             }
             $type = (string)($item['type'] ?? '');
             $line = \trim((string)($item['title'] ?? '')) . '=>' . \trim((string)($item['url'] ?? '#'));
-            if (\in_array($type, [Page::TYPE_TERMS_OF_SERVICE, Page::TYPE_PRIVACY_POLICY, Page::TYPE_COOKIE_POLICY], true)) {
+            $allLines[] = $line;
+            if (\in_array($type, [Page::TYPE_TERMS_OF_SERVICE, Page::TYPE_PRIVACY_POLICY, Page::TYPE_COOKIE_POLICY, Page::TYPE_REFUND_POLICY, Page::TYPE_SHIPPING_POLICY], true)) {
                 $legalLines[] = $line;
-            } else {
-                $primaryLines[] = $line;
             }
+            if (isset($featuredTypeMap[$type])) {
+                $featuredLines[] = $line;
+            }
+        }
+
+        if ($featuredLines === []) {
+            $featuredLines = \array_slice($allLines, 0, 4);
+        }
+        if ($legalLines === []) {
+            $legalLines = \array_slice($allLines, 1, 3);
         }
 
         return [
             'brand.name' => $siteDisplayName,
             'brand.logo' => (string)($websiteProfile['logo'] ?? ''),
             'brand.description' => $brandSummary,
-            'links.column1_title' => 'Quick Links',
-            'links.column1_items' => \implode("\n", $primaryLines),
-            'links.column2_title' => 'Legal',
+            'links.column1_title' => 'Featured Pages',
+            'links.column1_items' => \implode("\n", $featuredLines),
+            'links.column2_title' => 'Policy Info',
             'links.column2_items' => \implode("\n", $legalLines),
+            'links.column3_title' => 'All Pages',
+            'links.column3_items' => \implode("\n", $allLines),
             'copyright.text' => 'All rights reserved.',
             'copyright.year' => \date('Y'),
         ];
