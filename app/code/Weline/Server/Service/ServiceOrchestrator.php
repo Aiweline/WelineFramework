@@ -82,7 +82,6 @@ class ServiceOrchestrator
     private const ANSI_BRIGHT_ORANGE = "\033[38;5;214m";
     private float $lastHealthCheck = 0;
     private float $lastTickMainLoopSlowWarningAt = 0.0;
-    private string $debugRunId = '';
     private float $healthCheckInterval = 30.0;
     private bool $fullRestartOnFailure = true;
     private bool $haMode = true;
@@ -106,6 +105,9 @@ class ServiceOrchestrator
 
     /** @var array<string, array{role: string, instanceId: int, maxRestarts: int, restartDelay: float}> 等待复活的实例 */
     private array $resurrectQueue = [];
+    /** @var array<int, array{running: bool, checkedAt: float}> */
+    private array $processRunningCache = [];
+    private float $processRunningCacheTtlSec = 5.0;
 
     /**
      * 控制面排队操作。子进程协议消息（register/ready/disconnect 等）不进入该队列。
@@ -320,35 +322,6 @@ class ServiceOrchestrator
 
     /** 批量协调管理器 */
     private ?BatchManager $batchManager = null;
-
-    private function debugLog(string $hypothesisId, string $location, string $message, array $data = []): void
-    {
-        // #region agent log
-        $payload = [
-            'sessionId' => '6ca37a',
-            'runId' => $this->getDebugRunId(),
-            'hypothesisId' => $hypothesisId,
-            'location' => $location,
-            'message' => $message,
-            'data' => $data,
-            'timestamp' => (int) \floor(\microtime(true) * 1000),
-        ];
-        @\file_put_contents(
-            BP . 'debug-6ca37a.log',
-            \json_encode($payload, JSON_UNESCAPED_UNICODE) . PHP_EOL,
-            FILE_APPEND | LOCK_EX
-        );
-        // #endregion
-    }
-
-    private function getDebugRunId(): string
-    {
-        if ($this->debugRunId === '') {
-            $this->debugRunId = 'orchestrator-' . (string) \getmypid() . '-' . (string) \time();
-        }
-
-        return $this->debugRunId;
-    }
 
     private function cooperativeYieldIfNeeded(float &$lastYieldAt, float $sliceMs = 20.0): void
     {
@@ -852,21 +825,9 @@ class ServiceOrchestrator
             return false;
         }
 
-        $fiber = new \Fiber(function () use ($task, $label): void {
+        $fiber = new \Fiber(function () use ($task): void {
             SchedulerSystem::yield();
-            $taskStartAt = \microtime(true);
             $task();
-            $taskElapsedMs = (\microtime(true) - $taskStartAt) * 1000;
-            if ($taskElapsedMs > 1000) {
-                // #region agent log
-                $this->debugLog('H5', 'ServiceOrchestrator::scheduleMainLoopTask', 'mainloop_task_execution_slow', [
-                    'task_label' => $label,
-                    'task_elapsed_ms' => \round($taskElapsedMs, 2),
-                    'task_count' => \count($this->mainLoopTasks),
-                    'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
-                ]);
-                // #endregion
-            }
         });
 
         $this->mainLoopTasks[$key] = [
@@ -912,35 +873,11 @@ class ServiceOrchestrator
             return;
         }
 
-        $tickStartAt = \microtime(true);
         $budgetMs = (float) ($this->context?->getConfig('wls.orchestrator.fiber_tick_budget_ms', 50.0) ?? 50.0);
         if ($budgetMs < 1.0) {
             $budgetMs = 1.0;
         }
         $this->mainLoopFiberScheduler->tick(null, $budgetMs);
-        $tickElapsedMs = (\microtime(true) - $tickStartAt) * 1000;
-        if ($tickElapsedMs > 1000) {
-            $snapshot = [];
-            foreach ($this->mainLoopTasks as $task) {
-                $label = (string) ($task['label'] ?? 'unknown');
-                $startedAt = (float) ($task['startedAt'] ?? 0.0);
-                $snapshot[] = [
-                    'label' => $label,
-                    'age_ms' => \round($startedAt > 0 ? ((\microtime(true) - $startedAt) * 1000) : 0.0, 2),
-                ];
-                if (\count($snapshot) >= 6) {
-                    break;
-                }
-            }
-            // #region agent log
-            $this->debugLog('H1', 'ServiceOrchestrator::tickMainLoopTasks', 'fiber_scheduler_tick_slow', [
-                'tick_elapsed_ms' => \round($tickElapsedMs, 2),
-                'task_count' => \count($this->mainLoopTasks),
-                'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
-                'tasks_snapshot' => $snapshot,
-            ]);
-            // #endregion
-        }
 
         foreach (\array_keys($this->mainLoopTasks) as $key) {
             if (!isset($this->mainLoopTasks[$key])) {
@@ -1051,8 +988,8 @@ class ServiceOrchestrator
         $action = $operation['action'];
         $clientId = $operation['clientId'];
         $payload = $operation['payload'];
-
-        switch ($action) {
+        try {
+            switch ($action) {
             case ControlMessage::ACTION_RELOAD:
                 $type = (string)($payload['reload_type'] ?? ControlMessage::RELOAD_TYPE_CODE);
                 if ($type === ControlMessage::RELOAD_TYPE_CACHE) {
@@ -1208,6 +1145,8 @@ class ServiceOrchestrator
                     }
                 }
                 return;
+            }
+        } finally {
         }
     }
 
@@ -5167,19 +5106,6 @@ class ServiceOrchestrator
             // 总启动超时检查：超过 startupMaxDuration 未完成启动则强制退出
             $this->checkStartupTimeoutAndExitIfNeeded();
 
-            $loopStartAt = \microtime(true);
-            if ($pollCount % 200 === 0) {
-                // #region agent log
-                $this->debugLog('H4', 'ServiceOrchestrator::runLoop', 'mainloop_heartbeat', [
-                    'poll_count' => $pollCount,
-                    'task_count' => \count($this->mainLoopTasks),
-                    'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
-                    'running' => $this->running,
-                    'shutting_down' => $this->shuttingDown,
-                ]);
-                // #endregion
-            }
-
             // WlsLogger::info_('[Orchestrator] 主循环开始 运行时间:getMainLoopPollTimeoutUsec ' . $this->getMainLoopPollTimeoutUsec(100000) . 'us');
             // 每隔一段时间点答应一个循环数字，表示主循环未被阻塞
             if ($pollCount % 10000 === 0 && $pollCount > 0) {
@@ -5189,15 +5115,6 @@ class ServiceOrchestrator
             $pollStartAt = \microtime(true);
             $this->controlServer?->poll(0, $this->getMainLoopPollTimeoutUsec(100000));
             $pollElapsed = \microtime(true) - $pollStartAt;
-            if (($pollElapsed * 1000) > 1200) {
-                // #region agent log
-                $this->debugLog('H2', 'ServiceOrchestrator::runLoop', 'control_poll_slow', [
-                    'poll_elapsed_ms' => \round($pollElapsed * 1000, 2),
-                    'poll_timeout_usec' => $this->getMainLoopPollTimeoutUsec(100000),
-                    'task_count' => \count($this->mainLoopTasks),
-                ]);
-                // #endregion
-            }
             // WlsLogger::info_('[Orchestrator] 主循环 poll 运行时间: getMainLoopPollTimeoutUsec' . \number_format($pollElapsed * 1000, 2) . 'ms');
 
             // 每 5 秒输出一次循环状态
@@ -5235,15 +5152,6 @@ class ServiceOrchestrator
                         . ', tasks=' . \count($this->mainLoopTasks)
                         . ', fibers=' . ($this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0)
                     );
-                    // #region agent log
-                    $this->debugLog('H3', 'ServiceOrchestrator::runLoop', 'tick_mainloop_slow_warning', [
-                        'tick_elapsed_ms' => \round($tickElapsed * 1000, 2),
-                        'tick_warn_threshold_ms' => \round($tickSlowWarnThresholdMs, 2),
-                        'tick_warn_cooldown_sec' => \round($tickSlowWarnCooldownSec, 2),
-                        'task_count' => \count($this->mainLoopTasks),
-                        'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
-                    ]);
-                    // #endregion
                 }
             }
 
@@ -5365,7 +5273,9 @@ class ServiceOrchestrator
                 $this->rollingRestartStabilizingUntil = 0;
             }
 
-            if ($this->masterSelfAuditIntervalSec > 0.0
+            if ($this->startupAcceptanceComplete
+                && !$this->hasMainLoopTask('startup:child_service_startup')
+                && $this->masterSelfAuditIntervalSec > 0.0
                 && ($now - $this->lastMasterSelfAuditAt) >= $this->masterSelfAuditIntervalSec
                 && !$this->hasMainLoopTask('periodic:master_self_audit')
             ) {
@@ -6004,7 +5914,11 @@ class ServiceOrchestrator
 
     private function formatInstanceDebugContext(ServiceInstance $instance): string
     {
-        $pidAlive = $instance->pid > 0 ? ($this->isProcessRunning($instance->pid) ? '1' : '0') : '0';
+        $pidAlive = '0';
+        if ($instance->pid > 0) {
+            $cached = $this->processRunningCache[$instance->pid] ?? null;
+            $pidAlive = $cached === null ? '?' : ((bool) ($cached['running'] ?? false) ? '1' : '0');
+        }
         return 'instance=' . $instance->role . '#' . $instance->instanceId
             . ', state=' . $instance->state
             . ', pid=' . $instance->pid
@@ -7465,7 +7379,8 @@ class ServiceOrchestrator
                     }
                     continue;
                 }
-                if ($inst->pid > 0 && !$this->isProcessRunning($inst->pid)) {
+                $cachedRunning = $inst->pid > 0 ? ($this->processRunningCache[$inst->pid]['running'] ?? null) : null;
+                if ($inst->pid > 0 && $cachedRunning === false) {
                     WlsLogger::warning_(
                         "[Orchestrator] Worker#{$inst->instanceId} 进程 PID {$inst->pid} 已退出，摘除 IPC 并复活"
                     );
@@ -7483,7 +7398,7 @@ class ServiceOrchestrator
                     }
                     continue;
                 }
-            } elseif (!\in_array($inst->state, [
+                } elseif (!\in_array($inst->state, [
                 ServiceInstance::STATE_DRAINING,
                 ServiceInstance::STATE_STOPPING,
                 ServiceInstance::STATE_STOPPED,
@@ -7511,9 +7426,7 @@ class ServiceOrchestrator
                 }
                 if ($w->ipcClientId !== null
                     && $this->controlServer->clientExists($w->ipcClientId)
-                    && $w->state === ServiceInstance::STATE_READY
-                    && $w->pid > 0
-                    && $this->isProcessRunning($w->pid)) {
+                    && $w->state === ServiceInstance::STATE_READY) {
                     $alive++;
                 }
             }
@@ -8399,9 +8312,6 @@ class ServiceOrchestrator
             }
             if ($inst->ipcClientId === null
                 || ($this->controlServer !== null && !$this->controlServer->clientExists($inst->ipcClientId))) {
-                continue;
-            }
-            if ($inst->pid > 0 && !$this->isProcessRunning($inst->pid)) {
                 continue;
             }
             $n++;
@@ -10002,7 +9912,20 @@ class ServiceOrchestrator
         if ($pid <= 0) {
             return false;
         }
-        return Processer::isRunningByPid($pid);
+        $now = \microtime(true);
+        $cached = $this->processRunningCache[$pid] ?? null;
+        if ($cached !== null && ($now - (float) $cached['checkedAt']) <= $this->processRunningCacheTtlSec) {
+            return (bool) $cached['running'];
+        }
+        $running = Processer::isRunningByPid($pid);
+        $this->processRunningCache[$pid] = [
+            'running' => $running,
+            'checkedAt' => $now,
+        ];
+        if (\count($this->processRunningCache) > 512) {
+            $this->processRunningCache = [];
+        }
+        return $running;
     }
 
     /**
