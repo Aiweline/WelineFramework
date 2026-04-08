@@ -612,11 +612,7 @@ $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 // 如果启用了维护模式
 if ($isMaintenanceWorker) {
     try {
-        \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
-        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
-            'system' => ['maintenance' => true],
-        ]);
-        \Weline\Framework\App\Env::refreshMaintenanceCache();
+        \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(true);
         WlsLogger::info_("维护 Worker 模式已启用");
     } catch (\Throwable $e) {
         WlsLogger::warning_("设置维护模式失败: " . $e->getMessage());
@@ -770,11 +766,7 @@ if ($controlPort > 0) {
                     $mEnabled = (bool) ($msg['enabled'] ?? false);
                     $mReqId = (string) ($msg['request_id'] ?? '');
                     try {
-                        \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', $mEnabled);
-                        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
-                            'system' => ['maintenance' => $mEnabled],
-                        ]);
-                        \Weline\Framework\App\Env::refreshMaintenanceCache();
+                        \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode($mEnabled);
                         WlsLogger::info_("IPC 维护信号 enabled=" . ($mEnabled ? 'true' : 'false') . " request_id={$mReqId}");
                     } catch (\Throwable $e) {
                         WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
@@ -1077,11 +1069,24 @@ while (true) {
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
     }
-    
+
     // 定期刷新日志缓冲区（避免日志堆积）
     WlsLogger::flush_(false);
-    
+
     $now = \time();
+
+    // ========== 定时GC触发（防止内存泄漏） ==========
+    // 每60秒触发一次主动GC，减少内存占用
+    if (!isset($lastGcTime)) {
+        $lastGcTime = $now;
+    }
+    if ($now - $lastGcTime >= 60) {
+        $lastGcTime = $now;
+        $gcResult = \Weline\Server\Service\WorkerResponseMemoryGuard::compact();
+        if ($gcResult['cycles'] > 0 || $gcResult['trimmed_bytes'] > 0) {
+            WlsLogger::debug_("[GC] cycles={$gcResult['cycles']}, trimmed={$gcResult['trimmed_bytes']} bytes");
+        }
+    }
 
     // ========== 孤儿检测（IPC 优先） ==========
     if ($orphanGuard->shouldExit(

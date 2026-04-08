@@ -1595,38 +1595,23 @@ class Processer
      * @param string $pname
      * @return bool
      */
+    /**
+     * 销毁进程并清理所有相关资源
+     *
+     * 完整流程：
+     * 1. 从 PID 文件获取进程 PID
+     * 2. 验证进程是否为受信任的框架进程
+     * 3. 杀死进程
+     * 4. 清理 PID 文件和日志文件
+     * 5. 从受信任缓存移除 PID
+     *
+     * @param string $pname 进程名或 --name=xxx 格式
+     * @return bool 是否成功销毁
+     */
     public static function destroy(string $pname): bool
     {
+        // kill() 已经包含完整的清理逻辑（PID文件、日志文件、受信任缓存）
         return self::kill($pname);
-
-        // 快速路径：先从文件获取 PID（< 1ms）
-        $pid = (int) self::getData($pname, 'pid');
-        
-        // 如果文件中没有 PID，直接清理文件即可
-        // 注意：不调用 getPid()，因为在 Windows 上它可能很慢（5-30秒）
-        // 进程管理器创建的进程必须有 PID 文件，没有 PID 说明进程不存在或已被清理
-        if ($pid <= 0) {
-            self::removePidFile($pname);
-            self::removeLogFile($pname);
-            return false;
-        }
-        
-        if (!self::isRunningByPid($pid)) {
-            self::removePidFile($pname);
-            self::removeLogFile($pname);
-            return false;
-        }
-
-        if (!\is_array($record) || !self::doesPidMatchRecordedIdentity($pid, $record)) {
-            return false;
-        }
-
-        return self::killManagedProcess(
-            $pid,
-            (string) ($record['process_name'] ?? ''),
-            (string) ($record['launch_id'] ?? ''),
-            $pname
-        );
     }
 
 
@@ -2212,7 +2197,17 @@ class Processer
                 );
             }
 
-            [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($processCommand);
+            $arguments = '';
+            $argumentList = [];
+            $detachedPhpArgv = self::buildWindowsDetachedPhpArgvFromCommand($processCommand);
+            if ($detachedPhpArgv !== []) {
+                $phpBinary = (string) ($detachedPhpArgv[0] ?? PHP_BINARY);
+                $argumentList = \array_values(\array_slice($detachedPhpArgv, 1));
+                $arguments = \implode(' ', $argumentList);
+            } else {
+                [$phpBinary, $arguments] = self::splitPhpCommandForStartProcess($processCommand);
+                $argumentList = self::tokenizeCommandLineArguments($arguments);
+            }
             $processName = self::extractCommandLineArg($processCommand, 'name');
             $foregroundScript = null;
             if ($foreground) {
@@ -2234,6 +2229,7 @@ class Processer
                 'command' => $processCommand,
                 'php' => $phpBinary,
                 'arguments' => $arguments,
+                'argument_list' => $argumentList,
                 'process_name' => $processName,
                 'cwd' => BP,
                 'enable_log' => $enableLog,
@@ -2874,7 +2870,7 @@ CMD;
     }
 
     /**
-     * @param array<int, array{key: string, command: string, php: string, arguments: string, process_name: string, cwd: string, enable_log: bool, foreground: bool, foreground_script?: string|null}> $launchItems
+     * @param array<int, array{key: string, command: string, php: string, arguments: string, argument_list?: list<string>, process_name: string, cwd: string, enable_log: bool, foreground: bool, foreground_script?: string|null}> $launchItems
      */
     private static function buildWindowsBatchCreateScript(array $launchItems, string $resultPath, string $errorPath): ?string
     {
@@ -2890,6 +2886,7 @@ CMD;
             $php = \str_replace("'", "''", (string) ($item['php'] ?? ''));
             $cwd = \str_replace("'", "''", (string) ($item['cwd'] ?? BP));
             $arguments = self::escapePowerShellLiteral((string) ($item['arguments'] ?? ''));
+            $argumentList = $item['argument_list'] ?? self::tokenizeCommandLineArguments((string) ($item['arguments'] ?? ''));
             $foreground = !empty($item['foreground']);
             $foregroundScript = self::escapePowerShellLiteral((string) ($item['foreground_script'] ?? ''));
             $redirectBase = (string) ($item['process_name'] ?? $item['key'] ?? 'process');
@@ -2922,8 +2919,14 @@ CMD;
             } else {
                 $lines[] = "    \$startArgs.RedirectStandardOutput = '{$stdoutPath}'";
                 $lines[] = "    \$startArgs.RedirectStandardError = '{$stderrPath}'";
-                if ($arguments !== '') {
-                    $lines[] = "    \$startArgs.ArgumentList = '{$arguments}'";
+                if ($argumentList !== []) {
+                    $argumentListLiteral = '@(' . \implode(',', \array_map(
+                        static fn (string $argument): string => self::toPowerShellSingleQuoted($argument),
+                        $argumentList
+                    )) . ')';
+                    $lines[] = "    \$startArgs.ArgumentList = {$argumentListLiteral}";
+                } elseif ($arguments !== '') {
+                    $lines[] = "    \$startArgs.ArgumentList = @('" . self::escapePowerShellLiteral($arguments) . "')";
                 }
                 $lines[] = '    $p = Start-Process @startArgs';
                 $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
@@ -3022,7 +3025,7 @@ CMD;
         $tokens = [];
         foreach ($matches as $m) {
             if (isset($m[1]) && $m[1] !== '') {
-                $tokens[] = \stripcslashes($m[1]);
+                $tokens[] = self::decodeQuotedCommandLineToken($m[1]);
                 continue;
             }
             if (isset($m[2]) && $m[2] !== '') {
@@ -3031,6 +3034,15 @@ CMD;
         }
 
         return $tokens;
+    }
+
+    private static function decodeQuotedCommandLineToken(string $token): string
+    {
+        // Windows command lines commonly carry absolute paths like
+        // "E:\...\var\tmp\foo.php" or "...\\bin\\dispatcher.php".
+        // stripcslashes() would turn \t/\b/\n into control chars and corrupt
+        // the script path before Start-Process receives it.
+        return \str_replace(['\\"', '\\\\'], ['"', '\\'], $token);
     }
     
     /**
