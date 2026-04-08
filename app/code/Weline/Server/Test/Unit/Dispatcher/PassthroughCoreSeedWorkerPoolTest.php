@@ -8,6 +8,84 @@ use Weline\Server\Dispatcher\PassthroughCore;
 
 class PassthroughCoreSeedWorkerPoolTest extends TestCase
 {
+    private function createTrustingMasterReadyWarmupCore(
+        array $healthResults,
+        array $homepageResults = [],
+        array $config = []
+    ): object {
+        return new class('127.0.0.1', 19981, 0, false, $healthResults, $homepageResults, $config) extends PassthroughCore {
+            public array $healthCalls = [];
+            public array $homepageCalls = [];
+
+            public function __construct(
+                string $workerHost,
+                int $workerBasePort,
+                int $workerCount,
+                bool $workerSslEnabled,
+                private array $healthResults,
+                private array $homepageResults,
+                array $config
+            ) {
+                parent::__construct($workerHost, $workerBasePort, $workerCount, $workerSslEnabled);
+                if ($config !== []) {
+                    $this->configure($config);
+                }
+            }
+
+            public function runTrustingMasterReadyWarmup(int $port): array
+            {
+                return parent::warmupWorkerTrustingMasterReady($port);
+            }
+
+            protected function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
+            {
+                $this->healthCalls[] = [
+                    'port' => $port,
+                    'connect_timeout' => $connectTimeout,
+                    'response_timeout' => $responseTimeout,
+                ];
+
+                $result = $this->healthResults[$port] ?? true;
+                if ($result === true) {
+                    return ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01];
+                }
+                if (\is_string($result)) {
+                    return ['success' => false, 'error' => $result, 'elapsed' => 0.01];
+                }
+
+                return $result;
+            }
+
+            protected function warmupWorkerViaHomepage(
+                int $port,
+                int $maxRetries = 3,
+                float $connectTimeoutSeconds = 5.0,
+                float $tlsTimeoutSeconds = 8.0,
+                float $writeTimeoutSeconds = 5.0,
+                float $readTimeoutSeconds = 60.0
+            ): array {
+                $this->homepageCalls[] = [
+                    'port' => $port,
+                    'retries' => $maxRetries,
+                    'connect_timeout' => $connectTimeoutSeconds,
+                    'tls_timeout' => $tlsTimeoutSeconds,
+                    'write_timeout' => $writeTimeoutSeconds,
+                    'read_timeout' => $readTimeoutSeconds,
+                ];
+
+                $result = $this->homepageResults[$port] ?? true;
+                if ($result === true) {
+                    return ['success' => true, 'error' => ''];
+                }
+                if (\is_string($result)) {
+                    return ['success' => false, 'error' => $result];
+                }
+
+                return $result;
+            }
+        };
+    }
+
     private function createWarmupStubCore(array $warmupResults, bool $sslEnabled = false): PassthroughCore
     {
         return new class('127.0.0.1', 19981, 0, $sslEnabled, $warmupResults) extends PassthroughCore {
@@ -301,6 +379,42 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertStringContainsString("GET / HTTP/1.1\r\n", $request);
         self::assertStringContainsString("Host: localhost\r\n", $request);
         self::assertStringContainsString("X-WLS-Internal-Request: homepage-warmup\r\n", $request);
+    }
+
+    public function testTrustingMasterReadyWarmupSkipsHomepageWarmupByDefault(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore([
+            19982 => ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01],
+        ]);
+
+        $result = $core->runTrustingMasterReadyWarmup(19982);
+
+        self::assertTrue($result['success']);
+        self::assertSame('', $result['error']);
+        self::assertCount(1, $core->healthCalls);
+        self::assertSame([], $core->homepageCalls);
+    }
+
+    public function testTrustingMasterReadyWarmupCanOptIntoHomepageWarmup(): void
+    {
+        $core = $this->createTrustingMasterReadyWarmupCore(
+            [
+                19982 => ['success' => true, 'error' => '', 'status_line' => 'HTTP/1.1 200 OK', 'elapsed' => 0.01],
+            ],
+            [
+                19982 => 'homepage warmup timed out',
+            ],
+            [
+                'homepage_warmup_enabled' => true,
+            ]
+        );
+
+        $result = $core->runTrustingMasterReadyWarmup(19982);
+
+        self::assertTrue($result['success'], 'health probe success should still admit the worker');
+        self::assertSame('', $result['error']);
+        self::assertCount(1, $core->healthCalls);
+        self::assertCount(1, $core->homepageCalls);
     }
 
     public function testWarmupWaitSliceFallsBackOutsideFiberEvenWhenCallbackIsRegistered(): void

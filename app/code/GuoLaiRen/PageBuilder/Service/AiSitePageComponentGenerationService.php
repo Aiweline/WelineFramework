@@ -12,6 +12,7 @@ use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 final class AiSitePageComponentGenerationService
 {
@@ -248,10 +249,18 @@ final class AiSitePageComponentGenerationService
         }
 
         $fullContent = '';
+        $sse = RequestContext::get(\Weline\Framework\Runtime\RequestContext::SSE_WRITER_KEY);
         $this->getAiService()->generateStream(
             $prompt,
-            static function (string $chunk) use (&$fullContent): bool {
+            static function (string $chunk) use (&$fullContent, $sse, $region): bool {
                 $fullContent .= $chunk;
+                // 实时转发 AI chunks 到 SSE 客户端，不等待完整响应
+                if ($sse !== null) {
+                    $sse->sendEvent('ai_chunk', [
+                        'region' => $region,
+                        'chunk' => $chunk,
+                    ]);
+                }
                 return true;
             },
             null,
