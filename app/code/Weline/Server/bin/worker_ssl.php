@@ -2281,6 +2281,7 @@ while (true) {
         $isLongLived = ($longLivedDetection['is_long_lived'] ?? false) === true;
         $requestProtocol = (string) ($longLivedDetection['protocol'] ?? 'http');
         $isSseProtocolRequest = ($requestProtocol === 'sse');
+        $applyLongLivedLimit = !$isSseProtocolRequest;
 
         $uriForLog = '/';
         if (\preg_match('/^\w+\s+([^\s]+)/', $rawRequest, $m)) {
@@ -2300,7 +2301,7 @@ while (true) {
             $layer = (string) ($longLivedDetection['layer'] ?? 'unknown');
             $protocol = (string) ($longLivedDetection['protocol'] ?? 'long-lived');
             WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
-            if ($longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+            if ($applyLongLivedLimit && $longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
                 $isWorkspaceStreamSse = $isSseProtocolRequest && \str_contains($rawRequest, '/stream-sse');
                 if ($isWorkspaceStreamSse) {
                     $waitDeadline = \microtime(true) + 1.2;
@@ -2318,7 +2319,7 @@ while (true) {
                     }
                 }
             }
-            if ($longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+            if ($applyLongLivedLimit && $longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
                 $activeRequests--;
                 $body = 'Too Many Long Connections - Retry Shortly';
                 $resp = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain; charset=utf-8\r\nRetry-After: 2\r\nContent-Length: "
@@ -2335,14 +2336,20 @@ while (true) {
                 );
                 continue;
             }
-            $longLivedConnections[$connId] = [
-                'type' => $protocol,
-                'start' => \time(),
-            ];
-            WlsLogger::info_(
-                '长连接槽位已分配 (connId: ' . $connId . ', protocol: ' . $protocol
-                . ', 当前长连接数: ' . \count($longLivedConnections) . ')'
-            );
+            if ($applyLongLivedLimit) {
+                $longLivedConnections[$connId] = [
+                    'type' => $protocol,
+                    'start' => \time(),
+                ];
+                WlsLogger::info_(
+                    '长连接槽位已分配 (connId: ' . $connId . ', protocol: ' . $protocol
+                    . ', 当前长连接数: ' . \count($longLivedConnections) . ')'
+                );
+            } else {
+                WlsLogger::info_(
+                    'SSE 长连接不参与 long_lived_max_active 限制 (connId: ' . $connId . ', protocol: ' . $protocol . ')'
+                );
+            }
         }
 
         if ($fiberMaxActive > 0 && \count($activeFibers) >= $fiberMaxActive) {
