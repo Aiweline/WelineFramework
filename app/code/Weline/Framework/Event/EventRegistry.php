@@ -140,6 +140,9 @@ class EventRegistry implements EventRegistryInterface
         if (!isset($registry['dynamic_patterns'])) {
             $registry['dynamic_patterns'] = [];
         }
+
+        // 过滤已卸载/禁用模块的残留数据，避免对无效模块继续做冲突/规约校验
+        $this->purgeInactiveModulesFromRegistry($registry);
         
         // 2. 清除目标模块的旧数据
         $this->clearModuleData($registry, $moduleNames);
@@ -164,6 +167,48 @@ class EventRegistry implements EventRegistryInterface
         
         // 6. 保存注册表
         return $this->saveRegistry($registry);
+    }
+
+    /**
+     * 清理事件注册表中已卸载或禁用模块的数据。
+     */
+    private function purgeInactiveModulesFromRegistry(array &$registry): void
+    {
+        $env = \Weline\Framework\App\Env::getInstance();
+
+        foreach ($registry['events'] as $eventName => $eventInfo) {
+            $ownerModule = $eventInfo['module'] ?? '';
+            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+                unset($registry['events'][$eventName], $registry['event_to_module'][$eventName]);
+                continue;
+            }
+
+            if (!isset($eventInfo['observers']) || !is_array($eventInfo['observers'])) {
+                continue;
+            }
+
+            $registry['events'][$eventName]['observers'] = array_values(array_filter(
+                $eventInfo['observers'],
+                static fn($observer): bool => $env->getModuleStatus((string)($observer['module'] ?? ''))
+            ));
+        }
+
+        foreach ($registry['dynamic_patterns'] as $pattern => $patternInfo) {
+            $ownerModule = $patternInfo['module'] ?? '';
+            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+                unset($registry['dynamic_patterns'][$pattern]);
+                continue;
+            }
+
+            if (!isset($patternInfo['observers']) || !is_array($patternInfo['observers'])) {
+                continue;
+            }
+
+            $registry['dynamic_patterns'][$pattern]['observers'] = array_values(array_filter(
+                $patternInfo['observers'],
+                static fn($observer): bool => $env->getModuleStatus((string)($observer['module'] ?? ''))
+            ));
+        }
     }
     
     /**
