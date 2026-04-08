@@ -36,6 +36,9 @@ class CompletenessChecker
             }
 
             $module = $modules[$moduleName];
+            if (!($module['status'] ?? false)) {
+                continue;
+            }
             $basePath = $module['base_path'] ?? '';
             if (empty($basePath)) {
                 continue;
