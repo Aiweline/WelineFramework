@@ -501,6 +501,9 @@ class MasterProcess
         }
         $envConfig = $this->applySharedStateRuntimeConfig($envConfig);
 
+        $publicHostRaw = $this->config['public_host'] ?? null;
+        $publicHost = \is_string($publicHostRaw) && $publicHostRaw !== '' ? $publicHostRaw : null;
+
         return new ServiceContext(
             instanceName: $this->instanceName,
             epoch: 1,
@@ -522,6 +525,7 @@ class MasterProcess
             workerCount: $this->workerCount,
             workerBasePort: $this->workerBasePort,
             workerPort: $this->workerPort,
+            publicHost: $publicHost,
         );
     }
 
@@ -590,6 +594,22 @@ class MasterProcess
                 $envConfig['wls']['shared_state'] = [];
             }
             $envConfig['wls']['shared_state']['runtime'] = $sharedStateRuntime;
+        }
+
+        $orchestratorRuntimeOptions = \is_array($this->config['orchestrator_runtime_options'] ?? null)
+            ? $this->config['orchestrator_runtime_options']
+            : [];
+        if ($orchestratorRuntimeOptions !== []) {
+            if (!isset($envConfig['wls']) || !\is_array($envConfig['wls'])) {
+                $envConfig['wls'] = [];
+            }
+            if (!isset($envConfig['wls']['orchestrator']) || !\is_array($envConfig['wls']['orchestrator'])) {
+                $envConfig['wls']['orchestrator'] = [];
+            }
+            $envConfig['wls']['orchestrator'] = \array_merge(
+                $envConfig['wls']['orchestrator'],
+                $orchestratorRuntimeOptions
+            );
         }
 
         return $envConfig;

@@ -81,6 +81,8 @@ class ServiceOrchestrator
     private const ANSI_BRIGHT_GREEN = "\033[92m";
     private const ANSI_BRIGHT_ORANGE = "\033[38;5;214m";
     private float $lastHealthCheck = 0;
+    private float $lastTickMainLoopSlowWarningAt = 0.0;
+    private string $debugRunId = '';
     private float $healthCheckInterval = 30.0;
     private bool $fullRestartOnFailure = true;
     private bool $haMode = true;
@@ -273,20 +275,8 @@ class ServiceOrchestrator
     /** 滚动重启稳定期结束时间戳 */
     private float $rollingRestartStabilizingUntil = 0.0;
 
-    /** Session/Memory IPC 断开后 Worker 策略里标记「端点不可用」 */
-    private array $infraDegraded = [
-        ControlMessage::ROLE_SESSION_SERVER => false,
-        ControlMessage::ROLE_MEMORY_SERVER => false,
-    ];
-
-    /** 共享服务 runtime 端点缓存：role => [runtime, cachedAt] */
-    private array $sharedServiceRuntimeCache = [];
-    /** 共享服务 runtime 端点缓存 TTL（秒） */
-    private float $sharedServiceRuntimeCacheTtl = 30.0;
-    /** 共享服务健康状态缓存：role => [healthy, cachedAt] */
-    private array $sharedInfraHealthCache = [];
-    /** 共享服务健康状态缓存 TTL（秒） */
-    private float $sharedInfraHealthCacheTtl = 10.0;
+    /** 关键服务 IPC 断开后标记「端点不可用」，由 IPC 事件驱动更新 */
+    private array $infraDegraded = [];
 
     /**
      * Temporarily bypass control-operation preemption so critical sidecar
@@ -330,6 +320,45 @@ class ServiceOrchestrator
 
     /** 批量协调管理器 */
     private ?BatchManager $batchManager = null;
+
+    private function debugLog(string $hypothesisId, string $location, string $message, array $data = []): void
+    {
+        // #region agent log
+        $payload = [
+            'sessionId' => '6ca37a',
+            'runId' => $this->getDebugRunId(),
+            'hypothesisId' => $hypothesisId,
+            'location' => $location,
+            'message' => $message,
+            'data' => $data,
+            'timestamp' => (int) \floor(\microtime(true) * 1000),
+        ];
+        @\file_put_contents(
+            BP . 'debug-6ca37a.log',
+            \json_encode($payload, JSON_UNESCAPED_UNICODE) . PHP_EOL,
+            FILE_APPEND | LOCK_EX
+        );
+        // #endregion
+    }
+
+    private function getDebugRunId(): string
+    {
+        if ($this->debugRunId === '') {
+            $this->debugRunId = 'orchestrator-' . (string) \getmypid() . '-' . (string) \time();
+        }
+
+        return $this->debugRunId;
+    }
+
+    private function cooperativeYieldIfNeeded(float &$lastYieldAt, float $sliceMs = 20.0): void
+    {
+        $now = \microtime(true);
+        if ((($now - $lastYieldAt) * 1000) < $sliceMs) {
+            return;
+        }
+        $lastYieldAt = $now;
+        SchedulerSystem::yield();
+    }
 
     public function __construct()
     {
@@ -823,9 +852,21 @@ class ServiceOrchestrator
             return false;
         }
 
-        $fiber = new \Fiber(function () use ($task): void {
+        $fiber = new \Fiber(function () use ($task, $label): void {
             SchedulerSystem::yield();
+            $taskStartAt = \microtime(true);
             $task();
+            $taskElapsedMs = (\microtime(true) - $taskStartAt) * 1000;
+            if ($taskElapsedMs > 1000) {
+                // #region agent log
+                $this->debugLog('H5', 'ServiceOrchestrator::scheduleMainLoopTask', 'mainloop_task_execution_slow', [
+                    'task_label' => $label,
+                    'task_elapsed_ms' => \round($taskElapsedMs, 2),
+                    'task_count' => \count($this->mainLoopTasks),
+                    'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
+                ]);
+                // #endregion
+            }
         });
 
         $this->mainLoopTasks[$key] = [
@@ -871,7 +912,35 @@ class ServiceOrchestrator
             return;
         }
 
-        $this->mainLoopFiberScheduler->tick();
+        $tickStartAt = \microtime(true);
+        $budgetMs = (float) ($this->context?->getConfig('wls.orchestrator.fiber_tick_budget_ms', 50.0) ?? 50.0);
+        if ($budgetMs < 1.0) {
+            $budgetMs = 1.0;
+        }
+        $this->mainLoopFiberScheduler->tick(null, $budgetMs);
+        $tickElapsedMs = (\microtime(true) - $tickStartAt) * 1000;
+        if ($tickElapsedMs > 1000) {
+            $snapshot = [];
+            foreach ($this->mainLoopTasks as $task) {
+                $label = (string) ($task['label'] ?? 'unknown');
+                $startedAt = (float) ($task['startedAt'] ?? 0.0);
+                $snapshot[] = [
+                    'label' => $label,
+                    'age_ms' => \round($startedAt > 0 ? ((\microtime(true) - $startedAt) * 1000) : 0.0, 2),
+                ];
+                if (\count($snapshot) >= 6) {
+                    break;
+                }
+            }
+            // #region agent log
+            $this->debugLog('H1', 'ServiceOrchestrator::tickMainLoopTasks', 'fiber_scheduler_tick_slow', [
+                'tick_elapsed_ms' => \round($tickElapsedMs, 2),
+                'task_count' => \count($this->mainLoopTasks),
+                'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
+                'tasks_snapshot' => $snapshot,
+            ]);
+            // #endregion
+        }
 
         foreach (\array_keys($this->mainLoopTasks) as $key) {
             if (!isset($this->mainLoopTasks[$key])) {
@@ -1348,10 +1417,7 @@ class ServiceOrchestrator
         $rawCritical = $context->getConfig('wls.orchestrator.critical_roles', $defaultCriticalRoles);
         $this->criticalRoles = \array_fill_keys(\is_array($rawCritical) ? $rawCritical : $defaultCriticalRoles, true);
         $this->escalationDisconnects = [];
-        $this->infraDegraded = [
-            ControlMessage::ROLE_SESSION_SERVER => false,
-            ControlMessage::ROLE_MEMORY_SERVER => false,
-        ];
+        $this->infraDegraded = [];
         $this->infraServiceResurrectAttempts = (int) ($context->getConfig('wls.orchestrator.infra_service_resurrect_attempts', 3) ?? 3);
         if ($this->infraServiceResurrectAttempts < 1) {
             $this->infraServiceResurrectAttempts = 1;
@@ -1585,7 +1651,7 @@ class ServiceOrchestrator
             . \date('H:i:s', (int)$this->childServicesStartupDeadline)
             . ' (总超时限制: ' . $this->startupMaxDuration . 's)');
 
-        // 共享基础服务(session/memory) 由 ensureSharedCriticalInfra 先行；其余角色一次性批量并发拉起
+        // 所有服务统一并发启动（包括 session/memory 共享服务）
         $providers = $this->sortProvidersForStartup($this->registry->getAllProviders());
         $startedCount = 0;
         $startupAcceptance = [];
@@ -1599,10 +1665,7 @@ class ServiceOrchestrator
                 continue;
             }
             $role = $provider->getRole();
-            if ($this->isSharedStateManagedRole($role)) {
-                WlsLogger::info_("[Orchestrator] 共享服务 {$role} 由全局 SharedStateServiceManager 管理，Master 跳过本地拉起");
-                continue;
-            }
+            // 移除共享服务特殊处理，让它们像普通服务一样参与并发启动
             $this->desiredState[$role] = $provider->getInstanceCount($context);
             if ($role === ControlMessage::ROLE_WORKER) {
                 $workerProviders[] = $provider;
@@ -1612,14 +1675,8 @@ class ServiceOrchestrator
         }
 
         $criticalRoles = $this->getWorkerCriticalInfraRoles();
-        // 共享关键基础设施（session/memory）优先：
-        // - ensureRuntime 内部按角色短锁 + 锁外并发等待；
-        // - 已存在健康共享服务时会直接复用并跳过拉起。
-        if ($criticalRoles !== []) {
-            $this->ensureSharedCriticalInfra($criticalRoles, true);
-        }
 
-        WlsLogger::info_('[Orchestrator] 所有本地子服务一并并发启动');
+        WlsLogger::info_('[Orchestrator] 所有本地子服务一并并发启动（包括共享服务）');
         if ($context->frontend) {
             echo "\033[34m  开始启动所有进程（并发）...\033[0m\n";
         }
@@ -2465,7 +2522,7 @@ class ServiceOrchestrator
         }
 
         WlsLogger::info_(
-            "[Orchestrator] 鍏变韩 {$role} 閫氳繃鍚姩 runtime 鎺ュ叆锛?instance={$context->instanceName}, port={$port}, pid={$pid}, token_file={$connectedToken}"
+            "[Orchestrator] 共享 {$role} 通过启动 runtime 接入，instance={$context->instanceName}, port={$port}, pid={$pid}, token_file={$connectedToken}"
         );
 
         return [
@@ -2739,9 +2796,7 @@ class ServiceOrchestrator
         $this->registry->updateInstance($instance);
         unset($this->resurrectQueue[$instance->getKey()]);
 
-        if (\in_array($instance->role, [ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER], true)
-            && (($this->infraDegraded[$instance->role] ?? false) === true)
-        ) {
+        if (($this->infraDegraded[$instance->role] ?? false) === true) {
             $this->infraDegraded[$instance->role] = false;
             $this->broadcastRoutingPolicyToWorkers();
         }
@@ -5113,14 +5168,37 @@ class ServiceOrchestrator
             $this->checkStartupTimeoutAndExitIfNeeded();
 
             $loopStartAt = \microtime(true);
+            if ($pollCount % 200 === 0) {
+                // #region agent log
+                $this->debugLog('H4', 'ServiceOrchestrator::runLoop', 'mainloop_heartbeat', [
+                    'poll_count' => $pollCount,
+                    'task_count' => \count($this->mainLoopTasks),
+                    'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
+                    'running' => $this->running,
+                    'shutting_down' => $this->shuttingDown,
+                ]);
+                // #endregion
+            }
 
-            WlsLogger::info_('[Orchestrator] 主循环开始 运行时间:getMainLoopPollTimeoutUsec ' . $this->getMainLoopPollTimeoutUsec(100000) . 'us');
-
+            // WlsLogger::info_('[Orchestrator] 主循环开始 运行时间:getMainLoopPollTimeoutUsec ' . $this->getMainLoopPollTimeoutUsec(100000) . 'us');
+            // 每隔一段时间点答应一个循环数字，表示主循环未被阻塞
+            if ($pollCount % 10000 === 0 && $pollCount > 0) {
+                WlsLogger::info_('[Orchestrator] 主循环未被阻塞 #' . $pollCount);
+            }
             // Poll IPC 消息（可能触发 stopAll 导致 shuttingDown=true）
             $pollStartAt = \microtime(true);
             $this->controlServer?->poll(0, $this->getMainLoopPollTimeoutUsec(100000));
             $pollElapsed = \microtime(true) - $pollStartAt;
-            WlsLogger::info_('[Orchestrator] 主循环 poll 运行时间: getMainLoopPollTimeoutUsec' . \number_format($pollElapsed * 1000, 2) . 'ms');
+            if (($pollElapsed * 1000) > 1200) {
+                // #region agent log
+                $this->debugLog('H2', 'ServiceOrchestrator::runLoop', 'control_poll_slow', [
+                    'poll_elapsed_ms' => \round($pollElapsed * 1000, 2),
+                    'poll_timeout_usec' => $this->getMainLoopPollTimeoutUsec(100000),
+                    'task_count' => \count($this->mainLoopTasks),
+                ]);
+                // #endregion
+            }
+            // WlsLogger::info_('[Orchestrator] 主循环 poll 运行时间: getMainLoopPollTimeoutUsec' . \number_format($pollElapsed * 1000, 2) . 'ms');
 
             // 每 5 秒输出一次循环状态
             if ($pollElapsed > 0.1 || ($pollCount % 50 === 0 && $pollCount > 0)) {
@@ -5139,8 +5217,34 @@ class ServiceOrchestrator
             $tickStartAt = \microtime(true);
             $this->tickMainLoopTasks();
             $tickElapsed = \microtime(true) - $tickStartAt;
-            if ($tickElapsed > 0.5) {
-                WlsLogger::warning_('[Orchestrator] tickMainLoopTasks 耗时过长: ' . \number_format($tickElapsed * 1000, 2) . 'ms');
+            $tickSlowWarnThresholdMs = (float) ($this->context?->getConfig('wls.orchestrator.tick_slow_warn_threshold_ms', 500.0) ?? 500.0);
+            if ($tickSlowWarnThresholdMs < 100.0) {
+                $tickSlowWarnThresholdMs = 100.0;
+            }
+            $tickSlowWarnCooldownSec = (float) ($this->context?->getConfig('wls.orchestrator.tick_slow_warn_cooldown_sec', 3.0) ?? 3.0);
+            if ($tickSlowWarnCooldownSec < 0.5) {
+                $tickSlowWarnCooldownSec = 0.5;
+            }
+            if (($tickElapsed * 1000) > $tickSlowWarnThresholdMs) {
+                $now = \microtime(true);
+                if (($now - $this->lastTickMainLoopSlowWarningAt) >= $tickSlowWarnCooldownSec) {
+                    $this->lastTickMainLoopSlowWarningAt = $now;
+                    WlsLogger::warning_(
+                        '[Orchestrator] tickMainLoopTasks 耗时过长: '
+                        . \number_format($tickElapsed * 1000, 2) . 'ms'
+                        . ', tasks=' . \count($this->mainLoopTasks)
+                        . ', fibers=' . ($this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0)
+                    );
+                    // #region agent log
+                    $this->debugLog('H3', 'ServiceOrchestrator::runLoop', 'tick_mainloop_slow_warning', [
+                        'tick_elapsed_ms' => \round($tickElapsed * 1000, 2),
+                        'tick_warn_threshold_ms' => \round($tickSlowWarnThresholdMs, 2),
+                        'tick_warn_cooldown_sec' => \round($tickSlowWarnCooldownSec, 2),
+                        'task_count' => \count($this->mainLoopTasks),
+                        'active_fibers' => $this->mainLoopFiberScheduler?->getActiveFiberCount() ?? 0,
+                    ]);
+                    // #endregion
+                }
             }
 
 
@@ -5338,11 +5442,10 @@ class ServiceOrchestrator
         }
 
         $roles = [];
-        foreach ([ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER] as $role) {
-            if (!$this->isSharedCriticalRoleEnabled($role)) {
-                continue;
+        foreach ($this->registry->getAllProviders() as $provider) {
+            if ($provider->isCriticalRole() && $provider->isEnabled($this->context)) {
+                $roles[] = $provider->getRole();
             }
-            $roles[] = $role;
         }
 
         return $roles;
@@ -5367,13 +5470,7 @@ class ServiceOrchestrator
 
     private function isCriticalInfraRoleReady(string $role): bool
     {
-        if ($this->isSharedStateManagedRole($role)) {
-            $healthy = $this->isSharedInfraHealthy($role);
-            $this->infraDegraded[$role] = !$healthy;
-
-            return $healthy;
-        }
-
+        // 共享服务现在也是普通服务，统一通过 Registry 检查
         if (($this->infraDegraded[$role] ?? false) === true) {
             return false;
         }
@@ -5432,13 +5529,9 @@ class ServiceOrchestrator
                     return false;
                 }
 
-                $this->ensureSharedCriticalInfra($criticalRoles);
-
                 $this->processResurrectQueue($criticalRoles);
                 foreach ($criticalRoles as $role) {
-                    if ($this->isSharedStateManagedRole($role)) {
-                        continue;
-                    }
+                    // 共享服务现在也是普通服务，统一处理
                     $this->reconcileRoleSlotGaps($role);
                 }
 
@@ -5556,14 +5649,17 @@ class ServiceOrchestrator
         }
 
         $now = \microtime(true);
+        $lastYieldAt = $now;
         $providers = $this->registry->getAllProviders();
 
         foreach ($providers as $provider) {
+            $this->cooperativeYieldIfNeeded($lastYieldAt);
             if ($this->shouldYieldPeriodicWork(true)) {
                 return;
             }
             $instances = $this->registry->getInstancesByRole($provider->getRole());
             foreach ($instances as $instance) {
+                $this->cooperativeYieldIfNeeded($lastYieldAt);
                 if ($this->shouldYieldPeriodicWork(true)) {
                     return;
                 }
@@ -5647,11 +5743,8 @@ class ServiceOrchestrator
                     WlsLogger::warning_(
                         "[Orchestrator] 外部共享 sidecar 不可用，切换为本实例接管: {$instance->role}#{$instance->instanceId}"
                     );
-                    if ($instance->role === ControlMessage::ROLE_SESSION_SERVER
-                        || $instance->role === ControlMessage::ROLE_MEMORY_SERVER) {
-                        $this->infraDegraded[$instance->role] = true;
-                        $this->broadcastRoutingPolicyToWorkers();
-                    }
+                    $this->infraDegraded[$instance->role] = true;
+                    $this->broadcastRoutingPolicyToWorkers();
                     $this->healthCheckRestartOrEscalate(
                         $instance,
                         "shared_external_unavailable:{$instance->role}#{$instance->instanceId}"
@@ -6300,7 +6393,9 @@ class ServiceOrchestrator
             return;
         }
 
+        $lastYieldAt = \microtime(true);
         foreach ($this->desiredState as $role => $desiredCount) {
+            $this->cooperativeYieldIfNeeded($lastYieldAt);
             if ($this->shouldYieldPeriodicWork(true)) {
                 return;
             }
@@ -6311,6 +6406,7 @@ class ServiceOrchestrator
 
             // 缺失实例补齐
             for ($slot = 1; $slot <= $desiredCount; $slot++) {
+                $this->cooperativeYieldIfNeeded($lastYieldAt);
                 if ($this->shouldYieldPeriodicWork(true)) {
                     return;
                 }
@@ -6338,6 +6434,7 @@ class ServiceOrchestrator
 
             // 超额实例回收
             foreach ($this->registry->getInstancesByRole($role) as $instanceId => $instance) {
+                $this->cooperativeYieldIfNeeded($lastYieldAt);
                 if ($this->shouldYieldPeriodicWork(true)) {
                     return;
                 }
@@ -7110,7 +7207,7 @@ class ServiceOrchestrator
             $this->notifyDispatcherRedirectReady($instance);
         }
 
-        if (\in_array($instance->role, [ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER], true)) {
+        if (($this->infraDegraded[$instance->role] ?? false) === true) {
             $this->infraDegraded[$instance->role] = false;
             WlsLogger::info_("[Orchestrator] {$instance->role} 已 READY，解除端点降级并广播 ROUTING_POLICY");
             $this->broadcastRoutingPolicyToWorkers();
@@ -7154,14 +7251,15 @@ class ServiceOrchestrator
             $this->markStartupPhaseRunning($this->context, $totalServices);
         }
         $mainPort = $this->context?->mainPort ?? 0;
-        $host = $this->context?->host ?? '127.0.0.1';
+        $bindHost = $this->context?->host ?? '127.0.0.1';
+        $displayHost = $this->context?->publicHost ?? $bindHost;
         $sslEnabled = $this->context?->sslEnabled ?? false;
         $protocol = $sslEnabled ? 'https' : 'http';
 
         // 输出醒目的服务器准备就绪通知
         WlsLogger::info_('[Server] ========================================');
         WlsLogger::info_('[Server] ✓ 服务器准备就绪');
-        WlsLogger::info_("[Server]   地址: {$protocol}://{$host}:{$mainPort}");
+        WlsLogger::info_("[Server]   地址: {$protocol}://{$displayHost}:{$mainPort}");
         WlsLogger::info_("[Server]   服务实例: {$totalServices} 个");
         WlsLogger::info_('[Server] ========================================');
 
@@ -7169,7 +7267,7 @@ class ServiceOrchestrator
         if ($this->context?->frontend) {
             $ctx = $this->context;
             $defaultPort = $sslEnabled ? 443 : 80;
-            $baseUrl = $protocol . '://' . $host . ($mainPort !== $defaultPort ? ':' . $mainPort : '');
+            $baseUrl = $protocol . '://' . $displayHost . ($mainPort !== $defaultPort ? ':' . $mainPort : '');
             $backendPrefix = $ctx->getConfig('router.area_routes.backend.prefix') ?? '';
             $apiPath = $ctx->getConfig('router.area_routes.rest_frontend.prefix') ?: 'api';
             $apiAdminPath = $ctx->getConfig('router.area_routes.rest_backend.prefix') ?: 'api_admin';
@@ -7179,7 +7277,7 @@ class ServiceOrchestrator
             $backendUrl = $baseUrl . '/' . ($backendPrefix !== '' ? $backendPrefix . '/' : '') . 'admin';
             $apiUrl = $baseUrl . '/' . $apiPath . '/';
             $apiAdminUrl = $baseUrl . '/' . $apiAdminPath . '/';
-            $httpUrl = $sslEnabled && $httpRedirectPort > 0 ? "http://{$host}:{$httpRedirectPort}/ → HTTPS" : null;
+            $httpUrl = $sslEnabled && $httpRedirectPort > 0 ? "http://{$displayHost}:{$httpRedirectPort}/ → HTTPS" : null;
 
             $colLabel = 16;
             $sep = 3;
@@ -7227,8 +7325,8 @@ class ServiceOrchestrator
             echo self::ANSI_BOLD . self::ANSI_GREEN . "  " . __('使用说明：') . self::ANSI_RESET . "\n";
             $tips = [
                 __('WLS 默认仅监听 127.0.0.1，仅本机可访问'),
-                __('外网访问需用 Nginx/Caddy 等反向代理转发到 %{1}:%{2}', [$host, $mainPort]),
-                __('Nginx 示例：') . "proxy_pass {$protocol}://{$host}:{$mainPort};",
+                __('外网访问需用 Nginx/Caddy 等反向代理转发到 %{1}:%{2}', [$bindHost, $mainPort]),
+                __('Nginx 示例：') . "proxy_pass {$protocol}://{$bindHost}:{$mainPort};",
                 __('需直连外网时：') . "php bin/w server:start --host 0.0.0.0",
             ];
             foreach ($tips as $tip) {
@@ -7342,8 +7440,10 @@ class ServiceOrchestrator
             return;
         }
 
+        $lastYieldAt = \microtime(true);
         $workers = $this->registry->getInstancesByRole('worker');
         foreach ($workers as $inst) {
+            $this->cooperativeYieldIfNeeded($lastYieldAt);
             if ($this->shouldYieldPeriodicWork(true)) {
                 return;
             }
@@ -7405,6 +7505,7 @@ class ServiceOrchestrator
         $alive = 0;
         if ($this->controlServer !== null) {
             foreach ($this->registry->getInstancesByRole('worker') as $w) {
+                $this->cooperativeYieldIfNeeded($lastYieldAt);
                 if ($this->shouldYieldPeriodicWork(true)) {
                     return;
                 }
@@ -9529,10 +9630,8 @@ class ServiceOrchestrator
     {
         $sessionEndpoint = $this->resolveServiceEndpoint(ControlMessage::ROLE_SESSION_SERVER, 19970);
         $memoryEndpoint = $this->resolveServiceEndpoint(ControlMessage::ROLE_MEMORY_SERVER, 19971);
-        $sessionUnreachable = !$this->isSharedInfraHealthy(ControlMessage::ROLE_SESSION_SERVER);
-        $memoryUnreachable = !$this->isSharedInfraHealthy(ControlMessage::ROLE_MEMORY_SERVER);
-        $this->infraDegraded[ControlMessage::ROLE_SESSION_SERVER] = $sessionUnreachable;
-        $this->infraDegraded[ControlMessage::ROLE_MEMORY_SERVER] = $memoryUnreachable;
+        $sessionUnreachable = ($this->infraDegraded[ControlMessage::ROLE_SESSION_SERVER] ?? false);
+        $memoryUnreachable = ($this->infraDegraded[ControlMessage::ROLE_MEMORY_SERVER] ?? false);
 
         return [
             'version' => 1,
@@ -9565,15 +9664,7 @@ class ServiceOrchestrator
      */
     private function resolveServiceEndpoint(string $role, int $defaultPort): array
     {
-        if ($this->isSharedStateManagedRole($role)) {
-            $runtime = $this->resolveSharedServiceRuntime($role);
-
-            return [
-                'host' => (string) ($runtime['host'] ?? '127.0.0.1'),
-                'port' => (int) ($runtime['port'] ?? $defaultPort),
-            ];
-        }
-
+        // 所有服务统一从 Registry 获取端点
         $host = '127.0.0.1';
         $port = $defaultPort;
         $instances = $this->registry->getInstancesByRole($role);
@@ -9592,171 +9683,6 @@ class ServiceOrchestrator
         }
 
         return ['host' => $host, 'port' => $port];
-    }
-
-    private function isSharedStateManagedRole(string $role): bool
-    {
-        return $role === ControlMessage::ROLE_SESSION_SERVER
-            || $role === ControlMessage::ROLE_MEMORY_SERVER;
-    }
-
-    private function isSharedCriticalRoleEnabled(string $role): bool
-    {
-        if ($this->context === null) {
-            return false;
-        }
-
-        if ($role === ControlMessage::ROLE_SESSION_SERVER) {
-            return true;
-        }
-
-        $memory = \is_array(($this->context->envConfig['wls'] ?? [])['memory_service'] ?? null)
-            ? $this->context->envConfig['wls']['memory_service']
-            : [];
-
-        return (bool) ($memory['enabled'] ?? true);
-    }
-
-    /**
-     * @param string[] $roles
-     */
-    private function ensureSharedCriticalInfra(array $roles, bool $throwOnFailure = false): void
-    {
-        if ($this->context === null) {
-            return;
-        }
-
-        $sharedRoles = [];
-        foreach ($roles as $role) {
-            if ($this->isSharedStateManagedRole($role)) {
-                $sharedRoles[] = $role;
-            }
-        }
-        if ($sharedRoles === []) {
-            return;
-        }
-
-        $manager = $this->createSharedStateServiceManager();
-
-        // 先做快速探测：避免 ensureRuntime 的等待链路阻塞启动主路径。
-        $unhealthyRoles = [];
-        foreach ($sharedRoles as $role) {
-            $probe = $manager->probe($role, [], $this->context->envConfig);
-            $healthy = (bool) ($probe['healthy'] ?? false);
-            $this->infraDegraded[$role] = !$healthy;
-            if (!$healthy) {
-                $unhealthyRoles[] = $role;
-            }
-        }
-
-        if ($unhealthyRoles === []) {
-            return;
-        }
-
-        WlsLogger::warning_(
-            '[Orchestrator] 共享关键基础服务未就绪，改为后台 ensureRuntime，不阻塞启动: '
-            . \implode(', ', $unhealthyRoles)
-        );
-
-        // 后台补拉起：不阻塞当前启动路径。
-        $taskKey = 'startup:ensure_shared_infra';
-        if (!$this->hasMainLoopTask($taskKey)) {
-            $this->scheduleMainLoopTask($taskKey, 'ensure_shared_infra', function () use ($manager, $sharedRoles): void {
-                try {
-                    $manager->ensureRuntime(
-                        $this->context->instanceName,
-                        [],
-                        $this->context->envConfig,
-                        $this->context->frontend,
-                        false
-                    );
-                    foreach ($sharedRoles as $role) {
-                        $this->infraDegraded[$role] = false;
-                    }
-                    $this->broadcastRoutingPolicyToWorkers();
-                } catch (\Throwable $throwable) {
-                    WlsLogger::warning_(
-                        '[Orchestrator] 后台 ensure shared infra 失败（继续降级运行）: '
-                        . $throwable->getMessage()
-                    );
-                }
-            });
-        }
-
-        if ($throwOnFailure) {
-            // 兼容旧调用语义：记录一次告警，但不再抛异常阻断启动。
-            WlsLogger::warning_('[Orchestrator] throwOnFailure=true 已降级为非阻塞模式（避免启动卡顿）');
-        }
-    }
-
-    private function isSharedInfraHealthy(string $role): bool
-    {
-        if ($this->context === null) {
-            return false;
-        }
-
-        if (!$this->isSharedCriticalRoleEnabled($role)) {
-            return true;
-        }
-
-        $now = \microtime(true);
-        $cached = $this->sharedInfraHealthCache[$role] ?? null;
-        if ($cached !== null && ($now - (float)$cached['cachedAt']) < $this->sharedInfraHealthCacheTtl) {
-            return (bool)$cached['healthy'];
-        }
-
-        $probe = $this->createSharedStateServiceManager()->probe($role, [], $this->context->envConfig);
-        $healthy = (bool) ($probe['healthy'] ?? false);
-        $this->sharedInfraHealthCache[$role] = ['healthy' => $healthy, 'cachedAt' => $now];
-
-        return $healthy;
-    }
-
-    /**
-     * 使共享服务健康状态缓存失效（infra 恢复或断开时调用）
-     */
-    private function invalidateSharedInfraCache(string $role): void
-    {
-        unset($this->sharedInfraHealthCache[$role], $this->sharedServiceRuntimeCache[$role]);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function resolveSharedServiceRuntime(string $role): array
-    {
-        if ($this->context === null) {
-            return ['host' => '127.0.0.1', 'port' => $role === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970];
-        }
-
-        $now = \microtime(true);
-        $cached = $this->sharedServiceRuntimeCache[$role] ?? null;
-        if ($cached !== null && ($now - (float)$cached['cachedAt']) < $this->sharedServiceRuntimeCacheTtl) {
-            return (array)$cached['runtime'];
-        }
-
-        $resolved = $this->createSharedStateRuntimeResolver()->resolve([], $this->context->envConfig, $this->context->instanceName);
-        $runtime = $role === ControlMessage::ROLE_MEMORY_SERVER
-            ? ($resolved['memory'] ?? [])
-            : ($resolved['session'] ?? []);
-
-        $probe = $this->createSharedStateServiceManager()->probe($role, [], $this->context->envConfig);
-        $probeRuntime = \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
-        $runtime = $probeRuntime !== [] ? \array_merge($runtime, $probeRuntime) : $runtime;
-
-        $this->sharedServiceRuntimeCache[$role] = ['runtime' => $runtime, 'cachedAt' => $now];
-
-        return $runtime;
-    }
-
-    protected function createSharedStateServiceManager(): SharedStateServiceManager
-    {
-        return new SharedStateServiceManager();
-    }
-
-    protected function createSharedStateRuntimeResolver(): SharedStateRuntimeResolver
-    {
-        return new SharedStateRuntimeResolver();
     }
 
     // ========== 批量协调消息处理（SOLID: 单一职责）============
