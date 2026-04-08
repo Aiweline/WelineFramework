@@ -54,6 +54,11 @@ class RequestContext
     public const AREA_REST_BACKEND = 'rest_backend';
     
     // ==================== 区域常量结束 ====================
+
+    // ==================== SSE Writer ====================
+    public const SSE_WRITER_KEY = 'framework.sse.writer';
+
+    // ==================== 上下文数据存储 ====================
     /**
      * 上下文数据存储
      * 
