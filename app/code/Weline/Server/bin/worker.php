@@ -219,13 +219,40 @@ try {
     // SharedState 的 session/memory 信息在首次请求时通过 ConnectionPool 自动获取
     // 不再在这里同步等待 SharedStateServiceManager::ensureRuntime()
 
-    // 使用默认地址，实际地址在首次请求时由 ConnectionPool 自动发现
-    $sessionHost = '127.0.0.1';
-    $sessionPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
-    $sessionTokenFileName = 'session_server.token';
-    $memoryHost = '127.0.0.1';
-    $memoryPort = 19971 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
-    $memoryTokenFileName = 'memory_server.token';
+    // 从 env.php 读取共享服务地址，用于预热连接池
+    $projectOffset = \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+    $wls = $_wlsEnvConfig['wls'] ?? [];
+
+    // Session 配置
+    $sessionConfig = \is_array($wls['session'] ?? null) ? $wls['session'] : [];
+    $wlsServer = \is_array($sessionConfig['wls_server'] ?? null) ? $sessionConfig['wls_server'] : [];
+    $sessionHost = \trim((string) ($wlsServer['host'] ?? $sessionConfig['host'] ?? '127.0.0.1'));
+    if ($sessionHost === '') {
+        $sessionHost = '127.0.0.1';
+    }
+    $sessionPort = (int) ($wlsServer['port'] ?? $sessionConfig['port'] ?? (19970 + $projectOffset));
+    if ($sessionPort <= 0) {
+        $sessionPort = 19970 + $projectOffset;
+    }
+    $sessionTokenFileName = \trim((string) ($wlsServer['token_file_name'] ?? $sessionConfig['token_file_name'] ?? 'session_server.token'));
+    if ($sessionTokenFileName === '') {
+        $sessionTokenFileName = 'session_server.token';
+    }
+
+    // Memory 配置
+    $memoryService = \is_array($wls['memory_service'] ?? null) ? $wls['memory_service'] : [];
+    $memoryHost = \trim((string) ($memoryService['host'] ?? '127.0.0.1'));
+    if ($memoryHost === '') {
+        $memoryHost = '127.0.0.1';
+    }
+    $memoryPort = (int) ($memoryService['port'] ?? (19971 + $projectOffset));
+    if ($memoryPort <= 0) {
+        $memoryPort = 19971 + $projectOffset;
+    }
+    $memoryTokenFileName = \trim((string) ($memoryService['token_file_name'] ?? 'memory_server.token'));
+    if ($memoryTokenFileName === '') {
+        $memoryTokenFileName = 'memory_server.token';
+    }
 
     // 注意：Worker 启动阶段不进行任何服务发现或连接尝试
     // 所有连接将由首个请求到达时按需进行（Lazy Initialization）
@@ -1068,6 +1095,15 @@ while (true) {
     try {
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
+    }
+
+    // Worker 主循环计数
+    if (!isset($workerLoopCount)) {
+        $workerLoopCount = 0;
+    }
+    $workerLoopCount++;
+    if ($workerLoopCount % 10000 === 0) {
+        WlsLogger::info_("[Worker] 主循环未被阻塞 #{$workerLoopCount}");
     }
 
     // 定期刷新日志缓冲区（避免日志堆积）
@@ -2152,12 +2188,13 @@ function wlsDispatchRequestFiberStep(
     $isLongLived = ($longLivedDetection['is_long_lived'] ?? false) === true;
     $requestProtocol = (string) ($longLivedDetection['protocol'] ?? 'http');
     $isSseProtocolRequest = ($requestProtocol === 'sse');
+    $applyLongLivedLimit = !$isSseProtocolRequest;
     if ($isLongLived) {
         $layer = (string)($longLivedDetection['layer'] ?? 'unknown');
         $protocol = (string)($longLivedDetection['protocol'] ?? 'long-lived');
         WlsLogger::info_("长链分层命中: layer={$layer}, protocol={$protocol}, connId={$connId}");
 
-        if ($longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+        if ($applyLongLivedLimit && $longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
             $isWorkspaceStreamSse = $isSseProtocolRequest && \str_contains($rawRequest, '/stream-sse');
             if ($isWorkspaceStreamSse) {
                 $waitDeadline = \microtime(true) + 1.2;
@@ -2176,7 +2213,7 @@ function wlsDispatchRequestFiberStep(
             }
         }
 
-        if ($longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
+        if ($applyLongLivedLimit && $longLivedMaxActive > 0 && \count($longLivedConnections) >= $longLivedMaxActive) {
             $activeRequests--;
             $body = 'Too Many Long Connections - Retry Shortly';
             $resp = "HTTP/1.1 429 Too Many Requests\r\nContent-Type: text/plain; charset=utf-8\r\nRetry-After: 2\r\nContent-Length: " . \strlen($body) . "\r\nConnection: close\r\n\r\n" . $body;
@@ -2195,11 +2232,15 @@ function wlsDispatchRequestFiberStep(
             return;
         }
 
-        $longLivedConnections[$connId] = [
-            'type' => $protocol,
-            'start' => \time(),
-        ];
-        WlsLogger::info_("长连接槽位已分配 (connId: {$connId}, protocol: {$protocol}, 当前长连接数: " . \count($longLivedConnections) . ")");
+        if ($applyLongLivedLimit) {
+            $longLivedConnections[$connId] = [
+                'type' => $protocol,
+                'start' => \time(),
+            ];
+            WlsLogger::info_("长连接槽位已分配 (connId: {$connId}, protocol: {$protocol}, 当前长连接数: " . \count($longLivedConnections) . ")");
+        } else {
+            WlsLogger::info_("SSE 长连接不参与 long_lived_max_active 限制 (connId: {$connId}, protocol: {$protocol})");
+        }
     }
 
     $handleStartTime = \microtime(true);
