@@ -8,6 +8,10 @@
  */
 /**@var \Weline\Framework\View\Template $this */
 $activeTab = $activeTab ?? 'model';
+$pagination = $pagination ?? [];
+$currentVendor = $currentVendor ?? '';
+$currentStatus = $currentStatus ?? '';
+$currentSearch = $currentSearch ?? '';
 ?>
 <template>Weline_Ai::Backend/Manager/tabs.phtml</template>
 <?php if (empty($embed)): ?>
@@ -127,7 +131,7 @@ $activeTab = $activeTab ?? 'model';
                         <select class="form-select" id="vendorFilter" name="vendor">
                             <option value=""><lang>全部</lang></option>
                             <?php foreach ($vendors as $vendor): ?>
-                                <option value="<?= $vendor ?>"><?= $vendor ?></option>
+                                <option value="<?= $vendor ?>" <?= $currentVendor === $vendor ? 'selected' : '' ?>><?= $vendor ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -136,14 +140,14 @@ $activeTab = $activeTab ?? 'model';
                         <label class="form-label"><lang>状态</lang></label>
                         <select class="form-select" id="statusFilter" name="status">
                             <option value=""><lang>全部</lang></option>
-                            <option value="1"><lang>激活</lang></option>
-                            <option value="0"><lang>未激活</lang></option>
+                            <option value="1" <?= $currentStatus === '1' ? 'selected' : '' ?>><lang>激活</lang></option>
+                            <option value="0" <?= $currentStatus === '0' ? 'selected' : '' ?>><lang>未激活</lang></option>
                         </select>
                     </div>
                     
                     <div class="col-md-4">
                         <label class="form-label"><lang>搜索</lang></label>
-                        <input type="text" class="form-control" id="searchInput" name="search" placeholder="<?= __('模型名称或代码') ?>">
+                        <input type="text" class="form-control" id="searchInput" name="search" value="<?= htmlspecialchars((string)$currentSearch, ENT_QUOTES) ?>" placeholder="<?= __('模型名称或代码') ?>">
                     </div>
                     
                     <div class="col-md-2 d-flex align-items-end">
@@ -435,6 +439,37 @@ $activeTab = $activeTab ?? 'model';
                                 <?php endforeach; ?>
                             </tbody>
                         </table>
+                    </div>
+                <?php endif; ?>
+
+                <?php
+                $page = (int)($pagination['page'] ?? 1);
+                $totalPages = (int)($pagination['total_pages'] ?? 1);
+                ?>
+                <?php if ($totalPages > 1): ?>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <div class="text-muted small">
+                            <lang>第</lang> <?= $page ?> <lang>页 / 共</lang> <?= $totalPages ?> <lang>页</lang>
+                        </div>
+                        <nav aria-label="Model pagination">
+                            <ul class="pagination pagination-sm mb-0">
+                                <?php
+                                $prevPage = max(1, $page - 1);
+                                $nextPage = min($totalPages, $page + 1);
+                                ?>
+                                <li class="page-item <?= $page <= 1 ? 'disabled' : '' ?>">
+                                    <a class="page-link" href="javascript:void(0)" onclick="goPage(<?= $prevPage ?>)"><lang>上一页</lang></a>
+                                </li>
+                                <?php for ($p = max(1, $page - 2); $p <= min($totalPages, $page + 2); $p++): ?>
+                                    <li class="page-item <?= $p === $page ? 'active' : '' ?>">
+                                        <a class="page-link" href="javascript:void(0)" onclick="goPage(<?= $p ?>)"><?= $p ?></a>
+                                    </li>
+                                <?php endfor; ?>
+                                <li class="page-item <?= $page >= $totalPages ? 'disabled' : '' ?>">
+                                    <a class="page-link" href="javascript:void(0)" onclick="goPage(<?= $nextPage ?>)"><lang>下一页</lang></a>
+                                </li>
+                            </ul>
+                        </nav>
                     </div>
                 <?php endif; ?>
             </div>
@@ -898,6 +933,18 @@ $activeTab = $activeTab ?? 'model';
 
     window.resetFilters = function() {
         window.location.href = '<?= $this->getBackendUrl('*/backend/model') ?>';
+    };
+
+    window.goPage = function(page) {
+        var vendor = document.getElementById('vendorFilter').value;
+        var status = document.getElementById('statusFilter').value;
+        var search = document.getElementById('searchInput').value;
+        var params = new URLSearchParams();
+        if (vendor) params.append('vendor', vendor);
+        if (status) params.append('status', status);
+        if (search) params.append('search', search);
+        params.append('page', String(page || 1));
+        window.location.href = '<?= $this->getBackendUrl('*/backend/model') ?>?' + params.toString();
     };
 
     // 测试模型连通性
