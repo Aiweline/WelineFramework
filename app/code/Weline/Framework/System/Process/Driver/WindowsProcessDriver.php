@@ -309,110 +309,148 @@ class WindowsProcessDriver extends AbstractProcessDriver
     
     /**
      * @inheritDoc
-     * 
+     *
      * 策略：
      * 1. taskkill /F /PID（最快最可靠）
      * 2. PowerShell Stop-Process -Force（回退）
      * 3. wmic terminate（兼容旧系统）
+     *
+     * 重试机制：每个方案最多重试3次，每次间隔100ms
      */
     public function killProcess(int $pid): bool
     {
         if (!$this->isValidPid($pid)) {
             return false;
         }
-        
+
+        $maxRetries = 3;
+        $retryDelayMs = 100;
+
         // 方案1：taskkill（最快最通用）
-        $output = [];
-        $exitCode = 0;
-        $this->executeCommand("taskkill /F /PID {$pid} 2>NUL", $output, $exitCode);
-        
-        if ($exitCode === 0) {
-            return true;
-        }
-        
-        // 方案2：PowerShell Stop-Process（taskkill 失败时回退）
-        if ($this->isPowerShellAvailable()) {
+        for ($retry = 0; $retry < $maxRetries; $retry++) {
             $output = [];
             $exitCode = 0;
-            $this->executeCommand(
-                "powershell -NoProfile -Command \"Stop-Process -Id {$pid} -Force -ErrorAction SilentlyContinue\" 2>NUL",
-                $output,
-                $exitCode
-            );
+            $this->executeCommand("taskkill /F /PID {$pid} 2>NUL", $output, $exitCode);
+
             if ($exitCode === 0 || !$this->isRunningByPid($pid)) {
                 return true;
             }
+
+            if ($retry < $maxRetries - 1) {
+                $this->waitMs($retryDelayMs);
+            }
         }
-        
+
+        // 方案2：PowerShell Stop-Process（taskkill 失败时回退）
+        if ($this->isPowerShellAvailable()) {
+            for ($retry = 0; $retry < $maxRetries; $retry++) {
+                $output = [];
+                $exitCode = 0;
+                $this->executeCommand(
+                    "powershell -NoProfile -Command \"Stop-Process -Id {$pid} -Force -ErrorAction SilentlyContinue\" 2>NUL",
+                    $output,
+                    $exitCode
+                );
+                if ($exitCode === 0 || !$this->isRunningByPid($pid)) {
+                    return true;
+                }
+
+                if ($retry < $maxRetries - 1) {
+                    $this->waitMs($retryDelayMs);
+                }
+            }
+        }
+
         // 方案3：wmic terminate（兼容旧系统）
         if ($this->isWmicAvailable()) {
-            $output = [];
-            $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output);
-            $this->waitMs(200);
-            return !$this->isRunningByPid($pid);
+            for ($retry = 0; $retry < $maxRetries; $retry++) {
+                $output = [];
+                $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output);
+                $this->waitMs($retryDelayMs);
+                if (!$this->isRunningByPid($pid)) {
+                    return true;
+                }
+            }
         }
-        
-        return false;
+
+        return !$this->isRunningByPid($pid);
     }
     
     /**
      * @inheritDoc
-     * 
+     *
      * 策略：
      * 1. taskkill /F /T /PID（杀进程树，最快）
      * 2. PowerShell 递归杀子进程
      * 3. wmic terminate（兼容旧系统）
+     *
+     * 重试机制：每个方案最多重试3次，每次间隔100ms
      */
     public function killProcessTree(int $pid): bool
     {
         if (!$this->isValidPid($pid)) {
             return false;
         }
-        
+
+        $maxRetries = 3;
+        $retryDelayMs = 100;
+
         // 方案1：taskkill /T（杀进程树，最快最通用）
-        $output = [];
-        $exitCode = 0;
-        $this->executeCommand("taskkill /F /T /PID {$pid} 2>NUL", $output, $exitCode);
-        
-        if ($exitCode === 0) {
-            return true;
+        for ($retry = 0; $retry < $maxRetries; $retry++) {
+            $output = [];
+            $exitCode = 0;
+            $this->executeCommand("taskkill /F /T /PID {$pid} 2>NUL", $output, $exitCode);
+
+            if ($exitCode === 0 || !$this->isRunningByPid($pid)) {
+                return true;
+            }
+
+            if ($retry < $maxRetries - 1) {
+                $this->waitMs($retryDelayMs);
+            }
         }
-        
+
         // 方案2：PowerShell 递归查找并杀死子进程
         // 使用字符串拼接替代 heredoc，避免不同 PHP 版本/行尾符下的解析问题
         if ($this->isPowerShellAvailable()) {
-            // 先杀子进程，再杀父进程
-            // 注意引号规则（参见 windows-command-quoting 技能）：
-            // - 外层 " 由 cmd.exe 剥离后传给 PowerShell
-            // - 内部 $ppid / $_ 是 PowerShell 变量，PHP 单引号串中不会被 PHP 解析
-            // - Filter 用 ('ParentProcessId=' + $ppid) 避免嵌套双引号
-            $psCmd = 'powershell -NoProfile -Command "'
-                . 'function Kill-Tree($ppid) { '
-                . 'Get-CimInstance Win32_Process -Filter (\'ParentProcessId=\' + $ppid) -ErrorAction SilentlyContinue | ForEach-Object { '
-                . 'Kill-Tree $_.ProcessId; '
-                . 'Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue '
-                . '} }; '
-                . 'Kill-Tree ' . $pid . '; '
-                . 'Stop-Process -Id ' . $pid . ' -Force -ErrorAction SilentlyContinue'
-                . '" 2>NUL';
-            $output = [];
-            $exitCode = 0;
-            $this->executeCommand($psCmd, $output, $exitCode);
-            
-            $this->waitMs(200);
-            if (!$this->isRunningByPid($pid)) {
-                return true;
+            for ($retry = 0; $retry < $maxRetries; $retry++) {
+                // 先杀子进程，再杀父进程
+                // 注意引号规则（参见 windows-command-quoting 技能）：
+                // - 外层 " 由 cmd.exe 剥离后传给 PowerShell
+                // - 内部 $ppid / $_ 是 PowerShell 变量，PHP 单引号串中不会被 PHP 解析
+                // - Filter 用 ('ParentProcessId=' + $ppid) 避免嵌套双引号
+                $psCmd = 'powershell -NoProfile -Command "'
+                    . 'function Kill-Tree($ppid) { '
+                    . 'Get-CimInstance Win32_Process -Filter (\'ParentProcessId=\' + $ppid) -ErrorAction SilentlyContinue | ForEach-Object { '
+                    . 'Kill-Tree $_.ProcessId; '
+                    . 'Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue '
+                    . '} }; '
+                    . 'Kill-Tree ' . $pid . '; '
+                    . 'Stop-Process -Id ' . $pid . ' -Force -ErrorAction SilentlyContinue'
+                    . '" 2>NUL';
+                $output = [];
+                $exitCode = 0;
+                $this->executeCommand($psCmd, $output, $exitCode);
+
+                $this->waitMs($retryDelayMs);
+                if (!$this->isRunningByPid($pid)) {
+                    return true;
+                }
             }
         }
-        
+
         // 方案3：wmic terminate（兼容旧系统）
         if ($this->isWmicAvailable()) {
-            $output = [];
-            $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output);
-            $this->waitMs(200);
-            return !$this->isRunningByPid($pid);
+            for ($retry = 0; $retry < $maxRetries; $retry++) {
+                $output = [];
+                $this->executeCommand("wmic process where ProcessId={$pid} call terminate 2>NUL", $output);
+                $this->waitMs($retryDelayMs);
+                if (!$this->isRunningByPid($pid)) {
+                    return true;
+                }
+            }
         }
-        
+
         return !$this->isRunningByPid($pid);
     }
     
@@ -446,14 +484,10 @@ class WindowsProcessDriver extends AbstractProcessDriver
                 return $cached['inUse'];
             }
         }
-        
-        // 优先：socket 探测（跨平台通用，最快）
-        $socketResult = $this->socketPortCheck($port);
-        if ($socketResult !== null) {
-            self::$portCache[$port] = ['inUse' => $socketResult, 'time' => \time()];
-            return $socketResult;
-        }
-        
+
+        // Windows 上优先基于 LISTENING 状态判定。
+        // 某些“幽灵监听”端口不会正确响应 TCP connect，若先用 socket 探测会被误判成空闲，
+        // 导致 Master 复用同一个坏控制端口并永久起不来。
         // 回退1：netstat（通用，所有 Windows 版本支持）
         $output = [];
         $this->executeCommand("netstat -ano 2>NUL", $output);
@@ -467,7 +501,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
                 }
             }
         }
-        
+
         // 回退2：PowerShell Get-NetTCPConnection（Windows 8+/Server 2012+）
         // 当 netstat 输出为空或异常时使用
         if (empty($output) && $this->isPowerShellAvailable()) {
@@ -489,7 +523,14 @@ class WindowsProcessDriver extends AbstractProcessDriver
                 }
             }
         }
-        
+
+        // 最后才使用 socket 探测作为兜底，避免将不响应 connect 的 LISTENING 端口判空。
+        $socketResult = $this->socketPortCheck($port);
+        if ($socketResult !== null) {
+            self::$portCache[$port] = ['inUse' => $socketResult, 'time' => \time()];
+            return $socketResult;
+        }
+
         self::$portCache[$port] = ['inUse' => false, 'time' => \time()];
         return false;
     }

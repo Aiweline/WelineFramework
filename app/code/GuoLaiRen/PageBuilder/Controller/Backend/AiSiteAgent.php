@@ -29,6 +29,7 @@ use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
@@ -561,6 +562,9 @@ SCRIPT;
      */
     public function getTestSse(): void
     {
+        // 释放 PHP session 锁，避免阻塞 SSE
+        $this->releasePhpSessionLockForSse();
+
         $sse = new SseWriter();
         $sse->start();
         $sse->sendEvent('start', ['message' => 'Test SSE connection started']);
@@ -1129,6 +1133,8 @@ SCRIPT;
             'stage' => $session->getStage(),
             'publish_status' => $session->getPublishStatus(),
         ]);
+        // 注册 SSE writer 到 RequestContext，让 AI 流式 chunks 能实时转发到 SSE 客户端
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
         $snapshot = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_SNAPSHOT_PERSIST);
         $this->logStreamSse('snapshot_built', [
             'session_id' => $session->getId(),
@@ -1240,6 +1246,10 @@ SCRIPT;
     {
         @\set_time_limit(0);
         @\ignore_user_abort(true);
+
+        // 立即释放 PHP session 锁，避免阻塞 SSE 长连接
+        $this->releasePhpSessionLockForSse();
+
         $sse = new SseWriter();
         $sse->start();
 

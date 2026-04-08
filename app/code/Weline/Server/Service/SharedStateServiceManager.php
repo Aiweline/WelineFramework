@@ -398,12 +398,21 @@ class SharedStateServiceManager
 
         while (\microtime(true) < $deadline && $pending !== []) {
             $sleepUs = $pollIntervals[\min($pollIndex, \count($pollIntervals) - 1)];
-            SchedulerSystem::usleep($sleepUs);
+            // 关键修复：使用 yieldDelay 替代 usleep，让出控制权给主循环处理 IPC。
+            // usleep 内部虽然也 suspend，但只让出 ~10μs 就立即恢复，不够主循环完成一轮 poll。
+            // yieldDelay 确保当前 Fiber 真正挂起，tick() 返回后主循环可处理 IPC。
+            SchedulerSystem::yieldDelay((int) \max(1, $sleepUs / 1000));
             $pollIndex++;
+
+            // 每轮探活后主动 yield，让 Master 主循环有机会处理 IPC 消息
+            SchedulerSystem::yield();
 
             foreach ($pending as $roleKey => $definition) {
                 $probe = $this->probeDefinition($definition);
                 if (!((bool) ($probe['healthy'] ?? false))) {
+                    if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null) {
+                        SchedulerSystem::yield();
+                    }
                     continue;
                 }
 
@@ -416,6 +425,9 @@ class SharedStateServiceManager
                 $this->writeRuntimeFile($roleKey, $runtime);
                 $done[$roleKey] = $runtime;
                 unset($pending[$roleKey]);
+                if (SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null) {
+                    SchedulerSystem::yield();
+                }
             }
         }
 
