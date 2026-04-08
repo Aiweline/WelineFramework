@@ -260,6 +260,7 @@ class ProcesserTest extends TestCore
         self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
         self::assertStringContainsString('ArgumentList = @(\'/d\',\'/c\',\'"C:\temp\weline-worker-visible.cmd"\')', $script);
         self::assertStringContainsString("FilePath = 'C:\\php\\php.exe'", $script);
+        self::assertStringContainsString("ArgumentList = @('worker.php','--name=weline-worker-hidden')", $script);
         self::assertSame(1, \substr_count($script, 'RedirectStandardOutput'));
         self::assertSame(1, \substr_count($script, 'RedirectStandardError'));
         self::assertSame(1, \substr_count($script, 'PassThru = $true'));
@@ -286,6 +287,58 @@ class ProcesserTest extends TestCore
         self::assertIsString($script);
         self::assertStringContainsString('$results.Add("worker-foreground`t0")', $script);
         self::assertStringContainsString('Start-Process @startArgs | Out-Null', $script);
+    }
+
+    public function testBuildWindowsBatchCreateScriptUsesExplicitArgumentArrayForBackgroundProcess(): void
+    {
+        $script = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchCreateScript', [
+            [[
+                'key' => 'worker-hidden',
+                'command' => '"C:\php\php.exe" worker.php --name=weline-worker-hidden --launch-id=launch-visible',
+                'php' => 'C:\php\php.exe',
+                'arguments' => 'worker.php --name=weline-worker-hidden --launch-id=launch-visible',
+                'argument_list' => ['worker.php', '--name=weline-worker-hidden', '--launch-id=launch-visible'],
+                'process_name' => 'weline-worker-hidden',
+                'cwd' => 'C:\repo',
+                'enable_log' => true,
+                'foreground' => false,
+            ]],
+            'C:\temp\batch-result.txt',
+            'C:\temp\batch-error.txt',
+        ]);
+
+        self::assertIsString($script);
+        self::assertStringContainsString(
+            "ArgumentList = @('worker.php','--name=weline-worker-hidden','--launch-id=launch-visible')",
+            $script
+        );
+    }
+
+    public function testTokenizeCommandLineArgumentsPreservesQuotedWindowsScriptPathBackslashes(): void
+    {
+        $tokens = $this->invokePrivateStatic(Processer::class, 'tokenizeCommandLineArguments', [
+            '"E:\WelineFramework\DEV-workspace\var\tmp\codex-processer-child.php" --label=tokenize --name=codex-repro',
+        ]);
+
+        self::assertSame([
+            'E:\WelineFramework\DEV-workspace\var\tmp\codex-processer-child.php',
+            '--label=tokenize',
+            '--name=codex-repro',
+        ], $tokens);
+    }
+
+    public function testBuildWindowsDetachedPhpArgvFromCommandPreservesQuotedWindowsBackslashes(): void
+    {
+        $argv = $this->invokePrivateStatic(Processer::class, 'buildWindowsDetachedPhpArgvFromCommand', [
+            '"' . PHP_BINARY . '" "E:\WelineFramework\DEV-workspace\app\code\Weline\Server\bin\dispatcher.php" 127.0.0.1 443 default --name=weline-test-dispatcher',
+        ]);
+
+        self::assertSame(PHP_BINARY, $argv[0]);
+        self::assertSame('E:\WelineFramework\DEV-workspace\app\code\Weline\Server\bin\dispatcher.php', $argv[1]);
+        self::assertSame('127.0.0.1', $argv[2]);
+        self::assertSame('443', $argv[3]);
+        self::assertSame('default', $argv[4]);
+        self::assertSame('--name=weline-test-dispatcher', $argv[5]);
     }
 
     public function testShouldTryManagedProcessReuseIgnoresForegroundFlag(): void

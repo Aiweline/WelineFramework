@@ -93,12 +93,20 @@ final class SharedStateProtocolProbe
     {
         $errno = 0;
         $errstr = '';
-        $socket = @\stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, 1.5);
+        $inSchedulerFiber = SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null;
+        $connectTimeout = $inSchedulerFiber ? 0.15 : 1.5;
+        $socket = @\stream_socket_client("tcp://{$host}:{$port}", $errno, $errstr, $connectTimeout);
         if ($socket === false) {
             return null;
         }
-        \stream_set_blocking($socket, true);
-        \stream_set_timeout($socket, 2, 0);
+        if ($inSchedulerFiber) {
+            // 在 Master/Worker Fiber 场景避免阻塞式 fread 长时间卡住主循环。
+            \stream_set_blocking($socket, false);
+            \stream_set_timeout($socket, 0, 200000);
+        } else {
+            \stream_set_blocking($socket, true);
+            \stream_set_timeout($socket, 2, 0);
+        }
 
         return $socket;
     }
@@ -109,12 +117,14 @@ final class SharedStateProtocolProbe
         if ($socket === null) {
             return false;
         }
+        $inSchedulerFiber = SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null;
+        $readTimeoutSec = $inSchedulerFiber ? 0.25 : 2.0;
         $buffer = '';
         try {
             if (@\fwrite($socket, SessionProtocol::buildPing()) === false) {
                 return false;
             }
-            $msg = self::readNextMessage($socket, $buffer, 2.0);
+            $msg = self::readNextMessage($socket, $buffer, $readTimeoutSec);
 
             return $msg !== null
                 && SessionProtocol::isSuccess($msg)
@@ -130,12 +140,14 @@ final class SharedStateProtocolProbe
         if ($socket === null) {
             return false;
         }
+        $inSchedulerFiber = SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null;
+        $readTimeoutSec = $inSchedulerFiber ? 0.25 : 2.0;
         $buffer = '';
         try {
             if (@\fwrite($socket, SessionProtocol::buildAuth($secret)) === false) {
                 return false;
             }
-            $msg = self::readNextMessage($socket, $buffer, 2.0);
+            $msg = self::readNextMessage($socket, $buffer, $readTimeoutSec);
             if ($msg === null || !SessionProtocol::isSuccess($msg)) {
                 return false;
             }
@@ -143,7 +155,7 @@ final class SharedStateProtocolProbe
             if (@\fwrite($socket, SessionProtocol::buildPing()) === false) {
                 return false;
             }
-            $msg = self::readNextMessage($socket, $buffer, 2.0);
+            $msg = self::readNextMessage($socket, $buffer, $readTimeoutSec);
 
             return $msg !== null
                 && SessionProtocol::isSuccess($msg)
@@ -160,6 +172,7 @@ final class SharedStateProtocolProbe
     private static function readNextMessage($socket, string &$buffer, float $timeoutSec): ?array
     {
         $deadline = \microtime(true) + $timeoutSec;
+        $inSchedulerFiber = SchedulerSystem::isSchedulerActive() && \Fiber::getCurrent() !== null;
         while (\microtime(true) < $deadline) {
             $messages = SessionProtocol::extractMessages($buffer);
             if ($messages !== []) {
@@ -167,6 +180,10 @@ final class SharedStateProtocolProbe
             }
             $chunk = @\fread($socket, 65536);
             if ($chunk === false) {
+                if ($inSchedulerFiber) {
+                    SchedulerSystem::usleep(2000);
+                    continue;
+                }
                 $messages = SessionProtocol::extractMessages($buffer);
 
                 return $messages[0] ?? null;
