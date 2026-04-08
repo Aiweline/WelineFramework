@@ -107,10 +107,17 @@ class MasterCleanupBootstrap
 
         // 解析 netstat 输出：TCP    127.0.0.1:PORT  0.0.0.0:0  LISTENING  PID
         foreach ((array)$netstatOutput as $line) {
+            if (\strpos($line, 'LISTENING') === false) {
+                continue;
+            }
+            if (!\preg_match('/[:\.]' . $port . '\s/', $line)) {
+                continue;
+            }
             if (\preg_match('/\s+(\d+)\s*$/', $line, $matches)) {
                 $pid = (int)$matches[1];
                 if ($pid > 0) {
-                    $name = @\shell_exec("tasklist /FI \"PID eq {$pid}\" /NH 2>nul") ?: "unknown.exe";
+                    $name = @\shell_exec("tasklist /FI \"PID eq {$pid}\" /NH 2>nul");
+                    $name = \is_string($name) && \trim($name) !== '' ? \trim($name) : 'unknown.exe';
                     return ['pid' => $pid, 'name' => \trim($name)];
                 }
             }
@@ -159,6 +166,10 @@ class MasterCleanupBootstrap
      */
     private static function isPortAvailable(int $port): bool
     {
+        if (PHP_OS_FAMILY === 'Windows') {
+            return self::checkPortOccupantWindows($port) === null;
+        }
+
         $sock = @\fsockopen('127.0.0.1', $port, $errno, $errstr, 1);
         if ($sock) {
             @\fclose($sock);
