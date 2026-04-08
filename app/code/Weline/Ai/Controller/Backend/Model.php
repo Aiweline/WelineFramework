@@ -39,6 +39,8 @@ use Weline\Framework\App\Env;
 #[Acl('Weline_Ai::ai_model_manager', 'AI模型管理', 'mdi-robot', 'AI模型管理', 'Weline_Backend::ai_group')]
 class Model extends BackendController
 {
+    private bool $vendorModelsEnsured = false;
+
     /**
      * 获取AI模型（懒加载）
      */
@@ -291,6 +293,7 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_list', '查看AI模型列表', 'mdi-view-list', '查看AI模型列表')]
     public function index(): string
     {
+        $this->ensureVendorModelsAvailable();
         if ($this->request->isAjax() || $this->request->getGet('format') === 'json') {
             return $this->indexJson();
         }
@@ -298,17 +301,50 @@ class Model extends BackendController
             $this->layoutType = 'default.blank';
         }
         try {
-            $page = (int)$this->request->getGet('page', 1);
+            $page = max(1, (int)$this->request->getGet('page', 1));
             $pageSize = 20;
+            $vendorFilter = trim((string)$this->request->getGet('vendor', ''));
+            $statusFilter = trim((string)$this->request->getGet('status', ''));
+            $searchFilter = trim((string)$this->request->getGet('search', ''));
 
-            // 获取模型列表 - 使用fetchArray避免内存问题
-            $modelData = $this->getAiModel()->reset()
-                ->pagination($page, $pageSize)
+            // 先按供应商/状态做数据库过滤，再在内存中做搜索匹配（名称/代码/供应商）
+            $query = $this->getAiModel()->reset();
+            if ($vendorFilter !== '') {
+                $query->where(AiModel::schema_fields_SUPPLIER, $vendorFilter);
+            }
+            if ($statusFilter === '1' || $statusFilter === '0') {
+                $query->where(AiModel::schema_fields_IS_ACTIVE, (int)$statusFilter);
+            }
+
+            $allFilteredRows = $query
                 ->order(AiModel::schema_fields_CREATED_AT, 'DESC')
                 ->select()
                 ->fetchArray();
 
-            // 简化数据，只获取必要字段
+            if ($searchFilter !== '') {
+                $needle = mb_strtolower($searchFilter);
+                $allFilteredRows = array_values(array_filter($allFilteredRows, static function (array $row) use ($needle): bool {
+                    $haystacks = [
+                        (string)($row['name'] ?? ''),
+                        (string)($row['model_code'] ?? ''),
+                        (string)($row['supplier'] ?? ''),
+                        (string)($row['vendor'] ?? ''),
+                    ];
+                    foreach ($haystacks as $text) {
+                        if ($text !== '' && str_contains(mb_strtolower($text), $needle)) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }));
+            }
+
+            $total = count($allFilteredRows);
+            $totalPages = max(1, (int)ceil($total / $pageSize));
+            $page = min($page, $totalPages);
+            $offset = ($page - 1) * $pageSize;
+            $modelData = array_slice($allFilteredRows, $offset, $pageSize);
+
             $models = [];
             $supportedProviders = VendorConfigManager::getSupportedProviders();
             foreach ($modelData as $data) {
@@ -376,23 +412,28 @@ class Model extends BackendController
                 return $bid <=> $aid;
             });
 
-            // 获取总数
-            $total = $this->getAiModel()->reset()->select()->count();
-
             // 获取所有供应商列表（用于筛选）
-            $vendors = [];
-            foreach ($models as $model) {
-                $vendor = $model['vendor'] ?? '';
-                if ($vendor && !in_array($vendor, $vendors)) {
-                    $vendors[] = $vendor;
-                }
-            }
-            sort($vendors);
-            
+            // 注意：不能只从当前分页 models 提取，否则会漏掉非当前页供应商（如 deepseek）。
+            $vendors = $this->collectAllVendorsForFilter();
+
+            $pagination = [
+                'page' => $page,
+                'page_size' => $pageSize,
+                'total' => $total,
+                'total_pages' => $totalPages,
+                'has_prev' => $page > 1,
+                'has_next' => $page < $totalPages,
+                'prev_page' => max(1, $page - 1),
+                'next_page' => min($totalPages, $page + 1),
+            ];
+
             $this->assign('models', $models);
-            $this->assign('pagination', null); // 简化分页
+            $this->assign('pagination', $pagination);
             $this->assign('total', (string)$total);
             $this->assign('vendors', $vendors);
+            $this->assign('currentVendor', $vendorFilter);
+            $this->assign('currentStatus', $statusFilter);
+            $this->assign('currentSearch', $searchFilter);
             $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
             $this->assign('activeTab', 'model');
 
@@ -411,6 +452,7 @@ class Model extends BackendController
 
     private function indexJson(): string
     {
+        $this->ensureVendorModelsAvailable();
         try {
             $models = $this->getAiModel()->reset()
                 ->order(\Weline\Ai\Model\AiModel::schema_fields_CREATED_AT, 'DESC')
@@ -2017,5 +2059,86 @@ class Model extends BackendController
     {
         $this->request->getResponse()->setHeader('Content-Type', 'application/json');
         return json_encode($data);
+    }
+
+    /**
+     * 收集筛选下拉需要的全量供应商列表。
+     * 来源：数据库模型表（supplier/vendor）+ 供应商配置文件，避免分页导致漏项。
+     */
+    private function collectAllVendorsForFilter(): array
+    {
+        $vendors = [];
+
+        try {
+            $rows = $this->getAiModel()->reset()
+                ->select()
+                ->fetchArray();
+            foreach ($rows as $row) {
+                $candidateVendors = [
+                    trim((string)($row['vendor'] ?? '')),
+                    trim((string)($row['supplier'] ?? '')),
+                ];
+                foreach ($candidateVendors as $vendorCode) {
+                    if ($vendorCode !== '' && !in_array($vendorCode, $vendors, true)) {
+                        $vendors[] = $vendorCode;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            Env::log('ai_model.log', '[Model::collectAllVendorsForFilter][db] ' . $e->getMessage(), 'WARNING');
+        }
+
+        try {
+            $supportedProviders = VendorConfigManager::getSupportedProviders();
+            foreach (array_keys($supportedProviders) as $providerCode) {
+                $providerCode = trim((string)$providerCode);
+                if ($providerCode !== '' && !in_array($providerCode, $vendors, true)) {
+                    $vendors[] = $providerCode;
+                }
+            }
+        } catch (\Throwable $e) {
+            Env::log('ai_model.log', '[Model::collectAllVendorsForFilter][provider] ' . $e->getMessage(), 'WARNING');
+        }
+
+        sort($vendors);
+        return $vendors;
+    }
+
+    /**
+     * 自动确保供应商静态模型已同步到数据库，避免后台列表缺失模型。
+     */
+    private function ensureVendorModelsAvailable(): void
+    {
+        if ($this->vendorModelsEnsured) {
+            return;
+        }
+        $this->vendorModelsEnsured = true;
+
+        try {
+            $providers = VendorConfigManager::getSupportedProviders();
+            foreach ($providers as $providerCode => $providerConfig) {
+                $providerCode = trim((string)$providerCode);
+                if ($providerCode === '') {
+                    continue;
+                }
+                if (empty($providerConfig['models']) || !is_array($providerConfig['models'])) {
+                    continue;
+                }
+
+                $exists = $this->getAiModel()->reset()
+                    ->where(AiModel::schema_fields_SUPPLIER, $providerCode)
+                    ->find()
+                    ->fetch();
+                if ($exists && $exists->getId()) {
+                    continue;
+                }
+
+                $this->getModelSyncService()->syncProvider($providerCode, [
+                    'keep_existing' => true,
+                ]);
+            }
+        } catch (\Throwable $e) {
+            Env::log('ai_model.log', '[Model::ensureVendorModelsAvailable] ' . $e->getMessage(), 'WARNING');
+        }
     }
 }
