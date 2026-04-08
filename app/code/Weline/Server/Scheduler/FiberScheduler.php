@@ -154,13 +154,14 @@ class FiberScheduler
      * @param callable|null $beforeResume 在 resume 前调用，接收 Fiber 参数，
      *                                    由 Worker 负责恢复该 Fiber 的请求级上下文。
      */
-    public function tick(?callable $beforeResume = null): void
+    public function tick(?callable $beforeResume = null, ?float $maxExecutionMs = null): void
     {
         if (empty($this->timers)) {
             return;
         }
 
         $now = \microtime(true);
+        $startAt = $maxExecutionMs !== null ? $now : 0.0;
 
         // PHP 8.4 优化：预分配数组类型提升性能
         /** @var array<int, array{deadline: float, fiber: \Fiber}> */
@@ -172,8 +173,16 @@ class FiberScheduler
             }
         }
 
-        // PHP 8.4 优化：批量删除比逐个删除更高效
         foreach ($expired as $id => $timer) {
+            if ($maxExecutionMs !== null) {
+                $elapsedMs = (\microtime(true) - $startAt) * 1000;
+                if ($elapsedMs >= $maxExecutionMs) {
+                    // 超出时间预算：保留剩余 expired timers，让下一轮 tick 继续 resume
+                    break;
+                }
+            }
+
+            // 仅在即将处理该 fiber 时删除对应 timer，避免预算中断后丢失到期 fiber
             unset($this->timers[$id]);
 
             /** @var \Fiber $fiber */
