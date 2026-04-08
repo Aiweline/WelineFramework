@@ -24,8 +24,6 @@ use Weline\Server\Service\CliServerService;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedSidecarInspector;
-use Weline\Server\Service\SharedStateRuntimeResolver;
-use Weline\Server\Service\SharedStateServiceManager;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
@@ -680,7 +678,8 @@ class Start extends CommandAbstract
         
             // 保存实例信息（Master 将从这里读取配置并启动所有进程）
             $workerScript = $this->ensureWorkerScript($workerSslEnabled);
-            $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime);
+            $orchestratorRuntimeOptions = $this->buildOrchestratorRuntimeOptions($frontend);
+            $this->saveInstanceInfo($instanceName, $host, $port, $count, $daemon, $sslEnabled, $sslCert, $sslKey, [], $dispatcherEnabled, $workerPort, $httpRedirectPort, $frontend, $enableLog, $useDirectMode, $workerBasePort, $sharedStateRuntime, $orchestratorRuntimeOptions);
         } finally {
             if ($workerPortAllocationLocked) {
                 $this->releaseWorkerPortAllocationLock();
@@ -713,6 +712,7 @@ class Start extends CommandAbstract
         // Master 统一管理：Dispatcher、Worker、HTTP Redirect
         $config['worker_port'] = $workerPort;
         $config['dispatcher_enabled'] = $dispatcherEnabled;
+        $config['orchestrator_runtime_options'] = $this->buildOrchestratorRuntimeOptions($frontend);
         // 同步 daemon 标志到 config（$daemon 已根据 --frontend 参数覆盖，
         // 但 $config['daemon'] 仍是 env 默认值 true，导致 MasterProcess::log() 跳过控制台输出）
         $config['daemon'] = $daemon;
@@ -753,7 +753,8 @@ class Start extends CommandAbstract
             @\flush();
         }
 
-        // 前台模式也使用 listenHost
+        // 前台模式也使用 listenHost；对外展示的访问域名保留为项目 host（如 *.weline.local）
+        $config['public_host'] = $host;
         $config['host'] = $listenHost;
 
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
@@ -835,6 +836,9 @@ class Start extends CommandAbstract
         $defaultWorkerBasePort = 10000 + MasterProcess::getProjectPortOffset();
         $workerBasePort = (int)($data['worker_base_port'] ?? $defaultWorkerBasePort);
         $workerCount = (int)($data['count'] ?? 1);
+        $orchestratorRuntimeOptions = \is_array($data['orchestrator_runtime_options'] ?? null)
+            ? $data['orchestrator_runtime_options']
+            : [];
         $config = [
             'host' => (string)($data['host'] ?? '127.0.0.1'),
             'port' => $port,
@@ -847,6 +851,7 @@ class Start extends CommandAbstract
             'memory_server_port' => (int) ($data['memory_server_port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'memory_server_token_file_name' => (string) ($data['memory_server_token_file_name'] ?? 'memory_server.token'),
             'daemon' => true,
+            'orchestrator_runtime_options' => $orchestratorRuntimeOptions,
         ];
         // HTTPS 模式固定规则：仅 443 启动 80 端口 Redirect Worker
         $httpRedirectPort = 0;
@@ -1485,19 +1490,39 @@ class Start extends CommandAbstract
             $envConfig = [];
         }
 
-        // 启动阶段不在 CLI 入口串行 ensure 共享服务（包含 -r/force）：
-        // 统一由 Master startup phase-one 与 Dispatcher/maintenance 并发拉起共享侧车，避免前置阻塞。
-        return $this->createSharedStateRuntimeResolver()->resolve($config, $envConfig, $instanceName);
-    }
+        // 提供默认端口和 token，Providers 会使用这些配置
+        $projectOffset = MasterProcess::getProjectPortOffset();
+        $sessionPort = (int) ($config['session_server_port'] ?? 0);
+        if ($sessionPort <= 0) {
+            $sessionPort = 19970 + $projectOffset;
+        }
+        $memoryPort = (int) ($config['memory_server_port'] ?? 0);
+        if ($memoryPort <= 0) {
+            $memoryPort = 19971 + $projectOffset;
+        }
 
-    protected function createSharedStateRuntimeResolver(): SharedStateRuntimeResolver
-    {
-        return new SharedStateRuntimeResolver();
-    }
+        $sessionToken = (string) ($config['session_server_token_file_name'] ?? '');
+        if ($sessionToken === '') {
+            $sessionToken = 'session_server.token';
+        }
+        $memoryToken = (string) ($config['memory_server_token_file_name'] ?? '');
+        if ($memoryToken === '') {
+            $memoryToken = 'memory_server.token';
+        }
 
-    protected function createSharedStateServiceManager(): SharedStateServiceManager
-    {
-        return new SharedStateServiceManager();
+        // 返回配置供 Providers 使用（不再调用 SharedStateServiceManager）
+        return [
+            'session' => [
+                'host' => '127.0.0.1',
+                'port' => $sessionPort,
+                'token_file_name' => $sessionToken,
+            ],
+            'memory' => [
+                'host' => '127.0.0.1',
+                'port' => $memoryPort,
+                'token_file_name' => $memoryToken,
+            ],
+        ];
     }
 
     /**
@@ -3573,7 +3598,7 @@ class Start extends CommandAbstract
     /**
      * 保存实例信息
      */
-    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = []): void
+    protected function saveInstanceInfo(string $instanceName, string $host, int $port, int $count, bool $daemon, bool $sslEnabled = false, string $sslCert = '', string $sslKey = '', array $workerPids = [], bool $dispatcherEnabled = false, int $workerPort = 0, int $httpRedirectPort = 0, bool $frontend = false, bool $enableLog = false, bool $useDirectMode = false, int $workerBasePort = 10000, array $sharedStateRuntime = [], array $orchestratorRuntimeOptions = []): void
     {
         $instanceDir = $this->getInstanceRuntimeDir();
         if (!\is_dir($instanceDir)) {
@@ -3612,6 +3637,8 @@ class Start extends CommandAbstract
             'http_redirect_port' => $httpRedirectPort,
             // 前台模式（重启 Worker 时保持可见窗口）
             'frontend' => $frontend,
+            // 启动参数固化：子进程拉起链路统一读取实例参数，避免依赖 env.php 导致前台策略丢失。
+            'orchestrator_runtime_options' => $orchestratorRuntimeOptions,
             // 进程日志开关（-log 参数或 env 配置 system.processer.log）
             'enable_log' => $enableLog,
             // IPC 控制端口（由 Master 进程计算并更新）
@@ -3637,6 +3664,25 @@ class Start extends CommandAbstract
         }
         
         ServerInstanceManager::atomicWriteJsonStatic($instanceFile, $instanceData);
+    }
+
+    /**
+     * 将 server:start 的关键运行参数固化为实例级 orchestrator 选项。
+     *
+     * @return array<string, bool>
+     */
+    protected function buildOrchestratorRuntimeOptions(bool $frontend): array
+    {
+        if (!$frontend) {
+            return [];
+        }
+
+        // Windows 前台模式：显式允许 Worker/非 Worker 使用前台创建，确保可见全部子进程控制台。
+        return [
+            'allow_windows_frontend_child_process' => true,
+            'frontend_worker_windows' => true,
+            'frontend_non_worker_windows' => true,
+        ];
     }
     
     /**
