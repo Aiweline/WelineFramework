@@ -63,4 +63,22 @@ PHP);
         self::assertSame('session_server.instance-a.token', $env->getConfig('wls.session.token_file_name'));
         self::assertSame('memory_server.instance-a.token', $env->getConfig('wls.memory_service.token_file_name'));
     }
+
+    public function testRuntimeMaintenanceModeDoesNotPersistEnvFile(): void
+    {
+        \file_put_contents($this->envPath, <<<'PHP'
+<?php return [
+    'system' => ['maintenance' => false],
+];
+PHP);
+
+        $env = Env::getInstance()->reload();
+        $env->setRuntimeMaintenanceMode(true);
+
+        self::assertTrue((bool) $env->getConfig('system.maintenance'));
+
+        /** @var array<string, mixed> $persisted */
+        $persisted = include $this->envPath;
+        self::assertFalse((bool) ($persisted['system']['maintenance'] ?? false));
+    }
 }

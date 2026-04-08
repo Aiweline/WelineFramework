@@ -348,16 +348,25 @@ class MasterProcess
             // 创建 Orchestrator
             $this->orchestrator = new ServiceOrchestrator();
             $this->orchestrator->loadProviders();
+            $this->log(__('Master 启动阶段：Orchestrator providers 已加载'));
+            $this->logger->flush(true);
 
             // 注册信号处理
             $this->registerSignalHandlers();
+            $this->log(__('Master 启动阶段：信号处理器已注册'));
+            $this->logger->flush(true);
 
             // 先拉起控制面并落盘 Master 信息，让后台启动确认不再被子服务启动阶段阻塞
             $this->orchestrator->bootstrapControlPlane($this->context);
+            $this->log(__('Master 启动阶段：控制面已启动'));
+            $this->logger->flush(true);
             $this->saveMasterInfo('bootstrapping');
+            $this->log(__('Master 启动阶段：bootstrapping 实例信息已写入'));
+            $this->logger->flush(true);
 
             // 进入主循环；子服务在 Fiber 中拉起，等待期间仍可 poll 控制面 IPC（启动完成后再释放启动锁，方案 B）
             $this->log(__('Master 进入主循环，监控子进程...'));
+            $this->logger->flush(true);
             $this->orchestrator->runLoopWithDeferredChildStartup($this->context, function (): void {
                 $this->releaseStartupLock();
             });
@@ -384,6 +393,10 @@ class MasterProcess
             try {
                 $controlServer = $this->orchestrator?->getControlServer();
                 if ($controlServer !== null) {
+                    WlsLogger::warning_(
+                        '[Master] IPC control server remained open in finally, closing directly. '
+                        . ($this->orchestrator?->describeLifecycleState() ?? 'orchestrator=null')
+                    );
                     $controlServer->close();
                     WlsLogger::info_('[Master] IPC 控制服务器已关闭');
                 }

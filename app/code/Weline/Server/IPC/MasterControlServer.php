@@ -45,6 +45,12 @@ class MasterControlServer
     /** 监听端口 */
     private int $port = 0;
 
+    /** Explicit opt-in for the Windows native socket bridge. */
+    private bool $windowsNativeSocketBridgeEnabled = false;
+
+    /** Tracks whether the current server socket was started via the bridge. */
+    private bool $usingWindowsNativeSocketBridge = false;
+
     /**
      * 已连接的客户端
      * key = (int) socket resource id
@@ -112,6 +118,21 @@ class MasterControlServer
         $this->expectedInstanceCode = \trim($instanceCode);
     }
 
+    public function setWindowsNativeSocketBridgeEnabled(bool $enabled): void
+    {
+        $this->windowsNativeSocketBridgeEnabled = $enabled;
+    }
+
+    public function isWindowsNativeSocketBridgeEnabled(): bool
+    {
+        return $this->windowsNativeSocketBridgeEnabled;
+    }
+
+    public function isUsingWindowsNativeSocketBridge(): bool
+    {
+        return $this->usingWindowsNativeSocketBridge;
+    }
+
     /**
      * 启动控制服务器
      *
@@ -123,6 +144,23 @@ class MasterControlServer
     {
         $this->host = $host;
         $this->port = $port;
+        $this->usingWindowsNativeSocketBridge = false;
+
+        if ($this->shouldUseWindowsNativeSocketBridge()) {
+            if ($this->startWithWindowsNativeSocketBridge($host, $port)) {
+                return true;
+            }
+
+            WlsLogger::warning_(
+                "[IPC-Master] Windows native socket bridge failed on {$host}:{$port}, falling back to stream_socket_server"
+            );
+        } elseif ((\defined('IS_WIN') && IS_WIN) && $this->windowsNativeSocketBridgeEnabled) {
+            WlsLogger::warning_(
+                '[IPC-Master] Windows native socket bridge was requested but is unavailable, using stream_socket_server'
+            );
+        } elseif (\defined('IS_WIN') && IS_WIN) {
+            WlsLogger::info_('[IPC-Master] Windows native socket bridge disabled, using stream_socket_server');
+        }
 
         $errno  = 0;
         $errstr = '';
@@ -148,6 +186,86 @@ class MasterControlServer
                 $this->port = (int)\substr($localName, $colonPos + 1);
             }
         }
+
+        return true;
+    }
+
+    private function shouldUseWindowsNativeSocketBridge(): bool
+    {
+        if (!$this->windowsNativeSocketBridgeEnabled) {
+            return false;
+        }
+
+        return (\defined('IS_WIN') && IS_WIN)
+            && \function_exists('socket_create')
+            && \function_exists('socket_bind')
+            && \function_exists('socket_listen')
+            && \function_exists('socket_export_stream')
+            && \defined('AF_INET')
+            && \defined('SOCK_STREAM')
+            && \defined('SOL_TCP');
+    }
+
+    private function startWithWindowsNativeSocketBridge(string $host, int $port): bool
+    {
+        $rawSocket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+        if ($rawSocket === false) {
+            $errorCode = \socket_last_error();
+            WlsLogger::error_("[IPC-Master] socket_create failed: ({$errorCode}) " . \socket_strerror($errorCode));
+
+            return false;
+        }
+
+        if (\defined('SO_EXCLUSIVEADDRUSE')
+            && !@\socket_set_option($rawSocket, SOL_SOCKET, SO_EXCLUSIVEADDRUSE, 1)) {
+            $errorCode = \socket_last_error($rawSocket);
+            WlsLogger::warning_(
+                "[IPC-Master] socket_set_option SO_EXCLUSIVEADDRUSE failed: ({$errorCode}) "
+                . \socket_strerror($errorCode)
+            );
+        }
+
+        if (!@\socket_bind($rawSocket, $host, $port)) {
+            $errorCode = \socket_last_error($rawSocket);
+            WlsLogger::error_("[IPC-Master] socket_bind failed on {$host}:{$port}: ({$errorCode}) " . \socket_strerror($errorCode));
+            @\socket_close($rawSocket);
+
+            return false;
+        }
+
+        if (!@\socket_listen($rawSocket, 1024)) {
+            $errorCode = \socket_last_error($rawSocket);
+            WlsLogger::error_("[IPC-Master] socket_listen failed: ({$errorCode}) " . \socket_strerror($errorCode));
+            @\socket_close($rawSocket);
+
+            return false;
+        }
+
+        if ($port === 0) {
+            $boundHost = $host;
+            $boundPort = 0;
+            if (@\socket_getsockname($rawSocket, $boundHost, $boundPort)) {
+                $this->port = (int) $boundPort;
+            }
+        }
+
+        $stream = @\socket_export_stream($rawSocket);
+        if (!\is_resource($stream)) {
+            $errorCode = \socket_last_error($rawSocket);
+            WlsLogger::error_(
+                "[IPC-Master] socket_export_stream failed: ({$errorCode}) "
+                . \socket_strerror($errorCode)
+            );
+            @\socket_close($rawSocket);
+
+            return false;
+        }
+
+        $this->serverSocket = $stream;
+        $this->usingWindowsNativeSocketBridge = true;
+        \stream_set_blocking($this->serverSocket, false);
+        @\stream_set_write_buffer($this->serverSocket, 0);
+        WlsLogger::info_("[IPC-Master] started via Windows native socket bridge on {$host}:{$this->port}");
 
         return true;
     }

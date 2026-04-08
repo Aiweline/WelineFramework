@@ -686,6 +686,21 @@ class Env extends DataObject
         self::$maintenanceCached = null;
         self::$maintenanceLastCheck = 0.0;
     }
+
+    /**
+     * Update maintenance mode for the current process only.
+     *
+     * This bypasses the WLS maintenance integration event and avoids writing
+     * app/etc/env.php, which is important for child-process local state flips.
+     */
+    public function setRuntimeMaintenanceMode(bool $enabled): void
+    {
+        $this->applyRuntimeConfig([
+            'system' => ['maintenance' => $enabled],
+        ]);
+        self::$maintenanceCached = $enabled;
+        self::$maintenanceLastCheck = \microtime(true);
+    }
     
     /**
      * @DESC         |获取环境参数

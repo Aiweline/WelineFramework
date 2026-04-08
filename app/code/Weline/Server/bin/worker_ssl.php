@@ -1191,11 +1191,9 @@ $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 // 如果启用了维护模式
 if ($isMaintenanceWorker) {
     try {
-        \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
-        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
-            'system' => ['maintenance' => true],
-        ]);
-        \Weline\Framework\App\Env::refreshMaintenanceCache();
+        // Child-maintenance state must stay process-local and must not
+        // re-enter the master maintenance IPC control queue.
+        \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(true);
         WlsLogger::info_("维护 Worker 模式已启用");
     } catch (\Throwable $e) {
         WlsLogger::warning_("设置维护模式失败: " . $e->getMessage());
@@ -1368,11 +1366,7 @@ if ($controlPort > 0) {
                     if ($mEnabled) {
                         if (!empty($msg['immediate_ack'])) {
                             try {
-                                \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
-                                \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
-                                    'system' => ['maintenance' => true],
-                                ]);
-                                \Weline\Framework\App\Env::refreshMaintenanceCache();
+                                \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(true);
                             } catch (\Throwable $e) {
                                 WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
                             }
@@ -1391,11 +1385,7 @@ if ($controlPort > 0) {
                     }
                     $pendingMaintDrainReqId = null;
                     try {
-                        \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', false);
-                        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
-                            'system' => ['maintenance' => false],
-                        ]);
-                        \Weline\Framework\App\Env::refreshMaintenanceCache();
+                        \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(false);
                         WlsLogger::info_("IPC 维护信号 enabled=false request_id={$mReqId}");
                     } catch (\Throwable $e) {
                         WlsLogger::warning_('IPC 维护信号应用失败: ' . $e->getMessage());
@@ -1679,11 +1669,7 @@ while (true) {
     if ($pendingMaintDrainReqId !== null && !$isMaintenanceWorker
         && empty($connections) && empty($pendingHandshakes)) {
         try {
-            \Weline\Framework\App\Env::getInstance()->setConfig('system.maintenance', true);
-            \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig([
-                'system' => ['maintenance' => true],
-            ]);
-            \Weline\Framework\App\Env::refreshMaintenanceCache();
+            \Weline\Framework\App\Env::getInstance()->setRuntimeMaintenanceMode(true);
         } catch (\Throwable $e) {
             WlsLogger::warning_('维护标志应用失败: ' . $e->getMessage());
         }
