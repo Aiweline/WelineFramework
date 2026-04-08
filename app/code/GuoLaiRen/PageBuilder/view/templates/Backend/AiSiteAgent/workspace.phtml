@@ -455,6 +455,20 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     padding: 28px 28px 24px;
     text-align: center;
 }
+.pb-ai-build-guard-progress {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(37, 99, 235, 0.14);
+    margin-bottom: 8px;
+    overflow: hidden;
+}
+.pb-ai-build-guard-progress-bar {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--backend-color-primary, #2563eb);
+    transition: width 0.4s ease;
+    width: 0%;
+}
 .pb-ai-build-guard-spinner {
     width: 48px;
     height: 48px;
@@ -1296,8 +1310,12 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 <div class="pb-ai-build-guard d-none" id="pb-ai-build-guard" aria-live="polite" aria-hidden="true">
     <div class="pb-ai-build-guard-card">
         <div class="pb-ai-build-guard-spinner" aria-hidden="true"></div>
-        <h5 class="mb-2"><?= htmlspecialchars((string)__('正在准备编辑环境'), ENT_QUOTES, 'UTF-8') ?></h5>
-        <p class="text-muted mb-0" id="pb-ai-build-guard-message"><?= htmlspecialchars((string)__('请稍候，系统正在创建可视化编辑所需环境并持续生成页面。'), ENT_QUOTES, 'UTF-8') ?></p>
+        <h5 class="mb-2" id="pb-ai-build-guard-title"><?= htmlspecialchars((string)__('正在准备编辑环境'), ENT_QUOTES, 'UTF-8') ?></h5>
+        <p class="text-muted mb-2" id="pb-ai-build-guard-message"><?= htmlspecialchars((string)__('请稍候，系统正在创建可视化编辑所需环境并持续生成页面。'), ENT_QUOTES, 'UTF-8') ?></p>
+        <div class="pb-ai-build-guard-progress" id="pb-ai-build-guard-progress">
+            <div class="pb-ai-build-guard-progress-bar" id="pb-ai-build-guard-progress-bar"></div>
+        </div>
+        <p class="text-muted mb-0 small" id="pb-ai-build-guard-detail"></p>
     </div>
 </div>
 
@@ -1421,15 +1439,47 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         buildNavigationGuardActive = !!active;
     }
 
-    function showBuildGuard(message) {
+    function showBuildGuard(message, detail) {
         var guard = document.getElementById('pb-ai-build-guard');
         var messageEl = document.getElementById('pb-ai-build-guard-message');
+        var detailEl = document.getElementById('pb-ai-build-guard-detail');
+        var titleEl = document.getElementById('pb-ai-build-guard-title');
         if (messageEl) {
             messageEl.textContent = String(message || messages.buildPreparing || '');
+        }
+        if (detailEl) {
+            detailEl.textContent = String(detail || '');
+        }
+        if (titleEl) {
+            titleEl.textContent = String(messages.buildPreparing || __('正在准备编辑环境'));
         }
         if (guard) {
             guard.classList.remove('d-none');
             guard.setAttribute('aria-hidden', 'false');
+        }
+        resetBuildGuardProgress();
+    }
+
+    function updateBuildGuardProgress(message, progressPercent, detail) {
+        var messageEl = document.getElementById('pb-ai-build-guard-message');
+        var detailEl = document.getElementById('pb-ai-build-guard-detail');
+        var progressBar = document.getElementById('pb-ai-build-guard-progress-bar');
+        if (messageEl) {
+            messageEl.textContent = String(message || '');
+        }
+        if (detailEl) {
+            detailEl.textContent = String(detail || '');
+        }
+        if (progressBar) {
+            var percent = parseInt(progressPercent || 0, 10) || 0;
+            progressBar.style.width = Math.min(100, Math.max(0, percent)) + '%';
+        }
+    }
+
+    function resetBuildGuardProgress() {
+        var progressBar = document.getElementById('pb-ai-build-guard-progress-bar');
+        if (progressBar) {
+            progressBar.style.width = '0%';
         }
     }
 
@@ -3446,6 +3496,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 return;
             }
             queueGenerationStatus(selectedTypes);
+            buildStartupPending = true;
             showBuildGuard(messages.buildPreparing);
             setBuildNavigationGuard(true);
 
@@ -3474,6 +3525,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 scope_patch: JSON.stringify(buildVirtualThemePatch())
             }).then(function (data) {
                 if (!data || !data.success) {
+                    buildStartupPending = false;
                     hideBuildGuard();
                     setBuildNavigationGuard(false);
                     setRunVirtualThemeButtonsDisabled(false);
@@ -3492,11 +3544,13 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     }
                 }
 
+                buildStartupPending = false;
                 hideBuildGuard();
                 setBuildNavigationGuard(false);
                 resetBuildStartUi();
                 toast('error', messages.operationStreamMissing);
             }).catch(function () {
+                buildStartupPending = false;
                 hideBuildGuard();
                 setBuildNavigationGuard(false);
                 resetBuildStartUi();
@@ -3524,6 +3578,8 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         switchWorkspaceStage: switchWorkspaceStage,
         showBuildGuard: showBuildGuard,
         hideBuildGuard: hideBuildGuard,
+        updateBuildGuardProgress: updateBuildGuardProgress,
+        resetBuildGuardProgress: resetBuildGuardProgress,
         setBuildNavigationGuard: setBuildNavigationGuard,
         updateVirtualBlockState: updateVirtualBlockState,
         replaceCurrentBlockHtml: replaceCurrentBlockHtml,
@@ -4153,9 +4209,14 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         }
 
         if (String(operation || '') === 'build') {
-            buildStartupPending = true;
-            if (typeof previewBridge.showBuildGuard === 'function') {
-                previewBridge.showBuildGuard(messages.buildPreparing);
+            // 只有在还没有显示 build guard 时才显示（比如直接调用 startOperationStream 而不是通过 pbAiConfirmGenerateThemeContinue）
+            if (buildStartupPending && document.getElementById('pb-ai-build-guard') && !document.getElementById('pb-ai-build-guard').classList.contains('d-none')) {
+                // Build guard 已经显示了（由 pbAiConfirmGenerateThemeContinue 显示），不重复显示
+            } else {
+                buildStartupPending = true;
+                if (typeof previewBridge.showBuildGuard === 'function') {
+                    previewBridge.showBuildGuard(messages.buildPreparing);
+                }
             }
             if (typeof previewBridge.setBuildNavigationGuard === 'function') {
                 previewBridge.setBuildNavigationGuard(true);
@@ -4194,9 +4255,13 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             if (payload && payload.state) {
                 hydrateWorkspaceFromState(payload.state);
             }
+            // 确保清理 buildStartupPending 状态
             buildStartupPending = false;
             if (typeof previewBridge.hideBuildGuard === 'function') {
                 previewBridge.hideBuildGuard();
+            }
+            if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                previewBridge.setBuildNavigationGuard(false);
             }
             toast('success', (payload && payload.message) ? String(payload.message) : (messages.buildReady || '编辑环境已就绪'));
         });
@@ -4207,6 +4272,29 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 return;
             }
             logOperationToWorkspaceTerminal('progress', payload, 'progress', payload.message);
+
+            // 更新 build guard 进度条（如果正在显示）
+            if (buildStartupPending && typeof previewBridge.updateBuildGuardProgress === 'function') {
+                var pageLabel = payload.page_label || pageTypeLabelMap[payload.page_type] || payload.page_type || '';
+                var detailText = pageLabel ? (pageLabel + ' · ' + payload.message) : String(payload.message);
+                previewBridge.updateBuildGuardProgress(
+                    (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + (parseInt(payload.progress_percent || 0, 10) || 0) + '%'),
+                    payload.progress_percent || 0,
+                    detailText
+                );
+            }
+
+            // 第一个 progress 事件到来时，隐藏 build guard 并滚动到 SSE 终端
+            if (buildStartupPending && typeof previewBridge.hideBuildGuard === 'function') {
+                buildStartupPending = false;
+                previewBridge.hideBuildGuard();
+                previewBridge.setBuildNavigationGuard(false);
+                // 滚动到 SSE 终端
+                var panels = Array.from(document.querySelectorAll('.pb-ai-workspace-log-panel'));
+                if (panels.length > 0 && typeof panels[0].scrollIntoView === 'function') {
+                    panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
 
             if (window.PbAiWorkspacePreview && payload.page_type) {
                 var progressPercent = parseInt(payload.progress_percent || 0, 10) || 0;

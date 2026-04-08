@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Server\Log\WlsLogger;
 
 class SharedStateRuntimeResolver
 {
@@ -18,6 +19,7 @@ class SharedStateRuntimeResolver
      */
     public function resolve(array $config = [], array $envConfig = [], ?string $instanceName = null): array
     {
+        $resolveStartedAt = \microtime(true);
         if ($envConfig === []) {
             $loaded = Env::getInstance()->getConfig();
             $envConfig = \is_array($loaded) ? $loaded : [];
@@ -43,7 +45,13 @@ class SharedStateRuntimeResolver
 
         $sessionPort = (int) ($config['session_server_port'] ?? $config['session_port'] ?? $session['port']);
         if ($sessionPort <= 0) {
-            $probeRuntime = $this->probeRuntime('session_server', [], $envConfig);
+            $probeRuntime = $this->probeRuntimeWithTelemetry(
+                'session_server',
+                [],
+                $envConfig,
+                'session_port_missing',
+                $instanceName
+            );
             $sessionPort = (int) ($probeRuntime['port'] ?? 0);
             // 如果探测失败,使用项目偏移量计算默认端口
             if ($sessionPort <= 0) {
@@ -59,7 +67,14 @@ class SharedStateRuntimeResolver
             ?? $session['token_file_name']
         ));
         if (!$sessionTokenExplicit && ($sessionToken === '' || $sessionToken === 'session_server.token')) {
-            $probeRuntime = $this->probeRuntime('session_server', $config, $envConfig);
+            $probeRuntime = $this->probeRuntimeWithTelemetry(
+                'session_server',
+                $config,
+                $envConfig,
+                'session_token_default',
+                $instanceName,
+                $sessionPort
+            );
             $probeToken = \trim((string)($probeRuntime['token_file_name'] ?? ''));
             if ($probeToken !== '') {
                 $sessionToken = $probeToken;
@@ -76,7 +91,13 @@ class SharedStateRuntimeResolver
 
         $memoryPort = (int) ($config['memory_server_port'] ?? $config['memory_port'] ?? $memory['port']);
         if ($memoryPort <= 0) {
-            $probeRuntime = $this->probeRuntime('memory_server', [], $envConfig);
+            $probeRuntime = $this->probeRuntimeWithTelemetry(
+                'memory_server',
+                [],
+                $envConfig,
+                'memory_port_missing',
+                $instanceName
+            );
             $memoryPort = (int) ($probeRuntime['port'] ?? 0);
             // 如果探测失败,使用项目偏移量计算默认端口
             if ($memoryPort <= 0) {
@@ -92,7 +113,14 @@ class SharedStateRuntimeResolver
             ?? $memory['token_file_name']
         ));
         if (!$memoryTokenExplicit && ($memoryToken === '' || $memoryToken === 'memory_server.token')) {
-            $probeRuntime = $this->probeRuntime('memory_server', $config, $envConfig);
+            $probeRuntime = $this->probeRuntimeWithTelemetry(
+                'memory_server',
+                $config,
+                $envConfig,
+                'memory_token_default',
+                $instanceName,
+                $memoryPort
+            );
             $probeToken = \trim((string)($probeRuntime['token_file_name'] ?? ''));
             if ($probeToken !== '') {
                 $memoryToken = $probeToken;
@@ -102,7 +130,7 @@ class SharedStateRuntimeResolver
             $memoryToken = 'memory_server.token';
         }
 
-        return [
+        $runtime = [
             'session' => [
                 'host' => $sessionHost,
                 'port' => $sessionPort,
@@ -114,6 +142,16 @@ class SharedStateRuntimeResolver
                 'token_file_name' => $memoryToken,
             ],
         ];
+
+        $elapsedMs = \max(0, (int) \round((\microtime(true) - $resolveStartedAt) * 1000));
+        WlsLogger::info_(
+            '[SharedStateRuntimeResolver] resolve instance=' . ($instanceName ?? 'auto')
+            . ' elapsed=' . $elapsedMs . 'ms'
+            . ' session=' . $runtime['session']['host'] . ':' . $runtime['session']['port'] . '/' . $runtime['session']['token_file_name']
+            . ' memory=' . $runtime['memory']['host'] . ':' . $runtime['memory']['port'] . '/' . $runtime['memory']['token_file_name']
+        );
+
+        return $runtime;
     }
 
     private function resolveCurrentInstanceName(): ?string
@@ -180,5 +218,35 @@ class SharedStateRuntimeResolver
     {
         $probe = (new SharedStateServiceManager())->probe($role, $config, $envConfig);
         return \is_array($probe['runtime'] ?? null) ? $probe['runtime'] : [];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $envConfig
+     * @return array<string, mixed>
+     */
+    private function probeRuntimeWithTelemetry(
+        string $role,
+        array $config,
+        array $envConfig,
+        string $reason,
+        ?string $instanceName = null,
+        ?int $resolvedPort = null
+    ): array {
+        $startedAt = \microtime(true);
+        $runtime = $this->probeRuntime($role, $config, $envConfig);
+        $elapsedMs = \max(0, (int) \round((\microtime(true) - $startedAt) * 1000));
+
+        WlsLogger::info_(
+            '[SharedStateRuntimeResolver] probe role=' . $role
+            . ' reason=' . $reason
+            . ' instance=' . ($instanceName ?? 'auto')
+            . ($resolvedPort !== null ? ' port=' . $resolvedPort : '')
+            . ' elapsed=' . $elapsedMs . 'ms'
+            . ' result_port=' . (int) ($runtime['port'] ?? 0)
+            . ' result_token=' . (string) ($runtime['token_file_name'] ?? '')
+        );
+
+        return $runtime;
     }
 }
