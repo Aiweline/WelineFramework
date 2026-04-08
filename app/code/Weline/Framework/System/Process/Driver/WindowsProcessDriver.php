@@ -596,8 +596,8 @@ class WindowsProcessDriver extends AbstractProcessDriver
      * @inheritDoc
      * 
      * 进程检测策略（参考 Symfony Process）：
-     * 1. tasklist /FI "PID eq"（最快且最通用，所有 Windows 版本支持）
-     * 2. PowerShell Get-Process（回退，处理 tasklist 本地化问题）
+     * 1. PowerShell Get-Process（优先，通常最快）
+     * 2. tasklist /FI "PID eq"（兼容兜底，所有 Windows 版本支持）
      * 
      * 注意 Windows 的 tasklist 输出可能受系统语言影响：
      * - 英文：INFO: No tasks are running which match the specified criteria.
@@ -611,31 +611,7 @@ class WindowsProcessDriver extends AbstractProcessDriver
             return false;
         }
         
-        // 方案1：tasklist /FI（最快，所有 Windows 版本支持）
-        $output = [];
-        $exitCode = 0;
-        // 使用 /FO CSV 格式输出，便于解析且不受本地化影响
-        $this->executeCommand("tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL", $output, $exitCode);
-        
-        if (!empty($output)) {
-            foreach ($output as $line) {
-                $line = \trim($line);
-                if ($line === '') {
-                    continue;
-                }
-                // CSV 格式的第一个字段如果以 "INFO:" 开头（不分语言），说明进程不存在
-                // 但有些本地化版本用不同前缀，所以我们解析 CSV 检查 PID 字段
-                $parts = \str_getcsv($line, ',', '"', '');
-                if (\count($parts) >= 2) {
-                    $parsedPid = $this->sanitizePid($parts[1]);
-                    if ($parsedPid === $pid) {
-                        return true;
-                    }
-                }
-            }
-        }
-        
-        // 方案2：PowerShell Get-Process（处理 tasklist 异常或本地化问题）
+        // 方案1：PowerShell Get-Process（优先快速判断）
         if ($this->isPowerShellAvailable()) {
             $output = [];
             $exitCode = 0;
@@ -647,6 +623,29 @@ class WindowsProcessDriver extends AbstractProcessDriver
             
             if ($exitCode === 0 && !empty($output[0])) {
                 return \trim($output[0]) === '1';
+            }
+        }
+        
+        // 方案2：tasklist /FI（兼容兜底，所有 Windows 版本支持）
+        $output = [];
+        $exitCode = 0;
+        // 使用 /FO CSV 格式输出，便于解析且不受本地化影响
+        $this->executeCommand("tasklist /FI \"PID eq {$pid}\" /FO CSV /NH 2>NUL", $output, $exitCode);
+        
+        if (!empty($output)) {
+            foreach ($output as $line) {
+                $line = \trim($line);
+                if ($line === '') {
+                    continue;
+                }
+                // 解析 CSV 并检查 PID 字段，避免依赖本地化提示文案
+                $parts = \str_getcsv($line, ',', '"', '');
+                if (\count($parts) >= 2) {
+                    $parsedPid = $this->sanitizePid($parts[1]);
+                    if ($parsedPid === $pid) {
+                        return true;
+                    }
+                }
             }
         }
         
