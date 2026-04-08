@@ -16,6 +16,8 @@ use Weline\Framework\Runtime\RequestContext;
 
 final class AiSitePageComponentGenerationService
 {
+    private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
+
     public function __construct(
         private readonly ?FrameworkBuilder $frameworkBuilder = null,
         private readonly ?AiResponseJsonParser $responseJsonParser = null,
@@ -250,10 +252,42 @@ final class AiSitePageComponentGenerationService
 
         $fullContent = '';
         $sse = RequestContext::get(\Weline\Framework\Runtime\RequestContext::SSE_WRITER_KEY);
+        $chunkForwarder = RequestContext::get(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
+        $chunkBuffer = '';
+        $lastChunkFlushAt = \microtime(true);
+        $flushChunkBuffer = static function (bool $force = false) use (&$chunkBuffer, &$lastChunkFlushAt, $chunkForwarder, $region): void {
+            if (!\is_callable($chunkForwarder) || $chunkBuffer === '') {
+                return;
+            }
+            $now = \microtime(true);
+            $hasBoundary = \str_contains($chunkBuffer, "\n");
+            if (
+                !$force
+                && \strlen($chunkBuffer) < 120
+                && !$hasBoundary
+                && ($now - $lastChunkFlushAt) < 0.25
+            ) {
+                return;
+            }
+
+            try {
+                $chunkForwarder([
+                    'region' => $region,
+                    'chunk' => $chunkBuffer,
+                ]);
+            } catch (\Throwable) {
+            }
+
+            $chunkBuffer = '';
+            $lastChunkFlushAt = $now;
+        };
+
         $this->getAiService()->generateStream(
             $prompt,
-            static function (string $chunk) use (&$fullContent, $sse, $region): bool {
+            static function (string $chunk) use (&$fullContent, &$chunkBuffer, $flushChunkBuffer, $sse, $region): bool {
                 $fullContent .= $chunk;
+                $chunkBuffer .= $chunk;
+                $flushChunkBuffer(false);
                 // 实时转发 AI chunks 到 SSE 客户端，不等待完整响应
                 if ($sse !== null) {
                     $sse->sendEvent('ai_chunk', [
@@ -267,6 +301,7 @@ final class AiSitePageComponentGenerationService
             'pagebuilder_component_generation',
             null
         );
+        $flushChunkBuffer(true);
 
         $payload = $this->getResponseJsonParser()->extractAndDecode($fullContent);
         if ($payload === null) {
