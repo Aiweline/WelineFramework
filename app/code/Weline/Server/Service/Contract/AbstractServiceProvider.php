@@ -83,6 +83,12 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
      */
     public function healthCheck(ServiceInstance $instance): HealthCheckResult
     {
+        // 已有 IPC 连接的实例无需额外做 PID/端口探活。
+        // 在 Windows 下进程查询代价高（PowerShell/tasklist），此处优先走 IPC 快路径。
+        if ($instance->ipcClientId !== null) {
+            return HealthCheckResult::healthy();
+        }
+
         if ($instance->pid <= 0) {
             return HealthCheckResult::unhealthy('No PID');
         }
@@ -100,12 +106,6 @@ abstract class AbstractServiceProvider implements ServiceProviderInterface
 
         if (!$isRunning) {
             return HealthCheckResult::unhealthy('Process not running');
-        }
-
-        // 已有 IPC 连接的实例无需 fsockopen 探活（IPC 本身已证明进程健康），
-        // 避免每 30 秒产生一次无意义的 TCP connect → disconnect 日志。
-        if ($instance->ipcClientId !== null) {
-            return HealthCheckResult::healthy();
         }
 
         // 无 IPC 连接时才用 fsockopen 做端口连通性检测
