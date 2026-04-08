@@ -9,6 +9,19 @@ use Weline\Server\IPC\MasterControlServer;
 
 final class MasterControlServerCommandClientTest extends TestCase
 {
+    public function testWindowsNativeSocketBridgeIsDisabledByDefault(): void
+    {
+        $server = new MasterControlServer();
+        self::assertTrue($server->start('127.0.0.1', 0));
+
+        try {
+            self::assertFalse($server->isWindowsNativeSocketBridgeEnabled());
+            self::assertFalse($server->isUsingWindowsNativeSocketBridge());
+        } finally {
+            $server->close();
+        }
+    }
+
     public function testCommandClientIsClassifiedAsControlBeforeDisconnect(): void
     {
         $server = new MasterControlServer();
