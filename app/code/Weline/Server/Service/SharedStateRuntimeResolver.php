@@ -36,8 +36,6 @@ class SharedStateRuntimeResolver
         $session = $base->getSession();
         $memory = $base->getMemory();
 
-        $wlsServer = \is_array($config['wls_server'] ?? null) ? $config['wls_server'] : [];
-
         $sessionHost = \trim((string) ($config['session_host'] ?? $config['session_server_host'] ?? $session['host']));
         if ($sessionHost === '') {
             $sessionHost = '127.0.0.1';
@@ -45,17 +43,10 @@ class SharedStateRuntimeResolver
 
         $sessionPort = (int) ($config['session_server_port'] ?? $config['session_port'] ?? $session['port']);
         if ($sessionPort <= 0) {
-            $probeRuntime = $this->probeRuntimeWithTelemetry(
-                'session_server',
-                [],
-                $envConfig,
-                'session_port_missing',
-                $instanceName
-            );
-            $sessionPort = (int) ($probeRuntime['port'] ?? 0);
+            $sessionPort = 19970 + MasterProcess::getProjectPortOffset();
             // 如果探测失败,使用项目偏移量计算默认端口
             if ($sessionPort <= 0) {
-                $sessionPort = 19970 + MasterProcess::getProjectPortOffset();
+                $sessionPort = 19970;
             }
         }
 
@@ -67,18 +58,7 @@ class SharedStateRuntimeResolver
             ?? $session['token_file_name']
         ));
         if (!$sessionTokenExplicit && ($sessionToken === '' || $sessionToken === 'session_server.token')) {
-            $probeRuntime = $this->probeRuntimeWithTelemetry(
-                'session_server',
-                $config,
-                $envConfig,
-                'session_token_default',
-                $instanceName,
-                $sessionPort
-            );
-            $probeToken = \trim((string)($probeRuntime['token_file_name'] ?? ''));
-            if ($probeToken !== '') {
-                $sessionToken = $probeToken;
-            }
+            $sessionToken = $this->resolveImplicitTokenFileName('session_server', $sessionPort);
         }
         if ($sessionToken === '') {
             $sessionToken = 'session_server.token';
@@ -91,17 +71,10 @@ class SharedStateRuntimeResolver
 
         $memoryPort = (int) ($config['memory_server_port'] ?? $config['memory_port'] ?? $memory['port']);
         if ($memoryPort <= 0) {
-            $probeRuntime = $this->probeRuntimeWithTelemetry(
-                'memory_server',
-                [],
-                $envConfig,
-                'memory_port_missing',
-                $instanceName
-            );
-            $memoryPort = (int) ($probeRuntime['port'] ?? 0);
+            $memoryPort = 19971 + MasterProcess::getProjectPortOffset();
             // 如果探测失败,使用项目偏移量计算默认端口
             if ($memoryPort <= 0) {
-                $memoryPort = 19971 + MasterProcess::getProjectPortOffset();
+                $memoryPort = 19971;
             }
         }
 
@@ -113,18 +86,7 @@ class SharedStateRuntimeResolver
             ?? $memory['token_file_name']
         ));
         if (!$memoryTokenExplicit && ($memoryToken === '' || $memoryToken === 'memory_server.token')) {
-            $probeRuntime = $this->probeRuntimeWithTelemetry(
-                'memory_server',
-                $config,
-                $envConfig,
-                'memory_token_default',
-                $instanceName,
-                $memoryPort
-            );
-            $probeToken = \trim((string)($probeRuntime['token_file_name'] ?? ''));
-            if ($probeToken !== '') {
-                $memoryToken = $probeToken;
-            }
+            $memoryToken = $this->resolveImplicitTokenFileName('memory_server', $memoryPort);
         }
         if ($memoryToken === '') {
             $memoryToken = 'memory_server.token';
@@ -207,6 +169,20 @@ class SharedStateRuntimeResolver
             'port' => (int) ($memory['port'] ?? (19971 + MasterProcess::getProjectPortOffset())),
             'token_file_name' => (string) ($memory['token_file_name'] ?? 'memory_server.token'),
         ];
+    }
+
+    private function resolveImplicitTokenFileName(string $role, int $port): string
+    {
+        $defaultToken = $role === 'memory_server' ? 'memory_server.token' : 'session_server.token';
+        $defaultPort = ($role === 'memory_server' ? 19971 : 19970) + MasterProcess::getProjectPortOffset();
+        if ($port <= 0 || $port === $defaultPort) {
+            return $defaultToken;
+        }
+
+        $name = \pathinfo($defaultToken, \PATHINFO_FILENAME);
+        $ext = \pathinfo($defaultToken, \PATHINFO_EXTENSION) ?: 'token';
+
+        return $name . '.' . $port . '.' . $ext;
     }
 
     /**
