@@ -54,14 +54,15 @@ class PassthroughCore
     private const WORKER_HEALTH_PATH = '/_wls/health';
 
     /**
-     * Master 已通过 IPC 确认 Worker READY 后的入池探活：短超时、少重试。
-     * 避免与「监听已就绪」重复采用 2~4s 级连接窗口，拖慢首流量入池。
+     * Master 已通过 IPC 确认 Worker READY 后的入池探活。
+     * 注意：当 Worker 处理慢事件（如 detect_website 数据库查询）时，
+     * 需要足够的响应时间才能完成探活。已增加超时时间以适应 Worker 繁忙场景。
      */
-    private const IPC_READY_WARMUP_CONNECT_MIN = 0.5;
-    private const IPC_READY_WARMUP_CONNECT_MAX = 1.5;
-    private const IPC_READY_WARMUP_RESPONSE_SEC = 2.0;
-    private const IPC_READY_WARMUP_RETRIES = 2;
-    private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 50000;
+    private const IPC_READY_WARMUP_CONNECT_MIN = 1.0;
+    private const IPC_READY_WARMUP_CONNECT_MAX = 2.5;
+    private const IPC_READY_WARMUP_RESPONSE_SEC = 8.0;
+    private const IPC_READY_WARMUP_RETRIES = 3;
+    private const IPC_READY_WARMUP_RETRY_DELAY_USEC = 100000;
     /**
      * 首页预热仅用于“提前点燃”应用栈，不参与入池成败判定；因此采用更短预算，避免拖慢维护接流。
      */
@@ -125,6 +126,7 @@ class PassthroughCore
      * 可选：探活/预热过程中协作式让出（仅应在 Dispatcher 的入池 Fiber 内注册为 Fiber::suspend）。
      */
     private ?\Closure $warmupCooperativeYield = null;
+    private bool $homepageWarmupEnabled = false;
 
     /**
      * HTTP 重定向端口（用于明文 HTTP 请求转发到 http_redirect_worker）
@@ -376,6 +378,9 @@ class PassthroughCore
         }
         if (isset($config['empty_pool_spin_max_seconds'])) {
             $this->emptyPoolSpinMaxSeconds = \max(0.0, (float) $config['empty_pool_spin_max_seconds']);
+        }
+        if (isset($config['homepage_warmup_enabled'])) {
+            $this->homepageWarmupEnabled = (bool) $config['homepage_warmup_enabled'];
         }
         if (isset($config['backend_pool_enabled'])) {
             $this->backendPoolEnabled = (bool)$config['backend_pool_enabled'];
@@ -1366,6 +1371,13 @@ class PassthroughCore
                     $this->workerHealth[$port]['last_success'] = \microtime(true);
                 }
                 $this->warmupYield();
+                if (!$this->homepageWarmupEnabled) {
+                    $this->logWarmup(
+                        "Worker:{$port} IPC 入池健康探活已通过，默认跳过首页预热",
+                        'INFO'
+                    );
+                    return ['success' => true, 'error' => ''];
+                }
                 $homeWarmup = $this->warmupWorkerViaHomepage(
                     $port,
                     self::IPC_READY_HOMEPAGE_WARMUP_RETRIES,
@@ -1467,7 +1479,7 @@ class PassthroughCore
      *
      * @return array{success: bool, error: string}
      */
-    private function warmupWorkerViaHomepage(
+    protected function warmupWorkerViaHomepage(
         int $port,
         int $maxRetries = 3,
         float $connectTimeoutSeconds = 5.0,
@@ -1730,7 +1742,7 @@ class PassthroughCore
     /**
      * @return array{success: bool, error: string, status_line?: string, elapsed: float}
      */
-    private function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
+    protected function requestWorkerHealth(int $port, float $connectTimeout, float $responseTimeout): array
     {
         $this->warmupYield();
         $target = "tcp://{$this->workerHost}:{$port}";
@@ -1793,33 +1805,25 @@ class PassthroughCore
                         $tlsOk = true;
                         break;
                     }
+                    // crypto === false 表示握手尚未完成或遇到可恢复错误，继续等待
                     if ($crypto === false) {
-                        return [
-                            'success' => false,
-                            'error' => 'health tls handshake failed',
-                            'elapsed' => \round(\microtime(true) - $startedAt, 2),
-                        ];
-                    }
-                    $ready = $this->waitForStreamReady($conn, true, true, $tlsDeadline);
-                    if ($ready === false) {
-                        return [
-                            'success' => false,
-                            'error' => 'health tls handshake select failed',
-                            'elapsed' => \round(\microtime(true) - $startedAt, 2),
-                        ];
-                    }
-                    if ($ready === 0) {
-                        return [
-                            'success' => false,
-                            'error' => 'health tls handshake timeout',
-                            'elapsed' => \round(\microtime(true) - $startedAt, 2),
-                        ];
+                        $ready = $this->waitForStreamReady($conn, true, true, $tlsDeadline);
+                        if ($ready === false) {
+                            // select 失败，继续循环等待
+                            continue;
+                        }
+                        if ($ready === 0) {
+                            // 超时，继续循环等待
+                            continue;
+                        }
+                        // 读写就绪，继续下一次握手尝试
+                        continue;
                     }
                 }
                 if (!$tlsOk) {
                     return [
                         'success' => false,
-                        'error' => 'health tls handshake timeout',
+                        'error' => 'health tls handshake timeout after ' . \round(\microtime(true) - $startedAt, 2) . 's',
                         'elapsed' => \round(\microtime(true) - $startedAt, 2),
                     ];
                 }
