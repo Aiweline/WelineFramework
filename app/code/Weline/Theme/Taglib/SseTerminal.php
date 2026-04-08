@@ -208,7 +208,6 @@ var eventSource = null;
 var postAbortController = null;
 var isRunning = false;
 var currentUrl = initialUrl;
-var suppressTransportErrorUntil = 0;
 var eventSourceSeq = 0;
 
 // 公共 API 暴露到 window
@@ -356,7 +355,8 @@ function dispatchSseEvent(eventName, data) {
         var msg = data.message || data.result || data.keyword || data.msg;
         if (!msg) msg = (Object.keys(data).length > 0 ? JSON.stringify(data) : eventName);
         var type = (eventName === 'failed' || eventName === 'error') ? 'error' : eventName;
-        if (eventCallbacks[eventName]) {
+        var hasCallback = !!eventCallbacks[eventName];
+        if (hasCallback) {
             eventCallbacks[eventName]({ data: JSON.stringify(data) });
         } else {
             log(msg, type);
@@ -369,12 +369,16 @@ function dispatchSseEvent(eventName, data) {
         if (data.progress !== undefined) {
             setProgress(data.progress);
         }
+        // 如果存在 done/failed/error 事件的回调，则由回调负责管理连接生命周期，不自动 stop()
+        // 这样前端可以在 done 回调中先 reconnection 再 stop()，避免状态显示"已断开"但日志还在输出
         if (eventName === 'done' || eventName === 'failed' || eventName === 'error') {
-            stop({ suppressTransportError: true });
+            if (!hasCallback) {
+                stop();
+            }
         }
     } catch (err) {
         log(typeof data === 'string' ? data : eventName, eventName);
-        if (eventCallbacks[eventName]) eventCallbacks[eventName]({ data: typeof data === 'string' ? data : JSON.stringify(data) });
+        // catch 中不再重复调用 callback，避免重复调用
     }
 }
 
@@ -510,14 +514,11 @@ function start(url, options) {
         if (eventSource !== source || sourceSeq !== eventSourceSeq) {
             return;
         }
-        if (Date.now() < suppressTransportErrorUntil) {
-            suppressTransportErrorUntil = 0;
-            return;
-        }
         if (source.readyState === EventSource.CLOSED) {
             setStatus('disconnected', '$t_disconnected');
-            stop({ suppressTransportError: true });
+            stop();
         } else if (source.readyState === EventSource.CONNECTING) {
+            // 完全遵循原生 EventSource：CONNECTING 由浏览器自动重连管理
             setStatus('connecting', '$t_connecting');
         } else {
             setStatus('error', '$t_error');
@@ -564,11 +565,7 @@ function start(url, options) {
     });
 }
 
-function stop(options) {
-    var settings = options || {};
-    if (settings.suppressTransportError) {
-        suppressTransportErrorUntil = Date.now() + 1500;
-    }
+function stop() {
     if (postAbortController) {
         postAbortController.abort();
         postAbortController = null;
@@ -603,7 +600,7 @@ function clear() {
 if (btnToggle) {
     btnToggle.addEventListener('click', function() {
         if (isRunning) {
-            stop({ suppressTransportError: true });
+            stop();
         } else {
             start();
         }
