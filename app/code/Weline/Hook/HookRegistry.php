@@ -180,6 +180,9 @@ class HookRegistry
         if (!isset($registry['hook_to_module'])) {
             $registry['hook_to_module'] = [];
         }
+
+        // 过滤已卸载/禁用模块的残留数据，避免对无效模块继续做校验
+        $this->purgeInactiveModulesFromRegistry($registry);
         
         // 2. 清除目标模块的旧数据
         $this->clearModuleHooks($registry, $moduleNames);
@@ -202,6 +205,32 @@ class HookRegistry
         
         // 8. 保存注册表
         return $this->saveRegistry($registry);
+    }
+
+    /**
+     * 清理注册表中已卸载或禁用模块的残留数据。
+     */
+    private function purgeInactiveModulesFromRegistry(array &$registry): void
+    {
+        $env = \Weline\Framework\App\Env::getInstance();
+
+        foreach ($registry['hooks'] as $hookName => $hookInfo) {
+            $ownerModule = $hookInfo['module'] ?? '';
+            if ($ownerModule !== '' && !$env->getModuleStatus($ownerModule)) {
+                unset($registry['hooks'][$hookName], $registry['hook_to_module'][$hookName]);
+                continue;
+            }
+
+            if (!isset($hookInfo['implementations']) || !is_array($hookInfo['implementations'])) {
+                continue;
+            }
+
+            foreach ($hookInfo['implementations'] as $moduleName => $_implementation) {
+                if (!$env->getModuleStatus((string)$moduleName)) {
+                    unset($registry['hooks'][$hookName]['implementations'][$moduleName]);
+                }
+            }
+        }
     }
     
     /**
