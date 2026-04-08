@@ -98,6 +98,9 @@ class ExtendsRegistry
     {
         // 1. 加载现有注册表
         $registry = $this->getRegistry(true);
+
+        // 清理已卸载/禁用模块残留，避免对无效模块继续做 extends 完备性/继承关系处理
+        $this->purgeInactiveModulesFromRegistry($registry);
         
         // 2. 清除目标模块的旧数据
         $this->clearModuleExtends($registry, $moduleNames);
@@ -116,6 +119,33 @@ class ExtendsRegistry
         
         // 7. 保存注册表
         return $this->saveRegistry($registry);
+    }
+
+    /**
+     * 清理扩展注册表中已卸载或禁用模块的残留数据。
+     */
+    private function purgeInactiveModulesFromRegistry(array &$registry): void
+    {
+        $env = Env::getInstance();
+
+        foreach (array_keys($registry) as $moduleName) {
+            if (!$env->getModuleStatus((string)$moduleName)) {
+                unset($registry[$moduleName]);
+            }
+        }
+
+        foreach ($registry as $targetModule => &$targetData) {
+            if (!isset($targetData['extended_by']) || !is_array($targetData['extended_by'])) {
+                continue;
+            }
+
+            foreach (array_keys($targetData['extended_by']) as $sourceModule) {
+                if (!$env->getModuleStatus((string)$sourceModule)) {
+                    unset($targetData['extended_by'][$sourceModule]);
+                }
+            }
+        }
+        unset($targetData);
     }
     
     /**
