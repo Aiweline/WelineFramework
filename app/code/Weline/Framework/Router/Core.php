@@ -319,7 +319,7 @@ class Core
                 ]);
             }
         }
-        $hasPreviewTheme = w_env_get('preview_theme') !== null && (int)w_env_get('preview_theme') > 0;
+        $hasPreviewTheme = \w_env_get('preview_theme') !== null && (int)\w_env_get('preview_theme') > 0;
         
         
         // 性能优化：复用已读取的统一缓存数据
@@ -460,7 +460,7 @@ class Core
 
     public function processUrl()
     {
-        $hasPreviewTheme = w_env_get('preview_theme') !== null && (int)w_env_get('preview_theme') > 0;
+        $hasPreviewTheme = \w_env_get('preview_theme') !== null && (int)\w_env_get('preview_theme') > 0;
         // 后端请求不缓存，直接跳过缓存读取
         if ($this->is_backend) {
             $this->routerGeneratedGetParams = [];
@@ -470,7 +470,7 @@ class Core
             $eventManager = ObjectManager::getInstance(EventsManager::class);
             /** @var DataObject $routerData */
             $routerData = new DataObject(['path' => $url, 'rule' => new DataObject()]);
-            $originalGet = w_env_get();
+            $originalGet = \w_env_get();
             $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
             $pathData = $routerData->getData('path');
             $url = is_string($pathData) ? $pathData : (string)($pathData ?? '');
@@ -573,7 +573,7 @@ class Core
                 $eventManager = ObjectManager::getInstance(EventsManager::class);
                 /** @var DataObject $routerData */
                 $routerData = new DataObject(['path' => $url, 'rule' => new DataObject()]);
-                $originalGet = w_env_get();
+                $originalGet = \w_env_get();
                 $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
                 $pathData = $routerData->getData('path');
                 $url = is_string($pathData) ? $pathData : (string)($pathData ?? '');
@@ -1150,7 +1150,7 @@ class Core
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
         // 编辑器预览模式不写入全页缓存
-        $isEditorMode = w_env_get('editor_mode') !== null && (w_env_get('editor_mode') === '1' || w_env_get('editor_mode') === 'true');
+        $isEditorMode = \w_env_get('editor_mode') !== null && (\w_env_get('editor_mode') === '1' || \w_env_get('editor_mode') === 'true');
         if (!$this->is_backend && !$isEditorMode && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
             // 写前校验：fullUri 无效时跳过 FPC 写入，避免以错误 key 污染缓存
             $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
@@ -1236,7 +1236,7 @@ class Core
     private function collectRouterGeneratedGetParams(array $originalGet): array
     {
         $generated = [];
-        foreach (w_env_get() as $key => $value) {
+        foreach (\w_env_get() as $key => $value) {
             if (!array_key_exists($key, $originalGet) || $originalGet[$key] !== $value) {
                 $generated[$key] = $value;
             }

@@ -48,7 +48,7 @@ final class LastEventIdResolver
             }
         }
 
-        return $_SERVER['HTTP_LAST_EVENT_ID'] ?? 0;
+        return \w_env('http_last_event_id', 0) ?: 0;
     }
 
     private static function normalizeToPositiveInt(mixed $value): int

@@ -174,6 +174,10 @@ if (\is_file($envFile)) {
 }
 $envConfig = \is_array($envConfig) ? $envConfig : [];
 $sharedStateRuntime = \Weline\Server\Service\SharedStateRuntimeOptions::fromCliArgs($argv, $instanceName, $envConfig);
+
+// 初始化 WLS Worker 全局状态
+\Weline\Server\Service\WlsWorkerGlobals::setArgv($argv);
+\Weline\Server\Service\WlsWorkerGlobals::resetStd();
 $envOverrides = $sharedStateRuntime->toEnvOverrides();
 $envConfig = \array_replace_recursive($envConfig, $envOverrides);
 \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig($envOverrides);
@@ -215,7 +219,6 @@ $lastMainLoopUnblockedLogAt = 0.0;
  */
 function _loadSniCertsFromMap(): array
 {
-    global $_domainPolicies;
     $mapFile = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'ssl_certificate_map.json';
     if (!\is_file($mapFile)) {
         return [];
@@ -245,7 +248,7 @@ function _loadSniCertsFromMap(): array
                 ];
             }
         }
-        $_domainPolicies = $policies;
+        \Weline\Server\Service\WlsWorkerGlobals::setDomainPolicies($policies);
         return $certs;
     } catch (\Throwable) {
         return [];
@@ -259,8 +262,7 @@ function _loadSniCertsFromMap(): array
  */
 function _getDomainPolicy(string $domain): array
 {
-    global $_domainPolicies;
-    return $_domainPolicies[$domain] ?? ['force_https' => 1, 'force_root_to_www' => 0];
+    return \Weline\Server\Service\WlsWorkerGlobals::getDomainPolicy($domain);
 }
 
 /**
@@ -356,17 +358,7 @@ function _resolveSniCert(string $domain, array &$cache): ?array
  */
 function _clearRestoreCertNegativeCache(array $domains): void
 {
-    static $attempted = [];  // 与 _restoreCertFromDb 共享同一 static 变量（同文件作用域中不存在，需通过引用传递）
-    // PHP static 变量在同一进程内按函数隔离，此处须通过注入方式清除。
-    // 实现方案：用一个全局的引用数组代替函数内 static，见下方 $_wlsRestoreAttempted。
-    global $_wlsRestoreAttempted;
-    if (empty($domains)) {
-        $_wlsRestoreAttempted = [];
-    } else {
-        foreach ($domains as $d) {
-            unset($_wlsRestoreAttempted[$d]);
-        }
-    }
+    \Weline\Server\Service\WlsWorkerGlobals::clearRestoreAttempted($domains);
 }
 
 /**
@@ -375,11 +367,10 @@ function _clearRestoreCertNegativeCache(array $domains): void
  */
 function _restoreCertFromDb(string $domain): bool
 {
-    global $_domainPolicies, $_wlsRestoreAttempted;
-    if (isset($_wlsRestoreAttempted[$domain])) {
+    if (\Weline\Server\Service\WlsWorkerGlobals::isRestoreAttempted($domain)) {
         return false;
     }
-    $_wlsRestoreAttempted[$domain] = true;
+    \Weline\Server\Service\WlsWorkerGlobals::setRestoreAttempted($domain);
 
     try {
         /** @var \Weline\Server\Service\SslCertificateService $sslService */
@@ -393,10 +384,12 @@ function _restoreCertFromDb(string $domain): bool
             );
             $certModel->clearQuery()->loadByDomain($domain);
             if ($certModel->getCertId()) {
-                $_domainPolicies[$domain] = [
+                $policies = \Weline\Server\Service\WlsWorkerGlobals::getDomainPolicies();
+                $policies[$domain] = [
                     'force_https' => $certModel->getForceHttps() ? 1 : 0,
                     'force_root_to_www' => $certModel->getForceRootToWww() ? 1 : 0,
                 ];
+                \Weline\Server\Service\WlsWorkerGlobals::setDomainPolicies($policies);
             }
         }
         return $restored;
@@ -3660,11 +3653,11 @@ function handleRequest(
         return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: " . \strlen($notFoundBody) . "\r\nConnection: close\r\n\r\n{$notFoundBody}";
     }
     // ========== ACME HTTP-01 校验结束 ==========
-    
+
     // ========== 静态文件处理（WLS 模式特有） ==========
     $staticResponse = handleStaticFile($uri, $rawRequest);
     if ($staticResponse !== null) {
-        $cacheInfo = $WLS_LAST_STATIC_CACHE ?? null;
+        $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache();
         $cacheStatus = $cacheInfo['status'] ?? 'miss';
         $cacheUri = $cacheInfo['uri'] ?? $uri;
         WlsLogger::info_(__('静态文件缓存: %{1} %{2}', [\strtoupper($cacheStatus), $cacheUri]));
@@ -3863,19 +3856,18 @@ function handleRequest(
  */
 function handleStaticFile(string $uri, string $rawRequest): ?string
 {
-    global $WLS_STATIC_CACHE_MAX_TOTAL, $WLS_STATIC_CACHE_MAX_SIZE, $WLS_CACHE_EVICTION_THRESHOLD, $WLS_LAST_STATIC_CACHE;
-    $WLS_LAST_STATIC_CACHE = null;
-    
+    \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache(null);
+
     // ========== 静态文件内存缓存（冷热淘汰策略） ==========
     // 缓存格式：[filepath => ['content' => string, 'mtime' => int, 'size' => int, 'cached_at' => int, 'hits' => int, 'last_access' => int]]
     static $staticFileCache = [];
     static $staticFileCacheTotalSize = 0;
     static $staticFileCacheMaxAge = 86400 * 7;  // 缓存有效期：7 天
-    
-    // 使用全局配置（如果已设置）
-    $maxTotal = $WLS_STATIC_CACHE_MAX_TOTAL ?? 100 * 1024 * 1024;
-    $maxSize = $WLS_STATIC_CACHE_MAX_SIZE ?? 1024 * 1024;
-    $evictionThreshold = $WLS_CACHE_EVICTION_THRESHOLD ?? 5 * 1024 * 1024;
+
+    // 使用 WlsWorkerGlobals 配置
+    $maxTotal = \Weline\Server\Service\WlsWorkerGlobals::getStaticCacheMaxTotal();
+    $maxSize = \Weline\Server\Service\WlsWorkerGlobals::getStaticCacheMaxSize();
+    $evictionThreshold = \Weline\Server\Service\WlsWorkerGlobals::getCacheEvictionThreshold();
     
     // 特殊命令：清理内存缓存
     if ($uri === '__CLEAR_CACHE__') {
@@ -4079,11 +4071,11 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     }
     
     // 默认标记为 MISS（非内存缓存命中）
-    $WLS_LAST_STATIC_CACHE = [
+    \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([
         'status' => 'miss',
         'uri' => $uriPath,
         'path' => $filename,
-    ];
+    ]);
 
     $validatedCached = null;
     $cacheHeaderStatus = 'MISS';
@@ -4095,7 +4087,9 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         ) {
             $validatedCached = $cached;
             $cacheHeaderStatus = 'HIT';
-            $WLS_LAST_STATIC_CACHE['status'] = 'hit';
+            $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache() ?: [];
+            $cacheInfo['status'] = 'hit';
+            \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache($cacheInfo);
             $staticFileCache[$filename]['hits'] = ($cached['hits'] ?? 0) + 1;
             $staticFileCache[$filename]['last_access'] = $now;
         } else {
@@ -4147,7 +4141,9 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
             if ($cached['mtime'] === $mtime && ($now - $cached['cached_at']) < $staticFileCacheMaxAge) {
                 $content = $cached['content'];
                     $fromCache = true;
-                    $WLS_LAST_STATIC_CACHE['status'] = 'hit';
+                    $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache() ?: [];
+                    $cacheInfo['status'] = 'hit';
+                    \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache($cacheInfo);
                 // 更新访问统计（冷热计数）
                 $staticFileCache[$filename]['hits'] = ($cached['hits'] ?? 0) + 1;
                 $staticFileCache[$filename]['last_access'] = $now;

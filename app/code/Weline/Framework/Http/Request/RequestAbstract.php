@@ -586,31 +586,21 @@ abstract class RequestAbstract extends RequestFilter
      */
     public static function detectScheme(): string
     {
-        // REQUEST_SCHEME
-        if (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] === 'https') {
-            return 'https';
+        // 按优先级检查各种协议来源
+        $sources = [
+            \w_env('request.scheme'),
+            \w_env('server.https'),
+            \w_env('http_x_forwarded_proto'),
+            \w_env('http_weline_original_scheme'),
+            \w_env('server.server_port'),
+        ];
+
+        foreach ($sources as $value) {
+            if ($value === 'https' || $value === 'on' || $value === '1' || $value === '443') {
+                return 'https';
+            }
         }
-        
-        // HTTPS 头
-        if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] === '1')) {
-            return 'https';
-        }
-        
-        // 代理头 X-Forwarded-Proto
-        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-            return 'https';
-        }
-        
-        // Weline 自定义代理头
-        if (isset($_SERVER['HTTP_WELINE_ORIGINAL_SCHEME']) && $_SERVER['HTTP_WELINE_ORIGINAL_SCHEME'] === 'https') {
-            return 'https';
-        }
-        
-        // 端口 443
-        if (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] === '443') {
-            return 'https';
-        }
-        
+
         return 'http';
     }
     
@@ -630,16 +620,16 @@ abstract class RequestAbstract extends RequestFilter
 
         // 透传模式：优先信任 HTTP_HOST（客户端原始 Host）
         $currentPort = '';
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
+        $host = \w_env('server.http_host', \w_env('server.server_name', 'localhost'));
         if (\str_contains($host, ':')) {
             $hostParts = \explode(':', $host, 2);
             $currentPort = (string)($hostParts[1] ?? '');
         }
-        
+
         // WELINE_WEBSITE_URL 由 Url::parser() → processUrlParse() 写入 $_SERVER
         // 它包含 scheme://host[:port][/sub_path]
         // URL 生成时始终参考当前请求的端口（WLS 非标准端口如 9981 必须带上），避免生成错误链接
-        $websiteUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
+        $websiteUrl = \w_env('website_url', '');
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $hostPart = $parsed['host'] ?? 'localhost';
@@ -740,7 +730,7 @@ abstract class RequestAbstract extends RequestFilter
         if ($serverBag->isAjax()) {
             return true;
         }
-        return isset($_GET['isAjax']) || isset($_POST['isAjax']);
+        return \w_env_get('isAjax') !== null || \w_env_post('isAjax') !== null;
     }
 
     public function isIframe(): bool
@@ -753,6 +743,6 @@ abstract class RequestAbstract extends RequestFilter
         if ($serverBag->get('Sec-Fetch-Dest') == 'iframe') {
             return true;
         }
-        return isset($_GET['isIframe']) || isset($_POST['isIframe']);
+        return \w_env_get('isIframe') !== null || \w_env_post('isIframe') !== null;
     }
 }

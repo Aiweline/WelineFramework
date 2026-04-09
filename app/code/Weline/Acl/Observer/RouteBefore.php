@@ -336,7 +336,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
         $hasUser = $user !== null || $sessionAclContext !== null;
         if (!$hasUser) {
-            $sidHint = \strlen((string) ($_COOKIE[WlsStrategy::SESSION_NAME] ?? '')) > 0 ? \substr((string) $_COOKIE[WlsStrategy::SESSION_NAME], 0, 8) . '...' : 'none';
+            $sidHint = \strlen((string) (\w_env_cookie(WlsStrategy::SESSION_NAME) ?? '')) > 0 ? \substr((string) \w_env_cookie(WlsStrategy::SESSION_NAME), 0, 8) . '...' : 'none';
             $backendSess = $this->getBackendSession()->getSession();
             $actualSid = $backendSess->getId();
             $sessIdHint = \strlen($actualSid) > 0 ? \substr($actualSid, 0, 8) . '...' : 'empty';
