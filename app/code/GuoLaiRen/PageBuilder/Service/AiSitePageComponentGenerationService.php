@@ -17,6 +17,8 @@ use Weline\Framework\Runtime\RequestContext;
 final class AiSitePageComponentGenerationService
 {
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
+    private const JSON_REPAIR_MAX_ATTEMPTS = 3;
+    private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
 
     public function __construct(
         private readonly ?FrameworkBuilder $frameworkBuilder = null,
@@ -54,8 +56,30 @@ final class AiSitePageComponentGenerationService
      */
     public function generateSharedComponents(array $websiteProfile, array $scope): array
     {
+        return $this->generateSharedComponentsConcurrently($websiteProfile, $scope);
+    }
+
+    /**
+     * @return array{
+     *   code:string,
+     *   name:string,
+     *   region:string,
+     *   phtml:string,
+     *   html:string,
+     *   default_config:array<string,mixed>,
+     *   ai_data:array<string,mixed>
+     * }
+     */
+    public function generateSharedComponent(string $region, array $websiteProfile, array $scope): array
+    {
+        $region = \trim($region);
+        if (!\in_array($region, ['header', 'footer'], true)) {
+            throw new \InvalidArgumentException((string)__('Unsupported shared component region: %{1}', [$region]));
+        }
+
         $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
         $cacheKey = \md5((string)\json_encode([
+            'region' => $region,
             'site' => $siteDisplayName,
             'brief' => $this->pickString($websiteProfile['brief_description'] ?? null, $scope['brief_description'] ?? null, $scope['user_description'] ?? null),
             'pages' => $this->resolveScopedPageTypes($scope),
@@ -69,7 +93,7 @@ final class AiSitePageComponentGenerationService
         $headerConfig = $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
         $footerConfig = $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
 
-        $sharedCache[$cacheKey] = [
+        $sharedCache[$cacheKey] = match ($region) {
             'header' => $this->generateComponent(
                 'header/ai-site-header',
                 'AI Site Header',
@@ -78,7 +102,7 @@ final class AiSitePageComponentGenerationService
                 $headerConfig,
                 $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $headerConfig)
             ),
-            'footer' => $this->generateComponent(
+            default => $this->generateComponent(
                 'footer/ai-site-footer',
                 'AI Site Footer',
                 'footer',
@@ -86,7 +110,7 @@ final class AiSitePageComponentGenerationService
                 $footerConfig,
                 $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig)
             ),
-        ];
+        };
 
         return $sharedCache[$cacheKey];
     }
@@ -109,38 +133,190 @@ final class AiSitePageComponentGenerationService
      */
     public function generatePageSections(string $pageType, array $websiteProfile, array $scope): array
     {
+        return $this->generatePageSectionsConcurrently($pageType, $websiteProfile, $scope);
+    }
+
+    /**
+     * 并发生成多个组件（header + footer + 多个 section 可同时进行）
+     *
+     * 使用 Fiber 实现并发：每个组件在独立 Fiber 中调用 generateComponent()，
+     * 复用完整的 AI 调用 → JSON 修复 → 语法校验 → 自动修复流程。
+     *
+     * @param array<string, array{
+     *   componentCode:string,
+     *   name:string,
+     *   region:string,
+     *   prompt:string,
+     *   defaultConfig:array<string,mixed>,
+     *   renderContext:array<string,mixed>
+     * }> $components region => component spec
+     * @return \Generator yields [region => result] as each component finishes; result has same shape as generateComponent()
+     */
+    public function generateComponentsConcurrently(array $components): \Generator
+    {
+        if ($components === []) {
+            return;
+        }
+
+        // Fiber 不可用或测试环境 → 串行回退
+        if ($this->isTestEnvironment() || !\class_exists(\Fiber::class)) {
+            foreach ($components as $region => $spec) {
+                yield $region => $this->generateComponent(
+                    $spec['componentCode'],
+                    $spec['name'],
+                    $spec['region'],
+                    $spec['prompt'],
+                    $spec['defaultConfig'],
+                    $spec['renderContext']
+                );
+            }
+            return;
+        }
+
+        /** @var array<string, \Fiber> $fibers */
+        $fibers = [];
+        foreach ($components as $region => $spec) {
+            $fibers[$region] = new \Fiber(function () use ($spec): array {
+                return $this->generateComponent(
+                    $spec['componentCode'],
+                    $spec['name'],
+                    $spec['region'],
+                    $spec['prompt'],
+                    $spec['defaultConfig'],
+                    $spec['renderContext']
+                );
+            });
+        }
+
+        // 启动所有 Fiber
+        foreach ($fibers as $fiber) {
+            $fiber->start();
+        }
+
+        // 轮询直到全部完成
+        $results = [];
+        $errors = [];
+        while (\count($results) + \count($errors) < \count($fibers)) {
+            foreach ($fibers as $region => $fiber) {
+                if (isset($results[$region]) || isset($errors[$region])) {
+                    continue;
+                }
+                if ($fiber->isTerminated()) {
+                    try {
+                        $results[$region] = $fiber->getReturn();
+                    } catch (\Throwable $e) {
+                        $errors[$region] = $e;
+                    }
+                } elseif ($fiber->isSuspended()) {
+                    try {
+                        $fiber->resume();
+                    } catch (\Throwable $e) {
+                        $errors[$region] = $e;
+                    }
+                }
+            }
+            // 避免 CPU 空转
+            \usleep(5000);
+        }
+
+        // 按原始顺序 yield 结果
+        foreach ($components as $region => $_) {
+            if (isset($results[$region])) {
+                yield $region => $results[$region];
+            } elseif (isset($errors[$region])) {
+                throw $errors[$region];
+            }
+        }
+    }
+
+    /**
+     * 并发生成 header + footer 共享组件
+     *
+     * @return array{header:array<string,mixed>, footer:array<string,mixed>}
+     */
+    public function generateSharedComponentsConcurrently(array $websiteProfile, array $scope): array
+    {
+        $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
+        $headerConfig = $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+        $footerConfig = $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
+
+        $components = [
+            'header' => [
+                'componentCode' => 'header/ai-site-header',
+                'name' => 'AI Site Header',
+                'region' => 'header',
+                'prompt' => $this->buildHeaderGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $headerConfig),
+                'defaultConfig' => $headerConfig,
+                'renderContext' => $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $headerConfig),
+            ],
+            'footer' => [
+                'componentCode' => 'footer/ai-site-footer',
+                'name' => 'AI Site Footer',
+                'region' => 'footer',
+                'prompt' => $this->buildFooterGenerationPrompt($websiteProfile, $scope, $siteDisplayName, $footerConfig),
+                'defaultConfig' => $footerConfig,
+                'renderContext' => $this->buildRenderContext(Page::TYPE_HOME, $websiteProfile, $scope, $footerConfig),
+            ],
+        ];
+
+        $result = ['header' => null, 'footer' => null];
+        foreach ($this->generateComponentsConcurrently($components) as $region => $component) {
+            $result[$region] = $component;
+        }
+
+        return $result;
+    }
+
+    /**
+     * 并发生成一个页面的所有 section
+     *
+     * @return array{blueprint:array<string,mixed>, sections:list<array<string,mixed>>}
+     */
+    public function generatePageSectionsConcurrently(string $pageType, array $websiteProfile, array $scope): array
+    {
         $blueprint = $this->getPageBlueprintService()->buildPageBlueprint($pageType, $scope, $websiteProfile);
-        $sections = [];
+        $components = [];
+        $sectionMeta = [];
 
         foreach (($blueprint['sections'] ?? []) as $section) {
             if (!\is_array($section)) {
                 continue;
             }
-
             $sectionCode = \trim((string)($section['code'] ?? ''));
             if ($sectionCode === '') {
                 continue;
             }
 
             $defaultConfig = $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
-            $sections[] = \array_replace(
-                [
-                    'key' => (string)($section['key'] ?? ''),
-                    'code' => $sectionCode,
-                    'name' => (string)($section['name'] ?? $sectionCode),
-                    'region' => 'content',
-                    'sort_order' => (int)($section['sort_order'] ?? 0),
-                ],
-                $this->generateComponent(
-                    $sectionCode,
-                    (string)($section['name'] ?? $sectionCode),
-                    'content',
-                    $this->buildSectionGenerationPrompt($pageType, $section, $blueprint, $websiteProfile, $scope),
-                    $defaultConfig,
-                    $this->buildRenderContext($pageType, $websiteProfile, $scope, $defaultConfig)
-                )
-            );
+            $key = (string)($section['key'] ?? '');
+            $name = (string)($section['name'] ?? $sectionCode);
+            $regionKey = 'section_' . $sectionCode;
+
+            $components[$regionKey] = [
+                'componentCode' => $sectionCode,
+                'name' => $name,
+                'region' => 'content',
+                'prompt' => $this->buildSectionGenerationPrompt($pageType, $section, $blueprint, $websiteProfile, $scope),
+                'defaultConfig' => $defaultConfig,
+                'renderContext' => $this->buildRenderContext($pageType, $websiteProfile, $scope, $defaultConfig),
+            ];
+            $sectionMeta[$regionKey] = [
+                'key' => $key,
+                'code' => $sectionCode,
+                'name' => $name,
+                'region' => 'content',
+                'sort_order' => (int)($section['sort_order'] ?? 0),
+            ];
         }
+
+        $sections = [];
+        foreach ($this->generateComponentsConcurrently($components) as $regionKey => $result) {
+            $meta = $sectionMeta[$regionKey] ?? [];
+            $sections[] = \array_replace($meta, $result);
+        }
+
+        // 按 sort_order 排序
+        \usort($sections, static fn(array $a, array $b): int => ($a['sort_order'] ?? 0) <=> ($b['sort_order'] ?? 0));
 
         return [
             'blueprint' => $blueprint,
@@ -170,19 +346,19 @@ final class AiSitePageComponentGenerationService
         array $renderContext
     ): array {
         $aiData = $this->runAiGeneration($region, $prompt);
-        $this->ensureAiPayloadValid($aiData, $region);
+        $aiData = $this->ensureAiPayloadValid($aiData, $region);
 
-        $phtml = $this->getFrameworkBuilder()->buildComponent($region, [
+        $componentInfo = [
             'name' => $name,
             'name_en' => $name,
             'description' => $prompt,
-        ], $aiData);
+        ];
+
+        $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
 
         $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
         if (empty($syntaxCheck['valid'])) {
-            throw new \RuntimeException((string)__('AI 生成的组件未通过 PHP 语法校验：%{message}', [
-                'message' => (string)($syntaxCheck['error'] ?? 'unknown'),
-            ]));
+            $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
         }
 
         $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
@@ -199,23 +375,216 @@ final class AiSitePageComponentGenerationService
     }
 
     /**
+     * 尝试自动修复 PHP 语法错误，修复失败则抛出异常
+     */
+    private function attemptSyntaxFix(string $phtml, string $region, array $componentInfo, array $aiData, array $initialCheck): string
+    {
+        $codeFixer = $this->getCodeFixer();
+        $codeValidator = $this->getCodeValidator();
+
+        // 第 1 轮：CodeFixer::fix() 常规修复
+        $fixed = $codeFixer->fix($phtml);
+        $check = $codeValidator->checkSyntax($fixed);
+        if (!empty($check['valid'])) {
+            return $fixed;
+        }
+
+        // 第 2 轮：CodeFixer::fixAndValidate() 含激进修复
+        $result = $codeFixer->fixAndValidate($phtml, $codeValidator);
+        if (!empty($result['validation']['valid'])) {
+            return (string)$result['code'];
+        }
+
+        // 第 3 轮：对 AI 数据中各字段逐一修复后重新组装
+        $fixedAiData = $aiData;
+        $fieldsToPatch = ['php_variables', 'html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'];
+        $patched = false;
+        foreach ($fieldsToPatch as $field) {
+            if (!isset($fixedAiData[$field]) || !\is_string($fixedAiData[$field]) || $fixedAiData[$field] === '') {
+                continue;
+            }
+            $original = $fixedAiData[$field];
+            if ($field === 'php_variables') {
+                $fixedAiData[$field] = $codeFixer->fixPhpVariables($fixedAiData[$field]);
+            } else {
+                $fixedAiData[$field] = $codeFixer->fixHtmlContent($fixedAiData[$field]);
+            }
+            if ($fixedAiData[$field] !== $original) {
+                $patched = true;
+            }
+        }
+        if ($patched) {
+            $fixedAiData = $codeFixer->fixAiData($fixedAiData);
+            $rebuilt = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $fixedAiData);
+            $check = $codeValidator->checkSyntax($rebuilt);
+            if (!empty($check['valid'])) {
+                return $rebuilt;
+            }
+        }
+
+        // 第 4 轮：清空所有可选字段后重新组装（保底）
+        $minimalAiData = $aiData;
+        foreach ($this->getOptionalAiFieldsForRegion($region) as $optField) {
+            $minimalAiData[$optField] = '';
+        }
+        $minimalAiData = $codeFixer->fixAiData($minimalAiData);
+        $rebuilt = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $minimalAiData);
+        $check = $codeValidator->checkSyntax($rebuilt);
+        if (!empty($check['valid'])) {
+            return $rebuilt;
+        }
+
+        throw new \RuntimeException((string)__('AI 生成的组件未通过 PHP 语法校验（已尝试 %{n} 轮自动修复）：%{message}', [
+            'n' => self::SYNTAX_FIX_MAX_ATTEMPTS + 2,
+            'message' => (string)($initialCheck['error'] ?? 'unknown'),
+        ]));
+    }
+
+    /**
      * @param array<string,mixed> $aiData
      */
-    private function ensureAiPayloadValid(array $aiData, string $region): void
+    private function ensureAiPayloadValid(array $aiData, string $region): array
     {
-        if ($this->isTestEnvironment()) {
-            return;
-        }
+        $aiData = $this->getCodeFixer()->fixAiData($aiData);
 
         $validation = $this->getCodeValidator()->validateAiData($aiData, $region);
         if (!empty($validation['valid'])) {
-            return;
+            return $aiData;
+        }
+
+        $safeAiData = $this->dropInvalidOptionalFields($aiData, $validation['errors'] ?? [], $region);
+        if ($safeAiData !== $aiData) {
+            $safeValidation = $this->getCodeValidator()->validateAiData($safeAiData, $region);
+            if (!empty($safeValidation['valid'])) {
+                return $safeAiData;
+            }
+        }
+
+        $broadSafeAiData = $this->dropAllOptionalFields($aiData, $region);
+        if ($broadSafeAiData !== $aiData) {
+            $broadSafeValidation = $this->getCodeValidator()->validateAiData($broadSafeAiData, $region);
+            if (!empty($broadSafeValidation['valid'])) {
+                return $broadSafeAiData;
+            }
         }
 
         $errors = \array_values(\array_filter(\array_map('strval', $validation['errors'] ?? [])));
         throw new \RuntimeException((string)__('AI 组件 JSON 校验失败：%{message}', [
             'message' => \implode('; ', \array_slice($errors, 0, 5)),
         ]));
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @param array<int|string,mixed> $errors
+     * @return array<string,mixed>
+     */
+    private function dropInvalidOptionalFields(array $aiData, array $errors, string $region): array
+    {
+        $optionalFields = $this->getOptionalAiFieldsForRegion($region);
+        $invalidFields = $this->extractInvalidAiFields($errors);
+
+        if ($invalidFields === []) {
+            $invalidFields = ['php_variables', 'js_content'];
+        }
+
+        foreach ($invalidFields as $field) {
+            if (\in_array($field, $optionalFields, true)) {
+                $aiData[$field] = '';
+            }
+        }
+
+        return $aiData;
+    }
+
+    /**
+     * @param array<string,mixed> $aiData
+     * @return array<string,mixed>
+     */
+    private function dropAllOptionalFields(array $aiData, string $region): array
+    {
+        foreach ($this->getOptionalAiFieldsForRegion($region) as $field) {
+            $aiData[$field] = '';
+        }
+
+        return $aiData;
+    }
+
+    /**
+     * @param array<int|string,mixed> $errors
+     * @return list<string>
+     */
+    private function extractInvalidAiFields(array $errors): array
+    {
+        $knownFields = [
+            'extra_fields',
+            'php_variables',
+            'css_extra',
+            'css_responsive',
+            'css_content',
+            'html_extra',
+            'html_extra_column',
+            'footer_extra_text',
+            'js_content',
+        ];
+        $fields = [];
+
+        foreach ($errors as $error) {
+            if (!\is_scalar($error)) {
+                continue;
+            }
+
+            $message = (string)$error;
+            if (\preg_match('/^\[([a-z_]+)\]/i', $message, $matches)) {
+                $fields[] = \strtolower((string)$matches[1]);
+                continue;
+            }
+
+            foreach ($knownFields as $field) {
+                if (\str_contains($message, $field)) {
+                    $fields[] = $field;
+                }
+            }
+        }
+
+        return \array_values(\array_unique(\array_filter($fields)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function getOptionalAiFieldsForRegion(string $region): array
+    {
+        return match ($region) {
+            'header' => [
+                'extra_fields',
+                'php_variables',
+                'css_extra',
+                'css_responsive',
+                'css_content',
+                'html_extra',
+                'js_content',
+            ],
+            'footer' => [
+                'extra_fields',
+                'php_variables',
+                'css_extra',
+                'css_responsive',
+                'css_content',
+                'html_extra_column',
+                'html_extra',
+                'footer_extra_text',
+                'js_content',
+            ],
+            default => [
+                'extra_fields',
+                'php_variables',
+                'css_extra',
+                'css_responsive',
+                'css_content',
+                'js_content',
+            ],
+        };
     }
 
     /**
@@ -303,7 +672,7 @@ final class AiSitePageComponentGenerationService
         );
         $flushChunkBuffer(true);
 
-        $payload = $this->getResponseJsonParser()->extractAndDecode($fullContent);
+        $payload = $this->decodeComponentPayloadWithRepair($fullContent, $region);
         if ($payload === null) {
             throw new \RuntimeException((string)__('AI 未返回有效的组件 JSON 结果'));
         }
@@ -387,6 +756,85 @@ final class AiSitePageComponentGenerationService
         }
 
         return $normalized ?: $data;
+    }
+
+    /**
+     * @return array<string,mixed>|null
+     */
+    private function decodeComponentPayloadWithRepair(string $content, string $region): ?array
+    {
+        $parser = $this->getResponseJsonParser();
+        $decoded = $parser->extractAndDecode($content);
+        if (\is_array($decoded)) {
+            return $decoded;
+        }
+
+        $currentContent = $content;
+        for ($attempt = 1; $attempt <= self::JSON_REPAIR_MAX_ATTEMPTS; $attempt++) {
+            $this->emitJsonRepairNotice($region, $attempt, self::JSON_REPAIR_MAX_ATTEMPTS);
+            $retryContent = $this->requestJsonRepair(
+                $region,
+                (string)__('AI 未返回有效的组件 JSON 结果'),
+                $currentContent
+            );
+            if ($retryContent === null || \trim($retryContent) === '') {
+                continue;
+            }
+
+            $currentContent = $retryContent;
+            $decoded = $parser->extractAndDecode($currentContent);
+            if (\is_array($decoded)) {
+                return $decoded;
+            }
+        }
+
+        return null;
+    }
+
+    private function emitJsonRepairNotice(string $region, int $attempt, int $maxAttempts): void
+    {
+        $message = (string)__('AI 返回的组件 JSON 结构无效，正在进行第 %{1}/%{2} 轮修复', [$attempt, $maxAttempts]);
+        $chunkForwarder = RequestContext::get(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
+        if (\is_callable($chunkForwarder)) {
+            try {
+                $chunkForwarder([
+                    'region' => $region !== '' ? ($region . '_json_repair') : 'json_repair',
+                    'chunk' => $message,
+                ]);
+            } catch (\Throwable) {
+            }
+        }
+    }
+
+    private function requestJsonRepair(string $region, string $validationError, string $previousContent): ?string
+    {
+        $previousSnippet = $this->clipText($previousContent, 8000);
+        $expectedFields = match ($region) {
+            'header' => 'extra_fields, php_variables, css_extra, html_extra, js_content',
+            'footer' => 'extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content',
+            default => 'extra_fields, php_variables, css_extra, css_responsive, html_content, js_content',
+        };
+        $prompt = "You are repairing a malformed PageBuilder {$region} component JSON.\n"
+            . "The previous output failed because: {$validationError}\n"
+            . "Return ONLY one corrected JSON object. No markdown. No explanation.\n"
+            . "Keep valid content when possible, but fix the JSON structure first.\n"
+            . "Expected JSON fields: {$expectedFields}\n"
+            . "Previous invalid output:\n{$previousSnippet}";
+
+        $response = $this->getAiService()->generate(
+            $prompt,
+            null,
+            'pagebuilder_component_generation',
+            null,
+            [
+                'temperature' => 0.2,
+                'max_tokens' => 16000,
+                'timeout' => 180,
+                'response_format' => ['type' => 'json_object'],
+            ]
+        );
+
+        return \is_string($response) ? $response : null;
     }
 
     /**

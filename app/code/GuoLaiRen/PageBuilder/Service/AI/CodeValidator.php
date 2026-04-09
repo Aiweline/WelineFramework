@@ -468,6 +468,12 @@ class CodeValidator
     {
         $errors = [];
 
+        // 早期检测 `=>` 数组语法（AI 误解格式时会产生 `$key => value` 而非 `$key = value`）
+        // 这种语法在 try{ php_variables } 块内会导致 "Parse error: unexpected token => on line N"
+        if (preg_match('/^\s*\$[a-zA-Z_]\w*\s*=>/m', $phpCode)) {
+            $errors[] = 'php_variables 检测到 `=>` 数组语法（应为 `$var = value` 而非 `$var => value`）';
+        }
+
         $phpOpenPattern = '/<\x3f(?:php|=)?/';
         if (preg_match($phpOpenPattern, $phpCode)) {
             $errors[] = 'php_variables字段不应包含PHP开始标签';
