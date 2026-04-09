@@ -182,6 +182,7 @@ $memoryRuntime = $sharedStateRuntime->getMemory();
 $envLoopDriver = (string) (($envConfig['wls']['loop']['driver'] ?? 'auto'));
 $wlsLoopDriver = $wlsLoopDriver !== '' ? $wlsLoopDriver : $envLoopDriver;
 $wlsLoopDriver = \Weline\Server\EventLoop\EventLoopFactory::normalizeDriver($wlsLoopDriver);
+$wlsEnv = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 
 // 所有 Worker 都启用 stdout 输出（便于调试和监控）
 WlsLogger::getInstance()
@@ -194,7 +195,6 @@ $originTokenValidationEnabled = false;
 $originTokenHeader = 'X-Weline-Origin-Token';
 $originTokenAllowLocal = true;
 if ($envConfig !== []) {
-    $wlsEnv = $envConfig['wls'] ?? [];
     $originToken = (string)($wlsEnv['origin_token'] ?? '');
     $originValidationConfig = $wlsEnv['origin_token_validation'] ?? [];
     if (\is_array($originValidationConfig)) {
@@ -203,6 +203,9 @@ if ($envConfig !== []) {
         $originTokenAllowLocal = (bool)($originValidationConfig['allow_local'] ?? true);
     }
 }
+$mainLoopUnblockedLogEvery = \Weline\Server\Service\MainLoopUnblockedLogConfig::resolve($wlsEnv, ['worker', 'worker_ssl']);
+$mainLoopUnblockedLogIntervalSec = \Weline\Server\Service\MainLoopUnblockedLogConfig::resolveInterval($wlsEnv, ['worker', 'worker_ssl']);
+$lastMainLoopUnblockedLogAt = 0.0;
 
 /**
  * 从 ssl_certificate_map.json 加载 SNI 证书映射。
@@ -1588,6 +1591,28 @@ while (true) {
     if (\function_exists('pcntl_signal_dispatch')) {
         \pcntl_signal_dispatch();
     }
+
+    // Worker 主循环计数
+    if (!isset($workerLoopCount)) {
+        $workerLoopCount = 0;
+    }
+    $workerLoopCount++;
+    $workerLoopHeartbeatNow = \microtime(true);
+    if (
+        \Weline\Server\Service\MainLoopUnblockedLogConfig::shouldEmit($workerLoopCount, $mainLoopUnblockedLogEvery)
+        || \Weline\Server\Service\MainLoopUnblockedLogConfig::shouldEmitByInterval(
+            $workerLoopHeartbeatNow,
+            $lastMainLoopUnblockedLogAt,
+            $mainLoopUnblockedLogIntervalSec
+        )
+    ) {
+        $lastMainLoopUnblockedLogAt = $workerLoopHeartbeatNow;
+        WlsLogger::info_("[Worker SSL] 主循环未被阻塞 #{$workerLoopCount}");
+        // Preserve the legacy mojibake line in a dead branch to avoid risky re-encoding of this script.
+        if (false) {
+        WlsLogger::info_("[Worker SSL] 循环未被阻塞 #{$workerLoopCount} #{$workerLoopCount}");
+        }
+    }
     
     // 定期刷新日志缓冲区（避免日志堆积）
     WlsLogger::flush_(false);
@@ -1774,6 +1799,14 @@ while (true) {
                         unset($writeBuffers[$connId]);
                         unset($writableConnections[$connId]);
                         unset($pendingClose[$connId]);
+                        if (isset($longLivedConnections[$connId])) {
+                            unset($longLivedConnections[$connId]);
+                        }
+                        if (isset($activeFibers[$connId])) {
+                            $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                            $fiberScheduler->unregisterFiber();
+                            unset($activeFibers[$connId]);
+                        }
                     }
                     continue; // 跳过正常超时关闭
                 }
@@ -1789,6 +1822,14 @@ while (true) {
                 unset($writeBuffers[$connId]);
                 unset($writableConnections[$connId]);
                 unset($pendingClose[$connId]);
+                if (isset($longLivedConnections[$connId])) {
+                    unset($longLivedConnections[$connId]);
+                }
+                if (isset($activeFibers[$connId])) {
+                    $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                    $fiberScheduler->unregisterFiber();
+                    unset($activeFibers[$connId]);
+                }
             }
         }
         
@@ -1845,6 +1886,15 @@ while (true) {
             unset($requestBuffers[$connId]);
             unset($connectionLastActivity[$connId]);
             unset($requestLogged[$connId]);
+            unset($writeBuffers[$connId]);
+            unset($writableConnections[$connId]);
+            unset($pendingClose[$connId]);
+            unset($longLivedConnections[$connId]);
+            if (isset($activeFibers[$connId])) {
+                $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                $fiberScheduler->unregisterFiber();
+                unset($activeFibers[$connId]);
+            }
         }
     }
     
@@ -1984,14 +2034,16 @@ while (true) {
             $suspendedAtSsl = $afDataSsl['suspended_at'] ?? $nowFiberCheck;
             $lastActivitySsl = $afDataSsl['last_activity'] ?? $afDataSsl['handleStartTime'] ?? $nowFiberCheck;
             $inactiveTimeSsl = $nowFiberCheck - $lastActivitySsl;
-            if ($fiberHeartbeatTimeoutSsl > 0 && $inactiveTimeSsl >= $fiberHeartbeatTimeoutSsl) {
+            $isLongLivedAfSsl = $afDataSsl['is_long_lived'] ?? false;
+            // 长连接（SSE 等）不参与心跳超时检查，由客户端/服务端正常断开管理其生命周期
+            if (!$isLongLivedAfSsl && $fiberHeartbeatTimeoutSsl > 0 && $inactiveTimeSsl >= $fiberHeartbeatTimeoutSsl) {
                 WlsLogger::warning_(
                     "Fiber 心跳超时: connId={$afConnIdSsl} inactive_time={$inactiveTimeSsl}s (超过 {$fiberHeartbeatTimeoutSsl}s 未续约)"
                 );
                 $toReleaseSsl[$afConnIdSsl] = $afDataSsl;
                 continue;
             }
-            $isLongLivedAfSsl = $afDataSsl['is_long_lived'] ?? false;
+            // 非长连接的闲置回收
             if (!$isLongLivedAfSsl && $releaseThresholdSsl > 0 && ($nowFiberCheck - $suspendedAtSsl) >= $releaseThresholdSsl) {
                 $toReleaseSsl[$afConnIdSsl] = $afDataSsl;
             }
@@ -3197,6 +3249,13 @@ function enqueueSseWriteAndAwaitDrain(
         return;
     }
 
+    // 防止响应污染：验证 $connections[$connId] 仍然是本 Fiber 持有的原始连接。
+    // PHP 回收 stream 后 resource ID 可被新连接复用，若不校验同一性，
+    // SSE Fiber 的写回调会把数据追加到新请求的 writeBuffer，导致正常页面收到 SSE 流。
+    if (isset($connections[$connId]) && $connections[$connId] !== $conn) {
+        return;
+    }
+
     $streamOk = isset($connections[$connId])
         && \is_resource($conn)
         && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true);
@@ -3335,9 +3394,11 @@ function sslFinalizeHttpResponseAfterHandle(
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
 
         if ($hasBufferedData) {
-            $writeBuffers[$connId] .= $response;
+            // 非 SSE 响应遇到缓冲区有残留数据时：直接覆盖，不再追加。
+            // 防止前一个 SSE 连接关闭后缓冲区残留 SSE 数据碎片被拼到普通 HTTP 响应前面。
+            $writeBuffers[$connId] = $response;
             $writableConnections[$connId] = $conn;
-            WlsLogger::info_("Worker 响应追加到缓冲区 connId={$connId} len={$responseLen}");
+            WlsLogger::info_("Worker 响应覆盖缓冲区（替换残留） connId={$connId} len={$responseLen}");
             goto ssl_finalize_skip_write;
         }
 
