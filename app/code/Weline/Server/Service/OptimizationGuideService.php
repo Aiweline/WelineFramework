@@ -13,7 +13,6 @@ declare(strict_types=1);
 namespace Weline\Server\Service;
 
 use Weline\Framework\App\Env;
-
 /**
  * OptimizationGuideService - 性能优化指南服务
  * 
@@ -801,7 +800,7 @@ INI,
             return true;
         }
         
-        $remoteAddr = $_SERVER['REMOTE_ADDR'] ?? '';
+        $remoteAddr = w_env('server.remote_addr', '');
         
         // 本地 IP
         $localIps = ['127.0.0.1', '::1', 'localhost'];
