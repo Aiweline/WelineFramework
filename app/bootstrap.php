@@ -24,6 +24,8 @@ if ((PHP_SAPI !== 'cli') and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . '
 
 // 统一自动加载：app/code 与 generated/code 优先于 vendor（与 WLS worker 共用 app/autoload.php）
 require __DIR__ . DIRECTORY_SEPARATOR . 'autoload.php';
+// 加载框架通用函数（必须在 TraceContext::init() 之前，因为 TraceContext 依赖 w_env() 等函数）
+require __DIR__ . '/code/Weline/Framework/Common/functions.php';
 // 初始化统一的异常处理系统
 ExceptionBootstrap::init(PHP_SAPI === 'cli' ? 'CLI' : 'FPM');
 
