@@ -108,9 +108,9 @@ use Weline\Framework\Manager\ObjectManager;
         return $this->setData('class', $class);
     }
 
-    function setType(string $type = ''): Acl
+    function setType(?string $type = ''): Acl
     {
-        return $this->setData('type', $type);
+        return $this->setData('type', $type ?? '');
     }
 
     function setIcon(string $icon): Acl
