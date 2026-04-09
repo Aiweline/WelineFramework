@@ -15,7 +15,6 @@ use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-
 /**
  * CacheManager - 路由缓存管理类
  * 
@@ -72,7 +71,7 @@ class CacheManager
             $this->cache = $this->frameworkCacheManager->pool('router');
         }
         
-        $uri = $_SERVER['REQUEST_URI'] ?? $request->getUri();
+        $uri = \w_env('request.uri', $request->getUri());
         $method = $request->getMethod() ?: 'GET';
         
         // 规范化 URI

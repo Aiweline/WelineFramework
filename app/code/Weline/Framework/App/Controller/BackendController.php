@@ -63,7 +63,7 @@ class BackendController extends PcController
             return;
         }
 
-        $isHttpRequest = !CLI || isset($_SERVER['REQUEST_URI']);
+        $isHttpRequest = !CLI || \w_env('request.uri') !== null;
         $sessionIsLogin = $this->session->isLoggedIn();
         
         if ($isHttpRequest && !$sessionIsLogin) {

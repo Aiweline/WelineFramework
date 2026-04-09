@@ -24,8 +24,8 @@ class Cookie
      */
     public static function set(string $key, string $value, int $expire = 3600 * 24 * 7, array $options = []): void
     {
-        // 更新 $_COOKIE 以便当前请求可以读取
-        $_COOKIE[$key] = $value;
+        // 同步到 WelineEnv 以支持 Fiber 隔离
+        \w_env_set("cookie.{$key}", $value);
         
         // 提取选项，设置默认值
         $path = $options['path'] ?? '/';
@@ -49,7 +49,7 @@ class Cookie
 
     public static function get(string $key, $default = null)
     {
-        return $_COOKIE[$key] ?? $default;
+        return \w_env_cookie($key, $default);
     }
 
     /**
@@ -60,7 +60,7 @@ class Cookie
      */
     public static function delete(string $key, array $options = []): void
     {
-        unset($_COOKIE[$key]);
+        \w_env_set("cookie.{$key}", null);
         self::set($key, '', -86400, $options);
     }
 

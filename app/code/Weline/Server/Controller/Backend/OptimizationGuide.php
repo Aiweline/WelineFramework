@@ -105,23 +105,23 @@ class OptimizationGuide extends BackendController
     protected function isAjaxRequest(): bool
     {
         // 检查 X-Requested-With 头
-        $requestedWith = $_SERVER['HTTP_X_REQUESTED_WITH'] ?? '';
+        $requestedWith = \w_env('http_x_requested_with', '');
         if (\strtolower($requestedWith) === 'xmlhttprequest') {
             return true;
         }
-        
+
         // 检查 Accept 头是否包含 JSON
-        $accept = $_SERVER['HTTP_ACCEPT'] ?? '';
+        $accept = \w_env('server.accept', '');
         if (\str_contains($accept, 'application/json')) {
             return true;
         }
-        
+
         // 检查 Content-Type
-        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $contentType = \w_env('server.content_type', '');
         if (\str_contains($contentType, 'application/json')) {
             return true;
         }
-        
+
         return false;
     }
 }

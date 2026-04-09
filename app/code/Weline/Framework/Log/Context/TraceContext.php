@@ -212,16 +212,18 @@ class TraceContext
     {
         // 标准 HTTP 头
         $headerKey = 'HTTP_' . str_replace('-', '_', strtoupper(self::TRACE_ID_HEADER));
-        
-        if (isset($_SERVER[$headerKey]) && !empty($_SERVER[$headerKey])) {
-            return self::sanitizeId($_SERVER[$headerKey]);
+
+        $value = \w_env(strtolower($headerKey));
+        if (!empty($value)) {
+            return self::sanitizeId($value);
         }
-        
+
         // W3C Traceparent 头
-        if (isset($_SERVER['HTTP_TRACEPARENT'])) {
-            return self::parseTraceparent($_SERVER['HTTP_TRACEPARENT']);
+        $traceparent = \w_env('http_traceparent');
+        if (!empty($traceparent)) {
+            return self::parseTraceparent($traceparent);
         }
-        
+
         return null;
     }
 
@@ -231,11 +233,12 @@ class TraceContext
     private static function getSpanIdFromHeader(): ?string
     {
         $headerKey = 'HTTP_' . str_replace('-', '_', strtoupper(self::SPAN_ID_HEADER));
-        
-        if (isset($_SERVER[$headerKey]) && !empty($_SERVER[$headerKey])) {
-            return self::sanitizeId($_SERVER[$headerKey]);
+
+        $value = \w_env(strtolower($headerKey));
+        if (!empty($value)) {
+            return self::sanitizeId($value);
         }
-        
+
         return null;
     }
 
