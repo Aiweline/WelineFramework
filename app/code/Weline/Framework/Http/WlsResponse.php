@@ -333,14 +333,29 @@ class WlsResponse
     }
     
     /**
+     * 压缩阈值（50MB），超过此大小跳过压缩以避免内存耗尽
+     */
+    private const COMPRESS_SIZE_LIMIT = 50 * 1024 * 1024;
+
+    /**
      * 支持 Gzip 压缩
+     *
+     * @param string $acceptEncoding Accept-Encoding 头值
+     * @return self
      */
     public function compress(string $acceptEncoding = ''): self
     {
         if (empty($this->body) || \strlen($this->body) < 1024) {
             return $this;
         }
-        
+
+        $bodySize = \strlen($this->body);
+
+        // 超过压缩阈值时跳过压缩，避免内存耗尽（gzencode 需要约 2-3 倍原文件大小的内存）
+        if ($bodySize > self::COMPRESS_SIZE_LIMIT) {
+            return $this;
+        }
+
         if (\stripos($acceptEncoding, 'gzip') !== false && \function_exists('gzencode')) {
             $compressed = \gzencode($this->body, 6);
             if ($compressed !== false) {
@@ -348,7 +363,7 @@ class WlsResponse
                 $this->headers['Content-Encoding'] = 'gzip';
             }
         }
-        
+
         return $this;
     }
 }
