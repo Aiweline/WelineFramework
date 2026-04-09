@@ -19,7 +19,6 @@ use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-
 /**
  * 检查全页缓存 Observer
  * 在 Weline_Framework::App::run_before 事件后立即检查全页缓存，如果存在则直接返回，避免运行到更深的位置
@@ -47,33 +46,33 @@ class CheckFullPageCache implements ObserverInterface
         }
 
         // 只处理 GET 请求
-        $requestMethod = $_SERVER['REQUEST_METHOD'] ?? 'GET';
+        $requestMethod = w_env('request.method', 'GET');
         if ($requestMethod !== 'GET') {
             return;
         }
-        
+
         // 编辑器预览模式不缓存（editor_mode=1 的 iframe 请求）
-        if (isset($_GET['editor_mode']) && ($_GET['editor_mode'] === '1' || $_GET['editor_mode'] === 'true')) {
+        if (w_env_get('editor_mode') === '1' || w_env_get('editor_mode') === 'true') {
             return;
         }
 
         // 检查 URL 是否已经解析完成
         // 使用 WELINE_URL_PARSED 标志判断，这是最可靠的方式
         // 在 WLS 模式下，GlobalsEmulator 不再设置 WELINE_IS_BACKEND，而是使用 WELINE_URL_PARSED
-        if (!isset($_SERVER['WELINE_URL_PARSED']) || !$_SERVER['WELINE_URL_PARSED']) {
+        if (!w_env('url_parsed', false)) {
             // URL 解析未完成，无法生成正确的缓存键，直接返回
             // 等待 Weline_Framework::App::url_parsed_after 事件触发时再检查
             return;
         }
-        
+
         // 检查是否是后端请求（后端请求不缓存）
         // 此时 URL 已解析完成，WELINE_IS_BACKEND 已正确设置
-        if (isset($_SERVER['WELINE_IS_BACKEND']) && $_SERVER['WELINE_IS_BACKEND']) {
+        if (w_env('is_backend', false)) {
             return;
         }
-        
+
         // 备用检查：通过原始 REQUEST_URI 判断是否是后端请求
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '/';
+        $requestUri = w_env('request.uri', '/');
         $backendPrefix = Env::getAreaRoutePrefix('backend') ?: 'admin';
         if (str_starts_with($requestUri, '/' . $backendPrefix . '/') || str_starts_with($requestUri, '/' . $backendPrefix)) {
             return;
@@ -90,7 +89,7 @@ class CheckFullPageCache implements ObserverInterface
         }
 
         // 读前校验：fullUri 无效时跳过 FPC，避免命中错误缓存导致串台
-        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
+        $fullUri = w_env('full_request_uri', '');
         if (!KeyBuilder::isValidFullPageCacheKey($fullUri)) {
             return;
         }
