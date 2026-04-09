@@ -218,7 +218,7 @@ if (!function_exists('w_log_exception')) {
         $context['exception_file'] = $context['_exception_file'];
         $context['exception_line'] = $context['_exception_line'];
 
-        $logMessage = $message ?? 'Exception occurred: {_exception_class}';
+        $logMessage = $message ?? 'Exception occurred: {exception_class} in {exception_file}:{exception_line}';
         
         w_log('error', $logMessage, $context, $channel ?? 'exception');
     }
