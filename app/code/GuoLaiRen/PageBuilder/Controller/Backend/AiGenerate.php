@@ -155,7 +155,7 @@ class AiGenerate extends BackendController
         
         if (!$this->request->isPost()) {
             // 记录详细的请求方法信息用于调试
-            $actualMethod = $_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN';
+            $actualMethod = \w_env('request.method', 'UNKNOWN');
             w_log_error("[AiGenerate::pageContent] Request method check failed. isPost()=false, actual REQUEST_METHOD={$actualMethod}");
             
             return json_encode([
@@ -2159,8 +2159,8 @@ class AiGenerate extends BackendController
             
             $styleCode = $input['style_code'] ?? 'tpmst';
             $region = $input['region'] ?? 'content';
-            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: ($_GET['name'] ?? '')));
-            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: ($_GET['description'] ?? '')));
+            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: (\w_env_get('name') ?? '')));
+            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: (\w_env_get('description') ?? '')));
             $style = $input['style'] ?? 'modern';
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';
@@ -3937,8 +3937,8 @@ PROMPT;
             $agentCode = $input['agent_code'] ?? 'pagebuilder_component';
             $styleCode = $input['style_code'] ?? 'tpmst';
             $region = $input['region'] ?? 'content';
-            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: ($_GET['name'] ?? '')));
-            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: ($_GET['description'] ?? '')));
+            $name = trim((string)($input['name'] ?? $this->request->getGet('name', '') ?: (\w_env_get('name') ?? '')));
+            $description = trim((string)($input['description'] ?? $this->request->getGet('description', '') ?: (\w_env_get('description') ?? '')));
             $style = $input['style'] ?? 'modern';
             $fieldsInput = trim($input['fields'] ?? '');
             $referenceComponent = $input['reference_component'] ?? '';

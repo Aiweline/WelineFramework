@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\Extends\Module\Weline_Framework\Session;
 
+use Weline\Framework\Env\w_env;
 use Weline\Framework\Session\Driver\SessionDriverHandlerInterface;
 use Weline\Framework\Session\Session;
 use Weline\Server\Service\SessionStateFacade;
@@ -38,15 +39,15 @@ class WlsSharedSession implements SessionDriverHandlerInterface
     {
         $sessionName = Session::session_name;
 
-        if (isset($_COOKIE[$sessionName]) && !empty($_COOKIE[$sessionName])) {
-            $this->currentSessionId = (string) $_COOKIE[$sessionName];
+        if (\w_env_cookie($sessionName, '')) {
+            $this->currentSessionId = (string) \w_env_cookie($sessionName, '');
             $this->loadSessionData();
 
             return;
         }
 
         $this->currentSessionId = \bin2hex(\random_bytes(16));
-        $_SESSION = [];
+        // 初始化会话数据（通过 localCache 统一管理，handler 需要操作 $_SESSION 同步）
         $this->localCache = [];
         $this->localCacheValid = true;
         $this->setSessionCookie();
@@ -73,7 +74,7 @@ class WlsSharedSession implements SessionDriverHandlerInterface
             \time() + 86400 * 30,
             '/',
             '',
-            isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+            \w_env('server.https') === 'on',
             true,
             'Lax'
         );

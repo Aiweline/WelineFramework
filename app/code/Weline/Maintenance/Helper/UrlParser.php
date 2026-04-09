@@ -49,11 +49,11 @@ class UrlParser
         $server['WELINE_BACKEND_AREA'] = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: 'admin';
         $server['WELINE_AREA_ROUTE'] = '';
         $server['WELINE_AREA'] = 'frontend';
-        $server['WELINE_USER_CURRENCY'] = $_COOKIE['WELINE_USER_CURRENCY'] ?? 'CNY';
-        $server['WELINE_USER_LANG'] = $_COOKIE['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
-        $server['WELINE_WEBSITE_ID'] = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
-        $server['WELINE_WEBSITE_CODE'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
-        $server['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
+        $server['WELINE_USER_CURRENCY'] = \w_env_cookie('WELINE_USER_CURRENCY') ?? 'CNY';
+        $server['WELINE_USER_LANG'] = \w_env_cookie('WELINE_USER_LANG') ?? 'zh_Hans_CN';
+        $server['WELINE_WEBSITE_ID'] = w_env('website.id') ?? '';
+        $server['WELINE_WEBSITE_CODE'] = w_env('website.code') ?? '';
+        $server['WELINE_WEBSITE_URL'] = w_env('website_url') ?? '';
 
         $result = [
             'area' => 'frontend',
