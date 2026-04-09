@@ -519,21 +519,20 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     private function recordAcquireMetric(float $startTime, string $result, int $retryCount): void
     {
         $durationMs = (\microtime(true) - $startTime) * 1000;
+        $metrics = \Weline\Server\Service\Telemetry\MetricsCollector::getInstance();
 
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector']->recordHistogram(
-                'wls_pool_acquire_duration_ms',
-                $durationMs,
-                ['host' => $this->host, 'port' => (string)$this->port, 'result' => $result]
+        $metrics->recordHistogram(
+            'wls_pool_acquire_duration_ms',
+            $durationMs,
+            ['host' => $this->host, 'port' => (string)$this->port, 'result' => $result]
+        );
+
+        if ($retryCount > 0) {
+            $metrics->incrementCounter(
+                'wls_pool_acquire_retry_total',
+                $retryCount,
+                ['host' => $this->host, 'port' => (string)$this->port]
             );
-
-            if ($retryCount > 0) {
-                $GLOBALS['wls_metrics_collector']->incrementCounter(
-                    'wls_pool_acquire_retry_total',
-                    $retryCount,
-                    ['host' => $this->host, 'port' => (string)$this->port]
-                );
-            }
         }
     }
 
@@ -542,13 +541,11 @@ class ConnectionPoolManager implements ConnectionPoolInterface
      */
     private function incrementMetric(string $name, array $labels): void
     {
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector']->incrementCounter(
-                $name,
-                1,
-                \array_merge(['host' => $this->host, 'port' => (string)$this->port], $labels)
-            );
-        }
+        \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->incrementCounter(
+            $name,
+            1,
+            \array_merge(['host' => $this->host, 'port' => (string)$this->port], $labels)
+        );
     }
 
     /**
@@ -633,13 +630,11 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             if ($busyDuration > $leakThresholdSec) {
                 $leakCount++;
 
-                if (isset($GLOBALS['wls_metrics_collector'])) {
-                    $GLOBALS['wls_metrics_collector']->incrementCounter(
-                        'wls_pool_connection_leak_total',
-                        1,
-                        ['host' => $this->host, 'port' => (string)$this->port]
-                    );
-                }
+                \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->incrementCounter(
+                    'wls_pool_connection_leak_total',
+                    1,
+                    ['host' => $this->host, 'port' => (string)$this->port]
+                );
 
                 $this->log(\sprintf(
                     'Connection leak detected: busy for %.2fs (threshold: %.2fs)',
@@ -694,12 +689,11 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $total = $idle + $busy;
 
         // 更新 Gauge 指标
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $labels = ['host' => $this->host, 'port' => (string)$this->port];
-            $GLOBALS['wls_metrics_collector']->setGauge('wls_pool_connections_total', (float)$idle, \array_merge($labels, ['state' => 'idle']));
-            $GLOBALS['wls_metrics_collector']->setGauge('wls_pool_connections_total', (float)$busy, \array_merge($labels, ['state' => 'busy']));
-            $GLOBALS['wls_metrics_collector']->setGauge('wls_pool_connections_total', (float)$total, \array_merge($labels, ['state' => 'total']));
-        }
+        $labels = ['host' => $this->host, 'port' => (string)$this->port];
+        $metrics = \Weline\Server\Service\Telemetry\MetricsCollector::getInstance();
+        $metrics->setGauge('wls_pool_connections_total', (float)$idle, \array_merge($labels, ['state' => 'idle']));
+        $metrics->setGauge('wls_pool_connections_total', (float)$busy, \array_merge($labels, ['state' => 'busy']));
+        $metrics->setGauge('wls_pool_connections_total', (float)$total, \array_merge($labels, ['state' => 'total']));
 
         return [
             'idle' => $idle,

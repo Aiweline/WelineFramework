@@ -328,13 +328,11 @@ class PooledConnection implements PooledConnectionInterface
     {
         $durationMs = (\microtime(true) - $startTime) * 1000;
 
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector']->recordHistogram(
-                'wls_pool_auth_duration_ms',
-                $durationMs,
-                ['host' => $this->host, 'port' => (string)$this->port, 'result' => $result]
-            );
-        }
+        \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
+            'wls_pool_auth_duration_ms',
+            $durationMs,
+            ['host' => $this->host, 'port' => (string)$this->port, 'result' => $result]
+        );
     }
 
     /**
@@ -342,13 +340,11 @@ class PooledConnection implements PooledConnectionInterface
      */
     private function incrementMetric(string $name, array $labels): void
     {
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector']->incrementCounter(
-                $name,
-                1,
-                \array_merge(['host' => $this->host, 'port' => (string)$this->port], $labels)
-            );
-        }
+        \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->incrementCounter(
+            $name,
+            1,
+            \array_merge(['host' => $this->host, 'port' => (string)$this->port], $labels)
+        );
     }
 
     private function registerFailure(): void
