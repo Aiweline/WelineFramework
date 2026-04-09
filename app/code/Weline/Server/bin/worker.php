@@ -149,6 +149,7 @@ $envConfig = \array_replace_recursive($envConfig, $envOverrides);
 \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig($envOverrides);
 $sessionRuntime = $sharedStateRuntime->getSession();
 $memoryRuntime = $sharedStateRuntime->getMemory();
+$wlsEnv = \is_array($envConfig['wls'] ?? null) ? $envConfig['wls'] : [];
 
 // Origin Token 回源校验配置（可选安全增强）
 $originToken = '';
@@ -156,7 +157,6 @@ $originTokenValidationEnabled = false;
 $originTokenHeader = 'X-Weline-Origin-Token';
 $originTokenAllowLocal = true;
 if ($envConfig !== []) {
-    $wlsEnv = $envConfig['wls'] ?? [];
     $originToken = (string)($wlsEnv['origin_token'] ?? '');
     $originValidationConfig = $wlsEnv['origin_token_validation'] ?? [];
     if (\is_array($originValidationConfig)) {
@@ -165,6 +165,9 @@ if ($envConfig !== []) {
         $originTokenAllowLocal = (bool)($originValidationConfig['allow_local'] ?? true);
     }
 }
+$mainLoopUnblockedLogEvery = \Weline\Server\Service\MainLoopUnblockedLogConfig::resolve($wlsEnv, ['worker']);
+$mainLoopUnblockedLogIntervalSec = \Weline\Server\Service\MainLoopUnblockedLogConfig::resolveInterval($wlsEnv, ['worker']);
+$lastMainLoopUnblockedLogAt = 0.0;
 
 // ========== 日志系统：直接使用 WlsLogger ==========
 // 检测模式（只检测一次）
@@ -1102,8 +1105,21 @@ while (true) {
         $workerLoopCount = 0;
     }
     $workerLoopCount++;
-    if ($workerLoopCount % 10000 === 0) {
+    $workerLoopHeartbeatNow = \microtime(true);
+    if (
+        \Weline\Server\Service\MainLoopUnblockedLogConfig::shouldEmit($workerLoopCount, $mainLoopUnblockedLogEvery)
+        || \Weline\Server\Service\MainLoopUnblockedLogConfig::shouldEmitByInterval(
+            $workerLoopHeartbeatNow,
+            $lastMainLoopUnblockedLogAt,
+            $mainLoopUnblockedLogIntervalSec
+        )
+    ) {
+        $lastMainLoopUnblockedLogAt = $workerLoopHeartbeatNow;
         WlsLogger::info_("[Worker] 主循环未被阻塞 #{$workerLoopCount}");
+        // Preserve the legacy mojibake line in a dead branch to avoid risky re-encoding of this script.
+        if (false) {
+        WlsLogger::info_("[Worker] 循环未被阻塞 #{$workerLoopCount} #{$workerLoopCount}");
+        }
     }
 
     // 定期刷新日志缓冲区（避免日志堆积）
@@ -1237,6 +1253,11 @@ while (true) {
                 $requestBuffers = [];
                 $connectionLastActivity = [];
                 $requestLogged = [];
+                $writeBuffers = [];
+                $writableConnections = [];
+                $pendingClose = [];
+                $longLivedConnections = [];
+                $activeFibers = [];
                 
                 if ($ipcClient && $ipcClient->isConnected()) {
                     $ipcClient->sendDrainingComplete($workerId, $port);
@@ -1263,6 +1284,17 @@ while (true) {
                 unset($requestBuffers[$connId]);
                 unset($connectionLastActivity[$connId]);
                 unset($requestLogged[$connId]);
+                unset($writeBuffers[$connId]);
+                unset($writableConnections[$connId]);
+                unset($pendingClose[$connId]);
+                if (isset($longLivedConnections[$connId])) {
+                    unset($longLivedConnections[$connId]);
+                }
+                if (isset($activeFibers[$connId])) {
+                    $fiberScheduler->cancelTimersForFiber($activeFibers[$connId]['fiber']);
+                    $fiberScheduler->unregisterFiber();
+                    unset($activeFibers[$connId]);
+                }
             }
         }
     }
@@ -1762,14 +1794,16 @@ function wlsReleaseIdleFibersStep(
         $suspendedAt = $afData['suspended_at'] ?? $now;
         $lastActivity = $afData['last_activity'] ?? $afData['handleStartTime'] ?? $now;
         $inactiveTime = $now - $lastActivity;
+        $isLongLived = $afData['is_long_lived'] ?? false;
 
-        if ($fiberHeartbeatTimeout > 0 && $inactiveTime >= $fiberHeartbeatTimeout) {
+        // 长连接（SSE 等）不参与心跳超时检查，由客户端/服务端正常断开管理其生命周期
+        if (!$isLongLived && $fiberHeartbeatTimeout > 0 && $inactiveTime >= $fiberHeartbeatTimeout) {
             WlsLogger::warning_("Fiber 心跳超时: connId={$afConnId} inactive_time={$inactiveTime}s (超过 {$fiberHeartbeatTimeout}s 未续约)");
             $toRelease[$afConnId] = $afData;
             continue;
         }
 
-        $isLongLived = $afData['is_long_lived'] ?? false;
+        // 非长连接的闲置回收
         if (!$isLongLived && $releaseThreshold > 0 && ($now - $suspendedAt) >= $releaseThreshold) {
             $toRelease[$afConnId] = $afData;
         }
@@ -1983,6 +2017,12 @@ function wlsHttpEnqueueSseWriteAndAwaitDrain(
             $pendingClose[$connId]
         );
 
+        return;
+    }
+
+    // 防止资源 ID 复用污染：验证 $conn 是否仍是 $connections[$connId] 的同一资源
+    // 如果 SSE 连接已关闭且 ID 被新连接复用，$conn !== $connections[$connId]，跳过写入
+    if ($conn !== $connections[$connId]) {
         return;
     }
 
@@ -2662,9 +2702,14 @@ function sendResponseAndCleanup(
         $hasBufferedData = isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '';
 
         if ($hasBufferedData) {
-            $writeBuffers[$connId] .= $response;
+            // 非 SSE 响应遇到缓冲区有残留数据时：直接覆盖，不再追加。
+            // 这样可以避免：前一个 SSE 连接关闭后缓冲区残留 SSE 数据碎片，
+            // 而后同一个 connId 的普通 HTTP 响应把 SSE 碎片拼在前面，导致浏览器解析出错。
+            // 如果确实需要追加（如分块 Transfer-Encoding），应在 Controller 层用
+            // chunked encoding 处理，而不在 Worker 侧做跨请求拼接。
+            $writeBuffers[$connId] = $response;
             $writableConnections[$connId] = $conn;
-            WlsLogger::info_("Worker 响应追加到缓冲区 connId={$connId} len={$responseLen}");
+            WlsLogger::info_("Worker 响应覆盖缓冲区（替换残留） connId={$connId} len={$responseLen}");
             goto http_finalize_skip_write;
         }
 
