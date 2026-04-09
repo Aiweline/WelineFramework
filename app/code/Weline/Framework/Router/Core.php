@@ -20,6 +20,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
 class Core
@@ -297,9 +298,11 @@ class Core
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan('controller_chain::router_before_start', (microtime(true) - $t0) * 1000, 'controller');
         }
+        SchedulerSystem::yield();
 
         # 获取URL
         $this->url = $url = $this->processUrl();
+        SchedulerSystem::yield();
 
         // 诊断日志：记录路由开始时的关键状态
         $originalUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
@@ -316,7 +319,7 @@ class Core
                 ]);
             }
         }
-        $hasPreviewTheme = isset($_GET['preview_theme']) && (int)$_GET['preview_theme'] > 0;
+        $hasPreviewTheme = w_env_get('preview_theme') !== null && (int)w_env_get('preview_theme') > 0;
         
         
         // 性能优化：复用已读取的统一缓存数据
@@ -339,6 +342,7 @@ class Core
                 $this->clearCurrentRequestRouteCaches();
             } else {
                 $this->router = $cachedRouter;
+                SchedulerSystem::yield();
                 return $this->route();
             }
         }
@@ -350,6 +354,7 @@ class Core
                 $this->clearCurrentRequestRouteCaches();
             } else {
                 $this->router = $router;
+                SchedulerSystem::yield();
                 return $this->route();
             }
         }
@@ -455,7 +460,7 @@ class Core
 
     public function processUrl()
     {
-        $hasPreviewTheme = isset($_GET['preview_theme']) && (int)$_GET['preview_theme'] > 0;
+        $hasPreviewTheme = w_env_get('preview_theme') !== null && (int)w_env_get('preview_theme') > 0;
         // 后端请求不缓存，直接跳过缓存读取
         if ($this->is_backend) {
             $this->routerGeneratedGetParams = [];
@@ -465,7 +470,7 @@ class Core
             $eventManager = ObjectManager::getInstance(EventsManager::class);
             /** @var DataObject $routerData */
             $routerData = new DataObject(['path' => $url, 'rule' => new DataObject()]);
-            $originalGet = $_GET;
+            $originalGet = w_env_get();
             $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
             $pathData = $routerData->getData('path');
             $url = is_string($pathData) ? $pathData : (string)($pathData ?? '');
@@ -568,7 +573,7 @@ class Core
                 $eventManager = ObjectManager::getInstance(EventsManager::class);
                 /** @var DataObject $routerData */
                 $routerData = new DataObject(['path' => $url, 'rule' => new DataObject()]);
-                $originalGet = $_GET;
+                $originalGet = w_env_get();
                 $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
                 $pathData = $routerData->getData('path');
                 $url = is_string($pathData) ? $pathData : (string)($pathData ?? '');
@@ -1033,6 +1038,7 @@ class Core
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan('controller_chain::route_before', (microtime(true) - $t0) * 1000, 'controller');
         }
+        SchedulerSystem::yield();
 
         $t0 = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
         $dispatch = ObjectManager::getInstance((string)$dispatch);
@@ -1040,6 +1046,7 @@ class Core
         if (RequestLifecycleTrace::isEnabled()) {
             RequestLifecycleTrace::recordSpan('controller_chain::controller_init', (microtime(true) - $t0) * 1000, 'controller');
         }
+        SchedulerSystem::yield();
         # 检测控制器方法
         if (!method_exists($dispatch, $method)) {
             $dispatch_class = $dispatch::class;
@@ -1053,7 +1060,9 @@ class Core
             RequestLifecycleTrace::pushCurrentParent('controller_chain::action_execute');
         }
         try {
+            SchedulerSystem::yield();
             $result = call_user_func([$dispatch, $method], /*...$this->request->getParams()*/);
+            SchedulerSystem::yield();
             // 检测是否是流式响应（SSE）- 如果是，直接返回，不进行后续处理
             // 仅依赖 headers_list 在部分 FPM 场景会失效，因此优先检查 SseContext 开关。
             if (SseContext::isSseEnabled()) {
@@ -1090,6 +1099,7 @@ class Core
                 RequestLifecycleTrace::recordSpan('controller_chain::route_after', (microtime(true) - $t0) * 1000, 'controller');
             }
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
+            SchedulerSystem::yield();
             $output = ob_get_clean();
             // 如果控制器返回了结果，优先使用返回值；否则使用输出缓冲区内容
             $fpcHtml = !empty($result) ? (is_string($result) ? $result : $output) : $output;
@@ -1140,7 +1150,7 @@ class Core
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
         // 编辑器预览模式不写入全页缓存
-        $isEditorMode = isset($_GET['editor_mode']) && ($_GET['editor_mode'] === '1' || $_GET['editor_mode'] === 'true');
+        $isEditorMode = w_env_get('editor_mode') !== null && (w_env_get('editor_mode') === '1' || w_env_get('editor_mode') === 'true');
         if (!$this->is_backend && !$isEditorMode && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
             // 写前校验：fullUri 无效时跳过 FPC 写入，避免以错误 key 污染缓存
             $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
@@ -1226,7 +1236,7 @@ class Core
     private function collectRouterGeneratedGetParams(array $originalGet): array
     {
         $generated = [];
-        foreach ($_GET as $key => $value) {
+        foreach (w_env_get() as $key => $value) {
             if (!array_key_exists($key, $originalGet) || $originalGet[$key] !== $value) {
                 $generated[$key] = $value;
             }
