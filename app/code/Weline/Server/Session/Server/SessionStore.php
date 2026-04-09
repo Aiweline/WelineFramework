@@ -779,13 +779,11 @@ final class SessionStore
 
         // 记录 GC 耗时
         $durationMs = (\microtime(true) - $startTime) * 1000;
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector']->recordHistogram(
-                'wls_store_gc_duration_ms',
-                $durationMs,
-                []
-            );
-        }
+        \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
+            'wls_store_gc_duration_ms',
+            $durationMs,
+            []
+        );
 
         return $cleaned;
     }
@@ -888,9 +886,7 @@ final class SessionStore
         $lines[] = "{$prefix}persists_total {$this->persistCount}";
 
         // 合并全局指标收集器的指标
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $lines[] = $GLOBALS['wls_metrics_collector']->exportPrometheus();
-        }
+        $lines[] = \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->exportPrometheus();
 
         return \implode("\n", $lines) . "\n";
     }
@@ -975,13 +971,11 @@ final class SessionStore
 
             // 记录淘汰耗时
             $durationMs = (\microtime(true) - $startTime) * 1000;
-            if (isset($GLOBALS['wls_metrics_collector'])) {
-                $GLOBALS['wls_metrics_collector']->recordHistogram(
-                    'wls_store_lru_eviction_duration_ms',
-                    $durationMs,
-                    []
-                );
-            }
+            \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
+                'wls_store_lru_eviction_duration_ms',
+                $durationMs,
+                []
+            );
         }
     }
 
@@ -1082,30 +1076,29 @@ final class SessionStore
     private function recordOperationMetric(string $operation, float $durationSec, string $result): void
     {
         $durationMs = $durationSec * 1000;
+        $metrics = \Weline\Server\Service\Telemetry\MetricsCollector::getInstance();
 
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector']->recordHistogram(
-                'wls_store_operation_duration_ms',
-                $durationMs,
-                ['operation' => $operation, 'result' => $result]
+        $metrics->recordHistogram(
+            'wls_store_operation_duration_ms',
+            $durationMs,
+            ['operation' => $operation, 'result' => $result]
+        );
+
+        // 慢操作检测
+        $threshold = $this->slowOperationThresholds[$operation] ?? 100;
+        if ($durationMs > $threshold) {
+            $metrics->incrementCounter(
+                'wls_store_slow_operation_total',
+                1,
+                ['operation' => $operation]
             );
 
-            // 慢操作检测
-            $threshold = $this->slowOperationThresholds[$operation] ?? 100;
-            if ($durationMs > $threshold) {
-                $GLOBALS['wls_metrics_collector']->incrementCounter(
-                    'wls_store_slow_operation_total',
-                    1,
-                    ['operation' => $operation]
-                );
-
-                $this->log(\sprintf(
-                    'Slow operation detected: %s took %.2fms (threshold: %dms)',
-                    $operation,
-                    $durationMs,
-                    $threshold
-                ));
-            }
+            $this->log(\sprintf(
+                'Slow operation detected: %s took %.2fms (threshold: %dms)',
+                $operation,
+                $durationMs,
+                $threshold
+            ));
         }
 
         // 更新请求计数
@@ -1118,21 +1111,20 @@ final class SessionStore
     private function recordPersistMetric(float $durationSec, string $result, string $reason): void
     {
         $durationMs = $durationSec * 1000;
+        $metrics = \Weline\Server\Service\Telemetry\MetricsCollector::getInstance();
 
-        if (isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector']->recordHistogram(
-                'wls_store_persist_duration_ms',
-                $durationMs,
-                ['result' => $result]
+        $metrics->recordHistogram(
+            'wls_store_persist_duration_ms',
+            $durationMs,
+            ['result' => $result]
+        );
+
+        if ($result === 'failure') {
+            $metrics->incrementCounter(
+                'wls_store_persist_failure_total',
+                1,
+                ['reason' => $reason]
             );
-
-            if ($result === 'failure') {
-                $GLOBALS['wls_metrics_collector']->incrementCounter(
-                    'wls_store_persist_failure_total',
-                    1,
-                    ['reason' => $reason]
-                );
-            }
         }
     }
 }

@@ -3048,11 +3048,11 @@ function handleRequest(
         return "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Length: " . \strlen($notFoundBody) . "\r\nConnection: close\r\n\r\n{$notFoundBody}";
     }
     // ========== ACME HTTP-01 校验结束 ==========
-    
+
     // ========== 静态文件处理（WLS 模式特有） ==========
     $staticResponse = handleStaticFile($uri, $rawRequest);
     if ($staticResponse !== null) {
-        $cacheInfo = $WLS_LAST_STATIC_CACHE ?? null;
+        $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache();
         $cacheStatus = $cacheInfo['status'] ?? 'miss';
         $cacheUri = $cacheInfo['uri'] ?? $uri;
         WlsLogger::info_(__('静态文件缓存: %{1} %{2}', [\strtoupper($cacheStatus), $cacheUri]));
@@ -3336,17 +3336,16 @@ function handleRequest(
  */
 function handleStaticFile(string $uri, string $rawRequest): ?string
 {
-    global $WLS_STATIC_CACHE_MAX_TOTAL, $WLS_STATIC_CACHE_MAX_SIZE, $WLS_CACHE_EVICTION_THRESHOLD, $WLS_LAST_STATIC_CACHE;
-    $WLS_LAST_STATIC_CACHE = null;
-    
+    \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache(null);
+
     // ========== 静态文件内存缓存（冷热淘汰策略） ==========
     static $staticFileCache = [];
     static $staticFileCacheTotalSize = 0;
     static $staticFileCacheMaxAge = 86400 * 7;
-    
-    $maxTotal = $WLS_STATIC_CACHE_MAX_TOTAL ?? 100 * 1024 * 1024;
-    $maxSize = $WLS_STATIC_CACHE_MAX_SIZE ?? 1024 * 1024;
-    $evictionThreshold = $WLS_CACHE_EVICTION_THRESHOLD ?? 5 * 1024 * 1024;
+
+    $maxTotal = \Weline\Server\Service\WlsWorkerGlobals::getStaticCacheMaxTotal();
+    $maxSize = \Weline\Server\Service\WlsWorkerGlobals::getStaticCacheMaxSize();
+    $evictionThreshold = \Weline\Server\Service\WlsWorkerGlobals::getCacheEvictionThreshold();
     
     // 特殊命令：清理内存缓存
     if ($uri === '__CLEAR_CACHE__') {
@@ -3523,7 +3522,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
     }
     
     // 默认标记为 MISS（非内存缓存命中）
-    $WLS_LAST_STATIC_CACHE = [
+    \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache([
         'status' => 'miss',
         'uri' => $uriPath,
         'path' => $filename,
@@ -3539,7 +3538,9 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         ) {
             $validatedCached = $cached;
             $cacheHeaderStatus = 'HIT';
-            $WLS_LAST_STATIC_CACHE['status'] = 'hit';
+            $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache() ?: [];
+            $cacheInfo['status'] = 'hit';
+            \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache($cacheInfo);
             $staticFileCache[$filename]['hits'] = ($cached['hits'] ?? 0) + 1;
             $staticFileCache[$filename]['last_access'] = $now;
         } else {
@@ -3620,7 +3621,9 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
                 if ($cached['mtime'] === $mtime && ($now - $cached['cached_at']) < $staticFileCacheMaxAge) {
                     $content = $cached['content'];
                     $fromCache = true;
-                    $WLS_LAST_STATIC_CACHE['status'] = 'hit';
+                    $cacheInfo = \Weline\Server\Service\WlsWorkerGlobals::getLastStaticCache() ?: [];
+                    $cacheInfo['status'] = 'hit';
+                    \Weline\Server\Service\WlsWorkerGlobals::setLastStaticCache($cacheInfo);
                     // 更新访问统计（冷热计数）
                     $staticFileCache[$filename]['hits'] = ($cached['hits'] ?? 0) + 1;
                     $staticFileCache[$filename]['last_access'] = $now;

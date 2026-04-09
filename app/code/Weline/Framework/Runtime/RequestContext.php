@@ -19,6 +19,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\Env\WelineEnv;
 /**
  * 请求上下文
  * 
@@ -481,6 +482,7 @@ class RequestContext
     {
         self::$_area = $area;
         $_SERVER['WELINE_AREA'] = $area;
+        \w_env_set('area', $area, 'RequestContext::setWelineArea');
     }
     
     /**
@@ -502,6 +504,7 @@ class RequestContext
     {
         self::$_areaRoute = $route;
         $_SERVER['WELINE_AREA_ROUTE'] = $route;
+        \w_env_set('area_route', $route, 'RequestContext::setWelineAreaRoute');
     }
     
     /**
@@ -523,6 +526,7 @@ class RequestContext
     {
         self::$_websiteId = $websiteId;
         $_SERVER['WELINE_WEBSITE_ID'] = $websiteId;
+        \w_env_set('website_id', (string) $websiteId, 'RequestContext::setWelineWebsiteId');
     }
     
     /**
@@ -544,6 +548,7 @@ class RequestContext
     {
         self::$_websiteCode = $code;
         $_SERVER['WELINE_WEBSITE_CODE'] = $code;
+        \w_env_set('website_code', $code, 'RequestContext::setWelineWebsiteCode');
     }
     
     /**
@@ -565,6 +570,7 @@ class RequestContext
     {
         self::$_websiteUrl = $url;
         $_SERVER['WELINE_WEBSITE_URL'] = $url;
+        \w_env_set('website_url', $url, 'RequestContext::setWelineWebsiteUrl');
     }
     
     /**
@@ -586,6 +592,7 @@ class RequestContext
     {
         self::$_userLang = $lang;
         $_SERVER['WELINE_USER_LANG'] = $lang;
+        \w_env_set('user.lang', $lang, 'RequestContext::setWelineUserLang');
     }
     
     /**
@@ -607,6 +614,7 @@ class RequestContext
     {
         self::$_userCurrency = $currency;
         $_SERVER['WELINE_USER_CURRENCY'] = $currency;
+        \w_env_set('user.currency', $currency, 'RequestContext::setWelineUserCurrency');
     }
     
     // =============== 区域判断便捷方法 ===============
@@ -659,8 +667,9 @@ class RequestContext
     
     /**
      * 从 $_SERVER 同步 WELINE_* 变量到 RequestContext
-     * 
+     *
      * 在请求开始时调用，确保 RequestContext 与 $_SERVER 同步
+     * 同时同步到 WelineEnv
      */
     public static function syncFromServer(): void
     {
@@ -671,14 +680,22 @@ class RequestContext
         self::$_websiteUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
         self::$_userLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
         self::$_userCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+
+        // 同步到 WelineEnv
+        WelineEnv::set('area', self::$_area, 'RequestContext syncFromServer');
+        WelineEnv::set('area_route', self::$_areaRoute, 'RequestContext syncFromServer');
+        WelineEnv::set('website_id', (string) self::$_websiteId, 'RequestContext syncFromServer');
+        WelineEnv::set('website_code', self::$_websiteCode, 'RequestContext syncFromServer');
+        WelineEnv::set('user.lang', self::$_userLang, 'RequestContext syncFromServer');
+        WelineEnv::set('user.currency', self::$_userCurrency, 'RequestContext syncFromServer');
     }
     
     /**
      * 重置 WELINE_* 变量到默认值
-     * 
+     *
      * 在请求结束时调用，避免 WLS 下跨请求污染
      * 同时重置 $_SERVER 中的对应值，确保下一个请求不会继承旧状态
-     * 
+     *
      * 重要：必须 unset $_SERVER 变量而非设为空字符串，
      *       否则 syncFromServer() 中的 ?? 运算符无法正确回退到默认值
      */
@@ -692,7 +709,7 @@ class RequestContext
         self::$_websiteUrl = '';
         self::$_userLang = 'zh_Hans_CN';
         self::$_userCurrency = 'CNY';
-        
+
         // 重置 $_SERVER 中的 WELINE_* 变量
         // 注意：使用 unset 而非赋空字符串，确保 syncFromServer() 的 ?? 运算符能正确工作
         $_SERVER['WELINE_AREA'] = self::AREA_FRONTEND;
@@ -703,6 +720,13 @@ class RequestContext
         unset($_SERVER['WELINE_WEBSITE_URL']);
         unset($_SERVER['WELINE_USER_LANG']);
         unset($_SERVER['WELINE_USER_CURRENCY']);
+
+        // 重置 WelineEnv（会清空覆盖记录）
+        try {
+            WelineEnv::getInstance()->reset();
+        } catch (\Throwable) {
+            // 忽略 WelineEnv 重置错误
+        }
     }
     
     // =============== 便捷方法（保持向后兼容） ===============

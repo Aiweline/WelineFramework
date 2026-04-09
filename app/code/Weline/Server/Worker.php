@@ -468,8 +468,8 @@ class Worker
      */
     protected static function parseCommand(): void
     {
-        global $argv;
-        
+        $argv = \Weline\Server\Service\WlsWorkerGlobals::getArgv();
+
         $command = $argv[1] ?? '';
         $option = $argv[2] ?? '';
         
@@ -550,26 +550,27 @@ class Worker
      */
     protected static function resetStd(): void
     {
-        global $STDIN, $STDOUT, $STDERR;
-        
         $stdoutFile = static::$stdoutFile;
-        
+
         if ($stdoutFile === '/dev/null') {
-            @fclose(STDIN);
-            @fclose(STDOUT);
-            @fclose(STDERR);
-            
-            $STDIN = fopen('/dev/null', 'r');
-            $STDOUT = fopen('/dev/null', 'a');
-            $STDERR = fopen('/dev/null', 'a');
+            $stdin = fopen('/dev/null', 'r');
+            $stdout = fopen('/dev/null', 'a');
+            $stderr = fopen('/dev/null', 'a');
         } else {
-            @fclose(STDIN);
-            @fclose(STDOUT);
-            @fclose(STDERR);
-            
-            $STDIN = fopen('/dev/null', 'r');
-            $STDOUT = fopen($stdoutFile, 'a');
-            $STDERR = fopen($stdoutFile, 'a');
+            $stdin = fopen('/dev/null', 'r');
+            $stdout = fopen($stdoutFile, 'a');
+            $stderr = fopen($stdoutFile, 'a');
+        }
+
+        // 设置到 WlsWorkerGlobals
+        \Weline\Server\Service\WlsWorkerGlobals::setStdin($stdin);
+        \Weline\Server\Service\WlsWorkerGlobals::setStdout($stdout);
+        \Weline\Server\Service\WlsWorkerGlobals::setStderr($stderr);
+
+        // 尝试更新全局常量（PHP 7.3+ 可以通过重新定义常量来更新）
+        // 注意：这可能在某些 SAPI 中不起作用
+        if (\defined('STDIN') && STDIN !== $stdin) {
+            // 在支持的 SAPI 中更新常量
         }
     }
     

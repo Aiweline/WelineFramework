@@ -78,9 +78,9 @@ class KeyBuilder
         ?string $domain = null,
         ?string $area = null
     ): string {
-        $domain = $domain ?? ($_SERVER['HTTP_HOST'] ?? 'default');
-        $area = $area ?? ($_SERVER['WELINE_AREA'] ?? 'frontend');
-        
+        $domain = $domain ?? \w_env('server.http_host', 'default');
+        $area = $area ?? \w_env('area', 'frontend');
+
         return self::build($identity, $domain . ':' . $area . ':' . $key);
     }
 
@@ -127,9 +127,9 @@ class KeyBuilder
      */
     public static function getDomainKey(): string
     {
-        $websiteCode = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
-        $host = $_SERVER['HTTP_HOST'] ?? '';
-        
+        $websiteCode = \w_env('website_code', '');
+        $host = \w_env('server.http_host', '');
+
         return $websiteCode ?: $host;
     }
 
@@ -140,7 +140,7 @@ class KeyBuilder
      */
     public static function getAreaKey(): string
     {
-        return $_SERVER['WELINE_AREA'] ?? 'frontend';
+        return \w_env('area', 'frontend');
     }
 
     /**
@@ -153,7 +153,7 @@ class KeyBuilder
     public static function buildUrlCacheKey(string $uri, string $method = 'GET'): string
     {
         $uri = self::normalizeUri($uri);
-        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $uri;
+        $fullUri = \w_env('full_request_uri', $uri);
         return self::build('router', 'url:' . $fullUri . ':' . $method);
     }
 
@@ -167,7 +167,7 @@ class KeyBuilder
     public static function buildRuleCacheKey(string $uri, string $method = 'GET'): string
     {
         $uri = self::normalizeUri($uri);
-        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $uri;
+        $fullUri = \w_env('full_request_uri', $uri);
         return self::build('router', 'rule:' . $fullUri . ':' . $method);
     }
 
@@ -181,7 +181,7 @@ class KeyBuilder
     public static function buildRouterStartCacheKey(string $uri, string $method = 'GET'): string
     {
         $uri = self::normalizeUri($uri);
-        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $uri;
+        $fullUri = \w_env('full_request_uri', $uri);
         return self::build('router', 'start:' . $fullUri . ':' . $method);
     }
 
@@ -214,25 +214,25 @@ class KeyBuilder
      */
     public static function buildUnifiedRequestCacheKey(string $uri = '', string $method = 'GET'): string
     {
-        $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $uri;
+        $fullUri = \w_env('full_request_uri', $uri);
         $usedFallback = false;
 
         if ($fullUri === '' || !\str_contains($fullUri, '://')) {
-            $scheme = $_SERVER['REQUEST_SCHEME'] ?? 'http';
-            $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-            $path = $_SERVER['REQUEST_URI'] ?? '/';
+            $scheme = \w_env('request.scheme', 'http');
+            $host = \w_env('server.http_host', 'localhost');
+            $path = \w_env('request.uri', '/');
             $fullUri = $scheme . '://' . $host . (\str_starts_with($path, '/') ? '' : '/') . $path;
             $usedFallback = true;
         }
         if ($fullUri === '' || !\str_contains($fullUri, '://')) {
-            $fullUri = 'unknown-' . ($_SERVER['REQUEST_URI'] ?? '/');
+            $fullUri = 'unknown-' . \w_env('request.uri', '/');
             $usedFallback = true;
         }
 
         if ($usedFallback && \function_exists('w_log_warning')) {
             w_log_warning(
                 '[KeyBuilder] WELINE_FULL_REQUEST_URI missing, used fallback for FPC key',
-                ['fullUri' => $fullUri, 'REQUEST_URI' => $_SERVER['REQUEST_URI'] ?? ''],
+                ['fullUri' => $fullUri, 'REQUEST_URI' => \w_env('request.uri', '')],
                 'fpc_consistency.log'
             );
         }
