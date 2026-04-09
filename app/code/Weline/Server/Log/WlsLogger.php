@@ -270,8 +270,39 @@ class WlsLogger
 
                 $encoded = @\json_encode($context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PARTIAL_OUTPUT_ON_ERROR, 3);
                 if ($encoded === false || \strlen($encoded) > 4096) {
-                    // 从 8192 降低到 4096，减少内存占用
-                    $contextStr = ' [context too large]';
+                    // context 太大时，提取重点字段而不是直接丢弃
+                    $keyFields = [
+                        'exception_class',
+                        'exception_message',
+                        'exception_code',
+                        'exception_file',
+                        'exception_line',
+                        '_exception_class',
+                        '_exception_message',
+                        '_exception_code',
+                        '_exception_file',
+                        '_exception_line',
+                        '_previous_exception',
+                        'message',
+                        'error',
+                    ];
+                    $extracted = [];
+                    foreach ($keyFields as $key) {
+                        if (isset($context[$key]) && \strlen((string)$context[$key]) < 500) {
+                            $extracted[$key] = $context[$key];
+                        }
+                    }
+                    if (!empty($extracted)) {
+                        $extracted['_truncated'] = true;
+                        $extractedJson = @\json_encode($extracted, JSON_UNESCAPED_UNICODE | JSON_PARTIAL_OUTPUT_ON_ERROR);
+                        if ($extractedJson !== false && \strlen($extractedJson) <= 4096) {
+                            $contextStr = ' ' . $extractedJson;
+                        } else {
+                            $contextStr = ' [context too large: ' . \strlen($encoded) . ' bytes]';
+                        }
+                    } else {
+                        $contextStr = ' [context too large: ' . \strlen($encoded) . ' bytes]';
+                    }
                 } else {
                     $contextStr = ' ' . $encoded;
                 }
