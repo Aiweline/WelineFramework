@@ -189,6 +189,7 @@ class CodeFixer
         $phpOpen = chr(60) . chr(63) . 'php';
         $phpShort = chr(60) . chr(63);
         $phpClose = chr(63) . chr(62);
+        $php = str_replace(["\r\n", "\r"], "\n", $php);
         
         // 移除PHP开始/结束标签
         $original = $php;
@@ -212,7 +213,27 @@ class CodeFixer
         if ($php !== $original) {
             $this->addFix('php_variables', '修复了双美元符号变量');
         }
-        
+
+        // 修复数组箭头语法 `=>`：AI 可能误解模板变量格式而输出 `$key => value` 而不是 `$key = value`
+        // 这种语法在 try{ php_variables } 块内是无效的，会导致 "Parse error: unexpected token =>"
+        $original = $php;
+        $fixedLines = [];
+        $hasArrowFix = false;
+        foreach (preg_split('/\n/', $php) ?: [] as $line) {
+            $trimmed = trim($line);
+            // 匹配 $var => value 或 $var => 'value' 模式（不是字符串内的 =>）
+            if (preg_match('/^\$[a-zA-Z_]\w*\s*=>\s*/', $trimmed)) {
+                $fixedLines[] = preg_replace('/^(\$[a-zA-Z_]\w*)\s*=>\s*/', '$1 = ', $line);
+                $hasArrowFix = true;
+            } else {
+                $fixedLines[] = $line;
+            }
+        }
+        if ($hasArrowFix) {
+            $php = implode("\n", $fixedLines);
+            $this->addFix('php_variables', '修复了 `=>` 数组语法为 `$var = value` 赋值语法');
+        }
+
         // 移除所有内嵌的 PHP 标签（不仅仅是开头结尾）
         $original = $php;
         $php = preg_replace('/<\?(?:php|=)?/i', '', $php);
@@ -222,6 +243,49 @@ class CodeFixer
         }
         
         // 修复常见的语法问题
+        $original = $php;
+        $lines = preg_split('/\n/', $php) ?: [];
+        $safeLines = [];
+        $removedUnsafeStatements = false;
+        $addedSemicolons = false;
+        foreach ($lines as $line) {
+            $trimmed = trim($line);
+            if ($trimmed === '') {
+                continue;
+            }
+
+            if (
+                str_contains($trimmed, '```')
+                || str_contains($trimmed, '$this->')
+                || str_contains($trimmed, '{')
+                || str_contains($trimmed, '}')
+                || preg_match('/^\s*(?:if|else|elseif|foreach|while|for|switch|continue|break|return|echo|print)\b/i', $trimmed)
+                || preg_match('/=\s*(?:function|fn)\s*\(/i', $trimmed)
+                || preg_match('/=\s*new\s+class\b/i', $trimmed)
+                || !preg_match('/^\$[a-zA-Z_][a-zA-Z0-9_]*\s*=/', $trimmed)
+            ) {
+                $removedUnsafeStatements = true;
+                continue;
+            }
+
+            if (!preg_match('/;\s*$/', $trimmed)) {
+                $trimmed .= ';';
+                $addedSemicolons = true;
+            }
+
+            $safeLines[] = $trimmed;
+        }
+        $php = implode("\n", $safeLines);
+        if ($removedUnsafeStatements) {
+            $this->addFix('php_variables', '移除了不受支持的 php_variables 语句');
+        }
+        if ($addedSemicolons) {
+            $this->addFix('php_variables', '补全了 php_variables 赋值语句分号');
+        }
+        if ($php !== $original && !$removedUnsafeStatements && !$addedSemicolons) {
+            $this->addFix('php_variables', '规范化了 php_variables 内容');
+        }
+
         $php = $this->fixPhpSyntax($php);
         
         return $php;
