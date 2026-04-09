@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Runtime;
 
 use Weline\Framework\Http\Request;
+use Weline\Framework\Env\WelineEnv;
 
 /**
  * 超全局变量模拟器
@@ -50,12 +51,12 @@ class GlobalsEmulator
         $this->backup = [
             '_GET' => $_GET ?? [],
             '_POST' => $_POST ?? [],
-            '_COOKIE' => $_COOKIE ?? [],
+            '_COOKIE' => \w_env_cookie() ?? [],
             '_FILES' => $_FILES ?? [],
             '_SERVER' => $_SERVER ?? [],
             '_REQUEST' => $_REQUEST ?? [],
         ];
-        
+
         // 从 Request 对象填充超全局变量
         $this->populateFromRequest($request);
         
@@ -79,12 +80,12 @@ class GlobalsEmulator
         $this->backup = [
             '_GET' => $_GET ?? [],
             '_POST' => $_POST ?? [],
-            '_COOKIE' => $_COOKIE ?? [],
+            '_COOKIE' => \w_env_cookie() ?? [],
             '_FILES' => $_FILES ?? [],
             '_SERVER' => $_SERVER ?? [],
             '_REQUEST' => $_REQUEST ?? [],
         ];
-        
+
         // 解析原始 HTTP 数据
         $parsed = $this->parseRawHttp($rawData);
         
@@ -226,8 +227,65 @@ class GlobalsEmulator
                 $server[$serverKey] = $value;
             }
         }
-        
+
+        // 同步到 WelineEnv
+        $this->syncToWelineEnv($server);
+
         return $server;
+    }
+
+    /**
+     * 同步 $_SERVER 到 WelineEnv
+     */
+    private function syncToWelineEnv(array $server): void
+    {
+        // 初始化 WelineEnv 参数缓存
+        $welineEnv = WelineEnv::getInstance();
+
+        // 同步 $_GET/$_POST/$_COOKIE/$_FILES
+        $welineEnv->initFromGlobals();
+
+        // 同步 $_SERVER 中的 WELINE_* 和标准变量到 RequestContext
+        foreach ($server as $key => $value) {
+            if (\str_starts_with($key, 'WELINE_')) {
+                // 映射 WELINE_* 到对应的别名
+                $alias = match ($key) {
+                    'WELINE_AREA' => 'area',
+                    'WELINE_AREA_ROUTE' => 'area_route',
+                    'WELINE_WEBSITE_ID' => 'website_id',
+                    'WELINE_WEBSITE_CODE' => 'website_code',
+                    'WELINE_USER_LANG' => 'user.lang',
+                    'WELINE_USER_CURRENCY' => 'user.currency',
+                    'WELINE_URL_PARSED' => 'url_parsed',
+                    'WELINE_IS_BACKEND' => 'is_backend',
+                    'WELINE_IS_STATIC_FILE' => 'is_static_file',
+                    'WELINE_PARSER_URL' => 'parser_url',
+                    'WELINE_ORIGIN_REQUEST_URI' => 'origin_request_uri',
+                    'WELINE_FULL_REQUEST_URI' => 'full_request_uri',
+                    default => null,
+                };
+                if ($alias !== null) {
+                    WelineEnv::set($alias, $value, 'GlobalsEmulator buildServerArray');
+                }
+            } elseif (\str_starts_with($key, 'WLS_')) {
+                // WLS 内部变量
+                $alias = match ($key) {
+                    'WLS_REDIRECT_COUNT' => 'wls.redirect_count',
+                    'WLS_REQUEST_COUNT' => 'wls.request_count',
+                    default => null,
+                };
+                if ($alias !== null) {
+                    WelineEnv::set($alias, $value, 'GlobalsEmulator buildServerArray');
+                }
+            }
+        }
+
+        // 同步标准 $_SERVER 变量
+        WelineEnv::set('request.method', $server['REQUEST_METHOD'] ?? 'GET', 'GlobalsEmulator');
+        WelineEnv::set('request.uri', $server['REQUEST_URI'] ?? '/', 'GlobalsEmulator');
+        WelineEnv::set('request.scheme', $server['REQUEST_SCHEME'] ?? 'http', 'GlobalsEmulator');
+        WelineEnv::set('server.http_host', $server['HTTP_HOST'] ?? 'localhost', 'GlobalsEmulator');
+        WelineEnv::set('server.remote_addr', $server['REMOTE_ADDR'] ?? '0.0.0.0', 'GlobalsEmulator');
     }
     
     /**
@@ -315,7 +373,7 @@ class GlobalsEmulator
     
     /**
      * 重置超全局变量
-     * 
+     *
      * @return void
      */
     public function reset(): void
@@ -323,7 +381,7 @@ class GlobalsEmulator
         if (!$this->emulated) {
             return;
         }
-        
+
         // 清空超全局变量（不恢复备份，因为在常驻内存模式下备份可能已过时）
         $_GET = [];
         $_POST = [];
@@ -353,9 +411,16 @@ class GlobalsEmulator
             }
         }
         $_SERVER = $newServer;
-        
+
         $this->emulated = false;
         $this->backup = [];
+
+        // 重置 WelineEnv
+        try {
+            WelineEnv::getInstance()->reset();
+        } catch (\Throwable) {
+            // 忽略错误
+        }
     }
     
     /**

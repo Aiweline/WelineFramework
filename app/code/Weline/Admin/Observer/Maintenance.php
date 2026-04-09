@@ -15,7 +15,6 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\View\Block;
 use Weline\Maintenance\Helper\UrlParser;
-
 class Maintenance implements \Weline\Framework\Event\ObserverInterface
 {
     /**
@@ -27,11 +26,11 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         // 在 run_before 阶段，使用轻量级 URL 解析器判断请求类型（不触发事件，不查询数据库）
         $parse = $event->getData('parse');
         $uri = $parse['uri'];
-        $isApiRequest = UrlParser::isApiRequest($_SERVER['ORIGIN_REQUEST_URI'] ?? '');
-        $isBackend = UrlParser::isBackendRequest($_SERVER['ORIGIN_REQUEST_URI'] ?? '');
+        $isApiRequest = UrlParser::isApiRequest(\w_env('origin_request_uri', ''));
+        $isBackend = UrlParser::isBackendRequest(\w_env('origin_request_uri', ''));
         // 如果 area 不是 API，再检查 Accept 头（兼容某些特殊情况）
         if (!$isApiRequest) {
-            $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+            $acceptHeader = \w_env('server.accept', '');
             $isApiRequest = str_contains($acceptHeader, 'application/json');
         }
         // 仅处理后端非 API 请求
@@ -68,9 +67,11 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         $data->setData('white_urls', $white_urls);
         if (!$white) {
             // 获取语言（从事件数据中读取，如果事件数据中有的话）
-            $lang = $data->getData('language') ?? $_SERVER['WELINE_USER_LANG'] ?? $_COOKIE['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            $lang = $data->getData('language') ?? \w_env('user.lang', 'zh_Hans_CN');
             // 设置语言到 Request，以便模板能够使用正确的语言
             $request->setData('WELINE_USER_LANG', $lang);
+            // 同步到 WelineEnv 和 $_SERVER
+            \Weline\Framework\Env\WelineEnv::set('user.lang', $lang, 'Maintenance Observer');
             $_SERVER['WELINE_USER_LANG'] = $lang;
             
             // 标记为已处理，阻止 MaintenanceInterceptor 继续执行

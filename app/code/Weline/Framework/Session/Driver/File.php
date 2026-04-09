@@ -10,6 +10,7 @@
 namespace Weline\Framework\Session\Driver;
 
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Session\SessionFactory;
 
 class File extends DataObject implements SessionDriverHandlerInterface
 {
@@ -43,25 +44,45 @@ class File extends DataObject implements SessionDriverHandlerInterface
 
     public function set($name, $value): bool
     {
-        $_SESSION[$name] = $value;
-        if ($_SESSION[$name]) {
+        try {
+            $session = SessionFactory::getInstance()->createSession();
+            $session->set($name, $value);
             return true;
+        } catch (\Throwable $e) {
+            $_SESSION[$name] = $value;
+            if ($_SESSION[$name]) {
+                return true;
+            }
+            return false;
         }
-        return false;
     }
 
     public function get($name = null): mixed
     {
-        if ($name) {
-            return $_SESSION[$name] ?? null;
+        try {
+            $session = SessionFactory::getInstance()->createSession();
+            if ($name) {
+                return $session->get($name);
+            }
+            return $session->all();
+        } catch (\Throwable $e) {
+            if ($name) {
+                return $_SESSION[$name] ?? null;
+            }
+            return $_SESSION;
         }
-        return $_SESSION;
     }
 
     public function delete($name): bool
     {
-        unset($_SESSION[$name]);
-        return true;
+        try {
+            $session = SessionFactory::getInstance()->createSession();
+            $session->delete($name);
+            return true;
+        } catch (\Throwable $e) {
+            unset($_SESSION[$name]);
+            return true;
+        }
     }
 
 
