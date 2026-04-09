@@ -108,7 +108,7 @@ class ParameterBag
             return [];
         }
 
-        $contentType = $_SERVER['CONTENT_TYPE'] ?? '';
+        $contentType = \w_env('server.content_type', '');
         $ct = \strtolower(\trim((string) \explode(';', $contentType, 2)[0]));
 
         // ── JSON 系列：application/json, text/json, *+json ──
@@ -195,6 +195,7 @@ class ParameterBag
     {
         $this->query[$key] = $value;
         $_GET[$key] = $value; // 同步到超全局变量以保持兼容
+        \w_env_set("get.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
         $this->allParams = null; // 清除缓存
         return $this;
     }
@@ -220,6 +221,7 @@ class ParameterBag
     {
         unset($this->query[$key]);
         unset($_GET[$key]); // 同步到超全局变量
+        \w_env_set("get.{$key}", null); // 同步清除 WelineEnv
         $this->allParams = null;
         return $this;
     }
@@ -260,6 +262,7 @@ class ParameterBag
             if (str_starts_with($key, $prefix)) {
                 unset($this->query[$key]);
                 unset($_GET[$key]);
+                \w_env_set("get.{$key}", null);
             }
         }
         // 添加新参数
@@ -267,6 +270,7 @@ class ParameterBag
             $fullKey = $prefix . $key;
             $this->query[$fullKey] = $value;
             $_GET[$fullKey] = $value;
+            \w_env_set("get.{$fullKey}", $value);
         }
         $this->allParams = null;
         return $this;
@@ -284,6 +288,7 @@ class ParameterBag
             if (str_starts_with($key, $prefix)) {
                 unset($this->query[$key]);
                 unset($_GET[$key]);
+                \w_env_set("get.{$key}", null);
             }
         }
         $this->allParams = null;
@@ -324,6 +329,7 @@ class ParameterBag
     {
         $this->request[$key] = $value;
         $_POST[$key] = $value; // 同步到超全局变量以保持兼容
+        \w_env_set("post.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
         $this->allParams = null;
         return $this;
     }

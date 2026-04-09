@@ -32,6 +32,9 @@ if (!function_exists('Weline_Taglib_resolve')) {
         if (strpos($__path,'.') === false) {
             $__varName = $__path;
             if (array_key_exists($__varName, $__scope)) { return $__scope[$__varName]; }
+            // 优先从 w_env 获取模板变量，向后兼容 $GLOBALS
+            $__wenvVal = w_env('template.' . $__varName);
+            if ($__wenvVal !== null) { return $__wenvVal; }
             if (isset($GLOBALS[$__varName])) { return $GLOBALS[$__varName]; }
             return $__hasDefault ? $__default : $__varName;
         }
@@ -39,7 +42,9 @@ if (!function_exists('Weline_Taglib_resolve')) {
         $__segments = array_filter(explode('.',$__path),'strlen');
         if (empty($__segments)) { return $__hasDefault ? $__default : $__expr; }
         $__rootName = array_shift($__segments);
-        $__val = array_key_exists($__rootName, $__scope) ? $__scope[$__rootName] : ($GLOBALS[$__rootName] ?? null);
+        // 优先从 w_env 获取模板变量，向后兼容 $GLOBALS
+        $__wenvVal = w_env('template.' . $__rootName);
+        $__val = array_key_exists($__rootName, $__scope) ? $__scope[$__rootName] : ($__wenvVal ?? ($GLOBALS[$__rootName] ?? null));
         if ($__val === null) { return $__hasDefault ? $__default : $__expr; }
         foreach ($__segments as $__seg) {
             if (is_array($__val) && array_key_exists($__seg,$__val)) { $__val = $__val[$__seg]; continue; }

@@ -132,6 +132,7 @@ class ServerBag
     {
         $this->server[$key] = $value;
         $_SERVER[$key] = $value; // 同步到超全局变量
+        \w_env_set("server.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
         $this->headers = null; // 清除 headers 缓存
         return $this;
     }
@@ -157,6 +158,7 @@ class ServerBag
     {
         unset($this->server[$key]);
         unset($_SERVER[$key]);
+        \w_env_set("server.{$key}", null); // 同步清除 WelineEnv
         return $this;
     }
     

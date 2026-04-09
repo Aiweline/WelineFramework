@@ -14,7 +14,6 @@ use GuoLaiRen\PageBuilder\Model\Page as PageModel;
 use GuoLaiRen\PageBuilder\Model\Style;
 use GuoLaiRen\PageBuilder\Service\PageRenderService;
 use Weline\Framework\App\Controller\FrontendController;
-
 class Page extends FrontendController
 {
     private PageModel $pageModel;
@@ -622,16 +621,18 @@ class Page extends FrontendController
         $params['locale'] = $locale;
         
         // 如果当前请求是预览模式，保留 preview 参数
-        if (isset($_GET['preview']) && $_GET['preview'] == '1') {
+        if (\w_env_get('preview') == '1') {
             $params['preview'] = '1';
         }
         // 预览时保留 page_id，确保语言切换后仍预览同一页面
-        if (!empty($_GET['page_id'])) {
-            $params['page_id'] = (int)$_GET['page_id'];
+        $pageId = \w_env_get('page_id');
+        if ($pageId !== null && $pageId !== '') {
+            $params['page_id'] = (int)$pageId;
         }
         // 预览时保留 style_code，确保语言切换后仍预览当前模板
-        if (!empty($_GET['style_code'])) {
-            $params['style_code'] = (string)$_GET['style_code'];
+        $styleCode = \w_env_get('style_code');
+        if ($styleCode !== null && $styleCode !== '') {
+            $params['style_code'] = (string)$styleCode;
         }
         
         // 重新构建URL

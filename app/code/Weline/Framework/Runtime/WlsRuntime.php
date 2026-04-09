@@ -20,7 +20,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Session;
-
+use Weline\Framework\Env\WelineEnv;
 /**
  * WLS 运行时
  * 
@@ -164,6 +164,7 @@ class WlsRuntime implements RuntimeInterface
         // 重置重定向计数器（每个新请求重置）
         if (!isset($_SERVER['WLS_REDIRECT_COUNT'])) {
             $_SERVER['WLS_REDIRECT_COUNT'] = 0;
+            WelineEnv::set('wls.redirect_count', '0', 'WlsRuntime init');
         }
         
         // 直接写入调试日志（WlsRuntime::handle 开始）
@@ -206,6 +207,9 @@ class WlsRuntime implements RuntimeInterface
                 StateManager::runWlsPersistentRequestEntryBaseline();
             }
             $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
+            // 同步到 WelineEnv
+            WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
+            WelineEnv::set('request.method', $_SERVER['REQUEST_METHOD'] ?? 'GET', 'WlsRuntime handle');
             // 早期从 URL 提取语言/货币，供 RequestContext::syncFromServer() 使用
             $this->parseUrlLangCurrency($timing['uri']);
             // 在 $_SERVER 已为当前请求后再初始化请求上下文
@@ -221,6 +225,9 @@ class WlsRuntime implements RuntimeInterface
             $_SERVER['WELINE_PARSER_URL'] = true;
             $_SERVER['WELINE_IS_MEDIA'] = false;
             $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
+            // 同步到 WelineEnv
+            WelineEnv::set('parser_url', 'true', 'WlsRuntime handle');
+            WelineEnv::set('wls.request_count', (string) $this->requestCount, 'WlsRuntime handle');
             
             // 语言/货币已在 init() 前通过 parseUrlLangCurrency() 从 URL 提取，run_before 可直接使用
             
@@ -235,6 +242,7 @@ class WlsRuntime implements RuntimeInterface
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('run_before', $timing['run_before_ms'], 'framework');
             }
+            SchedulerSystem::yield();
             
             // 如果run_before事件耗时过长，记录警告
             if ($timing['run_before_ms'] > 100) {
@@ -255,6 +263,7 @@ class WlsRuntime implements RuntimeInterface
                 $processUrlEnd = \microtime(true);
                 $timing['process_url_parse_ms'] = \round(($processUrlEnd - $processUrlStart) * 1000, 2);
             }
+            SchedulerSystem::yield();
             
             // 关键修复：Url::parser() 修改了 $_SERVER['REQUEST_URI']（去除了区域/货币/语言前缀）
             // 如果在 parser 之前有代码调用了 Request::getUri()（如 run_before 事件观察者），
@@ -281,6 +290,7 @@ class WlsRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('router_init', $timing['router_init_ms'], 'framework');
             }
+            SchedulerSystem::yield();
             // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie 与无意义 IO
             if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
                 \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
@@ -301,6 +311,7 @@ class WlsRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::recordSpan('router_start', $timing['router_start_ms'], 'framework');
             }
+            SchedulerSystem::yield();
             
             // 触发 run_after 事件
             $runAfterStart = \microtime(true);
@@ -316,6 +327,7 @@ class WlsRuntime implements RuntimeInterface
                 RequestLifecycleTrace::popCurrentParent();
                 RequestLifecycleTrace::recordSpan('run_after', $timing['run_after_ms'], 'framework');
             }
+            SchedulerSystem::yield();
             $t5 = \microtime(true);
             
             // 如果run_after事件耗时过长，记录警告
@@ -367,6 +379,7 @@ class WlsRuntime implements RuntimeInterface
             $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
             $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
+            SchedulerSystem::yield();
 
             $isDev = \defined('DEV') && DEV;
             $performanceConfig = $this->getPerformanceConfig();
@@ -397,8 +410,11 @@ class WlsRuntime implements RuntimeInterface
                 return $this->buildSseFailedResponse($statusCode, $message, ['redirect' => $redirectUrl]);
             }
             // 记录重定向信息
-            $redirectCount = $_SERVER['WLS_REDIRECT_COUNT'] ?? 0;
+            $redirectCount = (int) ($_SERVER['WLS_REDIRECT_COUNT'] ?? 0);
             $currentUri = $_SERVER['REQUEST_URI'] ?? '/';
+            // 同步到 WelineEnv
+            WelineEnv::set('wls.redirect_count', (string) $redirectCount, 'WlsRuntime catch RedirectException');
+            WelineEnv::set('request.uri', $currentUri, 'WlsRuntime catch RedirectException');
             $redirectUrl = $redirectEx->getRedirectUrl();
             
             // 如果重定向次数过多，记录警告
@@ -527,7 +543,11 @@ class WlsRuntime implements RuntimeInterface
             $timing['method'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
             $timing['ip'] = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
             $timing['timestamp'] = date('Y-m-d H:i:s');
-            $timing['redirect_count'] = $_SERVER['WLS_REDIRECT_COUNT'] ?? 0;
+            $timing['redirect_count'] = (int) ($_SERVER['WLS_REDIRECT_COUNT'] ?? 0);
+            // 同步到 WelineEnv
+            WelineEnv::set('request.method', $timing['method'], 'WlsRuntime finally');
+            WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
+            WelineEnv::set('wls.redirect_count', (string) $timing['redirect_count'], 'WlsRuntime finally');
             $this->recordPerformanceTiming($timing, $isDev);
         }
     }
@@ -550,6 +570,8 @@ class WlsRuntime implements RuntimeInterface
         }
 
         $area = $parse['area'] ?? $parse['server']['WELINE_AREA'] ?? '';
+        // 同步到 WelineEnv
+        WelineEnv::set('area', $area, 'WlsRuntime processUrlParse');
         $isBackendArea = ($area === 'backend' || $area === 'rest_backend');
         if (isset($_SERVER['REQUEST_METHOD']) && isset($parse['uri'])) {
             $uri = \Weline\Framework\Http\Url::decode_url($parse['uri']);
@@ -586,6 +608,9 @@ class WlsRuntime implements RuntimeInterface
         }
         $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $currentUri;
         $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $currentUri;
+        WelineEnv::set('request.uri', $currentUri, 'WlsRuntime processUrlParse');
+        WelineEnv::set('origin_request_uri', $currentUri, 'WlsRuntime processUrlParse');
+        WelineEnv::set('full_request_uri', $_SERVER['WELINE_FULL_REQUEST_URI'], 'WlsRuntime processUrlParse');
         
         // 设置后端标识
         $welineArea = $_SERVER['WELINE_AREA'] ?? '';
@@ -598,6 +623,8 @@ class WlsRuntime implements RuntimeInterface
         if (!empty($parse['currency'])) {
             $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
             RequestContext::currency($parse['currency']);
+            // 同步到 WelineEnv
+            WelineEnv::set('user.currency', $parse['currency'], 'WlsRuntime processUrlParse');
         } else {
             // 设置默认值，确保模板访问时不会出现 undefined 警告
             $_SERVER['WELINE_USER_CURRENCY'] = $_SERVER['WELINE_USER_CURRENCY'] ?? RequestContext::currency();
@@ -605,6 +632,8 @@ class WlsRuntime implements RuntimeInterface
         if (!empty($parse['language'])) {
             $_SERVER['WELINE_USER_LANG'] = $parse['language'];
             RequestContext::locale($parse['language']);
+            // 同步到 WelineEnv
+            WelineEnv::set('user.lang', $parse['language'], 'WlsRuntime processUrlParse');
         } else {
             // 设置默认值，确保模板访问时不会出现 undefined 警告
             $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? RequestContext::locale();
@@ -618,6 +647,7 @@ class WlsRuntime implements RuntimeInterface
         // 标记 URL 解析已完成
         // CheckFullPageCache 在 url_parsed_after 事件中可以使用此标志判断
         $_SERVER['WELINE_URL_PARSED'] = true;
+        WelineEnv::set('url_parsed', true, 'WlsRuntime processUrlParse');
     }
     
     /**
@@ -685,10 +715,14 @@ class WlsRuntime implements RuntimeInterface
         if ($currency !== null) {
             $_SERVER['WELINE_USER_CURRENCY'] = $currency;
             RequestContext::currency($currency);
+            // 同步到 WelineEnv
+            WelineEnv::set('user.currency', $currency, 'WlsRuntime parseUrlLangCurrency');
         }
         if ($language !== null) {
             $_SERVER['WELINE_USER_LANG'] = $language;
             RequestContext::locale($language);
+            // 同步到 WelineEnv
+            WelineEnv::set('user.lang', $language, 'WlsRuntime parseUrlLangCurrency');
         }
     }
     
@@ -773,9 +807,9 @@ class WlsRuntime implements RuntimeInterface
                     <dt>文件位置：</dt>
                     <dd>' . \htmlspecialchars($file, ENT_QUOTES, 'UTF-8') . ':' . $line . '</dd>
                     <dt>请求 URI：</dt>
-                    <dd>' . \htmlspecialchars($_SERVER['REQUEST_URI'] ?? '/', ENT_QUOTES, 'UTF-8') . '</dd>
+                    <dd>' . \htmlspecialchars(\w_env('request.uri', '/'), ENT_QUOTES, 'UTF-8') . '</dd>
                     <dt>请求方法：</dt>
-                    <dd>' . \htmlspecialchars($_SERVER['REQUEST_METHOD'] ?? 'GET', ENT_QUOTES, 'UTF-8') . '</dd>
+                    <dd>' . \htmlspecialchars(\w_env('request.method', 'GET'), ENT_QUOTES, 'UTF-8') . '</dd>
                 </dl>
             </div>
             <div class="error-trace">' . \htmlspecialchars($trace, ENT_QUOTES, 'UTF-8') . '</div>
@@ -826,8 +860,8 @@ class WlsRuntime implements RuntimeInterface
         
         $logEntry = [
             'timestamp' => \date('Y-m-d H:i:s'),
-            'request_uri' => $_SERVER['REQUEST_URI'] ?? '/',
-            'request_method' => $_SERVER['REQUEST_METHOD'] ?? 'GET',
+            'request_uri' => \w_env('request.uri', '/'),
+            'request_method' => \w_env('request.method', 'GET'),
             'exception' => \get_class($e),
             'message' => $e->getMessage(),
             'file' => $e->getFile(),

@@ -800,7 +800,7 @@ INI,
             return true;
         }
         
-        $remoteAddr = w_env('server.remote_addr', '');
+        $remoteAddr = \w_env('server.remote_addr', '');
         
         // 本地 IP
         $localIps = ['127.0.0.1', '::1', 'localhost'];

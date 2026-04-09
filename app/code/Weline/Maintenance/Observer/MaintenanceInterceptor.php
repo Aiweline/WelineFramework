@@ -252,7 +252,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
         // 从Header检查
         if (in_array('header', $methods)) {
-            $headerKey = $_SERVER['HTTP_' . strtoupper(str_replace('-', '_', $keyName))] ?? null;
+            $headerKey = w_env('server.' . strtolower('HTTP_' . strtoupper(str_replace('-', '_', $keyName)))) ?? null;
             if ($headerKey === $keyValue) {
                 return true;
             }
@@ -260,7 +260,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
         // 从Cookie检查
         if (in_array('cookie', $methods)) {
-            $cookieKey = $_COOKIE[$keyName] ?? null;
+            $cookieKey = \w_env_cookie($keyName);
             if ($cookieKey === $keyValue) {
                 return true;
             }
@@ -287,7 +287,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
 
         try {
             $clientIp = IpMatcher::getClientIp();
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            $userAgent = \w_env('server.http_user_agent') ?? '';
             $timestamp = date('Y-m-d H:i:s');
             
             $logDir = BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR;
@@ -323,29 +323,29 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     {
         // 优先级1：从 URL 路径中获取语言（UrlParser 已解析并设置到 $_SERVER['WELINE_USER_LANG']）
         // 如果路径中明确指定了语言，优先使用路径中的语言
-        $lang = $_SERVER['WELINE_USER_LANG'] ?? null;
+        $lang = \w_env('user.lang');
         
         // 优先级2：从 Cookie 获取语言（如果路径中没有指定）
         if (empty($lang)) {
-            $lang = $_COOKIE['WELINE_USER_LANG'] ?? null;
+            $lang = \w_env_cookie('WELINE_USER_LANG');
         }
-        
+
         // 优先级3：从浏览器 Accept-Language 头获取
         if (empty($lang)) {
-            $acceptLang = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+            $acceptLang = \w_env('server.http_accept_language') ?? '';
             if (!empty($acceptLang)) {
                 $langs = explode(',', $acceptLang);
                 $firstLang = trim(explode(';', $langs[0])[0]);
                 $lang = $this->convertLangCode($firstLang);
             }
         }
-        
+
         // 优先级4：使用默认语言
         // 如果检测到的语言是英文，但用户可能期望中文，优先使用中文
         // 只有在明确设置了英文 Cookie 或路径中指定了英文时才使用英文
-        if (empty($lang) || ($lang === 'en_US' && empty($_COOKIE['WELINE_USER_LANG']) && empty($_SERVER['WELINE_USER_LANG']))) {
+        if (empty($lang) || ($lang === 'en_US' && empty(\w_env_cookie('WELINE_USER_LANG')) && empty(\w_env('user.lang')))) {
             // 检查 Accept-Language 是否包含中文
-            $acceptLang = $_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? '';
+            $acceptLang = \w_env('server.http_accept_language') ?? '';
             if (!empty($acceptLang) && (str_contains($acceptLang, 'zh') || str_contains($acceptLang, 'cn'))) {
                 $lang = self::DEFAULT_LANG;
             } else {

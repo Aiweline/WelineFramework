@@ -15,7 +15,6 @@ namespace Weline\Admin\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-
 class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterface
 {
     /**
@@ -85,8 +84,8 @@ class NoAccessRedirectBefore implements \Weline\Framework\Event\ObserverInterfac
             return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
         }
         if ($backendPrefix !== null && $backendPrefix !== '') {
-            $currency = $this->request->getServer('WELINE_USER_CURRENCY') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
-            $language = $this->request->getServer('WELINE_USER_LANG') ?? $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            $currency = \w_env('user.currency', 'CNY');
+            $language = \w_env('user.lang', 'zh_Hans_CN');
             return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
         }
         return $this->request->getUrlBuilder()->getBackendUrlPath($path);
