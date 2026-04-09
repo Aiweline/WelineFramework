@@ -434,8 +434,12 @@ class FrameworkBuilder
         $replacements['CATEGORY'] = $category;
         $replacements['WRAPPER_TAG'] = $category === 'header' ? 'header' : ($category === 'footer' ? 'footer' : 'section');
         
-        // AI生成的代码
-        $replacements['EXTRA_FIELDS'] = $this->formatExtraFields($aiData['extra_fields'] ?? '');
+        // AI生成的代码 - 处理 extra_fields 可能是数组或字符串的情况
+        $extraFields = $aiData['extra_fields'] ?? '';
+        if (is_array($extraFields)) {
+            $extraFields = json_encode($extraFields, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+        }
+        $replacements['EXTRA_FIELDS'] = $this->formatExtraFields($extraFields);
         // 注入前再次移除含 { } 的行，避免 try{ {{PHP_VARIABLES}} } 内出现未闭合大括号导致 Parse error on line N
         $pv = $aiData['php_variables'] ?? '';
         $pvLines = explode("\n", str_replace("\r\n", "\n", $pv));
