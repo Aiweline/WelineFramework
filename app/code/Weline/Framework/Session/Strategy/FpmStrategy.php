@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Session\Strategy;
 
+use Weline\Framework\Session\SessionFactory;
 use Weline\Framework\Session\Storage\SessionStorageInterface;
 
 /**
@@ -54,7 +55,7 @@ final class FpmStrategy implements SessionStrategyInterface
         $this->defaultTtl = (int)($config['lifetime'] ?? $config['session_ttl'] ?? 3600);
         $this->cookiePath = $config['cookie_path'] ?? '/';
         $this->cookieDomain = $config['cookie_domain'] ?? '';
-        $this->cookieSecure = (bool)($config['cookie_secure'] ?? (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on'));
+        $this->cookieSecure = (bool)($config['cookie_secure'] ?? (\w_env('server.https') === 'on'));
         $this->cookieHttpOnly = (bool)($config['cookie_httponly'] ?? true);
         $this->cookieSameSite = $config['cookie_samesite'] ?? 'Lax';
     }
@@ -91,6 +92,7 @@ final class FpmStrategy implements SessionStrategyInterface
             $currentId = \session_id();
             if ($currentId !== '' && $currentId !== false) {
                 $data = $_SESSION ?? [];
+                $this->syncToFrameworkSession($data);
                 return $currentId;
             }
             return '';
@@ -103,6 +105,7 @@ final class FpmStrategy implements SessionStrategyInterface
             $currentId = \session_id();
             if ($sessionId === null || $sessionId === '' || $currentId === $sessionId) {
                 $data = $_SESSION ?? [];
+                $this->syncToFrameworkSession($data);
                 return $currentId ?: '';
             }
             \session_write_close();
@@ -124,6 +127,7 @@ final class FpmStrategy implements SessionStrategyInterface
         }
 
         $data = $_SESSION ?? [];
+        $this->syncToFrameworkSession($data);
         
         return \session_id() ?: '';
     }
@@ -138,6 +142,7 @@ final class FpmStrategy implements SessionStrategyInterface
         }
 
         $_SESSION = $data;
+        $this->syncToFrameworkSession($data);
         
         return true;
     }
@@ -159,6 +164,7 @@ final class FpmStrategy implements SessionStrategyInterface
     {
         if (\session_status() === PHP_SESSION_ACTIVE) {
             $_SESSION = [];
+            $this->clearFrameworkSession();
             
             if (\ini_get('session.use_cookies')) {
                 $params = \session_get_cookie_params();
@@ -188,6 +194,7 @@ final class FpmStrategy implements SessionStrategyInterface
             \session_regenerate_id($deleteOld);
             $newId = \session_id() ?: '';
             $_SESSION = $data;
+            $this->syncToFrameworkSession($data);
             return $newId;
         }
 
@@ -198,6 +205,7 @@ final class FpmStrategy implements SessionStrategyInterface
         }
 
         $this->storage->write($newId, $data, $ttl > 0 ? $ttl : $this->defaultTtl);
+        $this->syncToFrameworkSession($data);
         $this->setCookie($newId, $this->defaultTtl);
         
         return $newId;
@@ -226,6 +234,34 @@ final class FpmStrategy implements SessionStrategyInterface
                 'samesite' => $this->cookieSameSite,
             ]
         );
+    }
+
+    /**
+     * 同步数据到框架 Session
+     */
+    private function syncToFrameworkSession(array $data): void
+    {
+        try {
+            $session = SessionFactory::getInstance()->createSession();
+            foreach ($data as $key => $value) {
+                $session->set($key, $value);
+            }
+        } catch (\Throwable $e) {
+            // Session 未初始化时静默忽略，fallback 到 $_SESSION
+        }
+    }
+
+    /**
+     * 清空框架 Session
+     */
+    private function clearFrameworkSession(): void
+    {
+        try {
+            $session = SessionFactory::getInstance()->createSession();
+            $session->clear();
+        } catch (\Throwable $e) {
+            // Session 未初始化时静默忽略
+        }
     }
 
     /**

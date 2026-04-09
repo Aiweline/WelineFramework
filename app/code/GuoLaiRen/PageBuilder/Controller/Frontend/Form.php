@@ -74,9 +74,9 @@ class Form extends FrontendController
             }
 
             // 获取其他信息
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
-            $ipAddress = $_SERVER['REMOTE_ADDR'] ?? '';
-            $referer = $_SERVER['HTTP_REFERER'] ?? '';
+            $userAgent = \w_env('server.user_agent', '');
+            $ipAddress = \w_env('server.remote_addr', '');
+            $referer = \w_env('http_referer', '');
 
             // 保存表单提交记录
             $submission = clone $this->formSubmissionModel;

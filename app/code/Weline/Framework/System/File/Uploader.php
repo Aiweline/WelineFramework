@@ -14,7 +14,6 @@ namespace Weline\Framework\System\File;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-
 class Uploader
 {
     private string $media_dir = PUB . 'media' . DS;
@@ -45,13 +44,14 @@ class Uploader
 
     public function checkDomain(): void
     {
-        if (isset($_SERVER['HTTP_ORIGIN'])) {
+        $httpOrigin = w_env('http_origin', '');
+        if (!empty($httpOrigin)) {
             // 验证来源是否在白名单内
-            if (in_array($_SERVER['HTTP_ORIGIN'], $this->accepted_origins)) {
+            if (in_array($httpOrigin, $this->accepted_origins)) {
                 if ($this->headerResponse) {
-                    header('Access-Control-Allow-Origin: ' . $_SERVER['HTTP_ORIGIN']);
+                    header('Access-Control-Allow-Origin: ' . $httpOrigin);
                 } else {
-                    $this->headers['Access-Control-Allow-Origin'] = $_SERVER['HTTP_ORIGIN'];
+                    $this->headers['Access-Control-Allow-Origin'] = $httpOrigin;
                 }
             } else {
                 if ($this->headerResponse) {
