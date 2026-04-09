@@ -467,3 +467,152 @@ if (!function_exists('w_get_string_between_quotes')) {
         return array_merge($matches_double_quote, $matches_single_quote);
     }
 }
+
+use Weline\Framework\Env\WelineEnv;
+
+if (!function_exists('w_env')) {
+    function w_env(string $key, mixed $default = null): mixed
+    {
+        return WelineEnv::get($key, $default);
+    }
+}
+
+if (!function_exists('w_env_set')) {
+    function w_env_set(string $key, mixed $value, string $reason = ''): void
+    {
+        WelineEnv::set($key, $value, $reason);
+    }
+}
+
+if (!function_exists('w_env_get')) {
+    function w_env_get(?string $key = null, mixed $default = null): mixed
+    {
+        return WelineEnv::getGet($key, $default);
+    }
+}
+
+if (!function_exists('w_env_post')) {
+    function w_env_post(?string $key = null, mixed $default = null): mixed
+    {
+        return WelineEnv::getPost($key, $default);
+    }
+}
+
+if (!function_exists('w_env_cookie')) {
+    function w_env_cookie(?string $key = null, mixed $default = null): mixed
+    {
+        return WelineEnv::getCookie($key, $default);
+    }
+}
+
+if (!function_exists('w_env_files')) {
+    function w_env_files(?string $key = null): mixed
+    {
+        return WelineEnv::getFiles($key);
+    }
+}
+
+if (!function_exists('w_env_area')) {
+    function w_env_area(): string
+    {
+        return WelineEnv::getArea();
+    }
+}
+
+if (!function_exists('w_env_lang')) {
+    function w_env_lang(): string
+    {
+        return WelineEnv::getLang();
+    }
+}
+
+if (!function_exists('w_env_currency')) {
+    function w_env_currency(): string
+    {
+        return WelineEnv::getCurrency();
+    }
+}
+
+if (!function_exists('w_env_website_id')) {
+    function w_env_website_id(): ?int
+    {
+        return WelineEnv::getWebsiteId();
+    }
+}
+
+if (!function_exists('w_env_is_backend')) {
+    function w_env_is_backend(): bool
+    {
+        return WelineEnv::isBackend();
+    }
+}
+
+if (!function_exists('w_env_is_frontend')) {
+    function w_env_is_frontend(): bool
+    {
+        return WelineEnv::isFrontend();
+    }
+}
+
+if (!function_exists('w_env_request_uri')) {
+    function w_env_request_uri(): string
+    {
+        return WelineEnv::getRequestUri();
+    }
+}
+
+if (!function_exists('w_env_request_method')) {
+    function w_env_request_method(): string
+    {
+        return WelineEnv::getRequestMethod();
+    }
+}
+
+if (!function_exists('w_env_http_host')) {
+    function w_env_http_host(): string
+    {
+        return WelineEnv::getHttpHost();
+    }
+}
+
+if (!function_exists('w_env_client_ip')) {
+    function w_env_client_ip(): string
+    {
+        return WelineEnv::getClientIp();
+    }
+}
+
+if (!function_exists('w_env_user_id')) {
+    function w_env_user_id(): ?int
+    {
+        return WelineEnv::getUserId();
+    }
+}
+
+if (!function_exists('w_env_session_id')) {
+    function w_env_session_id(): ?string
+    {
+        return WelineEnv::getSessionId();
+    }
+}
+
+if (!function_exists('w_env_is_https')) {
+    function w_env_is_https(): bool
+    {
+        return WelineEnv::isHttps();
+    }
+}
+
+if (!function_exists('w_env_redirect_count')) {
+    function w_env_redirect_count(): int
+    {
+        return WelineEnv::getRedirectCount();
+    }
+}
+
+if (!function_exists('w_env_inc_redirect_count')) {
+    function w_env_inc_redirect_count(): void
+    {
+        WelineEnv::incRedirectCount();
+    }
+}
