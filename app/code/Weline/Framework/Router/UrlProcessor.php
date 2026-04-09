@@ -14,7 +14,6 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-
 /**
  * UrlProcessor - URL 处理类
  * 
@@ -147,7 +146,7 @@ class UrlProcessor
         // 触发处理 URL 之前的事件
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $routerData = new DataObject(['path' => $url, 'rule' => new DataObject()]);
-        $originalGet = $_GET;
+        $originalGet = \w_env_get();
         
         $eventManager->dispatch('Weline_Framework_Router::process_uri_before', $routerData);
         
@@ -182,7 +181,7 @@ class UrlProcessor
     {
         $newParams = [];
         
-        foreach ($_GET as $key => $value) {
+        foreach (\w_env_get() as $key => $value) {
             if (!array_key_exists($key, $originalGet)) {
                 $newParams[$key] = $value;
             }
@@ -200,7 +199,8 @@ class UrlProcessor
     public function applyGeneratedGetParams(array $params): void
     {
         foreach ($params as $key => $value) {
-            if (!isset($_GET[$key])) {
+            if (\w_env_get($key) === null) {
+                \w_env_set("get.{$key}", $value);
                 $_GET[$key] = $value;
             }
         }
@@ -235,7 +235,7 @@ class UrlProcessor
     public function isStaticFile(string $url = ''): bool
     {
         if ($url === '') {
-            return (bool)($_SERVER['WELINE_IS_STATIC_FILE'] ?? false);
+            return (bool) w_env('is_static_file', false);
         }
         return weline_is_static_file_path($url);
     }

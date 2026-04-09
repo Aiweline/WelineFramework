@@ -195,7 +195,7 @@ class Event extends \Weline\Framework\DataObject\DataObject
                 $isCliDebugMode = isset($argv) && in_array('--event-debug', $argv);
             } else {
                 // Web 模式：检查 GET 参数中是否有 event-debug
-                $isWebDebugMode = isset($_GET['event-debug']);
+                $isWebDebugMode = \w_env_get('event-debug') !== null;
             }
             
             $needDebug = $isCliDebugMode || $isWebDebugMode;

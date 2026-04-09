@@ -63,7 +63,7 @@ final class WlsStrategy implements SessionStrategyInterface
         $this->defaultTtl = (int)($config['lifetime'] ?? $config['session_ttl'] ?? 3600);
         $this->cookiePath = $config['cookie_path'] ?? '/';
         $this->cookieDomain = $config['cookie_domain'] ?? '';
-        $this->cookieSecure = (bool)($config['cookie_secure'] ?? (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on'));
+        $this->cookieSecure = (bool)($config['cookie_secure'] ?? (w_env('server.https') === 'on'));
         $this->cookieHttpOnly = (bool)($config['cookie_httponly'] ?? true);
         $this->cookieSameSite = $config['cookie_samesite'] ?? 'Lax';
         $this->cookieLifetime = (int)($config['cookie_lifetime'] ?? 86400 * 30);
@@ -95,7 +95,7 @@ final class WlsStrategy implements SessionStrategyInterface
     public function initialize(?string $sessionId, array &$data): string
     {
         if ($sessionId === null || $sessionId === '') {
-            $sessionId = $_COOKIE[self::SESSION_NAME] ?? '';
+            $sessionId = \w_env_cookie(self::SESSION_NAME) ?? '';
         }
 
         if ($sessionId === '') {
