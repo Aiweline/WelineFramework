@@ -15,7 +15,6 @@ use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-
 /**
  * 维护模式下 API 请求统一响应处理
  */
@@ -30,24 +29,24 @@ class Maintenance implements ObserverInterface
     public function execute(Event &$event): void
     {
         // 在 run_before 阶段，使用轻量级 URL 解析器判断是否是 API 请求（不触发事件，不查询数据库）
-        $uri = $_SERVER['REQUEST_URI'] ?? '';
+        $uri = \w_env('request.uri', '');
         $isApiRequest = $this->isApiRequest($uri);
-        
+
         // 如果 area 不是 API，再检查 Accept 头（兼容某些特殊情况）
         if (!$isApiRequest) {
-            $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+            $acceptHeader = \w_env('server.accept', '');
             $isApiRequest = str_contains($acceptHeader, 'application/json');
         }
-        
+
         // 开发环境下：通过查询参数 ?api=1 可以测试 API 维护模式响应
         if (!$isApiRequest && defined('DEV') && DEV) {
-            $queryString = $_SERVER['QUERY_STRING'] ?? '';
+            $queryString = \w_env('request.query_string', '');
             parse_str($queryString, $queryParams);
             if (isset($queryParams['api']) && ($queryParams['api'] === '1' || $queryParams['api'] === 'true')) {
                 $isApiRequest = true;
             }
         }
-        
+
         // 仅处理 API 请求
         if ($isApiRequest) {
              /** @var DataObject|null $data */
@@ -57,8 +56,8 @@ class Maintenance implements ObserverInterface
             }
 
             $whiteUrls = $data->getData('white_urls') ?? [];
-            // 使用 $_SERVER 获取 URI，避免 Request 对象未初始化的问题
-            $uri = $_SERVER['REQUEST_URI'] ?? '';
+            // 使用 w_env 获取 URI，避免 Request 对象未初始化的问题
+            $uri = \w_env('request.uri', '');
 
             foreach ($whiteUrls as $whiteUrl) {
                 $whiteUrl = (string)$whiteUrl;
@@ -72,8 +71,9 @@ class Maintenance implements ObserverInterface
             $data->setData('white_urls', $whiteUrls);
 
             // 获取语言（从事件数据中读取，如果事件数据中有的话）
-            $lang = $data->getData('language') ?? $_SERVER['WELINE_USER_LANG'] ?? $_COOKIE['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            $lang = $data->getData('language') ?? \w_env('user.lang', 'zh_Hans_CN');
             // 设置语言到 $_SERVER，以便翻译函数能够使用正确的语言
+            \w_env_set('user.lang', $lang, 'Api Maintenance Observer');
             $_SERVER['WELINE_USER_LANG'] = $lang;
 
             $retryAfter = (int)(Env::get('maintenance.retry_after', self::DEFAULT_RETRY_AFTER));
@@ -87,7 +87,7 @@ class Maintenance implements ObserverInterface
                 'message' => __('系统正在升级，请稍后再试。'),
                 'data' => [
                     'retry_after' => $retryAfter,
-                    'request_id' => $_SERVER['REQUEST_TIME_FLOAT'] ?? microtime(true),
+                    'request_id' => \w_env('request.time_float', microtime(true)),
                 ],
             ];
 

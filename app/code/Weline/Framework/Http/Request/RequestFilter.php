@@ -11,7 +11,6 @@ namespace Weline\Framework\Http\Request;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
-
 class RequestFilter extends DataObject
 {
     private static RequestFilter $instance;
@@ -268,7 +267,7 @@ class RequestFilter extends DataObject
         foreach ($_POST as $key => $value) {
             $this->StopAttack($key, $value, $postfilter);
         }
-        foreach ($_COOKIE as $key => $value) {
+        foreach (\w_env_cookie() as $key => $value) {
             $this->StopAttack($key, $value, $cookiefilter);
         }
         if (file_exists('updateSafeScan.php')) {
@@ -289,7 +288,7 @@ class RequestFilter extends DataObject
             if (DEV) {
                 dd($matches);
             }
-            $this->slog('<br><br>操作IP: ' . $_SERVER['REMOTE_ADDR'] . '<br>操作时间: ' . date('%Y-%m-%d %H:%M:%S') . '<br>操作页面:' . $_SERVER['PHP_SELF'] . '<br>提交方式: ' . $_SERVER['REQUEST_METHOD'] . '<br>提交参数: ' . $StrFiltKey . '<br>提交数据: ' . $StrFiltValue);
+            $this->slog('<br><br>操作IP: ' . \w_env('server.remote_addr', 'unknown') . '<br>操作时间: ' . date('%Y-%m-%d %H:%M:%S') . '<br>操作页面:' . \w_env('server.php_self', '') . '<br>提交方式: ' . \w_env('request.method', 'GET') . '<br>提交参数: ' . $StrFiltKey . '<br>提交数据: ' . $StrFiltValue);
             throw new \Weline\Framework\Http\ResponseTerminateException(
                 403,
                 'WelineFramework 警告:非法操作！',

@@ -42,11 +42,11 @@ class Router implements RouterInterface
             $websiteId = self::getCurrentWebsiteId();
             // 无站点时按请求 host 解析站点，便于直接用域名访问首页
             if ($websiteId <= 0) {
-                $host = $_SERVER['HTTP_HOST'] ?? '';
+                $host = \w_env('server.http_host', '');
                 if ($host !== '') {
                     $websiteId = self::findWebsiteIdByHost($host) ?? 0;
                     if ($websiteId > 0) {
-                        $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteId;
+                        \w_env_set('website_id', (string)$websiteId);
                         if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
                             \Weline\Framework\Runtime\RequestContext::websiteId($websiteId);
                         }
@@ -54,16 +54,18 @@ class Router implements RouterInterface
                 }
             }
             // 预览模式：优先用 query 的 handle + website_id 配合 URL 解码
-            $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
-            $queryHandle = isset($_GET['handle']) && is_string($_GET['handle']) ? trim(rawurldecode($_GET['handle'])) : '';
-            $homePageHandle = self::getHomePageHandle($websiteId);
-            if (!self::shouldRewriteRootPath($isPreview, $queryHandle, $homePageHandle)) {
-                return;
+            $isPreview = \w_env_get('preview') == '1';
+            $queryHandle = \w_env_get('handle');
+            if ($queryHandle !== null) {
+                $queryHandle = is_string($queryHandle) ? trim(rawurldecode($queryHandle)) : '';
+            } else {
+                $queryHandle = '';
             }
             if ($isPreview && $queryHandle !== '') {
-                $websiteIdParam = isset($_GET['website_id']) ? (int)$_GET['website_id'] : 0;
+                $websiteIdParam = \w_env_get('website_id');
+                $websiteIdParam = $websiteIdParam !== null ? (int)$websiteIdParam : 0;
                 if ($websiteIdParam > 0) {
-                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$websiteIdParam;
+                    \w_env_set('website_id', (string)$websiteIdParam);
                     if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
                         \Weline\Framework\Runtime\RequestContext::websiteId($websiteIdParam);
                     }
@@ -74,16 +76,6 @@ class Router implements RouterInterface
                 $_GET['handle'] = $queryHandle;
                 return;
             }
-            $path = '/pagebuilder/frontend/page/view';
-            $rule['module'] = 'GuoLaiRen_PageBuilder';
-            if ($isPreview) {
-                $rule['handle'] = $homePageHandle ?? '';
-                $_GET['handle'] = $rule['handle'];
-            } else {
-                $rule['handle'] = '';
-                $_GET['handle'] = '';
-            }
-            return;
             if ($websiteId > 0) {
                 $homePageHandle = self::getHomePageHandle($websiteId);
                 // 有首页即重写。live 模式：根路径直接以域名为首页，不传 handle；预览模式仍传 handle
@@ -117,7 +109,7 @@ class Router implements RouterInterface
         
         // 5. 检查当前站点下 handle 是否存在；同站可省略前缀，如 /about 匹配 handle about 或 home-about
         $websiteId = self::getCurrentWebsiteId();
-        $isPreview = isset($_GET['preview']) && $_GET['preview'] == '1';
+        $isPreview = \w_env_get('preview') == '1';
         if (!self::handleExists($handle, $websiteId, $isPreview)) {
             // 同站短路径：先试 path 作为 handle，再试「首页handle- path」
             if ($websiteId > 0) {
@@ -135,7 +127,7 @@ class Router implements RouterInterface
             } else {
                 $resolvedWebsiteId = self::findWebsiteIdByHandle($handle, $isPreview);
                 if ($resolvedWebsiteId !== null) {
-                    $_SERVER['WELINE_WEBSITE_ID'] = (string)$resolvedWebsiteId;
+                    \w_env_set('website_id', (string)$resolvedWebsiteId);
                     if (class_exists(\Weline\Framework\Runtime\RequestContext::class)) {
                         \Weline\Framework\Runtime\RequestContext::websiteId($resolvedWebsiteId);
                     }
@@ -167,6 +159,7 @@ class Router implements RouterInterface
         $systemPaths = [
             '/admin',
             '/api',
+            '/blog',
             '/pagebuilder',
             '/media',
             '/static',
@@ -218,16 +211,7 @@ class Router implements RouterInterface
         
         return $handle;
     }
-
-    private static function shouldRewriteRootPath(bool $isPreview, string $queryHandle, ?string $homePageHandle): bool
-    {
-        if ($isPreview && $queryHandle !== '') {
-            return true;
-        }
-
-        return $homePageHandle !== null;
-    }
-
+    
     /**
      * 检查当前站点下 handle 是否存在于数据库（同一站点内 handle 唯一，无站点时 website_id=0）
      *
@@ -355,7 +339,7 @@ class Router implements RouterInterface
             if ($websiteId > 0) {
                 return $websiteId;
             }
-            return (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+            return (int)(\w_env('website_id') ?? 0);
         } catch (\Exception $e) {
             return 0;
         }

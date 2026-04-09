@@ -214,9 +214,10 @@ class Response implements ResponseInterface
         $this->flushSessionBeforeTerminate();
 
         // 重定向监控：记录重定向信息
-        $redirectCount = ($_SERVER['REDIRECT_COUNT'] ?? 0) + 1;
+        $redirectCount = ((int) \w_env('wls.redirect_count', 0)) + 1;
+        \w_env_set('wls.redirect_count', (string) $redirectCount, 'Response redirect');
         $_SERVER['REDIRECT_COUNT'] = $redirectCount;
-        $currentUri = $_SERVER['REQUEST_URI'] ?? '/';
+        $currentUri = \w_env('request.uri', '/');
 
         // 如果重定向次数过多，记录警告
         if ($redirectCount > 5) {

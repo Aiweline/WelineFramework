@@ -37,6 +37,12 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
     ) {
         $this->manager = $manager ?? new SharedStateServiceManager();
         $this->consumerCode = $this->resolveConsumerCode($config);
+
+        // WLS 模式下默认启用直连，避免 Worker 启动时阻塞的 ensure/probe
+        if (!isset($config['prefer_direct_connect']) && \defined('WLS_MODE') && WLS_MODE) {
+            $config['prefer_direct_connect'] = true;
+        }
+
         if ($this->attemptDirectBootstrap($config, $manager, $sharedMemoryService, $cacheMemoryService, $stateClient)) {
             return;
         }
@@ -383,6 +389,8 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
             $_ENV['WLS_INSTANCE_NAME'] ?? null,
             $_SERVER['WLS_INSTANCE'] ?? null,
             $_SERVER['WLS_INSTANCE_NAME'] ?? null,
+            \w_env('wls.instance', ''),
+            \w_env('wls.instance_name', ''),
         ] as $candidate) {
             if (\is_string($candidate) && \trim($candidate) !== '') {
                 return \trim($candidate);
@@ -400,8 +408,28 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
      */
     private function resolveConfiguredRuntime(array $config): array
     {
-        $runtime = (new SharedStateRuntimeResolver())->resolve($config);
+        // 直接从 env.php 读取配置，避免调用 resolve() 触发阻塞的 probe
+        $envConfig = \Weline\Framework\App\Env::getInstance()->getConfig();
+        if (!\is_array($envConfig)) {
+            $envConfig = [];
+        }
 
-        return $runtime['memory'];
+        $wls = $envConfig['wls'] ?? [];
+        $memoryService = \is_array($wls['memory_service'] ?? null) ? $wls['memory_service'] : [];
+
+        $host = \trim((string) ($memoryService['host'] ?? '127.0.0.1'));
+        if ($host === '') {
+            $host = '127.0.0.1';
+        }
+
+        $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
+        $port = (int) ($memoryService['port'] ?? $defaultPort);
+        $tokenFileName = \trim((string) ($memoryService['token_file_name'] ?? 'memory_server.token'));
+
+        return [
+            'host' => $host,
+            'port' => $port > 0 ? $port : $defaultPort,
+            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'memory_server.token',
+        ];
     }
 }

@@ -8,6 +8,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Env\WelineEnv;
 
 /**
  * WLS Fiber 请求级上下文
@@ -35,6 +36,12 @@ class WlsFiberContext
     private array $requestVars;
     /** @var array<mixed> */
     private array $filesVars;
+
+    /** WelineEnv 状态快照 */
+    private ?array $welineEnvState = null;
+
+    /** WelineEnv Cookie 快照（单独保存 cookie 数据） */
+    private ?array $welineEnvCookie = null;
 
     /** Request 对象引用（WlsRequest 或 Request），使用引用以兼容 ObjectManager::setInstance */
     private ?object $request = null;
@@ -68,6 +75,13 @@ class WlsFiberContext
         $ctx->postVars = $_POST;
         $ctx->cookieVars = $_COOKIE;
         $ctx->requestVars = $_REQUEST;
+
+        // 单独快照 WelineEnv 的 cookie 数据
+        try {
+            $ctx->welineEnvCookie = WelineEnv::getInstance()->capture()['cookie'] ?? null;
+        } catch (\Throwable) {
+            $ctx->welineEnvCookie = null;
+        }
         $ctx->filesVars = $_FILES;
 
         try {
@@ -79,6 +93,13 @@ class WlsFiberContext
         $ctx->requestId = RequestContext::getId();
         $ctx->headerCollectorState = HeaderCollector::getInstance()->captureState();
 
+        // 快照 WelineEnv 状态
+        try {
+            $ctx->welineEnvState = WelineEnv::getInstance()->capture();
+        } catch (\Throwable) {
+            $ctx->welineEnvState = null;
+        }
+
         return $ctx;
     }
 
@@ -87,6 +108,11 @@ class WlsFiberContext
      */
     public function restore(bool $restoreResponseState = true): void
     {
+        // SSE 上下文恢复：先完全重置再按快照精确还原，
+        // 避免上一个 Fiber 遗留的 sseEnabled/headersSent 污染当前 Fiber。
+        // 旧实现仅在快照值为 true 时调用 enableSse()/markHeadersSent()，
+        // 但从不将它们重置为 false，导致 SSE Fiber 的状态泄漏到普通请求 Fiber。
+        SseContext::reset();
         SseContext::setConnection($this->sseConnection);
         if (\is_callable($this->sseWriteCallback)) {
             SseContext::setWriteCallback($this->sseWriteCallback);
@@ -105,6 +131,19 @@ class WlsFiberContext
         $_POST = $this->postVars;
         $_COOKIE = $this->cookieVars;
         $_REQUEST = $this->requestVars;
+
+        // 恢复 WelineEnv 的 cookie 数据（仅当存在独立 cookie 快照时）
+        // 注意：后续的 welineEnvState 完整恢复会覆盖此处效果，
+        // 此处仅为兼容需要单独处理 cookie 快照的场景
+        if ($this->welineEnvCookie !== null) {
+            try {
+                $currentSnapshot = WelineEnv::getInstance()->capture();
+                $currentSnapshot['cookie'] = $this->welineEnvCookie;
+                WelineEnv::getInstance()->restore($currentSnapshot);
+            } catch (\Throwable) {
+                // 忽略 WelineEnv cookie 恢复错误
+            }
+        }
         $_FILES = $this->filesVars;
 
         Url::resetWlsFiberInterleavedParserScratch();
@@ -136,6 +175,15 @@ class WlsFiberContext
         }
         if ($restoreResponseState) {
             HeaderCollector::getInstance()->restoreState($this->headerCollectorState);
+        }
+
+        // 恢复 WelineEnv 状态
+        if ($this->welineEnvState !== null) {
+            try {
+                WelineEnv::getInstance()->restore($this->welineEnvState);
+            } catch (\Throwable) {
+                // 忽略 WelineEnv 恢复错误
+            }
         }
     }
 

@@ -57,7 +57,7 @@ class Url implements UrlInterface
     protected function isCurrentAreaBackend(): bool
     {
         // 优先使用 $_SERVER['WELINE_AREA']，这是每个请求都会更新的
-        $area = $_SERVER['WELINE_AREA'] ?? '';
+        $area = w_env('area', '');
         if ($area !== '') {
             return ($area === 'backend' || $area === 'rest_backend');
         }
@@ -302,10 +302,10 @@ class Url implements UrlInterface
     {
         $prefix = '';
 
-        $currency = self::normalizeCurrency($_SERVER['WELINE_USER_CURRENCY'] ?? null);
-        $language = self::normalizeLanguage($_SERVER['WELINE_USER_LANG'] ?? null);
-        $websiteCurrency = self::normalizeCurrency($_SERVER['WELINE_WEBSITE_CURRENCY'] ?? null) ?: self::getFrameworkDefaultCurrency();
-        $websiteLanguage = self::normalizeLanguage($_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? null) ?: self::getFrameworkDefaultLanguage();
+        $currency = self::normalizeCurrency(w_env('user.currency'));
+        $language = self::normalizeLanguage(w_env('user.lang'));
+        $websiteCurrency = self::normalizeCurrency(w_env('website.currency')) ?: self::getFrameworkDefaultCurrency();
+        $websiteLanguage = self::normalizeLanguage(w_env('website.language')) ?: self::getFrameworkDefaultLanguage();
         $frameworkCurrency = self::getFrameworkDefaultCurrency();
         $frameworkLanguage = self::getFrameworkDefaultLanguage();
 
@@ -554,21 +554,21 @@ class Url implements UrlInterface
      */
     public static function getCurrentScheme(): string
     {
-        if (isset($_SERVER['REQUEST_SCHEME']) && $_SERVER['REQUEST_SCHEME'] === 'https') {
-            return 'https';
+        // 按优先级检查各种协议来源
+        $sources = [
+            w_env('request.scheme'),
+            w_env('server.https'),
+            w_env('http_x_forwarded_proto'),
+            w_env('http_weline_original_scheme'),
+            w_env('server.server_port'),
+        ];
+
+        foreach ($sources as $value) {
+            if ($value === 'https' || $value === 'on' || $value === '1' || $value === '443') {
+                return 'https';
+            }
         }
-        if (isset($_SERVER['HTTPS']) && ($_SERVER['HTTPS'] === 'on' || $_SERVER['HTTPS'] === '1')) {
-            return 'https';
-        }
-        if (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') {
-            return 'https';
-        }
-        if (isset($_SERVER['HTTP_WELINE_ORIGINAL_SCHEME']) && $_SERVER['HTTP_WELINE_ORIGINAL_SCHEME'] === 'https') {
-            return 'https';
-        }
-        if (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] === '443') {
-            return 'https';
-        }
+
         return 'http';
     }
     
