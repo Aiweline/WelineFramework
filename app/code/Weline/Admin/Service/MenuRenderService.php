@@ -78,9 +78,9 @@ class MenuRenderService
         $backendKey = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? '';
         $expectedMinLength = strlen($backendKey) + 10; // backend + /XXX/xx_XX 至少
         if (strlen($prefix) < $expectedMinLength) {
-            $lang = $_SERVER['WELINE_USER_LANG'] ?? '(not set)';
-            $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? '(not set)';
-            $requestUri = $_SERVER['REQUEST_URI'] ?? '(not set)';
+            $lang = \w_env('user.lang') ?? '(not set)';
+            $currency = \w_env('user.currency') ?? '(not set)';
+            $requestUri = \w_env('request.uri') ?? '(not set)';
             w_log_warning(
                 "MenuRenderService::getBackendUrlPrefix returned short prefix: '{$prefix}', " .
                 "WELINE_USER_LANG={$lang}, WELINE_USER_CURRENCY={$currency}, REQUEST_URI={$requestUri}",

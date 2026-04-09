@@ -87,9 +87,7 @@ final class SessionServer
         }
 
         // 初始化全局指标收集器
-        if (!isset($GLOBALS['wls_metrics_collector'])) {
-            $GLOBALS['wls_metrics_collector'] = new \Weline\Server\Service\Telemetry\SessionMetricsCollector();
-        }
+        \Weline\Server\Service\Telemetry\MetricsCollector::initGlobal();
     }
     
     /**
