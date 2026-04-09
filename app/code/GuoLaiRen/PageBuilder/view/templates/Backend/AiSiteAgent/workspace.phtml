@@ -1442,7 +1442,17 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     throw new Error(errMsg);
                 });
             }
-            return response.json();
+            return response.text().then(function (text) {
+                var rawText = String(text || '').trim();
+                if (!rawText) {
+                    return { success: true };
+                }
+                try {
+                    return JSON.parse(rawText);
+                } catch (error) {
+                    return { success: true, message: rawText, raw_response: rawText };
+                }
+            });
         }).catch(function (error) {
             throw error;
         });
@@ -2992,11 +3002,12 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 }
             }
             window.location.reload();
-        }).catch(function () {
+        }).catch(function (error) {
             if (submitBtn) {
                 submitBtn.disabled = false;
             }
-            toast('error', messages.networkError);
+            var message = error && error.message ? String(error.message) : messages.networkError;
+            toast('error', message);
         });
     }
 
@@ -3986,7 +3997,17 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     throw new Error(errMsg);
                 });
             }
-            return response.json();
+            return response.text().then(function (text) {
+                var rawText = String(text || '').trim();
+                if (!rawText) {
+                    return { success: true };
+                }
+                try {
+                    return JSON.parse(rawText);
+                } catch (error) {
+                    return { success: true, message: rawText, raw_response: rawText };
+                }
+            });
         });
     }
 
@@ -4453,6 +4474,36 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     : (<?= \json_encode((string)__('AI 片段'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ': ' + chunkText);
             }
             logOperationToWorkspaceTerminal('chunk', payload, 'info', payload.message);
+        });
+
+        source.addEventListener('shared_component_generated', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            if (payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+            }
+
+            var region = String(payload.region || '');
+            var regionLabel = region === 'header'
+                ? <?= \json_encode((string)__('Header'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                : (region === 'footer'
+                    ? <?= \json_encode((string)__('Footer'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    : region);
+            var logMessage = payload.message || (regionLabel ? (regionLabel + ' ' + <?= \json_encode((string)__('已同步到可视化主题'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>) : '');
+            logOperationToWorkspaceTerminal('shared_component_generated', payload, 'progress', logMessage);
+
+            var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
+            if (previewFrame && previewFrame.src) {
+                window.setTimeout(function() {
+                    previewFrame.src = previewFrame.src;
+                }, 400);
+            }
+
+            if (regionLabel) {
+                toast('success', regionLabel + ' ' + <?= \json_encode((string)__('已生成并同步'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            }
         });
 
         source.addEventListener('page_generated', function (event) {
