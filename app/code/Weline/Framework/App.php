@@ -203,7 +203,7 @@ class App
                 define('DEBUG', true);
             } else {
                 if (!defined('DEBUG') and isset($config['debug_key'])) {
-                    if ((!empty($_GET['debug']) && ($_GET['debug'] === $config['debug_key'])) || (Cookie::get('w_debug') === '1')) {
+                    if ((\w_env_get('debug') !== null && (\w_env_get('debug') === $config['debug_key'])) || (Cookie::get('w_debug') === '1')) {
                         define('DEBUG', true);
                     } else {
                         define('DEBUG', false);
@@ -213,11 +213,11 @@ class App
                 }
             }
         }
-        if (isset($_GET['debug']) && isset($config['debug_key'])) {
-            if ($_GET['debug'] === $config['debug_key']) {
+        if (\w_env_get('debug') !== null && isset($config['debug_key'])) {
+            if (\w_env_get('debug') === $config['debug_key']) {
                 setcookie('w_debug', '1', 0, '/', '', false, false);
                 setcookie('w_debug', '1', 0, '/' . $config['admin'], '', false, false);
-            } elseif ($_GET['debug'] === '0') {
+            } elseif (\w_env_get('debug') === '0') {
                 setcookie('w_debug', '', 0, '/', '', false, false);
                 setcookie('w_debug', '', 0, '/' . $config['admin'], '', false, false);
             }
@@ -225,7 +225,7 @@ class App
         // 沙盒模式
         if (!defined('SANDBOX')) {
             if (isset($config['sandbox_key'])) {
-                if ((!empty($_GET['sandbox']) && ($_GET['sandbox'] === $config['sandbox_key'])) || (Cookie::get('w_sandbox') === '1')) {
+                if ((\w_env_get('sandbox') !== null && (\w_env_get('sandbox') === $config['sandbox_key'])) || (Cookie::get('w_sandbox') === '1')) {
                     define('SANDBOX', true);
                 } else {
                     define('SANDBOX', false);
@@ -234,11 +234,11 @@ class App
                 define('SANDBOX', false);
             }
         }
-        if (isset($config['sandbox_key']) && isset($_GET['sandbox'])) {
-            if ($_GET['sandbox'] === $config['sandbox_key']) {
+        if (isset($config['sandbox_key']) && \w_env_get('sandbox') !== null) {
+            if (\w_env_get('sandbox') === $config['sandbox_key']) {
                 setcookie('w_sandbox', '1', 0, '/', '', false, false);
                 setcookie('w_sandbox', '1', 0, '/' . $config['admin'], '', false, false);
-            } elseif ($_GET['sandbox'] === '0') {
+            } elseif (\w_env_get('sandbox') === '0') {
                 setcookie('w_sandbox', '', 0, '/', '', false, false);
                 setcookie('w_sandbox', '', 0, '/' . $config['admin'], '', false, false);
             }

@@ -346,6 +346,7 @@ class WlsRequest extends Request
         $_GET = $getParams;
         $_POST = $postParams;
         $_COOKIE = $cookies;
+        \Weline\Framework\Env\WelineEnv::set('cookie', $cookies);
         $_SERVER = $server;
         $_REQUEST = \array_merge($getParams, $postParams);
         
@@ -467,7 +468,7 @@ class WlsRequest extends Request
     public function getParameterBag(): \Weline\Framework\Http\Request\ParameterBag
     {
         if ($this->parameterBag === null) {
-            $contentType = $this->parsedHeaders['Content-Type'] ?? w_env('server.content_type', '');
+            $contentType = $this->parsedHeaders['Content-Type'] ?? \w_env('server.content_type', '');
             $parsed = self::parseRequestBody($this->body, $contentType, $this->parsedMethod);
             $bodyData = $parsed['post'];
             if (!empty($parsed['files'])) {
@@ -577,9 +578,9 @@ class WlsRequest extends Request
         // WLS 模式：URL 解析完成后，$_SERVER['REQUEST_URI'] 已是最终的纯路由
         // 必须直接读取，不能依赖 parent 的缓存（可能缓存了解析前的原始 URI）
         if (\Weline\Framework\Runtime\Runtime::isPersistent()) {
-            if (w_env('url_parsed', false)) {
+            if (\w_env('url_parsed', false)) {
                 // URL 已解析完成，从 $_SERVER 读取最新的纯路由 URI
-                return w_env('request.uri', '/');
+                return \w_env('request.uri', '/');
             }
             // URL 尚未解析，使用从原始 HTTP 请求中解析的 URI
             if ($this->parsedUri !== '') {

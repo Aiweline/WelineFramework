@@ -13,7 +13,6 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
-
 class State extends DataObject
 {
     public const area_backend = 'backend';
@@ -71,9 +70,9 @@ class State extends DataObject
      */
     public static function getLang(): string
     {
-        // 优先从 URL 路径解析的 SERVER 变量中读取（从路径配置的 URL）
-        $lang = $_SERVER['WELINE_USER_LANG'] ?? null;
-        // 如果 SERVER 中没有，从 Cookie 读取
+        // 优先从 URL 路径解析的变量中读取（从路径配置的 URL）
+        $lang = \w_env('user.lang');
+        // 如果 w_env 中没有，从 Cookie 读取
         if (empty($lang)) {
             $lang = Cookie::get('WELINE_USER_LANG');
         }
@@ -86,15 +85,15 @@ class State extends DataObject
 
     /**
      * 获取当前货币
-     * 优先级：URL 路径解析的 SERVER 变量 > Cookie > 默认值
-     * 
+     * 优先级：URL 路径解析的变量 > Cookie > 默认值
+     *
      * @return string
      */
     public static function getCurrency(): string
     {
-        // 优先从 URL 路径解析的 SERVER 变量中读取（从路径配置的 URL）
-        $currency = $_SERVER['WELINE_USER_CURRENCY'] ?? null;
-        // 如果 SERVER 中没有，从 Cookie 读取
+        // 优先从 URL 路径解析的变量中读取（从路径配置的 URL）
+        $currency = \w_env('user.currency');
+        // 如果 w_env 中没有，从 Cookie 读取
         if (empty($currency)) {
             $currency = Cookie::get('WELINE_USER_CURRENCY');
         }
