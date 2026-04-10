@@ -66,6 +66,7 @@ class UsageStatisticsService
             'COALESCE(SUM(' . AiUsageLog::schema_fields_TOTAL_TOKENS . '), 0) AS total_tokens,' .
             'COALESCE(SUM(' . AiUsageLog::schema_fields_TOTAL_COST . '), 0) AS total_cost'
         )->find()->fetch();
+        $row = $this->normalizeSingleRow($row);
         if (!$row || !is_array($row)) {
             return [
                 'total_requests' => 0,
@@ -100,10 +101,7 @@ class UsageStatisticsService
         );
         $model->group(AiUsageLog::schema_fields_MODEL_CODE);
         $model->order('total_tokens', 'DESC');
-        $items = $model->select()->fetch();
-        if (!is_array($items)) {
-            return [];
-        }
+        $items = $this->normalizeRows($model->select()->fetch());
         $list = [];
         foreach ($items as $row) {
             $cost = (float)($row['total_cost'] ?? 0);
@@ -127,5 +125,39 @@ class UsageStatisticsService
             'summary' => $this->getPeriodSummary($period),
             'model_ranking' => $this->getModelRanking($period),
         ];
+    }
+
+    /**
+     * 兼容 ORM fetch 可能返回数组/模型对象/结果对象的差异。
+     */
+    private function normalizeSingleRow(mixed $row): array
+    {
+        if (is_array($row)) {
+            return $row;
+        }
+        if (is_object($row) && method_exists($row, 'getData')) {
+            $data = $row->getData();
+            return is_array($data) ? $data : [];
+        }
+        return [];
+    }
+
+    /**
+     * 兼容 ORM 列表查询返回结构，统一为二维数组。
+     */
+    private function normalizeRows(mixed $rows): array
+    {
+        if (is_array($rows)) {
+            return $rows;
+        }
+        if (is_object($rows) && method_exists($rows, 'getItems')) {
+            $items = $rows->getItems();
+            return is_array($items) ? $items : [];
+        }
+        if (is_object($rows) && method_exists($rows, 'getData')) {
+            $data = $rows->getData();
+            return is_array($data) ? [$data] : [];
+        }
+        return [];
     }
 }
