@@ -49,7 +49,9 @@ class Statistics extends BaseController
      */
     public function getStats()
     {
-        $period = $this->request->getParam('period', UsageStatisticsService::PERIOD_DAY);
+        $period = $this->request->getParam('period')
+            ?? $this->request->getGet('period')
+            ?? UsageStatisticsService::PERIOD_DAY;
         if (!in_array($period, [
             UsageStatisticsService::PERIOD_DAY,
             UsageStatisticsService::PERIOD_WEEK,
