@@ -472,6 +472,12 @@ class Env extends DataObject
         $content = str_replace("\r\n", "\n", $content);
         $content = str_replace("\r", "\n", $content);
         
+        if (function_exists('w_log') && $append) {
+            $channel = self::normalizeLogChannel($filename);
+            w_log(strtolower($level), $content, [], $channel);
+            return true;
+        }
+
         $timestamp = date('Y-m-d H:i:s');
         
         if ($compact) {
@@ -503,31 +509,72 @@ class Env extends DataObject
             $logEntry = $header_line . "\n" . $content . "\n" . $end_line . "\n\n";
         }
         
-        // Ensure proper file path
-        if (!str_contains($filename, BP)) {
-            // Remove .log extension if present (will be added below)
-            $filename = preg_replace('/\.log$/', '', $filename);
-            // Sanitize filename: replace illegal characters for Windows filesystem
-            // Illegal chars: \ / : * ? " < > | and also replace spaces with underscores
-            $filename = preg_replace('/[\\\\\/:\*\?"<>\|\s]+/', '_', $filename);
-            // Remove leading/trailing underscores and collapse multiple underscores
-            $filename = preg_replace('/_+/', '_', trim($filename, '_'));
-            $filename = Env::VAR_DIR . 'log' . DS . $filename . '.log';
+        $targetFile = self::normalizeLogTargetFile($filename);
+        if (!is_dir(dirname($targetFile))) {
+            @mkdir(dirname($targetFile), 0777, true);
         }
-        
-        // Create directory if needed
-        if (!is_file($filename)) {
-            if (!is_dir(dirname($filename))) {
-                mkdir(dirname($filename), 0777, true);
+
+        if ($append) {
+            return file_put_contents($targetFile, $logEntry, FILE_APPEND) !== false;
+        }
+        return file_put_contents($targetFile, $logEntry) !== false;
+    }
+
+    private static function normalizeLogChannel(string $filename): string
+    {
+        $value = trim($filename);
+        if ($value === '') {
+            return 'app';
+        }
+
+        $normalized = str_replace('\\', '/', $value);
+        if (defined('BP')) {
+            $projectRoot = str_replace('\\', '/', rtrim(BP, '\\/')) . '/';
+            if (str_starts_with($normalized, $projectRoot)) {
+                $normalized = substr($normalized, strlen($projectRoot));
             }
         }
-        
-        // Write to file
-        if ($append) {
-            return file_put_contents($filename, $logEntry, FILE_APPEND) !== false;
-        } else {
-            return file_put_contents($filename, $logEntry) !== false;
+
+        $normalized = ltrim($normalized, '/');
+        if (str_starts_with($normalized, 'var/log/')) {
+            $normalized = substr($normalized, strlen('var/log/'));
         }
+
+        if ($normalized === '' || $normalized === '.') {
+            return 'app';
+        }
+
+        $leaf = basename($normalized);
+        if (in_array($leaf, ['exception.log', 'php_error.log', 'error.log', 'warning.log', 'notice.log', 'debug.log'], true)) {
+            return substr($leaf, 0, -4);
+        }
+
+        return preg_replace('/\s+/', '_', $normalized) ?: 'app';
+    }
+
+    private static function normalizeLogTargetFile(string $filename): string
+    {
+        $value = trim($filename);
+        if ($value === '') {
+            return Env::VAR_DIR . 'log' . DS . 'app.log';
+        }
+
+        $normalized = str_replace('\\', '/', $value);
+        if (preg_match('/^[A-Za-z]:\//', $normalized) === 1 || str_starts_with($normalized, '/')) {
+            return str_replace('/', DS, $normalized);
+        }
+
+        $normalized = ltrim($normalized, '/');
+        if (str_starts_with($normalized, 'var/log/')) {
+            return BP . str_replace('/', DS, $normalized);
+        }
+
+        $safe = preg_replace('/[\\\\\/:\*\?"<>\|]+/', '_', $normalized) ?: 'app';
+        if (!str_ends_with(strtolower($safe), '.log')) {
+            $safe .= '.log';
+        }
+
+        return Env::VAR_DIR . 'log' . DS . $safe;
     }
 
     /**
