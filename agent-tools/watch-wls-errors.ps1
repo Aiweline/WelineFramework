@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $targets = @(
-    Join-Path $LogDir "wls.log",
+    Join-Path $LogDir "wls\wls.log",
     Join-Path $LogDir "exception.log",
     Join-Path $LogDir "php_error.log",
     Join-Path $LogDir "error.log"

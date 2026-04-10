@@ -234,16 +234,18 @@ class LoggerFactory
         $basePath = rtrim($basePath, DIRECTORY_SEPARATOR);
 
         // 规范通道列表（这些通道可以有独立目录）
+        $globalRootChannels = [
+            'exception',
+            'php_error',
+        ];
         $standardChannels = [
             'cron',
             'sql',
-            'exception',
             'auth',
             'payment',
             'api',
             'wls',
             'session',
-            'php_error',
         ];
 
         // 默认通道直接写入 var/log/app.log
@@ -252,6 +254,9 @@ class LoggerFactory
         }
 
         // 规范通道：var/log/{channel}/
+        if (in_array($channel, $globalRootChannels, true)) {
+            return $basePath . DIRECTORY_SEPARATOR;
+        }
         if (in_array($channel, $standardChannels, true)) {
             $channelPath = $basePath . DIRECTORY_SEPARATOR . $channel . DIRECTORY_SEPARATOR;
 

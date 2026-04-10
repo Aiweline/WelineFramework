@@ -389,7 +389,10 @@ class WlsRequest extends Request
             $jsonOutput = \json_encode($debugServerVars, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
             
             // 始终写入日志文件（便于查看）
-            $logDir = \defined('BP') ? BP . 'var/log/' : '';
+            $logDir = \defined('BP') ? BP . 'var/log/wls/' : '';
+            if ($logDir && !\is_dir($logDir)) {
+                @\mkdir($logDir, 0755, true);
+            }
             if ($logDir && \is_dir($logDir)) {
                 @\file_put_contents($logDir . 'wls.log', '[' . \date('Y-m-d H:i:s') . "] [WlsRequest] \$_SERVER:\n{$jsonOutput}\n", FILE_APPEND);
             }
@@ -716,7 +719,7 @@ class WlsRequest extends Request
         // 直接从 $_SERVER 读取 WELINE_WEBSITE_URL（Url::parser → processUrlParse 写入）
         // 不能用 getServer() / ServerBag，因为 ServerBag 可能在 parser 之前就已初始化
         // URL 生成时始终参考当前 WLS 请求的端口，非标准端口（如 9981）必须带上
-        $websiteUrl = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
+        $websiteUrl = (string) \w_env('website_url', '');
         if ($websiteUrl !== '') {
             $parsed = \parse_url($websiteUrl);
             $wHost = $parsed['host'] ?? 'localhost';
