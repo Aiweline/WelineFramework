@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Log\LoggerFactory;
 use Weline\Framework\Log\LoggerInterface;
 use Weline\Framework\Log\FpmLogger;
+use ReflectionMethod;
 
 class LoggerFactoryTest extends TestCase
 {
@@ -114,5 +115,43 @@ class LoggerFactoryTest extends TestCase
 
         $logger = LoggerFactory::create();
         $this->assertInstanceOf(LoggerInterface::class, $logger);
+    }
+
+    public function testExceptionAndPhpErrorChannelsStayAtRootLevel(): void
+    {
+        LoggerFactory::setConfig(['path' => 'var/log']);
+        $exceptionPath = $this->resolveLogPath('exception');
+        $phpErrorPath = $this->resolveLogPath('php_error');
+
+        $normalizedException = str_replace('\\', '/', rtrim($exceptionPath, '/\\'));
+        $normalizedPhpError = str_replace('\\', '/', rtrim($phpErrorPath, '/\\'));
+
+        $this->assertStringEndsWith('/var/log', $normalizedException);
+        $this->assertStringEndsWith('/var/log', $normalizedPhpError);
+    }
+
+    public function testNonStandardLogFileChannelsGoToOtherDirectory(): void
+    {
+        LoggerFactory::setConfig(['path' => 'var/log']);
+        $path = $this->resolveLogPath('ai_activity.log');
+        $normalized = str_replace('\\', '/', rtrim($path, '/\\'));
+
+        $this->assertStringEndsWith('/var/log/other', $normalized);
+    }
+
+    public function testWlsChannelUsesDedicatedDirectory(): void
+    {
+        LoggerFactory::setConfig(['path' => 'var/log']);
+        $path = $this->resolveLogPath('wls');
+        $normalized = str_replace('\\', '/', rtrim($path, '/\\'));
+
+        $this->assertStringEndsWith('/var/log/wls', $normalized);
+    }
+
+    private function resolveLogPath(string $channel): string
+    {
+        $method = new ReflectionMethod(LoggerFactory::class, 'getLogPath');
+        $method->setAccessible(true);
+        return (string)$method->invoke(null, ['path' => 'var/log'], $channel);
     }
 }
