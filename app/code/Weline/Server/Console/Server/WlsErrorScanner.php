@@ -23,10 +23,10 @@ class WlsErrorScanner extends CommandAbstract
 
     /** 监控的日志文件 */
     private const LOG_FILES = [
-        'wls.log',
-        'exception.log',
-        'php_error.log',
-        'error.log',
+        'var/log/wls/wls.log',
+        'var/log/exception.log',
+        'var/log/php_error.log',
+        'var/log/error.log',
     ];
 
     /** 关键错误匹配模式 */
@@ -63,12 +63,11 @@ class WlsErrorScanner extends CommandAbstract
             $this->out('=== WLS 错误扫描开始 ===');
         }
 
-        $logDir = $this->getLogDir();
         $signatureFile = $this->getSignatureCachePath();
         $alertLogPath = $this->getAlertLogPath();
 
         // 1. 收集所有目标日志文件的最新错误行
-        $allErrors = $this->scanLogFiles($logDir, $verbose);
+        $allErrors = $this->scanLogFiles($verbose);
 
         if (empty($allErrors)) {
             if ($verbose) {
@@ -110,11 +109,6 @@ class WlsErrorScanner extends CommandAbstract
         return 0;
     }
 
-    private function getLogDir(): string
-    {
-        return BP . '/var/log/wls';
-    }
-
     private function getSignatureCachePath(): string
     {
         return BP . '/var/' . self::SIGNATURE_CACHE;
@@ -135,12 +129,12 @@ class WlsErrorScanner extends CommandAbstract
      *
      * @return array<int, array{file:string, line:int, type:string, message:string, timestamp:string, hash:string}>
      */
-    private function scanLogFiles(string $logDir, bool $verbose): array
+    private function scanLogFiles(bool $verbose): array
     {
         $errors = [];
 
         foreach (self::LOG_FILES as $logFile) {
-            $filePath = $logDir . '/' . $logFile;
+            $filePath = BP . '/' . ltrim($logFile, '/');
             if (!file_exists($filePath)) {
                 if ($verbose) {
                     $this->out('跳过不存在文件: ' . $logFile);
@@ -159,11 +153,11 @@ class WlsErrorScanner extends CommandAbstract
                 $lineNumber++;
                 foreach (self::ERROR_PATTERNS as $pattern) {
                     if (str_contains($line, $pattern)) {
-                        $hash = md5($logFile . $lineNumber . $pattern . mb_substr($line, 0, 200));
+                        $hash = md5($filePath . $lineNumber . $pattern . mb_substr($line, 0, 200));
                         $timestamp = $this->extractTimestamp($line);
                         $type = $this->classifyError($line);
                         $errors[] = [
-                            'file' => $logFile,
+                            'file' => $filePath,
                             'line' => $lineNumber,
                             'type' => $type,
                             'message' => trim($line),
