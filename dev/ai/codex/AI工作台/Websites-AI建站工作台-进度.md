@@ -1,8 +1,12 @@
 # Websites AI建站工作台进度
 
-- 最后更新：2026-03-28 15:45
-- 当前状态：epic_8_completed
-- 当前阶段：Epic 8 完成，全部 Epic 已收尾
+- 最后更新：2026-04-11
+- 当前状态：epic_8_completed（契约与硬化范围）；PageBuilder 原生工作区端到端仍见阻塞项（见下方纠偏）
+- **补充（2026-04-11）**：`GuoLaiRen_PageBuilder` 侧 **AI 虚拟主题轨**与既有**样式模板/模板管理**体系尚未形成可验收闭环；**模块 PHPUnit** 应以 `exclude-group=integration` 跑单元为主，集成/仿真（含真实 AI、`pagebuilder_phpsim`）单独环境执行。详见 [`app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md`](../../../app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md) §2.2.1、§3.1、§3.3-6。
+- **产品流程（2026-04-11）**：信息收集后须 **先展示建站方案并支持微调、用户确认后** 再进入主题/页面生成；模板管理可视化对齐 PB 可视化；轻量 HTML 走 **部件生成**（`html_blocks`）。见 [`app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md`](../../../app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md) §2.2.2～§2.2.3 与 [`app/code/GuoLaiRen/PageBuilder/doc/计划-新AI建站工作台-页面区块与智能体.md`](../../../app/code/GuoLaiRen/PageBuilder/doc/计划-新AI建站工作台-页面区块与智能体.md) 决策 12～14、阶段 1.5。
+- 当前阶段：Websites 侧 Epic 已收尾；**PageBuilder provider 全链路验收以模块内收敛文档为准，不得将「Epic 8 完成」等同为 PB 端到端无阻塞**
+
+**纠偏（2026-04-10）**：`epic_8_completed` 指本仓库已规划的 **扩展契约、registry、持久化、工作台壳层、域名与预览相关 Tool、单测/硬化** 等范围内事项。**`GuoLaiRen_PageBuilder` 原生 AI 建站工作区** 仍可能存在 **`stream-sse` 重复订阅、operation 阶段推进、默认轨口径** 等问题；权威拆解、阻塞分级与修复路线见 [`app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md`](../../../app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md) 第 3～4 节。
 
 ## 里程碑状态
 
@@ -20,6 +24,7 @@
 | Epic 6 完成预览 | 已完成 | PreviewWebsiteTool + DomainLifecycleBridge 状态条 |
 | PageBuilder provider 接入 | 已完成 | PageBuilderProvider + PageBuilderProviderTest |
 | **Epic 8 测试与硬化** | **已完成** | 全部 Tool 有 UT，DB 测试受环境限制 |
+| **PageBuilder 端到端工作区验收** | **进行中 / 有阻塞** | `stream-sse` / `operation-sse`、阶段推进、默认轨与入口策略等；见上文 PB 收敛文档 §3～§4（P0～P2） |
 
 ## Epic 1 完成情况
 
@@ -73,11 +78,14 @@
    - 旧的 `generated/routers/backend_pc.php` 生成物损坏会阻塞升级
    - 清理旧生成物后，升级成功
 
-## 下一步建议
+## 下一步建议（与 PageBuilder 收敛计划对齐）
 
-1. 主线进入 Epic 3：后台控制器、工作台 JSON API、SSE 流接口。
-2. 让 Epic 3 只依赖当前服务层，不跨层直操作模型。
-3. 主题选择能力仍建议在 Epic 6 通过 `WebsiteThemeSource` 注入，不提前耦合到 Websites 核心。
+1. **P0 可观测性**：为工作区 `stream-sse` / `operation-sse` 建立复现基线与日志字段（`public_id`、`last_event_id`、`tab_token`、`execution_token` 等），区分「重复连接来源」与「只心跳不进入 operation」。
+2. **P1 SSE 单连接治理**：同一标签页、同一 `public_id` 仅保留一条展示用 `stream-sse`；构建时 `operation-sse` 与展示流按设计暂停/恢复，避免抢占。
+3. **P2 操作执行与阶段推进**：`post-start-build` 与 `operation-sse` 认领/事件持久化闭环；失败路径回写 `active_operation`，避免 UI 长期卡在「准备中」类状态。
+4. **P3 及以后**：handoff 与默认轨（`html_blocks` vs `virtual_theme`）、入口策略与回归矩阵，仍以 PB 收敛文档 §4～§5 为准。
+
+历史说明：Epic 3～8 对应能力已按里程碑表落地；上列为 **PageBuilder 原生工作区与中台衔接** 的后续工程重点，不重复旧 Epic 序号叙事。
 ## 2026-03-23 Entry Integration Slice
 
 1. `Weline_Websites` `SiteBuilderAgent` is no longer just a plain one-shot form page.

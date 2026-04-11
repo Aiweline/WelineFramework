@@ -12,6 +12,7 @@
   - 按阶段拆开的实施任务、目标文件、测试先行顺序与完成标准
 - [Websites-AI建站工作台-进度.md](./Websites-AI建站工作台-进度.md)
   - 当前决策、里程碑状态、阻塞项、下一步入口
+  - **纠偏**：文首已区分 **Epic 8 / Websites 硬化范围** 与 **`GuoLaiRen_PageBuilder` 原生工作区端到端**；后者阻塞与 P0～P2 路线以模块内 [`app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md`](../../../../app/code/GuoLaiRen/PageBuilder/doc/计划-AI建站中台-PageBuilder拓展流程与进展.md) 为准。
 
 ## 当前定位
 

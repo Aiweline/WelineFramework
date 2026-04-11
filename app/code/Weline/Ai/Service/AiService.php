@@ -28,6 +28,7 @@ use Weline\Ai\Interface\AgentInterface;
 use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Ai\Exception\ModelSelectionException;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\RequestContext;
@@ -213,6 +214,7 @@ class AiService
      * @param string|null $locale 语言代码
      * @param array $params 额外参数
      * @return string
+     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
      * @throws Exception
      */
     public function generate(
@@ -228,7 +230,7 @@ class AiService
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new Exception($reason);
+            throw new ModelSelectionException($reason);
         }
 
         // 2. 配置解析
@@ -302,6 +304,7 @@ class AiService
      * @param string|null $scenarioCode
      * @param array $params
      * @return array
+     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
      * @throws Exception
      */
     public function generateStructured(
@@ -313,7 +316,7 @@ class AiService
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new Exception($reason);
+            throw new ModelSelectionException($reason);
         }
 
         return $this->callModelApiStructured($model, $prompt, $params);
@@ -329,6 +332,7 @@ class AiService
      * @param string|null $locale 语言代码
      * @param array $params 额外参数
      * @return void
+     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
      * @throws Exception
      */
     public function generateStream(
@@ -343,7 +347,7 @@ class AiService
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new Exception($reason);
+            throw new ModelSelectionException($reason);
         }
 
         // 2. 场景适配器处理
@@ -1387,6 +1391,7 @@ class AiService
      * @param array $params 额外参数
      * @param callable|null $streamCallback SSE 事件回调
      * @return AgentResult
+     * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
      * @throws Exception
      */
     public function executeAgent(
@@ -1407,7 +1412,7 @@ class AiService
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
-            throw new Exception($reason);
+            throw new ModelSelectionException($reason);
         }
 
         // 3. 注入供应商账户配置（base_url、api_key、proxy 等）
