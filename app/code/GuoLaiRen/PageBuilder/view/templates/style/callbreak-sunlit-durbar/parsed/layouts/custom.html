@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Head content rendered by $this->renderHead() -->
+</head>
+<body class="page-custom">
+    <!-- Header Region (继承自首页) -->
+    <header class="site-header" data-region="header">
+        <!-- Inherited from home page -->
+    </header>
+    
+    <!-- Main Content Region -->
+    <main class="site-content custom-content" data-region="content">
+        <!-- 
+            Custom page content area
+            
+            When no components are configured:
+            - Displays page title and content from database
+            - In visual mode, shows placeholder for adding components
+            
+            When components are configured:
+            - Renders configured components in order
+        -->
+        <div class="content-container">
+            <article class="page-article">
+                <h1 class="page-title">Page Title</h1>
+                <div class="page-body">
+                    <!-- User-configured content or components -->
+                </div>
+            </article>
+        </div>
+    </main>
+    
+    <!-- Footer Region (继承自首页) -->
+    <footer class="site-footer" data-region="footer">
+        <!-- Inherited from home page -->
+    </footer>
+    
+    <!-- Footer scripts -->
+</body>
+</html>

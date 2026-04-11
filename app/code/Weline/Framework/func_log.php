@@ -11,6 +11,29 @@ declare(strict_types=1);
 use Weline\Framework\Log\LoggerFactory;
 use Weline\Framework\Log\LoggerInterface;
 
+if (!function_exists('w_log_should_use_wls_direct')) {
+    function w_log_should_use_wls_direct(): bool
+    {
+        if (\defined('WLS_MODE') && WLS_MODE) {
+            return true;
+        }
+        if (\defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE) {
+            return true;
+        }
+        $processTag = \getenv('WLS_PROCESS_TAG');
+        if (\is_string($processTag) && $processTag !== '') {
+            return true;
+        }
+        if (\class_exists(\Weline\Server\Log\Error\ErrorBootstrap::class, false)
+            && \Weline\Server\Log\Error\ErrorBootstrap::isInitialized()
+        ) {
+            return true;
+        }
+
+        return false;
+    }
+}
+
 if (!function_exists('w_log')) {
     /**
      * 记录任意级别的日志
@@ -27,8 +50,20 @@ if (!function_exists('w_log')) {
     function w_log(string $level, string $message, array $context = [], ?string $channel = null): void
     {
         try {
-            $logger = LoggerFactory::create($channel);
-            $logger->log($level, $message, $context);
+            if (w_log_should_use_wls_direct() && \class_exists(\Weline\Server\Log\WlsLogger::class)) {
+                $payload = $context;
+                if ($channel !== null && $channel !== '') {
+                    $payload['_channel'] = $channel;
+                }
+                \Weline\Server\Log\WlsLogger::getInstance()->log(
+                    \strtoupper($level),
+                    $message,
+                    $payload
+                );
+            } else {
+                $logger = LoggerFactory::create($channel);
+                $logger->log($level, $message, $context);
+            }
             $sseManual = \getenv('WELINE_CRON_MANUAL_SSE');
             if ($sseManual !== false && $sseManual !== '' && $sseManual !== '0') {
                 $echoLevels = ['notice', 'info', 'warning', 'error', 'critical', 'alert', 'emergency'];

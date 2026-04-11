@@ -331,6 +331,32 @@ async function createDirectPagebuilderWorkspace(page, backendRoot) {
 }
 
 /**
+ * 复用 {@link createDirectPagebuilderWorkspace} 的登录与会话创建，再退回引导式 UI（去掉 expert=1），
+ * 避免在未携带后台 Cookie 的 fetch 上重复 post-create-session。
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} backendRoot
+ */
+async function openPagebuilderWorkspaceGuidedAfterExpert(page, backendRoot) {
+  const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
+  const guidedUrl = new URL(workspaceUrl);
+  guidedUrl.searchParams.delete('expert');
+  await gotoStable(page, guidedUrl.toString());
+  return { workspaceUrl: guidedUrl.toString() };
+}
+
+/**
+ * @param {string} workspaceUrl
+ */
+function buildPagebuilderGetStateJsonUrl(workspaceUrl) {
+  const u = new URL(workspaceUrl);
+  u.pathname = u.pathname.replace(/\/workspace$/i, '/get-state-json');
+  const publicId = u.searchParams.get('public_id') || '';
+  expect(publicId, 'workspace url must include public_id for get-state-json').toBeTruthy();
+  return u.toString();
+}
+
+/**
  * Handoff 控制器在异常时会回退到 legacy index；此时从 Websites 镜像工作区 scope 读取 PageBuilder workspace 直链。
  * @param {import('@playwright/test').Page} page
  * @param {number} [timeoutMs]
@@ -1194,6 +1220,35 @@ test.describe('PageBuilder AI site building (websites_default provider → PageB
 });
 
 moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', () => {
+  /**
+   * 与 PHPUnit 集成测 AiSiteWorkbenchSuccessIntegrationTest 阶段划分对齐：
+   * 阶段 1 信息 → merge-scope；阶段 2/3 的完整链路见同文件内其它用例（build/publish/storefront）。
+   */
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-GUIDED-001' },
+    'guided workspace: stepper + get-state-json contract (frontend wiring)',
+    async ({ page }) => {
+      test.setTimeout(120000);
+      const backendRoot = await loginAsAdmin(page, { bootstrapOnly: true });
+      const { workspaceUrl } = await openPagebuilderWorkspaceGuidedAfterExpert(page, backendRoot);
+
+      await expect(page.locator('.pb-guided-steps')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('#pb-ai-guided-scope-defaults')).toBeAttached();
+
+      const stateUrl = buildPagebuilderGetStateJsonUrl(workspaceUrl);
+      const stateRes = await page.request.get(stateUrl, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      expect(stateRes.ok(), `get-state-json HTTP ${stateRes.status()}`).toBeTruthy();
+      const stateJson = await stateRes.json();
+      expect(stateJson && stateJson.success, JSON.stringify(stateJson)).toBeTruthy();
+      expect(stateJson.data && typeof stateJson.data === 'object').toBeTruthy();
+      const d = stateJson.data;
+      expect(typeof d.public_id === 'string' && d.public_id.length > 0).toBeTruthy();
+    }
+  );
+
   moduleCase(
     test,
     { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-LEGACY-001' },
@@ -1397,6 +1452,93 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       await gotoStable(page, workspaceUrl);
       await ensurePagebuilderExpertLayout(page);
       await expect(page.locator('#pb-ai-default-locale-summary')).toHaveValue('ja_JP', { timeout: 15000 });
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-ROUTE-004' },
+    'legacy index route stays stable after workspace page-type switch',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(420000);
+
+      const backendRoot = await loginAsAdmin(page);
+      const createSessionUrl = normalizeToCurrentOrigin(
+        page,
+        new URL('pagebuilder/backend/ai-site-agent/post-create-session', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
+      );
+      const createResp = await page.request.post(createSessionUrl, {
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      });
+      const createText = await createResp.text();
+      let createPayload;
+      try {
+        createPayload = JSON.parse(createText);
+      } catch (error) {
+        throw new Error(`pagebuilder create-session(api request): HTTP ${createResp.status()} non-JSON body=${createText.slice(0, 400)}`);
+      }
+      expect(createPayload && createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
+      expect(createPayload.workspace_url).toBeTruthy();
+      const workspaceUrl = normalizeToCurrentOrigin(page, String(createPayload.workspace_url));
+      await gotoStable(page, workspaceUrl);
+      await ensurePagebuilderExpertLayout(page);
+
+      const suffix = Date.now().toString().slice(-8);
+      const localDomain = buildLocalDomain(`pb-route-${suffix}`);
+      const scopePatch = {
+        site_title: `E2E PB Route ${suffix}`,
+        site_tagline: 'legacy route stable',
+        target_domain: localDomain,
+        brief_description: 'Verify legacy index route does not drift after switching preview page type.',
+        user_description: 'Verify legacy index route does not drift after switching preview page type.',
+        page_types: ['home_page', 'about_page', 'contact_page'],
+      };
+
+      await page.fill('#pb-ai-site-title', scopePatch.site_title);
+      await page.fill('#pb-ai-site-tagline', scopePatch.site_tagline);
+      await page.fill('#pb-ai-target-domain', localDomain);
+      await page.fill('#pb-ai-brief-description', scopePatch.brief_description);
+      await mergePagebuilderScope(page, scopePatch);
+
+      const buildStart = await startPagebuilderBuild(page, backendRoot, { ...scopePatch });
+      const buildStream = await consumeSseStream(
+        page,
+        normalizeToCurrentOrigin(page, String(buildStart.stream_url)),
+        { timeoutMs: WORKSPACE_TIMEOUT }
+      );
+      expect(buildStream.ok, JSON.stringify(buildStream)).toBeTruthy();
+      expect(buildStream.eventNames).toContain('done');
+      expect(buildStream.lastDone && buildStream.lastDone.success !== false, JSON.stringify(buildStream)).toBeTruthy();
+
+      await gotoStable(page, workspaceUrl);
+      await ensurePagebuilderExpertLayout(page);
+      await expect(page.locator('#pb-ai-visual-preview-frame')).toBeVisible({ timeout: 60000 });
+
+      const aboutTab = page.locator('.pb-ai-preview-tab[data-page-type="about_page"]').first();
+      await expect(aboutTab).toBeVisible({ timeout: 30000 });
+      await aboutTab.click();
+      await expect
+        .poll(async () => (await page.locator('#pb-ai-visual-preview-frame').getAttribute('src')) || '', {
+          timeout: 30000,
+        })
+        .toMatch(/page_type=about_page/);
+
+      const legacyIndexUrl = normalizeToCurrentOrigin(
+        page,
+        new URL('pagebuilder/backend/ai-site-agent/index?legacy=1', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
+      );
+      await gotoStable(page, legacyIndexUrl);
+
+      await expect(page.locator('#pb-ai-site-create')).toBeVisible({ timeout: 30000 });
+      await expect(page.locator('h5.card-title', { hasText: '最近会话' })).toBeVisible({ timeout: 15000 });
+
+      const routeSnapshot = await page.evaluate(() => ({
+        pathname: window.location.pathname,
+        search: window.location.search,
+      }));
+      expect(String(routeSnapshot.pathname || '')).toMatch(/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/index$/i);
+      expect(String(routeSnapshot.search || '')).toContain('legacy=1');
     }
   );
 });

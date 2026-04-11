@@ -1,0 +1,44 @@
+<svg width="960" height="760" viewBox="0 0 960 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rovHeroGlow" x1="182" y1="88" x2="731" y2="606" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4D7A"/>
+      <stop offset="0.5" stop-color="#FF8C42"/>
+      <stop offset="1" stop-color="#D2FF3F"/>
+    </linearGradient>
+    <linearGradient id="rovHeroPanel" x1="258" y1="150" x2="674" y2="620" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#141B31"/>
+      <stop offset="1" stop-color="#080B14"/>
+    </linearGradient>
+  </defs>
+  <rect width="960" height="760" rx="42" fill="#0A1020"/>
+  <circle cx="481" cy="352" r="258" fill="url(#rovHeroGlow)" fill-opacity="0.16"/>
+  <path d="M156 538C262 422 361 362 482 346C620 327 714 258 809 124" stroke="url(#rovHeroGlow)" stroke-width="18" stroke-linecap="round" stroke-opacity="0.22"/>
+  <path d="M172 604C278 488 375 431 507 417C627 405 714 338 799 228" stroke="#2BE7FF" stroke-width="4" stroke-linecap="round" stroke-opacity="0.48" stroke-dasharray="12 18"/>
+  <g>
+    <rect x="250" y="132" width="438" height="512" rx="34" fill="url(#rovHeroPanel)" stroke="rgba(255,255,255,0.08)"/>
+    <rect x="280" y="168" width="378" height="62" rx="20" fill="rgba(255,255,255,0.05)"/>
+    <circle cx="320" cy="199" r="12" fill="#FF4D7A"/>
+    <circle cx="358" cy="199" r="12" fill="#FF8C42"/>
+    <circle cx="396" cy="199" r="12" fill="#D2FF3F"/>
+    <rect x="298" y="274" width="332" height="220" rx="28" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)"/>
+    <path d="M326 430C382 368 429 335 486 325C548 314 587 280 621 232" stroke="url(#rovHeroGlow)" stroke-width="10" stroke-linecap="round"/>
+    <circle cx="480" cy="382" r="76" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)"/>
+    <circle cx="480" cy="382" r="42" fill="#D2FF3F" fill-opacity="0.16" stroke="#D2FF3F" stroke-opacity="0.56" stroke-width="2"/>
+    <path d="M482 334L493 353L514 357L499 372L503 394L482 383L461 394L465 372L450 357L471 353L482 334Z" fill="#D2FF3F"/>
+    <rect x="298" y="528" width="158" height="72" rx="22" fill="#FF4D7A" fill-opacity="0.16" stroke="#FF4D7A" stroke-opacity="0.3"/>
+    <rect x="472" y="528" width="158" height="72" rx="22" fill="#2BE7FF" fill-opacity="0.12" stroke="#2BE7FF" stroke-opacity="0.3"/>
+  </g>
+  <g transform="translate(174 218) rotate(-14)">
+    <rect width="154" height="214" rx="28" fill="#F8FAFF"/>
+    <rect x="6" y="6" width="142" height="202" rx="22" stroke="#D2D7E6"/>
+    <text x="28" y="50" font-family="Sora, Arial, sans-serif" font-size="42" font-weight="700" fill="#131A31">7</text>
+    <path d="M39 68L51 84L39 100L27 84L39 68Z" fill="#131A31"/>
+  </g>
+  <g transform="translate(640 184) rotate(12)">
+    <rect width="154" height="214" rx="28" fill="#F8FAFF"/>
+    <rect x="6" y="6" width="142" height="202" rx="22" stroke="#ECD6D7"/>
+    <text x="28" y="50" font-family="Sora, Arial, sans-serif" font-size="42" font-weight="700" fill="#FF4D7A">8</text>
+    <path d="M42 66C34 78 28 85 28 93C28 104 36 112 46 112C56 112 64 104 64 95C64 84 52 75 42 66Z" fill="#FF4D7A"/>
+    <path d="M42 118L26 98H58L42 118Z" fill="#FF4D7A"/>
+  </g>
+</svg>

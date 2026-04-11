@@ -1,0 +1,456 @@
+<?php
+/**
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: FAQ折叠面板
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_intro => 显示简介:select:yes|yes,no
+ * display.first_open => 首个问题默认展开:select:no|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景主色:color:#0b1525
+ * style.accent_color => 强调色:color:#f2a93b
+ * style.title_color => 标题颜色:color:#f8fafc
+ * style.text_color => 正文颜色:color:#e9f5f2
+ * style.panel_bg_color => 卡片背景色:color:rgba(11,21,37,0.85)
+ * style.card_border_color => 卡片边框色:color:rgba(30,185,128,0.3)
+ * style.card_radius => 卡片圆角:number:18|px
+ * style.section_padding => 区域内边距(PC端):number:64|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ *
+ * group:texts => 文本内容
+ * texts.badge => 徽标文字:text:Call Break Support
+ * texts.title => 区域标题:text:Frequently Asked Questions
+ * texts.intro => 简介:textarea:Everything you need to know about Call Break Legend, bidding strategy, and secure withdrawals.
+ * texts.tag_1 => 标签1:text:Rules & Bids
+ * texts.tag_2 => 标签2:text:Fair Play
+ * texts.tag_3 => 标签3:text:Fast Withdrawals
+ * texts.faq_1_question => 问题1:text:How do I start playing?
+ * texts.faq_1_answer => 答案1:textarea:Download the app, sign up, and join a Call Break table in seconds.
+ * texts.faq_2_question => 问题2:text:How does bidding work?
+ * texts.faq_2_answer => 答案2:textarea:Place your bid before the round starts, then aim to win exactly that many tricks.
+ * texts.faq_3_question => 问题3:text:Is it safe and fair?
+ * texts.faq_3_answer => 答案3:textarea:Yes. We use secure encryption and fair play protections across all tables.
+ * texts.faq_4_question => 问题4:text:How do I withdraw winnings?
+ * texts.faq_4_answer => 答案4:textarea:Withdrawals are processed quickly to your preferred payment method.
+ * texts.faq_5_question => 问题5:text:
+ * texts.faq_5_answer => 答案5:textarea:
+ * texts.faq_6_question => 问题6:text:
+ * texts.faq_6_answer => 答案6:textarea:
+ *
+ * @fields_end
+ */
+
+$componentId = 'cbl-faq-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
+if (!$display) return;
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showIntro = $getConfig('display.show_intro', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('faq.bg_color', '#0b1525'));
+$accentColor = $getConfig('style.accent_color', '#f2a93b');
+$titleColor = $getConfig('style.title_color', '#f8fafc');
+$textColor = $getConfig('style.text_color', '#e9f5f2');
+$panelBgColor = $getConfig('style.panel_bg_color', 'rgba(11,21,37,0.85)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(30,185,128,0.3)');
+$cardRadius = $getConfig('style.card_radius', '18');
+$sectionPadding = $getConfig('style.section_padding', '64');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '48');
+
+$badgeText = $getConfig('texts.badge', 'Call Break Support');
+$title = $getConfig('texts.title', $getConfig('faq.title', 'Frequently Asked Questions'));
+$intro = $getConfig('texts.intro', 'Everything you need to know about Call Break Legend, bidding strategy, and secure withdrawals.');
+$tags = array_filter([
+    trim((string)$getConfig('texts.tag_1', 'Rules & Bids')),
+    trim((string)$getConfig('texts.tag_2', 'Fair Play')),
+    trim((string)$getConfig('texts.tag_3', 'Fast Withdrawals')),
+]);
+
+$defaults = [
+    ['question' => 'How do I start playing?', 'answer' => 'Download the app, sign up, and join a Call Break table in seconds.'],
+    ['question' => 'How does bidding work?', 'answer' => 'Place your bid before the round starts, then aim to win exactly that many tricks.'],
+    ['question' => 'Is it safe and fair?', 'answer' => 'Yes. We use secure encryption and fair play protections across all tables.'],
+    ['question' => 'How do I withdraw winnings?', 'answer' => 'Withdrawals are processed quickly to your preferred payment method.'],
+    ['question' => 'Can beginners play ranked tables?', 'answer' => 'Yes. Start in standard rooms, then move into ranked once your bid consistency improves.'],
+    ['question' => 'Which modes are available?', 'answer' => 'You can play Classic, Quick Match, and challenge-based tables depending on your pace.'],
+];
+
+$faqs = [];
+for ($i = 1; $i <= 6; $i++) {
+    $default = $defaults[$i - 1] ?? ['question' => '', 'answer' => ''];
+    $question = trim((string)$getConfig("texts.faq_{$i}_question", $default['question']));
+    $answer = trim((string)$getConfig("texts.faq_{$i}_answer", $default['answer']));
+    if ($question !== '' && $answer !== '') {
+        $faqs[] = ['question' => $question, 'answer' => $answer];
+    }
+}
+
+if (empty($faqs)) {
+    $faqs = array_slice($defaults, 0, 4);
+}
+
+$facts = [
+    ['label' => 'Bidding', 'value' => 'Locked pre-round'],
+    ['label' => 'Security', 'value' => 'Encrypted sessions'],
+    ['label' => 'Withdrawal', 'value' => 'Fast processing'],
+];
+?>
+
+<section id="<?= $componentId ?>" class="cbl-faq">
+    <div class="faq-shell">
+        
+
+        <div class="faq-accordion">
+            <?php foreach ($faqs as $index => $faq): ?>
+                <?php $open = $firstOpen && $index === 0; ?>
+                <article class="faq-item<?= $open ? ' is-open' : '' ?>" data-faq-item>
+                    <button class="faq-trigger" type="button" aria-expanded="<?= $open ? 'true' : 'false' ?>">
+                        <span class="faq-number"><?= sprintf('%02d', $index + 1) ?></span>
+                        <span class="faq-question"><?= htmlspecialchars($faq['question']) ?></span>
+                        <span class="faq-plus" aria-hidden="true">+</span>
+                    </button>
+                    <div class="faq-answer"<?= $open ? '' : ' hidden' ?>>
+                        <p><?= nl2br(htmlspecialchars($faq['answer'])) ?></p>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+        <aside class="faq-brief">
+            <?php if ($showIntro && $badgeText !== ''): ?>
+                <span class="faq-badge"><?= htmlspecialchars($badgeText) ?></span>
+            <?php endif; ?>
+
+            <?php if ($showTitle): ?>
+                <h2><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+
+            <?php if ($showIntro && $intro !== ''): ?>
+                <p class="faq-intro"><?= htmlspecialchars($intro) ?></p>
+            <?php endif; ?>
+
+            <?php if (!empty($tags)): ?>
+                <div class="faq-tags">
+                    <?php foreach ($tags as $tag): ?>
+                        <span><?= htmlspecialchars($tag) ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <div class="faq-facts">
+                <?php foreach ($facts as $fact): ?>
+                    <div class="faq-fact-card">
+                        <span><?= htmlspecialchars($fact['label']) ?></span>
+                        <strong><?= htmlspecialchars($fact['value']) ?></strong>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --faq-bg: <?= htmlspecialchars($bgColor) ?>;
+    --faq-accent: <?= htmlspecialchars($accentColor) ?>;
+    --faq-title: <?= htmlspecialchars($titleColor) ?>;
+    --faq-text: <?= htmlspecialchars($textColor) ?>;
+    --faq-panel: <?= htmlspecialchars($panelBgColor) ?>;
+    --faq-border: <?= htmlspecialchars($cardBorderColor) ?>;
+    --faq-radius: <?= (int)$cardRadius ?>px;
+    position: relative;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    background:
+        radial-gradient(680px 340px at 8% 8%, rgba(30, 185, 128, 0.16), transparent 70%),
+        radial-gradient(640px 320px at 92% 18%, rgba(242, 169, 59, 0.14), transparent 72%),
+        linear-gradient(180deg, var(--faq-bg) 0%, #0f2538 50%, #0b1525 100%);
+    color: var(--faq-text);
+}
+
+#<?= $componentId ?> .faq-shell {
+    width: min(1220px, calc(100% - 2rem));
+    margin: 0 auto;
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 0.6fr) minmax(0, 0.4fr) ;
+    align-items: start;
+}
+
+#<?= $componentId ?> .faq-brief {
+    border-radius: 24px;
+    border: 1px solid rgba(30, 185, 128, 0.3);
+    background: linear-gradient(160deg, rgba(11, 21, 37, 0.72) 0%, rgba(15, 43, 62, 0.48) 100%);
+    box-shadow: 0 20px 48px rgba(2, 6, 12, 0.44);
+    padding: clamp(1.1rem, 2.7vw, 1.65rem);
+    position: sticky;
+    top: 92px;
+}
+
+#<?= $componentId ?> .faq-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.34rem 0.8rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #0b1525;
+    background: linear-gradient(135deg, #1eb980, #f2a93b);
+}
+
+#<?= $componentId ?> .faq-brief h2 {
+    margin: 0.95rem 0 0;
+    color: var(--faq-title);
+    font-size: clamp(1.72rem, 3.6vw, 2.55rem);
+    line-height: 1.1;
+}
+
+#<?= $componentId ?> .faq-intro {
+    margin: 0.9rem 0 0;
+    color: rgba(233, 245, 242, 0.9);
+    line-height: 1.72;
+    font-size: 0.96rem;
+}
+
+#<?= $componentId ?> .faq-tags {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .faq-tags span {
+    border-radius: 999px;
+    border: 1px solid rgba(233, 245, 242, 0.2);
+    background: rgba(11, 21, 37, 0.55);
+    padding: 0.3rem 0.62rem;
+    font-size: 0.75rem;
+    color: rgba(233, 245, 242, 0.95);
+}
+
+#<?= $componentId ?> .faq-facts {
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .faq-fact-card {
+    border-radius: 12px;
+    border: 1px solid rgba(233, 245, 242, 0.14);
+    background: rgba(11, 21, 37, 0.45);
+    padding: 0.55rem 0.58rem;
+    text-align: center;
+}
+
+#<?= $componentId ?> .faq-fact-card span {
+    display: block;
+    font-size: 0.68rem;
+    color: rgba(203, 213, 225, 0.86);
+}
+
+#<?= $componentId ?> .faq-fact-card strong {
+    display: block;
+    margin-top: 0.12rem;
+    color: var(--faq-accent);
+    font-size: 0.78rem;
+    line-height: 1.2;
+}
+
+#<?= $componentId ?> .faq-accordion {
+    display: grid;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .faq-item {
+    border-radius: var(--faq-radius);
+    border: 1px solid var(--faq-border);
+    background: var(--faq-panel);
+    box-shadow: 0 15px 38px rgba(2, 6, 12, 0.35);
+    overflow: hidden;
+    transition: border-color 0.25s ease, transform 0.25s ease;
+}
+
+#<?= $componentId ?> .faq-item:hover {
+    transform: translateY(-3px);
+    border-color: rgba(242, 169, 59, 0.45);
+}
+
+#<?= $componentId ?> .faq-trigger {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 26px;
+    gap: 0.72rem;
+    align-items: center;
+    padding: 0.95rem 1rem;
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .faq-number {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    color: #0b1525;
+    background: linear-gradient(145deg, #f2a93b, #ffd88f);
+}
+
+#<?= $componentId ?> .faq-question {
+    color: #f8fafc;
+    font-size: 0.98rem;
+    font-weight: 700;
+    line-height: 1.45;
+}
+
+#<?= $componentId ?> .faq-plus {
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--faq-accent);
+    border: 1px solid rgba(242, 169, 59, 0.4);
+    background: rgba(242, 169, 59, 0.1);
+    transition: transform 0.25s ease;
+}
+
+#<?= $componentId ?> .faq-answer {
+    border-top: 1px solid rgba(233, 245, 242, 0.1);
+    padding: 0 1rem 1rem 1rem;
+}
+
+#<?= $componentId ?> .faq-answer p {
+    margin: 0.72rem 0 0;
+    color: var(--faq-text);
+    font-size: 0.92rem;
+    line-height: 1.72;
+}
+
+#<?= $componentId ?> .faq-item.is-open .faq-plus {
+    transform: rotate(45deg);
+}
+
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .faq-shell {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .faq-accordion {
+        grid-column: 1;
+        grid-row: 2;
+    }
+
+    #<?= $componentId ?> .faq-brief {
+        position: static;
+        grid-column: 1;
+        grid-row: 1;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+
+    #<?= $componentId ?> .faq-shell {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .faq-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #<?= $componentId ?> .faq-fact-card:last-child {
+        grid-column: 1 / -1;
+    }
+
+    #<?= $componentId ?> .faq-trigger {
+        grid-template-columns: 36px minmax(0, 1fr) 24px;
+        padding: 0.85rem 0.78rem;
+    }
+
+    #<?= $componentId ?> .faq-number {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        font-size: 0.7rem;
+    }
+
+    #<?= $componentId ?> .faq-question {
+        font-size: 0.9rem;
+    }
+}
+</style>
+
+<script>
+(function() {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) return;
+
+    var items = root.querySelectorAll('[data-faq-item]');
+    if (!items.length) return;
+
+    var setState = function(item, open) {
+        var trigger = item.querySelector('.faq-trigger');
+        var body = item.querySelector('.faq-answer');
+        if (!trigger || !body) return;
+
+        if (open) {
+            item.classList.add('is-open');
+            trigger.setAttribute('aria-expanded', 'true');
+            body.removeAttribute('hidden');
+        } else {
+            item.classList.remove('is-open');
+            trigger.setAttribute('aria-expanded', 'false');
+            body.setAttribute('hidden', 'hidden');
+        }
+    };
+
+    items.forEach(function(item) {
+        var trigger = item.querySelector('.faq-trigger');
+        if (!trigger) return;
+
+        trigger.addEventListener('click', function() {
+            var isOpen = item.classList.contains('is-open');
+            items.forEach(function(other) {
+                setState(other, false);
+            });
+            if (!isOpen) {
+                setState(item, true);
+            }
+        });
+    });
+})();
+</script>

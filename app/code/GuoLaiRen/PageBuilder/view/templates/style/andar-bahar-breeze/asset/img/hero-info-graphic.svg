@@ -1,0 +1,49 @@
+<svg width="860" height="620" viewBox="0 0 860 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="860" height="620" rx="40" fill="#F6FFFC"/>
+  <rect x="34" y="34" width="792" height="552" rx="34" fill="url(#bg)"/>
+  <path d="M94 170C174 130 245 118 336 138C444 162 520 210 620 202C686 197 736 173 786 138" stroke="#68C5C4" stroke-opacity="0.24" stroke-width="8" stroke-linecap="round"/>
+  <path d="M102 428C186 398 268 397 364 426C456 453 540 488 640 473C702 464 748 442 788 414" stroke="#90D5FF" stroke-opacity="0.24" stroke-width="8" stroke-linecap="round"/>
+  <g filter="url(#shadow)">
+    <rect x="110" y="114" width="210" height="280" rx="30" transform="rotate(-7 110 114)" fill="#FFFFFF"/>
+    <rect x="114" y="118" width="202" height="272" rx="26" stroke="#E0F7F1" stroke-width="2"/>
+    <text x="168" y="188" fill="#2D8F9B" font-family="Arial, sans-serif" font-size="36" font-weight="700">Andar</text>
+    <circle cx="218" cy="262" r="54" fill="url(#orb1)"/>
+    <path d="M175 316C191 299 209 291 230 291C251 291 270 299 285 316" stroke="#268B95" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="430" y="182" width="220" height="292" rx="30" transform="rotate(8 430 182)" fill="#FFFFFF"/>
+    <rect x="434" y="186" width="212" height="284" rx="26" stroke="#E3EEFF" stroke-width="2"/>
+    <text x="492" y="266" fill="#517CC8" font-family="Arial, sans-serif" font-size="36" font-weight="700">Bahar</text>
+    <circle cx="546" cy="336" r="54" fill="url(#orb2)"/>
+    <path d="M503 389C519 372 537 364 558 364C579 364 598 372 613 389" stroke="#5C84D4" stroke-width="8" stroke-linecap="round"/>
+  </g>
+  <g>
+    <rect x="286" y="462" width="286" height="74" rx="24" fill="#FFFFFF" fill-opacity="0.9"/>
+    <rect x="286.5" y="462.5" width="285" height="73" rx="23.5" stroke="#DCEEEF"/>
+    <text x="324" y="492" fill="#34767B" font-family="Arial, sans-serif" font-size="22" font-weight="700">Fast scan</text>
+    <text x="324" y="518" fill="#648084" font-family="Arial, sans-serif" font-size="18">Clean odds blocks, lighter motion, breezy mobile rhythm</text>
+  </g>
+  <defs>
+    <linearGradient id="bg" x1="430" y1="34" x2="430" y2="586" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F9FFFD"/>
+      <stop offset="1" stop-color="#EFF9FF"/>
+    </linearGradient>
+    <radialGradient id="orb1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(218 262) rotate(90) scale(54)">
+      <stop stop-color="#AAFFF0"/>
+      <stop offset="1" stop-color="#62CCC2"/>
+    </radialGradient>
+    <radialGradient id="orb2" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(546 336) rotate(90) scale(54)">
+      <stop stop-color="#DAF3FF"/>
+      <stop offset="1" stop-color="#88BFFE"/>
+    </radialGradient>
+    <filter id="shadow" x="72" y="84" width="620" height="436" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="14"/>
+      <feGaussianBlur stdDeviation="16"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.282353 0 0 0 0 0.596078 0 0 0 0 0.615686 0 0 0 0.14 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+    </filter>
+  </defs>
+</svg>

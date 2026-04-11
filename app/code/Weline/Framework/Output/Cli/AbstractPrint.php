@@ -494,7 +494,7 @@ COMMAND_LIST;
     {
         if ($this->isTerminal === null) {
             // 检查是否为 CLI 环境
-            if (php_sapi_name() !== 'cli') {
+            if (!\in_array(\php_sapi_name(), ['cli', 'phpdbg'], true)) {
                 $this->isTerminal = false;
                 return $this->isTerminal;
             }

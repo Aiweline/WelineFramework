@@ -59,8 +59,8 @@ class Reload extends CommandAbstract
         // 强制模式：批量杀死后重启，不等待排水
         $forceMode = isset($args['f']) || isset($args['force']);
         
-        // 等待模式（默认），-n 跳过等待
-        $waitMode = !(isset($args['n']) || isset($args['no-wait']));
+        // 等待模式（默认），-n 跳过等待；-f 强制模式固定为不等待
+        $waitMode = !$forceMode && !(isset($args['n']) || isset($args['no-wait']));
         
         $reloadType = $forceMode 
             ? ControlMessage::RELOAD_TYPE_FORCE 
@@ -510,7 +510,7 @@ class Reload extends CommandAbstract
                 '-n, --no-wait' => __('不等待：发送命令后立即返回'),
             ],
             [
-                __('默认行为') => __('等待滚动重启完成后返回，显示进度'),
+                __('默认行为') => __('等待滚动重启完成后返回，显示进度（-f 强制模式除外）'),
                 __('-f 强制模式') => __('批量重启：直接杀死所有 Worker，属于停机型更新，快速但会中断请求'),
                 __('-n 不等待') => __('发送命令后立即返回，适合脚本调用'),
                 __('适用场景') => __('修改了 Worker 代码、业务代码、模板、配置等'),

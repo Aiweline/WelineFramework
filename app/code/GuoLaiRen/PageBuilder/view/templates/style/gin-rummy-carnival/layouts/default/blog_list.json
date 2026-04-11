@@ -1,0 +1,27 @@
+{
+    "page_type": "blog_list",
+    "name": "Blog List Page Layout",
+    "description": "Gin Rummy Carnival blog list page layout",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-list",
+                "enabled": true,
+                "instance_id": "blog-list-default",
+                "config": {
+                    "content.badge": "Journal",
+                    "content.title": "Gin Rummy Guides & Updates",
+                    "content.description": "Fresh reads on table rhythm, match modes, and platform updates."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Blog list page layout. Posts are rendered dynamically by the blog module."
+}

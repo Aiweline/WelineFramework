@@ -1,0 +1,56 @@
+{
+    "page_type": "about_page",
+    "name": "About Page Default Layout",
+    "description": "About-page layout for the Court Piece Electric Mahal theme.",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "about-content",
+                "enabled": true,
+                "instance_id": "about-content-default",
+                "config": {
+                    "layout": "standard",
+                    "show_team": true,
+                    "show_values": true,
+                    "show_stats": true,
+                    "show_cta": true,
+                    "hero.title": "Inside Court Piece Electric Mahal",
+                    "hero.subtitle": "Step into a high-voltage card arena built for quick rounds, bold table energy, and a smoother mobile-first play experience.",
+                    "stats.stat_1_number": "4 Seats",
+                    "stats.stat_1_label": "team play focus",
+                    "stats.stat_2_number": "3 Modes",
+                    "stats.stat_2_label": "match energy zones",
+                    "stats.stat_3_number": "24 7",
+                    "stats.stat_3_label": "table access",
+                    "stats.stat_4_number": "100 pct",
+                    "stats.stat_4_label": "mobile ready",
+                    "story.title": "Why Players Remember The Mahal",
+                    "story.subtitle": "A louder home base for fast court-piece sessions",
+                    "story.content": "Court Piece Electric Mahal turns classic partnership card play into a brighter, more cinematic destination. The experience leans into sharp table chemistry, rapid entry, and strong visual contrast so every section feels alive instead of flat.",
+                    "story.rail_1_title": "Built for",
+                    "story.rail_1_text": "Partnership rounds with quick reading and bold table pacing",
+                    "story.rail_2_title": "Known for",
+                    "story.rail_2_text": "Electric contrast, dramatic motion, and clearer mobile scanning",
+                    "story.rail_3_title": "Perfect for",
+                    "story.rail_3_text": "Players who want style, speed, and a memorable court-piece vibe",
+                    "values.title": "What Shapes The Experience",
+                    "values.subtitle": "The ideas behind every table-facing detail",
+                    "team.title": "Who Makes The Table Glow",
+                    "team.subtitle": "The crew behind the mahal atmosphere",
+                    "cta.title": "Ready To Join The Electric Table",
+                    "cta.description": "Move from story to action and connect with the Court Piece Electric Mahal team for updates, support, and the next big round.",
+                    "cta.button_text": "Go To Contact Page",
+                    "cta.button_url": "/contact"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Header and footer inherit from the home-page layout."
+}

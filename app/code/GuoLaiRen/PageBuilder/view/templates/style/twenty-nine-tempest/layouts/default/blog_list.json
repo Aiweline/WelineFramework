@@ -1,0 +1,27 @@
+{
+    "page_type": "blog_list",
+    "name": "博客列表页面布局",
+    "description": "Twenty Nine Tempest 主题博客文章列表页布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-list",
+                "enabled": true,
+                "instance_id": "blog-list-default",
+                "config": {
+                    "content.badge": "Journal",
+                    "content.title": "29 Card Guides & Updates",
+                    "content.description": "Fresh reads on table rhythm, match modes, and platform updates."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "博客列表页面布局，文章列表由博客模块动态渲染"
+}

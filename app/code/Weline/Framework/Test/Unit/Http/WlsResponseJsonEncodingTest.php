@@ -4,13 +4,13 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Http;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Http\WlsResponse;
+use Weline\Framework\Http\Response;
 
 final class WlsResponseJsonEncodingTest extends TestCase
 {
     public function testJsonResponseKeepsBodyWhenPayloadContainsInvalidUtf8(): void
     {
-        $response = WlsResponse::json([
+        $response = Response::json([
             'error' => true,
             'message' => "bad\xB1utf8",
         ], 400);

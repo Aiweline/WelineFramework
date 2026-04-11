@@ -1,0 +1,16 @@
+{
+    "page_type": "custom_page",
+    "name": "自定义页面布局",
+    "description": "Roulette Supernova 主题自定义空白页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [],
+        "footer": []
+    },
+    "notes": "空白内容区域，header/footer 继承自 home_page"
+}

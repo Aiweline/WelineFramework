@@ -1,0 +1,487 @@
+<?php
+/**
+ * Teen Patti Gold Rush - Games Component
+ *
+ * @component_start
+ * code: games
+ * name: 游戏介绍
+ * name_en: Games Showcase
+ * description: 游戏/产品介绍卡片，支持图片和描述
+ * category: content
+ * region: content
+ * thumbnail: asset/img/game/game-i1.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示卡片描述:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景基础色:color:#260f22
+ * style.title_color => 标题颜色:color:#fff4d4
+ * style.title_font_size => 标题字号(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:24|px
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.09)
+ * style.card_border_radius => 卡片圆角:number:16|px
+ * style.card_border_color => 卡片边框颜色:color:rgba(255,218,240,0.24)
+ * style.card_title_color => 卡片标题颜色:color:#fff2db
+ * style.card_title_font_size => 卡片标题字号:number:20|px
+ * style.card_desc_color => 卡片描述颜色:color:#f4deff
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.section_padding => 区域内边距(PC端):number:68|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:42|px
+ * style.card_gap => 卡片间距:number:24|px
+ * style.card_content_padding => 卡片内容内边距:number:22|px
+ * style.hover_transform => 悬停位移:number:5|px
+ *
+ * group:images => 图片配置
+ * images.image_1_desktop => 游戏1桌面端图片:textarea:|默认使用本地图片
+ * images.image_1_mobile => 游戏1移动端图片:textarea:|默认使用本地图片
+ * images.image_2 => 游戏2图片:textarea:|默认使用本地图片
+ * images.image_3 => 游戏3图片:textarea:|默认使用本地图片
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Multiples Game
+ * texts.summary => 区域辅助文案:text:Three quick lanes covering Teen Patti, Rummy, and Slots.
+ * texts.game_1_title => 游戏1标题:text:Teen Patti Classic
+ * texts.game_1_desc => 游戏1描述:textarea:Core Teen Patti table flow with rapid room entry and stable rounds.
+ * texts.game_2_title => 游戏2标题:text:Rummy Turbo
+ * texts.game_2_desc => 游戏2描述:textarea:Sequence-focused matches with cleaner score rhythm and fast rematch entry.
+ * texts.game_3_title => 游戏3标题:text:Slot Sprint
+ * texts.game_3_desc => 游戏3描述:textarea:Short spin sessions designed for fast breaks between card tables.
+ *
+ * @fields_end
+ */
+
+$componentId = 'gr-games-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+
+    return $default;
+};
+
+$getCardValue = function ($index, array $keys, $default = '') use ($getConfigAny) {
+    $prefixedKeys = [];
+    foreach ($keys as $key) {
+        $prefixedKeys[] = 'game_' . $index . '.' . $key;
+        $prefixedKeys[] = $key;
+    }
+    return $getConfigAny($prefixedKeys, $default);
+};
+
+$joinLabels = static function (array $items) {
+    $items = array_values(array_filter(array_map('trim', $items), static function ($item) {
+        return $item !== '';
+    }));
+    $count = count($items);
+    if ($count === 0) {
+        return '';
+    }
+    if ($count === 1) {
+        return $items[0];
+    }
+    if ($count === 2) {
+        return $items[0] . ' and ' . $items[1];
+    }
+
+    $last = array_pop($items);
+    return implode(', ', $items) . ', and ' . $last;
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$display = $getConfigAny(['display.show_section', 'games.display'], 'yes') !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfigAny(['display.show_title'], 'yes') !== 'no';
+$showDescription = $getConfigAny(['display.show_description'], 'yes') !== 'no';
+
+$bgColor = $getConfigAny(['style.bg_color', 'games.bg_color'], '#260f22');
+$titleColor = $getConfigAny(['style.title_color'], '#fff4d4');
+$titleFontSize = (int)$getConfigAny(['style.title_font_size'], '36');
+$titleFontSizeMobile = (int)$getConfigAny(['style.title_font_size_mobile'], '24');
+$cardBgColor = $getConfigAny(['style.card_bg_color'], 'rgba(255,255,255,0.09)');
+$cardBorderRadius = (int)$getConfigAny(['style.card_border_radius'], '16');
+$cardBorderColor = $getConfigAny(['style.card_border_color'], 'rgba(255,218,240,0.24)');
+$cardTitleColor = $getConfigAny(['style.card_title_color'], '#fff2db');
+$cardTitleFontSize = (int)$getConfigAny(['style.card_title_font_size'], '20');
+$cardDescColor = $getConfigAny(['style.card_desc_color'], '#f4deff');
+$cardDescFontSize = (int)$getConfigAny(['style.card_desc_font_size'], '14');
+$sectionPadding = (int)$getConfigAny(['style.section_padding'], '68');
+$sectionPaddingMobile = (int)$getConfigAny(['style.section_padding_mobile'], '42');
+$cardGap = (int)$getConfigAny(['style.card_gap'], '24');
+$cardContentPadding = (int)$getConfigAny(['style.card_content_padding'], '22');
+$hoverTransform = (int)$getConfigAny(['style.hover_transform'], '5');
+
+$defaultImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/game/game-i1.webp');
+$defaultImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/game/game-i1-m.webp');
+$defaultImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/game/game-i2.webp');
+$defaultImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/game/game-i3.webp');
+
+$image1Desktop = $getCardValue(1, ['images.image_1_desktop', 'games.image_1_desktop'], '') ?: $defaultImage1Desktop;
+$image1Mobile = $getCardValue(1, ['images.image_1_mobile', 'games.image_1_mobile'], '') ?: $defaultImage1Mobile;
+$image2 = $getCardValue(2, ['images.image_2', 'games.image_2'], '') ?: $defaultImage2;
+$image3 = $getCardValue(3, ['images.image_3', 'games.image_3'], '') ?: $defaultImage3;
+
+$title = $getConfigAny(['texts.title', 'games.title', 'texts.games_title'], 'Multiples Game');
+$title1 = $getCardValue(1, ['texts.game_1_title', 'texts.game_teen_patti_speed'], 'Teen Patti Classic');
+$desc1 = $getCardValue(1, ['texts.game_1_desc', 'texts.game_teen_patti_speed_desc'], 'Core Teen Patti table flow with rapid room entry and stable rounds.');
+$title2 = $getCardValue(2, ['texts.game_2_title', 'texts.game_rummy_master'], 'Rummy Turbo');
+$desc2 = $getCardValue(2, ['texts.game_2_desc', 'texts.game_rummy_master_desc'], 'Sequence-focused matches with cleaner score rhythm and fast rematch entry.');
+$title3 = $getCardValue(3, ['texts.game_3_title', 'texts.game_slots_meta'], 'Slot Sprint');
+$desc3 = $getCardValue(3, ['texts.game_3_desc', 'texts.game_slots_meta_desc'], 'Short spin sessions designed for fast breaks between card tables.');
+$brandName = $sanitizeTitle((string)$getConfigAny(['logo.text', 'header.logo.text'], $page ? ($page->getData('title') ?: '') : ''));
+if ($brandName === '') {
+    $brandName = 'Teen Patti Gold Rush';
+}
+
+$games = [
+    [
+        'title' => $title1,
+        'desc' => $desc1,
+        'desktop' => $image1Desktop,
+        'mobile' => $image1Mobile,
+        'label' => '01',
+    ],
+    [
+        'title' => $title2,
+        'desc' => $desc2,
+        'desktop' => $image2,
+        'mobile' => $image2,
+        'label' => '02',
+    ],
+    [
+        'title' => $title3,
+        'desc' => $desc3,
+        'desktop' => $image3,
+        'mobile' => $image3,
+        'label' => '03',
+    ],
+];
+$gameTitles = array_values(array_filter(array_map(static function ($game) {
+    return trim((string)($game['title'] ?? ''));
+}, $games), static function ($item) {
+    return $item !== '';
+}));
+$defaultSummary = 'Three quick lanes covering ' . $joinLabels(array_slice($gameTitles, 0, 3)) . '.';
+$summary = trim((string)$getConfigAny(['texts.summary', 'texts.games_summary'], $defaultSummary));
+
+$sectionLabelAttr = $showTitle ? ' aria-labelledby="' . $componentId . '-title"' : '';
+?>
+
+<section id="<?= $componentId ?>" class="gr-games"<?= $sectionLabelAttr ?>>
+    <div class="section-inner">
+        <?php if ($showTitle): ?>
+            <header class="games-head">
+                <span class="games-kicker"><?= htmlspecialchars($brandName) ?></span>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                <?php if ($summary !== ''): ?>
+                    <p class="games-summary"><?= htmlspecialchars($summary) ?></p>
+                <?php endif; ?>
+            </header>
+        <?php endif; ?>
+
+        <div class="games-grid" style="--game-gap: <?= (int)$cardGap ?>px; --game-radius: <?= (int)$cardBorderRadius ?>px; --hover-offset: <?= (int)$hoverTransform ?>px;">
+            <?php foreach ($games as $game): ?>
+                <article class="game-card">
+                    <span class="game-label"><?= htmlspecialchars($game['label']) ?></span>
+                    <div class="game-media">
+                        <picture>
+                            <?php if (!empty($game['mobile'])): ?>
+                                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($game['mobile']) ?>">
+                            <?php endif; ?>
+                            <?php if (!empty($game['desktop'])): ?>
+                                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($game['desktop']) ?>">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($game['desktop'] ?: $game['mobile']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" loading="lazy" decoding="async">
+                        </picture>
+                    </div>
+                    <div class="game-content">
+                        <h3><?= htmlspecialchars($game['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($game['desc']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="games-stack-mobile">
+            <?php foreach ($games as $game): ?>
+                <article class="mobile-game-card">
+                    <span class="game-label"><?= htmlspecialchars($game['label']) ?></span>
+                    <div class="game-media game-media-mobile">
+                        <picture>
+                            <?php if (!empty($game['mobile'])): ?>
+                                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($game['mobile']) ?>">
+                            <?php endif; ?>
+                            <?php if (!empty($game['desktop'])): ?>
+                                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($game['desktop']) ?>">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($game['desktop'] ?: $game['mobile']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" loading="lazy" decoding="async">
+                        </picture>
+                    </div>
+                    <div class="game-content">
+                        <h3><?= htmlspecialchars($game['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($game['desc']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background-color: <?= htmlspecialchars($bgColor) ?>;
+    background-image:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255, 255, 255, 0.026) 1px, transparent 1px),
+        radial-gradient(circle at 16% 20%, rgba(255, 169, 98, 0.13) 0, transparent 34%),
+        radial-gradient(circle at 86% 82%, rgba(100, 255, 234, 0.1) 0, transparent 32%);
+    background-size: 30px 30px, 30px 30px, 100% 100%, 100% 100%;
+    box-shadow: inset 0 -120px 120px -96px rgba(14, 10, 22, 0.34);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: repeating-linear-gradient(-34deg, rgba(255, 255, 255, 0.045) 0 2px, transparent 2px 18px);
+    clip-path: polygon(52% 0, 100% 0, 100% 100%, 32% 100%);
+    opacity: 0.1;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background-image: radial-gradient(rgba(255, 198, 144, 0.52) 1px, transparent 1px);
+    background-size: 16px 16px;
+    opacity: 0.08;
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .games-head {
+    margin: 0 0 1.2rem;
+}
+
+#<?= $componentId ?> .games-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.34rem 0.72rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 170, 118, 0.5);
+    background: rgba(255, 124, 68, 0.17);
+    color: #ffd9ba;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .games-head h2 {
+    margin: 0.74rem 0 0;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 4.8vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.05;
+}
+
+#<?= $componentId ?> .games-summary {
+    margin: 0.78rem 0 0;
+    max-width: 42rem;
+    color: rgba(255, 232, 208, 0.86);
+    line-height: 1.75;
+}
+
+#<?= $componentId ?> .games-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--game-gap);
+}
+
+#<?= $componentId ?> .game-card,
+#<?= $componentId ?> .mobile-game-card {
+    position: relative;
+    border-radius: var(--game-radius);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)), <?= htmlspecialchars($cardBgColor) ?>;
+    box-shadow: 0 12px 24px rgba(6, 13, 31, 0.28);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .game-card {
+    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+#<?= $componentId ?> .game-card::after {
+    content: '';
+    position: absolute;
+    inset: -40% auto auto -24%;
+    width: 44%;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 249, 226, 0.68) 45%, rgba(102, 255, 237, 0) 100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .game-card:hover {
+    transform: translateY(calc(var(--hover-offset) * -1px));
+    box-shadow: 0 16px 30px rgba(6, 13, 31, 0.32);
+    border-color: rgba(255, 191, 146, 0.36);
+}
+
+#<?= $componentId ?> .game-card:hover::after {
+    animation: gr-games-scan 1.18s ease;
+}
+
+#<?= $componentId ?> .game-label {
+    position: absolute;
+    z-index: 3;
+    left: 0.78rem;
+    top: 0.74rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 184, 129, 0.4);
+    background: rgba(255, 127, 72, 0.16);
+    color: #ffe8d2;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .game-media {
+    padding: 2.74rem 0.78rem 0;
+}
+
+#<?= $componentId ?> .game-media picture {
+    display: block;
+    overflow: hidden;
+    border-radius: calc(var(--game-radius) - 7px);
+}
+
+#<?= $componentId ?> .game-media img {
+    display: block;
+    width: 100%;
+    object-fit: cover;
+    aspect-ratio: 1.62 / 1;
+}
+
+#<?= $componentId ?> .game-content {
+    padding: 0.86rem <?= (int)$cardContentPadding ?>px <?= (int)$cardContentPadding ?>px;
+}
+
+#<?= $componentId ?> .game-content h3 {
+    margin: 0;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.22;
+}
+
+#<?= $componentId ?> .game-content p {
+    margin: 0.6rem 0 0;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.7;
+    opacity: 0.94;
+}
+
+#<?= $componentId ?> .games-stack-mobile {
+    display: none;
+}
+
+@keyframes gr-games-scan {
+    0% { transform: translateX(0); opacity: 0; }
+    18% { opacity: 1; }
+    100% { transform: translateX(420%); opacity: 0; }
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .section-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .games-grid {
+        display: none;
+    }
+
+    #<?= $componentId ?> .games-stack-mobile {
+        display: grid;
+        gap: 0.74rem;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> .game-content h3 {
+        font-size: 1.04rem;
+    }
+
+    #<?= $componentId ?> .game-content p {
+        font-size: 0.88rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .game-card {
+        transition: none;
+    }
+
+    #<?= $componentId ?> .game-card:hover {
+        transform: none;
+    }
+}
+</style>

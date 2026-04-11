@@ -1,0 +1,844 @@
+<?php
+/**
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: FAQ折叠面板
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_intro => 显示简介:select:yes|yes,no
+ * display.first_open => 首个问题默认展开:select:no|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景主色:color:#fff0dc
+ * style.accent_color => 强调色:color:#f3b53f
+ * style.title_color => 标题颜色:color:#3f2418
+ * style.text_color => 正文颜色:color:#6f4b37
+ * style.panel_bg_color => 卡片背景色:color:rgba(255,255,255,0.88)
+ * style.card_border_color => 卡片边框色:color:rgba(242,107,79,0.18)
+ * style.card_radius => 卡片圆角:number:22|px
+ * style.section_padding => 区域内边距(PC端):number:64|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ *
+ * group:texts => 文本内容
+ * texts.badge => 徽标文字:text:Sunrise Support
+ * texts.title => 区域标题:text:Frequently Asked Questions
+ * texts.intro => 简介:textarea:Everything important is kept visible: table pace, trust notes, and the quick answers players usually look for first.
+ * texts.tag_1 => 标签1:text:Quick Rooms
+ * texts.tag_2 => 标签2:text:Table Trust
+ * texts.tag_3 => 标签3:text:Mobile Readability
+ * texts.timeline_kicker => 时间线标签:text:Questions Timeline
+ * texts.timeline_summary => 时间线说明:textarea:Tap any stop to expand the answer right inside the timeline.
+ * texts.expand_hint => 展开提示:text:Tap to read answer
+ * texts.collapse_hint => 收起提示:text:Tap to collapse
+ * texts.expand_text => 展开按钮文字:text:Expand
+ * texts.close_text => 收起按钮文字:text:Close
+ * texts.answer_kicker => 答案标签:text:FAQ Answer
+ * texts.question_prefix => 问题前缀:text:Question
+ * texts.faq_1_question => 问题1:text:What makes this theme different from darker gaming templates?
+ * texts.faq_1_answer => 答案1:textarea:It uses a light editorial layout, softer contrast, and new section structures while keeping the same PHP-driven configuration patterns.
+ * texts.faq_2_question => 问题2:text:Can the default content still be overridden from config?
+ * texts.faq_2_answer => 答案2:textarea:Yes. Titles, intro text, questions, answers, and display switches all still follow the same config fallback rules.
+ * texts.faq_3_question => 问题3:text:Is the layout responsive on mobile first?
+ * texts.faq_3_answer => 答案3:textarea:Yes. Cards collapse into a single column, sticky summary content resets properly, and tap targets stay large.
+ * texts.faq_4_question => 问题4:text:Can I hide part of this section without editing code?
+ * texts.faq_4_answer => 答案4:textarea:Yes. Badge, title, intro, and the first-open behavior can all be controlled by the existing component settings.
+ * texts.faq_5_question => 问题5:text:
+ * texts.faq_5_answer => 答案5:textarea:
+ * texts.faq_6_question => 问题6:text:
+ * texts.faq_6_answer => 答案6:textarea:
+ *
+ * @fields_end
+ */
+
+$componentId = 'dts-faq-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
+if (!$display) return;
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showIntro = $getConfig('display.show_intro', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
+
+$bgColor = $getConfig('style.bg_color', '#fff0dc');
+$accentColor = $getConfig('style.accent_color', '#f3b53f');
+$titleColor = $getConfig('style.title_color', '#3f2418');
+$textColor = $getConfig('style.text_color', '#6f4b37');
+$panelBgColor = $getConfig('style.panel_bg_color', 'rgba(255,255,255,0.88)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(242,107,79,0.18)');
+$cardRadius = $getConfig('style.card_radius', '22');
+$sectionPadding = $getConfig('style.section_padding', '64');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '48');
+
+$badgeText = $getConfig('texts.badge', 'Sunrise Support');
+$title = $getConfig('texts.title', 'Frequently Asked Questions');
+$intro = $getConfig('texts.intro', 'Everything important is kept visible: table pace, trust notes, and the quick answers players usually look for first.');
+$timelineKicker = $getConfig('texts.timeline_kicker', 'Questions Timeline');
+$timelineSummary = $getConfig('texts.timeline_summary', 'Tap any stop to expand the answer right inside the timeline.');
+$expandHintText = $getConfig('texts.expand_hint', 'Tap to read answer');
+$collapseHintText = $getConfig('texts.collapse_hint', 'Tap to collapse');
+$expandActionText = $getConfig('texts.expand_text', 'Expand');
+$closeActionText = $getConfig('texts.close_text', 'Close');
+$answerKicker = $getConfig('texts.answer_kicker', 'FAQ Answer');
+$questionPrefix = $getConfig('texts.question_prefix', 'Question');
+$tags = array_filter([
+    trim((string)$getConfig('texts.tag_1', 'Quick Rooms')),
+    trim((string)$getConfig('texts.tag_2', 'Table Trust')),
+    trim((string)$getConfig('texts.tag_3', 'Mobile Readability')),
+]);
+
+$defaults = [
+    ['question' => 'What makes this theme different from darker gaming templates?', 'answer' => 'It uses a light editorial layout, softer contrast, and new section structures while keeping the same PHP-driven configuration patterns.'],
+    ['question' => 'Can the default content still be overridden from config?', 'answer' => 'Yes. Titles, intro text, questions, answers, and display switches all still follow the same config fallback rules.'],
+    ['question' => 'Is the layout responsive on mobile first?', 'answer' => 'Yes. Cards collapse into a single column, sticky summary content resets properly, and tap targets stay large.'],
+    ['question' => 'Can I hide part of this section without editing code?', 'answer' => 'Yes. Badge, title, intro, and the first-open behavior can all be controlled by the existing component settings.'],
+    ['question' => 'Will empty questions fall back safely?', 'answer' => 'Yes. Empty slots are skipped, and the built-in defaults continue to render a complete section when needed.'],
+    ['question' => 'Can this module work on standalone FAQ pages too?', 'answer' => 'Yes. The same component is reused in the FAQ page layout with the same rendering logic.'],
+];
+
+$faqs = [];
+for ($i = 1; $i <= 6; $i++) {
+    $default = $defaults[$i - 1] ?? ['question' => '', 'answer' => ''];
+    $question = trim((string)$getConfig("texts.faq_{$i}_question", $default['question']));
+    $answer = trim((string)$getConfig("texts.faq_{$i}_answer", $default['answer']));
+    if ($question !== '' && $answer !== '') {
+        $faqs[] = ['question' => $question, 'answer' => $answer];
+    }
+}
+
+if (empty($faqs)) {
+    $faqs = array_slice($defaults, 0, 4);
+}
+
+$faqItems = [];
+foreach ($faqs as $index => $faq) {
+    $faqItems[] = [
+        'index' => $index,
+        'question' => $faq['question'],
+        'answer' => $faq['answer'],
+    ];
+}
+
+$initialActiveIndex = $firstOpen ? 0 : null;
+?>
+
+<section id="<?= $componentId ?>" class="dts-faq" aria-labelledby="<?= $componentId ?>-title">
+    <div class="faq-shell">
+        <header class="faq-head" id="faq">
+            <?php if ($showIntro && $badgeText !== ''): ?>
+                <span class="faq-badge"><?= htmlspecialchars($badgeText) ?></span>
+            <?php endif; ?>
+
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+
+            <?php if ($showIntro && $intro !== ''): ?>
+                <p class="faq-intro"><?= htmlspecialchars($intro) ?></p>
+            <?php endif; ?>
+
+            <?php if (!empty($tags)): ?>
+                <div class="faq-tags">
+                    <?php foreach ($tags as $tag): ?>
+                        <span><?= htmlspecialchars($tag) ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </header>
+
+        <div class="faq-browser">
+            <div class="faq-switch-hint" aria-hidden="true">
+                <?php if ($timelineKicker !== ''): ?>
+                    <span class="switch-kicker"><?= htmlspecialchars($timelineKicker) ?></span>
+                <?php endif; ?>
+                <?php if ($timelineSummary !== ''): ?>
+                    <span class="switch-copy"><?= htmlspecialchars($timelineSummary) ?></span>
+                <?php endif; ?>
+            </div>
+
+            <div class="faq-topic-bar" role="list">
+                <?php foreach ($faqItems as $faq): ?>
+                    <?php $isOpen = $initialActiveIndex !== null && $faq['index'] === $initialActiveIndex; ?>
+                    <article class="faq-item<?= $isOpen ? ' is-open' : '' ?>" data-faq-item="<?= (int)$faq['index'] ?>" role="listitem">
+                        <button
+                            type="button"
+                            class="faq-topic<?= $isOpen ? ' is-active' : '' ?>"
+                            id="<?= $componentId ?>-trigger-<?= (int)$faq['index'] ?>"
+                            data-faq-trigger="<?= (int)$faq['index'] ?>"
+                            aria-controls="<?= $componentId ?>-panel-<?= (int)$faq['index'] ?>"
+                            aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
+                        >
+                            <span class="topic-number"><?= sprintf('%02d', $faq['index'] + 1) ?></span>
+                            <span class="topic-copy">
+                                <strong><?= htmlspecialchars($faq['question']) ?></strong>
+                                <span class="topic-label"><?= htmlspecialchars($isOpen ? $collapseHintText : $expandHintText) ?></span>
+                            </span>
+                            <span class="topic-action" aria-hidden="true" data-topic-action><?= htmlspecialchars($isOpen ? $closeActionText : $expandActionText) ?></span>
+                        </button>
+
+                        <div class="faq-inline-wrap<?= $isOpen ? ' is-open' : '' ?>" data-faq-panel-wrap="<?= (int)$faq['index'] ?>" aria-hidden="<?= $isOpen ? 'false' : 'true' ?>">
+                            <div class="faq-inline-inner">
+                                <article
+                                    class="faq-inline-panel"
+                                    id="<?= $componentId ?>-panel-<?= (int)$faq['index'] ?>"
+                                    data-faq-panel="<?= (int)$faq['index'] ?>"
+                                    role="region"
+                                    tabindex="<?= $isOpen ? '0' : '-1' ?>"
+                                    aria-labelledby="<?= $componentId ?>-trigger-<?= (int)$faq['index'] ?>"
+                                >
+                                    <div class="inline-accent" aria-hidden="true"></div>
+                                    <div class="inline-glow inline-glow-left" aria-hidden="true"></div>
+                                    <div class="inline-glow inline-glow-right" aria-hidden="true"></div>
+                                    <span class="inline-watermark" aria-hidden="true"><?= sprintf('%02d', $faq['index'] + 1) ?></span>
+                                    <div class="inline-topline">
+                                        <?php if ($answerKicker !== ''): ?>
+                                            <span class="inline-kicker"><?= htmlspecialchars($answerKicker) ?></span>
+                                        <?php endif; ?>
+                                        <span class="inline-step"><?= htmlspecialchars($questionPrefix) ?> <?= sprintf('%02d', $faq['index'] + 1) ?></span>
+                                    </div>
+                                    <h3><?= htmlspecialchars($faq['question']) ?></h3>
+                                    <div class="inline-divider" aria-hidden="true"></div>
+                                    <div class="inline-copy">
+                                        <p><?= nl2br(htmlspecialchars($faq['answer'])) ?></p>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --faq-radius: <?= (int)$cardRadius ?>px;
+    position: relative;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0 84px;
+    background:
+        radial-gradient(620px 240px at 10% 0%, rgba(255,180,144,0.2), transparent 72%),
+        radial-gradient(620px 260px at 88% 18%, rgba(243,181,63,0.16), transparent 74%),
+        linear-gradient(180deg, <?= htmlspecialchars($bgColor) ?> 0%, #ffead0 100%);
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?> .faq-shell {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    display: grid;
+    gap: 1.2rem;
+}
+
+#<?= $componentId ?> .faq-head {
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+#<?= $componentId ?> .faq-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.82rem;
+    border-radius: 999px;
+    background: rgba(243, 181, 63, 0.16);
+    color: #9a6517;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .faq-head h2 {
+    margin-top: 0.95rem;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(1.9rem, 4vw, 3.2rem);
+    line-height: 1.04;
+}
+
+#<?= $componentId ?> .faq-intro {
+    margin-top: 0.9rem;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .faq-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .faq-tags span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    background: rgba(255,255,255,0.82);
+    color: #734f39;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .faq-browser {
+    display: grid;
+    gap: 0.9rem;
+}
+
+#<?= $componentId ?> .faq-switch-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    padding: 0 0.15rem;
+}
+
+#<?= $componentId ?> .switch-kicker,
+#<?= $componentId ?> .switch-copy {
+    display: inline-flex;
+    align-items: center;
+}
+
+#<?= $componentId ?> .switch-kicker {
+    min-height: 32px;
+    padding: 0.34rem 0.72rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    color: #8f5a23;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .switch-copy {
+    color: #8a6b58;
+    font-size: 0.86rem;
+    line-height: 1.55;
+}
+
+#<?= $componentId ?> .faq-topic-bar {
+    position: relative;
+    display: grid;
+    gap: 0.8rem;
+    padding: 0.1rem 0 0.1rem 0.2rem;
+}
+
+#<?= $componentId ?> .faq-topic-bar::before {
+    content: '';
+    position: absolute;
+    left: 1.38rem;
+    top: 0.7rem;
+    bottom: 0.7rem;
+    width: 2px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(242,107,79,0.16), rgba(243,181,63,0.32), rgba(242,107,79,0.12));
+}
+
+#<?= $componentId ?> .faq-item {
+    position: relative;
+    display: grid;
+    gap: 0.56rem;
+}
+
+#<?= $componentId ?> .faq-item.is-open {
+    z-index: 1;
+}
+
+#<?= $componentId ?> .faq-topic {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.82rem;
+    min-width: 0;
+    min-height: 78px;
+    padding: 0.68rem 0.88rem 0.68rem 0.3rem;
+    border-radius: calc(var(--faq-radius) + 2px);
+    border: 1px solid rgba(242, 107, 79, 0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.78) 0%, rgba(255,246,236,0.9) 100%);
+    box-shadow: 0 14px 28px rgba(194, 130, 94, 0.08);
+    text-align: left;
+    color: inherit;
+    cursor: pointer;
+    transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+}
+
+#<?= $componentId ?> .faq-topic::before {
+    content: '';
+    position: absolute;
+    left: 1.38rem;
+    top: 50%;
+    width: 1.2rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(242,107,79,0.38), <?= htmlspecialchars($accentColor) ?>);
+    opacity: 0;
+    transform: translateY(-50%) scaleX(0.35);
+    transform-origin: left center;
+    transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+#<?= $componentId ?> .faq-topic:hover,
+#<?= $componentId ?> .faq-topic.is-active {
+    transform: translateX(4px);
+    border-color: rgba(242, 107, 79, 0.24);
+    box-shadow: 0 20px 34px rgba(194, 130, 94, 0.12);
+}
+
+#<?= $componentId ?> .faq-topic:focus-visible {
+    outline: 2px solid rgba(242, 107, 79, 0.34);
+    outline-offset: 3px;
+}
+
+#<?= $componentId ?> .faq-topic:hover::before,
+#<?= $componentId ?> .faq-topic.is-active::before {
+    opacity: 1;
+    transform: translateY(-50%) scaleX(1);
+}
+
+#<?= $componentId ?> .faq-topic.is-active {
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,241,224,0.96) 100%);
+}
+
+#<?= $componentId ?> .topic-number {
+    position: relative;
+    z-index: 1;
+    width: 2.2rem;
+    height: 2.2rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, rgba(242,107,79,0.18), rgba(243,181,63,0.28));
+    color: #b5482a;
+    font-size: 0.78rem;
+    font-weight: 800;
+    box-shadow: 0 0 0 7px rgba(255, 240, 220, 0.98);
+}
+
+#<?= $componentId ?> .faq-topic.is-active .topic-number {
+    background: linear-gradient(135deg, rgba(242,107,79,0.68), rgba(243,181,63,0.88));
+    color: #fff8ef;
+    box-shadow: 0 0 0 8px rgba(255, 240, 220, 0.98), 0 0 0 13px rgba(243, 181, 63, 0.12);
+}
+
+#<?= $componentId ?> .topic-copy {
+    min-width: 0;
+    display: grid;
+    gap: 0.22rem;
+}
+
+#<?= $componentId ?> .topic-label {
+    color: #9b765d;
+    font-size: 0.72rem;
+    font-weight: 800;
+    line-height: 1.4;
+}
+
+#<?= $componentId ?> .topic-copy strong {
+    color: #3f2418;
+    font-size: 0.96rem;
+    line-height: 1.34;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .topic-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 0.22rem 0.68rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.82);
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    color: #a06a20;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .topic-action::after {
+    content: '+';
+    margin-left: 0.34rem;
+    font-size: 0.92em;
+}
+
+#<?= $componentId ?> .faq-topic.is-active .topic-action {
+    background: rgba(243, 181, 63, 0.16);
+    border-color: rgba(243, 181, 63, 0.2);
+    color: #9a6517;
+}
+
+#<?= $componentId ?> .faq-item.is-open .topic-action::after {
+    content: '-';
+}
+
+#<?= $componentId ?> .faq-inline-wrap {
+    display: grid;
+    grid-template-rows: 0fr;
+    margin-left: 3.18rem;
+    opacity: 0;
+    pointer-events: none;
+    transition: grid-template-rows 0.36s ease, opacity 0.28s ease;
+}
+
+#<?= $componentId ?> .faq-inline-wrap.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#<?= $componentId ?> .faq-inline-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .faq-inline-panel {
+    position: relative;
+    overflow: hidden;
+    margin-top: 0.08rem;
+    border-radius: calc(var(--faq-radius) + 14px);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, <?= htmlspecialchars($panelBgColor) ?> 100%);
+    box-shadow: 0 24px 50px rgba(194, 130, 94, 0.14);
+    padding: clamp(1rem, 2.6vw, 1.55rem);
+    transform: translateY(-12px);
+    opacity: 0;
+    transition: transform 0.36s cubic-bezier(0.22, 0.84, 0.28, 1), opacity 0.26s ease;
+}
+
+#<?= $componentId ?> .faq-inline-wrap.is-open .faq-inline-panel {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+#<?= $componentId ?> .faq-inline-panel::before {
+    content: '';
+    position: absolute;
+    left: -1.5rem;
+    top: 1.55rem;
+    width: 1.18rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(242,107,79,0.38), <?= htmlspecialchars($accentColor) ?>);
+}
+
+#<?= $componentId ?> .inline-accent {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(90deg, rgba(242,107,79,0.92), <?= htmlspecialchars($accentColor) ?>, rgba(242,107,79,0.32));
+}
+
+#<?= $componentId ?> .inline-glow {
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .inline-glow-left {
+    top: -84px;
+    left: -72px;
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(242,107,79,0.14) 0%, rgba(242,107,79,0.03) 58%, transparent 76%);
+}
+
+#<?= $componentId ?> .inline-glow-right {
+    right: -28px;
+    bottom: -92px;
+    width: 240px;
+    height: 240px;
+    background: radial-gradient(circle, rgba(243,181,63,0.16) 0%, rgba(243,181,63,0.04) 54%, transparent 74%);
+}
+
+#<?= $componentId ?> .inline-watermark {
+    position: absolute;
+    top: 0.9rem;
+    right: 1rem;
+    font-size: clamp(3rem, 8vw, 5rem);
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -0.06em;
+    color: rgba(194, 130, 94, 0.08);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .inline-topline {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem;
+    padding-right: clamp(3.2rem, 9vw, 6rem);
+}
+
+#<?= $componentId ?> .inline-kicker,
+#<?= $componentId ?> .inline-step {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0.42rem 0.78rem;
+    border-radius: 999px;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .inline-kicker {
+    background: rgba(255,255,255,0.82);
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    color: #7c604e;
+}
+
+#<?= $componentId ?> .inline-step {
+    background: rgba(243, 181, 63, 0.16);
+    border: 1px solid rgba(243, 181, 63, 0.2);
+    color: #9a6517;
+}
+
+#<?= $componentId ?> .faq-inline-panel h3 {
+    position: relative;
+    z-index: 1;
+    margin-top: 1rem;
+    max-width: 760px;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(1.4rem, 2.8vw, 2.15rem);
+    line-height: 1.12;
+}
+
+#<?= $componentId ?> .inline-divider {
+    position: relative;
+    z-index: 1;
+    width: min(180px, 44%);
+    height: 2px;
+    margin-top: 0.95rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(242,107,79,0.52), rgba(243,181,63,0.22));
+}
+
+#<?= $componentId ?> .inline-copy {
+    position: relative;
+    z-index: 1;
+    margin-top: 1rem;
+    max-width: 860px;
+}
+
+#<?= $componentId ?> .inline-copy p {
+    color: <?= htmlspecialchars($textColor) ?>;
+    line-height: 1.82;
+    font-size: 0.98rem;
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0 64px;
+    }
+
+    #<?= $componentId ?> .faq-head {
+        text-align: left;
+    }
+
+    #<?= $componentId ?> .faq-tags {
+        justify-content: flex-start;
+    }
+
+    #<?= $componentId ?> .faq-switch-hint {
+        align-items: flex-start;
+    }
+
+    #<?= $componentId ?> .switch-copy {
+        font-size: 0.8rem;
+    }
+
+    #<?= $componentId ?> .faq-topic-bar::before {
+        left: 1.22rem;
+    }
+
+    #<?= $componentId ?> .faq-topic {
+        min-height: 74px;
+        padding: 0.62rem 0.7rem 0.62rem 0.24rem;
+        gap: 0.68rem;
+    }
+
+    #<?= $componentId ?> .faq-topic::before {
+        left: 1.22rem;
+        width: 1rem;
+    }
+
+    #<?= $componentId ?> .topic-number {
+        width: 2.05rem;
+        height: 2.05rem;
+        box-shadow: 0 0 0 6px rgba(255, 240, 220, 0.98);
+    }
+
+    #<?= $componentId ?> .faq-topic.is-active .topic-number {
+        box-shadow: 0 0 0 6px rgba(255, 240, 220, 0.98), 0 0 0 10px rgba(243, 181, 63, 0.12);
+    }
+
+    #<?= $componentId ?> .topic-copy strong {
+        font-size: 0.9rem;
+    }
+
+    #<?= $componentId ?> .topic-label,
+    #<?= $componentId ?> .topic-action {
+        font-size: 0.66rem;
+    }
+
+    #<?= $componentId ?> .faq-inline-wrap {
+        margin-left: 2.78rem;
+    }
+
+    #<?= $componentId ?> .faq-inline-panel {
+        border-radius: 28px;
+        padding: 1rem;
+    }
+
+    #<?= $componentId ?> .faq-inline-panel::before {
+        left: -1.1rem;
+        width: 0.86rem;
+        top: 1.4rem;
+    }
+
+    #<?= $componentId ?> .inline-watermark {
+        top: 0.9rem;
+        right: 0.9rem;
+        font-size: 3.15rem;
+    }
+
+    #<?= $componentId ?> .faq-inline-panel h3 {
+        font-size: clamp(1.24rem, 7vw, 1.65rem);
+    }
+
+    #<?= $componentId ?> .inline-copy p {
+        font-size: 0.92rem;
+        line-height: 1.72;
+    }
+}
+</style>
+
+<script>
+(() => {
+    const root = document.getElementById('<?= $componentId ?>');
+    if (!root) return;
+    const closeActionText = <?= json_encode((string) $closeActionText) ?>;
+    const expandActionText = <?= json_encode((string) $expandActionText) ?>;
+    const collapseHintText = <?= json_encode((string) $collapseHintText) ?>;
+    const expandHintText = <?= json_encode((string) $expandHintText) ?>;
+
+    const items = Array.from(root.querySelectorAll('[data-faq-item]'));
+    const buttons = Array.from(root.querySelectorAll('[data-faq-trigger]'));
+    const panelWraps = Array.from(root.querySelectorAll('[data-faq-panel-wrap]'));
+    const panels = Array.from(root.querySelectorAll('[data-faq-panel]'));
+
+    const syncState = (activeIndex = null, shouldScroll = false) => {
+        items.forEach((item) => {
+            const index = Number(item.dataset.faqItem);
+            const isOpen = activeIndex !== null && index === activeIndex;
+            const button = item.querySelector('[data-faq-trigger]');
+            const wrap = item.querySelector('[data-faq-panel-wrap]');
+            const panel = item.querySelector('[data-faq-panel]');
+            const action = item.querySelector('[data-topic-action]');
+            const label = item.querySelector('.topic-label');
+
+            item.classList.toggle('is-open', isOpen);
+
+            if (button) {
+                button.classList.toggle('is-active', isOpen);
+                button.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+            }
+
+            if (action) {
+                action.textContent = isOpen ? closeActionText : expandActionText;
+            }
+
+            if (label) {
+                label.textContent = isOpen ? collapseHintText : expandHintText;
+            }
+
+            if (wrap) {
+                wrap.classList.toggle('is-open', isOpen);
+                wrap.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+            }
+
+            if (panel) {
+                panel.setAttribute('tabindex', isOpen ? '0' : '-1');
+            }
+        });
+
+        if (shouldScroll && activeIndex !== null && window.matchMedia('(max-width: 640px)').matches) {
+            const target = root.querySelector('[data-faq-item="' + activeIndex + '"]');
+            if (target) {
+                const rect = target.getBoundingClientRect();
+                if (rect.top < 72 || rect.top > window.innerHeight * 0.52) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+        }
+    };
+
+    buttons.forEach((button, buttonIndex) => {
+        button.addEventListener('click', () => {
+            const index = Number(button.dataset.faqTrigger);
+            const isOpen = button.getAttribute('aria-expanded') === 'true';
+            syncState(isOpen ? null : index, true);
+        });
+
+        button.addEventListener('keydown', (event) => {
+            const key = event.key;
+            if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(key)) {
+                return;
+            }
+
+            event.preventDefault();
+
+            let nextIndex = buttonIndex;
+            if (key === 'ArrowDown') {
+                nextIndex = (buttonIndex + 1) % buttons.length;
+            } else if (key === 'ArrowUp') {
+                nextIndex = (buttonIndex - 1 + buttons.length) % buttons.length;
+            } else if (key === 'Home') {
+                nextIndex = 0;
+            } else if (key === 'End') {
+                nextIndex = buttons.length - 1;
+            }
+
+            buttons[nextIndex].focus();
+        });
+    });
+
+    if (<?= $initialActiveIndex === null ? 'true' : 'false' ?>) {
+        syncState(null);
+    }
+})();
+</script>

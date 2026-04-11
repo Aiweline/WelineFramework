@@ -224,7 +224,7 @@ class PreviewTokenService
         
         // 2. HTTP Header
         $headerKey = 'HTTP_' . str_replace('-', '_', strtoupper(self::TOKEN_HEADER));
-        $token = $_SERVER[$headerKey] ?? null;
+        $token = \w_env("server.{$headerKey}", null);
         if (!empty($token)) {
             return $token;
         }

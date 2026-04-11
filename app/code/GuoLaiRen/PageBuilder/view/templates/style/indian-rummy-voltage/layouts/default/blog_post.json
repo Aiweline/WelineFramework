@@ -1,0 +1,31 @@
+{
+    "page_type": "blog_post",
+    "name": "博客文章默认布局",
+    "description": "单篇博客文章详情页面标准布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-detail",
+                "enabled": true,
+                "instance_id": "blog-detail-default",
+                "config": {
+                    "blog.show_author": "yes",
+                    "blog.show_date": "yes",
+                    "blog.show_sidebar": "yes",
+                    "blog.show_tags": "yes",
+                    "blog.show_share": "yes",
+                    "blog.show_related": "yes",
+                    "blog.related_count": "3"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "header 和 footer 为空数组表示从首页继承"
+}

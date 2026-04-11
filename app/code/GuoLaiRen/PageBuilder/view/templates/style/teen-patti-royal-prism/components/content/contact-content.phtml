@@ -1,0 +1,783 @@
+<?php
+/**
+ * Contact content component
+ *
+ * @component_start
+ * code: contact-content
+ * name: 联系我们内容
+ * name_en: Contact Content
+ * description: 联系方式和表单展示组件，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_map => 显示地图:select:yes|yes,no
+ * display.show_form => 显示表单:select:yes|yes,no
+ * display.show_social => 显示社交链接:select:yes|yes,no
+ * display.show_info => 显示联系信息:select:yes|yes,no
+ *
+ * group:hero => Hero区域
+ * hero.title => 页面标题:text:|留空使用页面标题
+ * hero.subtitle => 页面副标题:textarea:Need support or business help? Reach us through the channels below.
+ * hero.bg_color => 背景颜色:color:#fff4d8
+ * hero.bg_gradient_end => 渐变结束色:color:#ffe4a8
+ * hero.title_color => 标题颜色:color:#402217
+ *
+ * group:contact_info => 联系信息
+ * contact_info.address => 地址:textarea:Mumbai Operations Hub, Andheri East, Maharashtra, India
+ * contact_info.phone => 电话:text:+91 98765 43210
+ * contact_info.email => 邮箱:text:support@teenpattiroyalprism.com
+ * contact_info.work_hours => 工作时间:text:24/7 Player Support
+ *
+ * group:social => 社交链接
+ * social.wechat => 微信:text:
+ * social.weibo => 微博:text:
+ * social.facebook => Facebook:text:https://facebook.com
+ * social.twitter => Twitter:text:https://x.com
+ * social.linkedin => LinkedIn:text:https://linkedin.com
+ *
+ * group:form => 表单设置
+ * form.title => 表单标题:text:Send A Support Message
+ * form.submit_text => 提交按钮文本:text:Send Message
+ * form.success_message => 成功提示:text:Thanks. Our team will reply soon.
+ *
+ * group:map => 地图设置
+ * map.embed_url => 地图嵌入地址:textarea:
+ * map.height => 地图高度:number:400|px
+ *
+ * @fields_end
+ */
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $component_config ?? $this->getData('component_config') ?? [];
+$config = array_merge(
+    is_array($styleSettings) ? $styleSettings : [],
+    is_array($componentConfig) ? $componentConfig : []
+);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showMap = $getConfig('display.show_map', 'yes') !== 'no';
+$showForm = $getConfig('display.show_form', 'yes') !== 'no';
+$showSocial = $getConfig('display.show_social', 'yes') !== 'no';
+$showInfo = $getConfig('display.show_info', 'yes') !== 'no';
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroBg = $getConfig('hero.bg_color', $colors['hero_bg'] ?? '#fff6ea');
+$heroGradientEnd = $getConfig('hero.bg_gradient_end', $colors['hero_bg_gradient_end'] ?? '#ffe2bb');
+$heroTitleColor = $getConfig('hero.title_color', $colors['heading_color'] ?? '#3d2217');
+
+$textPrimary = $colors['text_primary'] ?? '#332016';
+$textSecondary = $colors['text_secondary'] ?? '#6b4e41';
+$textMuted = $colors['text_muted'] ?? '#9a7d6d';
+$sectionBg1 = $colors['section_bg_1'] ?? '#fffdf8';
+$sectionBg2 = $colors['section_bg_2'] ?? '#eef9ff';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.82)';
+$borderLight = $colors['border_light'] ?? 'rgba(126,91,67,0.14)';
+$buttonBg = $colors['button_primary_bg'] ?? 'linear-gradient(100deg, #ff9f4d 0%, #ff4d4d 100%)';
+$buttonText = $colors['button_primary_text'] ?? '#2b140d';
+$primaryColor = $getConfig('color_scheme.primary', '#ff7a45');
+$secondaryColor = $getConfig('color_scheme.secondary', '#00cdb6');
+$surfaceColor = $getConfig('color_scheme.surface', 'rgba(255,255,255,0.82)');
+
+$page = $this->getData('page');
+$pageTitle = $page ? (string)($page->getData('title') ?: 'Contact Teen Patti Royal Prism') : 'Contact Teen Patti Royal Prism';
+
+$heroTitle = $getConfig('hero.title', $pageTitle);
+$heroSubtitle = $getConfig('hero.subtitle', 'Need support or business help? Reach us through the channels below.');
+
+$contactAddress = $getConfig('contact_info.address', 'Mumbai Operations Hub, Andheri East, Maharashtra, India');
+$contactPhone = $getConfig('contact_info.phone', '+91 98765 43210');
+$contactEmail = $getConfig('contact_info.email', 'support@teenpattiroyalprism.com');
+$contactWorkHours = $getConfig('contact_info.work_hours', '24/7 Player Support');
+$phoneHref = preg_replace('/\s+/', '', $contactPhone);
+
+$formTitle = $getConfig('form.title', 'Send A Support Message');
+$formSubmitText = $getConfig('form.submit_text', 'Send Message');
+$formSuccessMessage = $getConfig('form.success_message', 'Thanks. Our team will reply soon.');
+
+$mapEmbedUrl = trim((string)$getConfig('map.embed_url', ''));
+$mapHeight = max(260, (int)$getConfig('map.height', '400'));
+
+$socialLinks = [
+    ['name' => 'Facebook', 'url' => trim((string)$getConfig('social.facebook', '')), 'label' => 'FB'],
+    ['name' => 'Twitter', 'url' => trim((string)$getConfig('social.twitter', '')), 'label' => 'X'],
+    ['name' => 'LinkedIn', 'url' => trim((string)$getConfig('social.linkedin', '')), 'label' => 'IN'],
+    ['name' => 'WeChat', 'url' => trim((string)$getConfig('social.wechat', '')), 'label' => 'WC'],
+    ['name' => 'Weibo', 'url' => trim((string)$getConfig('social.weibo', '')), 'label' => 'WB'],
+];
+$socialLinks = array_values(array_filter($socialLinks, function ($item) {
+    return $item['url'] !== '';
+}));
+
+$contactCards = [
+    ['label' => __('Address'), 'value' => $contactAddress, 'href' => ''],
+    ['label' => __('Phone'), 'value' => $contactPhone, 'href' => $phoneHref !== '' ? 'tel:' . $phoneHref : ''],
+    ['label' => __('Email'), 'value' => $contactEmail, 'href' => $contactEmail !== '' ? 'mailto:' . $contactEmail : ''],
+    ['label' => __('Support Hours'), 'value' => $contactWorkHours, 'href' => ''],
+];
+$instanceId = $component_instance_id ?? 'contact-content-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>" class="prism-contact-page">
+    <div class="contact-hero">
+        <span class="hero-float hero-float-left" data-prism-parallax data-prism-speed="0.06" aria-hidden="true"></span>
+        <span class="hero-float hero-float-right" data-prism-parallax data-prism-speed="0.09" aria-hidden="true"></span>
+        <div class="section-inner hero-layout<?= $showInfo ? '' : ' no-panel' ?>">
+            <header class="hero-copy" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                <p class="section-tag"><?= __('Contact') ?></p>
+                <h1><?= htmlspecialchars($heroTitle) ?></h1>
+                <p class="hero-summary"><?= htmlspecialchars($heroSubtitle) ?></p>
+
+                <div class="hero-actions">
+                    <a href="tel:<?= htmlspecialchars($phoneHref) ?>">
+                        <strong><?= htmlspecialchars($contactPhone) ?></strong>
+                        <span><?= __('Call') ?></span>
+                    </a>
+                    <a href="mailto:<?= htmlspecialchars($contactEmail) ?>">
+                        <strong><?= htmlspecialchars($contactEmail) ?></strong>
+                        <span><?= __('Email') ?></span>
+                    </a>
+                    <div>
+                        <strong><?= htmlspecialchars($contactWorkHours) ?></strong>
+                        <span><?= __('Hours') ?></span>
+                    </div>
+                </div>
+
+                <?php if (!$showInfo && $showSocial && !empty($socialLinks)): ?>
+                    <div class="hero-social" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="120ms">
+                        <?php foreach ($socialLinks as $link): ?>
+                            <a href="<?= htmlspecialchars($link['url']) ?>" target="_blank" rel="noopener" aria-label="<?= htmlspecialchars($link['name']) ?>">
+                                <?= htmlspecialchars($link['label']) ?>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </header>
+
+            <?php if ($showInfo): ?>
+                <aside class="hero-panel" data-prism-reveal data-prism-effect="animate__fadeInLeft">
+                    <p class="panel-tag"><?= __('Support Desk') ?></p>
+                    <div class="panel-lines">
+                        <div>
+                            <span><?= __('Address') ?></span>
+                            <strong><?= nl2br(htmlspecialchars($contactAddress)) ?></strong>
+                        </div>
+                        <div>
+                            <span><?= __('Response') ?></span>
+                            <strong><?= htmlspecialchars($contactWorkHours) ?></strong>
+                        </div>
+                        <div>
+                            <span><?= __('Email') ?></span>
+                            <strong><?= htmlspecialchars($contactEmail) ?></strong>
+                        </div>
+                    </div>
+
+                    <?php if ($showSocial && !empty($socialLinks)): ?>
+                        <div class="panel-social">
+                            <?php foreach ($socialLinks as $link): ?>
+                                <a href="<?= htmlspecialchars($link['url']) ?>" target="_blank" rel="noopener" aria-label="<?= htmlspecialchars($link['name']) ?>">
+                                    <span><?= htmlspecialchars($link['label']) ?></span>
+                                    <small><?= htmlspecialchars($link['name']) ?></small>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </aside>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <section class="contact-stage">
+        <div class="section-inner stage-layout<?= !$showInfo ? ' no-info' : '' ?><?= !$showForm ? ' no-form' : '' ?>">
+            <?php if ($showInfo): ?>
+                <aside class="info-column" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                    <header class="column-head">
+                        <p class="section-tag"><?= __('Routes') ?></p>
+                        <h2><?= __('Support Desks') ?></h2>
+                    </header>
+
+                    <div class="desk-grid">
+                        <?php foreach ($contactCards as $index => $card): ?>
+                            <?php if (trim((string)$card['value']) === '') continue; ?>
+                            <article class="desk-card desk-card-<?= $index + 1 ?>" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="<?= min($index * 80, 260) ?>ms">
+                                <span class="desk-label"><?= htmlspecialchars((string)$card['label']) ?></span>
+                                <?php if ($card['href'] !== ''): ?>
+                                    <a href="<?= htmlspecialchars($card['href']) ?>"><?= nl2br(htmlspecialchars((string)$card['value'])) ?></a>
+                                <?php else: ?>
+                                    <p><?= nl2br(htmlspecialchars((string)$card['value'])) ?></p>
+                                <?php endif; ?>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </aside>
+            <?php endif; ?>
+
+            <?php if ($showForm): ?>
+                <section class="form-column" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="120ms">
+                    <header class="form-head">
+                        <p class="section-tag"><?= __('Message') ?></p>
+                        <h2><?= htmlspecialchars($formTitle) ?></h2>
+                    </header>
+
+                    <form class="contact-form" onsubmit="return false;" aria-label="contact form">
+                        <div class="form-row">
+                            <label>
+                                <span><?= __('Name') ?></span>
+                                <input type="text" name="name" placeholder="<?= htmlspecialchars((string)__('Your name')) ?>" required>
+                            </label>
+                            <label>
+                                <span><?= __('Email') ?></span>
+                                <input type="email" name="email" placeholder="<?= htmlspecialchars((string)__('you@example.com')) ?>" required>
+                            </label>
+                        </div>
+
+                        <label>
+                            <span><?= __('Topic') ?></span>
+                            <input type="text" name="topic" placeholder="<?= htmlspecialchars((string)__('How can we help?')) ?>">
+                        </label>
+
+                        <label>
+                            <span><?= __('Message') ?></span>
+                            <textarea name="message" rows="6" placeholder="<?= htmlspecialchars((string)__('Share your request')) ?>" required></textarea>
+                        </label>
+
+                        <div class="form-foot">
+                            <button type="submit" class="submit-btn"><?= htmlspecialchars($formSubmitText) ?></button>
+                            <p class="form-note"><?= htmlspecialchars($formSuccessMessage) ?></p>
+                        </div>
+                    </form>
+                </section>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <?php if ($showMap): ?>
+        <section class="map-stage" style="--map-height: <?= $mapHeight ?>px;">
+            <div class="section-inner map-shell">
+                <div class="map-copy" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                    <p class="section-tag"><?= __('Locate') ?></p>
+                    <h2><?= __('Visit The Support Hub') ?></h2>
+                    <?php if ($contactAddress !== ''): ?>
+                        <p><?= nl2br(htmlspecialchars($contactAddress)) ?></p>
+                    <?php endif; ?>
+                    <?php if ($contactWorkHours !== ''): ?>
+                        <span class="map-meta"><?= htmlspecialchars($contactWorkHours) ?></span>
+                    <?php endif; ?>
+                </div>
+
+                <div class="map-panel" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="100ms">
+                    <?php if ($mapEmbedUrl !== ''): ?>
+                        <iframe src="<?= htmlspecialchars($mapEmbedUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Map"></iframe>
+                    <?php else: ?>
+                        <div class="map-placeholder">
+                            <strong><?= __('Map ready for your embed link') ?></strong>
+                            <p><?= nl2br(htmlspecialchars($contactAddress)) ?></p>
+                        </div>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </section>
+    <?php endif; ?>
+</section>
+
+<style>
+#<?= $instanceId ?> {
+    --hero-bg: <?= htmlspecialchars($heroBg) ?>;
+    --hero-bg-end: <?= htmlspecialchars($heroGradientEnd) ?>;
+    --hero-title: <?= htmlspecialchars($heroTitleColor) ?>;
+    --text-primary: <?= htmlspecialchars($textPrimary) ?>;
+    --text-secondary: <?= htmlspecialchars($textSecondary) ?>;
+    --text-muted: <?= htmlspecialchars($textMuted) ?>;
+    --section-bg-1: <?= htmlspecialchars($sectionBg1) ?>;
+    --section-bg-2: <?= htmlspecialchars($sectionBg2) ?>;
+    --card-bg: <?= htmlspecialchars($cardBg) ?>;
+    --surface: <?= htmlspecialchars($surfaceColor) ?>;
+    --border-light: <?= htmlspecialchars($borderLight) ?>;
+    --button-bg: <?= htmlspecialchars($buttonBg) ?>;
+    --button-text: <?= htmlspecialchars($buttonText) ?>;
+    --primary: <?= htmlspecialchars($primaryColor) ?>;
+    --secondary: <?= htmlspecialchars($secondaryColor) ?>;
+    color: var(--text-primary);
+}
+
+#<?= $instanceId ?> .section-inner {
+    width: min(1180px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+#<?= $instanceId ?> .section-tag,
+#<?= $instanceId ?> .panel-tag {
+    margin: 0;
+    display: inline-flex;
+    width: fit-content;
+    padding: 0.34rem 0.72rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 205, 182, 0.28);
+    background: rgba(0, 205, 182, 0.1);
+    color: #0e9f8d;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+#<?= $instanceId ?> h1,
+#<?= $instanceId ?> h2,
+#<?= $instanceId ?> h3 {
+    margin: 0;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    letter-spacing: -0.04em;
+}
+
+#<?= $instanceId ?> .contact-hero {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.6rem, 7vw, 6rem) 0 clamp(2.6rem, 5vw, 3.8rem);
+    background:
+        linear-gradient(150deg, rgba(255, 255, 255, 0.62), rgba(255,255,255,0) 34%),
+        linear-gradient(135deg, var(--hero-bg) 0%, var(--hero-bg-end) 100%);
+}
+
+#<?= $instanceId ?> .hero-float {
+    position: absolute;
+    border-radius: 999px;
+    pointer-events: none;
+}
+
+#<?= $instanceId ?> .hero-float-left {
+    top: -2rem;
+    left: -5rem;
+    width: clamp(11rem, 24vw, 17rem);
+    height: clamp(11rem, 24vw, 17rem);
+    background: radial-gradient(circle, rgba(0,205,182,0.2), rgba(0,205,182,0) 72%);
+}
+
+#<?= $instanceId ?> .hero-float-right {
+    right: -4rem;
+    bottom: -3rem;
+    width: clamp(12rem, 30vw, 20rem);
+    height: clamp(12rem, 30vw, 20rem);
+    background: radial-gradient(circle, rgba(255,122,69,0.2), rgba(255,122,69,0) 72%);
+}
+
+#<?= $instanceId ?> .hero-layout {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.06fr) minmax(290px, 0.94fr);
+    gap: 1rem;
+    align-items: end;
+}
+
+#<?= $instanceId ?> .hero-layout.no-panel {
+    grid-template-columns: 1fr;
+}
+
+#<?= $instanceId ?> .hero-copy {
+    display: grid;
+    gap: 1rem;
+    max-width: 760px;
+}
+
+#<?= $instanceId ?> .hero-copy h1 {
+    color: var(--hero-title);
+    font-size: clamp(2.5rem, 6vw, 4.4rem);
+    line-height: 0.96;
+}
+
+#<?= $instanceId ?> .hero-summary {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    line-height: 1.82;
+}
+
+#<?= $instanceId ?> .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+
+#<?= $instanceId ?> .hero-actions a,
+#<?= $instanceId ?> .hero-actions div {
+    display: grid;
+    gap: 0.3rem;
+    padding: 0.9rem 1rem;
+    border-radius: 22px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,248,239,0.82));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    text-decoration: none;
+    box-shadow: 0 16px 28px rgba(215, 186, 160, 0.14);
+}
+
+#<?= $instanceId ?> .hero-actions strong {
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    line-height: 1.45;
+    word-break: break-word;
+}
+
+#<?= $instanceId ?> .hero-actions span {
+    color: #0e9f8d;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .hero-social {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+}
+
+#<?= $instanceId ?> .hero-social a {
+    width: 2.7rem;
+    height: 2.7rem;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.84);
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    color: var(--text-primary);
+    text-decoration: none;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .hero-panel {
+    display: grid;
+    gap: 1rem;
+    padding: 1.15rem;
+    border-radius: 30px;
+    background:
+        radial-gradient(240px 120px at 100% 0%, rgba(255, 122, 69, 0.16), rgba(255, 122, 69, 0) 70%),
+        linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,250,244,0.86));
+    border: 1px solid rgba(255,255,255,0.58);
+    box-shadow: 0 24px 42px rgba(230, 172, 120, 0.18);
+    backdrop-filter: blur(16px);
+}
+
+#<?= $instanceId ?> .panel-lines {
+    display: grid;
+    gap: 0.8rem;
+}
+
+#<?= $instanceId ?> .panel-lines div {
+    display: grid;
+    gap: 0.28rem;
+    padding: 0.9rem 1rem;
+    border-radius: 22px;
+    border: 1px solid var(--border-light);
+    background: rgba(255,255,255,0.72);
+}
+
+#<?= $instanceId ?> .panel-lines span {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .panel-lines strong {
+    color: var(--text-primary);
+    font-size: 0.98rem;
+    line-height: 1.62;
+}
+
+#<?= $instanceId ?> .panel-social {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.65rem;
+}
+
+#<?= $instanceId ?> .panel-social a {
+    display: grid;
+    gap: 0.18rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: 18px;
+    text-decoration: none;
+    border: 1px solid var(--border-light);
+    background: rgba(239,255,251,0.8);
+}
+
+#<?= $instanceId ?> .panel-social span {
+    color: var(--text-primary);
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .panel-social small {
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+#<?= $instanceId ?> .contact-stage {
+    background:
+        radial-gradient(680px 240px at 0% 0%, rgba(255,122,69,0.12), rgba(255,122,69,0) 72%),
+        var(--section-bg-1);
+    padding: clamp(3rem, 6vw, 4.5rem) 0;
+}
+
+#<?= $instanceId ?> .stage-layout {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.86fr) minmax(0, 1.14fr);
+    gap: 1rem;
+}
+
+#<?= $instanceId ?> .stage-layout.no-info {
+    grid-template-columns: 1fr;
+}
+
+#<?= $instanceId ?> .stage-layout.no-form {
+    grid-template-columns: 1fr;
+}
+
+#<?= $instanceId ?> .info-column,
+#<?= $instanceId ?> .form-column {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+#<?= $instanceId ?> .column-head,
+#<?= $instanceId ?> .form-head {
+    display: grid;
+    gap: 0.7rem;
+}
+
+#<?= $instanceId ?> .column-head h2,
+#<?= $instanceId ?> .form-head h2,
+#<?= $instanceId ?> .map-copy h2 {
+    font-size: clamp(1.75rem, 4vw, 2.7rem);
+    color: var(--hero-title);
+    line-height: 1.02;
+}
+
+#<?= $instanceId ?> .desk-grid {
+    display: grid;
+    gap: 0.8rem;
+}
+
+#<?= $instanceId ?> .desk-card {
+    display: grid;
+    gap: 0.42rem;
+    padding: 1rem 1rem 1.05rem;
+    border-radius: 24px;
+    border: 1px solid var(--border-light);
+    box-shadow: 0 18px 30px rgba(215, 186, 160, 0.14);
+}
+
+#<?= $instanceId ?> .desk-card-1 {
+    background: linear-gradient(180deg, rgba(255,249,236,0.96), rgba(255,236,213,0.88));
+}
+
+#<?= $instanceId ?> .desk-card-2 {
+    background: linear-gradient(180deg, rgba(239,255,251,0.96), rgba(224,251,246,0.88));
+}
+
+#<?= $instanceId ?> .desk-card-3 {
+    background: linear-gradient(180deg, rgba(255,247,243,0.96), rgba(255,229,216,0.88));
+}
+
+#<?= $instanceId ?> .desk-card-4 {
+    background: linear-gradient(180deg, rgba(246,249,255,0.96), rgba(233,241,255,0.88));
+}
+
+#<?= $instanceId ?> .desk-label {
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $instanceId ?> .desk-card p,
+#<?= $instanceId ?> .desk-card a {
+    margin: 0;
+    color: var(--text-primary);
+    line-height: 1.76;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+#<?= $instanceId ?> .form-column {
+    padding: clamp(1rem, 3vw, 1.4rem);
+    border-radius: 32px;
+    background:
+        radial-gradient(320px 130px at 100% 0%, rgba(0,205,182,0.16), rgba(0,205,182,0) 72%),
+        linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255,246,238,0.9));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 24px 42px rgba(215, 186, 160, 0.18);
+}
+
+#<?= $instanceId ?> .contact-form {
+    display: grid;
+    gap: 0.9rem;
+}
+
+#<?= $instanceId ?> .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+}
+
+#<?= $instanceId ?> .contact-form label {
+    display: grid;
+    gap: 0.45rem;
+}
+
+#<?= $instanceId ?> .contact-form span {
+    color: var(--text-primary);
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+#<?= $instanceId ?> .contact-form input,
+#<?= $instanceId ?> .contact-form textarea {
+    width: 100%;
+    border: 1px solid rgba(126, 91, 67, 0.16);
+    border-radius: 18px;
+    background: rgba(255,255,255,0.9);
+    color: var(--text-primary);
+    font: inherit;
+    line-height: 1.6;
+    padding: 0.85rem 0.95rem;
+    box-sizing: border-box;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+#<?= $instanceId ?> .contact-form input:focus,
+#<?= $instanceId ?> .contact-form textarea:focus {
+    border-color: rgba(0,205,182,0.46);
+    box-shadow: 0 0 0 4px rgba(0,205,182,0.12);
+}
+
+#<?= $instanceId ?> .form-foot {
+    display: grid;
+    gap: 0.75rem;
+}
+
+#<?= $instanceId ?> .submit-btn {
+    border: 0;
+    border-radius: 999px;
+    min-height: 3.2rem;
+    padding: 0.8rem 1.3rem;
+    background: var(--button-bg);
+    color: var(--button-text);
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+    box-shadow: 0 18px 30px rgba(255, 122, 69, 0.2);
+}
+
+#<?= $instanceId ?> .form-note {
+    margin: 0;
+    color: var(--text-muted);
+    line-height: 1.72;
+}
+
+#<?= $instanceId ?> .map-stage {
+    background:
+        radial-gradient(720px 220px at 100% 100%, rgba(0,205,182,0.14), rgba(0,205,182,0) 72%),
+        var(--section-bg-2);
+    padding: 0 0 clamp(3rem, 6vw, 4.5rem);
+}
+
+#<?= $instanceId ?> .map-shell {
+    display: grid;
+    grid-template-columns: minmax(250px, 0.78fr) minmax(0, 1.22fr);
+    gap: 1rem;
+    align-items: stretch;
+}
+
+#<?= $instanceId ?> .map-copy {
+    display: grid;
+    gap: 0.8rem;
+    padding: clamp(1rem, 3vw, 1.35rem);
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,251,244,0.88));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 18px 30px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $instanceId ?> .map-copy p {
+    margin: 0;
+    color: var(--text-secondary);
+    line-height: 1.82;
+}
+
+#<?= $instanceId ?> .map-meta {
+    color: #0e9f8d;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .map-panel {
+    min-height: var(--map-height);
+    border-radius: 34px;
+    overflow: hidden;
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,255,255,0.7));
+    box-shadow: 0 22px 36px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $instanceId ?> .map-panel iframe,
+#<?= $instanceId ?> .map-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: var(--map-height);
+    border: 0;
+}
+
+#<?= $instanceId ?> .map-placeholder {
+    display: grid;
+    place-items: center;
+    padding: 1.4rem;
+    text-align: center;
+    background:
+        linear-gradient(140deg, rgba(255,247,235,0.95), rgba(238,255,251,0.85)),
+        linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.72));
+}
+
+#<?= $instanceId ?> .map-placeholder strong {
+    color: var(--hero-title);
+    font-size: 1.15rem;
+}
+
+#<?= $instanceId ?> .map-placeholder p {
+    margin: 0.6rem 0 0;
+    color: var(--text-secondary);
+    line-height: 1.72;
+}
+
+@media (max-width: 1024px) {
+    #<?= $instanceId ?> .hero-layout,
+    #<?= $instanceId ?> .stage-layout,
+    #<?= $instanceId ?> .map-shell {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $instanceId ?> .hero-actions,
+    #<?= $instanceId ?> .form-row,
+    #<?= $instanceId ?> .panel-social {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $instanceId ?> .hero-actions a,
+    #<?= $instanceId ?> .hero-actions div {
+        padding: 0.85rem 0.9rem;
+    }
+}
+</style>

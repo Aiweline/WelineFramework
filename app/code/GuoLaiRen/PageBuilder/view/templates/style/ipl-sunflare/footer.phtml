@@ -1,0 +1,70 @@
+<?php
+/**
+ * IPL Sunflare - Footer
+ *
+ * @fields_start
+ *
+ * group:style => 样式配置
+ * style.background_color => 背景颜色:color:#271912
+ * style.text_color => 文字颜色:color:#d1a98d
+ * style.link_color => 链接颜色:color:#dcb993
+ * style.link_hover_color => 链接悬停颜色:color:#ffe6d1
+ * style.border_top => 显示顶部边框:select:yes|yes,no
+ * style.border_color => 边框颜色:color:rgba(180,105,55,0.2)
+ *
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1260
+ * layout.padding_horizontal => 左右内边距:responsive:10/10|px[MD]
+ * layout.padding_vertical => 上下内边距:responsive:16/24|px[MD]
+ *
+ * group:footer => 页脚品牌设置
+ * footer.logo_text => 品牌名称:text:IPL Sunflare
+ * footer.logo_url => 品牌图标:textarea:|默认使用本地ipl-logo-icon.svg
+ * footer.tagline => 品牌副文案:text:IPL pace. Sunflare energy.
+ *
+ * group:content => 内容配置
+ * content.footer_links => 页脚链接:textarea:Home=>/\r\nMatch Modes=>#modes\r\nAdvantages=>#advantages\r\nReviews=>#reviews\r\nFAQ=>#faq|配置格式：名字=>url，一行一个
+ * content.copyright_text => 版权信息:text:© 2026 IPL Sunflare. All rights reserved.
+ * content.disclaimer_text => 风险提示:textarea:18+ Only. IPL Sunflare is for adult users only. Play responsibly and follow your local gaming regulations.
+ * content.use_custom_links => 使用自定义链接组:select:yes|yes,no
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
+ *
+ * group:typography => 排版设置
+ * typography.font_size => 字体大小:responsive:12/14|px[MD]
+ * typography.line_height => 行高:number:1.65
+ *
+ * @fields_end
+ */
+?>
+<?php
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+
+$templateCode = $page ? $page->getData('style') : 'ipl-sunflare';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'ipl-sunflare';
+}
+
+$this->assign('template_code', $templateCode);
+$this->assign('page', $page);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+$this->assign('component_config', is_array($componentConfig) ? $componentConfig : []);
+$this->assign('__pagebuilder_shell_managed', true);
+?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/ipl-sunflare/components/footer/links.phtml') ?>
+</body>
+</html>

@@ -1,0 +1,703 @@
+<?php
+/**
+ * @component_start
+ * code: testimonials
+ * name: 用户评价
+ * name_en: Testimonials
+ * description: 用户评价展示
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_rating => 显示评分:select:yes|yes,no
+ * display.show_avatar => 显示头像:select:yes|yes,no
+ * display.show_avg => 显示平均评分:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#0e161b
+ * style.accent_color => 强调色:color:#08e7d8
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.08)
+ * style.card_border_color => 卡片边框色:color:rgba(255,255,255,0.12)
+ * style.text_color => 正文颜色:color:#fff8f2
+ * style.section_padding => 区域内边距(PC端):number:88|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:52|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:What Players Notice First
+ * texts.testimonial_1_name => 评价1姓名:text:Aarav Sinha
+ * texts.testimonial_1_tag => 评价1标签:text:Live Baccarat
+ * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1内容:textarea:I can spot banker or player choices quickly, and the room details stay readable even during a fast session.
+ * texts.testimonial_2_name => 评价2姓名:text:Meera Joshi
+ * texts.testimonial_2_tag => 评价2标签:text:No Commission Room
+ * texts.testimonial_2_rating => 评价2评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2内容:textarea:The table descriptions tell me exactly where to sit without opening extra screens or guessing the room pace.
+ * texts.testimonial_3_name => 评价3姓名:text:Rohan Verma
+ * texts.testimonial_3_tag => 评价3标签:text:Classic Baccarat
+ * texts.testimonial_3_rating => 评价3评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_3_content => 评价3内容:textarea:The page feels bright, but the real win is how quickly I can compare classic and live table options.
+ * texts.testimonial_4_name => 评价4姓名:text:Ananya Pillai
+ * texts.testimonial_4_tag => 评价4标签:text:Evening Session
+ * texts.testimonial_4_rating => 评价4评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_4_content => 评价4内容:textarea:The highlighted room and quick entry button help me move from the landing page to a table in seconds.
+ * texts.testimonial_5_name => 评价5姓名:text:Kabir Rao
+ * texts.testimonial_5_tag => 评价5标签:text:Mobile Player
+ * texts.testimonial_5_rating => 评价5评分:text:⭐⭐⭐⭐☆
+ * texts.testimonial_5_content => 评价5内容:textarea:Even on a small screen the buttons, ratings, and room links stay clear enough to use with one hand.
+ *
+ * group:avatars => 头像配置
+ * avatars.avatar_1 => 评价1头像:textarea:
+ * avatars.avatar_2 => 评价2头像:textarea:
+ * avatars.avatar_3 => 评价3头像:textarea:
+ * avatars.avatar_4 => 评价4头像:textarea:
+ * avatars.avatar_5 => 评价5头像:textarea:
+ *
+ * @fields_end
+ */
+
+$componentId = 'bwf-testimonials-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('testimonials.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showRating = $getConfig('display.show_rating', 'yes') !== 'no';
+$showAvatar = $getConfig('display.show_avatar', 'yes') !== 'no';
+$showAvg = $getConfig('display.show_avg', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', '#0e161b');
+$accentColor = $getConfig('style.accent_color', '#08e7d8');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.08)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(255,255,255,0.12)');
+$textColor = $getConfig('style.text_color', '#fff8f2');
+$sectionPadding = (int)$getConfig('style.section_padding', '88');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '52');
+
+$title = $getConfig('texts.title', 'What Players Notice First');
+
+$parseRating = function($raw) {
+    $raw = trim((string)$raw);
+    if ($raw === '') {
+        return 0;
+    }
+    if (is_numeric($raw)) {
+        return (int)$raw;
+    }
+    preg_match_all('/[★⭐]/u', $raw, $matches);
+    return count($matches[0] ?? []);
+};
+
+$defaultTestimonials = [
+    [
+        'name' => 'Aarav Sinha',
+        'tag' => 'Live Baccarat',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'I can spot banker or player choices quickly, and the room details stay readable even during a fast session.',
+    ],
+    [
+        'name' => 'Meera Joshi',
+        'tag' => 'No Commission Room',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'The table descriptions tell me exactly where to sit without opening extra screens or guessing the room pace.',
+    ],
+    [
+        'name' => 'Rohan Verma',
+        'tag' => 'Classic Baccarat',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'The page feels bright, but the real win is how quickly I can compare classic and live table options.',
+    ],
+    [
+        'name' => 'Ananya Pillai',
+        'tag' => 'Evening Session',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'The highlighted room and quick entry button help me move from the landing page to a table in seconds.',
+    ],
+    [
+        'name' => 'Kabir Rao',
+        'tag' => 'Mobile Player',
+        'rating' => '⭐⭐⭐⭐☆',
+        'text' => 'Even on a small screen the buttons, ratings, and room links stay clear enough to use with one hand.',
+    ],
+];
+
+$testimonials = [];
+for ($i = 1; $i <= 5; $i++) {
+    $defaults = $defaultTestimonials[$i - 1] ?? ['name' => '', 'tag' => '', 'rating' => '⭐⭐⭐⭐⭐', 'text' => ''];
+    $name = trim((string)$getConfig("texts.testimonial_{$i}_name", $defaults['name']));
+    $tag = trim((string)$getConfig("texts.testimonial_{$i}_tag", $defaults['tag']));
+    $ratingText = $getConfig("texts.testimonial_{$i}_rating", $defaults['rating']);
+    $content = trim((string)$getConfig("texts.testimonial_{$i}_content", $defaults['text']));
+    $avatar = trim((string)$getConfig("avatars.avatar_{$i}", ''));
+
+    if ($name !== '' && $content !== '') {
+        $ratingValue = max(0, min(5, $parseRating($ratingText)));
+        $ratingDisplay = is_numeric($ratingText) ? str_repeat('★', (int)$ratingText) : (string)$ratingText;
+        $testimonials[] = [
+            'name' => $name,
+            'tag' => $tag,
+            'rating' => $ratingValue,
+            'rating_text' => trim($ratingDisplay) !== '' ? $ratingDisplay : str_repeat('★', max(1, $ratingValue)),
+            'text' => $content,
+            'avatar' => $avatar,
+        ];
+    }
+}
+
+if (empty($testimonials)) {
+    foreach ($defaultTestimonials as $fallback) {
+        $testimonials[] = [
+            'name' => $fallback['name'],
+            'tag' => $fallback['tag'],
+            'rating' => $parseRating($fallback['rating']),
+            'rating_text' => $fallback['rating'],
+            'text' => $fallback['text'],
+            'avatar' => '',
+        ];
+    }
+}
+
+$totalRating = array_sum(array_column($testimonials, 'rating'));
+$avgRating = count($testimonials) ? $totalRating / count($testimonials) : 0;
+$avgRatingLabel = number_format($avgRating, 1);
+
+$buildInitials = function($name) {
+    $parts = preg_split('/\s+/', trim((string)$name));
+    $first = $parts[0] ?? '';
+    $second = $parts[1] ?? $first;
+    return strtoupper(substr($first, 0, 1) . substr($second, 0, 1));
+};
+?>
+
+<section id="<?= $componentId ?>" class="bwf-testimonials" aria-labelledby="<?= $componentId ?>-title">
+    <div class="voices-shell">
+        <div class="voices-top">
+            <?php if ($showTitle): ?>
+                <header class="voices-header" id="reviews">
+                    <div class="voices-title-wrap">
+                        <span class="voices-title-mark" aria-hidden="true">
+                            <span class="signal-bar signal-low"></span>
+                            <span class="signal-bar signal-mid"></span>
+                            <span class="signal-bar signal-high"></span>
+                            <span class="signal-dot"></span>
+                        </span>
+                        <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                    </div>
+                </header>
+            <?php endif; ?>
+
+            <div class="voices-tools<?= !$showAvg ? ' no-summary' : '' ?>">
+                <?php if ($showAvg): ?>
+                    <div class="voices-summary">
+                        <?php if ($showRating): ?>
+                            <span class="summary-stars"><?= htmlspecialchars(str_repeat('★', max(1, (int)round($avgRating)))) ?></span>
+                        <?php endif; ?>
+                        <strong><?= htmlspecialchars($avgRatingLabel) ?></strong>
+                        <small><?= (int) count($testimonials) ?></small>
+                    </div>
+                <?php endif; ?>
+
+                <div class="voices-controls">
+                    <button type="button" class="voice-arrow" data-voice-prev aria-label="Previous reviews"><span>‹</span></button>
+                    <button type="button" class="voice-arrow" data-voice-next aria-label="Next reviews"><span>›</span></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="voices-rail" data-voices-rail>
+            <?php foreach ($testimonials as $index => $item): ?>
+                <article class="voice-card voice-card-<?= (int)(($index % 4) + 1) ?>">
+                    <div class="voice-card-inner">
+                        <div class="voice-top-row">
+                            <?php if ($showAvatar): ?>
+                                <div class="voice-avatar">
+                                    <?php if (!empty($item['avatar'])): ?>
+                                        <img src="<?= htmlspecialchars($item['avatar']) ?>" alt="<?= htmlspecialchars($item['name']) ?>">
+                                    <?php else: ?>
+                                        <?= htmlspecialchars($buildInitials($item['name'])) ?>
+                                    <?php endif; ?>
+                                </div>
+                            <?php endif; ?>
+
+                            <div class="voice-meta">
+                                <strong><?= htmlspecialchars($item['name']) ?></strong>
+                                <?php if ($item['tag'] !== ''): ?>
+                                    <span><?= htmlspecialchars($item['tag']) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <?php if ($showRating): ?>
+                            <div class="voice-rating"><?= htmlspecialchars($item['rating_text']) ?></div>
+                        <?php endif; ?>
+
+                        <p><?= htmlspecialchars($item['text']) ?></p>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --voices-bg: <?= htmlspecialchars($bgColor) ?>;
+    --voices-accent: <?= htmlspecialchars($accentColor) ?>;
+    --voices-card-bg: <?= htmlspecialchars($cardBgColor) ?>;
+    --voices-card-border: <?= htmlspecialchars($cardBorderColor) ?>;
+    --voices-text: <?= htmlspecialchars($textColor) ?>;
+    position: relative;
+    padding: <?= $sectionPadding ?>px 0;
+    overflow: hidden;
+    color: var(--voices-text);
+    background:
+        radial-gradient(760px 340px at 0% 0%, rgba(255,95,58,0.16), transparent 64%),
+        radial-gradient(740px 340px at 100% 18%, rgba(8,231,216,0.14), transparent 60%),
+        radial-gradient(540px 240px at 50% 100%, rgba(199,255,65,0.12), transparent 60%),
+        linear-gradient(180deg, #0f1318 0%, var(--voices-bg) 46%, #121019 100%);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 36px 36px;
+    opacity: 0.16;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .voices-shell {
+    width: min(1260px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .voices-top {
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 1.2rem;
+}
+
+#<?= $componentId ?> .voices-header {
+    max-width: 38rem;
+}
+
+#<?= $componentId ?> .voices-title-wrap {
+    display: grid;
+    gap: 0.9rem;
+}
+
+#<?= $componentId ?> .voices-title-mark {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 0.34rem;
+    width: fit-content;
+    padding: 0.12rem 0.16rem;
+}
+
+#<?= $componentId ?> .voices-title-mark .signal-bar,
+#<?= $componentId ?> .voices-title-mark .signal-dot {
+    display: inline-flex;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .voices-title-mark .signal-bar {
+    width: 10px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(8,231,216,0.82) 100%);
+    box-shadow: 0 0 16px rgba(8,231,216,0.16);
+    animation: <?= $componentId ?>-signal-pulse 3.8s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .voices-title-mark .signal-low {
+    height: 12px;
+    animation-delay: -0.1s;
+}
+
+#<?= $componentId ?> .voices-title-mark .signal-mid {
+    height: 18px;
+    animation-delay: -0.5s;
+}
+
+#<?= $componentId ?> .voices-title-mark .signal-high {
+    height: 24px;
+    animation-delay: -0.9s;
+}
+
+#<?= $componentId ?> .voices-title-mark .signal-dot {
+    width: 8px;
+    height: 8px;
+    margin-left: 0.24rem;
+    margin-bottom: 0.1rem;
+    background: linear-gradient(135deg, #ffb347 0%, #ff5f3a 100%);
+    box-shadow: 0 0 14px rgba(255,95,58,0.22);
+}
+
+#<?= $componentId ?> .voices-header h2 {
+    position: relative;
+    width: fit-content;
+    color: #fff8f2;
+    font-family: 'Outfit', 'Manrope', sans-serif;
+    font-size: clamp(2.2rem, 4.8vw, 4.2rem);
+    line-height: 0.96;
+    letter-spacing: -0.06em;
+}
+
+#<?= $componentId ?> .voices-header h2::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -0.38rem;
+    width: clamp(7.4rem, 22vw, 11rem);
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.94) 0%, rgba(8,231,216,0.72) 58%, rgba(255,255,255,0) 100%);
+    box-shadow: 0 0 16px rgba(8,231,216,0.14);
+}
+
+#<?= $componentId ?> .voices-tools {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .voices-tools.no-summary {
+    margin-left: auto;
+}
+
+#<?= $componentId ?> .voices-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-height: 48px;
+    padding: 0.56rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(12px);
+}
+
+#<?= $componentId ?> .summary-stars {
+    color: #ffe18b;
+    font-size: 0.9rem;
+    letter-spacing: 0.12em;
+}
+
+#<?= $componentId ?> .voices-summary strong {
+    font-size: 1.16rem;
+    color: #fff8f2;
+}
+
+#<?= $componentId ?> .voices-summary small {
+    color: rgba(255,248,242,0.7);
+    font-size: 0.82rem;
+}
+
+#<?= $componentId ?> .voices-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.62rem;
+}
+
+#<?= $componentId ?> .voice-arrow {
+    width: 46px;
+    height: 46px;
+    border: 0;
+    border-radius: 18px;
+    cursor: pointer;
+    color: #fff8f2;
+    background: rgba(255,255,255,0.08);
+    backdrop-filter: blur(12px);
+    transition: transform 0.22s ease, background 0.22s ease;
+}
+
+#<?= $componentId ?> .voice-arrow:hover {
+    transform: translateY(-2px);
+    background: rgba(255,255,255,0.14);
+}
+
+#<?= $componentId ?> .voice-arrow span {
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+#<?= $componentId ?> .voices-rail {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    margin-top: 2rem;
+    padding: 0.25rem 20vw 0.4rem 0;
+}
+
+#<?= $componentId ?> .voices-rail::-webkit-scrollbar {
+    display: none;
+}
+
+#<?= $componentId ?> .voice-card {
+    flex: 0 0 clamp(272px, 30vw, 360px);
+    scroll-snap-align: start;
+}
+
+#<?= $componentId ?> .voice-card-inner {
+    position: relative;
+    min-height: 320px;
+    height: 100%;
+    padding: 1.3rem;
+    border-radius: 34px;
+    border: 1px solid var(--voices-card-border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.14) 0%, var(--voices-card-bg) 100%);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 24px 44px rgba(0, 0, 0, 0.16);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .voice-card-inner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(145deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 46%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .voice-card-2 .voice-card-inner,
+#<?= $componentId ?> .voice-card-4 .voice-card-inner {
+    border-radius: 72px 32px 32px 32px;
+}
+
+#<?= $componentId ?> .voice-card-1 .voice-card-inner::after,
+#<?= $componentId ?> .voice-card-3 .voice-card-inner::after {
+    content: '';
+    position: absolute;
+    right: -38px;
+    top: -38px;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,95,58,0.24) 0%, rgba(255,95,58,0.02) 72%, transparent 80%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .voice-card-2 .voice-card-inner::after,
+#<?= $componentId ?> .voice-card-4 .voice-card-inner::after {
+    content: '';
+    position: absolute;
+    left: -42px;
+    bottom: -42px;
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(8,231,216,0.22) 0%, rgba(8,231,216,0.02) 72%, transparent 80%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .voice-top-row {
+    display: flex;
+    align-items: center;
+    gap: 0.88rem;
+}
+
+#<?= $componentId ?> .voice-avatar {
+    width: 56px;
+    height: 56px;
+    flex-shrink: 0;
+    border-radius: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(255,95,58,0.16) 0%, rgba(199,255,65,0.16) 48%, rgba(8,231,216,0.16) 100%);
+    color: #fff8f2;
+    font-size: 1rem;
+    font-weight: 900;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .voice-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .voice-meta {
+    min-width: 0;
+}
+
+#<?= $componentId ?> .voice-meta strong {
+    display: block;
+    color: #fff8f2;
+    font-size: 1.04rem;
+    line-height: 1.2;
+}
+
+#<?= $componentId ?> .voice-meta span {
+    display: block;
+    margin-top: 0.28rem;
+    color: rgba(255,248,242,0.7);
+    font-size: 0.82rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#<?= $componentId ?> .voice-rating {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 1rem;
+    min-height: 34px;
+    padding: 0.42rem 0.76rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    color: #ffe18b;
+    font-size: 0.84rem;
+    letter-spacing: 0.08em;
+}
+
+#<?= $componentId ?> .voice-card p {
+    margin-top: 1rem;
+    color: rgba(255,248,242,0.86);
+    font-size: 0.98rem;
+    line-height: 1.9;
+}
+
+@keyframes <?= $componentId ?>-signal-pulse {
+    0%, 100% {
+        transform: translateY(0) scaleY(0.92);
+        opacity: 0.7;
+    }
+    45% {
+        transform: translateY(-1px) scaleY(1.08);
+        opacity: 1;
+    }
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .voices-top {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    #<?= $componentId ?> .voices-tools,
+    #<?= $componentId ?> .voices-tools.no-summary {
+        margin-left: 0;
+    }
+
+    #<?= $componentId ?> .voices-title-wrap {
+        gap: 0.76rem;
+    }
+
+    #<?= $componentId ?> .voices-rail {
+        padding-right: 18vw;
+    }
+
+    #<?= $componentId ?> .voice-card {
+        flex-basis: clamp(272px, 44vw, 340px);
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding: <?= $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .voices-shell {
+        width: min(100% - 1rem, 100%);
+    }
+
+    #<?= $componentId ?> .voices-tools {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    #<?= $componentId ?> .voices-title-mark .signal-bar {
+        width: 9px;
+    }
+
+    #<?= $componentId ?> .voices-summary {
+        padding: 0.52rem 0.78rem;
+        gap: 0.46rem;
+    }
+
+    #<?= $componentId ?> .voices-summary strong,
+    #<?= $componentId ?> .voices-summary small,
+    #<?= $componentId ?> .summary-stars {
+        display: inline-flex;
+        align-items: center;
+    }
+
+    #<?= $componentId ?> .voices-summary strong {
+        font-size: 1.02rem;
+    }
+
+    #<?= $componentId ?> .voices-summary small {
+        font-size: 0.78rem;
+    }
+
+    #<?= $componentId ?> .voices-rail {
+        gap: 0.82rem;
+        padding-right: 24vw;
+    }
+
+    #<?= $componentId ?> .voice-card {
+        flex: 0 0 min(84vw, 300px);
+    }
+
+    #<?= $componentId ?> .voice-card-inner {
+        min-height: 292px;
+        padding: 1.08rem;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const section = document.getElementById('<?= $componentId ?>');
+    if (!section) {
+        return;
+    }
+
+    const rail = section.querySelector('[data-voices-rail]');
+    const prev = section.querySelector('[data-voice-prev]');
+    const next = section.querySelector('[data-voice-next]');
+
+    if (!rail || !prev || !next) {
+        return;
+    }
+
+    const getStep = () => {
+        const card = rail.querySelector('.voice-card');
+        if (!card) {
+            return rail.clientWidth * 0.8;
+        }
+        const styles = window.getComputedStyle(rail);
+        const gap = parseFloat(styles.columnGap || styles.gap || '0') || 0;
+        return card.getBoundingClientRect().width + gap;
+    };
+
+    prev.addEventListener('click', () => {
+        rail.scrollBy({ left: -getStep(), behavior: 'smooth' });
+    });
+
+    next.addEventListener('click', () => {
+        rail.scrollBy({ left: getStep(), behavior: 'smooth' });
+    });
+})();
+</script>

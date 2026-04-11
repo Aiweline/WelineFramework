@@ -1,0 +1,868 @@
+<?php
+/**
+ * Roulette Supernova - Navigation
+ *
+ * @component_start
+ * code: header-nav
+ * name: 导航栏
+ * name_en: Navigation Bar
+ * description: Roulette Supernova compact navigation with a lighter desktop height and a layered mobile drawer.
+ * category: header
+ * region: header
+ * @component_end
+ *
+ * @fields_start
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文字:text:Roulette Supernova
+ * logo.url => Logo图片URL:textarea:|留空使用默认图标
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 导航背景色:color:#12121c
+ * navigation.text_color => 导航文字颜色:color:#f7f1e8
+ * navigation.link_color => 导航链接颜色:color:#f7f1e8
+ * navigation.link_hover_color => 链接悬停颜色:color:#dfff5a
+ * navigation.items => 导航项:textarea:Home=>/\r\nTables=>#tables\r\nEdge=>#advantages\r\nReviews=>#reviews\r\nFAQ=>#faq|格式：文本=>链接
+ * navigation.use_custom_links => 使用自定义导航链接:select:yes|yes,no
+ * navigation.use_subpages => 使用子页面作为导航:select:no|yes,no
+ * group:navigation_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * navigation.label_home_page => 首页菜单名:text:
+ * navigation.label_about_page => 关于我们菜单名:text:
+ * navigation.label_blog_list => 博客菜单名:text:
+ * navigation.label_contact_page => 联系我们菜单名:text:
+ * navigation.label_terms_of_service => 条款菜单名:text:
+ * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * group:download_button => 下载按钮
+ * download_button.display => 显示下载按钮:select:yes|yes,no
+ * download_button.text => 按钮文本:text:Spin Now
+ * download_button.bg_color => 按钮背景颜色:color:#ff5b45
+ * download_button.bg_hover_color => 按钮悬停背景色:color:#ffbf47
+ * download_button.text_color => 按钮文字颜色:color:#130d08
+ * download_button.url => 按钮链接:text:#download
+ * @fields_end
+ */
+
+$componentId = 'rsn-nav-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$metaTitleRaw = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'Roulette Supernova';
+$metaTitle = $sanitizeTitle($metaTitleRaw);
+if ($metaTitle === '') {
+    $metaTitle = 'Roulette Supernova';
+}
+$metaDescription = $page ? trim((string) ($page->getData('meta_description') ?: '')) : '';
+
+$navDisplay = $normalizeToggle($getConfigAny(['navigation.display', 'header.navigation.display'], 'yes')) !== 'no';
+if (!$navDisplay) {
+    return;
+}
+
+$logoDisplay = $normalizeToggle($getConfigAny(['logo.display', 'header.logo.display'], 'yes')) !== 'no';
+$logoText = $sanitizeTitle($getConfigAny(['logo.text', 'header.logo.text', 'app_info.app_name', 'texts.app_name'], 'Roulette Supernova'));
+if ($logoText === '') {
+    $logoText = 'Roulette Supernova';
+}
+$logoIconUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/roulette-supernova/asset/img/roulette-logo-icon.svg');
+$logoUrl = trim((string) $getConfigAny(['logo.url', 'header.logo.url'], ''));
+$logoUrl = $logoUrl !== '' ? $logoUrl : ($page && $page->getData('logo') ? (string) $page->getData('logo') : $logoIconUrl);
+
+$navBgColor = (string) $getConfigAny(['navigation.bg_color', 'header.navigation.bg_color'], $colors['nav_bg'] ?? '#12121c');
+$navTextColor = (string) $getConfigAny(['navigation.text_color', 'header.navigation.text_color'], $colors['nav_text'] ?? '#f7f1e8');
+$navLinkColor = (string) $getConfigAny(['navigation.link_color', 'header.navigation.link_color'], $colors['nav_link'] ?? '#f7f1e8');
+$navLinkHoverColor = (string) $getConfigAny(['navigation.link_hover_color', 'header.navigation.link_hover_color'], $colors['nav_link_hover'] ?? '#dfff5a');
+$ctaDisplay = $normalizeToggle($getConfigAny(['download_button.display', 'header.download_button.display'], 'yes')) !== 'no';
+$ctaText = trim((string) $getConfigAny(['download_button.text', 'header.download_button.text', 'navigation.cta_text'], 'Spin Now'));
+$ctaUrl = trim((string) $getConfigAny(['download_button.url', 'header.download_button.url', 'navigation.cta_url'], '#download'));
+$ctaHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string) $ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaHref, 'url');
+$ctaBgColor = (string) $getConfigAny(['download_button.bg_color', 'header.download_button.bg_color'], $colors['accent_primary'] ?? '#ff5b45');
+$ctaBgHoverColor = (string) $getConfigAny(['download_button.bg_hover_color', 'header.download_button.hover_bg_color'], $colors['accent_primary_dark'] ?? '#ffbf47');
+$ctaTextColor = (string) $getConfigAny(['download_button.text_color', 'header.download_button.text_color'], $colors['button_primary_text'] ?? '#130d08');
+
+$navItemsConfig = (string) $getConfigAny(['navigation.items', 'header.navigation.items'], "Home=>/\nTables=>#tables\nEdge=>#advantages\nReviews=>#reviews\nFAQ=>#faq");
+$useCustomLinksRaw = trim((string) $getConfigAny(['navigation.use_custom_links', 'header.navigation.use_custom_links'], ''));
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($getConfig('navigation.use_subpages', 'no'), 'no') !== 'yes';
+$navItems = [];
+
+if (!$useCustomLinks && $page) {
+    $navigationPages = method_exists($page, 'getHeaderNavigationPages')
+        ? $page->getHeaderNavigationPages(10)
+        : $page->getNavigationPages([], 10);
+
+    foreach ($navigationPages as $navPage) {
+        $title = trim((string) ($navPage['title'] ?? ''));
+        if ($title === '') {
+            continue;
+        }
+
+        $type = (string) ($navPage['type'] ?? '');
+        $configuredLabel = trim((string) $getConfigAny([
+            'navigation_labels.navigation.label_' . $type,
+            'navigation.label_' . $type,
+            'header.navigation.label_' . $type,
+        ], ''));
+
+        $navItems[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : $title,
+            'href' => (string) ($navPage['url'] ?? '#'),
+        ];
+    }
+}
+
+if (empty($navItems)) {
+    if (strpos($navItemsConfig, '\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\n', "\n", $navItemsConfig);
+    }
+
+    foreach (preg_split('/\r?\n/', $navItemsConfig) ?: [] as $line) {
+        $line = trim((string) $line);
+        if ($line === '' || strpos($line, '=>') === false) {
+            continue;
+        }
+
+        $parts = explode('=>', $line, 2);
+        $text = trim((string) ($parts[0] ?? ''));
+        $href = trim((string) ($parts[1] ?? ''));
+
+        if ($text === '') {
+            continue;
+        }
+
+        $navItems[] = [
+            'text' => $text,
+            'href' => $href !== '' ? $href : '#',
+        ];
+    }
+}
+
+if (empty($navItems)) {
+    $navItems = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'Tables', 'href' => '#tables'],
+        ['text' => 'Reviews', 'href' => '#reviews'],
+        ['text' => 'FAQ', 'href' => '#faq'],
+    ];
+}
+?>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+<nav id="<?= $componentId ?>" class="rsn-nav" aria-label="Main navigation" data-mobile-open="false">
+    <div class="nav-shell">
+        <?php if ($logoDisplay): ?>
+            <a href="/" class="brand-core" aria-label="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?> home">
+                <span class="brand-rim" aria-hidden="true"></span>
+                <img class="brand-icon" src="<?= htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>">
+                <span class="brand-copy"><?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?></span>
+            </a>
+        <?php endif; ?>
+
+        <div class="nav-tray lg:flex">
+            <div class="nav-links" role="list">
+                <?php foreach ($navItems as $item): ?>
+                    <a class="nav-link" href="<?= htmlspecialchars($item['href'], ENT_QUOTES, 'UTF-8') ?>"><span><?= htmlspecialchars($item['text'], ENT_QUOTES, 'UTF-8') ?></span></a>
+                <?php endforeach; ?>
+            </div>
+            <?php if ($ctaDisplay && $ctaText !== ''): ?>
+                <a class="nav-cta" href="<?= htmlspecialchars($ctaRef, ENT_QUOTES, 'UTF-8') ?>">
+                    <span class="cta-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 4V14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M8 10L12 14L16 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 18H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    <span><?= htmlspecialchars($ctaText, ENT_QUOTES, 'UTF-8') ?></span>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <div class="mobile-actions lg:hidden">
+            <?php if ($ctaDisplay && $ctaText !== ''): ?>
+                <a class="nav-cta mobile-nav-cta" href="<?= htmlspecialchars($ctaRef, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($ctaText, ENT_QUOTES, 'UTF-8') ?>">
+                    <span class="cta-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 4V14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M8 10L12 14L16 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 18H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                </a>
+            <?php endif; ?>
+            <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="<?= $componentId ?>-mobile" aria-label="Toggle navigation">
+                <span class="nav-toggle-line nav-toggle-line-top"></span>
+                <span class="nav-toggle-line nav-toggle-line-mid"></span>
+                <span class="nav-toggle-line nav-toggle-line-bottom"></span>
+            </button>
+        </div>
+    </div>
+
+    <div class="mobile-panel" id="<?= $componentId ?>-mobile" aria-hidden="true">
+        <div class="mobile-panel-inner">
+            <div class="mobile-panel-backdrop mobile-panel-backdrop-a"></div>
+            <div class="mobile-panel-backdrop mobile-panel-backdrop-b"></div>
+            <div class="mobile-panel-top">
+                <span class="mobile-kicker"><?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?></span>
+                <button class="mobile-close" type="button" aria-label="Close navigation">
+                    <span></span>
+                    <span></span>
+                </button>
+            </div>
+            <div class="mobile-links">
+                <?php foreach ($navItems as $index => $item): ?>
+                    <a class="mobile-link" href="<?= htmlspecialchars($item['href'], ENT_QUOTES, 'UTF-8') ?>" style="--delay: <?= number_format($index * 0.06, 2, '.', '') ?>s;">
+                        <span class="mobile-link-marker"></span>
+                        <span class="mobile-link-label"><?= htmlspecialchars($item['text'], ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="mobile-link-arrow" aria-hidden="true">↗</span>
+                    </a>
+                <?php endforeach; ?>
+            </div>
+            <?php if ($ctaDisplay && $ctaText !== ''): ?>
+                <a class="mobile-cta" href="<?= htmlspecialchars($ctaRef, ENT_QUOTES, 'UTF-8') ?>">
+                    <span class="cta-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 4V14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            <path d="M8 10L12 14L16 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M5 18H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </span>
+                    <span><?= htmlspecialchars($ctaText, ENT_QUOTES, 'UTF-8') ?></span>
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</nav>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap');
+body{background:linear-gradient(180deg, #05060d 0%, #14070f 58%, #05060b 100%)}
+#<?= $componentId ?> {
+    --rsn-nav-bg: <?= htmlspecialchars($navBgColor, ENT_QUOTES, 'UTF-8') ?>;
+    --rsn-nav-text: <?= htmlspecialchars($navTextColor, ENT_QUOTES, 'UTF-8') ?>;
+    --rsn-nav-link: <?= htmlspecialchars($navLinkColor, ENT_QUOTES, 'UTF-8') ?>;
+    --rsn-nav-link-hover: <?= htmlspecialchars($navLinkHoverColor, ENT_QUOTES, 'UTF-8') ?>;
+    --rsn-nav-cta: <?= htmlspecialchars($ctaBgColor, ENT_QUOTES, 'UTF-8') ?>;
+    --rsn-nav-cta-hover: <?= htmlspecialchars($ctaBgHoverColor, ENT_QUOTES, 'UTF-8') ?>;
+    --rsn-nav-cta-text: <?= htmlspecialchars($ctaTextColor, ENT_QUOTES, 'UTF-8') ?>;
+    --rsn-shell-width: min(1280px, calc(100% - clamp(1rem, 4vw, 2rem)));
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    width: 100%;
+    padding: 0.58rem clamp(0.72rem, 1.8vw, 1rem);
+    overflow: clip;
+}
+
+#<?= $componentId ?>,
+#<?= $componentId ?> * {
+    box-sizing: border-box;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: calc(100% - 0.16rem);
+    border-radius: 0 0 24px 24px;
+    background: linear-gradient(180deg, rgba(18,18,28,0.92) 0%, rgba(8,8,14,0.86) 100%);
+    border-bottom: 1px solid rgba(255,255,255,0.3);
+    box-shadow: 0 16px 38px rgba(0,0,0,0.28);
+    backdrop-filter: blur(16px);
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    left: max(1rem, calc(50% - 620px));
+    right: max(1rem, calc(50% - 620px));
+    bottom: 0.24rem;
+    height: 2px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 18% 50%, rgba(255,91,69,0.88) 0 4px, transparent 9px), linear-gradient(90deg, rgba(255,91,69,0) 0%, rgba(255,91,69,0.18) 14%, rgba(255,255,255,0.94) 42%, rgba(223,255,90,0.9) 62%, rgba(77,246,255,0.22) 76%, rgba(77,246,255,0) 100%);
+    transform: translateX(-20%);
+    animation: rsn-nav-streak 6s linear infinite;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .nav-shell,
+#<?= $componentId ?> .mobile-panel {
+    width: var(--rsn-shell-width);
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .nav-shell {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .brand-core {
+    position: relative;
+    display: inline-grid;
+    grid-template-columns: auto auto;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    max-width: min(100%, 19rem);
+    color: var(--rsn-nav-text);
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .brand-rim {
+    position: absolute;
+    inset: 50% auto auto 1.35rem;
+    width: 70px;
+    height: 70px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,91,69,0.22) 0%, rgba(77,246,255,0.1) 42%, transparent 76%);
+    filter: blur(2px);
+}
+
+#<?= $componentId ?> .brand-icon {
+    position: relative;
+    z-index: 1;
+    width: 40px;
+    height: 40px;
+    display: block;
+}
+
+#<?= $componentId ?> .brand-copy {
+    position: relative;
+    z-index: 1;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--rsn-nav-text);
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .nav-tray {
+    justify-self: end;
+    display: none;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+    padding: 0.28rem 0.38rem 0.28rem 0.6rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+#<?= $componentId ?> .nav-links {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.18rem;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0.4rem 0.72rem;
+    color: var(--rsn-nav-link);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .nav-link span {
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .nav-link::before,
+#<?= $componentId ?> .nav-link::after {
+    content: '';
+    position: absolute;
+    transition: opacity 0.26s ease, transform 0.26s ease;
+}
+
+#<?= $componentId ?> .nav-link::before {
+    inset: 0.2rem 0.18rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(255,91,69,0.12) 0%, rgba(77,246,255,0.04) 100%);
+    border: 1px solid rgba(255,255,255,0.06);
+    opacity: 0;
+    transform: scale(0.92);
+}
+
+#<?= $componentId ?> .nav-link::after {
+    left: 0.9rem;
+    right: 0.9rem;
+    bottom: 0.38rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,91,69,0) 0%, rgba(255,91,69,0.9) 35%, rgba(223,255,90,0.92) 70%, rgba(223,255,90,0) 100%);
+    opacity: 0;
+    transform: scaleX(0.35);
+    transform-origin: center;
+}
+
+#<?= $componentId ?> .nav-link:hover,
+#<?= $componentId ?> .nav-link:focus-visible {
+    color: var(--rsn-nav-link-hover);
+}
+
+#<?= $componentId ?> .nav-link:hover::before,
+#<?= $componentId ?> .nav-link:focus-visible::before,
+#<?= $componentId ?> .nav-link:hover::after,
+#<?= $componentId ?> .nav-link:focus-visible::after {
+    opacity: 1;
+    transform: scale(1);
+}
+
+#<?= $componentId ?> .nav-cta,
+#<?= $componentId ?> .mobile-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.52rem;
+    min-height: 38px;
+    padding: 0.6rem 0.92rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, var(--rsn-nav-cta) 0%, #ffbf47 46%, #dfff5a 100%);
+    color: var(--rsn-nav-cta-text);
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 12px 28px rgba(255,91,69,0.22);
+    transition: transform 0.24s ease, filter 0.24s ease;
+}
+
+#<?= $componentId ?> .nav-cta:hover,
+#<?= $componentId ?> .mobile-cta:hover,
+#<?= $componentId ?> .nav-cta:focus-visible,
+#<?= $componentId ?> .mobile-cta:focus-visible {
+    transform: translateY(-2px);
+    filter: brightness(1.04);
+}
+
+#<?= $componentId ?> .cta-icon {
+    width: 1rem;
+    height: 1rem;
+    display: inline-flex;
+    flex: 0 0 auto;
+    line-height: 0;
+}
+
+#<?= $componentId ?> .cta-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#<?= $componentId ?> .mobile-actions {
+    display: none;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.45rem;
+    flex: 0 0 auto;
+}
+
+#<?= $componentId ?> .mobile-nav-cta {
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border-radius: 16px;
+    flex: 0 0 auto;
+}
+
+#<?= $componentId ?> .nav-toggle,
+#<?= $componentId ?> .mobile-close {
+    border: 0;
+    background: none;
+    color: var(--rsn-nav-text);
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .nav-toggle {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .nav-toggle-line {
+    position: absolute;
+    display: block;
+    width: 16px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transition: transform 0.28s ease, opacity 0.28s ease;
+}
+
+#<?= $componentId ?> .nav-toggle-line-top {
+    transform: translateY(-4px);
+}
+
+#<?= $componentId ?> .nav-toggle-line-mid {
+    transform: translateY(0);
+}
+
+#<?= $componentId ?> .nav-toggle-line-bottom {
+    transform: translateY(4px);
+}
+
+#<?= $componentId ?> .mobile-panel {
+    margin-top: 0.52rem;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transform: translateY(-0.7rem) scale(0.98);
+    transform-origin: top center;
+    transition: max-height 0.34s ease, opacity 0.26s ease, transform 0.26s ease;
+}
+
+#<?= $componentId ?> .mobile-panel-inner {
+    position: relative;
+    border-radius: 24px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(180deg, rgba(16,16,24,0.98) 0%, rgba(9,9,14,0.98) 100%);
+    box-shadow: 0 26px 60px rgba(0,0,0,0.34);
+    overflow: hidden;
+    padding-bottom: 0.9rem;
+}
+
+#<?= $componentId ?> .mobile-panel-backdrop {
+    position: absolute;
+    filter: blur(10px);
+    opacity: 0.85;
+}
+
+#<?= $componentId ?> .mobile-panel-backdrop-a {
+    inset: -4rem auto auto -3rem;
+    width: 180px;
+    height: 180px;
+    border-radius: 42% 58% 48% 52% / 58% 46% 54% 42%;
+    background: linear-gradient(135deg, rgba(255,91,69,0.38) 0%, rgba(255,91,69,0.02) 100%);
+}
+
+#<?= $componentId ?> .mobile-panel-backdrop-b {
+    inset: auto -3rem -4rem auto;
+    width: 220px;
+    height: 180px;
+    border-radius: 56% 44% 62% 38% / 44% 57% 43% 56%;
+    background: linear-gradient(135deg, rgba(77,246,255,0.22) 0%, rgba(223,255,90,0.08) 100%);
+}
+
+#<?= $componentId ?> .mobile-panel-top {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem 1rem 0;
+}
+
+#<?= $componentId ?> .mobile-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0.38rem 0.76rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--rsn-nav-text);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .mobile-close {
+    position: relative;
+    width: 38px;
+    height: 38px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .mobile-close span {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 16px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+}
+
+#<?= $componentId ?> .mobile-close span:first-child {
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+#<?= $componentId ?> .mobile-close span:last-child {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+#<?= $componentId ?> .mobile-links {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 0.68rem;
+    padding: 0.95rem 0.95rem 0;
+}
+
+#<?= $componentId ?> .mobile-link {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 0.78rem;
+    padding: 0.95rem 0.95rem;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.035);
+    color: var(--rsn-nav-text);
+    text-decoration: none;
+    transform: translateY(12px) scale(0.98);
+    opacity: 0;
+    transition: transform 0.34s ease, opacity 0.34s ease, background 0.24s ease;
+    transition-delay: var(--delay, 0s);
+}
+
+#<?= $componentId ?> .mobile-link:hover,
+#<?= $componentId ?> .mobile-link:focus-visible {
+    background: rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .mobile-link-marker {
+    width: 0.72rem;
+    height: 0.72rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--rsn-nav-cta) 0%, #dfff5a 100%);
+    box-shadow: 0 0 16px rgba(255,91,69,0.24);
+}
+
+#<?= $componentId ?> .mobile-link-label {
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+}
+
+#<?= $componentId ?> .mobile-link-arrow {
+    color: #dfff5a;
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .mobile-cta {
+    position: relative;
+    z-index: 1;
+    margin: 0.95rem 0.95rem 0;
+}
+
+#<?= $componentId ?>[data-mobile-open='true'] .mobile-panel {
+    max-height: 80vh;
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+
+#<?= $componentId ?>[data-mobile-open='true'] .mobile-link {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+}
+
+#<?= $componentId ?>[data-mobile-open='true'] .nav-toggle-line-top {
+    transform: translateY(0) rotate(45deg);
+}
+
+#<?= $componentId ?>[data-mobile-open='true'] .nav-toggle-line-mid {
+    opacity: 0;
+    transform: scaleX(0.2);
+}
+
+#<?= $componentId ?>[data-mobile-open='true'] .nav-toggle-line-bottom {
+    transform: translateY(0) rotate(-45deg);
+}
+
+@keyframes rsn-nav-streak {
+    0% { transform: translateX(-20%); opacity: 0.3; }
+    14% { opacity: 1; }
+    55% { opacity: 0.9; }
+    100% { transform: translateX(12%); opacity: 0.18; }
+}
+
+@media (max-width: 1180px) {
+    #<?= $componentId ?> .nav-link {
+        padding-inline: 0.65rem;
+        font-size: 0.78rem;
+    }
+}
+
+@media (min-width: 993px) {
+    #<?= $componentId ?> .nav-tray {
+        display: inline-flex;
+    }
+}
+
+@media (max-width: 992px) {
+    #<?= $componentId ?> .nav-shell {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.6rem;
+    }
+
+    #<?= $componentId ?> .brand-core {
+        max-width: calc(100vw - 7.5rem);
+    }
+
+    #<?= $componentId ?> .mobile-actions {
+        display: flex;
+    }
+}
+
+@media (max-width: 720px) {
+    #<?= $componentId ?> {
+        padding: 0.54rem 0.74rem;
+    }
+
+    #<?= $componentId ?> .nav-shell,
+    #<?= $componentId ?> .mobile-panel {
+        width: min(100%, calc(100% - 0.1rem));
+    }
+
+    #<?= $componentId ?> .brand-core {
+        grid-template-columns: auto;
+        max-width: calc(100vw - 6.9rem);
+    }
+
+    #<?= $componentId ?> .brand-copy {
+        display: none;
+    }
+
+    #<?= $componentId ?> .brand-icon {
+        width: 36px;
+        height: 36px;
+    }
+
+    #<?= $componentId ?> .brand-rim {
+        inset: 50% auto auto 1.1rem;
+        width: 56px;
+        height: 56px;
+    }
+}
+</style>
+
+<script>
+(function () {
+    var nav = document.getElementById('<?= $componentId ?>');
+    if (!nav) {
+        return;
+    }
+
+    var toggle = nav.querySelector('.nav-toggle');
+    var panel = nav.querySelector('.mobile-panel');
+    var close = nav.querySelector('.mobile-close');
+    var links = nav.querySelectorAll('.mobile-link, .mobile-cta');
+    var originalOverflow = '';
+
+    function setOpen(next) {
+        nav.setAttribute('data-mobile-open', next ? 'true' : 'false');
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', next ? 'true' : 'false');
+        }
+        if (panel) {
+            panel.setAttribute('aria-hidden', next ? 'false' : 'true');
+        }
+        if (document.body) {
+            if (!originalOverflow) {
+                originalOverflow = document.body.style.overflow || '';
+            }
+            document.body.style.overflow = next ? 'hidden' : originalOverflow;
+        }
+    }
+
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            setOpen(nav.getAttribute('data-mobile-open') !== 'true');
+        });
+    }
+
+    if (close) {
+        close.addEventListener('click', function () {
+            setOpen(false);
+        });
+    }
+
+    links.forEach(function (link) {
+        link.addEventListener('click', function () {
+            setOpen(false);
+        });
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key === 'Escape' && nav.getAttribute('data-mobile-open') === 'true') {
+            setOpen(false);
+        }
+    });
+
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 992 && nav.getAttribute('data-mobile-open') === 'true') {
+            setOpen(false);
+        }
+    });
+})();
+</script>
+

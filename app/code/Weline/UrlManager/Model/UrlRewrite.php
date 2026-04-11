@@ -7,6 +7,8 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 namespace Weline\UrlManager\Model;
+
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
@@ -39,7 +41,10 @@ class UrlRewrite extends Model
      */
     public static function getCurrentWebsiteId(): int
     {
-        $websiteId = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
+        $websiteId = WelineEnv::get('website_id', null);
+        if ($websiteId === null || $websiteId === '') {
+            $websiteId = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
+        }
         if ($websiteId === '' || $websiteId === null) {
             return 0;
         }

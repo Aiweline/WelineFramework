@@ -1,0 +1,619 @@
+<?php
+/**
+ * Call Break Legend - Contact Content Component
+ *
+ * @component_start
+ * code: contact-content
+ * name: 联系我们内容
+ * name_en: Contact Content
+ * description: 联系方式和联系表单展示组件
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_map => 显示地图:select:yes|yes,no
+ * display.show_form => 显示联系表单:select:yes|yes,no
+ * display.show_social => 显示社交链接:select:yes|yes,no
+ * display.show_info => 显示联系信息:select:yes|yes,no
+ *
+ * group:hero => 顶部横幅
+ * hero.title => 页面标题:text:Get in Touch
+ * hero.subtitle => 页面副标题:textarea:Need help with Call Break tables, account access, or payout questions? Use the contact routes below to reach the right desk quickly.
+ *
+ * group:contact_info => 联系信息
+ * contact_info.address_label => 地址标签:text:Address
+ * contact_info.address => 地址:textarea:Mumbai, India
+ * contact_info.phone_label => 电话标签:text:Phone
+ * contact_info.phone => 电话:text:+91 1800-XXX-XXXX
+ * contact_info.email_label => 邮箱标签:text:Email
+ * contact_info.email => 邮箱:text:support@callbreaklegend.com
+ * contact_info.work_hours_label => 工作时间标签:text:Support Hours
+ * contact_info.work_hours => 工作时间:text:24/7 Customer Support
+ *
+ * group:social => 社交媒体
+ * social.wechat => 微信:text:
+ * social.weibo => 微博:text:
+ * social.facebook => Facebook链接:text:
+ * social.twitter => Twitter链接:text:
+ * social.linkedin => LinkedIn链接:text:
+ *
+ * group:form => 表单设置
+ * form.title => 表单标题:text:Send us a Message
+ * form.name_label => 姓名字段标签:text:Full Name
+ * form.email_label => 邮箱字段标签:text:Email Address
+ * form.subject_label => 主题字段标签:text:Subject
+ * form.message_label => 消息字段标签:text:Message
+ * form.submit_text => 提交按钮:text:Send Message
+ * form.success_message => 成功提示:text:Share the table, account, or payout context so the support team can route your request faster.
+ * form.queue_label => 表单辅助标签:text:Message Queue
+ *
+ * group:support => 辅助文案
+ * support.summary_kicker => 联系摘要标签:text:Support Center
+ * support.social_title => 社交区域标题:text:Follow The Desk
+ *
+ * group:map => 地图设置
+ * map.embed_url => 地图嵌入链接:textarea:
+ * map.height => 地图高度:number:360|px
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$config = array_merge($styleSettings, $componentConfig);
+$componentId = 'cbl-contact-' . uniqid();
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showMap = $getConfig('display.show_map', 'yes') !== 'no';
+$showForm = $getConfig('display.show_form', 'yes') !== 'no';
+$showSocial = $getConfig('display.show_social', 'yes') !== 'no';
+$showInfo = $getConfig('display.show_info', 'yes') !== 'no';
+
+$pageTitle = $page ? trim((string)($page->getData('title') ?? '')) : '';
+$pageContent = $page ? trim((string)($page->getData('content') ?? '')) : '';
+
+$title = trim((string)$getConfig('hero.title', $getConfig('content.title', $pageTitle)));
+if ($title === '') {
+    $title = 'Get in Touch';
+}
+$description = trim((string)$getConfig('hero.subtitle', $getConfig('content.description', 'Need help with Call Break tables, account access, or payout questions? Use the contact routes below to reach the right desk quickly.')));
+
+$addressLabel = trim((string)$getConfig('contact_info.address_label', 'Address'));
+$phoneLabel = trim((string)$getConfig('contact_info.phone_label', 'Phone'));
+$emailLabel = trim((string)$getConfig('contact_info.email_label', 'Email'));
+$workHoursLabel = trim((string)$getConfig('contact_info.work_hours_label', 'Support Hours'));
+$email = trim((string)$getConfig('contact_info.email', $getConfig('contact.email', 'support@callbreaklegend.com')));
+$phone = trim((string)$getConfig('contact_info.phone', $getConfig('contact.phone', '+91 1800-XXX-XXXX')));
+$address = trim((string)$getConfig('contact_info.address', $getConfig('contact.address', 'Mumbai, India')));
+$hours = trim((string)$getConfig('contact_info.work_hours', $getConfig('contact.hours', '24/7 Customer Support')));
+
+$formTitle = trim((string)$getConfig('form.title', $getConfig('content.form_title', 'Send us a Message')));
+$formNameLabel = trim((string)$getConfig('form.name_label', 'Full Name'));
+$formEmailLabel = trim((string)$getConfig('form.email_label', 'Email Address'));
+$formSubjectLabel = trim((string)$getConfig('form.subject_label', 'Subject'));
+$formMessageLabel = trim((string)$getConfig('form.message_label', 'Message'));
+$formSubmitText = trim((string)$getConfig('form.submit_text', 'Send Message'));
+$formSuccessMessage = trim((string)$getConfig('form.success_message', $getConfig('content.form_intro', 'Share the table, account, or payout context so the support team can route your request faster.')));
+$formQueueLabel = trim((string)$getConfig('form.queue_label', 'Message Queue'));
+$supportSummaryKicker = trim((string)$getConfig('support.summary_kicker', 'Support Center'));
+$supportSocialTitle = trim((string)$getConfig('support.social_title', 'Follow The Desk'));
+$mapEmbedUrl = trim((string)$getConfig('map.embed_url', ''));
+$mapHeight = max(240, (int)$getConfig('map.height', 360));
+
+$socialMap = [
+    'social.wechat' => 'WeChat',
+    'social.weibo' => 'Weibo',
+    'social.facebook' => 'Facebook',
+    'social.twitter' => 'Twitter',
+    'social.linkedin' => 'LinkedIn',
+];
+$socials = [];
+foreach ($socialMap as $key => $label) {
+    $url = trim((string)$getConfig($key, ''));
+    if ($url === '') {
+        continue;
+    }
+    $socials[] = [
+        'name' => $label,
+        'url' => $url,
+    ];
+}
+
+if (empty($socials)) {
+    $socialRaw = (string)$getConfig('social.items', "Facebook|#\nTwitter|#\nInstagram|#\nYouTube|#");
+    if (strpos($socialRaw, '\n') !== false && strpos($socialRaw, "\n") === false) {
+        $socialRaw = str_replace('\n', "\n", $socialRaw);
+    }
+    foreach (preg_split('/[\r\n]+/', $socialRaw) as $line) {
+        if (trim($line) === '') {
+            continue;
+        }
+        $parts = explode('|', $line, 2);
+        if (trim($parts[0] ?? '') !== '') {
+            $socials[] = [
+                'name' => trim($parts[0]),
+                'url' => trim($parts[1] ?? '#'),
+            ];
+        }
+    }
+}
+
+$channels = [];
+if ($email !== '') {
+    $channels[] = ['icon' => '📧', 'label' => $emailLabel !== '' ? $emailLabel : 'Email', 'value' => $email];
+}
+if ($phone !== '') {
+    $channels[] = ['icon' => '📞', 'label' => $phoneLabel !== '' ? $phoneLabel : 'Phone', 'value' => $phone];
+}
+if ($address !== '') {
+    $channels[] = ['icon' => '📍', 'label' => $addressLabel !== '' ? $addressLabel : 'Address', 'value' => $address];
+}
+if ($hours !== '') {
+    $channels[] = ['icon' => '🕐', 'label' => $workHoursLabel !== '' ? $workHoursLabel : 'Support Hours', 'value' => $hours];
+}
+?>
+
+<section id="<?= $componentId ?>" class="cbl-contact">
+    <div class="contact-shell">
+        <header class="contact-hero">
+            <h1><?= htmlspecialchars($title) ?></h1>
+            <?php if ($description !== ''): ?>
+                <p><?= htmlspecialchars($description) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <div class="contact-layout<?= !$showInfo ? ' is-form-only' : '' ?>">
+            <?php if ($showInfo): ?>
+                <aside class="support-rail">
+                    <article class="support-summary">
+                        <?php if ($supportSummaryKicker !== ''): ?>
+                            <span class="summary-kicker"><?= htmlspecialchars($supportSummaryKicker) ?></span>
+                        <?php endif; ?>
+                        <h2><?= htmlspecialchars($hours !== '' ? $hours : $title) ?></h2>
+                        <?php if ($description !== ''): ?>
+                            <p><?= htmlspecialchars($description) ?></p>
+                        <?php endif; ?>
+                        <?php if ($pageContent !== ''): ?>
+                            <div class="support-copy"><?= $pageContent ?></div>
+                        <?php endif; ?>
+                    </article>
+
+                    <?php if (!empty($channels)): ?>
+                        <div class="channel-grid">
+                            <?php foreach ($channels as $channel): ?>
+                                <article class="channel-card">
+                                    <div class="channel-mark"><?= htmlspecialchars($channel['icon']) ?></div>
+                                    <span class="channel-label"><?= htmlspecialchars($channel['label']) ?></span>
+                                    <strong><?= htmlspecialchars($channel['value']) ?></strong>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($showSocial && !empty($socials)): ?>
+                        <div class="social-panel">
+                            <?php if ($supportSocialTitle !== ''): ?>
+                                <span class="social-title"><?= htmlspecialchars($supportSocialTitle) ?></span>
+                            <?php endif; ?>
+                            <div class="social-links">
+                                <?php foreach ($socials as $social): ?>
+                                    <a href="<?= htmlspecialchars($social['url']) ?>" class="social-link" target="_blank" rel="noopener" title="<?= htmlspecialchars($social['name']) ?>">
+                                        <?= htmlspecialchars(mb_strtoupper(mb_substr($social['name'], 0, 2))) ?>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </aside>
+            <?php endif; ?>
+
+            <?php if ($showForm): ?>
+                <div class="message-dock">
+                    <div class="dock-head">
+                        <?php if ($formQueueLabel !== ''): ?>
+                            <span class="dock-kicker"><?= htmlspecialchars($formQueueLabel) ?></span>
+                        <?php endif; ?>
+                        <h2><?= htmlspecialchars($formTitle) ?></h2>
+                        <?php if ($formSuccessMessage !== ''): ?>
+                            <p><?= htmlspecialchars($formSuccessMessage) ?></p>
+                        <?php endif; ?>
+                    </div>
+
+                    <form class="contact-form">
+                        <div class="field field-half">
+                            <label><?= htmlspecialchars($formNameLabel !== '' ? $formNameLabel : 'Full Name') ?></label>
+                            <input type="text" placeholder="<?= htmlspecialchars($formNameLabel !== '' ? $formNameLabel : 'Full Name') ?>">
+                        </div>
+                        <div class="field field-half">
+                            <label><?= htmlspecialchars($formEmailLabel !== '' ? $formEmailLabel : 'Email Address') ?></label>
+                            <input type="email" placeholder="<?= htmlspecialchars($formEmailLabel !== '' ? $formEmailLabel : 'Email Address') ?>">
+                        </div>
+                        <div class="field">
+                            <label><?= htmlspecialchars($formSubjectLabel !== '' ? $formSubjectLabel : 'Subject') ?></label>
+                            <input type="text" placeholder="<?= htmlspecialchars($formSubjectLabel !== '' ? $formSubjectLabel : 'Subject') ?>">
+                        </div>
+                        <div class="field">
+                            <label><?= htmlspecialchars($formMessageLabel !== '' ? $formMessageLabel : 'Message') ?></label>
+                            <textarea placeholder="<?= htmlspecialchars($formMessageLabel !== '' ? $formMessageLabel : 'Message') ?>"></textarea>
+                        </div>
+                        <button type="submit" class="submit-btn"><?= htmlspecialchars($formSubmitText) ?></button>
+                    </form>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($showMap && $mapEmbedUrl !== ''): ?>
+            <section class="contact-map">
+                <iframe src="<?= htmlspecialchars($mapEmbedUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" style="height: <?= (int)$mapHeight ?>px;"></iframe>
+            </section>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: 96px 0;
+    background:
+        radial-gradient(680px 320px at 10% 12%, rgba(30, 185, 128, 0.14), transparent 72%),
+        radial-gradient(620px 320px at 90% 20%, rgba(242, 169, 59, 0.12), transparent 70%),
+        linear-gradient(180deg, #0b1525 0%, #0f2538 54%, #0b1525 100%);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .contact-shell {
+    width: min(1220px, calc(100% - 2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .contact-hero {
+    max-width: 760px;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .hero-badge,
+#<?= $componentId ?> .summary-kicker,
+#<?= $componentId ?> .dock-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.38rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .hero-badge,
+#<?= $componentId ?> .dock-kicker {
+    color: #d2fff0;
+    border: 1px solid rgba(30, 185, 128, 0.34);
+    background: rgba(30, 185, 128, 0.12);
+}
+
+#<?= $componentId ?> .contact-hero h1 {
+    margin-top: 0;
+    color: #f8fafc;
+    font-size: clamp(2.2rem, 4.4vw, 3.8rem);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .contact-hero p {
+    margin-top: 0.9rem;
+    color: rgba(233, 245, 242, 0.82);
+    line-height: 1.8;
+    font-size: 1rem;
+}
+
+#<?= $componentId ?> .contact-layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.88fr) minmax(0, 1.12fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+#<?= $componentId ?> .contact-layout.is-form-only {
+    grid-template-columns: 1fr;
+}
+
+#<?= $componentId ?> .support-summary,
+#<?= $componentId ?> .channel-card,
+#<?= $componentId ?> .social-panel,
+#<?= $componentId ?> .message-dock {
+    border-radius: 24px;
+    border: 1px solid rgba(122, 161, 192, 0.22);
+    background: linear-gradient(160deg, rgba(11, 21, 37, 0.88) 0%, rgba(15, 43, 62, 0.62) 100%);
+    box-shadow: 0 22px 52px rgba(2, 6, 12, 0.4);
+}
+
+#<?= $componentId ?> .support-rail {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .support-summary {
+    padding: 1.35rem;
+}
+
+#<?= $componentId ?> .summary-kicker {
+    color: #f2a93b;
+    border: 1px solid rgba(242, 169, 59, 0.26);
+    background: rgba(242, 169, 59, 0.12);
+}
+
+#<?= $componentId ?> .support-summary h2 {
+    margin-top: 0.95rem;
+    color: #f8fafc;
+    font-size: clamp(1.5rem, 2.6vw, 2.3rem);
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .support-summary p {
+    margin-top: 0.75rem;
+    color: rgba(203, 213, 225, 0.82);
+    line-height: 1.75;
+}
+
+#<?= $componentId ?> .support-copy {
+    margin-top: 0.85rem;
+    color: rgba(233, 245, 242, 0.86);
+    line-height: 1.72;
+}
+
+#<?= $componentId ?> .support-copy > :first-child {
+    margin-top: 0;
+}
+
+#<?= $componentId ?> .support-copy > :last-child {
+    margin-bottom: 0;
+}
+
+#<?= $componentId ?> .channel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .channel-card {
+    padding: 1.1rem;
+    display: grid;
+    gap: 0.42rem;
+    min-height: 154px;
+}
+
+#<?= $componentId ?> .channel-mark {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: grid;
+    place-items: center;
+    background: linear-gradient(135deg, rgba(30, 185, 128, 0.18), rgba(242, 169, 59, 0.16));
+    border: 1px solid rgba(242, 169, 59, 0.18);
+    font-size: 1.35rem;
+}
+
+#<?= $componentId ?> .channel-label {
+    margin-top: 0.7rem;
+    color: rgba(203, 213, 225, 0.74);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+#<?= $componentId ?> .channel-card strong {
+    color: #f8fafc;
+    line-height: 1.6;
+    font-size: 1rem;
+    word-break: break-word;
+}
+
+#<?= $componentId ?> .social-panel {
+    padding: 1.15rem;
+}
+
+#<?= $componentId ?> .social-title {
+    display: block;
+    color: #e8f3ff;
+    font-size: 0.88rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .social-links {
+    margin-top: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.62rem;
+}
+
+#<?= $componentId ?> .social-link {
+    min-width: 48px;
+    height: 42px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(30, 185, 128, 0.3);
+    background: rgba(30, 185, 128, 0.14);
+    color: #f2a93b;
+    text-decoration: none;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, border-color 0.25s ease;
+}
+
+#<?= $componentId ?> .social-link:hover {
+    transform: translateY(-2px);
+    border-color: rgba(242, 169, 59, 0.55);
+    background: linear-gradient(135deg, rgba(30, 185, 128, 0.95) 0%, rgba(242, 169, 59, 0.95) 100%);
+    color: #0b1525;
+    box-shadow: 0 12px 22px rgba(12, 53, 44, 0.38);
+}
+
+#<?= $componentId ?> .message-dock {
+    padding: clamp(1.25rem, 2.8vw, 1.8rem);
+    position: relative;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .message-dock::before {
+    content: "";
+    position: absolute;
+    inset: auto -12% -24% auto;
+    width: 220px;
+    height: 220px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(30, 185, 128, 0.12), transparent 72%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .dock-head {
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .dock-head h2 {
+    margin-top: 0.95rem;
+    color: #f8fafc;
+    font-size: clamp(1.7rem, 3vw, 2.5rem);
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .dock-head p {
+    margin-top: 0.7rem;
+    color: rgba(203, 213, 225, 0.8);
+    line-height: 1.72;
+}
+
+#<?= $componentId ?> .contact-form {
+    margin-top: 1.2rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .field {
+    display: grid;
+    gap: 0.48rem;
+}
+
+#<?= $componentId ?> .field-half {
+    grid-column: span 1;
+}
+
+#<?= $componentId ?> .field:not(.field-half) {
+    grid-column: 1 / -1;
+}
+
+#<?= $componentId ?> .field label {
+    color: rgba(233, 245, 242, 0.86);
+    font-size: 0.82rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .field input,
+#<?= $componentId ?> .field textarea {
+    width: 100%;
+    padding: 0.95rem 1rem;
+    border-radius: 14px;
+    border: 1px solid rgba(122, 161, 192, 0.24);
+    background: rgba(4, 14, 26, 0.58);
+    color: #f8fafc;
+    font-size: 0.96rem;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+#<?= $componentId ?> .field input::placeholder,
+#<?= $componentId ?> .field textarea::placeholder {
+    color: rgba(148, 163, 184, 0.78);
+}
+
+#<?= $componentId ?> .field input:focus,
+#<?= $componentId ?> .field textarea:focus {
+    outline: none;
+    border-color: rgba(242, 169, 59, 0.56);
+    background: rgba(6, 18, 33, 0.8);
+    box-shadow: 0 0 0 4px rgba(242, 169, 59, 0.08);
+}
+
+#<?= $componentId ?> .field textarea {
+    min-height: 170px;
+    resize: vertical;
+}
+
+#<?= $componentId ?> .submit-btn {
+    grid-column: 1 / -1;
+    min-height: 52px;
+    border: 0;
+    border-radius: 16px;
+    background: linear-gradient(135deg, #f2a93b 0%, #0f7f61 100%);
+    color: #0b1525;
+    font-size: 0.98rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+#<?= $componentId ?> .submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 34px rgba(18, 92, 73, 0.4);
+}
+
+#<?= $componentId ?> .contact-map {
+    margin-top: 1rem;
+    border-radius: 24px;
+    border: 1px solid rgba(122, 161, 192, 0.22);
+    background: linear-gradient(160deg, rgba(11, 21, 37, 0.88) 0%, rgba(15, 43, 62, 0.62) 100%);
+    box-shadow: 0 22px 52px rgba(2, 6, 12, 0.4);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .contact-map iframe {
+    display: block;
+    width: 100%;
+    border: 0;
+}
+
+@media (max-width: 1080px) {
+    #<?= $componentId ?> .contact-layout {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: 72px 0;
+    }
+
+    #<?= $componentId ?> .contact-shell {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .channel-grid,
+    #<?= $componentId ?> .contact-form {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .channel-card,
+    #<?= $componentId ?> .field-half {
+        grid-column: 1 / -1;
+    }
+}
+</style>

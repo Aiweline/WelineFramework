@@ -26,6 +26,11 @@ class HookReader extends ModuleFileReader
      */
     private static array $staticFileListCache = [];
 
+    public static function clearStaticCache(): void
+    {
+        self::$staticFileListCache = [];
+    }
+
     public function __construct(Scanner $scanner, string $path = 'view' . DS . 'hooks')
     {
         $this->hookCache = w_cache('hook');

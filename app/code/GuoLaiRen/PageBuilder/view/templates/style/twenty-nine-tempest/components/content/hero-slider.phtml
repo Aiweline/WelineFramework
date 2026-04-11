@@ -1,0 +1,937 @@
+<?php
+/**
+ * Twenty Nine Tempest - Hero Slider Component
+ *
+ * @component_start
+ * code: hero-slider
+ * name: Hero Banner
+ * name_en: Hero Slider
+ * description: Command-board hero with asymmetric stage
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:banner => Banner设置（TPMST兼容）
+ * banner.display => 显示Banner:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用主题图
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用主题图
+ * banner.alt => Banner图片描述:text:Twenty Nine Tempest hero
+ * banner.bg_color => Banner背景颜色:color:#091423
+ *
+ * group:hero => Hero设置
+ * hero.display => 显示Hero:select:yes|yes,no
+ * hero.title => 主标题:text:Rule the Next Hand with Twenty Nine Tempest
+ * hero.subtitle => 副标题:textarea:Sharp bidding cues, fast lobby entry, and a card-first interface built for competitive 29 players.
+ * hero.cta_text => 主按钮文本:text:Play Now
+ * hero.cta_url => 主按钮链接:text:#download
+ * hero.secondary_cta_text => 次按钮文本:text:Explore Rooms
+ * hero.secondary_cta_url => 次按钮链接:text:#tables
+ * hero.image => Hero图片地址:textarea:|留空使用默认图片
+ * hero.image_mobile => Hero移动端图片地址:textarea:|留空使用默认图片
+ * hero.alt => Hero图片描述:text:Twenty Nine Tempest hero
+ * hero.bg_color => Hero背景颜色:color:#091423
+ * hero.bg_image => 背景图片地址:textarea:|留空使用默认纹理
+ *
+ * group:download_btn => 下载按钮
+ * download_btn.display => 显示下载按钮:select:yes|yes,no
+ * download_btn.image => 下载按钮图片:textarea:|留空使用箭头图标
+ * download_btn.alt => 下载按钮描述:text:Play Now
+ * download_btn.url => 下载链接:text:#download
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 区域附加类名:textarea:tnt-hero-stage
+ * layout.margin_top => 移动端顶部重叠:number:-72|px
+ * layout.img_margin_top => 图片偏移:number:0|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'tnt-hero-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$normalizeDisplay = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroDisplay = $normalizeDisplay($getConfig('hero.display', $getConfig('banner.display', 'yes'))) === 'yes';
+if (!$heroDisplay) {
+    return;
+}
+
+$page = $this->getData('page');
+$pageTitle = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'Twenty Nine Tempest';
+$pageTitle = $sanitizeTitle($pageTitle);
+if ($pageTitle === '') {
+    $pageTitle = 'Twenty Nine Tempest';
+}
+
+$title = $sanitizeTitle((string) $getConfig('hero.title', ''));
+$bannerTitle = $sanitizeTitle((string) $getConfig('banner.alt', ''));
+if ($title === '' && $bannerTitle !== '' && stripos($bannerTitle, 'banner') === false && stripos($bannerTitle, 'hero') === false) {
+    $title = $bannerTitle;
+}
+if ($title === '') {
+    $title = $pageTitle !== '' ? $pageTitle : 'Rule the Next Hand with Twenty Nine Tempest';
+}
+
+$subtitle = trim((string) $getConfig('hero.subtitle', ''));
+if ($subtitle === '') {
+    $subtitle = $page ? trim((string) ($page->getData('meta_description') ?: '')) : '';
+}
+if ($subtitle === '') {
+    $subtitle = 'Sharp bidding cues, fast lobby entry, and a card-first interface built for competitive 29 players.';
+}
+
+$downloadDisplay = $normalizeDisplay($getConfig('download_btn.display', 'yes')) === 'yes';
+$downloadButtonImage = trim((string) $getConfig('download_btn.image', ''));
+$ctaText = (string) $getConfig('hero.cta_text', $getConfig('download_btn.alt', 'Play Now'));
+$ctaUrl = (string) $getConfig('hero.cta_url', $getConfig('download_btn.url', '#download'));
+$ctaHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string) $ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaHref, 'url');
+$ctaSecondaryText = (string) $getConfig('hero.secondary_cta_text', 'Explore Rooms');
+$ctaSecondaryUrl = (string) $getConfig('hero.secondary_cta_url', '#tables');
+$heroAlt = trim((string) $getConfig('hero.alt', $getConfig('banner.alt', '')));
+if ($heroAlt === '') {
+    $heroAlt = $title;
+}
+
+$heroImageDesktop = trim((string) $getConfig('hero.image', $getConfig('banner.image_desktop', '')));
+$heroImageMobile = trim((string) $getConfig('hero.image_mobile', $getConfig('banner.image_mobile', '')));
+$defaultHeroImage = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/twenty-nine-tempest/asset/img/hero-info-graphic.svg');
+$heroImageDesktop = $heroImageDesktop !== '' ? $heroImageDesktop : $defaultHeroImage;
+$heroImageMobile = $heroImageMobile !== '' ? $heroImageMobile : $heroImageDesktop;
+$bgColor = (string) $getConfig('hero.bg_color', $getConfig('banner.bg_color', $colors['hero_bg'] ?? '#091423'));
+$bgImage = trim((string) $getConfig('hero.bg_image', ''));
+$bgImage = $bgImage !== '' ? $bgImage : $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/twenty-nine-tempest/asset/img/poker-header-bg.svg');
+$sliderClasses = trim((string) $getConfig('layout.slider_classes', 'tnt-hero-stage'));
+$marginTop = (int) $getConfig('layout.margin_top', '-72');
+$imgMarginTop = (int) $getConfig('layout.img_margin_top', '0');
+
+$textLength = static function ($value) {
+    return function_exists('mb_strlen') ? mb_strlen($value) : strlen($value);
+};
+
+$trimWords = static function ($value, $wordLimit = 3) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return '';
+    }
+
+    $words = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value)) ?: [];
+    $words = array_values(array_filter($words, static function ($word) {
+        return $word !== '';
+    }));
+
+    return trim(implode(' ', array_slice($words, 0, max(1, (int) $wordLimit))));
+};
+
+$heroKicker = $trimWords($title, 3);
+if ($heroKicker === '') {
+    $heroKicker = 'Twenty Nine Tempest';
+}
+
+$heroChips = [];
+foreach ([$ctaText, $ctaSecondaryText] as $actionText) {
+    $actionText = trim((string) $actionText);
+    if ($actionText !== '') {
+        $heroChips[] = $actionText;
+    }
+}
+
+$subtitleParts = preg_split('/[,.!?;]+/', $subtitle) ?: [];
+foreach ($subtitleParts as $part) {
+    $part = trim((string) $part);
+    if ($part === '') {
+        continue;
+    }
+
+    if ($textLength($part) > 24) {
+        $part = $trimWords($part, 3);
+    }
+
+    if ($part !== '') {
+        $heroChips[] = $part;
+    }
+}
+
+$heroChips[] = $heroKicker;
+$heroChips = array_values(array_unique(array_filter($heroChips, static function ($item) {
+    return trim((string) $item) !== '';
+})));
+$heroChips = array_slice($heroChips, 0, 4);
+?>
+
+<section id="<?= $componentId ?>" class="tnt-hero <?= htmlspecialchars($sliderClasses) ?>" aria-labelledby="<?= $componentId ?>-title" style="--tnt-hero-base: <?= htmlspecialchars($bgColor) ?>; --tnt-hero-overlap: <?= (int) $marginTop ?>px; --tnt-hero-img-offset: <?= (int) $imgMarginTop ?>px;">
+    <div class="hero-texture" style="background-image:url('<?= htmlspecialchars($bgImage) ?>');"></div>
+
+    <div class="hero-shell">
+        <div class="hero-grid">
+            <figure class="hero-stage wow animate__fadeInUp" data-wow-delay="0.08s">
+                <div class="stage-panel">
+                    <div class="stage-topbar">
+                        <span class="stage-mode">Table View</span>
+                        <span class="stage-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                    </div>
+
+                    <div class="stage-frame" data-stage-frame>
+                        <span class="stage-glow glow-a" aria-hidden="true"></span>
+                        <span class="stage-glow glow-b" aria-hidden="true"></span>
+
+                        <div class="stage-orbit" aria-hidden="true">
+                            <span class="orbit-chip orbit-1" aria-hidden="true"></span>
+                            <span class="orbit-chip orbit-2" aria-hidden="true"></span>
+                            <span class="orbit-chip orbit-3" aria-hidden="true"></span>
+                            <span class="orbit-chip orbit-4" aria-hidden="true"></span>
+                        </div>
+
+                        <div class="stage-poster">
+                            <picture>
+                                <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($heroImageMobile) ?>">
+                                <source media="(min-width: 768px)" srcset="<?= htmlspecialchars($heroImageDesktop) ?>">
+                                <img src="<?= htmlspecialchars($heroImageDesktop) ?>" alt="<?= htmlspecialchars($heroAlt) ?>" fetchpriority="high" decoding="async">
+                            </picture>
+                        </div>
+                    </div>
+
+                </div>
+            </figure>
+
+            <aside class="hero-rail">
+                <div class="rail-intro wow animate__fadeInRight">
+                    <span class="hero-kicker"><?= htmlspecialchars($heroKicker) ?></span>
+
+                    <h1 class="rail-title" id="<?= $componentId ?>-title">
+                        <span><?= htmlspecialchars($title) ?></span>
+                    </h1>
+
+                    <?php if ($subtitle !== ''): ?>
+                        <p class="rail-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+                    <?php endif; ?>
+
+                    <div class="hero-tape" aria-label="Hero highlights">
+                        <?php foreach ($heroChips as $item): ?>
+                            <span class="tape-chip"><?= htmlspecialchars($item) ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+            </aside>
+
+            <div class="rail-actions wow animate__fadeInUp" data-wow-delay="0.14s">
+                <div class="action-layout">
+                    <div class="action-stack">
+                        <?php if ($downloadDisplay && $ctaText !== ''): ?>
+                            <a class="hero-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>">
+                                <?php if ($downloadButtonImage !== ''): ?>
+                                    <img class="hero-primary-icon" src="<?= htmlspecialchars($downloadButtonImage) ?>" alt="" aria-hidden="true">
+                                <?php else: ?>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                                        <path d="M12 4V14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                        <path d="M8 10L12 14L16 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M5 18H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                                    </svg>
+                                <?php endif; ?>
+                                <span><?= htmlspecialchars($ctaText) ?></span>
+                            </a>
+                        <?php endif; ?>
+
+                        <?php if ($ctaSecondaryText !== ''): ?>
+                            <a class="hero-secondary" href="<?= htmlspecialchars($ctaSecondaryUrl) ?>">
+                                <span><?= htmlspecialchars($ctaSecondaryText) ?></span>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --hero-cyan: #18f0ff;
+    --hero-coral: #ff7a4d;
+    --hero-sun: #ffd45d;
+    --hero-ink: #081725;
+    --hero-night: #101f35;
+    position: relative;
+    overflow: hidden;
+    margin-top: var(--tnt-hero-overlap);
+    padding: calc(clamp(5rem, 8vw, 7rem) + (var(--tnt-hero-overlap) * -1)) 0 clamp(2.6rem, 5vw, 4rem);
+    background:
+        radial-gradient(920px 380px at 8% 0%, rgba(24, 240, 255, 0.24), transparent 68%),
+        radial-gradient(760px 360px at 92% 14%, rgba(255, 122, 77, 0.24), transparent 66%),
+        linear-gradient(148deg, #04111d 0%, var(--tnt-hero-base) 34%, #24132f 72%, #38140f 100%);
+    isolation: isolate;
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 22%),
+        repeating-linear-gradient(122deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 26px);
+    opacity: 0.26;
+}
+
+#<?= $componentId ?>::after {
+    inset: auto -8% 8% auto;
+    width: min(620px, 52%);
+    height: min(440px, 42%);
+    background:
+        conic-gradient(from 210deg at 52% 48%, rgba(24,240,255,0.22), rgba(255,122,77,0.2), rgba(255,212,93,0.18), rgba(24,240,255,0.2)),
+        repeating-linear-gradient(152deg, rgba(255,255,255,0.12) 0 1px, transparent 1px 22px);
+    clip-path: polygon(10% 0%, 100% 10%, 86% 100%, 0% 84%);
+    opacity: 0.46;
+}
+
+#<?= $componentId ?> .hero-texture {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-size: cover;
+    opacity: 0.09;
+    filter: saturate(0.8) brightness(0.56);
+    mix-blend-mode: screen;
+}
+
+#<?= $componentId ?> .hero-shell {
+    width: min(1280px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .hero-kicker,
+#<?= $componentId ?> .tape-chip,
+#<?= $componentId ?> .stage-mode,
+#<?= $componentId ?> .orbit-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0.42rem 0.84rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .hero-kicker {
+    color: #091523;
+    background: linear-gradient(130deg, rgba(255,212,93,0.98) 0%, rgba(255,122,77,0.96) 52%, rgba(255,238,207,0.96) 100%);
+    box-shadow: 0 12px 24px rgba(255, 122, 77, 0.2);
+}
+
+#<?= $componentId ?> .hero-tape {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.52rem;
+}
+
+#<?= $componentId ?> .tape-chip {
+    color: #eef8ff;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+    backdrop-filter: blur(10px);
+}
+
+#<?= $componentId ?> .hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+    gap: clamp(1rem, 2vw, 1.5rem);
+    align-items: center;
+}
+
+#<?= $componentId ?> .hero-stage {
+    margin: 0;
+}
+
+#<?= $componentId ?> .stage-panel {
+    position: relative;
+    padding: 1rem;
+    border-radius: 36px;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 14%),
+        linear-gradient(156deg, rgba(5,18,31,0.9) 0%, rgba(12,28,48,0.94) 44%, rgba(36,18,43,0.9) 100%);
+    box-shadow: 0 32px 78px rgba(2, 8, 20, 0.38);
+}
+
+#<?= $componentId ?> .stage-panel::before,
+#<?= $componentId ?> .stage-panel::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .stage-panel::before {
+    inset: 0;
+    background:
+        radial-gradient(520px 260px at 16% 12%, rgba(24,240,255,0.18), transparent 72%),
+        radial-gradient(420px 220px at 86% 20%, rgba(255,122,77,0.16), transparent 70%);
+    opacity: 0.9;
+}
+
+#<?= $componentId ?> .stage-panel::after {
+    right: -12%;
+    top: 10%;
+    width: 46%;
+    height: 58%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0));
+    clip-path: polygon(18% 0%, 100% 14%, 74% 100%, 0% 86%);
+    opacity: 0.45;
+}
+
+#<?= $componentId ?> .stage-topbar {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+
+#<?= $componentId ?> .stage-mode {
+    color: #f2fbff;
+    background: rgba(255,255,255,0.08);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.12);
+}
+
+#<?= $componentId ?> .stage-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.32rem;
+}
+
+#<?= $componentId ?> .stage-dots i {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.44);
+    box-shadow: 0 0 18px rgba(255,255,255,0.18);
+}
+
+#<?= $componentId ?> .stage-frame {
+    --mx: 50%;
+    --my: 38%;
+    position: relative;
+    min-height: 520px;
+    margin-top: 0.84rem;
+    border-radius: 30px 30px 136px 30px;
+    overflow: hidden;
+    background:
+        radial-gradient(360px 240px at var(--mx) var(--my), rgba(255,255,255,0.18), transparent 58%),
+        linear-gradient(145deg, rgba(24,240,255,0.14) 0%, rgba(255,122,77,0.14) 42%, rgba(7,18,34,0.18) 100%),
+        linear-gradient(180deg, rgba(7,17,31,0.22) 0%, rgba(7,17,31,0.04) 100%);
+    box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.08),
+        inset 0 -90px 140px rgba(4,10,22,0.34);
+}
+
+#<?= $componentId ?> .stage-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        repeating-linear-gradient(145deg, rgba(255,255,255,0.08) 0 1px, transparent 1px 28px),
+        linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%);
+    opacity: 0.2;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .stage-glow {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(20px);
+    opacity: 0.75;
+}
+
+#<?= $componentId ?> .glow-a {
+    top: 8%;
+    left: 8%;
+    width: 120px;
+    height: 120px;
+    background: rgba(24, 240, 255, 0.26);
+}
+
+#<?= $componentId ?> .glow-b {
+    right: 12%;
+    bottom: 18%;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 122, 77, 0.24);
+}
+
+#<?= $componentId ?> .stage-orbit {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .orbit-chip {
+    position: absolute;
+    min-height: 0;
+    padding: 0;
+    width: 86px;
+    height: 28px;
+    border-radius: 999px;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0.03) 100%),
+        rgba(4, 16, 28, 0.28);
+    backdrop-filter: blur(10px);
+    box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.1),
+        0 12px 24px rgba(4, 10, 24, 0.18);
+    animation: tnt-hero-float 6.6s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .orbit-chip::before,
+#<?= $componentId ?> .orbit-chip::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    transform: translateY(-50%);
+}
+
+#<?= $componentId ?> .orbit-chip::before {
+    left: 14px;
+    background: rgba(24, 240, 255, 0.8);
+    box-shadow: 0 0 16px rgba(24, 240, 255, 0.42);
+}
+
+#<?= $componentId ?> .orbit-chip::after {
+    right: 14px;
+    background: rgba(255, 212, 93, 0.76);
+    box-shadow: 0 0 16px rgba(255, 212, 93, 0.34);
+}
+
+#<?= $componentId ?> .orbit-1 {
+    top: 12%;
+    left: 4%;
+}
+
+#<?= $componentId ?> .orbit-2 {
+    top: 14%;
+    right: 6%;
+    animation-delay: -1.8s;
+}
+
+#<?= $componentId ?> .orbit-3 {
+    bottom: 18%;
+    left: 4%;
+    animation-delay: -3s;
+}
+
+#<?= $componentId ?> .orbit-4 {
+    right: 7%;
+    bottom: 16%;
+    animation-delay: -4.2s;
+}
+
+#<?= $componentId ?> .stage-poster {
+    position: absolute;
+    z-index: 3;
+    left: 49%;
+    top: 50%;
+    width: min(54%, 390px);
+    aspect-ratio: 0.84;
+    transform: translate(-50%, calc(-50% + var(--tnt-hero-img-offset))) rotate(-10deg);
+    border-radius: 28px 28px 92px 28px;
+    overflow: hidden;
+    box-shadow: 0 32px 68px rgba(2, 8, 20, 0.4);
+}
+
+#<?= $componentId ?> .stage-poster::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 18%);
+    z-index: 1;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .stage-poster img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .hero-rail {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+    padding: 1.2rem 0 0.25rem clamp(0rem, 1vw, 0.35rem);
+}
+
+#<?= $componentId ?> .rail-intro {
+    padding: 0.15rem 0.1rem 0;
+}
+
+#<?= $componentId ?> .rail-intro .hero-tape {
+    margin-top: 1.08rem;
+}
+
+#<?= $componentId ?> .rail-title {
+    margin-top: 0.84rem;
+}
+
+#<?= $componentId ?> .rail-title span {
+    position: relative;
+    display: inline-block;
+    color: #f3f9ff;
+    font-size: clamp(2.3rem, 5vw, 4.9rem);
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    text-wrap: balance;
+    padding-bottom: 1rem;
+}
+
+#<?= $componentId ?> .rail-title span::before,
+#<?= $componentId ?> .rail-title span::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .rail-title span::before {
+    bottom: 0;
+    width: 108px;
+    height: 16px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,122,77,0.98) 0%, rgba(255,212,93,0.98) 54%, rgba(24,240,255,0.94) 100%);
+    clip-path: polygon(0 42%, 86% 0, 100% 100%, 12% 100%);
+    box-shadow: 0 12px 22px rgba(255, 122, 77, 0.18);
+}
+
+#<?= $componentId ?> .rail-title span::after {
+    bottom: 4px;
+    left: 118px;
+    width: 70px;
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.9), rgba(24,240,255,0.26));
+    transform: skewX(-32deg);
+    box-shadow:
+        92px 2px 0 rgba(255,255,255,0.2),
+        134px -2px 0 rgba(24,240,255,0.36);
+}
+
+#<?= $componentId ?> .rail-subtitle {
+    margin-top: 0.94rem;
+    color: #c7d8eb;
+    line-height: 1.84;
+    max-width: 34rem;
+}
+
+#<?= $componentId ?> .rail-actions {
+    grid-column: 1 / -1;
+    width: 100%;
+    padding: 1.2rem 1.08rem;
+    border-radius: 30px 30px 36px 30px;
+    background:
+        linear-gradient(160deg, rgba(255,242,213,0.97) 0%, rgba(255,250,241,0.94) 48%, rgba(241,249,255,0.94) 100%);
+    box-shadow: 0 24px 52px rgba(4, 10, 25, 0.24);
+}
+
+#<?= $componentId ?> .action-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    align-items: center;
+    gap: 0.9rem;
+}
+
+#<?= $componentId ?> .action-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.78rem;
+}
+
+#<?= $componentId ?> .hero-primary,
+#<?= $componentId ?> .hero-secondary {
+    width: 100%;
+    min-height: 52px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.52rem;
+    padding: 0.72rem 1rem;
+    border-radius: 18px;
+    font-size: 0.82rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+
+#<?= $componentId ?> .hero-primary {
+    color: #101521;
+    background: linear-gradient(135deg, rgba(255,122,77,0.98) 0%, rgba(255,212,93,0.98) 52%, rgba(24,240,255,0.94) 100%);
+    box-shadow: 0 16px 26px rgba(255, 122, 77, 0.22);
+    border-radius: 22px 22px 34px 22px;
+}
+
+#<?= $componentId ?> .hero-primary svg,
+#<?= $componentId ?> .hero-primary-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .hero-primary-icon {
+    object-fit: contain;
+}
+
+#<?= $componentId ?> .hero-secondary {
+    color: #081624;
+    background: rgba(8, 22, 36, 0.06);
+    border-radius: 18px 18px 28px 18px;
+    align-self: end;
+}
+
+#<?= $componentId ?> .hero-primary:hover,
+#<?= $componentId ?> .hero-secondary:hover {
+    transform: translateY(-1px);
+}
+
+@keyframes tnt-hero-float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-6px);
+    }
+}
+
+@media (max-width: 1180px) {
+    #<?= $componentId ?> .hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .hero-rail {
+        order: 1;
+        padding: 0;
+    }
+
+    #<?= $componentId ?> .rail-actions {
+        order: 2;
+    }
+
+    #<?= $componentId ?> .hero-stage {
+        order: 3;
+    }
+
+
+}
+
+@media (max-width: 900px) {
+
+
+    #<?= $componentId ?> .stage-poster {
+        width: min(50%, 340px);
+    }
+
+    #<?= $componentId ?> .action-stack {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: clamp(4.7rem, 13vw, 6rem) 0 clamp(2.2rem, 8vw, 3rem);
+    }
+
+    #<?= $componentId ?> .hero-shell {
+        width: min(100%, calc(100% - 0.78rem));
+    }
+
+    #<?= $componentId ?> .hero-tape {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        scrollbar-width: none;
+    }
+
+    #<?= $componentId ?> .hero-tape::-webkit-scrollbar {
+        display: none;
+    }
+
+    #<?= $componentId ?> .hero-grid {
+        gap: 0.78rem;
+    }
+
+    #<?= $componentId ?> .hero-tape {
+        padding-bottom: 0.14rem;
+    }
+
+    #<?= $componentId ?> .rail-intro {
+        padding: 0;
+    }
+
+    #<?= $componentId ?> .rail-intro .hero-tape {
+        margin-top: 0.88rem;
+    }
+
+    #<?= $componentId ?> .rail-title {
+        margin-top: 0.72rem;
+        max-width: none;
+    }
+
+    #<?= $componentId ?> .rail-title span {
+        font-size: clamp(2.02rem, 10vw, 3.16rem);
+        padding-bottom: 0.88rem;
+    }
+
+    #<?= $componentId ?> .rail-title span::before {
+        width: 86px;
+        height: 14px;
+    }
+
+    #<?= $componentId ?> .rail-title span::after {
+        left: 94px;
+        width: 52px;
+        box-shadow:
+            72px 2px 0 rgba(255,255,255,0.18),
+            104px -2px 0 rgba(24,240,255,0.3);
+    }
+
+    #<?= $componentId ?> .rail-subtitle {
+        margin-top: 0.86rem;
+        font-size: 0.96rem;
+        line-height: 1.78;
+    }
+
+    #<?= $componentId ?> .stage-panel {
+        min-height: auto;
+        padding: 0.76rem;
+        border-radius: 28px;
+    }
+
+    #<?= $componentId ?> .stage-frame {
+        min-height: 340px;
+        margin-top: 0.72rem;
+        border-radius: 24px 24px 92px 24px;
+    }
+
+    #<?= $componentId ?> .stage-poster {
+        width: min(72%, 250px);
+        top: 48%;
+        transform: translate(-50%, -50%) rotate(-8deg);
+        border-radius: 24px 24px 78px 24px;
+    }
+
+    #<?= $componentId ?> .stage-orbit {
+        display: none;
+    }
+
+    #<?= $componentId ?> .rail-actions {
+        padding: 0.9rem;
+        border-radius: 24px;
+    }
+
+    #<?= $componentId ?> .action-layout {
+        grid-template-columns: 1fr;
+        gap: 0.72rem;
+    }
+
+    #<?= $componentId ?> .action-stack {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .hero-primary,
+    #<?= $componentId ?> .hero-secondary {
+        min-height: 48px;
+        padding: 0.66rem 0.78rem;
+        font-size: 0.74rem;
+    }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .orbit-chip,
+    #<?= $componentId ?> .hero-primary,
+    #<?= $componentId ?> .hero-secondary {
+        animation: none;
+        transition: none;
+    }
+}
+</style>
+
+<script>
+(function () {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var frame = root.querySelector('[data-stage-frame]');
+    if (!frame) {
+        return;
+    }
+
+    var coarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (coarsePointer) {
+        return;
+    }
+
+    var updateGlow = function (event) {
+        var rect = frame.getBoundingClientRect();
+        var x = ((event.clientX - rect.left) / rect.width) * 100;
+        var y = ((event.clientY - rect.top) / rect.height) * 100;
+        frame.style.setProperty('--mx', x.toFixed(2) + '%');
+        frame.style.setProperty('--my', y.toFixed(2) + '%');
+    };
+
+    frame.addEventListener('pointermove', updateGlow);
+    frame.addEventListener('pointerleave', function () {
+        frame.style.setProperty('--mx', '50%');
+        frame.style.setProperty('--my', '38%');
+    });
+})();
+</script>

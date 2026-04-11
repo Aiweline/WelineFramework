@@ -1,0 +1,31 @@
+{
+    "page_type": "blog_category",
+    "name": "博客分类页面布局",
+    "description": "Baccarat Wildfire 主题博客分类页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-category",
+                "enabled": true,
+                "instance_id": "blog-category-default",
+                "config": {
+                    "blog.title": "Browse Baccarat Topics",
+                    "blog.subtitle": "Explore room basics, live table updates, and responsible-play explainers.",
+                    "blog.show_sidebar": "yes",
+                    "blog.show_category": "yes",
+                    "blog.show_date": "yes",
+                    "blog.show_author": "yes",
+                    "blog.card_style": "default"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "博客分类页面布局"
+}

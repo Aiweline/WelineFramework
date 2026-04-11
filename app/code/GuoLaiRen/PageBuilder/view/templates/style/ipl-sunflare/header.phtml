@@ -1,0 +1,185 @@
+<?php
+/**
+ * IPL Sunflare - Header
+ *
+ * @fields_start
+ *
+ * group:header => 头部区域设置（Header）
+ * header.logo.display => 显示Logo:select:yes|yes,no
+ * header.logo.text => Logo文本:text:IPL Sunflare
+ * header.logo.subline => Logo副标题:text:Heatwave Edition
+ * header.logo.url => Logo地址:textarea:|默认使用本地ipl-logo-icon.svg
+ * header.logo.width => Logo宽度:responsive:46/46|px
+ * header.logo.height => Logo高度:responsive:|px[可选，默认跟随宽度]
+ * header.navigation.display => 显示导航:select:yes|yes,no
+ * header.navigation.bg_color => 导航背景色:color:#0f090f
+ * header.navigation.text_color => 导航文字颜色:color:#ffe6d1
+ * header.navigation.link_color => 链接颜色:color:#d6b29a
+ * header.navigation.link_hover_color => 链接悬停颜色:color:#ff9671
+ * header.navigation.items => 导航项配置:textarea:Home=>/\r\nMatch Modes=>#modes\r\nAdvantages=>#advantages\r\nReviews=>#reviews\r\nFAQ=>#faq|配置格式：名字=>url，一行一个
+ * group:header_nav_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * header.navigation.label_home_page => 首页菜单名:text:
+ * header.navigation.label_about_page => 关于我们菜单名:text:
+ * header.navigation.label_blog_list => 博客菜单名:text:
+ * header.navigation.label_contact_page => 联系我们菜单名:text:
+ * header.navigation.label_terms_of_service => 条款菜单名:text:
+ * header.navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * header.download_button.text => 下载按钮文本:text:Join Live Table
+ * header.download_button.display => 显示下载按钮:select:yes|yes,no
+ * header.download_button.bg_color => 按钮背景颜色:color:#ff6a3d
+ * header.download_button.hover_bg_color => 按钮悬停背景色:color:#ff4d8d
+ * header.download_button.text_color => 按钮文字颜色:color:#190a13
+ * header.download_button.size => 按钮字体大小:responsive:13/13|px[MD]
+ * header.download_button.padding => 按钮内边距:responsive:10/10|px[MD]
+ * header.download_button.border_radius => 按钮圆角:number:999|px
+ * header.download_button.extra_classes => 按钮额外CSS类:textarea:
+ * header.download_button.url => 下载链接:text:#download
+ *
+ * group:banner => Banner横幅区域设置（Hero/Banner）
+ * banner.display => 显示Banner区域:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用主题素材
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用主题素材
+ * banner.alt => Banner图片描述:text:IPL Sunflare hero
+ * banner.download_btn_image => Banner下载按钮图片:textarea:|默认使用主题素材
+ * banner.download_btn_alt => Banner下载按钮描述:text:Join Live Table
+ * banner.bg_color => Banner背景颜色:color:#120a14
+ * banner.padding_v => Banner上下内边距:responsive:0/0|px[MD]
+ * banner.slider_classes => Banner区域CSS类:textarea:isf-hero
+ *
+ * group:color_scheme => 全局色系设置
+ * color_scheme.scheme => 选择色系:select:default|default,blue,purple,green,red
+ *
+ * group:pixel => 像素统计
+ * pixel.enabled => 启用像素统计:select:yes|yes,no
+ * pixel.name => 像素名称:text:{handle}
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+$templateCode = $page ? $page->getData('style') : 'ipl-sunflare';
+if (empty($templateCode)) {
+    $templateCode = 'ipl-sunflare';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sanitizeTitle = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') return $value;
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$metaTitleRaw = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'IPL Sunflare';
+$metaTitle = $sanitizeTitle($metaTitleRaw);
+if ($metaTitle === '') {
+    $metaTitle = 'IPL Sunflare';
+}
+$metaDescription = $page ? $page->getData('meta_description') : '';
+$metaKeywords = $page ? $page->getData('meta_keywords') : '';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle) ?></title>
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'isf-ember': '<?= htmlspecialchars($colors['accent_primary'] ?? '#ff6a3d') ?>',
+                    'isf-saffron': '<?= htmlspecialchars($colors['accent_secondary'] ?? '#ff4d8d') ?>',
+                    'isf-cream': '<?= htmlspecialchars($colors['body_bg'] ?? '#120a14') ?>',
+                    'isf-honey': '<?= htmlspecialchars($colors['section_bg_2'] ?? '#17101a') ?>',
+                    'isf-ink': '<?= htmlspecialchars($colors['text_primary'] ?? '#ffe6d1') ?>',
+                    'isf-mute': '<?= htmlspecialchars($colors['text_muted'] ?? '#b78f74') ?>'
+                }
+            }
+        }
+    }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
+        :root {
+            --isf-body-bg: <?= htmlspecialchars($colors['body_bg'] ?? '#120a14') ?>;
+            --isf-body-alt: <?= htmlspecialchars($colors['section_bg_2'] ?? '#17101a') ?>;
+            --isf-body-strong: <?= htmlspecialchars($colors['section_bg_3'] ?? '#221426') ?>;
+            --isf-surface: <?= htmlspecialchars($colors['card_bg'] ?? 'rgba(34, 21, 32, 0.86)') ?>;
+            --isf-ink: <?= htmlspecialchars($colors['text_primary'] ?? '#ffe6d1') ?>;
+            --isf-muted: <?= htmlspecialchars($colors['text_muted'] ?? '#b78f74') ?>;
+            --isf-ember: <?= htmlspecialchars($colors['accent_primary'] ?? '#ff6a3d') ?>;
+            --isf-ember-deep: <?= htmlspecialchars($colors['accent_primary_dark'] ?? '#d94b2a') ?>;
+            --isf-saffron: <?= htmlspecialchars($colors['accent_secondary'] ?? '#ff4d8d') ?>;
+            --isf-shell-width: min(1260px, calc(100% - clamp(1rem, 4vw, 2rem)));
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(640px 340px at 8% 10%, rgba(255, 106, 61, 0.34), transparent 72%),
+                radial-gradient(720px 340px at 88% 14%, rgba(255, 77, 141, 0.24), transparent 72%),
+                linear-gradient(170deg, #0c0711 0%, var(--isf-body-bg) 38%, var(--isf-body-alt) 100%);
+            color: var(--isf-ink);
+            overflow-x: hidden;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: -1;
+            background:
+                linear-gradient(120deg, rgba(44, 28, 52, 0.62) 0%, rgba(255,255,255,0) 45%),
+                repeating-linear-gradient(120deg, rgba(255, 106, 61, 0.05) 0 1px, transparent 1px 24px);
+            opacity: 0.75;
+        }
+        h1, h2, h3, h4, h5 {
+            font-family: 'Sora', 'Manrope', sans-serif;
+            letter-spacing: -0.03em;
+        }
+        a { color: inherit; }
+        img { max-width: 100%; display: block; }
+        @media (max-width: 768px) {
+            body {
+                background:
+                    radial-gradient(400px 200px at 10% 8%, rgba(255, 106, 61, 0.28), transparent 72%),
+                    radial-gradient(420px 220px at 88% 10%, rgba(255, 77, 141, 0.19), transparent 72%),
+                    linear-gradient(170deg, #0c0711 0%, var(--isf-body-bg) 52%, var(--isf-body-alt) 100%);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-isf-cream text-isf-ink antialiased">
+<?php $this->assign('__pagebuilder_shell_managed', true); ?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/ipl-sunflare/components/header/nav.phtml') ?>

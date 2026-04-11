@@ -1,265 +1,96 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Weline Framework - FPM 运行时
- * 
- * 传统 PHP-FPM 模式的运行时实现
- * 包装现有 App::run() 逻辑，保持向后兼容
- * 
- * @author Aiweline
- * @email aiweline@qq.com
- */
-
 namespace Weline\Framework\Runtime;
 
 use Weline\Framework\App;
-use Weline\Framework\App\Env;
-use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Request;
-use Weline\Framework\Http\Url;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Router\Core as Router;
-use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Http\Sse\SseContext;
 
 /**
- * FPM 运行时
- * 
- * 特点：
- * - 每请求初始化/销毁
- * - 使用超全局变量
- * - 与现有代码完全兼容
+ * FPM runtime now enters through the single Context and delegates execution to
+ * the instance App bridge.
  */
 class FpmRuntime implements RuntimeInterface
 {
-    /**
-     * 是否已初始化
-     */
     private bool $bootstrapped = false;
-    
-    /**
-     * 事件管理器
-     */
-    private ?EventsManager $eventManager = null;
-    
-    /**
-     * @inheritDoc
-     */
+
     public function bootstrap(): void
     {
         if ($this->bootstrapped) {
             return;
         }
-        
-        // 初始化框架
+
         App::init();
-        
-        // 初始化请求上下文
-        RequestContext::init();
-        
         $this->bootstrapped = true;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function handle(?Request $request = null): string
     {
-        // 确保已初始化
         if (!$this->bootstrapped) {
             $this->bootstrap();
         }
-        
-        // 获取事件管理器
-        if ($this->eventManager === null) {
-            $this->eventManager = ObjectManager::getInstance(EventsManager::class);
-        }
-        
-        $_SERVER['WELINE_PARSER_URL'] = true;
-        $_SERVER['WELINE_IS_MEDIA'] = false;
-        
-        try {
-            $runBeforeStart = microtime(true);
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::pushCurrentParent('run_before');
-            }
-            $this->eventManager->dispatch('Weline_Framework::App::run_before');
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('run_before', (microtime(true) - $runBeforeStart) * 1000, 'framework');
-            }
-            
-            $result = '';
-            
-            if (!CLI) {
-                $urlParserStart = microtime(true);
-                $parse = null;
-                if ($_SERVER['WELINE_PARSER_URL']) {
-                    $parse = Url::parser();
-                }
-                
-                if (\is_array($parse)) {
-                    $this->processUrlParse($parse);
-                }
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
-                }
-                // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie
-                if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
-                    \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
-                }
-                $routerStartBegin = microtime(true);
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::pushCurrentParent('router_start');
-                }
-                $result = ObjectManager::getInstance(Router::class)->start();
-                if (RequestLifecycleTrace::isEnabled()) {
-                    RequestLifecycleTrace::popCurrentParent();
-                    RequestLifecycleTrace::recordSpan('router_start', (microtime(true) - $routerStartBegin) * 1000, 'framework');
-                }
-            }
-            
-            $runAfterStart = microtime(true);
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::pushCurrentParent('run_after');
-            }
-            $data = new \Weline\Framework\DataObject\DataObject(['result' => $result]);
-            $this->eventManager->dispatch('Weline_Framework::App::run_after', $data);
-            $result = $data->getData('result');
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('run_after', (microtime(true) - $runAfterStart) * 1000, 'framework');
-            }
 
-            // SSE 模式下，响应已经通过 SseWriter 直接流式输出；
-            // FPM 运行时不应再走普通 HTML/JSON 收口，避免覆盖为 text/html。
+        $isCliSapi = \in_array(\PHP_SAPI, ['cli', 'phpdbg'], true);
+        $context = Context::fromGlobals([
+            'mode' => self::MODE_FPM,
+            'type' => $isCliSapi ? 'system' : 'request',
+            'process_tag' => $isCliSapi ? 'CLI' : 'FPM',
+        ]);
+        Context::enter($context);
+        $this->syncCurrentContextFromGlobals();
+
+        try {
+            $response = (new App(Context::current(), false))->runResponse();
+
             if (SseContext::isSseEnabled()) {
                 return '';
             }
-            
-            if (\is_array($result)) {
-                return \json_encode($result);
-            }
-            
-            $resultStr = (string) $result;
-            // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
-            $resultStr = TelemetryBroadcaster::broadcast($resultStr, $request);
-            return $resultStr;
-            
-        } catch (\Weline\Framework\Http\ResponseTerminateException $e) {
-            // 捕获响应终止异常，在 FPM 模式下直接发送响应
-            $e->emit(true);
-            return ''; // 不会执行到这里，emit() 会 exit
+
+            return $response->getBody();
+        } finally {
+            Context::leave();
         }
     }
-    
-    /**
-     * 处理 URL 解析结果
-     */
-    private function processUrlParse(array $parse): void
-    {
-        if ($_SERVER['REQUEST_METHOD'] && isset($parse['uri'])) {
-            $uri = Url::decode_url($parse['uri']);
-            $parse['server']['REQUEST_URI'] = $uri;
-            $parse['server']['QUERY_STRING'] = Url::parse_url($uri, 'query');
-        }
-        $_SERVER = $parse['server'];
-        
-        // 设置后端标识
-        $welineArea = $_SERVER['WELINE_AREA'] ?? '';
-        $_SERVER['WELINE_IS_BACKEND'] = ($welineArea === 'backend' || $welineArea === 'rest_backend');
-        
-        // 存入请求上下文
-        RequestContext::area($welineArea);
-        
-        // 处理 Cookie
-        $default_cookies = [
-            'WELINE_USER_LANG',
-            'WELINE_USER_CURRENCY',
-            'WELINE_WEBSITE_ID',
-            'WELINE_WEBSITE_CODE',
-            'WELINE_WEBSITE_URL',
-        ];
-        
-        if ($parse['currency']) {
-            $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
-            RequestContext::currency($parse['currency']);
-        } else {
-            // 设置默认值，确保模板访问时不会出现 undefined 警告
-            $_SERVER['WELINE_USER_CURRENCY'] = $_SERVER['WELINE_USER_CURRENCY'] ?? RequestContext::currency();
-        }
-        if ($parse['language']) {
-            $_SERVER['WELINE_USER_LANG'] = $parse['language'];
-            RequestContext::locale($parse['language']);
-        } else {
-            // 设置默认值，确保模板访问时不会出现 undefined 警告
-            $_SERVER['WELINE_USER_LANG'] = $_SERVER['WELINE_USER_LANG'] ?? RequestContext::locale();
-        }
-        
-        foreach ($default_cookies as $key) {
-            if (!isset($_SERVER[$key])) {
-                if (\in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true)) {
-                    $_SERVER[$key] = '';
-                } else {
-                    throw new \Weline\Framework\App\Exception(__('系统SERVER缺少key：%{1}', $key));
-                }
-            }
-            $currentCookieValue = \Weline\Framework\Http\Cookie::get($key);
-            if ($currentCookieValue !== $_SERVER[$key]) {
-                \Weline\Framework\Http\Cookie::set($key, $_SERVER[$key], 3600 * 24 * 30, []);
-            }
-        }
-        
-        // 存储网站信息到上下文
-        if (!empty($_SERVER['WELINE_WEBSITE_ID'])) {
-            RequestContext::websiteId((int) $_SERVER['WELINE_WEBSITE_ID']);
-        }
-    }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function reset(): void
     {
-        // FPM 模式下，每个请求独立，无需重置
-        // 但清理请求上下文
+        Context::leave();
         RequestContext::cleanup();
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function terminate(): void
     {
-        // 清理请求上下文
+        Context::leave();
         RequestContext::cleanup();
-        
         $this->bootstrapped = false;
-        $this->eventManager = null;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function getMode(): string
     {
         return self::MODE_FPM;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function isPersistent(): bool
     {
         return false;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function isBootstrapped(): bool
     {
         return $this->bootstrapped;
+    }
+
+    private function syncCurrentContextFromGlobals(): void
+    {
+        WelineEnv::getInstance()->initFromSnapshot(
+            \is_array($_GET ?? null) ? $_GET : [],
+            \is_array($_POST ?? null) ? $_POST : [],
+            \is_array($_COOKIE ?? null) ? $_COOKIE : [],
+            \is_array($_FILES ?? null) ? $_FILES : [],
+            \is_array($_SERVER ?? null) ? $_SERVER : [],
+        );
     }
 }

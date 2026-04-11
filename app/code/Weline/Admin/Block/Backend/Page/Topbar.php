@@ -42,6 +42,30 @@ class Topbar extends \Weline\Framework\View\Block
         parent::__init();
         // 使用默认宽高24x18，autoSize=true使SVG自适应按钮大小
         $languages = $this->getI18n()->getLocalesWithFlagsDisplaySelf(Cookie::getLangLocal(), 24, 18, true, true);
+        $websiteId = (int)($this->request->getData('website_id') ?? 0);
+        if ($websiteId > 0) {
+            $websiteLanguageCodes = w_query('websites', 'getWebsiteLanguageCodes', ['website_id' => $websiteId]);
+            if (is_array($websiteLanguageCodes) && !empty($websiteLanguageCodes)) {
+                $allowedMap = [];
+                foreach ($websiteLanguageCodes as $websiteLanguageCode) {
+                    $websiteLanguageCode = (string)$websiteLanguageCode;
+                    if ($websiteLanguageCode !== '') {
+                        $allowedMap[$websiteLanguageCode] = true;
+                    }
+                }
+                if (!empty($allowedMap)) {
+                    $filteredLanguages = [];
+                    foreach ($languages as $languageCode => $languageData) {
+                        if (isset($allowedMap[(string)$languageCode])) {
+                            $filteredLanguages[$languageCode] = $languageData;
+                        }
+                    }
+                    if (!empty($filteredLanguages)) {
+                        $languages = $filteredLanguages;
+                    }
+                }
+            }
+        }
         $this->assign('languages', $languages);
         $current_language = ['code' => 'zh_Hans_CN', 'name' => '中文', 'flag' => ''];
         if (isset($languages[Cookie::getLang()])) {

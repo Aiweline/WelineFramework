@@ -1,0 +1,814 @@
+<?php
+/**
+ * Indian Rummy Voltage - About Content Component
+ *
+ * @component_start
+ * code: about-content
+ * name: 关于我们内容
+ * name_en: About Content
+ * description: 企业/品牌关于页面内容展示组件，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示设置
+ * display.show_stats => 显示数据统计:select:yes|yes,no
+ * display.show_values => 显示价值观:select:yes|yes,no
+ * display.show_team => 显示团队:select:yes|yes,no
+ * display.show_cta => 显示行动区:select:yes|yes,no
+ *
+ * group:hero => 首屏设置
+ * hero.title => 首屏标题:text:About Indian Rummy Voltage
+ * hero.subtitle => 首屏副标题:textarea:Built for players who want quick rounds, clear controls, and reliable card-table flow.
+ * hero.bg_color => 首屏背景色:color:#0a2a3c
+ * hero.bg_gradient_end => 首屏渐变结束色:color:#17233f
+ * hero.title_color => 首屏标题颜色:color:#ffd067
+ * hero.text_color => 首屏文字颜色:color:#d4deef
+ * hero.padding => 首屏内边距:number:80|px
+ *
+ * group:stats => 数据统计
+ * stats.stat_1_number => 数据1数值:text:30M+
+ * stats.stat_1_label => 数据1说明:text:Hands Played Monthly
+ * stats.stat_2_number => 数据2数值:text:4.8/5
+ * stats.stat_2_label => 数据2说明:text:Player Rating
+ * stats.stat_3_number => 数据3数值:text:24/7
+ * stats.stat_3_label => 数据3说明:text:Table Availability
+ * stats.stat_4_number => 数据4数值:text:1.2s
+ * stats.stat_4_label => 数据4说明:text:Average Match Join
+ * stats.number_color => 数值颜色:color:#ffd067
+ * stats.label_color => 说明颜色:color:#90a6c2
+ * stats.card_bg => 卡片背景色:color:rgba(255, 244, 250, 0.09)
+ *
+ * group:story => 品牌故事
+ * story.title => 故事标题:text:How Rummy Voltage Was Built
+ * story.subtitle => 故事副标题:text:From static lobbies to a faster match rhythm
+ * story.content => 故事内容:textarea:Indian Rummy Voltage started with one goal: reduce waiting and keep every table interaction clear.
+ * story.bg_color => 故事区背景色:color:#0d2133
+ * story.title_color => 故事标题颜色:color:#ffd067
+ *
+ * group:values => 价值观模块
+ * values.title => 模块标题:text:What We Optimize Every Release
+ * values.subtitle => 模块副标题:text:Three priorities shape each update
+ * values.value_1_icon => 价值观1图标:text:A
+ * values.value_1_title => 价值观1标题:text:Access Speed
+ * values.value_1_desc => 价值观1描述:textarea:Join rounds quickly with lightweight flows and clear route entry points.
+ * values.value_2_icon => 价值观2图标:text:F
+ * values.value_2_title => 价值观2标题:text:Fair Sessions
+ * values.value_2_desc => 价值观2描述:textarea:Transparent table logic and trackable wallet history keep trust high.
+ * values.value_3_icon => 价值观3图标:text:M
+ * values.value_3_title => 价值观3标题:text:Mobile First
+ * values.value_3_desc => 价值观3描述:textarea:Layouts, controls, and interactions are tuned for one-hand play.
+ * values.bg_color => 模块背景色:color:#111b38
+ *
+ * group:team => 团队模块
+ * team.title => 模块标题:text:Team Behind The Tables
+ * team.subtitle => 模块副标题:text:Operators, designers, and game-flow engineers
+ * team.member_1_icon => 成员1图标:text:R
+ * team.member_1_name => 成员1姓名:text:Rohan Singh
+ * team.member_1_role => 成员1职位:text:Product Lead
+ * team.member_2_icon => 成员2图标:text:P
+ * team.member_2_name => 成员2姓名:text:Priya Mehta
+ * team.member_2_role => 成员2职位:text:Gameplay Ops
+ * team.member_3_icon => 成员3图标:text:K
+ * team.member_3_name => 成员3姓名:text:Karan Patel
+ * team.member_3_role => 成员3职位:text:Reward Systems
+ * team.member_4_icon => 成员4图标:text:S
+ * team.member_4_name => 成员4姓名:text:Sneha Rao
+ * team.member_4_role => 成员4职位:text:Player Success
+ *
+ * group:cta => 行动区设置
+ * cta.title => 行动区标题:text:Ready To Join A Faster Table?
+ * cta.description => 行动区描述:textarea:Download the latest Indian Rummy Voltage build and jump into live match routes.
+ * cta.button_text => 行动区按钮文本:text:Download Now
+ * cta.button_url => 行动区按钮链接:text:#download
+ * cta.button_bg => 行动区按钮背景色:color:linear-gradient(115deg, #ffd067 0%, #ff9050 45%, #ff5a5d 100%)
+ * cta.button_text_color => 行动区按钮文字颜色:color:#2f1207
+ *
+ * @fields_end
+ */
+
+$config = $component_config ?? $this->getData('component_config') ?? [];
+
+$showStats = ($config['display.show_stats'] ?? 'yes') !== 'no';
+$showValues = ($config['display.show_values'] ?? 'yes') !== 'no';
+$showTeam = ($config['display.show_team'] ?? 'yes') !== 'no';
+$showCta = ($config['display.show_cta'] ?? 'yes') !== 'no';
+
+$heroTitle = $config['hero.title'] ?? '';
+$heroSubtitle = $config['hero.subtitle'] ?? '';
+$heroBgColorConfig = $config['hero.bg_color'] ?? '';
+$heroGradientEndConfig = $config['hero.bg_gradient_end'] ?? '';
+$heroTitleColorConfig = $config['hero.title_color'] ?? '';
+$heroTextColorConfig = $config['hero.text_color'] ?? '';
+$heroPadding = (int)($config['hero.padding'] ?? '80');
+
+$stat1Number = $config['stats.stat_1_number'] ?? '30M+';
+$stat1Label = $config['stats.stat_1_label'] ?? 'Hands Played Monthly';
+$stat2Number = $config['stats.stat_2_number'] ?? '4.8/5';
+$stat2Label = $config['stats.stat_2_label'] ?? 'Player Rating';
+$stat3Number = $config['stats.stat_3_number'] ?? '24/7';
+$stat3Label = $config['stats.stat_3_label'] ?? 'Table Availability';
+$stat4Number = $config['stats.stat_4_number'] ?? '1.2s';
+$stat4Label = $config['stats.stat_4_label'] ?? 'Average Match Join';
+$statsNumberColorConfig = $config['stats.number_color'] ?? '';
+$statsLabelColorConfig = $config['stats.label_color'] ?? '';
+$statsCardBgConfig = $config['stats.card_bg'] ?? '';
+
+$storyTitle = $config['story.title'] ?? 'How Rummy Voltage Was Built';
+$storySubtitle = $config['story.subtitle'] ?? 'From static lobbies to a faster match rhythm';
+$storyContent = $config['story.content'] ?? '';
+$storyBgColorConfig = $config['story.bg_color'] ?? '';
+$storyTitleColorConfig = $config['story.title_color'] ?? '';
+
+$valuesTitle = $config['values.title'] ?? 'What We Optimize Every Release';
+$valuesSubtitle = $config['values.subtitle'] ?? 'Three priorities shape each update';
+$value1Icon = $config['values.value_1_icon'] ?? 'A';
+$value1Title = $config['values.value_1_title'] ?? 'Access Speed';
+$value1Desc = $config['values.value_1_desc'] ?? 'Join rounds quickly with lightweight flows and clear route entry points.';
+$value2Icon = $config['values.value_2_icon'] ?? 'F';
+$value2Title = $config['values.value_2_title'] ?? 'Fair Sessions';
+$value2Desc = $config['values.value_2_desc'] ?? 'Transparent table logic and trackable wallet history keep trust high.';
+$value3Icon = $config['values.value_3_icon'] ?? 'M';
+$value3Title = $config['values.value_3_title'] ?? 'Mobile First';
+$value3Desc = $config['values.value_3_desc'] ?? 'Layouts, controls, and interactions are tuned for one-hand play.';
+$valuesBgColorConfig = $config['values.bg_color'] ?? '';
+
+$teamTitle = $config['team.title'] ?? 'Team Behind The Tables';
+$teamSubtitle = $config['team.subtitle'] ?? 'Operators, designers, and game-flow engineers';
+$member1Icon = $config['team.member_1_icon'] ?? 'R';
+$member1Name = $config['team.member_1_name'] ?? 'Rohan Singh';
+$member1Role = $config['team.member_1_role'] ?? 'Product Lead';
+$member2Icon = $config['team.member_2_icon'] ?? 'P';
+$member2Name = $config['team.member_2_name'] ?? 'Priya Mehta';
+$member2Role = $config['team.member_2_role'] ?? 'Gameplay Ops';
+$member3Icon = $config['team.member_3_icon'] ?? 'K';
+$member3Name = $config['team.member_3_name'] ?? 'Karan Patel';
+$member3Role = $config['team.member_3_role'] ?? 'Reward Systems';
+$member4Icon = $config['team.member_4_icon'] ?? 'S';
+$member4Name = $config['team.member_4_name'] ?? 'Sneha Rao';
+$member4Role = $config['team.member_4_role'] ?? 'Player Success';
+
+$ctaTitle = $config['cta.title'] ?? 'Ready To Join A Faster Table?';
+$ctaDescription = $config['cta.description'] ?? 'Download the latest Indian Rummy Voltage build and jump into live match routes.';
+$ctaButtonText = $config['cta.button_text'] ?? 'Download Now';
+$ctaButtonUrl = $config['cta.button_url'] ?? '#download';
+$ctaButtonBgConfig = $config['cta.button_bg'] ?? '';
+$ctaButtonTextColorConfig = $config['cta.button_text_color'] ?? '';
+
+$page = $this->getData('page');
+$pageTitle = $heroTitle ?: ($page ? ($page->getData('title') ?? 'About Indian Rummy Voltage') : 'About Indian Rummy Voltage');
+$pageContent = $page ? ($page->getData('content') ?? '') : '';
+
+$hasText = static function ($value) {
+    return trim(strip_tags((string)$value)) !== '';
+};
+
+$storySource = (string)($storyContent !== '' ? $storyContent : $pageContent);
+$storySource = preg_replace('/<(br\s*\/?|\/p|\/div|\/li|\/h[1-6])>/i', "\n", $storySource);
+$storySource = strip_tags((string)$storySource);
+$storyRaw = trim((string)$storySource);
+$storyParagraphs = array_values(array_filter(array_map('trim', preg_split('/\r?\n+/', $storyRaw))));
+$showStoryPanel = $hasText($storyTitle) || $hasText($storySubtitle) || !empty($storyParagraphs);
+
+$stats = array_values(array_filter([
+    ['number' => $stat1Number, 'label' => $stat1Label],
+    ['number' => $stat2Number, 'label' => $stat2Label],
+    ['number' => $stat3Number, 'label' => $stat3Label],
+    ['number' => $stat4Number, 'label' => $stat4Label],
+], static function (array $item) use ($hasText) {
+    return $hasText($item['number'] ?? '') || $hasText($item['label'] ?? '');
+}));
+$showStats = $showStats && !empty($stats);
+
+$values = array_values(array_filter([
+    ['icon' => $value1Icon, 'title' => $value1Title, 'desc' => $value1Desc],
+    ['icon' => $value2Icon, 'title' => $value2Title, 'desc' => $value2Desc],
+    ['icon' => $value3Icon, 'title' => $value3Title, 'desc' => $value3Desc],
+], static function (array $item) use ($hasText) {
+    return $hasText($item['icon'] ?? '') || $hasText($item['title'] ?? '') || $hasText($item['desc'] ?? '');
+}));
+$showValues = $showValues && (!empty($values) || $hasText($valuesTitle) || $hasText($valuesSubtitle));
+
+$teamMembers = array_values(array_filter([
+    ['icon' => $member1Icon, 'name' => $member1Name, 'role' => $member1Role],
+    ['icon' => $member2Icon, 'name' => $member2Name, 'role' => $member2Role],
+    ['icon' => $member3Icon, 'name' => $member3Name, 'role' => $member3Role],
+    ['icon' => $member4Icon, 'name' => $member4Name, 'role' => $member4Role],
+], static function (array $item) use ($hasText) {
+    return $hasText($item['icon'] ?? '') || $hasText($item['name'] ?? '') || $hasText($item['role'] ?? '');
+}));
+$showTeam = $showTeam && (!empty($teamMembers) || $hasText($teamTitle) || $hasText($teamSubtitle));
+$showCta = $showCta && ($hasText($ctaTitle) || $hasText($ctaDescription) || $hasText($ctaButtonText));
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroBg = $heroBgColorConfig ?: ($colors['hero_bg'] ?? '#0a2a3c');
+$heroGradientEnd = $heroGradientEndConfig ?: ($colors['hero_bg_gradient_end'] ?? '#17233f');
+$sectionBg1 = $storyBgColorConfig ?: ($colors['section_bg_1'] ?? '#0d2133');
+$sectionBg2 = $valuesBgColorConfig ?: ($colors['section_bg_2'] ?? '#111b38');
+$textPrimary = $colors['text_primary'] ?? '#f4f7ff';
+$textSecondary = $heroTextColorConfig ?: ($colors['text_secondary'] ?? '#d4deef');
+$textMuted = $colors['text_muted'] ?? '#90a6c2';
+$accentPrimary = $heroTitleColorConfig ?: ($colors['heading_color_alt'] ?? $colors['accent_primary_vibrant'] ?? '#ffd067');
+$accentSecondary = $colors['accent_secondary'] ?? '#00d8ae';
+$accentAlt = $colors['accent_primary'] ?? '#ff5a5d';
+$borderLight = $colors['border_light'] ?? 'rgba(157, 186, 231, 0.24)';
+$cardBg = $statsCardBgConfig ?: ($colors['card_bg'] ?? 'rgba(255, 255, 255, 0.9)');
+$statsNumberColor = $statsNumberColorConfig ?: $accentPrimary;
+$statsLabelColor = $statsLabelColorConfig ?: $textMuted;
+$storyTitleColor = $storyTitleColorConfig ?: $accentAlt;
+$buttonPrimaryBg = $ctaButtonBgConfig ?: ($colors['button_primary_bg'] ?? 'linear-gradient(115deg, #ffd067 0%, #ff9050 45%, #ff5a5d 100%)');
+$buttonPrimaryText = $ctaButtonTextColorConfig ?: ($colors['button_primary_text'] ?? '#2f1207');
+$brandName = trim((string)($config['logo.text'] ?? $config['header.logo.text'] ?? $config['texts.app_name'] ?? $config['app_info.app_name'] ?? 'Indian Rummy Voltage'));
+
+$instanceId = $component_instance_id ?? 'about-content-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>" class="rv-section rv-about-content">
+    <div class="rv-about-hero">
+        <div class="rv-inner">
+            <div class="rv-hero-main">
+                <p class="rv-kicker"><?= htmlspecialchars((string)$brandName) ?></p>
+                <h1><?= htmlspecialchars((string)$pageTitle) ?></h1>
+                <?php if ($heroSubtitle !== ''): ?>
+                    <p class="rv-hero-subtitle"><?= htmlspecialchars((string)$heroSubtitle) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($showStoryPanel): ?>
+                <div class="rv-hero-summary">
+                    <?php if ($hasText($storyTitle)): ?>
+                        <p class="rv-summary-tag"><?= htmlspecialchars((string)$storyTitle) ?></p>
+                    <?php endif; ?>
+                    <?php if ($hasText($storySubtitle)): ?>
+                        <h2><?= htmlspecialchars((string)$storySubtitle) ?></h2>
+                    <?php endif; ?>
+                    <?php foreach (array_slice($storyParagraphs, 0, 1) as $paragraph): ?>
+                        <?php if ($hasText($paragraph)): ?>
+                            <p><?= htmlspecialchars((string)$paragraph) ?></p>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+
+            <?php if ($showStats): ?>
+                <div class="rv-stat-strip" aria-label="about stats">
+                    <?php foreach ($stats as $stat): ?>
+                        <article class="rv-stat-cell">
+                            <strong><?= htmlspecialchars((string)$stat['number']) ?></strong>
+                            <span><?= htmlspecialchars((string)$stat['label']) ?></span>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="rv-about-core">
+        <div class="rv-inner">
+            <?php if ($showStoryPanel): ?>
+                <section class="rv-story-stage" aria-label="story flow">
+                    <header class="rv-story-head">
+                        <?php if ($hasText($storyTitle)): ?>
+                            <p class="rv-kicker rv-kicker-soft"><?= htmlspecialchars((string)$storyTitle) ?></p>
+                        <?php endif; ?>
+                        <?php if ($hasText($storySubtitle)): ?>
+                            <h2><?= htmlspecialchars((string)$storySubtitle) ?></h2>
+                        <?php endif; ?>
+                    </header>
+                    <?php if (!empty($storyParagraphs)): ?>
+                        <div class="rv-story-columns<?= count($storyParagraphs) > 5 ? ' is-dense' : '' ?>">
+                            <?php foreach ($storyParagraphs as $paragraph): ?>
+                                <?php if ($hasText($paragraph)): ?>
+                                    <p><?= htmlspecialchars((string)$paragraph) ?></p>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($showValues): ?>
+                <section class="rv-values-block" aria-label="values">
+                    <div class="rv-head-row">
+                        <p class="rv-kicker rv-kicker-soft">Voltage Priorities</p>
+                        <h2><?= htmlspecialchars((string)$valuesTitle) ?></h2>
+                        <?php if ($valuesSubtitle !== ''): ?>
+                            <p class="rv-section-note"><?= htmlspecialchars((string)$valuesSubtitle) ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="rv-values-grid">
+                        <?php foreach ($values as $index => $value): ?>
+                            <article class="rv-value-card value-<?= (int)($index + 1) ?>">
+                                <span class="rv-value-icon"><?= htmlspecialchars((string)$value['icon']) ?></span>
+                                <h3><?= htmlspecialchars((string)$value['title']) ?></h3>
+                                <p><?= htmlspecialchars((string)$value['desc']) ?></p>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($showTeam): ?>
+                <section class="rv-team-block" aria-label="team">
+                    <div class="rv-head-row">
+                        <p class="rv-kicker rv-kicker-soft">Team</p>
+                        <h2><?= htmlspecialchars((string)$teamTitle) ?></h2>
+                        <?php if ($teamSubtitle !== ''): ?>
+                            <p class="rv-section-note"><?= htmlspecialchars((string)$teamSubtitle) ?></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="rv-team-grid">
+                        <?php foreach ($teamMembers as $index => $member): ?>
+                            <article class="rv-team-card member-<?= (int)($index + 1) ?>">
+                                <span class="rv-team-avatar"><?= htmlspecialchars((string)$member['icon']) ?></span>
+                                <div>
+                                    <h3><?= htmlspecialchars((string)$member['name']) ?></h3>
+                                    <p><?= htmlspecialchars((string)$member['role']) ?></p>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if ($showCta): ?>
+        <div class="rv-about-cta">
+            <div class="rv-inner rv-cta-layout">
+                <h2><?= htmlspecialchars((string)$ctaTitle) ?></h2>
+                <?php if ($ctaDescription !== ''): ?>
+                    <p><?= htmlspecialchars((string)$ctaDescription) ?></p>
+                <?php endif; ?>
+                <a href="<?= htmlspecialchars((string)$ctaButtonUrl) ?>" class="rv-cta-btn"><?= htmlspecialchars((string)$ctaButtonText) ?></a>
+            </div>
+        </div>
+    <?php endif; ?>
+</section>
+
+<style>
+#<?= $instanceId ?> {
+    --hero-bg: <?= htmlspecialchars((string)$heroBg) ?>;
+    --hero-bg-end: <?= htmlspecialchars((string)$heroGradientEnd) ?>;
+    --section-bg-1: <?= htmlspecialchars((string)$sectionBg1) ?>;
+    --section-bg-2: <?= htmlspecialchars((string)$sectionBg2) ?>;
+    --text-primary: <?= htmlspecialchars((string)$textPrimary) ?>;
+    --text-secondary: <?= htmlspecialchars((string)$textSecondary) ?>;
+    --text-muted: <?= htmlspecialchars((string)$textMuted) ?>;
+    --accent-primary: <?= htmlspecialchars((string)$accentPrimary) ?>;
+    --accent-secondary: <?= htmlspecialchars((string)$accentSecondary) ?>;
+    --accent-alt: <?= htmlspecialchars((string)$accentAlt) ?>;
+    --border-light: <?= htmlspecialchars((string)$borderLight) ?>;
+    --card-bg: <?= htmlspecialchars((string)$cardBg) ?>;
+    --stats-number: <?= htmlspecialchars((string)$statsNumberColor) ?>;
+    --stats-label: <?= htmlspecialchars((string)$statsLabelColor) ?>;
+    --story-title: <?= htmlspecialchars((string)$storyTitleColor) ?>;
+    --button-bg: <?= htmlspecialchars((string)$buttonPrimaryBg) ?>;
+    --button-text: <?= htmlspecialchars((string)$buttonPrimaryText) ?>;
+}
+
+#<?= $instanceId ?> .rv-inner {
+    width: min(1180px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+#<?= $instanceId ?> .rv-about-hero {
+    padding: <?= $heroPadding ?>px 0 32px;
+    background:
+        radial-gradient(1040px 320px at 6% -12%, rgba(255, 90, 182, 0.24), transparent 72%),
+        radial-gradient(980px 320px at 96% 8%, rgba(89, 215, 255, 0.18), transparent 74%),
+        linear-gradient(136deg, var(--hero-bg) 0%, var(--hero-bg-end) 44%, #170d24 100%);
+    position: relative;
+    isolation: isolate;
+}
+
+#<?= $instanceId ?> .rv-about-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(108deg, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 24px);
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+#<?= $instanceId ?> .rv-about-hero .rv-inner::before {
+    content: '';
+    position: absolute;
+    top: -20px;
+    right: min(6vw, 48px);
+    width: clamp(180px, 30vw, 320px);
+    height: clamp(180px, 30vw, 320px);
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(169, 255, 94, 0.14), transparent 70%);
+    filter: blur(6px);
+    pointer-events: none;
+    z-index: -1;
+}
+
+#<?= $instanceId ?> .rv-about-hero .rv-inner {
+    position: relative;
+    z-index: 0;
+}
+
+#<?= $instanceId ?> .rv-hero-main {
+    max-width: 860px;
+    padding: 2px 2px 0;
+}
+
+#<?= $instanceId ?> .rv-kicker {
+    margin: 0 0 0.75rem;
+    width: fit-content;
+    border-radius: 999px;
+    border: 1px solid rgba(169, 255, 94, 0.35);
+    background: rgba(169, 255, 94, 0.12);
+    color: #d8ffb8;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    padding: 0.28rem 0.72rem;
+}
+
+#<?= $instanceId ?> .rv-kicker.rv-kicker-soft {
+    border-color: rgba(89, 215, 255, 0.3);
+    background: rgba(89, 215, 255, 0.12);
+    color: #c8f3ff;
+}
+
+#<?= $instanceId ?> .rv-hero-main h1 {
+    margin: 0;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    line-height: 1.05;
+    color: var(--accent-primary);
+    text-wrap: balance;
+}
+
+#<?= $instanceId ?> .rv-hero-subtitle {
+    margin: 0.92rem 0 0;
+    max-width: 760px;
+    color: var(--text-secondary);
+    line-height: 1.78;
+}
+
+#<?= $instanceId ?> .rv-hero-summary {
+    margin-top: 1.15rem;
+    border-radius: 18px;
+    padding: 14px 16px;
+    background:
+        linear-gradient(115deg, rgba(255, 244, 250, 0.1), rgba(255, 244, 250, 0.03)),
+        linear-gradient(180deg, rgba(18, 12, 30, 0.55), rgba(14, 9, 23, 0.64));
+    display: grid;
+    gap: 0.55rem;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+    max-width: 860px;
+}
+
+#<?= $instanceId ?> .rv-summary-tag {
+    margin: 0;
+    color: var(--story-title);
+    font-size: 0.74rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .rv-hero-summary h2 {
+    margin: 0;
+    font-size: clamp(1.02rem, 2vw, 1.26rem);
+    color: var(--text-primary);
+}
+
+#<?= $instanceId ?> .rv-hero-summary p {
+    margin: 0;
+    color: var(--text-muted);
+    line-height: 1.7;
+    font-size: 0.91rem;
+}
+
+#<?= $instanceId ?> .rv-stat-strip {
+    margin-top: 1.1rem;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    max-width: 980px;
+}
+
+#<?= $instanceId ?> .rv-stat-cell {
+    min-height: 94px;
+    border-radius: 12px;
+    padding: 12px;
+    background: linear-gradient(145deg, rgba(255, 244, 250, 0.12), rgba(255, 244, 250, 0.02));
+    display: grid;
+    align-content: center;
+    justify-items: start;
+    text-align: center;
+    gap: 0.32rem;
+    position: relative;
+    overflow: clip;
+}
+
+#<?= $instanceId ?> .rv-stat-cell:nth-child(2n) {
+    background: linear-gradient(145deg, rgba(89, 215, 255, 0.18), rgba(255, 244, 250, 0.03));
+}
+
+#<?= $instanceId ?> .rv-stat-cell:nth-child(3n) {
+    background: linear-gradient(145deg, rgba(169, 255, 94, 0.16), rgba(255, 244, 250, 0.03));
+}
+
+#<?= $instanceId ?> .rv-stat-cell::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    bottom: -28px;
+    width: 78px;
+    height: 78px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+#<?= $instanceId ?> .rv-stat-cell strong {
+    color: var(--stats-number);
+    font-size: clamp(1.2rem, 3vw, 1.9rem);
+    line-height: 1;
+}
+
+#<?= $instanceId ?> .rv-stat-cell span {
+    color: var(--stats-label);
+    font-size: 0.79rem;
+    line-height: 1.4;
+    text-align: left;
+}
+
+#<?= $instanceId ?> .rv-about-core {
+    background:
+        radial-gradient(960px 290px at 95% 10%, rgba(255, 90, 182, 0.11), transparent 76%),
+        radial-gradient(900px 300px at 0% 96%, rgba(89, 215, 255, 0.12), transparent 74%),
+        linear-gradient(180deg, #140d20 0%, var(--section-bg-2) 100%);
+    padding: 28px 0 58px;
+}
+
+#<?= $instanceId ?> .rv-story-stage,
+#<?= $instanceId ?> .rv-values-block,
+#<?= $instanceId ?> .rv-team-block {
+    border-radius: 16px;
+    background: rgba(255, 244, 250, 0.05);
+    padding: 16px;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.14);
+}
+
+#<?= $instanceId ?> .rv-values-block,
+#<?= $instanceId ?> .rv-team-block {
+    margin-top: 14px;
+}
+
+#<?= $instanceId ?> .rv-story-head h2,
+#<?= $instanceId ?> .rv-head-row h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: clamp(1.2rem, 3vw, 1.8rem);
+}
+
+#<?= $instanceId ?> .rv-head-row {
+    display: grid;
+    gap: 0.56rem;
+    margin-bottom: 0.9rem;
+}
+
+#<?= $instanceId ?> .rv-section-note {
+    margin: 0;
+    color: var(--text-muted);
+    line-height: 1.7;
+}
+
+#<?= $instanceId ?> .rv-story-columns {
+    margin-top: 0.82rem;
+    column-count: 2;
+    column-gap: 12px;
+}
+
+#<?= $instanceId ?> .rv-story-columns p {
+    margin: 0 0 12px;
+    color: var(--text-secondary);
+    line-height: 1.78;
+    padding: 0.78rem 0.82rem;
+    border-radius: 12px;
+    background: rgba(255, 244, 250, 0.08);
+    break-inside: avoid;
+    border-left: 2px solid rgba(89, 215, 255, 0.42);
+}
+
+#<?= $instanceId ?> .rv-story-columns.is-dense {
+    column-count: 3;
+}
+
+#<?= $instanceId ?> .rv-values-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+
+#<?= $instanceId ?> .rv-value-card {
+    border-radius: 14px;
+    padding: 13px;
+    background: rgba(255, 244, 250, 0.1);
+    display: grid;
+    gap: 0.55rem;
+    position: relative;
+    overflow: clip;
+}
+
+#<?= $instanceId ?> .rv-value-card.value-2 {
+    background: rgba(169, 255, 94, 0.13);
+}
+
+#<?= $instanceId ?> .rv-value-card.value-3 {
+    background: rgba(89, 215, 255, 0.16);
+}
+
+#<?= $instanceId ?> .rv-value-card::after {
+    content: '';
+    position: absolute;
+    right: -28px;
+    bottom: -28px;
+    width: 76px;
+    height: 76px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+}
+
+#<?= $instanceId ?> .rv-value-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #210c1d;
+    font-weight: 800;
+    background: var(--button-bg);
+}
+
+#<?= $instanceId ?> .rv-value-card h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+#<?= $instanceId ?> .rv-value-card p {
+    margin: 0;
+    color: var(--text-muted);
+    line-height: 1.65;
+    font-size: 0.9rem;
+}
+
+#<?= $instanceId ?> .rv-team-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+#<?= $instanceId ?> .rv-team-card {
+    border-radius: 12px;
+    background: rgba(255, 244, 250, 0.09);
+    padding: 12px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: center;
+}
+
+#<?= $instanceId ?> .rv-team-card.member-2,
+#<?= $instanceId ?> .rv-team-card.member-4 {
+    background: rgba(89, 215, 255, 0.14);
+}
+
+#<?= $instanceId ?> .rv-team-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255, 244, 250, 0.18);
+    color: var(--text-primary);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .rv-team-card h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 0.95rem;
+}
+
+#<?= $instanceId ?> .rv-team-card p {
+    margin: 0.2rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+#<?= $instanceId ?> .rv-about-cta {
+    background: linear-gradient(180deg, var(--section-bg-2) 0%, #140c1f 100%);
+    padding: 0 0 58px;
+}
+
+#<?= $instanceId ?> .rv-cta-layout {
+    border-radius: 18px;
+    padding: 18px;
+    background:
+        radial-gradient(460px 140px at 14% 18%, rgba(169, 255, 94, 0.18), transparent 74%),
+        radial-gradient(420px 140px at 86% 80%, rgba(89, 215, 255, 0.14), transparent 76%),
+        rgba(255, 244, 250, 0.08);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px 16px;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.16);
+}
+
+#<?= $instanceId ?> .rv-cta-layout h2 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: clamp(1.2rem, 3vw, 1.7rem);
+}
+
+#<?= $instanceId ?> .rv-cta-layout p {
+    margin: 0;
+    grid-column: 1;
+    color: var(--text-muted);
+    line-height: 1.7;
+}
+
+#<?= $instanceId ?> .rv-cta-btn {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    white-space: nowrap;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 0.7rem 1.15rem;
+    background: var(--button-bg);
+    color: var(--button-text);
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+    transition: transform 0.22s ease;
+}
+
+#<?= $instanceId ?> .rv-cta-btn:hover {
+    transform: translateY(-2px);
+}
+
+@media (max-width: 980px) {
+    #<?= $instanceId ?> .rv-story-columns,
+    #<?= $instanceId ?> .rv-values-grid,
+    #<?= $instanceId ?> .rv-team-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $instanceId ?> .rv-story-columns,
+    #<?= $instanceId ?> .rv-story-columns.is-dense {
+        column-count: 1;
+    }
+
+    #<?= $instanceId ?> .rv-stat-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #<?= $instanceId ?> .rv-cta-layout {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $instanceId ?> .rv-cta-btn {
+        grid-column: 1;
+        grid-row: auto;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $instanceId ?> .rv-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $instanceId ?> .rv-about-hero {
+        padding: 54px 0 28px;
+    }
+
+    #<?= $instanceId ?> .rv-stat-strip {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $instanceId ?> .rv-story-stage,
+    #<?= $instanceId ?> .rv-values-block,
+    #<?= $instanceId ?> .rv-team-block,
+    #<?= $instanceId ?> .rv-cta-layout {
+        border-radius: 14px;
+        padding: 14px;
+    }
+}
+</style>

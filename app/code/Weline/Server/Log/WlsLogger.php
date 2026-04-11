@@ -32,6 +32,11 @@ class WlsLogger
      * callable(string $line, string $level, string $processTag): void
      */
     private $ipcLogSink = null;
+    /** @var list<string> */
+    private array $pendingBatchFiles = [];
+    private int $maxPendingBatchFiles = 32;
+    private float $lastBottleneckWarnAt = 0.0;
+    private float $bottleneckWarnInterval = 5.0;
 
     /** 开发模式多进程同时打 debug/info 时，经 IPC 汇聚易形成 Master 端消息风暴 */
     private static float $ipcSinkWindowStart = 0.0;
@@ -222,6 +227,113 @@ class WlsLogger
         if (LogLevel::isAtLeast($level, LogLevel::ERROR)) {
             $this->writeErrorLog($line);
         }
+    }
+
+    private function getBatchSpoolDir(): string
+    {
+        return $this->logDir . '_batch' . DIRECTORY_SEPARATOR;
+    }
+
+    private function ensureBatchSpoolDir(): bool
+    {
+        $dir = $this->getBatchSpoolDir();
+        if (\is_dir($dir)) {
+            return true;
+        }
+
+        return @\mkdir($dir, 0755, true);
+    }
+
+    private function warnBottleneck(string $message): void
+    {
+        $now = \microtime(true);
+        if (($now - $this->lastBottleneckWarnAt) < $this->bottleneckWarnInterval) {
+            return;
+        }
+
+        $this->lastBottleneckWarnAt = $now;
+        @\error_log('[WlsLogger] ' . $message);
+    }
+
+    private function spillBufferToBatchFile(string $reason): void
+    {
+        if ($this->buffer === '' || !$this->fileEnabled || $this->logDir === '') {
+            return;
+        }
+
+        if (!$this->ensureBatchSpoolDir()) {
+            $this->appendImmediateToMainLog($this->buffer, LogLevel::WARNING);
+            $this->buffer = '';
+            $this->bufferSize = 0;
+            $this->bufferLineCount = 0;
+            $this->warnBottleneck('batch spool dir create failed, fallback to direct append, reason=' . $reason);
+            return;
+        }
+
+        if (\count($this->pendingBatchFiles) >= $this->maxPendingBatchFiles) {
+            $this->appendImmediateToMainLog($this->buffer, LogLevel::WARNING);
+            $this->buffer = '';
+            $this->bufferSize = 0;
+            $this->bufferLineCount = 0;
+            $this->warnBottleneck(
+                'pending batch files reached limit=' . $this->maxPendingBatchFiles
+                . ', fallback to direct append, reason=' . $reason
+            );
+            return;
+        }
+
+        $file = $this->getBatchSpoolDir()
+            . \date('Ymd-His')
+            . '-'
+            . \substr(\bin2hex(\random_bytes(4)), 0, 8)
+            . '.batch.log';
+
+        if (@\file_put_contents($file, $this->buffer, LOCK_EX) === false) {
+            $this->appendImmediateToMainLog($this->buffer, LogLevel::WARNING);
+            $this->warnBottleneck('spill batch write failed, fallback to direct append, reason=' . $reason);
+        } else {
+            $this->pendingBatchFiles[] = $file;
+            $this->warnBottleneck(
+                'spill buffer to batch file, reason=' . $reason
+                . ', pending_batches=' . \count($this->pendingBatchFiles)
+                . ', bytes=' . $this->bufferSize
+            );
+        }
+
+        $this->buffer = '';
+        $this->bufferSize = 0;
+        $this->bufferLineCount = 0;
+    }
+
+    private function flushPendingBatchFiles(string $mainLog): void
+    {
+        if ($this->pendingBatchFiles === []) {
+            return;
+        }
+
+        $remaining = [];
+        foreach ($this->pendingBatchFiles as $file) {
+            if (!\is_file($file)) {
+                continue;
+            }
+
+            $content = @\file_get_contents($file);
+            if ($content === false || $content === '') {
+                @\unlink($file);
+                continue;
+            }
+
+            if (@\file_put_contents($mainLog, $content, FILE_APPEND) === false) {
+                $remaining[] = $file;
+                $this->warnBottleneck('flush batch file failed, keep pending file: ' . \basename($file));
+                continue;
+            }
+
+            $this->writeProcessLogMirror($content);
+            @\unlink($file);
+        }
+
+        $this->pendingBatchFiles = $remaining;
     }
 
     public function log(string $level, string $message, array $context = []): void
@@ -440,7 +552,7 @@ class WlsLogger
 
     public function flush(bool $force = false): void
     {
-        if ($this->bufferSize === 0) {
+        if ($this->bufferSize === 0 && $this->pendingBatchFiles === []) {
             return;
         }
 
@@ -458,8 +570,11 @@ class WlsLogger
         $mainLog = $this->logDir . 'wls-' . \date('Y-m-d') . '.log';
         // 移除 LOCK_EX 避免锁竞争，使用非阻塞写入提升性能
         // 在 WLS 多 Worker 模式下，各 Worker 写入自己的日志文件，不会产生冲突
-        @\file_put_contents($mainLog, $this->buffer, FILE_APPEND);
-        $this->writeProcessLogMirror($this->buffer);
+        $this->flushPendingBatchFiles($mainLog);
+        if ($this->buffer !== '') {
+            @\file_put_contents($mainLog, $this->buffer, FILE_APPEND);
+            $this->writeProcessLogMirror($this->buffer);
+        }
 
         // 日志轮转：清理过期日志文件
         $this->rotateOldLogs();
@@ -550,12 +665,16 @@ class WlsLogger
         $memoryLimit = $this->getMemoryLimit();
 
         if ($memoryLimit > 0 && $memoryUsage > ($memoryLimit * 0.85)) {
-            $this->flush(true);
+            $this->spillBufferToBatchFile('memory_pressure');
+            $this->warnBottleneck(
+                'memory pressure detected, usage=' . \round($memoryUsage / 1024 / 1024, 1)
+                . 'MB limit=' . \round($memoryLimit / 1024 / 1024, 1) . 'MB'
+            );
         }
 
         // 防止缓冲区无限增长：检查行数和字节数双重限制
         if ($this->bufferLineCount >= $this->maxBufferLines || $this->bufferSize >= $this->maxBufferBytes) {
-            $this->flush(true);
+            $this->spillBufferToBatchFile('buffer_threshold');
         }
 
         $this->buffer .= $line;
@@ -692,6 +811,12 @@ class WlsLogger
     {
         if (self::$instance !== null) {
             self::$instance->flush(true);
+            foreach (self::$instance->pendingBatchFiles as $file) {
+                if (\is_file($file)) {
+                    @\unlink($file);
+                }
+            }
+            self::$instance->pendingBatchFiles = [];
         }
         self::$instance = null;
         LogConfig::clearCache();

@@ -1,0 +1,1092 @@
+<?php
+/**
+ * Three Patti Mela Pop - Navigation
+ *
+ * @component_start
+ * code: header-nav
+ * name: Mela Navigation
+ * name_en: Mela Navigation
+ * description: Festival-bright floating navigation with a responsive poster-style mobile menu.
+ * category: header
+ * region: header
+ * thumbnail: asset/img/mela-pop-logo.svg
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文本:text:Three Patti Mela Pop
+ * logo.subline => Logo副标题:text:Bright 3 Patti
+ * logo.url => Logo地址:textarea:|默认使用本地mela-pop-logo.svg
+ * logo.width => Logo宽度:responsive:68/72|px
+ * logo.height => Logo高度:responsive:|px[可选，默认跟随宽度]
+ *
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 导航背景色:color:rgba(255,248,231,0.2)
+ * navigation.bg_color_scrolled => 滚动后导航背景色:color:rgba(255,248,235,0.94)
+ * navigation.text_color => 导航文字颜色:color:#2d170b
+ * navigation.link_color => 链接颜色:color:#5b3a2a
+ * navigation.link_hover_color => 链接悬停颜色:color:#ff5a36
+ * navigation.link_font_size => 链接字号:number:14|px
+ * navigation.link_font_weight => 链接字重:number:700
+ * navigation.link_gap => 链接间距:number:20|px
+ * navigation.padding_x => 水平内边距:number:20|px
+ * navigation.padding_y => 垂直内边距:number:12|px
+ * navigation.min_height => 最小高度:number:78|px
+ * navigation.box_shadow => 阴影:text:0 24px 48px rgba(255,129,77,0.16)
+ * navigation.backdrop_blur => 背景模糊:number:14|px
+ * navigation.use_custom_links => 使用自定义导航链接:select:yes|yes,no
+ * navigation.items => 导航项:textarea:Home=>/\r\nAbout=>/about\r\nBlog=>/blog\r\nFAQs=>/faqs|每行一项，格式：标题=>链接
+ * group:navigation_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * navigation.label_home_page => 首页菜单名:text:
+ * navigation.label_about_page => 关于我们菜单名:text:
+ * navigation.label_blog_list => 博客菜单名:text:
+ * navigation.label_contact_page => 联系我们菜单名:text:
+ * navigation.label_terms_of_service => 条款菜单名:text:
+ * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * navigation.use_subpages => 兼容旧版-使用子页面生成导航:select:no|yes,no
+ *
+ * group:download_button => 下载按钮
+ * download_button.display => 显示下载按钮:select:yes|yes,no
+ * download_button.text => 按钮文字:text:Download
+ * download_button.url => 按钮链接:text:#download
+ * download_button.bg_color => 按钮背景色:color:#ff5a36
+ * download_button.bg_hover_color => 按钮悬停背景色:color:#d9381a
+ * download_button.text_color => 按钮文字颜色:color:#fffdf8
+ * download_button.font_size => 按钮字号:number:13|px
+ * download_button.font_weight => 按钮字重:number:800
+ * download_button.border_radius => 按钮圆角:number:999|px
+ * download_button.padding_x => 按钮水平内边距:number:20|px
+ * download_button.padding_y => 按钮垂直内边距:number:11|px
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+$standaloneShell = !($this->getData('__mela_shell_managed') || $this->getData('__pagebuilder_shell_managed'));
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$parseResponsive = function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string)$value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string)($parts[0] ?? '')),
+        'desktop' => trim((string)($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = function ($parsed) {
+    $mobile = (float)$parsed['mobile'];
+    $desktop = (float)$parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$templateCode = $page ? $page->getData('style') : 'three-patti-mela-pop';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'three-patti-mela-pop';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$brandName = trim((string)$getConfigAny(['logo.text', 'header.logo.text', 'app_info.app_name'], ''));
+if ($brandName === '' && $page) {
+    $brandName = (string)($page->getData('title') ?: '');
+}
+$brandName = $sanitizeTitle($brandName);
+if ($brandName === '') {
+    $brandName = 'Three Patti Mela Pop';
+}
+
+$metaTitleRaw = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : $brandName;
+$metaTitle = $sanitizeTitle($metaTitleRaw);
+if ($metaTitle === '') {
+    $metaTitle = $brandName;
+}
+$metaDescription = $page ? (string)($page->getData('meta_description') ?: '') : '';
+$metaKeywords = $page ? (string)($page->getData('meta_keywords') ?: '') : '';
+$pageIcon = $page ? (string)($page->getData('icon') ?: '') : '';
+
+$logoDisplay = $normalizeToggle($getConfigAny(['logo.display', 'header.logo.display'], 'yes')) !== 'no';
+$defaultLogoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/mela-pop-logo.svg');
+$logoUrl = $getConfigAny(['logo.url', 'header.logo.url'], '') ?: ($page && $page->getData('logo') ? $page->getData('logo') : $defaultLogoUrl);
+$logoWidth = $genResponsiveCSS($parseResponsive($getConfigAny(['logo.width', 'header.logo.width'], '68/72') . 'px'));
+$logoHeightConfig = $getConfigAny(['logo.height', 'header.logo.height'], '');
+$logoHeight = $logoHeightConfig === '' ? $logoWidth : $genResponsiveCSS($parseResponsive($logoHeightConfig . 'px'));
+
+$navDisplay = $normalizeToggle($getConfigAny(['navigation.display', 'header.navigation.display'], 'yes')) !== 'no';
+$navBgColor = $getConfigAny(['navigation.bg_color', 'header.navigation.bg_color'], $colors['nav_bg'] ?? 'rgba(255,248,231,0.24)');
+$navBgColorScrolled = $getConfig('navigation.bg_color_scrolled', $colors['nav_bg_scrolled'] ?? 'rgba(255,248,235,0.94)');
+$navTextColor = $getConfigAny(['navigation.text_color', 'header.navigation.text_color'], $colors['nav_text'] ?? '#2d170b');
+$navLinkColor = $getConfigAny(['navigation.link_color', 'header.navigation.link_color'], $colors['nav_link'] ?? '#5b3a2a');
+$navLinkHoverColor = $getConfigAny(['navigation.link_hover_color', 'header.navigation.link_hover_color'], $colors['nav_link_hover'] ?? '#ff5a36');
+$navLinkFontSize = (int)$getConfig('navigation.link_font_size', '14');
+$navLinkFontWeight = (int)$getConfig('navigation.link_font_weight', '700');
+$navLinkGap = (int)$getConfig('navigation.link_gap', '20');
+$navPaddingX = (int)$getConfig('navigation.padding_x', '20');
+$navPaddingY = (int)$getConfig('navigation.padding_y', '12');
+$navMinHeight = (int)$getConfig('navigation.min_height', '78');
+$navBoxShadow = $getConfig('navigation.box_shadow', '0 24px 48px rgba(255,129,77,0.16)');
+$navBackdropBlur = (int)$getConfig('navigation.backdrop_blur', '14');
+$useCustomLinksRaw = $getConfig('navigation.use_custom_links', '');
+$legacyUseSubpagesRaw = $getConfig('navigation.use_subpages', '');
+if ($useCustomLinksRaw !== '') {
+    $useCustomLinks = $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes';
+} elseif ($legacyUseSubpagesRaw !== '') {
+    $useCustomLinks = $normalizeToggle($legacyUseSubpagesRaw, 'no') !== 'yes';
+} else {
+    $useCustomLinks = true;
+}
+
+$downloadBtnDisplay = $normalizeToggle($getConfigAny(['download_button.display', 'header.download_button.display'], 'yes')) !== 'no';
+$downloadBtnText = trim((string)$getConfigAny(['download_button.text', 'header.download_button.text'], 'Download'));
+if ($downloadBtnText === '' || strtolower($downloadBtnText) === 'download app') {
+    $downloadBtnText = 'Download';
+}
+$downloadBtnUrl = $getConfigAny(['download_button.url', 'header.download_button.url'], '#download');
+$downloadBtnBgColor = $getConfigAny(['download_button.bg_color', 'header.download_button.bg_color'], $colors['accent_primary'] ?? '#ff5a36');
+$downloadBtnBgHoverColor = $getConfigAny(['download_button.bg_hover_color', 'header.download_button.hover_bg_color'], $colors['accent_primary_dark'] ?? '#d9381a');
+$downloadBtnTextColor = $getConfigAny(['download_button.text_color', 'header.download_button.text_color'], $colors['button_primary_text'] ?? '#fffdf8');
+$headerDownloadSize = trim((string)$getConfig('header.download_button.size', ''));
+$downloadBtnFontSizeCss = $getConfig('download_button.font_size', '') !== ''
+    ? ((int)$getConfig('download_button.font_size', '13') . 'px')
+    : ($headerDownloadSize !== '' ? $genResponsiveCSS($parseResponsive($headerDownloadSize . 'px')) : '13px');
+$downloadBtnFontWeight = (int)$getConfig('download_button.font_weight', '800');
+$downloadBtnRadius = (int)$getConfigAny(['download_button.border_radius', 'header.download_button.border_radius'], '999');
+$headerDownloadPadding = trim((string)$getConfig('header.download_button.padding', ''));
+$downloadBtnPaddingXCss = $getConfig('download_button.padding_x', '') !== ''
+    ? ((int)$getConfig('download_button.padding_x', '20') . 'px')
+    : ($headerDownloadPadding !== '' ? 'calc(' . $genResponsiveCSS($parseResponsive($headerDownloadPadding . 'px')) . ' * 1.72)' : '20px');
+$downloadBtnPaddingYCss = $getConfig('download_button.padding_y', '') !== ''
+    ? ((int)$getConfig('download_button.padding_y', '11') . 'px')
+    : ($headerDownloadPadding !== '' ? $genResponsiveCSS($parseResponsive($headerDownloadPadding . 'px')) : '11px');
+
+$navItems = [];
+if (!$useCustomLinks && $page) {
+    $navigationPages = [];
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $navigationPages = $page->getHeaderNavigationPages(10);
+    } elseif (method_exists($page, 'getNavigationPages')) {
+        $navigationPages = $page->getNavigationPages([], 10);
+    }
+    foreach ($navigationPages as $navPage) {
+        $type = trim((string)($navPage['type'] ?? ''));
+        $label = $type !== '' ? trim((string)$getConfig('navigation.label_' . $type, '')) : '';
+        if ($label === '' && $type !== '') {
+            $label = trim((string)$getConfig('header.navigation.label_' . $type, ''));
+        }
+        $navItems[] = [
+            'text' => $label !== '' ? $label : ($navPage['title'] ?? ''),
+            'href' => $navPage['url'] ?? '#',
+        ];
+    }
+}
+if (empty($navItems)) {
+    $navItemsConfig = $getConfigAny(['navigation.items', 'header.navigation.items'], "Home=>/\nAbout=>/about\nBlog=>/blog\nFAQs=>/faqs");
+    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+    }
+    foreach (preg_split('/\r?\n/', $navItemsConfig) as $line) {
+        $line = trim((string)$line);
+        if ($line === '' || strpos($line, '=>') === false) {
+            continue;
+        }
+        $parts = explode('=>', $line, 2);
+        $text = trim((string)($parts[0] ?? ''));
+        $href = trim((string)($parts[1] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        if ($href === '') {
+            $href = '/' . strtolower(trim((string)preg_replace('/[^a-zA-Z0-9]+/', '-', $text), '-'));
+        }
+        $navItems[] = ['text' => $text, 'href' => $href];
+    }
+}
+if (empty($navItems)) {
+    $navItems = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQs', 'href' => '/faqs'],
+    ];
+}
+
+$highlightItems = array_slice(array_map(static function ($item) {
+    return trim((string)($item['text'] ?? ''));
+}, $navItems), 0, 3);
+$highlightItems = array_values(array_filter($highlightItems, static function ($item) {
+    return $item !== '';
+}));
+if (empty($highlightItems)) {
+    $titleWords = preg_split('/\s+/', $brandName);
+    $highlightItems = array_slice(array_values(array_filter(array_map('trim', $titleWords))), 0, 3);
+}
+$brandSubline = trim((string)$getConfigAny(['logo.subline', 'header.logo.subline'], ''));
+if ($brandSubline === '') {
+    $brandSubline = implode(' / ', array_slice($highlightItems, 0, 2));
+}
+if ($brandSubline === '') {
+    $brandSubline = 'Bright 3 Patti';
+}
+
+$componentId = 'mela-nav-' . uniqid();
+$mobilePanelId = $componentId . '-mobile';
+?>
+<?php if ($standaloneShell): ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle) ?></title>
+    <?php if ($metaDescription !== ''): ?>
+        <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    <?php if ($metaKeywords !== ''): ?>
+        <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+    <?php if ($pageIcon !== ''): ?>
+        <link rel="icon" href="<?= htmlspecialchars($pageIcon) ?>">
+    <?php endif; ?>
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/animate.css@4.1.1/animate.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
+    <style>
+        :root {
+            --mela-body: <?= htmlspecialchars($colors['body_bg'] ?? '#fff7de') ?>;
+            --mela-hero: <?= htmlspecialchars($colors['hero_bg'] ?? '#ffe067') ?>;
+            --mela-hero-end: <?= htmlspecialchars($colors['hero_bg_gradient_end'] ?? '#ff8e3c') ?>;
+            --mela-ink: <?= htmlspecialchars($colors['text_primary'] ?? '#2d170b') ?>;
+            --mela-copy: <?= htmlspecialchars($colors['text_secondary'] ?? '#6b4b34') ?>;
+            --mela-muted: <?= htmlspecialchars($colors['text_muted'] ?? '#97725a') ?>;
+            --mela-accent: <?= htmlspecialchars($colors['accent_primary'] ?? '#ff5a36') ?>;
+            --mela-accent-2: <?= htmlspecialchars($colors['accent_secondary'] ?? '#00c2a8') ?>;
+            --mela-accent-3: <?= htmlspecialchars($colors['accent_primary_vibrant'] ?? '#ff4f7b') ?>;
+            --mela-surface: <?= htmlspecialchars($colors['card_bg'] ?? 'rgba(255,255,255,0.76)') ?>;
+            --mela-shell: min(1280px, calc(100% - clamp(1rem, 4vw, 2rem)));
+        }
+        @media (max-width: 767px) {
+            :root {
+                --mela-shell: min(1280px, calc(100% - 0.85rem));
+            }
+        }
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html {
+            scroll-behavior: smooth;
+        }
+        [hidden] {
+            display: none !important;
+        }
+        body {
+            font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(620px 280px at 8% 6%, rgba(255, 90, 54, 0.16), transparent 68%),
+                radial-gradient(720px 300px at 88% 4%, rgba(0, 194, 168, 0.18), transparent 70%),
+                radial-gradient(560px 280px at 50% 100%, rgba(255, 183, 3, 0.16), transparent 72%),
+                linear-gradient(180deg, #fffaf0 0%, var(--mela-body) 52%, #fff1d2 100%);
+            color: var(--mela-ink);
+            overflow-x: hidden;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body::before,
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: -2;
+        }
+        body::before {
+            background:
+                radial-gradient(circle at 16% 20%, rgba(255,255,255,0.62) 0 10px, transparent 11px),
+                radial-gradient(circle at 78% 18%, rgba(255,255,255,0.54) 0 9px, transparent 10px),
+                radial-gradient(circle at 24% 82%, rgba(255,255,255,0.42) 0 8px, transparent 9px),
+                radial-gradient(circle at 90% 74%, rgba(255,255,255,0.44) 0 7px, transparent 8px);
+            opacity: 0.82;
+        }
+        body::after {
+            background-image:
+                linear-gradient(135deg, rgba(45,23,11,0.035) 1px, transparent 1px),
+                linear-gradient(45deg, rgba(45,23,11,0.025) 1px, transparent 1px);
+            background-size: 28px 28px, 42px 42px;
+            opacity: 0.44;
+            z-index: -1;
+        }
+        body.mela-lock {
+            overflow: hidden;
+        }
+        img {
+            max-width: 100%;
+            display: block;
+        }
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+            letter-spacing: -0.04em;
+        }
+        .wow {
+            visibility: hidden;
+        }
+        html.mela-wow-ready .wow {
+            visibility: visible;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
+            .wow,
+            html.mela-wow-ready .wow {
+                visibility: visible;
+            }
+            .animate__animated {
+                animation: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="mela-pop-theme">
+<?php endif; ?>
+<nav id="<?= $componentId ?>" class="mela-nav<?= $navDisplay ? '' : ' nav-minimal' ?>" aria-label="Primary navigation" data-mobile-open="false">
+    <div class="nav-shell">
+        <div class="nav-ribbon" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+        </div>
+
+        <div class="nav-brand-wrap">
+            <?php if ($logoDisplay): ?>
+                <a class="brand-link" href="/" aria-label="<?= htmlspecialchars($brandName) ?> home">
+                    <span class="brand-logo">
+                        <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($brandName) ?>" loading="eager" decoding="async">
+                    </span>
+                    <span class="brand-copy">
+                        <strong><?= htmlspecialchars($brandName) ?></strong>
+                        <em><?= htmlspecialchars($brandSubline) ?></em>
+                    </span>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($navDisplay): ?>
+            <div class="nav-center" role="list">
+                <?php foreach ($navItems as $item): ?>
+                    <a class="nav-link" href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="nav-actions">
+            <?php if ($downloadBtnDisplay): ?>
+                <a class="nav-cta" href="<?= htmlspecialchars($downloadBtnUrl) ?>">
+                    <span class="cta-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                            <path d="M12 3v10.17l3.59-3.58L17 11l-5 5-5-5 1.41-1.41L12 13.17V3h2Zm-7 14h14v2H5v-2Z" fill="currentColor"></path>
+                        </svg>
+                    </span>
+                    <span><?= htmlspecialchars($downloadBtnText) ?></span>
+                </a>
+            <?php endif; ?>
+            <?php if ($navDisplay): ?>
+                <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="<?= $mobilePanelId ?>" aria-label="Toggle navigation">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </button>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if ($navDisplay): ?>
+        <div class="mela-mobile-panel" id="<?= $mobilePanelId ?>" aria-hidden="true">
+            <button class="mobile-backdrop" type="button" aria-label="Close menu"></button>
+            <div class="mobile-panel-shell" role="dialog" aria-modal="true" aria-label="<?= htmlspecialchars($brandName) ?> navigation">
+                <div class="mobile-panel-top">
+                    <div class="mobile-panel-title">
+                        <strong><?= htmlspecialchars($brandName) ?></strong>
+                        <span><?= htmlspecialchars($downloadBtnText) ?></span>
+                    </div>
+                    <button class="mobile-close" type="button" aria-label="Close menu">
+                        <span></span>
+                        <span></span>
+                    </button>
+                </div>
+
+                <div class="mobile-highlight-row" aria-hidden="true">
+                    <?php foreach ($highlightItems as $highlight): ?>
+                        <span><?= htmlspecialchars($highlight) ?></span>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="mobile-links">
+                    <?php foreach ($navItems as $item): ?>
+                        <a class="mobile-link" href="<?= htmlspecialchars($item['href']) ?>">
+                            <span><?= htmlspecialchars($item['text']) ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+
+                <?php if ($downloadBtnDisplay): ?>
+                    <a class="mobile-cta" href="<?= htmlspecialchars($downloadBtnUrl) ?>">
+                        <span class="cta-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                                <path d="M12 3v10.17l3.59-3.58L17 11l-5 5-5-5 1.41-1.41L12 13.17V3h2Zm-7 14h14v2H5v-2Z" fill="currentColor"></path>
+                            </svg>
+                        </span>
+                        <span><?= htmlspecialchars($downloadBtnText) ?></span>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</nav>
+
+<style>
+#<?= $componentId ?> {
+    position: fixed;
+    inset: 0 0 auto;
+    z-index: 120;
+    padding: max(0.85rem, env(safe-area-inset-top)) clamp(0.75rem, 2vw, 1rem) 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .nav-shell,
+#<?= $componentId ?> .mela-mobile-panel {
+    pointer-events: auto;
+}
+
+#<?= $componentId ?> .nav-shell {
+    width: var(--mela-shell);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    min-height: <?= (int)$navMinHeight ?>px;
+    padding: <?= (int)$navPaddingY ?>px <?= (int)$navPaddingX ?>px;
+    position: relative;
+    border-radius: 30px;
+    transition: background 0.28s ease, box-shadow 0.28s ease, border-color 0.28s ease, transform 0.28s ease;
+    color: <?= htmlspecialchars($navTextColor) ?>;
+}
+
+#<?= $componentId ?> .nav-ribbon {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.28s ease;
+}
+
+#<?= $componentId ?> .nav-ribbon span {
+    position: absolute;
+    display: block;
+    height: 10px;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .nav-ribbon span:nth-child(1) {
+    left: 1.4rem;
+    top: 0.9rem;
+    width: 5.5rem;
+    background: rgba(255, 90, 54, 0.18);
+}
+
+#<?= $componentId ?> .nav-ribbon span:nth-child(2) {
+    left: 50%;
+    top: 0.85rem;
+    width: 4.2rem;
+    transform: translateX(-50%);
+    background: rgba(255, 183, 3, 0.24);
+}
+
+#<?= $componentId ?> .nav-ribbon span:nth-child(3) {
+    right: 4.2rem;
+    bottom: 0.85rem;
+    width: 4rem;
+    background: rgba(0, 194, 168, 0.24);
+}
+
+#<?= $componentId ?> .nav-ribbon span:nth-child(4) {
+    right: 1.35rem;
+    top: 1rem;
+    width: 2.8rem;
+    background: rgba(255, 79, 123, 0.24);
+}
+
+#<?= $componentId ?>.is-scrolled .nav-shell,
+#<?= $componentId ?>.is-open .nav-shell {
+    background: <?= htmlspecialchars($navBgColorScrolled) ?>;
+    border: 1px solid rgba(45, 23, 11, 0.08);
+    box-shadow: <?= htmlspecialchars($navBoxShadow) ?>;
+    backdrop-filter: blur(<?= (int)$navBackdropBlur ?>px);
+}
+
+#<?= $componentId ?>.is-scrolled .nav-ribbon,
+#<?= $componentId ?>.is-open .nav-ribbon {
+    opacity: 1;
+}
+
+#<?= $componentId ?> .brand-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.85rem;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .brand-logo {
+    width: <?= $logoWidth ?>;
+    height: <?= $logoHeight ?>;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .brand-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: drop-shadow(0 12px 18px rgba(255, 129, 77, 0.12));
+}
+
+#<?= $componentId ?> .brand-copy {
+    display: grid;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .brand-copy strong {
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-size: clamp(0.98rem, 1.2vw, 1.08rem);
+    font-weight: 800;
+    line-height: 1.04;
+}
+
+#<?= $componentId ?> .brand-copy em {
+    font-style: normal;
+    font-size: 0.76rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(45, 23, 11, 0.54);
+    margin-top: 0.18rem;
+}
+
+#<?= $componentId ?> .nav-center {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: <?= (int)$navLinkGap ?>px;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.7rem;
+    padding: 0.4rem 0.95rem;
+    border-radius: 999px;
+    color: <?= htmlspecialchars($navLinkColor) ?>;
+    font-size: <?= (int)$navLinkFontSize ?>px;
+    font-weight: <?= (int)$navLinkFontWeight ?>;
+    letter-spacing: 0.01em;
+    transition: color 0.24s ease, background 0.24s ease, transform 0.24s ease;
+}
+
+#<?= $componentId ?> .nav-link:hover,
+#<?= $componentId ?> .nav-link:focus-visible {
+    color: <?= htmlspecialchars($navLinkHoverColor) ?>;
+    background: rgba(255,255,255,0.62);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+#<?= $componentId ?> .nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    justify-content: flex-end;
+}
+
+#<?= $componentId ?> .nav-cta,
+#<?= $componentId ?> .mobile-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.58rem;
+    min-height: 2.9rem;
+    padding: <?= $downloadBtnPaddingYCss ?> <?= $downloadBtnPaddingXCss ?>;
+    border-radius: <?= (int)$downloadBtnRadius ?>px;
+    background: linear-gradient(135deg, <?= htmlspecialchars($downloadBtnBgColor) ?> 0%, #ffb703 100%);
+    color: <?= htmlspecialchars($downloadBtnTextColor) ?>;
+    font-size: <?= $downloadBtnFontSizeCss ?>;
+    font-weight: <?= (int)$downloadBtnFontWeight ?>;
+    letter-spacing: 0.02em;
+    box-shadow: 0 18px 30px rgba(255, 90, 54, 0.2);
+    transition: transform 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .nav-cta .cta-icon,
+#<?= $componentId ?> .mobile-cta .cta-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .nav-cta .cta-icon svg,
+#<?= $componentId ?> .mobile-cta .cta-icon svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#<?= $componentId ?> .nav-cta:hover,
+#<?= $componentId ?> .nav-cta:focus-visible,
+#<?= $componentId ?> .mobile-cta:hover,
+#<?= $componentId ?> .mobile-cta:focus-visible {
+    transform: translateY(-2px);
+    background: linear-gradient(135deg, <?= htmlspecialchars($downloadBtnBgHoverColor) ?> 0%, #ff9d00 100%);
+    box-shadow: 0 22px 34px rgba(255, 90, 54, 0.28);
+    outline: none;
+}
+
+#<?= $componentId ?> .nav-toggle {
+    width: 3rem;
+    height: 3rem;
+    display: none;
+    position: relative;
+    border: 0;
+    border-radius: 24px;
+    background: rgba(255,255,255,0.88);
+    box-shadow: 0 16px 24px rgba(255, 129, 77, 0.14);
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .nav-toggle span {
+    position: absolute;
+    left: 50%;
+    width: 1.2rem;
+    height: 2px;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($navTextColor) ?>;
+    transform: translateX(-50%);
+    transition: transform 0.24s ease, opacity 0.24s ease, top 0.24s ease;
+}
+
+#<?= $componentId ?> .nav-toggle span:nth-child(1) { top: 1rem; }
+#<?= $componentId ?> .nav-toggle span:nth-child(2) { top: 1.45rem; }
+#<?= $componentId ?> .nav-toggle span:nth-child(3) { top: 1.9rem; }
+
+#<?= $componentId ?>.is-open .nav-toggle span:nth-child(1) {
+    top: 1.45rem;
+    transform: translateX(-50%) rotate(45deg);
+}
+
+#<?= $componentId ?>.is-open .nav-toggle span:nth-child(2) {
+    opacity: 0;
+}
+
+#<?= $componentId ?>.is-open .nav-toggle span:nth-child(3) {
+    top: 1.45rem;
+    transform: translateX(-50%) rotate(-45deg);
+}
+
+#<?= $componentId ?> .mela-mobile-panel {
+    position: fixed;
+    inset: 0;
+    z-index: 119;
+    display: flex;
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: calc(5.3rem + env(safe-area-inset-top)) 0.75rem 0.75rem;
+    background: rgba(30, 18, 10, 0.14);
+    backdrop-filter: blur(0);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.28s ease, backdrop-filter 0.28s ease, background 0.28s ease, visibility 0s linear 0.28s;
+}
+
+#<?= $componentId ?>.is-open .mela-mobile-panel {
+    opacity: 1;
+    background: rgba(30, 18, 10, 0.22);
+    backdrop-filter: blur(12px);
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 0.28s ease, backdrop-filter 0.28s ease, background 0.28s ease, visibility 0s linear 0s;
+}
+
+#<?= $componentId ?> .mobile-backdrop {
+    position: absolute;
+    inset: 0;
+    border: 0;
+    background: transparent;
+    cursor: default;
+}
+
+#<?= $componentId ?> .mobile-panel-shell {
+    position: relative;
+    width: min(85vw, 26rem);
+    min-height: calc(100svh - 6.05rem - env(safe-area-inset-top));
+    max-height: calc(100svh - 6.05rem - env(safe-area-inset-top));
+    margin-left: auto;
+    display: grid;
+    align-content: start;
+    gap: 0.75rem;
+    padding: 0.95rem;
+    border-radius: 30px 0 0 30px;
+    background:
+        radial-gradient(240px 120px at 0% 0%, rgba(255,255,255,0.42), rgba(255,255,255,0) 72%),
+        linear-gradient(180deg, rgba(255,251,244,0.98), rgba(255,245,231,0.98));
+    border: 1px solid rgba(45, 23, 11, 0.07);
+    box-shadow: 0 26px 44px rgba(255, 129, 77, 0.14);
+    overflow-y: auto;
+    transform: translate3d(105%, 0, 0);
+    transition: transform 0.34s cubic-bezier(0.22, 0.84, 0.24, 1), box-shadow 0.28s ease;
+}
+
+#<?= $componentId ?>.is-open .mobile-panel-shell {
+    transform: translate3d(0, 0, 0);
+}
+
+#<?= $componentId ?> .mobile-panel-top {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .mobile-panel-title {
+    display: grid;
+    gap: 0.1rem;
+}
+
+#<?= $componentId ?> .mobile-panel-title strong {
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-size: clamp(1.2rem, 4vw, 1.5rem);
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .mobile-panel-title span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(45, 23, 11, 0.52);
+}
+
+#<?= $componentId ?> .mobile-close {
+    position: relative;
+    width: 2.6rem;
+    height: 2.6rem;
+    border: 0;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.78);
+    box-shadow: inset 0 0 0 1px rgba(45,23,11,0.06);
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .mobile-close span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1.15rem;
+    height: 2px;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($navTextColor) ?>;
+}
+
+#<?= $componentId ?> .mobile-close span:nth-child(1) {
+    transform: translate(-50%, -50%) rotate(45deg);
+}
+
+#<?= $componentId ?> .mobile-close span:nth-child(2) {
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+#<?= $componentId ?> .mobile-highlight-row {
+    display: none;
+}
+
+#<?= $componentId ?> .mobile-links {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .mobile-link {
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.95rem 0.95rem 0.95rem 1rem;
+    border-radius: 20px;
+    text-align: left;
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: <?= htmlspecialchars($navTextColor) ?>;
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(45,23,11,0.06);
+    box-shadow: 0 10px 20px rgba(255, 129, 77, 0.06);
+    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease, background 0.24s ease;
+}
+
+#<?= $componentId ?> .mobile-link::after {
+    content: '›';
+    flex-shrink: 0;
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: rgba(45, 23, 11, 0.42);
+}
+
+#<?= $componentId ?> .mobile-link:hover,
+#<?= $componentId ?> .mobile-link:focus-visible {
+    transform: translateX(3px);
+    box-shadow: 0 12px 20px rgba(255, 129, 77, 0.1);
+    border-color: rgba(255, 90, 54, 0.18);
+    background: rgba(255,255,255,0.92);
+    outline: none;
+}
+
+#<?= $componentId ?> .mobile-cta {
+    width: 100%;
+    min-height: 3rem;
+    margin-top: 0.15rem;
+}
+
+@media (max-width: 1080px) {
+    #<?= $componentId ?> .nav-shell {
+        grid-template-columns: auto 1fr auto;
+    }
+
+    #<?= $componentId ?> .nav-center {
+        display: none;
+    }
+
+    #<?= $componentId ?> .nav-toggle {
+        display: inline-flex;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding-left: 0.4rem;
+        padding-right: 0.4rem;
+    }
+
+    #<?= $componentId ?> .nav-shell {
+        width: 100%;
+        min-height: 68px;
+        gap: 0.55rem;
+        padding: 8px 12px;
+        border-radius: 20px;
+    }
+
+    #<?= $componentId ?> .brand-copy em {
+        display: none;
+    }
+
+    #<?= $componentId ?> .brand-copy strong {
+        font-size: 0.95rem;
+    }
+
+    #<?= $componentId ?> .nav-cta {
+        display: none;
+    }
+
+    #<?= $componentId ?> .nav-toggle {
+        width: 2.8rem;
+        height: 2.8rem;
+        border-radius: 18px;
+    }
+
+    #<?= $componentId ?> .mela-mobile-panel {
+        padding: calc(4.95rem + env(safe-area-inset-top)) 0 0.55rem 15vw;
+    }
+
+    #<?= $componentId ?> .mobile-panel-shell {
+        width: 85vw;
+        min-height: calc(100svh - 5.5rem - env(safe-area-inset-top));
+        max-height: calc(100svh - 5.5rem - env(safe-area-inset-top));
+        padding: 0.9rem 0.78rem 0.78rem;
+        border-radius: 24px 0 0 24px;
+    }
+
+    #<?= $componentId ?> .mobile-panel-title span {
+        display: none;
+    }
+}
+</style>
+<script>
+(function () {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var toggle = root.querySelector('.nav-toggle');
+    var panel = document.getElementById('<?= $mobilePanelId ?>');
+    var closeButton = panel ? panel.querySelector('.mobile-close') : null;
+    var backdropButton = panel ? panel.querySelector('.mobile-backdrop') : null;
+    var desktopMq = window.matchMedia('(min-width: 1081px)');
+
+    var syncState = function (open) {
+        root.classList.toggle('is-open', open);
+        root.dataset.mobileOpen = open ? 'true' : 'false';
+        document.body.classList.toggle('mela-lock', open);
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+        if (panel) {
+            panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        }
+    };
+
+    var setOpen = function (open) {
+        syncState(open);
+    };
+
+    var syncScroll = function () {
+        root.classList.toggle('is-scrolled', (window.scrollY || window.pageYOffset || 0) > 18);
+    };
+
+    if (toggle && panel) {
+        toggle.addEventListener('click', function () {
+            setOpen(root.dataset.mobileOpen !== 'true');
+        });
+
+        if (closeButton) {
+            closeButton.addEventListener('click', function () {
+                setOpen(false);
+            });
+        }
+
+        if (backdropButton) {
+            backdropButton.addEventListener('click', function () {
+                setOpen(false);
+            });
+        }
+
+        panel.querySelectorAll('a').forEach(function (link) {
+            link.addEventListener('click', function () {
+                setOpen(false);
+            });
+        });
+
+        if (desktopMq.addEventListener) {
+            desktopMq.addEventListener('change', function (event) {
+                if (event.matches) {
+                    setOpen(false);
+                }
+            });
+        } else if (desktopMq.addListener) {
+            desktopMq.addListener(function (event) {
+                if (event.matches) {
+                    setOpen(false);
+                }
+            });
+        }
+
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && root.dataset.mobileOpen === 'true') {
+                setOpen(false);
+            }
+        });
+    }
+
+    syncState(false);
+    syncScroll();
+    window.addEventListener('scroll', syncScroll, { passive: true });
+})();
+</script>

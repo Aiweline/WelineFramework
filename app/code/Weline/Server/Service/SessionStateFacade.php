@@ -35,6 +35,11 @@ class SessionStateFacade implements SessionStateFacadeInterface
         $this->manager = $manager ?? new SharedStateServiceManager();
         $this->consumerCode = $this->resolveConsumerCode($config);
 
+        // WLS 模式下默认启用直连，避免 Worker 启动时阻塞的 ensure/probe
+        if (!isset($config['prefer_direct_connect']) && \defined('WLS_MODE') && WLS_MODE) {
+            $config['prefer_direct_connect'] = true;
+        }
+
         if ($this->attemptDirectBootstrap($config, $manager, $sessionClient, $sessionMemoryService)) {
             return;
         }
@@ -325,8 +330,29 @@ class SessionStateFacade implements SessionStateFacadeInterface
      */
     private function resolveConfiguredRuntime(array $config): array
     {
-        $runtime = (new SharedStateRuntimeResolver())->resolve($config);
+        // 直接从 env.php 读取配置，避免调用 resolve() 触发阻塞的 probe
+        $envConfig = \Weline\Framework\App\Env::getInstance()->getConfig();
+        if (!\is_array($envConfig)) {
+            $envConfig = [];
+        }
 
-        return $runtime['session'];
+        $wls = $envConfig['wls'] ?? [];
+        $sessionConfig = \is_array($wls['session'] ?? null) ? $wls['session'] : [];
+        $wlsServer = \is_array($sessionConfig['wls_server'] ?? null) ? $sessionConfig['wls_server'] : [];
+
+        $host = \trim((string) ($wlsServer['host'] ?? $sessionConfig['host'] ?? '127.0.0.1'));
+        if ($host === '') {
+            $host = '127.0.0.1';
+        }
+
+        $defaultPort = 19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset();
+        $port = (int) ($wlsServer['port'] ?? $sessionConfig['port'] ?? $defaultPort);
+        $tokenFileName = \trim((string) ($wlsServer['token_file_name'] ?? $sessionConfig['token_file_name'] ?? 'session_server.token'));
+
+        return [
+            'host' => $host,
+            'port' => $port > 0 ? $port : $defaultPort,
+            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'session_server.token',
+        ];
     }
 }

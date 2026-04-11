@@ -1,0 +1,224 @@
+<?php
+/**
+ * Blackjack Halo - Main Layout
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = 'blackjack-halo';
+
+$layoutConfig = $this->getData('layout_config') ?: [];
+$headerComponents = $layoutConfig['header'] ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+$footerComponents = $layoutConfig['footer'] ?? [];
+
+if (empty($headerComponents)) {
+    $headerComponents = [['code' => 'header-nav', 'enabled' => true, 'config' => []]];
+}
+
+if (empty($contentComponents)) {
+    $contentComponents = [
+        ['code' => 'hero-slider', 'enabled' => true, 'config' => []],
+        ['code' => 'advantages', 'enabled' => true, 'config' => []],
+        ['code' => 'games-showcase', 'enabled' => true, 'config' => []],
+        ['code' => 'testimonials', 'enabled' => true, 'config' => []],
+        ['code' => 'faq', 'enabled' => true, 'config' => []],
+    ];
+}
+
+if (empty($footerComponents)) {
+    $footerComponents = [['code' => 'footer-links', 'enabled' => true, 'config' => []]];
+}
+
+$componentFiles = [
+    'header-nav' => 'header/nav.phtml',
+    'hero-slider' => 'content/hero-slider.phtml',
+    'advantages' => 'content/advantages.phtml',
+    'games-showcase' => 'content/games.phtml',
+    'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
+    'testimonials' => 'content/testimonials.phtml',
+    'faq' => 'content/faq.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-category' => 'content/blog-category.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
+    'footer-links' => 'footer/links.phtml',
+];
+
+$renderComponent = function($component) use ($componentFiles, $page, $styleSettings) {
+    $code = $component['code'] ?? '';
+    $enabled = $component['enabled'] ?? true;
+    $componentConfig = $component['config'] ?? [];
+
+    if (!$enabled || $code === '') {
+        return '';
+    }
+
+    $file = $componentFiles[$code] ?? null;
+    if (!$file) {
+        return "<!-- Component not found: {$code} -->";
+    }
+
+    ob_start();
+    $this->assign('page', $page);
+    $this->assign('style', $styleSettings);
+    $this->assign('style_settings', $styleSettings);
+    $this->assign('component_config', $componentConfig);
+    echo $this->fetchTemplate("GuoLaiRen_PageBuilder::style/blackjack-halo/components/{$file}");
+    return ob_get_clean();
+};
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sanitizeTitle = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') return $value;
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$pageTitleRaw = $page ? $page->getData('title') : 'Blackjack Halo';
+$pageTitle = $sanitizeTitle($pageTitleRaw);
+if ($pageTitle === '') {
+    $pageTitle = 'Blackjack Halo';
+}
+$pageDescription = $page ? $page->getData('meta_description') : '';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <?php if ($pageDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($pageDescription) ?>">
+    <?php endif; ?>
+
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'bkh-felt': '<?= htmlspecialchars($colors['accent_primary'] ?? '#1f7a5b') ?>',
+                    'bkh-gold': '<?= htmlspecialchars($colors['accent_secondary'] ?? '#d0a03f') ?>',
+                    'bkh-ivory': '<?= htmlspecialchars($colors['body_bg'] ?? '#f5f3ea') ?>',
+                    'bkh-mist': '<?= htmlspecialchars($colors['section_bg_2'] ?? '#eef4e8') ?>',
+                    'bkh-ink': '<?= htmlspecialchars($colors['text_primary'] ?? '#1f312d') ?>',
+                    'bkh-muted': '<?= htmlspecialchars($colors['text_muted'] ?? '#6c8378') ?>'
+                }
+            }
+        }
+    }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap');
+        :root {
+            --bkh-body-bg: <?= htmlspecialchars($colors['body_bg'] ?? '#f5f3ea') ?>;
+            --bkh-body-alt: <?= htmlspecialchars($colors['section_bg_2'] ?? '#eef4e8') ?>;
+            --bkh-body-strong: <?= htmlspecialchars($colors['section_bg_3'] ?? '#e3ece0') ?>;
+            --bkh-surface: <?= htmlspecialchars($colors['card_bg'] ?? 'rgba(255, 255, 255, 0.82)') ?>;
+            --bkh-ink: <?= htmlspecialchars($colors['text_primary'] ?? '#1f312d') ?>;
+            --bkh-muted: <?= htmlspecialchars($colors['text_muted'] ?? '#6c8378') ?>;
+            --bkh-felt: <?= htmlspecialchars($colors['accent_primary'] ?? '#1f7a5b') ?>;
+            --bkh-felt-strong: <?= htmlspecialchars($colors['accent_primary_dark'] ?? '#15523e') ?>;
+            --bkh-gold: <?= htmlspecialchars($colors['accent_secondary'] ?? '#d0a03f') ?>;
+            --bkh-shell-width: min(1240px, calc(100% - clamp(1rem, 4vw, 2rem)));
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(740px 360px at 12% 8%, rgba(208, 160, 63, 0.14), transparent 62%),
+                radial-gradient(660px 320px at 88% 12%, rgba(31, 122, 91, 0.14), transparent 58%),
+                linear-gradient(180deg, #fcfbf7 0%, var(--bkh-body-bg) 46%, var(--bkh-body-alt) 100%);
+            color: var(--bkh-ink);
+            overflow-x: hidden;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(115deg, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0) 42%),
+                repeating-linear-gradient(135deg, rgba(22, 53, 45, 0.03) 0 1px, transparent 1px 20px);
+            opacity: 0.8;
+            z-index: -1;
+        }
+        h1, h2, h3, h4, h5 {
+            font-family: 'Sora', 'Manrope', sans-serif;
+            letter-spacing: -0.04em;
+        }
+        img { max-width: 100%; display: block; }
+        .bkh-region-header,
+        .bkh-region-content,
+        .bkh-region-footer,
+        .bkh-component-wrapper {
+            width: 100%;
+            min-width: 0;
+        }
+        @media (max-width: 768px) {
+            body {
+                background:
+                    radial-gradient(420px 220px at 12% 4%, rgba(208, 160, 63, 0.12), transparent 62%),
+                    radial-gradient(400px 220px at 88% 8%, rgba(31, 122, 91, 0.12), transparent 58%),
+                    linear-gradient(180deg, #fcfbf7 0%, var(--bkh-body-bg) 52%, var(--bkh-body-alt) 100%);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-bkh-ivory text-bkh-ink antialiased">
+    <header class="bkh-region-header relative w-full" data-region="header">
+        <?php foreach ($headerComponents as $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="bkh-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </header>
+
+    <main class="bkh-region-content relative flex min-w-0 flex-col" data-region="content">
+        <?php foreach ($contentComponents as $index => $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="bkh-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>" data-index="<?= (int)$index ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </main>
+
+    <footer class="bkh-region-footer relative w-full" data-region="footer">
+        <?php foreach ($footerComponents as $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="bkh-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </footer>
+</body>
+</html>

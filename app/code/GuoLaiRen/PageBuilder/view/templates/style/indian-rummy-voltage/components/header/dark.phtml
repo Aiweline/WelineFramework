@@ -1,0 +1,458 @@
+<?php
+/**
+ * RV 深色头部组件 - Dark Header Component
+ * 
+ * 深色背景的现代头部，包含 Logo、导航和渐变按钮
+ * 
+ * @component_start
+ * code: header-dark
+ * name: 深色头部
+ * name_en: Dark Header
+ * region: header
+ * category: header
+ * @component_end
+ * 
+ * @fields_start
+ * group:logo => 品牌标识设置
+ * logo.display => 显示品牌标识:select:yes|yes,no
+ * logo.url => 品牌标识地址:textarea:|留空使用默认
+ * logo.width => 品牌标识宽度:text:160px
+ * 
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.use_custom_links => 使用自定义导航:select:yes|yes,no
+ * navigation.items => 导航项:textarea:Home=>/\r\nAbout=>/about\r\nBlog=>/blog\r\nFAQs=>/faqs|配置格式：名字=>url，一行一个
+ * 
+ * group:button => 按钮设置
+ * button.display => 显示按钮:select:yes|yes,no
+ * button.text => 按钮文字:text:Download Now
+ * button.url => 按钮链接:text:#download
+ * 
+ * group:style => 样式设置
+ * style.background => 背景色:color:#1a1a2e
+ * style.nav_color => 导航文字色:color:#ffffff
+ * style.accent_color => 强调色:color:#e94560
+ * style.height => 头部高度:text:70px
+ * @fields_end
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ */
+
+// 生成唯一组件ID
+$componentId = 'rv-header-dark-' . uniqid();
+
+// 获取数据
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+// 合并配置：component_config 优先于 style_settings
+$config = array_merge($styleSettings, $componentConfig);
+
+// 辅助函数：读取配置，支持 group.field 格式
+// 同时兼容旧格式 group.group.field（历史数据兼容）
+$getConfigAny = function($keys, $default = '') use ($config) {
+    foreach ((array)$keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+        $parts = explode('.', (string)$key);
+        if (count($parts) === 2) {
+            $legacyKey = $parts[0] . '.' . $key;
+            if (isset($config[$legacyKey]) && $config[$legacyKey] !== '') {
+                return $config[$legacyKey];
+            }
+        }
+    }
+    return $default;
+};
+
+$getConfig = function($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$normalizeToggle = static function($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    if ($value === true || $value === 'true' || $value === 'yes') {
+        return 'yes';
+    }
+    if ($value === false || $value === 'false' || $value === 'no') {
+        return 'no';
+    }
+    return $default;
+};
+
+$parseNavItems = static function($value) {
+    $items = [];
+    $value = trim((string)$value);
+    if ($value === '') {
+        return $items;
+    }
+    if (strpos($value, '\\n') !== false && strpos($value, "\n") === false) {
+        $value = str_replace('\\n', "\n", $value);
+    }
+    $lines = preg_split('/\r?\n/', $value);
+    if (count($lines) === 1 && strpos($value, '=>') === false) {
+        $lines = explode(',', $value);
+    }
+    foreach ($lines as $line) {
+        $line = trim((string)$line);
+        if ($line === '') {
+            continue;
+        }
+        if (strpos($line, '=>') !== false) {
+            [$text, $href] = array_map('trim', explode('=>', $line, 2));
+        } else {
+            $parts = explode('#', $line, 2);
+            $text = trim((string)($parts[0] ?? ''));
+            $href = trim((string)($parts[1] ?? ''));
+            if ($href !== '') {
+                $href = '#' . ltrim($href, '#');
+            }
+        }
+        if ($text === '') {
+            continue;
+        }
+        if ($href === '') {
+            $href = '#';
+        }
+        $items[] = ['text' => $text, 'href' => $href];
+    }
+    return $items;
+};
+
+// Logo 配置
+$logoDisplayValue = $getConfig('logo.display', 'yes');
+$showLogo = !in_array($logoDisplayValue, ['no', '0', 0], true);
+$logoUrl = $getConfig('logo.url', '');
+$logoWidth = $getConfig('logo.width', '160px');
+
+// 如果没有配置 Logo，使用默认
+if (empty($logoUrl)) {
+    $logoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/logo/logo.avif');
+}
+
+// 导航配置
+$navDisplayValue = $getConfig('navigation.display', 'yes');
+$showNav = !in_array($navDisplayValue, ['no', '0', 0], true);
+$useCustomLinksRaw = $getConfig('navigation.use_custom_links', '');
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($getConfig('navigation.use_subpages', 'no'), 'no') !== 'yes';
+
+$navItems = [];
+
+// 优先使用真实子页面作为导航
+if (!$useCustomLinks && $page) {
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $navigationPages = $page->getHeaderNavigationPages(10);
+    } else {
+        $navigationPages = $page->getNavigationPages([], 10);
+    }
+    foreach ($navigationPages as $navPage) {
+        $navItems[] = [
+            'text' => $navPage['title'] ?? '',
+            'href' => $navPage['url'] ?? '/', // SEO 友好的 /handle URL
+        ];
+    }
+}
+
+// 如果没有子页面，使用配置的导航项
+if (empty($navItems)) {
+    $navItems = $parseNavItems($getConfig('navigation.items', "Home=>/\nAbout=>/about\nBlog=>/blog\nFAQs=>/faqs"));
+}
+
+// 最后的默认值
+if (empty($navItems)) {
+    if ($page) {
+        $defaultPages = $page->getNavigationPages([], 5);
+        foreach ($defaultPages as $navPage) {
+            $navItems[] = ['text' => $navPage['title'], 'href' => $navPage['url']];
+        }
+    }
+    if (empty($navItems)) {
+        $navItems = [
+            ['text' => 'Home', 'href' => '/'],
+            ['text' => 'About', 'href' => '/about'],
+            ['text' => 'Games', 'href' => '/games'],
+            ['text' => 'FAQ', 'href' => '/faq'],
+        ];
+    }
+}
+
+// 按钮配置
+$buttonDisplayValue = $getConfig('button.display', 'yes');
+$showButton = !in_array($buttonDisplayValue, ['no', '0', 0], true);
+$buttonText = $getConfig('button.text', 'Download Now');
+$buttonUrl = $getConfig('button.url', '#download');
+$buttonHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$buttonUrl);
+
+// 样式配置
+$bgColor = $getConfig('style.background', '#1a1a2e');
+$navColor = $getConfig('style.nav_color', '#ffffff');
+$accentColor = $getConfig('style.accent_color', '#e94560');
+$headerHeight = $getConfig('style.height', '70px');
+?>
+
+<!-- 深色头部组件 -->
+<header id="<?= $componentId ?>" class="rv-section rv-header-dark-component">
+    <div class="rv-section-inner">
+        <?php if ($showLogo): ?>
+        <div class="rv-header-logo">
+            <a href="/">
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="Logo" style="width: <?= htmlspecialchars($logoWidth) ?>">
+            </a>
+        </div>
+        <?php endif; ?>
+        
+        <?php if ($showNav && !empty($navItems)): ?>
+        <nav class="rv-header-nav">
+            <ul>
+                <?php foreach ($navItems as $item): ?>
+                <li><a href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+        </nav>
+        <?php endif; ?>
+        
+        <?php if ($showButton): ?>
+        <div class="rv-header-action">
+            <a href="<?= htmlspecialchars($buttonHref) ?>" class="btn-download">
+                <span class="btn-icon">⬇</span>
+                <span class="btn-text"><?= htmlspecialchars($buttonText) ?></span>
+            </a>
+        </div>
+        <?php endif; ?>
+        
+        <button class="mobile-menu-toggle" aria-label="Toggle Menu">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+    </div>
+</header>
+
+<style id="<?= $componentId ?>-styles">
+/* ============================================
+   深色头部组件样式 - Dark Header Styles
+   组件ID: <?= $componentId ?>
+
+   ============================================ */
+
+   * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", sans-serif;
+    line-height: 1.6;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+#<?= $componentId ?> {
+    background: <?= htmlspecialchars($bgColor) ?>;
+    height: <?= htmlspecialchars($headerHeight) ?>;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 2px 20px rgba(0, 0, 0, 0.3);
+}
+
+#<?= $componentId ?> .rv-section-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+}
+
+#<?= $componentId ?> .rv-header-logo a {
+    display: flex;
+    align-items: center;
+}
+
+#<?= $componentId ?> .rv-header-logo img {
+    height: auto;
+    transition: transform 0.3s ease;
+}
+
+#<?= $componentId ?> .rv-header-logo a:hover img {
+    transform: scale(1.05);
+}
+
+#<?= $componentId ?> .rv-header-nav ul {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 30px;
+}
+
+#<?= $componentId ?> .rv-header-nav a {
+    color: <?= htmlspecialchars($navColor) ?>;
+    text-decoration: none;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    position: relative;
+    padding: 5px 0;
+    transition: color 0.3s ease;
+}
+
+#<?= $componentId ?> .rv-header-nav a::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: <?= htmlspecialchars($accentColor) ?>;
+    transition: width 0.3s ease;
+}
+
+#<?= $componentId ?> .rv-header-nav a:hover {
+    color: <?= htmlspecialchars($accentColor) ?>;
+}
+
+#<?= $componentId ?> .rv-header-nav a:hover::after {
+    width: 100%;
+}
+
+#<?= $componentId ?> .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 24px;
+    background: linear-gradient(135deg, <?= htmlspecialchars($accentColor) ?>, #ff6b6b);
+    color: #fff;
+    text-decoration: none;
+    border-radius: 50px;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(233, 69, 96, 0.4);
+}
+
+#<?= $componentId ?> .btn-download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(233, 69, 96, 0.5);
+}
+
+#<?= $componentId ?> .btn-icon {
+    font-size: 16px;
+}
+
+#<?= $componentId ?> .mobile-menu-toggle {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 28px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+}
+
+#<?= $componentId ?> .mobile-menu-toggle span {
+    display: block;
+    width: 100%;
+    height: 3px;
+    background: <?= htmlspecialchars($navColor) ?>;
+    border-radius: 2px;
+    transition: all 0.3s ease;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    #<?= $componentId ?> .rv-header-nav {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: <?= htmlspecialchars($bgColor) ?>;
+        padding: 20px;
+        box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+    }
+    
+    #<?= $componentId ?> .rv-header-nav.active {
+        display: block;
+    }
+    
+    #<?= $componentId ?> .rv-header-nav ul {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    #<?= $componentId ?> .rv-header-nav a {
+        font-size: 16px;
+    }
+    
+    #<?= $componentId ?> .mobile-menu-toggle {
+        display: flex;
+    }
+    
+    #<?= $componentId ?> .btn-download {
+        padding: 10px 16px;
+        font-size: 12px;
+    }
+}
+</style>
+
+<script id="<?= $componentId ?>-scripts">
+(function() {
+    'use strict';
+    
+    var component = document.getElementById('<?= $componentId ?>');
+    if (!component) return;
+    
+    var menuToggle = component.querySelector('.mobile-menu-toggle');
+    var nav = component.querySelector('.rv-header-nav');
+    
+    if (menuToggle && nav) {
+        menuToggle.addEventListener('click', function() {
+            nav.classList.toggle('active');
+            
+            // 汉堡菜单动画
+            var spans = menuToggle.querySelectorAll('span');
+            if (nav.classList.contains('active')) {
+                spans[0].style.transform = 'rotate(45deg) translate(5px, 5px)';
+                spans[1].style.opacity = '0';
+                spans[2].style.transform = 'rotate(-45deg) translate(5px, -5px)';
+            } else {
+                spans[0].style.transform = '';
+                spans[1].style.opacity = '';
+                spans[2].style.transform = '';
+            }
+        });
+    }
+    
+    // 滚动时添加阴影效果
+    var lastScroll = 0;
+    window.addEventListener('scroll', function() {
+        var currentScroll = window.pageYOffset;
+        if (currentScroll > 50) {
+            component.style.boxShadow = '0 4px 30px rgba(0, 0, 0, 0.4)';
+        } else {
+            component.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.3)';
+        }
+        lastScroll = currentScroll;
+    });
+})();
+</script>

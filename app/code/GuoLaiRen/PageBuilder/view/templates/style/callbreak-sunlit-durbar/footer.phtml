@@ -1,0 +1,31 @@
+<?php
+/**
+ * Callbreak Sunlit Durbar - Footer
+ *
+ * @fields_start
+ *
+ * group:footer_logo => 页脚品牌
+ * footer.logo.text => 品牌名称:text:Callbreak Sunlit Durbar
+ * footer.logo.url => 品牌图标:textarea:|默认使用本地durbar-logo-icon.svg
+ *
+ * group:content => 内容配置
+ * content.use_custom_links => 使用自定义链接组:select:yes|yes,no
+ * content.footer_links => 页脚链接:textarea:Home=>/\r\nBlog=>/blog\r\nFAQ=>/faqs\r\nAbout=>/about\r\nPrivacy=>/privacy-policy\r\nTerms=>/terms-conditions
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
+ * content.copyright_text => 版权文案:text:© 2026 Callbreak Sunlit Durbar. All rights reserved.
+ * content.disclaimer_text => 免责声明:textarea:18+ Only. Play responsibly and review local regulations before participating in any gaming activity.
+ *
+ * @fields_end
+ */
+?>
+<?php
+$this->assign('__csd_shell_managed', true);
+$this->assign('__pagebuilder_shell_managed', true);
+?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/callbreak-sunlit-durbar/components/footer/links.phtml') ?>

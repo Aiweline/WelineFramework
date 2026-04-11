@@ -1,0 +1,15 @@
+<svg width="720" height="420" viewBox="0 0 720 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="420" rx="32" fill="#ECF4EA"/>
+  <ellipse cx="360" cy="214" rx="250" ry="126" fill="#1C5D49"/>
+  <ellipse cx="360" cy="214" rx="212" ry="96" stroke="#D3A03A" stroke-width="10"/>
+  <rect x="202" y="118" width="110" height="156" rx="18" transform="rotate(-10 202 118)" fill="#FFFDF8"/>
+  <rect x="292" y="134" width="110" height="156" rx="18" fill="#FFFDF8"/>
+  <path d="M246 160L263 184L280 160H246Z" fill="#D9624C"/>
+  <path d="M336 176L353 200L370 176H336Z" fill="#D9624C"/>
+  <circle cx="520" cy="154" r="54" fill="#F6F1E5"/>
+  <circle cx="520" cy="154" r="38" stroke="#D3A03A" stroke-width="10" stroke-dasharray="10 12"/>
+  <circle cx="520" cy="154" r="26" fill="#1B4C3C"/>
+  <text x="520" y="162" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="22" font-weight="800" fill="#F8F4E8">21</text>
+  <rect x="172" y="306" width="376" height="56" rx="18" fill="#FFFDF8" fill-opacity="0.82"/>
+  <text x="360" y="342" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="28" font-weight="700" fill="#1F3F35">Classic table</text>
+</svg>

@@ -1,0 +1,31 @@
+<svg width="1280" height="480" viewBox="0 0 1280 480" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sg1" x1="640" y1="0" x2="640" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF4E6" stop-opacity="0.84"/>
+      <stop offset="1" stop-color="#FFE3C1" stop-opacity="0.24"/>
+    </linearGradient>
+  </defs>
+  <rect width="1280" height="480" fill="url(#sg1)"/>
+  <g stroke="#F06D3A" stroke-opacity="0.15">
+    <path d="M0 430H1280"/>
+    <path d="M0 378H1280"/>
+    <path d="M0 326H1280"/>
+    <path d="M0 274H1280"/>
+    <path d="M0 222H1280"/>
+    <path d="M0 170H1280"/>
+    <path d="M0 118H1280"/>
+    <path d="M0 66H1280"/>
+  </g>
+  <g stroke="#F6B54A" stroke-opacity="0.15">
+    <path d="M80 0V480"/>
+    <path d="M200 0V480"/>
+    <path d="M320 0V480"/>
+    <path d="M440 0V480"/>
+    <path d="M560 0V480"/>
+    <path d="M680 0V480"/>
+    <path d="M800 0V480"/>
+    <path d="M920 0V480"/>
+    <path d="M1040 0V480"/>
+    <path d="M1160 0V480"/>
+  </g>
+</svg>

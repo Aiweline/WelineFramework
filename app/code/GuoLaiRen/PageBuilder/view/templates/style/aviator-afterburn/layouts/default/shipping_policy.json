@@ -1,0 +1,23 @@
+{
+    "page_type": "shipping_policy",
+    "name": "配送政策页面布局",
+    "description": "Aviator Afterburn 主题配送/交付政策页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "shipping-policy-default",
+                "config": {}
+            }
+        ],
+        "footer": []
+    },
+    "notes": "配送/交付政策页面布局"
+}

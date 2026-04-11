@@ -1,0 +1,192 @@
+<?php
+/**
+ * Blackjack Halo - Header
+ *
+ * @fields_start
+ *
+ * group:header => 头部区域设置（Header）
+ * header.logo.display => 显示Logo:select:yes|yes,no
+ * header.logo.text => Logo文本:text:Blackjack Halo
+ * header.logo.subline => Logo副标题:text:Light blackjack route
+ * header.logo.url => Logo地址:textarea:|默认使用本地halo-logo-icon.svg
+ * header.logo.width => Logo宽度:responsive:48/48|px
+ * header.logo.height => Logo高度:responsive:|px[可选，默认跟随宽度]
+ * header.navigation.display => 显示导航:select:yes|yes,no
+ * header.navigation.bg_color => 导航背景色:color:rgba(249,248,242,0.82)
+ * header.navigation.text_color => 导航文字颜色:color:#1f312d
+ * header.navigation.link_color => 链接颜色:color:#49665b
+ * header.navigation.link_hover_color => 链接悬停颜色:color:#14523f
+ * header.navigation.items => 导航项配置:textarea:Home=>/\r\nTables=>#tables\r\nWhy Halo=>#advantages\r\nReviews=>#reviews\r\nFAQ=>#faq|配置格式：名字=>url，一行一个
+ * group:header_nav_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * header.navigation.label_home_page => 首页菜单名:text:
+ * header.navigation.label_about_page => 关于我们菜单名:text:
+ * header.navigation.label_blog_list => 博客菜单名:text:
+ * header.navigation.label_contact_page => 联系我们菜单名:text:
+ * header.navigation.label_terms_of_service => 条款菜单名:text:
+ * header.navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * header.download_button.text => 下载按钮文本:text:Open Table
+ * header.download_button.display => 显示下载按钮:select:yes|yes,no
+ * header.download_button.bg_color => 按钮背景颜色:color:#1f7a5b
+ * header.download_button.hover_bg_color => 按钮悬停背景色:color:#15523e
+ * header.download_button.text_color => 按钮文字颜色:color:#f7f4ea
+ * header.download_button.size => 按钮字体大小:responsive:13/13|px[MD]
+ * header.download_button.padding => 按钮内边距:responsive:10/10|px[MD]
+ * header.download_button.border_radius => 按钮圆角:number:999|px
+ * header.download_button.extra_classes => 按钮额外CSS类:textarea:
+ * header.download_button.url => 下载链接:text:#download
+ *
+ * group:banner => Banner横幅区域设置（Hero/Banner）
+ * banner.display => 显示Banner区域:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用主题素材
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用主题素材
+ * banner.alt => Banner图片描述:text:Blackjack Halo hero
+ * banner.download_btn_image => Banner下载按钮图片:textarea:|默认使用主题素材
+ * banner.download_btn_alt => Banner下载按钮描述:text:Open Table
+ * banner.bg_color => Banner背景颜色:color:#f5f3ea
+ * banner.padding_v => Banner上下内边距:responsive:0/0|px[MD]
+ * banner.slider_classes => Banner区域CSS类:textarea:bkh-hero
+ *
+ * group:color_scheme => 全局色系设置
+ * color_scheme.scheme => 选择色系:select:default|default,blue,purple,green,red
+ *
+ * group:pixel => 像素统计
+ * pixel.enabled => 启用像素统计:select:yes|yes,no
+ * pixel.name => 像素名称:text:{handle}
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+
+$templateCode = $page ? $page->getData('style') : 'blackjack-halo';
+if (empty($templateCode)) {
+    $templateCode = 'blackjack-halo';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sanitizeTitle = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') return $value;
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$metaTitleRaw = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'Blackjack Halo';
+$metaTitle = $sanitizeTitle($metaTitleRaw);
+if ($metaTitle === '') {
+    $metaTitle = 'Blackjack Halo';
+}
+$metaDescription = $page ? $page->getData('meta_description') : '';
+$metaKeywords = $page ? $page->getData('meta_keywords') : '';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle) ?></title>
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'bkh-felt': '<?= htmlspecialchars($colors['accent_primary'] ?? '#1f7a5b') ?>',
+                    'bkh-gold': '<?= htmlspecialchars($colors['accent_secondary'] ?? '#d0a03f') ?>',
+                    'bkh-ivory': '<?= htmlspecialchars($colors['body_bg'] ?? '#f5f3ea') ?>',
+                    'bkh-mist': '<?= htmlspecialchars($colors['section_bg_2'] ?? '#eef4e8') ?>',
+                    'bkh-ink': '<?= htmlspecialchars($colors['text_primary'] ?? '#1f312d') ?>',
+                    'bkh-muted': '<?= htmlspecialchars($colors['text_muted'] ?? '#6c8378') ?>'
+                }
+            }
+        }
+    }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap');
+        :root {
+            --bkh-body-bg: <?= htmlspecialchars($colors['body_bg'] ?? '#f5f3ea') ?>;
+            --bkh-body-alt: <?= htmlspecialchars($colors['section_bg_2'] ?? '#eef4e8') ?>;
+            --bkh-body-strong: <?= htmlspecialchars($colors['section_bg_3'] ?? '#e3ece0') ?>;
+            --bkh-surface: <?= htmlspecialchars($colors['card_bg'] ?? 'rgba(255, 255, 255, 0.82)') ?>;
+            --bkh-ink: <?= htmlspecialchars($colors['text_primary'] ?? '#1f312d') ?>;
+            --bkh-muted: <?= htmlspecialchars($colors['text_muted'] ?? '#6c8378') ?>;
+            --bkh-felt: <?= htmlspecialchars($colors['accent_primary'] ?? '#1f7a5b') ?>;
+            --bkh-felt-strong: <?= htmlspecialchars($colors['accent_primary_dark'] ?? '#15523e') ?>;
+            --bkh-gold: <?= htmlspecialchars($colors['accent_secondary'] ?? '#d0a03f') ?>;
+            --bkh-shell-width: min(1240px, calc(100% - clamp(1rem, 4vw, 2rem)));
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(740px 360px at 12% 8%, rgba(208, 160, 63, 0.14), transparent 62%),
+                radial-gradient(660px 320px at 88% 12%, rgba(31, 122, 91, 0.14), transparent 58%),
+                linear-gradient(180deg, #fcfbf7 0%, var(--bkh-body-bg) 46%, var(--bkh-body-alt) 100%);
+            color: var(--bkh-ink);
+            overflow-x: hidden;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 0%, rgba(255,255,255,0.6), transparent 32%),
+                repeating-linear-gradient(135deg, rgba(22, 53, 45, 0.03) 0 1px, transparent 1px 20px);
+            opacity: 0.8;
+            z-index: -1;
+        }
+        h1, h2, h3, h4, h5 {
+            font-family: 'Sora', 'Manrope', sans-serif;
+            letter-spacing: -0.04em;
+        }
+        a { color: inherit; }
+        img { max-width: 100%; display: block; }
+        .bkh-region-header,
+        .bkh-region-content,
+        .bkh-region-footer,
+        .bkh-component-wrapper {
+            width: 100%;
+            min-width: 0;
+        }
+        @media (max-width: 768px) {
+            body {
+                background:
+                    radial-gradient(420px 220px at 12% 4%, rgba(208, 160, 63, 0.12), transparent 62%),
+                    radial-gradient(400px 220px at 88% 8%, rgba(31, 122, 91, 0.12), transparent 58%),
+                    linear-gradient(180deg, #fcfbf7 0%, var(--bkh-body-bg) 52%, var(--bkh-body-alt) 100%);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-bkh-ivory text-bkh-ink antialiased">
+<?php $this->assign('__pagebuilder_shell_managed', true); ?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/blackjack-halo/components/header/nav.phtml') ?>

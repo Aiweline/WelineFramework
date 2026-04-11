@@ -1,0 +1,79 @@
+<?php
+/**
+ * 博客分类布局模板
+ * 
+ * 页面类型: blog_category
+ * 描述: 博客分类列表页面布局，继承首页的 header/footer
+ * 
+ * 可用变量:
+ * - $page: Page 模型对象
+ * - $layout_config: 布局配置数组
+ * - $style_setting: 样式配置数组
+ * - $mode: 渲染模式 (visual/preview/live)
+ * - $current_category: 当前分类对象
+ * - $blog_posts: 当前分类下的博客文章列表
+ * - $blog_categories: 所有博客分类列表
+ */
+
+// 获取布局配置
+$layoutConfig = $layout_config ?? [];
+$headerComponents = $layoutConfig['header'] ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+$footerComponents = $layoutConfig['footer'] ?? [];
+
+// 渲染模式
+$isVisualMode = ($mode ?? 'live') === 'visual';
+
+// 博客数据
+$currentCategory = $current_category ?? null;
+$blogPosts = $blog_posts ?? [];
+$blogCategories = $blog_categories ?? [];
+?>
+<!DOCTYPE html>
+<html lang="<?= $lang ?? 'en' ?>">
+<head>
+    <?php $this->renderHead($page, $style_setting); ?>
+</head>
+<body class="page-blog page-blog-category">
+    <!-- Header Region (从首页继承) -->
+    <header class="site-header" data-region="header"<?= $isVisualMode ? ' data-slot-name="Header"' : '' ?>>
+        <?php $this->renderRegionComponents('header', $headerComponents, $page); ?>
+    </header>
+    
+    <!-- Main Content Region -->
+    <main class="site-content blog-content" data-region="content"<?= $isVisualMode ? ' data-slot-name="Content"' : '' ?>>
+        <div class="blog-container">
+            <!-- 分类标题 -->
+            <?php if ($currentCategory): ?>
+            <div class="category-header">
+                <h1 class="category-title"><?= htmlspecialchars($currentCategory['name'] ?? '') ?></h1>
+                <?php if (!empty($currentCategory['description'])): ?>
+                <p class="category-description"><?= htmlspecialchars($currentCategory['description']) ?></p>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            
+            <?php if (empty($contentComponents)): ?>
+                <!-- 无自定义内容组件时显示默认博客列表 -->
+                <div class="blog-list-default">
+                    <?php $this->fetch('GuoLaiRen_PageBuilder::style/callbreak-sunlit-durbar/components/content/blog-list.phtml', [
+                        'blog_posts' => $blogPosts,
+                        'blog_categories' => $blogCategories,
+                        'current_category' => $currentCategory,
+                        'page' => $page,
+                    ]); ?>
+                </div>
+            <?php else: ?>
+                <?php $this->renderRegionComponents('content', $contentComponents, $page); ?>
+            <?php endif; ?>
+        </div>
+    </main>
+    
+    <!-- Footer Region (从首页继承) -->
+    <footer class="site-footer" data-region="footer"<?= $isVisualMode ? ' data-slot-name="Footer"' : '' ?>>
+        <?php $this->renderRegionComponents('footer', $footerComponents, $page); ?>
+    </footer>
+    
+    <?php $this->renderFooterScripts($page, $style_setting); ?>
+</body>
+</html>

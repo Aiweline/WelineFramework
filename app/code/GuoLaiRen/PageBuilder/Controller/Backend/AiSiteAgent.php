@@ -39,20 +39,21 @@ use Weline\Websites\Service\AiWorkbench\SessionService as WebsitesSessionService
 #[Acl('GuoLaiRen_PageBuilder::ai_site_agent', 'AI 建站工作台', 'mdi-robot-outline', 'PageBuilder AI 建站会话与流水线', 'Weline_Backend::page_builder_group')]
 class AiSiteAgent extends BaseController
 {
+    private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     private const PARAMS_PUBLIC_ID = ['public_id'];
     private const PARAMS_OPERATION_SSE = ['public_id', 'execution_token'];
-    private const PARAMS_STREAM_LEASE = ['public_id', 'lease_token'];
     private const PARAMS_REGENERATE = ['public_id', 'page_type'];
     private const PARAMS_REFINE_COMPONENT = ['public_id', 'page_type', 'component_code', 'instruction'];
     private const PARAMS_UPDATE_BLOCK = ['public_id', 'page_type', 'block_id', 'block_config'];
     private const WORKSPACE_STREAM_SNAPSHOT_PERSIST = false;
     private const STREAM_LEASE_SCOPE_KEY = '_workspace_stream_lease';
+    private const STREAM_LEASE_TTL_SEC = 60;
     /**
      * 工作区 stream-sse 续约窗口：超过此时间未收到续约请求（POST post-touch-stream-lease）则视为断连，
      * 服务端将结束事件流并清理与本 lease 关联的排队/运行中操作。
      * 前端心跳间隔应显著小于本值（当前页面约 20s 一次 POST 续约）。
      */
-    private const STREAM_LEASE_TTL_SEC = 60;
+    private const STALE_ACTIVE_OPERATION_TTL_SEC = 180;
 
     private readonly AiSiteAgentSessionService $sessionService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
@@ -178,17 +179,19 @@ class AiSiteAgent extends BaseController
         $this->assign('start_build_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-build'));
         $this->assign('start_regenerate_page_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-regenerate-page'));
         $this->assign('start_refine_component_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-refine-component'));
+        $this->assign('start_block_refine_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-block-refine-sse'));
+        $this->assign('start_block_regenerate_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-block-regenerate-sse'));
         $this->assign('update_block_config_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-update-block-config'));
         $this->assign('start_publish_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-publish'));
         $this->assign('operation_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/operation-sse', ['public_id' => $publicId]));
         $this->assign('stream_sse_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/stream-sse', ['public_id' => $publicId]));
-        $this->assign('touch_stream_lease_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-touch-stream-lease'));
         $this->assign('switch_preview_page_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-switch-preview-page'));
         $this->assign('publish_check_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-publish-checklist'));
         $this->assign('delete_workspace_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-delete-workspace'));
         $this->assign('recommend_domain_url', $this->url->getBackendUrl('websites/backend/site-builder-agent/recommend-domain'));
         $this->assign('check_domain_url', $this->url->getBackendUrl('websites/backend/site-builder-agent/check-domain'));
         $this->assign('start_domain_purchase_url', $this->url->getBackendUrl('pagebuilder/backend/ai-site-agent/post-start-domain-purchase'));
+        $this->assign('domain_purchase_sse_url', $this->url->getBackendUrl('websites/backend/site-builder-agent/domain-purchase-sse'));
         $this->assign('domain_purchase_state', $domainPurchaseState);
         $this->assign('recommended_domain_list', $recommendedDomainList);
         $this->assign('recommended_registrar_label', $recommendedRegistrarLabel);
@@ -511,7 +514,11 @@ SCRIPT;
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动区块 AI 微调', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function postStartRefineComponent(): string { return $this->handleStartRefineComponent(); }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 寤虹珯浼氳瘽 API', 'mdi-api', '鏇存柊鍖哄潡閰嶇疆', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '区块 AI 微调（SSE）', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    public function postBlockRefineSse(): void { $this->handleBlockRegenerateSse(true); }
+
+    public function postBlockRegenerateSse(): void { $this->handleBlockRegenerateSse(false); }
+
     public function postUpdateBlockConfig(): string { return $this->handleUpdateBlockConfig(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_api', 'AI 建站会话 API', 'mdi-api', '启动发布流程', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -544,7 +551,7 @@ SCRIPT;
         return $this->fetchJson(['success' => true, 'message' => __('工作区已删除')]);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_stream', 'AI 建站事件流', 'mdi-access-point', '订阅 AI 建站会话事件流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站事件流', 'mdi-access-point', '订阅 AI 建站会话事件流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getStreamSse(): void
     {
         if (\defined('DEV') && DEV && !\headers_sent()) {
@@ -552,7 +559,14 @@ SCRIPT;
         }
         $this->handleStreamSse();
     }
-    public function postTouchStreamLease(): string { return $this->touchStreamLease(); }
+    public function postTouchStreamLease(): string
+    {
+        return $this->fetchJson([
+            'success' => true,
+            'message' => __('原生 SSE 模式无需额外续约'),
+            'native_sse' => true,
+        ]);
+    }
 
     /**
      * 测试 SSE 短轮询（无需认证）
@@ -589,7 +603,7 @@ SCRIPT;
         $sse->complete(['success' => true, 'message' => 'Test complete, please reconnect']);
     }
 
-    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_stream', 'AI 建站操作 SSE', 'mdi-access-point-network', '执行构建/重建/发布操作流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
+    #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_workspace', 'AI 建站操作 SSE', 'mdi-access-point-network', '执行构建/重建/发布操作流', 'GuoLaiRen_PageBuilder::ai_site_agent')]
     public function getOperationSse(): void { $this->handleOperationSse(); }
 
     #[Acl('GuoLaiRen_PageBuilder::ai_site_agent_create', '创建 AI 建站会话', 'mdi-plus', '创建新的 AI 建站会话', 'GuoLaiRen_PageBuilder::ai_site_agent')]
@@ -628,17 +642,17 @@ SCRIPT;
         $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         if ($adminId <= 0 || $publicId === '') {
-            return $this->fetchJson(['success' => false, 'message' => __('鍙傛暟鏃犳晥')]);
+            return $this->fetchJson(['success' => false, 'message' => __('参数无效')]);
         }
 
         $session = $this->sessionService->loadByPublicId($publicId, $adminId);
         if ($session === null) {
-            return $this->fetchJson(['success' => false, 'message' => __('浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶')]);
+            return $this->fetchJson(['success' => false, 'message' => __('会话不存在或无权访问')]);
         }
 
         $linkedWebsitesSession = $this->ensureLinkedWebsitesMirrorSession($session, $adminId);
         if (!$linkedWebsitesSession instanceof WebsitesAiSiteBuilderSession) {
-            return $this->fetchJson(['success' => false, 'message' => __('鏆傛棤娉曞垱寤哄煙鍚嶈喘涔板伐浣滃尯')]);
+            return $this->fetchJson(['success' => false, 'message' => __('暂时无法创建域名购买工作区')]);
         }
 
         $scopeError = '';
@@ -657,7 +671,7 @@ SCRIPT;
         if (empty($result['success'])) {
             return $this->fetchJson([
                 'success' => false,
-                'message' => (string)($result['message'] ?? __('鍔犲叆鍩熷悕璐拱闃熷垪澶辫触')),
+                'message' => (string)($result['message'] ?? __('加入域名购买队列失败')),
             ]);
         }
 
@@ -668,7 +682,7 @@ SCRIPT;
 
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)($result['message'] ?? __('宸插姞鍏ュ煙鍚嶈喘涔伴槦鍒?')),
+            'message' => (string)($result['message'] ?? __('已加入域名购买队列')),
             'state' => $state,
             'pagebuilder_state' => $this->buildWorkspaceState($freshPageBuilderSession, $adminId, 80, true),
             'linked_public_id' => $freshWebsitesSession->getPublicId(),
@@ -703,12 +717,21 @@ SCRIPT;
         if ($siteProfileManual !== []) {
             $scopePatch['site_profile_manual'] = $siteProfileManual;
         }
+        $mergedScope = $this->scopeCompatibilityService->normalizeScope(\array_replace($session->getScopeArray(), $scopePatch));
+        $targetDomain = \strtolower(\trim((string)($mergedScope['target_domain'] ?? '')));
+        if ($targetDomain === '') {
+            return $this->jsonError(
+                'DOMAIN_REQUIRED_BEFORE_BUILD',
+                (string)__('请先完成域名推荐并确认目标域名后，再开始生成主题/页面'),
+                ['public_id', 'target_domain']
+            );
+        }
         $startStage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         if ($startStage !== AiSiteAgentSession::STAGE_VISUAL_EDIT) {
             $startStage = AiSiteAgentSession::STAGE_VIRTUAL_THEME;
         }
 
-        return $this->fetchJson($this->startOperation(
+        $startResult = $this->startOperation(
             $session,
             $adminId,
             'build',
@@ -716,7 +739,8 @@ SCRIPT;
             $scopePatch,
             '',
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
-        ));
+        );
+        return $this->fetchJson($startResult);
     }
 
     private function handleStartRegeneratePage(): string
@@ -799,6 +823,110 @@ SCRIPT;
             $pageType,
             AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
         ));
+    }
+
+    private function handleBlockRegenerateSse(bool $refine): void
+    {
+        @\set_time_limit(0);
+        @\ignore_user_abort(true);
+        $this->releasePhpSessionLockForSse();
+
+        $sse = new SseWriter();
+        $sse->start();
+
+        $adminId = (int)$this->getLoginUserId();
+        $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
+        $pageType = \trim((string)$this->getRequestBodyValue('page_type', ''));
+        $componentCode = \trim((string)$this->getRequestBodyValue('component_code', ''));
+        $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
+
+        if ($adminId <= 0 || $publicId === '' || $pageType === '' || $componentCode === '' || ($refine && $instruction === '')) {
+            $this->sendSseContractError(
+                $sse,
+                'INVALID_PARAMS',
+                (string)__('参数无效'),
+                $refine ? self::PARAMS_REFINE_COMPONENT : self::PARAMS_REGENERATE
+            );
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $session = $this->sessionService->loadByPublicId($publicId, $adminId);
+        if ($session === null) {
+            $this->sendSseContractError($sse, 'SESSION_NOT_FOUND', 'Session not found or inaccessible', self::PARAMS_PUBLIC_ID, 404);
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        if (!\in_array($pageType, $pageTypes, true)) {
+            $this->sendSseContractError($sse, 'INVALID_PAGE_TYPE', 'Page type is not in the current workspace', self::PARAMS_REGENERATE, 400);
+            $sse->complete(['success' => false]);
+            return;
+        }
+
+        $stageCode = AiSiteAgentSession::STAGE_VISUAL_EDIT;
+        $originalActiveOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $originalWorkspaceStatus = $this->scopeCompatibilityService->normalizeWorkspaceStatus((string)($scope['workspace_status'] ?? ''));
+        $preserveOriginalOperation = \in_array(\trim((string)($originalActiveOperation['status'] ?? '')), ['queued', 'running'], true);
+
+        if ($refine) {
+            $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+            $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
+            $sectionRefinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
+            $sectionRefinements[$componentCode] = $instruction;
+            $virtualPage['section_refinements'] = $sectionRefinements;
+            $virtualPages[$pageType] = $virtualPage;
+            $scope['virtual_pages_by_type'] = $virtualPages;
+            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        }
+
+        $operationLabel = $refine ? 'block_refine' : 'block_regenerate';
+        $sse->sendEvent('start', [
+            'operation' => $operationLabel,
+            'page_type' => $pageType,
+            'component_code' => $componentCode,
+            'message' => $refine ? 'Starting AI block refine' : 'Starting AI block regenerate',
+        ]);
+
+        $this->registerAiChunkForwarder($sse, $session, $adminId, $stageCode, $operationLabel);
+
+        try {
+            $result = $this->runRegeneratePageOperation($sse, $session, $adminId, $pageType);
+            if ($preserveOriginalOperation) {
+                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                $freshScope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                $freshScope['active_operation'] = $originalActiveOperation;
+                $freshScope['workspace_status'] = $originalWorkspaceStatus;
+                $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
+            }
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $sse->complete([
+                'success' => true,
+                'operation' => $operationLabel,
+                'message' => $refine ? 'AI block refine completed' : 'AI block regenerate completed',
+                'data' => $result,
+                'state' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+            ]);
+        } catch (\Throwable $throwable) {
+            if ($preserveOriginalOperation) {
+                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                $freshScope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+                $freshScope['active_operation'] = $originalActiveOperation;
+                $freshScope['workspace_status'] = $originalWorkspaceStatus;
+                $this->sessionService->replaceScope($fresh->getId(), $adminId, $freshScope);
+            }
+            $sse->sendError($throwable->getMessage(), $this->inferThrowableHttpCode($throwable));
+            $sse->complete([
+                'success' => false,
+                'operation' => $operationLabel,
+                'message' => $throwable->getMessage(),
+            ]);
+        } finally {
+            $this->clearAiChunkForwarder();
+        }
     }
 
     private function handleStartPublish(): string
@@ -1056,10 +1184,16 @@ SCRIPT;
         }
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
+        $tabToken = \trim((string)$this->request->getGet('tab_token', ''));
+        if (\strlen($tabToken) > 64) {
+            $tabToken = \substr($tabToken, 0, 64);
+        }
         $this->logStreamSse('request_received', [
             'admin_id' => $adminId,
             'public_id' => $publicId,
             'last_event_id' => $lastEventId,
+            'stream_kind' => 'workspace',
+            'tab_token' => $tabToken !== '' ? $tabToken : null,
         ]);
 
         // 认证失败：返回 HTTP 401，不启动 SSE
@@ -1132,6 +1266,8 @@ SCRIPT;
             'session_id' => $session->getId(),
             'stage' => $session->getStage(),
             'publish_status' => $session->getPublishStatus(),
+            'stream_kind' => 'workspace',
+            'tab_token' => $tabToken !== '' ? $tabToken : null,
         ]);
         // 注册 SSE writer 到 RequestContext，让 AI 流式 chunks 能实时转发到 SSE 客户端
         RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
@@ -1156,17 +1292,35 @@ SCRIPT;
         $pollInterval = 1000;  // 每秒轮询一次
         $startTime = \time();
         $loopCount = 0;
+        $maxIdleLoops = 180;  // 最多连续 180 次无新事件（约 3 分钟），之后强制检测
+        $consecutiveIdleLoops = 0;
+        $maxTotalLoops = 86400;  // 最多运行 24 小时（兜底）
+        $forceCloseAfterIdleLoops = 60;  // 连续 60 次无新事件（约 1 分钟）后强制关闭
 
         while (true) {
             $loopCount++;
 
+            // 兜底：超过最大总循环次数强制退出
+            if ($loopCount > $maxTotalLoops) {
+                $this->logStreamSse('max_loops_reached', [
+                    'session_id' => $session->getId(),
+                    'loop_count' => $loopCount,
+                ], 'warning');
+                break;
+            }
+
             // 检查连接是否还活着
             if (!$sse->isAlive()) {
+                $this->logStreamSse('connection_dead', [
+                    'session_id' => $session->getId(),
+                    'loop_count' => $loopCount,
+                ]);
                 break;
             }
             $newEvents = $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80);
 
             if (!empty($newEvents)) {
+                $consecutiveIdleLoops = 0;
                 foreach ($newEvents as $event) {
                     $eventId = (int)($event['event_id'] ?? 0);
                     if ($eventId > $lastEventId) {
@@ -1180,12 +1334,38 @@ SCRIPT;
                     'event_count' => \count($newEvents),
                     'last_event_id' => $lastEventId,
                 ]);
-            } elseif ($loopCount === 1 || $loopCount % 10 === 0) {
-                $this->logStreamSse('poll_idle', [
-                    'session_id' => $session->getId(),
-                    'loop_count' => $loopCount,
-                    'last_event_id' => $lastEventId,
-                ]);
+            } else {
+                $consecutiveIdleLoops++;
+
+                // 连续多次无事件，尝试主动检测连接状态
+                if ($consecutiveIdleLoops > $maxIdleLoops) {
+                    $this->logStreamSse('idle_max_reached', [
+                        'session_id' => $session->getId(),
+                        'loop_count' => $loopCount,
+                        'consecutive_idle_loops' => $consecutiveIdleLoops,
+                    ], 'warning');
+                    break;
+                }
+
+                // 连续多次无事件且 isAlive 仍返回 true，发送 comment 检测对端是否真的活着
+                if ($consecutiveIdleLoops === $forceCloseAfterIdleLoops) {
+                    $this->logStreamSse('probing_connection', [
+                        'session_id' => $session->getId(),
+                        'loop_count' => $loopCount,
+                        'consecutive_idle_loops' => $consecutiveIdleLoops,
+                    ]);
+                    // 发送一个 comment探测连接，如果写入失败 isAlive 会在下一轮返回 false
+                    $sse->sendComment('probe:' . \time());
+                }
+
+                if ($loopCount === 1 || $loopCount % 10 === 0) {
+                    $this->logStreamSse('poll_idle', [
+                        'session_id' => $session->getId(),
+                        'loop_count' => $loopCount,
+                        'last_event_id' => $lastEventId,
+                        'consecutive_idle_loops' => $consecutiveIdleLoops,
+                    ]);
+                }
             }
 
             // 使用协程延迟，不阻塞 Worker
@@ -1242,6 +1422,78 @@ SCRIPT;
         return false;
     }
 
+    /**
+     * P2：仅 `queued` 可认领进入执行；`running` 视为重复 operation-sse；终态拒绝，避免重复跑 build/发布。
+     *
+     * @return array{ok: bool, reason?: string, message?: string}
+     */
+    private function claimActiveOperationExecution(
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $executionToken,
+        string $operation
+    ): array {
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+            $active = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+            $op = \trim((string)($active['operation'] ?? ''));
+            $tok = \trim((string)($active['execution_token'] ?? ''));
+            $status = \trim((string)($active['status'] ?? ''));
+
+            if ($op !== $operation || $tok !== $executionToken) {
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('未找到待执行的工作区操作')];
+            }
+
+            if (\in_array($status, ['done', 'error', 'cancelled'], true)) {
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('该操作已结束，请重新发起')];
+            }
+
+            if ($status === 'running') {
+                return ['ok' => false, 'reason' => 'duplicate_stream'];
+            }
+
+            if ($status !== 'queued') {
+                return ['ok' => false, 'reason' => 'terminal', 'message' => (string)__('操作状态异常，请刷新后重试')];
+            }
+
+            $scope['active_operation'] = \array_replace($active, [
+                'status' => 'running',
+                'message' => (string)__('操作开始执行'),
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ]);
+            $this->sessionService->replaceScope($fresh->getId(), $adminId, $scope);
+
+            $verify = $this->sessionService->loadById($session->getId(), $adminId) ?? $fresh;
+            $vScope = $this->scopeCompatibilityService->normalizeScope($verify->getScopeArray());
+            $vActive = \is_array($vScope['active_operation'] ?? null) ? $vScope['active_operation'] : [];
+            if (\trim((string)($vActive['execution_token'] ?? '')) === $executionToken
+                && \trim((string)($vActive['status'] ?? '')) === 'running') {
+                return ['ok' => true];
+            }
+        }
+
+        return ['ok' => false, 'reason' => 'duplicate_stream'];
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private function logOperationSse(string $message, array $context = [], string $level = 'info'): void
+    {
+        if (!(\defined('DEV') && DEV)) {
+            return;
+        }
+
+        $message = '[AiSiteAgent::operation-sse] ' . $message;
+        match (\strtolower($level)) {
+            'debug' => WlsLogger::debug_($message, $context),
+            'warn', 'warning' => WlsLogger::warning_($message, $context),
+            'error' => WlsLogger::error_($message, $context),
+            default => WlsLogger::info_($message, $context),
+        };
+    }
+
     private function handleOperationSse(): void
     {
         @\set_time_limit(0);
@@ -1277,10 +1529,77 @@ SCRIPT;
             return;
         }
 
+        $claim = $this->claimActiveOperationExecution($session, $adminId, $executionToken, $operation);
+        if (!$claim['ok']) {
+            $reason = (string)($claim['reason'] ?? '');
+            if ($reason === 'duplicate_stream') {
+                $this->logOperationSse('duplicate_connection', [
+                    'public_id' => $publicId,
+                    'operation' => $operation,
+                ]);
+                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                $sse->sendEvent('warning', [
+                    'message' => (string)__('该操作已在其他连接中执行，本连接不重复运行'),
+                    'operation' => $operation,
+                ]);
+                $sse->complete([
+                    'success' => true,
+                    'duplicate_stream' => true,
+                    'message' => (string)__('已同步当前状态'),
+                    'state' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+                ]);
+                return;
+            }
+            $terminalMessage = (string)($claim['message'] ?? (string)__('该操作已结束或不可用'));
+            $this->sendSseContractError($sse, 'OPERATION_NOT_ACTIVE', $terminalMessage, self::PARAMS_OPERATION_SSE, 409);
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $sse->complete([
+                'success' => false,
+                'state' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+            ]);
+            return;
+        }
+
+        $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+
         $stageCode = $this->scopeCompatibilityService->normalizeStage($session->getStage());
-        $this->updateActiveOperation($session, $adminId, ['status' => 'running', 'message' => (string)__('操作开始执行')]);
         $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_started', (string)__('已开始执行操作'), ['operation' => $operation, 'page_type' => (string)($activeOperation['page_type'] ?? '')]);
         $sse->sendEvent('start', ['message' => __('已开始执行：%{operation}', ['operation' => $operation]), 'operation' => $operation]);
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
+        RequestContext::set(self::REQUEST_CTX_AI_CHUNK_FORWARDER, function (array $payload) use ($sse, $session, $adminId, $stageCode, $operation): void {
+            $chunk = (string)($payload['chunk'] ?? '');
+            if ($chunk === '') {
+                return;
+            }
+            $region = \trim((string)($payload['region'] ?? ''));
+            $message = $region !== ''
+                ? (string)__('AI 片段（%{region}）：%{chunk}', ['region' => $region, 'chunk' => $chunk])
+                : (string)__('AI 片段：%{chunk}', ['chunk' => $chunk]);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                $stageCode,
+                'ai_chunk',
+                $message,
+                [
+                    'operation' => $operation,
+                    'details' => [
+                        'region' => $region,
+                        'chunk' => $chunk,
+                    ],
+                ]
+            );
+            if ($sse->isAlive()) {
+                $sse->sendEvent('chunk', [
+                    'operation' => $operation,
+                    'region' => $region,
+                    'chunk' => $chunk,
+                    'message' => $message,
+                ]);
+            }
+        });
 
         try {
             $result = match ($operation) {
@@ -1302,6 +1621,9 @@ SCRIPT;
                 return;
             }
             $sse->complete(['success' => false, 'message' => $throwable->getMessage(), 'operation' => $operation]);
+        } finally {
+            RequestContext::remove(RequestContext::SSE_WRITER_KEY);
+            RequestContext::remove(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
         }
     }
 
@@ -1322,6 +1644,54 @@ SCRIPT;
         }
 
         return 500;
+    }
+
+    private function registerAiChunkForwarder(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $stageCode,
+        string $operation
+    ): void {
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
+        RequestContext::set(self::REQUEST_CTX_AI_CHUNK_FORWARDER, function (array $payload) use ($sse, $session, $adminId, $stageCode, $operation): void {
+            $chunk = (string)($payload['chunk'] ?? '');
+            if ($chunk === '') {
+                return;
+            }
+            $region = \trim((string)($payload['region'] ?? ''));
+            $message = $region !== ''
+                ? 'AI chunk [' . $region . ']: ' . $chunk
+                : 'AI chunk: ' . $chunk;
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                $stageCode,
+                'ai_chunk',
+                $message,
+                [
+                    'operation' => $operation,
+                    'details' => [
+                        'region' => $region,
+                        'chunk' => $chunk,
+                    ],
+                ]
+            );
+            if ($sse->isAlive()) {
+                $sse->sendEvent('chunk', [
+                    'operation' => $operation,
+                    'region' => $region,
+                    'chunk' => $chunk,
+                    'message' => $message,
+                ]);
+            }
+        });
+    }
+
+    private function clearAiChunkForwarder(): void
+    {
+        RequestContext::remove(RequestContext::SSE_WRITER_KEY);
+        RequestContext::remove(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
     }
 
     /**
@@ -1391,10 +1761,23 @@ SCRIPT;
         );
         $normalized['pagebuilder_pages_by_type'] = $pagesByType;
         $normalized['preview_page_options'] = $this->scopeCompatibilityService->buildPreviewPageOptions($pagesByType);
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts(
+            $normalized['page_type_layouts'] ?? [],
+            $normalized['page_types']
+        );
+        $normalized['page_type_layouts'] = $pageTypeLayouts;
 
-        $virtualPagesByType = $this->scopeCompatibilityService->buildVirtualPagesByType($normalized['page_types'], $normalized);
+        $virtualPagesByType = $this->scopeCompatibilityService->buildVirtualPagesByType($normalized['page_types'], $normalized, false);
         $virtualPagesByType = $this->decorateVirtualPagesWithUrls($session->getPublicId(), $virtualThemeId, $virtualPagesByType);
         $normalized['virtual_pages_by_type'] = $virtualPagesByType;
+        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($normalized['workspace_track'] ?? ''));
+        $pendingGenerationPageTypes = $this->resolvePendingGenerationPageTypes(
+            $normalized['page_types'],
+            $workspaceTrack,
+            $pagesByType,
+            $pageTypeLayouts,
+            $virtualPagesByType
+        );
 
         $previewPageType = $this->scopeCompatibilityService->resolvePreviewPageType(
             $virtualPagesByType,
@@ -1419,7 +1802,6 @@ SCRIPT;
 
         $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
         $activeOperation = \is_array($normalized['active_operation'] ?? null) ? $normalized['active_operation'] : [];
-        $workspaceTrack = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($normalized['workspace_track'] ?? ''));
         $siteReady = (int)($normalized['site_ready'] ?? 1) === 1;
         $titleOk = \trim((string)($normalized['website_profile']['site_title'] ?? '')) !== '';
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
@@ -1428,7 +1810,7 @@ SCRIPT;
                 && $this->scopeCompatibilityService->htmlTrackHasCompleteBlocks($virtualPagesByType, $normalized['page_types']);
         } else {
             $canPublish = $virtualThemeId > 0
-                && \count($virtualPagesByType) >= \count($normalized['page_types'])
+                && $pendingGenerationPageTypes === []
                 && $titleOk
                 && $siteReady;
         }
@@ -1448,10 +1830,10 @@ SCRIPT;
             $activeOperation['status'] = 'done';
             $normalized['active_operation'] = $activeOperation;
         }
-        $workspaceStatus = $this->resolveWorkspaceStatus($session, $normalized, $canPublish);
+        $workspaceStatus = $this->resolveWorkspaceStatus($session, $normalized, $canPublish, $pendingGenerationPageTypes);
         $normalized['workspace_status'] = $workspaceStatus;
         $normalized['can_publish'] = $canPublish ? 1 : 0;
-        $normalized['build_summary'] = $this->buildSummary($virtualPagesByType, $activeOperation, $canPublish);
+        $normalized['build_summary'] = $this->buildSummary($virtualPagesByType, $activeOperation, $canPublish, $pendingGenerationPageTypes);
 
         $events = $this->sessionService->listRecentEvents($session->getId(), $adminId, $eventLimit);
         $topLogs = \array_slice($events, -12);
@@ -1476,6 +1858,8 @@ SCRIPT;
             'pagebuilder_pages_by_type' => $pagesByType,
             'page_type_layouts' => \is_array($normalized['page_type_layouts'] ?? null) ? $normalized['page_type_layouts'] : [],
             'virtual_pages_by_type' => $virtualPagesByType,
+            'pending_generation_page_types' => $pendingGenerationPageTypes,
+            'auto_start_build_after_stream' => $this->shouldAutoStartBuildAfterWorkspaceStream($workspaceStatus, $activeOperation, $pendingGenerationPageTypes),
             'preview_page_options' => \is_array($normalized['preview_page_options']) ? $normalized['preview_page_options'] : [],
             'preview_page_id' => (int)$normalized['preview_page_id'],
             'preview_page_type' => (string)$normalized['preview_page_type'],
@@ -1489,6 +1873,90 @@ SCRIPT;
             'scope' => $normalized,
             'events' => $events,
         ];
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param array<string, array<string, mixed>> $pagesByType
+     * @return list<string>
+     */
+    private function resolvePendingGenerationPageTypes(
+        array $pageTypes,
+        string $workspaceTrack,
+        array $pagesByType,
+        array $pageTypeLayouts,
+        array $virtualPagesByType
+    ): array
+    {
+        $pending = [];
+        foreach ($pageTypes as $pageType) {
+            if (!\is_string($pageType) || $pageType === '') {
+                continue;
+            }
+            if (!$this->isPageTypeGenerationComplete($workspaceTrack, $pageType, $pagesByType, $pageTypeLayouts, $virtualPagesByType)) {
+                $pending[] = $pageType;
+            }
+        }
+
+        return $pending;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $pagesByType
+     * @param array<string, array<string, mixed>> $pageTypeLayouts
+     * @param array<string, array<string, mixed>> $virtualPagesByType
+     */
+    private function isPageTypeGenerationComplete(
+        string $workspaceTrack,
+        string $pageType,
+        array $pagesByType,
+        array $pageTypeLayouts,
+        array $virtualPagesByType
+    ): bool {
+        $pageId = (int)($pagesByType[$pageType]['page_id'] ?? 0);
+        if ($pageId <= 0) {
+            return false;
+        }
+
+        if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
+            $blocks = \is_array($virtualPagesByType[$pageType]['blocks'] ?? null) ? $virtualPagesByType[$pageType]['blocks'] : [];
+
+            return $blocks !== [];
+        }
+
+        $layout = \is_array($pageTypeLayouts[$pageType] ?? null)
+            ? $pageTypeLayouts[$pageType]
+            : $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
+        $headerCode = \trim((string)($layout['header']['component'] ?? ''));
+        $footerCode = \trim((string)($layout['footer']['component'] ?? ''));
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+
+        return $headerCode !== '' && $footerCode !== '' && $content !== [];
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     * @param list<string> $pendingGenerationPageTypes
+     */
+    private function shouldAutoStartBuildAfterWorkspaceStream(string $workspaceStatus, array $activeOperation, array $pendingGenerationPageTypes): bool
+    {
+        if ($pendingGenerationPageTypes === []) {
+            return false;
+        }
+
+        $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        if (\in_array($activeStatus, ['queued', 'running'], true)) {
+            return false;
+        }
+
+        return !\in_array(
+            $workspaceStatus,
+            [
+                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHING,
+                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_PUBLISHED,
+            ],
+            true
+        );
     }
 
     /**
@@ -1515,7 +1983,12 @@ SCRIPT;
     /**
      * @param array<string, mixed> $scope
      */
-    private function resolveWorkspaceStatus(AiSiteAgentSession $session, array $scope, bool $canPublish): string
+    private function resolveWorkspaceStatus(
+        AiSiteAgentSession $session,
+        array $scope,
+        bool $canPublish,
+        array $pendingGenerationPageTypes = []
+    ): string
     {
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
@@ -1545,6 +2018,11 @@ SCRIPT;
                 return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_EDITING;
             }
         }
+        if ($track === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME && $pendingGenerationPageTypes !== []) {
+            if ((int)($scope['virtual_theme_id'] ?? 0) > 0) {
+                return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
+            }
+        }
         if ((int)($scope['virtual_theme_id'] ?? 0) > 0) {
             return AiSiteScopeCompatibilityService::WORKSPACE_STATUS_EDITING;
         }
@@ -1557,7 +2035,12 @@ SCRIPT;
      * @param array<string, mixed> $activeOperation
      * @return array<string, mixed>
      */
-    private function buildSummary(array $virtualPagesByType, array $activeOperation, bool $canPublish): array
+    private function buildSummary(
+        array $virtualPagesByType,
+        array $activeOperation,
+        bool $canPublish,
+        array $pendingGenerationPageTypes = []
+    ): array
     {
         $generatedAt = '';
         foreach ($virtualPagesByType as $pageData) {
@@ -1569,6 +2052,8 @@ SCRIPT;
 
         return [
             'page_count' => \count($virtualPagesByType),
+            'pending_page_count' => \count($pendingGenerationPageTypes),
+            'pending_page_types' => \array_values($pendingGenerationPageTypes),
             'last_generated_at' => $generatedAt,
             'active_operation' => \trim((string)($activeOperation['operation'] ?? '')),
             'can_publish' => $canPublish,
@@ -1713,8 +2198,37 @@ SCRIPT;
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
         $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
         $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        if (\in_array($activeStatus, ['queued', 'running'], true) && $this->isActiveOperationStale($activeOperation)) {
+            $scope['active_operation'] = \array_replace($activeOperation, [
+                'status' => 'cancelled',
+                'message' => (string)__('检测到历史操作长时间无进展，已自动回收并允许重新开始'),
+                'updated_at' => \date('Y-m-d H:i:s'),
+            ]);
+            $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
+            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                $this->scopeCompatibilityService->normalizeStage($session->getStage()),
+                'operation_cancelled',
+                (string)__('历史操作已超时回收，可重新发起构建'),
+                ['details' => ['reason' => 'stale_active_operation']]
+            );
+            $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+            $activeStatus = \trim((string)($activeOperation['status'] ?? ''));
+        }
         if (\in_array($activeStatus, ['queued', 'running'], true)) {
-            return ['success' => false, 'message' => __('当前已有正在执行的操作，请先等待完成')];
+            $runningOperation = \trim((string)($activeOperation['operation'] ?? ''));
+            $runningExecutionToken = \trim((string)($activeOperation['execution_token'] ?? ''));
+            return [
+                'success' => false,
+                'message' => __('当前已有正在执行的操作，请先等待完成'),
+                'operation' => $runningOperation,
+                'execution_token' => $runningExecutionToken,
+                'stream_url' => ($runningOperation !== '' && $runningExecutionToken !== '')
+                    ? $this->buildOperationStreamUrl($session->getPublicId(), $runningExecutionToken)
+                    : '',
+            ];
         }
 
         $scope = \array_replace($scope, $scopePatch);
@@ -1777,33 +2291,37 @@ SCRIPT;
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
-
         /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
         $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
-        $sharedComponents = $pageComponentGenerationService->generateSharedComponents($scope['website_profile'], $scope);
-        $this->appendWorkspaceEvent(
-            $session->getId(),
-            $adminId,
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'shared_layout_generated',
-            (string)__('AI 已生成站点页头与页脚'),
-            ['operation' => 'build']
-        );
 
-        /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
-        $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+        // 步骤 2: 生成 header/footer
         $currentStep++;
         $progressPercent = (int)(($currentStep / $totalSteps) * 100);
         $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('AI 正在生成站点页头与页脚'), $progressPercent);
-        $sharedComponents = $pageComponentGenerationService->generateSharedComponents($scope['website_profile'], $scope);
-        $this->appendWorkspaceEvent(
-            $session->getId(),
-            $adminId,
-            AiSiteAgentSession::STAGE_VISUAL_EDIT,
-            'shared_layout_generated',
-            (string)__('AI 已生成站点页头与页脚'),
-            ['operation' => 'build']
-        );
+
+        try {
+            $sharedComponents = $pageComponentGenerationService->generateSharedComponents($scope['website_profile'], $scope);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'shared_layout_generated',
+                (string)__('AI 已生成站点页头与页脚'),
+                ['operation' => 'build']
+            );
+        } catch (\Throwable $e) {
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'shared_layout_error',
+                (string)__('生成页头页脚失败：%{message}', ['message' => $e->getMessage()]),
+                ['operation' => 'build', 'details' => ['exception' => $e->getMessage()]],
+                AiSiteAgentSessionEvent::LEVEL_ERROR
+            );
+            // 继续生成，不因为 header/footer 生成失败而中断整个流程
+            $sharedComponents = ['header' => null, 'footer' => null];
+        }
 
         $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
         $now = \date('Y-m-d H:i:s');
@@ -1880,6 +2398,7 @@ SCRIPT;
             );
         }
 
+        $now = $lastGeneratedAt;
         $scope['build_summary'] = ['page_count' => \count($virtualPages), 'last_generated_at' => $now, 'active_operation' => 'build', 'can_publish' => true];
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => $now, 'message' => (string)__('HTML 区块已生成')]);
@@ -1895,6 +2414,65 @@ SCRIPT;
         return ['message' => (string)__('HTML 区块构建完成'), 'draft_website_id' => (int)$draftWebsite['website_id'], 'virtual_theme_id' => 0, 'page_types' => $pageTypes];
     }
 
+    private function persistVirtualThemeBuildScope(
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $scope,
+        int $websiteId,
+        array $pageTypes,
+        array $pageTypeLayouts,
+        array $virtualPages
+    ): array {
+        $scope['page_type_layouts'] = $pageTypeLayouts;
+        $scope['virtual_pages_by_type'] = $virtualPages;
+        $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? ''));
+        $materialized = $this->materializeGeneratedPages(
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            $websiteId,
+            \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+            $pageTypes,
+            $pageTypeLayouts,
+            $virtualPages
+        );
+        $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        $this->sessionService->bindWebsite($session->getId(), $adminId, $websiteId);
+        $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)($scope['virtual_theme_id'] ?? 0));
+
+        return $scope;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param array<string, array<string, mixed>> $pageTypeLayouts
+     * @param array<string, mixed> $component
+     * @return array<string, array<string, mixed>>
+     */
+    private function applySharedComponentToPageLayouts(array $pageTypes, array $pageTypeLayouts, array $component): array
+    {
+        $region = \trim((string)($component['region'] ?? ''));
+        if (!\in_array($region, ['header', 'footer'], true)) {
+            return $pageTypeLayouts;
+        }
+
+        $componentCode = \trim((string)($component['code'] ?? ''));
+        if ($componentCode === '') {
+            return $pageTypeLayouts;
+        }
+
+        $componentConfig = \is_array($component['default_config'] ?? null) ? $component['default_config'] : [];
+        foreach ($pageTypes as $pageType) {
+            $layout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
+            $layout[$region] = [
+                'component' => $componentCode,
+                'config' => $componentConfig,
+            ];
+            $pageTypeLayouts[$pageType] = $layout;
+        }
+
+        return $pageTypeLayouts;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -1906,9 +2484,66 @@ SCRIPT;
         if ($workspaceTrack === AiSiteScopeCompatibilityService::WORKSPACE_TRACK_HTML_BLOCKS) {
             return $this->runHtmlBlocksBuildOperation($sse, $session, $adminId, $scope);
         }
+        return $this->runVirtualThemeBuildOperation($sse, $session, $adminId, $scope);
         $scope['website_profile'] = $this->profileGenerationService->generate($scope);
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $pageTypeLabels = Page::getPageTypes();
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $themeShell = $this->virtualThemeService->ensureThemeShell($scope, $scope['website_profile'], $session->getId());
+        $scope['virtual_theme_id'] = (int)$themeShell['virtual_theme_id'];
+        $sharedComponents = $this->virtualThemeService->loadSharedComponents((int)$scope['virtual_theme_id']);
+        foreach (['header', 'footer'] as $region) {
+            if (\is_array($sharedComponents[$region] ?? null)) {
+                $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $sharedComponents[$region]);
+            }
+        }
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $existingPagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['pagebuilder_pages_by_type'] ?? []);
+        $missingSharedRegions = [];
+        foreach (['header', 'footer'] as $region) {
+            if (!\is_array($sharedComponents[$region] ?? null)) {
+                $missingSharedRegions[] = $region;
+            }
+        }
+        $pendingPageTypes = $this->resolvePendingGenerationPageTypes(
+            $pageTypes,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            $existingPagesByType,
+            $pageTypeLayouts,
+            $virtualPages
+        );
+        $totalSteps = \max(1, 1 + \count($missingSharedRegions) + \count($pendingPageTypes));
+        $currentStep = 0;
+        $environmentReadyEmitted = false;
+        $lastGeneratedAt = \date('Y-m-d H:i:s');
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+        $themeShell = $this->virtualThemeService->ensureThemeShell($scope, $scope['website_profile'], $session->getId());
+        $scope['virtual_theme_id'] = (int)$themeShell['virtual_theme_id'];
+        $sharedComponents = $this->virtualThemeService->loadSharedComponents((int)$scope['virtual_theme_id']);
+        foreach (['header', 'footer'] as $region) {
+            if (\is_array($sharedComponents[$region] ?? null)) {
+                $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $sharedComponents[$region]);
+            }
+        }
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $existingPagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['pagebuilder_pages_by_type'] ?? []);
+        $missingSharedRegions = [];
+        foreach (['header', 'footer'] as $region) {
+            if (!\is_array($sharedComponents[$region] ?? null)) {
+                $missingSharedRegions[] = $region;
+            }
+        }
+        $pendingPageTypes = $this->resolvePendingGenerationPageTypes(
+            $pageTypes,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            $existingPagesByType,
+            $pageTypeLayouts,
+            $virtualPages
+        );
+        $totalSteps = \max(1, 1 + \count($missingSharedRegions) + \count($pendingPageTypes));
+        $currentStep = 0;
+        $environmentReadyEmitted = false;
+        $lastGeneratedAt = \date('Y-m-d H:i:s');
         $totalSteps = \count($pageTypes) + 2; // 网站资料 + 虚拟主题 + N个页面
         $currentStep = 0;
 
@@ -1920,6 +2555,21 @@ SCRIPT;
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
         $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
+        $scope = $this->persistVirtualThemeBuildScope(
+            $session,
+            $adminId,
+            $scope,
+            (int)$draftWebsite['website_id'],
+            $pageTypes,
+            $pageTypeLayouts,
+            $virtualPages
+        );
+        /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
+        $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+        $totalSteps = \max(1, 1 + \count($missingSharedRegions) + \count($pendingPageTypes));
+        $currentStep = 1;
+        $environmentReadyEmitted = false;
+        $lastGeneratedAt = \date('Y-m-d H:i:s');
 
         // 步骤 2: 生成虚拟主题骨架
         $currentStep++;
@@ -1927,10 +2577,147 @@ SCRIPT;
         $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('正在生成虚拟主题骨架'), $progressPercent);
 
         // 初始化空的 page_type_layouts，稍后逐个生成
-        $pageTypeLayouts = [];
-        $virtualPages = [];
-        $now = \date('Y-m-d H:i:s');
-        $environmentReadyEmitted = false;
+        foreach ($missingSharedRegions as $region) {
+            $this->assertActiveStreamLeaseAlive($session, $adminId);
+            $currentStep++;
+            $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+
+            // 如果该组件已存在（从 loadSharedComponents 加载），直接跳过并发送完成事件
+            if (isset($sharedComponents[$region]) && \is_array($sharedComponents[$region])) {
+                $component = $sharedComponents[$region];
+                $this->sendOperationProgress(
+                    $sse,
+                    $session,
+                    $adminId,
+                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                    'build',
+                    $region === 'header'
+                        ? __('Header 组件已存在，跳过生成')
+                        : __('Footer 组件已存在，跳过生成'),
+                    $progressPercent
+                );
+                $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $component);
+                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+                $state = $this->buildWorkspaceState($fresh, $adminId, 80, true);
+                $readyPageType = (string)($state['preview_page_type'] ?? Page::TYPE_HOME);
+                $readyPageLabel = (string)($pageTypeLabels[$readyPageType] ?? $readyPageType);
+                $readyPageId = (int)($state['pagebuilder_pages_by_type'][$readyPageType]['page_id'] ?? 0);
+                if (!$environmentReadyEmitted && $readyPageId > 0) {
+                    $environmentReadyEmitted = true;
+                    $this->emitBuildEnvironmentReady(
+                        $sse,
+                        $session,
+                        $adminId,
+                        $readyPageType,
+                        $readyPageLabel,
+                        $readyPageId,
+                        (int)$scope['virtual_theme_id']
+                    );
+                }
+                $message = $region === 'header'
+                    ? (string)__('Header 组件已生成并同步到可视化主题')
+                    : (string)__('Footer 组件已生成并同步到可视化主题');
+                $sse->sendEvent('shared_component_generated', [
+                    'region' => $region,
+                    'component_code' => (string)($component['code'] ?? ''),
+                    'component_name' => (string)($component['name'] ?? ''),
+                    'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                    'progress_percent' => $progressPercent,
+                    'message' => $message,
+                    'state' => $state,
+                    'skipped' => true,
+                ]);
+                $this->appendWorkspaceEvent(
+                    $session->getId(),
+                    $adminId,
+                    AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                    'shared_component_generated',
+                    $message,
+                    [
+                        'operation' => 'skip',
+                        'details' => [
+                            'region' => $region,
+                            'component_code' => (string)($component['code'] ?? ''),
+                            'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                        ],
+                    ]
+                );
+                continue;
+            }
+
+            $this->sendOperationProgress(
+                $sse,
+                $session,
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'build',
+                $region === 'header'
+                    ? __('AI 正在生成站点 Header')
+                    : __('AI 正在生成站点 Footer'),
+                $progressPercent
+            );
+
+            $component = $pageComponentGenerationService->generateSharedComponent($region, $scope['website_profile'], $scope);
+            $sharedComponents[$region] = $component;
+            $this->virtualThemeService->saveGeneratedSharedComponent((int)$scope['virtual_theme_id'], $component);
+            $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $component);
+            $scope = $this->persistVirtualThemeBuildScope(
+                $session,
+                $adminId,
+                $scope,
+                (int)$draftWebsite['website_id'],
+                $pageTypes,
+                $pageTypeLayouts,
+                $virtualPages
+            );
+
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $state = $this->buildWorkspaceState($fresh, $adminId, 80, true);
+            $readyPageType = (string)($state['preview_page_type'] ?? Page::TYPE_HOME);
+            $readyPageLabel = (string)($pageTypeLabels[$readyPageType] ?? $readyPageType);
+            $readyPageId = (int)($state['pagebuilder_pages_by_type'][$readyPageType]['page_id'] ?? 0);
+            if (!$environmentReadyEmitted && $readyPageId > 0) {
+                $environmentReadyEmitted = true;
+                $this->emitBuildEnvironmentReady(
+                    $sse,
+                    $session,
+                    $adminId,
+                    $readyPageType,
+                    $readyPageLabel,
+                    $readyPageId,
+                    (int)$scope['virtual_theme_id']
+                );
+            }
+
+            $message = $region === 'header'
+                ? (string)__('Header 已生成并同步到可视化主题')
+                : (string)__('Footer 已生成并同步到可视化主题');
+            $sse->sendEvent('shared_component_generated', [
+                'region' => '',
+                'shared_region' => $region,
+                'component_code' => (string)($component['code'] ?? ''),
+                'component_name' => (string)($component['name'] ?? ''),
+                'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                'progress_percent' => $progressPercent,
+                'message' => $message,
+                'state' => $state,
+            ]);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'shared_component_generated',
+                $message,
+                [
+                    'operation' => 'build',
+                    'details' => [
+                        'region' => $region,
+                        'component_code' => (string)($component['code'] ?? ''),
+                        'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                    ],
+                ]
+            );
+        }
 
         // 步骤 3-N: 逐个生成每个页面类型
         foreach ($pageTypes as $pageType) {
@@ -1952,6 +2739,18 @@ SCRIPT;
 
             // 为当前页面类型生成布局
             $pageTypeLayouts[$pageType] = $this->scopeCompatibilityService->normalizeLayoutConfig([], $pageType);
+            $pageTypeLayouts = $this->applySharedComponentToPageLayouts([$pageType], $pageTypeLayouts, $sharedComponents['header'] ?? []);
+            $pageTypeLayouts = $this->applySharedComponentToPageLayouts([$pageType], $pageTypeLayouts, $sharedComponents['footer'] ?? []);
+            $currentPagesByType = $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['pagebuilder_pages_by_type'] ?? []);
+            if ($this->isPageTypeGenerationComplete(
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+                $pageType,
+                $currentPagesByType,
+                $pageTypeLayouts,
+                $virtualPages
+            )) {
+                continue;
+            }
 
             // 更新虚拟主题（包含当前页面类型）
             $theme = $this->virtualThemeService->ensureAiGeneratedVirtualTheme(
@@ -1959,16 +2758,21 @@ SCRIPT;
                 $scope['website_profile'],
                 [$pageType], // 只传入当前页面类型
                 [$pageType => $pageTypeLayouts[$pageType]],
-                $session->getId()
+                $session->getId(),
+                false,
+                $sharedComponents
             );
             $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
-            $scope['page_type_layouts'] = \array_replace($scope['page_type_layouts'] ?? [], $theme['page_type_layouts']);
+            $pageTypeLayouts = \array_replace($pageTypeLayouts, $theme['page_type_layouts']);
 
             // 构建当前页面的虚拟页面数据
-            $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], $scope);
-            $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], $scope);
+            $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], \array_replace($scope, [
+                'page_type_layouts' => $pageTypeLayouts,
+                'virtual_pages_by_type' => $virtualPages,
+            ]));
             if (isset($currentVirtualPages[$pageType])) {
-                $currentVirtualPages[$pageType]['last_generated_at'] = $now;
+                $lastGeneratedAt = \date('Y-m-d H:i:s');
+                $currentVirtualPages[$pageType]['last_generated_at'] = $lastGeneratedAt;
                 $currentVirtualPages[$pageType]['title'] = (string)($blueprint['page_title'] ?? ($currentVirtualPages[$pageType]['title'] ?? ''));
                 $currentVirtualPages[$pageType]['ai_description'] = (string)($blueprint['ai_description'] ?? ($currentVirtualPages[$pageType]['ai_description'] ?? ''));
                 $currentVirtualPages[$pageType]['meta_title'] = (string)($blueprint['meta_title'] ?? ($currentVirtualPages[$pageType]['meta_title'] ?? ''));
@@ -1979,19 +2783,17 @@ SCRIPT;
             }
 
             // 实时更新 scope，让前端可以立即看到新生成的页面
-            $scope['virtual_pages_by_type'] = $virtualPages;
-            $scope['preview_page_type'] = $this->scopeCompatibilityService->resolvePreviewPageType($virtualPages, (string)($scope['preview_page_type'] ?? ''));
-            $materialized = $this->materializeGeneratedPages(
-                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            $scope = $this->persistVirtualThemeBuildScope(
+                $session,
+                $adminId,
+                $scope,
                 (int)$draftWebsite['website_id'],
-                $scope['website_profile'],
-                \array_keys($virtualPages),
-                $scope['page_type_layouts'] ?? [],
+                $pageTypes,
+                $pageTypeLayouts,
                 $virtualPages
             );
-            $scope = $this->mergeMaterializedPagesIntoScope($scope, $materialized);
-            $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-            $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)$theme['virtual_theme_id']);
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $state = $this->buildWorkspaceState($fresh, $adminId, 80, true);
             $pageId = (int)($scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? 0);
             if (!$environmentReadyEmitted && $pageId > 0) {
                 $environmentReadyEmitted = true;
@@ -2002,7 +2804,7 @@ SCRIPT;
                     $pageType,
                     $pageLabel,
                     $pageId,
-                    (int)$theme['virtual_theme_id']
+                    (int)$scope['virtual_theme_id']
                 );
             }
 
@@ -2011,9 +2813,10 @@ SCRIPT;
                 'page_type' => $pageType,
                 'page_label' => $pageLabel,
                 'page_id' => $pageId,
-                'virtual_theme_id' => (int)$theme['virtual_theme_id'],
+                'virtual_theme_id' => (int)$scope['virtual_theme_id'],
                 'progress_percent' => $progressPercent,
                 'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
+                'state' => $state,
             ]);
             $this->appendWorkspaceEvent(
                 $session->getId(),
@@ -2026,13 +2829,14 @@ SCRIPT;
                     'page_type' => $pageType,
                     'details' => [
                         'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
-                        'virtual_theme_id' => (int)$theme['virtual_theme_id'],
+                        'virtual_theme_id' => (int)$scope['virtual_theme_id'],
                     ],
                 ]
             );
         }
 
         // 最终步骤：完成构建
+        $now = \date('Y-m-d H:i:s');
         $scope['build_summary'] = ['page_count' => \count($virtualPages), 'last_generated_at' => $now, 'active_operation' => 'build', 'can_publish' => true];
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
         $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => $now, 'message' => (string)__('主题构建完成')]);
@@ -2050,6 +2854,320 @@ SCRIPT;
     /**
      * @return array<string, mixed>
      */
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function runVirtualThemeBuildOperation(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $scope
+    ): array {
+        $scope['website_profile'] = $this->profileGenerationService->generate($scope);
+        $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        $pageTypeLabels = Page::getPageTypes();
+        $pageTypeLayouts = $this->scopeCompatibilityService->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
+
+        $themeShell = $this->virtualThemeService->ensureThemeShell($scope, $scope['website_profile'], $session->getId());
+        $scope['virtual_theme_id'] = (int)$themeShell['virtual_theme_id'];
+        $sharedComponents = $this->virtualThemeService->loadSharedComponents((int)$scope['virtual_theme_id']);
+
+        foreach (['header', 'footer'] as $region) {
+            if (\is_array($sharedComponents[$region] ?? null)) {
+                $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $sharedComponents[$region]);
+            }
+        }
+
+        $virtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType($pageTypes, $scope);
+        $pendingPageTypes = $this->resolvePendingGenerationPageTypes(
+            $pageTypes,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['pagebuilder_pages_by_type'] ?? []),
+            $pageTypeLayouts,
+            $virtualPages
+        );
+        $missingSharedRegions = [];
+        foreach (['header', 'footer'] as $region) {
+            if (!\is_array($sharedComponents[$region] ?? null)) {
+                $missingSharedRegions[] = $region;
+            }
+        }
+
+        $totalSteps = \max(1, 1 + \count($missingSharedRegions) + \count($pendingPageTypes));
+        $currentStep = 0;
+        $environmentReadyEmitted = false;
+        $lastGeneratedAt = \date('Y-m-d H:i:s');
+
+        $currentStep++;
+        $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('正在准备网站资料'), $progressPercent);
+
+        $draftWebsite = $this->draftWebsiteService->ensureDraftWebsite($scope, $scope['website_profile']);
+        $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
+        $scope['website_id'] = (int)$draftWebsite['website_id'];
+        $scope['selected_website_id'] = (int)$draftWebsite['website_id'];
+        $scope = $this->persistVirtualThemeBuildScope(
+            $session,
+            $adminId,
+            $scope,
+            (int)$draftWebsite['website_id'],
+            $pageTypes,
+            $pageTypeLayouts,
+            $virtualPages
+        );
+
+        /** @var AiSitePageComponentGenerationService $pageComponentGenerationService */
+        $pageComponentGenerationService = ObjectManager::getInstance(AiSitePageComponentGenerationService::class);
+
+        foreach ($missingSharedRegions as $region) {
+            $this->assertActiveStreamLeaseAlive($session, $adminId);
+            $currentStep++;
+            $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+            $this->sendOperationProgress(
+                $sse,
+                $session,
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'build',
+                $region === 'header' ? 'Generating shared header' : 'Generating shared footer',
+                $progressPercent
+            );
+
+            $component = $pageComponentGenerationService->generateSharedComponent($region, $scope['website_profile'], $scope);
+            $sharedComponents[$region] = $component;
+            $this->virtualThemeService->saveGeneratedSharedComponent((int)$scope['virtual_theme_id'], $component);
+            $pageTypeLayouts = $this->applySharedComponentToPageLayouts($pageTypes, $pageTypeLayouts, $component);
+            $scope = $this->persistVirtualThemeBuildScope(
+                $session,
+                $adminId,
+                $scope,
+                (int)$draftWebsite['website_id'],
+                $pageTypes,
+                $pageTypeLayouts,
+                $virtualPages
+            );
+
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $state = $this->buildWorkspaceState($fresh, $adminId, 80, true);
+            $readyPageType = (string)($state['preview_page_type'] ?? Page::TYPE_HOME);
+            $readyPageLabel = (string)($pageTypeLabels[$readyPageType] ?? $readyPageType);
+            $readyPageId = (int)($state['pagebuilder_pages_by_type'][$readyPageType]['page_id'] ?? 0);
+            if (!$environmentReadyEmitted && $readyPageId > 0) {
+                $environmentReadyEmitted = true;
+                $this->emitBuildEnvironmentReady(
+                    $sse,
+                    $session,
+                    $adminId,
+                    $readyPageType,
+                    $readyPageLabel,
+                    $readyPageId,
+                    (int)$scope['virtual_theme_id']
+                );
+            }
+
+            $message = $region === 'header'
+                ? 'Header generated and synced to visual theme'
+                : 'Footer generated and synced to visual theme';
+            $sse->sendEvent('shared_component_generated', [
+                'region' => $region,
+                'component_code' => (string)($component['code'] ?? ''),
+                'component_name' => (string)($component['name'] ?? ''),
+                'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                'progress_percent' => $progressPercent,
+                'message' => $message,
+                'state' => $state,
+            ]);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'shared_component_generated',
+                $message,
+                [
+                    'operation' => 'build',
+                    'details' => [
+                        'region' => $region,
+                        'component_code' => (string)($component['code'] ?? ''),
+                        'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                    ],
+                ]
+            );
+        }
+
+        foreach ($pageTypes as $pageType) {
+            if ($this->isPageTypeGenerationComplete(
+                AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+                $pageType,
+                $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['pagebuilder_pages_by_type'] ?? []),
+                $pageTypeLayouts,
+                $virtualPages
+            )) {
+                continue;
+            }
+
+            $this->assertActiveStreamLeaseAlive($session, $adminId);
+            $currentStep++;
+            $progressPercent = (int)(($currentStep / $totalSteps) * 100);
+            $pageLabel = (string)($pageTypeLabels[$pageType] ?? $pageType);
+            $blueprint = $this->pageBlueprintService->buildPageBlueprint($pageType, $scope, $scope['website_profile']);
+
+            $this->sendOperationProgress(
+                $sse,
+                $session,
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'build',
+                __('正在生成页面：%{page}', ['page' => $pageLabel]),
+                $progressPercent,
+                $pageType
+            );
+
+            $baseLayout = $this->scopeCompatibilityService->normalizeLayoutConfig($pageTypeLayouts[$pageType] ?? [], $pageType);
+            if (\trim((string)($baseLayout['header']['component'] ?? '')) === '' && \is_array($sharedComponents['header'] ?? null)) {
+                $baseLayout['header'] = [
+                    'component' => (string)($sharedComponents['header']['code'] ?? ''),
+                    'config' => \is_array($sharedComponents['header']['default_config'] ?? null) ? $sharedComponents['header']['default_config'] : [],
+                ];
+            }
+            if (\trim((string)($baseLayout['footer']['component'] ?? '')) === '' && \is_array($sharedComponents['footer'] ?? null)) {
+                $baseLayout['footer'] = [
+                    'component' => (string)($sharedComponents['footer']['code'] ?? ''),
+                    'config' => \is_array($sharedComponents['footer']['default_config'] ?? null) ? $sharedComponents['footer']['default_config'] : [],
+                ];
+            }
+
+            $theme = $this->virtualThemeService->ensureAiGeneratedVirtualTheme(
+                $scope,
+                $scope['website_profile'],
+                [$pageType],
+                [$pageType => $baseLayout],
+                $session->getId(),
+                false,
+                $sharedComponents
+            );
+            $scope['virtual_theme_id'] = (int)$theme['virtual_theme_id'];
+            $pageTypeLayouts = \array_replace($pageTypeLayouts, $theme['page_type_layouts']);
+
+            $currentVirtualPages = $this->scopeCompatibilityService->buildVirtualPagesByType([$pageType], \array_replace($scope, [
+                'page_type_layouts' => $pageTypeLayouts,
+                'virtual_pages_by_type' => $virtualPages,
+            ]));
+            if (isset($currentVirtualPages[$pageType])) {
+                $lastGeneratedAt = \date('Y-m-d H:i:s');
+                $currentVirtualPages[$pageType]['last_generated_at'] = $lastGeneratedAt;
+                $currentVirtualPages[$pageType]['title'] = (string)($blueprint['page_title'] ?? ($currentVirtualPages[$pageType]['title'] ?? ''));
+                $currentVirtualPages[$pageType]['ai_description'] = (string)($blueprint['ai_description'] ?? ($currentVirtualPages[$pageType]['ai_description'] ?? ''));
+                $currentVirtualPages[$pageType]['meta_title'] = (string)($blueprint['meta_title'] ?? ($currentVirtualPages[$pageType]['meta_title'] ?? ''));
+                $currentVirtualPages[$pageType]['meta_description'] = (string)($blueprint['meta_description'] ?? ($currentVirtualPages[$pageType]['meta_description'] ?? ''));
+                $currentVirtualPages[$pageType]['meta_keywords'] = (string)($blueprint['meta_keywords'] ?? ($currentVirtualPages[$pageType]['meta_keywords'] ?? ''));
+                $currentVirtualPages[$pageType]['section_refinements'] = \is_array($blueprint['section_refinements'] ?? null) ? $blueprint['section_refinements'] : [];
+                $virtualPages[$pageType] = $currentVirtualPages[$pageType];
+            }
+
+            $scope = $this->persistVirtualThemeBuildScope(
+                $session,
+                $adminId,
+                $scope,
+                (int)$draftWebsite['website_id'],
+                $pageTypes,
+                $pageTypeLayouts,
+                $virtualPages
+            );
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $state = $this->buildWorkspaceState($fresh, $adminId, 80, true);
+            $pageId = (int)($scope['pagebuilder_pages_by_type'][$pageType]['page_id'] ?? 0);
+            if (!$environmentReadyEmitted && $pageId > 0) {
+                $environmentReadyEmitted = true;
+                $this->emitBuildEnvironmentReady(
+                    $sse,
+                    $session,
+                    $adminId,
+                    $pageType,
+                    $pageLabel,
+                    $pageId,
+                    (int)$scope['virtual_theme_id']
+                );
+            }
+
+            $sse->sendEvent('page_generated', [
+                'page_type' => $pageType,
+                'page_label' => $pageLabel,
+                'page_id' => $pageId,
+                'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                'progress_percent' => $progressPercent,
+                'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
+                'state' => $state,
+            ]);
+            $this->appendWorkspaceEvent(
+                $session->getId(),
+                $adminId,
+                AiSiteAgentSession::STAGE_VISUAL_EDIT,
+                'page_generated',
+                (string)__('页面已生成：%{page}', ['page' => $pageLabel]),
+                [
+                    'operation' => 'build',
+                    'page_type' => $pageType,
+                    'details' => [
+                        'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
+                        'virtual_theme_id' => (int)$scope['virtual_theme_id'],
+                    ],
+                ]
+            );
+        }
+
+        $pendingPageTypes = $this->resolvePendingGenerationPageTypes(
+            $pageTypes,
+            AiSiteScopeCompatibilityService::WORKSPACE_TRACK_VIRTUAL_THEME,
+            $this->scopeCompatibilityService->normalizePagebuilderPagesByType($scope['pagebuilder_pages_by_type'] ?? []),
+            $pageTypeLayouts,
+            $virtualPages
+        );
+        $canPublish = $pendingPageTypes === [];
+        $now = \date('Y-m-d H:i:s');
+        $scope['build_summary'] = [
+            'page_count' => \count($virtualPages),
+            'pending_page_count' => \count($pendingPageTypes),
+            'pending_page_types' => $pendingPageTypes,
+            'last_generated_at' => $lastGeneratedAt,
+            'active_operation' => 'build',
+            'can_publish' => $canPublish,
+        ];
+        $scope['workspace_status'] = $canPublish
+            ? AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+            : AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING;
+        $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], [
+            'status' => 'done',
+            'updated_at' => $now,
+            'message' => (string)__('主题构建完成'),
+        ]);
+
+        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
+        $this->sessionService->bindWebsite($session->getId(), $adminId, (int)$draftWebsite['website_id']);
+        $this->sessionService->bindVirtualTheme($session->getId(), $adminId, (int)($scope['virtual_theme_id'] ?? 0));
+        $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
+        $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
+
+        $this->sendOperationProgress(
+            $sse,
+            $session,
+            $adminId,
+            AiSiteAgentSession::STAGE_VISUAL_EDIT,
+            'build',
+            $canPublish
+                ? (string)__('虚拟主题已生成，可继续进入页面编辑')
+                : (string)__('仍有页面待生成，构建进度已记录'),
+            100
+        );
+
+        return [
+            'message' => (string)__('主题构建完成'),
+            'draft_website_id' => (int)$draftWebsite['website_id'],
+            'virtual_theme_id' => (int)($scope['virtual_theme_id'] ?? 0),
+            'page_types' => $pageTypes,
+        ];
+    }
+
     private function runRegeneratePageOperation(SseWriter $sse, AiSiteAgentSession $session, int $adminId, string $pageType): array
     {
         $this->assertActiveStreamLeaseAlive($session, $adminId);
@@ -2423,6 +3541,22 @@ SCRIPT;
     private function assertActiveStreamLeaseAlive(AiSiteAgentSession $session, int $adminId, string $leaseToken = ''): void
     {
         // 标准 SSE 模式下不做 lease 校验，连接生命周期由浏览器/TCP 自然管理。
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     */
+    private function isActiveOperationStale(array $activeOperation): bool
+    {
+        $updatedAtRaw = \trim((string)($activeOperation['updated_at'] ?? $activeOperation['started_at'] ?? ''));
+        if ($updatedAtRaw === '') {
+            return true;
+        }
+        $updatedAtTs = \strtotime($updatedAtRaw);
+        if ($updatedAtTs === false) {
+            return true;
+        }
+        return (\time() - $updatedAtTs) > self::STALE_ACTIVE_OPERATION_TTL_SEC;
     }
 
     /**
@@ -2824,4 +3958,5 @@ SCRIPT;
             @\session_write_close();
         }
     }
+
 }

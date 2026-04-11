@@ -1,0 +1,551 @@
+<?php
+/**
+ * Twenty Nine Tempest Blog Category Component
+ *
+ * @fields_start
+ * blog.title|分类标题|text|Category Posts
+ * blog.subtitle|副标题|text|Browse articles by category
+ * blog.posts_per_page|每页显示数量|number|9
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_category|显示分类|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.card_style|卡片样式|select:default=默认,minimal=简约,featured=特色|default
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$currentCategory = $this->getData('current_category') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+$componentId = 'tnt-blog-category-' . uniqid();
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', $currentCategory['name'] ?? __('Category Posts'));
+$subtitle = $getConfig('blog.subtitle', __('Browse articles by category'));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$cardStyle = $getConfig('blog.card_style', 'default');
+
+$primaryColor = $getConfig('color_scheme.primary', '#1eb980');
+$secondaryColor = $getConfig('color_scheme.secondary', '#f2a93b');
+$bgColor = $getConfig('color_scheme.background', '#0b1525');
+$textColor = $getConfig('color_scheme.text', '#f8fafc');
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/twenty-nine-tempest/asset/img/poker-header-bg.svg');
+
+$spotlightPost = $blogPosts[0] ?? null;
+$listPosts = array_slice($blogPosts, 1);
+
+$excerpt = static function ($value, $limit) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return '';
+    }
+
+    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        return mb_strlen($value) > $limit ? mb_substr($value, 0, $limit) . '...' : $value;
+    }
+
+    return strlen($value) > $limit ? substr($value, 0, $limit) . '...' : $value;
+};
+?>
+
+<section id="<?= $componentId ?>" class="tnt-blog-category">
+    <div class="category-shell">
+        <header class="category-head">
+            <div class="head-main">
+                <?php if (!empty($currentCategory['name'])): ?>
+                    <span class="category-badge"><?= htmlspecialchars($currentCategory['name']) ?></span>
+                <?php endif; ?>
+                <h2><?= htmlspecialchars($title) ?></h2>
+                <?php if ($subtitle): ?>
+                    <p class="head-copy"><?= htmlspecialchars($subtitle) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <?php if (!empty($currentCategory['description'])): ?>
+                <div class="head-note">
+                    <span class="note-kicker">Category Note</span>
+                    <p><?= htmlspecialchars($currentCategory['description']) ?></p>
+                </div>
+            <?php endif; ?>
+        </header>
+
+        <?php if (empty($blogPosts)): ?>
+            <div class="category-empty">
+                <div class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                    </svg>
+                </div>
+                <p><?= __('No posts are available in this category yet. Please check back soon.') ?></p>
+                <a href="/blog" class="back-link"><?= __('Back to Blog List') ?></a>
+            </div>
+        <?php else: ?>
+            <div class="category-layout<?= $showSidebar ? ' has-rail' : '' ?>">
+                <div class="category-stage">
+                    <?php if ($spotlightPost): ?>
+                        <article class="spotlight-panel">
+                            <div class="spotlight-copy">
+                                <span class="spotlight-kicker">Category Lead</span>
+                                <div class="meta-line">
+                                    <?php if ($showCategory && !empty($spotlightPost['category_name'])): ?>
+                                        <span class="meta-chip"><?= htmlspecialchars($spotlightPost['category_name']) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($showDate && !empty($spotlightPost['published_at'])): ?>
+                                        <span class="meta-date"><?= date('M d, Y', strtotime($spotlightPost['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <h3><a href="<?= htmlspecialchars($spotlightPost['url']) ?>"><?= htmlspecialchars($spotlightPost['title']) ?></a></h3>
+                                <?php if (!empty($spotlightPost['summary'])): ?>
+                                    <p><?= htmlspecialchars($excerpt($spotlightPost['summary'], 220)) ?></p>
+                                <?php endif; ?>
+                                <div class="spotlight-foot">
+                                    <?php if ($showAuthor && !empty($spotlightPost['author'])): ?>
+                                        <span><?= htmlspecialchars($spotlightPost['author']) ?></span>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($spotlightPost['url']) ?>" class="story-link"><?= __('Read Article') ?></a>
+                                </div>
+                            </div>
+
+                            <?php if (!empty($spotlightPost['cover_image'])): ?>
+                                <a href="<?= htmlspecialchars($spotlightPost['url']) ?>" class="spotlight-media">
+                                    <img src="<?= htmlspecialchars($spotlightPost['cover_image']) ?>" alt="<?= htmlspecialchars($spotlightPost['title']) ?>" loading="lazy">
+                                </a>
+                            <?php endif; ?>
+                        </article>
+                    <?php endif; ?>
+
+                    <?php if (!empty($listPosts)): ?>
+                        <div class="lane-list style-<?= htmlspecialchars(preg_replace('/[^a-z0-9-]+/i', '', (string) $cardStyle)) ?>">
+                            <?php foreach ($listPosts as $index => $post): ?>
+                                <article class="lane-card<?= $cardStyle === 'featured' && $index === 0 ? ' is-emphasis' : '' ?>">
+                                    <?php if (!empty($post['cover_image'])): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="lane-media">
+                                            <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <div class="lane-copy">
+                                        <div class="meta-line">
+                                            <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                                <span class="meta-chip"><?= htmlspecialchars($post['category_name']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if ($showDate && !empty($post['published_at'])): ?>
+                                                <span class="meta-date"><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <h3><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h3>
+                                        <?php if ($cardStyle !== 'minimal' && !empty($post['summary'])): ?>
+                                            <p><?= htmlspecialchars($excerpt($post['summary'], 165)) ?></p>
+                                        <?php endif; ?>
+                                        <div class="lane-foot">
+                                            <?php if ($showAuthor && !empty($post['author'])): ?>
+                                                <span><?= htmlspecialchars($post['author']) ?></span>
+                                            <?php endif; ?>
+                                            <a href="<?= htmlspecialchars($post['url']) ?>" class="story-link"><?= __('Open Story') ?></a>
+                                        </div>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="category-rail">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker">Category Index</span>
+                                <div class="category-index">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <?php $active = !empty($currentCategory['id']) && isset($category['id']) && $category['id'] == $currentCategory['id']; ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="index-link<?= $active ? ' is-active' : '' ?>">
+                                            <span><?= htmlspecialchars($category['name']) ?></span>
+                                            <?php if (isset($category['post_count'])): ?>
+                                                <small><?= (int) $category['post_count'] ?></small>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recentPosts)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker">Recent Posts</span>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.5rem, 8vw, 6.2rem) 0;
+    background:
+        radial-gradient(960px 420px at 12% 8%, rgba(30, 185, 128, 0.18), transparent 68%),
+        radial-gradient(760px 360px at 92% 16%, rgba(242, 169, 59, 0.16), transparent 64%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.08;
+}
+
+#<?= $componentId ?>::after {
+    background: repeating-linear-gradient(128deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 28px);
+    opacity: 0.24;
+}
+
+#<?= $componentId ?> .category-shell {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .category-head {
+    display: grid;
+    grid-template-columns: minmax(0, 0.96fr) minmax(0, 0.8fr);
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .category-badge,
+#<?= $componentId ?> .note-kicker,
+#<?= $componentId ?> .spotlight-kicker,
+#<?= $componentId ?> .rail-kicker,
+#<?= $componentId ?> .meta-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0.44rem 0.88rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .category-badge,
+#<?= $componentId ?> .meta-chip {
+    color: #08131f;
+    background: linear-gradient(135deg, <?= htmlspecialchars($secondaryColor) ?>, <?= htmlspecialchars($primaryColor) ?>);
+}
+
+#<?= $componentId ?> .note-kicker,
+#<?= $componentId ?> .spotlight-kicker,
+#<?= $componentId ?> .rail-kicker {
+    color: #dce8f5;
+    background: rgba(255,255,255,0.08);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .head-main h2 {
+    margin-top: 0.9rem;
+    font-size: clamp(2.2rem, 4.5vw, 4rem);
+    line-height: 0.96;
+    letter-spacing: -0.06em;
+    text-wrap: balance;
+}
+
+#<?= $componentId ?> .head-copy,
+#<?= $componentId ?> .head-note p {
+    color: rgba(248,250,252,0.72);
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .head-note,
+#<?= $componentId ?> .spotlight-panel,
+#<?= $componentId ?> .lane-card,
+#<?= $componentId ?> .rail-card,
+#<?= $componentId ?> .category-empty {
+    position: relative;
+    border-radius: 28px;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .head-note {
+    padding: 1.1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .head-note p {
+    margin-top: 0.9rem;
+}
+
+#<?= $componentId ?> .category-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .category-layout.has-rail {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 0.34fr);
+}
+
+#<?= $componentId ?> .category-stage,
+#<?= $componentId ?> .category-rail {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .spotlight-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(280px, 1.1fr);
+    background: linear-gradient(180deg, rgba(255,245,224,0.97), rgba(247,250,255,0.94));
+    box-shadow: 0 28px 62px rgba(3, 10, 20, 0.26);
+}
+
+#<?= $componentId ?> .spotlight-copy,
+#<?= $componentId ?> .lane-copy {
+    padding: 1.15rem;
+    color: #0e1d2d;
+}
+
+#<?= $componentId ?> .meta-line {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+}
+
+#<?= $componentId ?> .meta-date,
+#<?= $componentId ?> .spotlight-foot span,
+#<?= $componentId ?> .lane-foot span {
+    color: rgba(14,29,45,0.58);
+    font-size: 0.84rem;
+}
+
+#<?= $componentId ?> .spotlight-copy h3,
+#<?= $componentId ?> .lane-copy h3 {
+    margin-top: 0.9rem;
+    font-size: clamp(1.3rem, 2vw, 2rem);
+    line-height: 1.08;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .spotlight-copy h3 a,
+#<?= $componentId ?> .lane-copy h3 a,
+#<?= $componentId ?> .story-link,
+#<?= $componentId ?> .index-link,
+#<?= $componentId ?> .recent-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .spotlight-copy p,
+#<?= $componentId ?> .lane-copy p,
+#<?= $componentId ?> .recent-link small {
+    margin-top: 0.85rem;
+    color: rgba(14,29,45,0.68);
+    line-height: 1.78;
+}
+
+#<?= $componentId ?> .spotlight-foot,
+#<?= $componentId ?> .lane-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .story-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0.62rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(8, 21, 37, 0.08);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .spotlight-media,
+#<?= $componentId ?> .lane-media {
+    display: block;
+}
+
+#<?= $componentId ?> .spotlight-media img,
+#<?= $componentId ?> .lane-media img,
+#<?= $componentId ?> .recent-link img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .lane-list {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .lane-card {
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    background: linear-gradient(180deg, rgba(255,245,224,0.96), rgba(247,250,255,0.93));
+    box-shadow: 0 22px 48px rgba(3, 10, 20, 0.22);
+}
+
+#<?= $componentId ?> .lane-card.is-emphasis {
+    transform: translateX(0.3rem);
+}
+
+#<?= $componentId ?> .lane-media {
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .lane-list.style-minimal .lane-media,
+#<?= $componentId ?> .lane-list.style-minimal .lane-card p {
+    display: none;
+}
+
+#<?= $componentId ?> .lane-list.style-minimal .lane-card {
+    grid-template-columns: 1fr;
+}
+
+#<?= $componentId ?> .rail-card {
+    padding: 1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .category-index,
+#<?= $componentId ?> .recent-stack {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 0.9rem;
+}
+
+#<?= $componentId ?> .index-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+    min-height: 52px;
+    padding: 0.72rem 0.85rem;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.05);
+}
+
+#<?= $componentId ?> .index-link.is-active {
+    color: #08131f;
+    background: linear-gradient(135deg, <?= htmlspecialchars($secondaryColor) ?>, <?= htmlspecialchars($primaryColor) ?>);
+}
+
+#<?= $componentId ?> .index-link small {
+    opacity: 0.72;
+}
+
+#<?= $componentId ?> .recent-link {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .recent-link img {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+}
+
+#<?= $componentId ?> .recent-link strong {
+    display: block;
+    line-height: 1.45;
+}
+
+#<?= $componentId ?> .recent-link small {
+    display: block;
+    margin-top: 0.32rem;
+}
+
+#<?= $componentId ?> .category-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .back-link {
+    display: inline-flex;
+    margin-top: 1rem;
+    color: inherit;
+    text-decoration: none;
+}
+
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .category-head,
+    #<?= $componentId ?> .category-layout.has-rail,
+    #<?= $componentId ?> .spotlight-panel,
+    #<?= $componentId ?> .lane-card {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    #<?= $componentId ?> .head-note,
+    #<?= $componentId ?> .spotlight-panel,
+    #<?= $componentId ?> .lane-card,
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .category-empty {
+        border-radius: 24px;
+    }
+
+    #<?= $componentId ?> .recent-link {
+        grid-template-columns: 60px minmax(0, 1fr);
+    }
+
+    #<?= $componentId ?> .recent-link img {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+    }
+}
+</style>

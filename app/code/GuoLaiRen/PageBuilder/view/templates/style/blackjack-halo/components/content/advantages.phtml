@@ -1,0 +1,328 @@
+<?php
+/**
+ * Blackjack Halo Advantages Component
+ *
+ * @component_start
+ * code: advantages
+ * name: 优势展示
+ * name_en: Advantages Section
+ * description: 展示 Blackjack Halo 的核心优势，遵循 tpmst 字段规范
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示描述:select:yes|yes,no
+ * display.show_button => 显示按钮:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#eef5ea
+ * style.title_color => 标题颜色:color:#1e5b46
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.card_title_color => 卡片标题颜色:color:#20352d
+ * style.card_title_font_size => 卡片标题字号:number:18|px
+ * style.card_desc_color => 卡片描述颜色:color:#61756d
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.icon_size => 图标尺寸:number:88|px
+ * style.icon_border_radius => 图标圆角:number:28|px
+ * style.section_padding => 区域内边距(PC端):number:72|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:46|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:button => 按钮配置
+ * button.text => 按钮文本:text:Open Tables
+ * button.url => 按钮链接:text:#tables
+ * button.bg_gradient_start => 按钮渐变起始色:color:#1f7a5b
+ * button.bg_gradient_end => 按钮渐变结束色:color:#d3a03a
+ * button.text_color => 按钮文字颜色:color:#f8f4e8
+ * button.border_radius => 按钮圆角:number:999|px
+ * button.padding_x => 按钮水平内边距:number:28|px
+ * button.padding_y => 按钮垂直内边距:number:12|px
+ *
+ * group:icons => 图标配置
+ * icons.icon_1 => 优势1图标:textarea:|默认使用本地 icon-halo-balance.svg
+ * icons.icon_2 => 优势2图标:textarea:|默认使用本地 icon-halo-pulse.svg
+ * icons.icon_3 => 优势3图标:textarea:|默认使用本地 icon-halo-shield.svg
+ *
+ * group:texts => 文本内容
+ * texts.kicker => 顶部提示:text:Blackjack advantage map
+ * texts.title => 区域标题:text:Why Blackjack Halo Feels Cleaner
+ * texts.advantage_1_title => 优势1标题:text:Balanced Bet Stack
+ * texts.advantage_1_desc => 优势1描述:textarea:Primary actions, table status, and entry prompts stay separated clearly so fast blackjack sessions still feel readable.
+ * texts.advantage_2_title => 优势2标题:text:Quick Round Pulse
+ * texts.advantage_2_desc => 优势2描述:textarea:The layout is tuned for players who want to scan table pace quickly without hunting for the next room or control.
+ * texts.advantage_3_title => 优势3标题:text:Trust Notes Up Front
+ * texts.advantage_3_desc => 优势3描述:textarea:Rules, support access, and room cues surface early, so the page feels more product-led than template-led.
+ *
+ * @fields_end
+ */
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+$componentId = 'bkh-advantages-' . uniqid();
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+$showButton = $getConfig('display.show_button', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('advantages.bg_color', '#eef5ea'));
+$titleColor = $getConfig('style.title_color', '#1e5b46');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$cardTitleColor = $getConfig('style.card_title_color', '#20352d');
+$cardTitleFontSize = $getConfig('style.card_title_font_size', '18');
+$cardDescColor = $getConfig('style.card_desc_color', '#61756d');
+$cardDescFontSize = $getConfig('style.card_desc_font_size', '14');
+$iconSize = $getConfig('style.icon_size', '88');
+$iconBorderRadius = $getConfig('style.icon_border_radius', '28');
+$sectionPadding = $getConfig('style.section_padding', '72');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '46');
+$cardGap = $getConfig('style.card_gap', '24');
+
+$btnText = $getConfig('button.text', 'Open Tables');
+$btnUrl = $getConfig('button.url', '#tables');
+$btnGradientStart = $getConfig('button.bg_gradient_start', '#1f7a5b');
+$btnGradientEnd = $getConfig('button.bg_gradient_end', '#d3a03a');
+$btnTextColor = $getConfig('button.text_color', '#f8f4e8');
+$btnBorderRadius = $getConfig('button.border_radius', '999');
+$btnPaddingX = $getConfig('button.padding_x', '28');
+$btnPaddingY = $getConfig('button.padding_y', '12');
+
+$defaultIcon1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/icon-halo-balance.svg');
+$defaultIcon2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/icon-halo-pulse.svg');
+$defaultIcon3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/icon-halo-shield.svg');
+
+$icon1 = $getConfig('icons.icon_1', $getConfig('advantages.icon_1', '')) ?: $defaultIcon1;
+$icon2 = $getConfig('icons.icon_2', $getConfig('advantages.icon_2', '')) ?: $defaultIcon2;
+$icon3 = $getConfig('icons.icon_3', $getConfig('advantages.icon_3', '')) ?: $defaultIcon3;
+
+$kicker = $getConfig('texts.kicker', 'Blackjack advantage map');
+$title = $getConfig('texts.title', $getConfig('advantages.title', 'Why Blackjack Halo Feels Cleaner'));
+$title1 = $getConfig('texts.advantage_1_title', 'Balanced Bet Stack');
+$desc1 = $getConfig('texts.advantage_1_desc', 'Primary actions, table status, and entry prompts stay separated clearly so fast blackjack sessions still feel readable.');
+$title2 = $getConfig('texts.advantage_2_title', 'Quick Round Pulse');
+$desc2 = $getConfig('texts.advantage_2_desc', 'The layout is tuned for players who want to scan table pace quickly without hunting for the next room or control.');
+$title3 = $getConfig('texts.advantage_3_title', 'Trust Notes Up Front');
+$desc3 = $getConfig('texts.advantage_3_desc', 'Rules, support access, and room cues surface early, so the page feels more product-led than template-led.');
+
+$cards = [
+    ['icon' => $icon1, 'title' => $title1, 'desc' => $desc1, 'tone' => 'left'],
+    ['icon' => $icon2, 'title' => $title2, 'desc' => $desc2, 'tone' => 'center'],
+    ['icon' => $icon3, 'title' => $title3, 'desc' => $desc3, 'tone' => 'right'],
+];
+?>
+
+<section id="<?= $componentId ?>" class="bkh-advantages" aria-labelledby="<?= $componentId ?>-title">
+    <div class="adv-shell">
+        <header class="adv-intro">
+            <span class="adv-kicker"><?= htmlspecialchars($kicker) ?></span>
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($showButton && $btnText !== ''): ?>
+                <a class="adv-btn" href="<?= htmlspecialchars($btnUrl) ?>"><?= htmlspecialchars($btnText) ?></a>
+            <?php endif; ?>
+        </header>
+
+        <div class="adv-fan" style="--adv-gap: <?= (int)$cardGap ?>px;">
+            <?php foreach ($cards as $index => $card): ?>
+                <article class="adv-card adv-card-<?= htmlspecialchars($card['tone']) ?>">
+                    <div class="card-orbit" aria-hidden="true"></div>
+                    <div class="card-icon-wrap">
+                        <img class="card-icon" src="<?= htmlspecialchars($card['icon']) ?>" alt="<?= htmlspecialchars($card['title']) ?>">
+                    </div>
+                    <h3><?= htmlspecialchars($card['title']) ?></h3>
+                    <?php if ($showDescription): ?>
+                        <p><?= htmlspecialchars($card['desc']) ?></p>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background:
+        radial-gradient(640px 260px at 8% 0%, rgba(211, 160, 58, 0.13), transparent 72%),
+        radial-gradient(620px 280px at 92% 14%, rgba(31, 122, 91, 0.12), transparent 72%),
+        linear-gradient(180deg, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0) 34%),
+        <?= htmlspecialchars($bgColor) ?>;
+    overflow: hidden;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(420px 180px at 50% 100%, rgba(211, 160, 58, 0.08), transparent 72%);
+}
+
+#<?= $componentId ?> .adv-shell {
+    width: min(1240px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-intro {
+    max-width: 760px;
+    margin: 0 auto 1.6rem;
+    text-align: center;
+}
+
+#<?= $componentId ?> .adv-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.44rem 0.86rem;
+    border-radius: 999px;
+    background: rgba(31, 122, 91, 0.08);
+    border: 1px solid rgba(31, 122, 91, 0.16);
+    color: #1a5d47;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .adv-intro h2 {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 5vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.02;
+}
+
+#<?= $componentId ?> .adv-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1.15rem;
+    padding: <?= (int)$btnPaddingY ?>px <?= (int)$btnPaddingX ?>px;
+    border-radius: <?= (int)$btnBorderRadius ?>px;
+    background: linear-gradient(90deg, <?= htmlspecialchars($btnGradientStart) ?> 0%, <?= htmlspecialchars($btnGradientEnd) ?> 100%);
+    color: <?= htmlspecialchars($btnTextColor) ?>;
+    text-decoration: none;
+    font-weight: 800;
+    box-shadow: 0 18px 30px rgba(31, 82, 63, 0.14);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+#<?= $componentId ?> .adv-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 34px rgba(31, 82, 63, 0.18);
+}
+
+#<?= $componentId ?> .adv-fan {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--adv-gap);
+    align-items: start;
+    padding-top: 1rem;
+}
+
+#<?= $componentId ?> .adv-card {
+    position: relative;
+    padding: 1.35rem 1.2rem 1.3rem;
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(248, 251, 246, 0.82) 100%);
+    border: 1px solid rgba(32, 53, 45, 0.08);
+    box-shadow: 0 20px 40px rgba(31, 82, 63, 0.08);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .adv-card-left {
+    transform: rotate(-4deg) translateY(18px);
+}
+
+#<?= $componentId ?> .adv-card-center {
+    transform: translateY(-6px);
+}
+
+#<?= $componentId ?> .adv-card-right {
+    transform: rotate(4deg) translateY(18px);
+}
+
+#<?= $componentId ?> .card-orbit {
+    position: absolute;
+    inset: auto auto -42px -28px;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(211,160,58,0.14) 0%, rgba(211,160,58,0) 72%);
+}
+
+#<?= $componentId ?> .card-icon-wrap {
+    width: <?= (int)$iconSize ?>px;
+    height: <?= (int)$iconSize ?>px;
+    padding: 0.35rem;
+    border-radius: <?= (int)$iconBorderRadius ?>px;
+    background: rgba(255,255,255,0.76);
+    border: 1px solid rgba(31, 122, 91, 0.1);
+    box-shadow: 0 14px 24px rgba(31, 82, 63, 0.08);
+}
+
+#<?= $componentId ?> .card-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: calc(<?= (int)$iconBorderRadius ?>px - 6px);
+}
+
+#<?= $componentId ?> .adv-card h3 {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.24;
+}
+
+#<?= $componentId ?> .adv-card p {
+    margin-top: 0.75rem;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.8;
+}
+
+@media (max-width: 900px) {
+    #<?= $componentId ?> .adv-fan {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .adv-card-left,
+    #<?= $componentId ?> .adv-card-center,
+    #<?= $componentId ?> .adv-card-right {
+        transform: none;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .adv-shell {
+        width: min(1240px, calc(100% - 0.9rem));
+    }
+
+    #<?= $componentId ?> .adv-card {
+        border-radius: 24px;
+    }
+}
+</style>

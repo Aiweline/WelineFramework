@@ -18,7 +18,7 @@ use Weline\Server\Log\WlsLogger;
 final class MasterOrphanGuard extends FrameworkOrphanGuard
 {
     public function __construct(
-        int $checkIntervalSec = 5,
+        int $checkIntervalSec = 30,
         int $deadThreshold = 3,
         int $unknownMasterDisconnectThreshold = 12,
     ) {

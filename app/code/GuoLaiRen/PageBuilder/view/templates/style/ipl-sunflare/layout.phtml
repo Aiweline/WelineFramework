@@ -1,0 +1,231 @@
+<?php
+/**
+ * IPL Sunflare - Main Layout
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = 'ipl-sunflare';
+
+$layoutConfig = $this->getData('layout_config') ?: [];
+$headerComponents = $layoutConfig['header'] ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+$footerComponents = $layoutConfig['footer'] ?? [];
+
+if (empty($headerComponents)) {
+    $headerComponents = [['code' => 'header-nav', 'enabled' => true, 'config' => []]];
+}
+
+if (empty($contentComponents)) {
+    $contentComponents = [
+        ['code' => 'banner', 'enabled' => true, 'config' => []],
+        ['code' => 'advantages', 'enabled' => true, 'config' => []],
+        ['code' => 'games-showcase', 'enabled' => true, 'config' => []],
+        ['code' => 'testimonials', 'enabled' => true, 'config' => []],
+        ['code' => 'faq', 'enabled' => true, 'config' => []],
+    ];
+}
+
+if (empty($footerComponents)) {
+    $footerComponents = [['code' => 'footer-links', 'enabled' => true, 'config' => []]];
+}
+
+$componentFiles = [
+    'header-nav' => 'header/nav.phtml',
+    'hero-slider' => 'content/hero-slider.phtml',
+    'advantages' => 'content/advantages.phtml',
+    'games-showcase' => 'content/games.phtml',
+    'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
+    'testimonials' => 'content/testimonials.phtml',
+    'faq' => 'content/faq.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-category' => 'content/blog-category.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
+    'footer-links' => 'footer/links.phtml',
+];
+
+$renderComponent = function($component) use ($componentFiles, $page, $styleSettings) {
+    $code = $component['code'] ?? '';
+    $enabled = $component['enabled'] ?? true;
+    $componentConfig = $component['config'] ?? [];
+
+    if (!$enabled || $code === '') {
+        return '';
+    }
+
+    $file = $componentFiles[$code] ?? null;
+    if (!$file) {
+        return "<!-- Component not found: {$code} -->";
+    }
+
+    ob_start();
+    $this->assign('page', $page);
+    $this->assign('style', $styleSettings);
+    $this->assign('style_settings', $styleSettings);
+    $this->assign('component_config', $componentConfig);
+    echo $this->fetchTemplate("GuoLaiRen_PageBuilder::style/ipl-sunflare/components/{$file}");
+    return ob_get_clean();
+};
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sanitizeTitle = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') return $value;
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$pageTitleRaw = $page ? $page->getData('title') : 'IPL Sunflare';
+$pageTitle = $sanitizeTitle($pageTitleRaw);
+if ($pageTitle === '') {
+    $pageTitle = 'IPL Sunflare';
+}
+$pageDescription = $page ? $page->getData('meta_description') : '';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <?php if ($pageDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($pageDescription) ?>">
+    <?php endif; ?>
+
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'isf-ember': '<?= htmlspecialchars($colors['accent_primary'] ?? '#ff6a3d') ?>',
+                    'isf-saffron': '<?= htmlspecialchars($colors['accent_secondary'] ?? '#ff4d8d') ?>',
+                    'isf-cream': '<?= htmlspecialchars($colors['body_bg'] ?? '#120a14') ?>',
+                    'isf-honey': '<?= htmlspecialchars($colors['section_bg_2'] ?? '#17101a') ?>',
+                    'isf-ink': '<?= htmlspecialchars($colors['text_primary'] ?? '#ffe6d1') ?>',
+                    'isf-mute': '<?= htmlspecialchars($colors['text_muted'] ?? '#b78f74') ?>'
+                }
+            }
+        }
+    }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Manrope:wght@400;500;600;700;800&display=swap');
+        :root {
+            --isf-body-bg: <?= htmlspecialchars($colors['body_bg'] ?? '#120a14') ?>;
+            --isf-body-alt: <?= htmlspecialchars($colors['section_bg_2'] ?? '#17101a') ?>;
+            --isf-body-strong: <?= htmlspecialchars($colors['section_bg_3'] ?? '#221426') ?>;
+            --isf-surface: <?= htmlspecialchars($colors['card_bg'] ?? 'rgba(34, 21, 32, 0.86)') ?>;
+            --isf-ink: <?= htmlspecialchars($colors['text_primary'] ?? '#ffe6d1') ?>;
+            --isf-muted: <?= htmlspecialchars($colors['text_muted'] ?? '#b78f74') ?>;
+            --isf-ember: <?= htmlspecialchars($colors['accent_primary'] ?? '#ff6a3d') ?>;
+            --isf-ember-deep: <?= htmlspecialchars($colors['accent_primary_dark'] ?? '#d94b2a') ?>;
+            --isf-saffron: <?= htmlspecialchars($colors['accent_secondary'] ?? '#ff4d8d') ?>;
+            --isf-shell-width: min(1260px, calc(100% - clamp(1rem, 4vw, 2rem)));
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        [hidden] { display: none !important; }
+
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(640px 340px at 8% 10%, rgba(255, 106, 61, 0.34), transparent 72%),
+                radial-gradient(720px 340px at 88% 14%, rgba(255, 77, 141, 0.24), transparent 72%),
+                linear-gradient(170deg, #0c0711 0%, var(--isf-body-bg) 38%, var(--isf-body-alt) 100%);
+            color: var(--isf-ink);
+            overflow-x: hidden;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: -1;
+            background:
+                linear-gradient(120deg, rgba(44, 28, 52, 0.62) 0%, rgba(255,255,255,0) 45%),
+                repeating-linear-gradient(120deg, rgba(255, 106, 61, 0.05) 0 1px, transparent 1px 24px);
+            opacity: 0.75;
+        }
+
+        h1, h2, h3, h4, h5 {
+            font-family: 'Sora', 'Manrope', sans-serif;
+            letter-spacing: -0.03em;
+        }
+
+        img { max-width: 100%; display: block; }
+
+        .isf-region-header,
+        .isf-region-content,
+        .isf-region-footer,
+        .isf-component-wrapper {
+            width: 100%;
+            min-width: 0;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                background:
+                    radial-gradient(400px 200px at 10% 8%, rgba(255, 106, 61, 0.28), transparent 72%),
+                    radial-gradient(420px 220px at 88% 10%, rgba(255, 77, 141, 0.19), transparent 72%),
+                    linear-gradient(170deg, #0c0711 0%, var(--isf-body-bg) 52%, var(--isf-body-alt) 100%);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-isf-cream text-isf-ink antialiased">
+    <header class="isf-region-header relative w-full" data-region="header">
+        <?php foreach ($headerComponents as $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="isf-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </header>
+
+    <main class="isf-region-content relative flex min-w-0 flex-col" data-region="content">
+        <?php foreach ($contentComponents as $index => $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="isf-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>" data-index="<?= (int)$index ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </main>
+
+    <footer class="isf-region-footer relative w-full" data-region="footer">
+        <?php foreach ($footerComponents as $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="isf-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </footer>
+</body>
+</html>

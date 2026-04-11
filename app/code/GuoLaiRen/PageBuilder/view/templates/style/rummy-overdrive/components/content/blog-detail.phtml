@@ -1,0 +1,718 @@
+<?php
+/**
+ * Rummy Overdrive Blog Detail Component
+ *
+ * @fields_start
+ * blog.show_sidebar|Show sidebar|select:yes=Yes,no=No|yes
+ * blog.show_cover|Show cover|select:yes=Yes,no=No|yes
+ * blog.show_author|Show author|select:yes=Yes,no=No|yes
+ * blog.show_date|Show date|select:yes=Yes,no=No|yes
+ * blog.show_tags|Show tags|select:yes=Yes,no=No|yes
+ * blog.show_share|Show share buttons|select:yes=Yes,no=No|yes
+ * blog.show_related|Show related stories|select:yes=Yes,no=No|yes
+ * blog.related_count|Related story count|number|3
+ * @fields_end
+ */
+
+$componentId = 'rov-blog-detail-' . uniqid();
+$jsCopyFunction = 'rovCopyLink' . preg_replace('/[^a-zA-Z0-9]/', '', $componentId);
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$currentPost = $this->getData('current_post') ?: [];
+$relatedPosts = $this->getData('related_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCover = $getConfig('blog.show_cover', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showTags = $getConfig('blog.show_tags', 'yes') === 'yes';
+$showShare = $getConfig('blog.show_share', 'yes') === 'yes';
+$showRelated = $getConfig('blog.show_related', 'yes') === 'yes';
+$relatedCount = max(1, (int)$getConfig('blog.related_count', 3));
+
+$primaryColor = $getConfig('color_scheme.primary', '#ff4d7a');
+$secondaryColor = $getConfig('color_scheme.secondary', '#2be7ff');
+$accentColor = '#d2ff3f';
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/rummy-overdrive/asset/img/poker-header-bg.svg');
+
+$tags = [];
+if (!empty($currentPost['tags'])) {
+    $tags = is_array($currentPost['tags']) ? $currentPost['tags'] : explode(',', $currentPost['tags']);
+    $tags = array_values(array_filter(array_map('trim', $tags), static function ($item) {
+        return $item !== '';
+    }));
+}
+
+$shareBaseUrl = (string)($currentPost['url'] ?? ($_SERVER['REQUEST_URI'] ?? ''));
+$shareUrl = urlencode($shareBaseUrl);
+$shareTitle = urlencode((string)($currentPost['title'] ?? ''));
+$hasCover = $showCover && !empty($currentPost['cover_image']);
+?>
+
+<?php if (empty($currentPost)): ?>
+    <section id="<?= $componentId ?>" class="rov-blog-detail">
+        <div class="detail-shell">
+            <div class="detail-empty wow animate__animated animate__fadeInUp">
+                <div class="empty-icon">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor" opacity="0.34" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                </div>
+                <h2><?= __('Article Not Found') ?></h2>
+                <p><?= __('The requested story is not available right now. Please return to the journal and choose another article.') ?></p>
+                <a href="/blog" class="notes-back"><?= __('Back To Blog') ?></a>
+            </div>
+        </div>
+    </section>
+<?php else: ?>
+    <section id="<?= $componentId ?>" class="rov-blog-detail">
+        <div class="detail-shell">
+            <nav class="detail-breadcrumb wow animate__animated animate__fadeInUp" aria-label="Breadcrumb">
+                <a href="/"><?= __('Home') ?></a>
+                <span>/</span>
+                <a href="/blog"><?= __('Blog') ?></a>
+                <span>/</span>
+                <strong><?= htmlspecialchars(mb_substr($currentPost['title'], 0, 44)) ?><?= mb_strlen($currentPost['title']) > 44 ? '...' : '' ?></strong>
+            </nav>
+
+            <header class="story-stage<?= $hasCover ? '' : ' no-cover' ?> wow animate__animated animate__fadeInUp">
+                <div class="stage-copy">
+                    <?php if (!empty($currentPost['category_name'])): ?>
+                        <span class="stage-chip"><?= htmlspecialchars($currentPost['category_name']) ?></span>
+                    <?php endif; ?>
+                    <h1><?= htmlspecialchars($currentPost['title']) ?></h1>
+                    <?php if (!empty($currentPost['summary'])): ?>
+                        <p class="stage-summary"><?= htmlspecialchars($currentPost['summary']) ?></p>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($hasCover): ?>
+                    <div class="stage-cover">
+                        <img src="<?= htmlspecialchars($currentPost['cover_image']) ?>" alt="<?= htmlspecialchars($currentPost['title']) ?>">
+                    </div>
+                <?php endif; ?>
+            </header>
+
+            <div class="reading-grid<?= $showSidebar ? ' has-rail' : '' ?>">
+                <aside class="story-notes wow animate__animated animate__fadeInLeft">
+                    <section class="notes-card">
+                        <span class="block-title"><?= __('Story Signals') ?></span>
+                        <div class="metrics-stack">
+                            <?php if ($showDate && !empty($currentPost['published_at'])): ?>
+                                <article class="note-metric">
+                                    <strong><?= __('Published') ?></strong>
+                                    <span><?= date('F d, Y', strtotime($currentPost['published_at'])) ?></span>
+                                </article>
+                            <?php endif; ?>
+
+                            <?php if ($showAuthor && !empty($currentPost['author'])): ?>
+                                <article class="note-metric">
+                                    <strong><?= __('Author') ?></strong>
+                                    <span><?= htmlspecialchars($currentPost['author']) ?></span>
+                                </article>
+                            <?php endif; ?>
+
+                            <?php if (!empty($currentPost['view_count'])): ?>
+                                <article class="note-metric">
+                                    <strong><?= __('Views') ?></strong>
+                                    <span><?= number_format($currentPost['view_count']) ?></span>
+                                </article>
+                            <?php endif; ?>
+                        </div>
+                    </section>
+
+                    <?php if ($showTags && !empty($tags)): ?>
+                        <section class="notes-card">
+                            <span class="block-title"><?= __('Tags') ?></span>
+                            <div class="tag-list">
+                                <?php foreach ($tags as $tag): ?>
+                                    <a href="/blog/tag/<?= urlencode($tag) ?>" class="tag-chip">#<?= htmlspecialchars($tag) ?></a>
+                                <?php endforeach; ?>
+                            </div>
+                        </section>
+                    <?php endif; ?>
+
+                    <?php if ($showShare): ?>
+                        <section class="notes-card">
+                            <span class="block-title"><?= __('Share') ?></span>
+                            <div class="share-row">
+                                <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $shareUrl ?>" target="_blank" rel="noopener" class="share-btn" title="Share on Facebook">FB</a>
+                                <a href="https://twitter.com/intent/tweet?url=<?= $shareUrl ?>&text=<?= $shareTitle ?>" target="_blank" rel="noopener" class="share-btn" title="Share on X">X</a>
+                                <a href="https://www.linkedin.com/shareArticle?mini=true&url=<?= $shareUrl ?>&title=<?= $shareTitle ?>" target="_blank" rel="noopener" class="share-btn" title="Share on LinkedIn">IN</a>
+                                <button type="button" class="share-btn" title="Copy link" onclick="<?= $jsCopyFunction ?>()">CP</button>
+                            </div>
+                        </section>
+                    <?php endif; ?>
+
+                    <a href="/blog" class="notes-back"><?= __('Back To Blog') ?></a>
+                </aside>
+
+                <article class="reading-paper wow animate__animated animate__fadeInUp">
+                    <div class="article-content">
+                        <?= $currentPost['content'] ?? '' ?>
+                    </div>
+                </article>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="reader-rail wow animate__animated animate__fadeInRight">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card">
+                                <span class="block-title"><?= __('Category Radar') ?></span>
+                                <div class="category-list">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="category-entry"><?= htmlspecialchars($category['name']) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recentPosts)): ?>
+                            <section class="rail-card">
+                                <span class="block-title"><?= __('Fresh Signals') ?></span>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($showRelated && !empty($relatedPosts)): ?>
+                <section class="related-strip wow animate__animated animate__fadeInUp">
+                    <div class="related-head">
+                        <span class="related-kicker"><?= __('Continue Reading') ?></span>
+                        <h2><?= __('Related Stories') ?></h2>
+                    </div>
+                    <div class="related-grid">
+                        <?php foreach (array_slice($relatedPosts, 0, $relatedCount) as $index => $post): ?>
+                            <article class="related-card wow animate__animated animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.06 * ($index + 1), 2)) ?>s">
+                                <?php if (!empty($post['cover_image'])): ?>
+                                    <a href="<?= htmlspecialchars($post['url']) ?>" class="related-media">
+                                        <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                    </a>
+                                <?php endif; ?>
+                                <div class="related-copy">
+                                    <h3><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h3>
+                                    <?php if (!empty($post['published_at'])): ?>
+                                        <span><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($showShare): ?>
+                <div class="copy-toast" id="<?= $componentId ?>-copy-toast" role="status" aria-live="polite">
+                    <?= __('Link copied to clipboard!') ?>
+                </div>
+                <script>
+                function <?= $jsCopyFunction ?>() {
+                    var text = window.location.href;
+                    var toast = document.getElementById('<?= $componentId ?>-copy-toast');
+                    var showToast = function () {
+                        if (!toast) {
+                            return;
+                        }
+                        toast.classList.add('is-visible');
+                        if (toast._timer) {
+                            window.clearTimeout(toast._timer);
+                        }
+                        toast._timer = window.setTimeout(function () {
+                            toast.classList.remove('is-visible');
+                        }, 2200);
+                    };
+                    var fallbackCopy = function () {
+                        var temp = document.createElement('input');
+                        temp.value = text;
+                        temp.setAttribute('readonly', 'readonly');
+                        document.body.appendChild(temp);
+                        temp.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(temp);
+                        showToast();
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).then(showToast).catch(fallbackCopy);
+                        return;
+                    }
+                    fallbackCopy();
+                }
+                </script>
+            <?php endif; ?>
+        </div>
+    </section>
+<?php endif; ?>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: 64px 0 88px;
+    background:
+        radial-gradient(980px 420px at 12% 8%, rgba(255, 77, 122, 0.2), transparent 64%),
+        radial-gradient(860px 420px at 88% 16%, rgba(43, 231, 255, 0.16), transparent 68%),
+        linear-gradient(180deg, #060912 0%, #0d1221 48%, #070910 100%);
+    color: #eef3ff;
+    overflow: hidden;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.08;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .detail-shell {
+    width: min(1240px, calc(100% - 2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .detail-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    color: #8ea0bf;
+    font-size: 0.9rem;
+}
+
+#<?= $componentId ?> .detail-breadcrumb a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .detail-breadcrumb strong {
+    color: #f7f9ff;
+}
+
+#<?= $componentId ?> .story-stage,
+#<?= $componentId ?> .notes-card,
+#<?= $componentId ?> .reading-paper,
+#<?= $componentId ?> .rail-card,
+#<?= $componentId ?> .related-card,
+#<?= $componentId ?> .detail-empty {
+    border-radius: 30px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(160deg, rgba(12, 16, 29, 0.94) 0%, rgba(7, 10, 18, 0.97) 100%);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.28);
+}
+
+#<?= $componentId ?> .story-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1.02fr) minmax(260px, 0.98fr);
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .story-stage.no-cover {
+    grid-template-columns: 1fr;
+}
+
+#<?= $componentId ?> .stage-copy {
+    padding: clamp(1.35rem, 3vw, 2rem);
+    display: grid;
+    gap: 0.9rem;
+    align-content: center;
+}
+
+#<?= $componentId ?> .stage-chip,
+#<?= $componentId ?> .block-title,
+#<?= $componentId ?> .related-kicker,
+#<?= $componentId ?> .tag-chip,
+#<?= $componentId ?> .share-btn,
+#<?= $componentId ?> .notes-back {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .stage-chip {
+    padding: 0.38rem 0.84rem;
+    color: #05070e;
+    background: linear-gradient(135deg, <?= htmlspecialchars($primaryColor) ?> 0%, #ff8c42 100%);
+}
+
+#<?= $componentId ?> .stage-copy h1 {
+    color: #f7f9ff;
+    font-size: clamp(2.2rem, 4.4vw, 3.9rem);
+    line-height: 1.03;
+    letter-spacing: -0.05em;
+}
+
+#<?= $componentId ?> .stage-summary {
+    color: #aab9d4;
+    line-height: 1.86;
+    max-width: 720px;
+}
+
+#<?= $componentId ?> .stage-cover {
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .stage-cover img,
+#<?= $componentId ?> .related-media img,
+#<?= $componentId ?> .recent-link img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .reading-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.24fr) minmax(0, 0.76fr);
+    gap: 1rem;
+    align-items: start;
+}
+
+#<?= $componentId ?> .reading-grid.has-rail {
+    grid-template-columns: minmax(220px, 0.22fr) minmax(0, 0.52fr) minmax(260px, 0.26fr);
+}
+
+#<?= $componentId ?> .story-notes,
+#<?= $componentId ?> .reader-rail {
+    display: grid;
+    gap: 1rem;
+    position: sticky;
+    top: 110px;
+}
+
+#<?= $componentId ?> .notes-card,
+#<?= $componentId ?> .rail-card {
+    padding: 1rem 1.05rem;
+}
+
+#<?= $componentId ?> .block-title,
+#<?= $componentId ?> .related-kicker {
+    padding: 0.34rem 0.74rem;
+    color: <?= htmlspecialchars($accentColor) ?>;
+    border: 1px solid rgba(210, 255, 63, 0.18);
+    background: rgba(210, 255, 63, 0.08);
+}
+
+#<?= $componentId ?> .metrics-stack,
+#<?= $componentId ?> .tag-list,
+#<?= $componentId ?> .share-row,
+#<?= $componentId ?> .recent-stack,
+#<?= $componentId ?> .category-list {
+    margin-top: 0.85rem;
+    display: grid;
+    gap: 0.75rem;
+}
+
+#<?= $componentId ?> .note-metric {
+    padding: 0.88rem 0.92rem;
+    border-radius: 22px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    display: grid;
+    gap: 0.25rem;
+}
+
+#<?= $componentId ?> .note-metric strong,
+#<?= $componentId ?> .related-head h2,
+#<?= $componentId ?> .recent-link strong,
+#<?= $componentId ?> .related-copy h3,
+#<?= $componentId ?> .rail-card strong {
+    color: #f7f9ff;
+}
+
+#<?= $componentId ?> .note-metric strong {
+    font-size: 0.82rem;
+}
+
+#<?= $componentId ?> .note-metric span,
+#<?= $componentId ?> .recent-link small,
+#<?= $componentId ?> .related-copy span,
+#<?= $componentId ?> .category-entry {
+    color: #8fa2c2;
+}
+
+#<?= $componentId ?> .tag-list,
+#<?= $componentId ?> .share-row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+#<?= $componentId ?> .tag-chip,
+#<?= $componentId ?> .share-btn {
+    padding: 0.52rem 0.82rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: #dbe5f7;
+}
+
+#<?= $componentId ?> .share-btn {
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .notes-back {
+    justify-content: center;
+    padding: 0.92rem 1.2rem;
+    color: #05070e;
+    background: linear-gradient(135deg, <?= htmlspecialchars($secondaryColor) ?> 0%, <?= htmlspecialchars($accentColor) ?> 100%);
+}
+
+#<?= $componentId ?> .reading-paper {
+    padding: clamp(1.3rem, 2.8vw, 2rem);
+}
+
+#<?= $componentId ?> .article-content {
+    color: #c7d4ec;
+    line-height: 1.9;
+    font-size: 1rem;
+}
+
+#<?= $componentId ?> .article-content h2 {
+    margin: 1.9rem 0 0.9rem;
+    color: <?= htmlspecialchars($accentColor) ?>;
+    font-size: 1.58rem;
+    line-height: 1.2;
+}
+
+#<?= $componentId ?> .article-content h3 {
+    margin: 1.5rem 0 0.7rem;
+    color: #f7f9ff;
+    font-size: 1.2rem;
+}
+
+#<?= $componentId ?> .article-content p,
+#<?= $componentId ?> .article-content ul,
+#<?= $componentId ?> .article-content ol,
+#<?= $componentId ?> .article-content table,
+#<?= $componentId ?> .article-content blockquote {
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .article-content ul,
+#<?= $componentId ?> .article-content ol {
+    padding-left: 1.35rem;
+}
+
+#<?= $componentId ?> .article-content li {
+    margin-bottom: 0.5rem;
+}
+
+#<?= $componentId ?> .article-content a {
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+}
+
+#<?= $componentId ?> .article-content blockquote {
+    padding: 1rem 1.1rem;
+    border-left: 4px solid rgba(43, 231, 255, 0.44);
+    background: rgba(43, 231, 255, 0.06);
+    border-radius: 0 18px 18px 0;
+}
+
+#<?= $componentId ?> .article-content table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#<?= $componentId ?> .article-content th,
+#<?= $componentId ?> .article-content td {
+    padding: 0.8rem 0.9rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    text-align: left;
+}
+
+#<?= $componentId ?> .article-content th {
+    color: #f7f9ff;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+#<?= $componentId ?> .category-entry {
+    display: block;
+    padding: 0.7rem 0.82rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .recent-link {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+    padding: 0.55rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .recent-link img {
+    border-radius: 14px;
+    aspect-ratio: 1 / 1;
+}
+
+#<?= $componentId ?> .recent-link span {
+    display: grid;
+    gap: 0.25rem;
+}
+
+#<?= $componentId ?> .related-strip {
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .related-head {
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .related-head h2 {
+    margin-top: 0.9rem;
+    font-size: clamp(1.55rem, 2.6vw, 2.2rem);
+}
+
+#<?= $componentId ?> .related-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .related-card {
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .related-media {
+    display: block;
+    aspect-ratio: 1.3 / 1;
+}
+
+#<?= $componentId ?> .related-copy {
+    padding: 1rem 1.05rem;
+    display: grid;
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .related-copy h3 {
+    font-size: 1.04rem;
+    line-height: 1.42;
+}
+
+#<?= $componentId ?> .related-copy a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .detail-empty {
+    padding: 2.1rem 1.2rem;
+    display: grid;
+    justify-items: center;
+    gap: 0.8rem;
+    text-align: center;
+}
+
+#<?= $componentId ?> .detail-empty h2 {
+    color: #f7f9ff;
+    font-size: 1.55rem;
+}
+
+#<?= $componentId ?> .detail-empty p {
+    max-width: 620px;
+    color: #aab9d4;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .copy-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translate(-50%, 16px);
+    padding: 0.82rem 1rem;
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(7, 10, 18, 0.96);
+    color: #f7f9ff;
+    font-size: 0.88rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+    z-index: 60;
+}
+
+#<?= $componentId ?> .copy-toast.is-visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+}
+
+@media (max-width: 1160px) {
+    #<?= $componentId ?> .reading-grid.has-rail {
+        grid-template-columns: minmax(220px, 0.28fr) minmax(0, 0.72fr);
+    }
+
+    #<?= $componentId ?> .reader-rail {
+        position: relative;
+        top: auto;
+        grid-column: 1 / -1;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 940px) {
+    #<?= $componentId ?> .story-stage,
+    #<?= $componentId ?> .reading-grid,
+    #<?= $componentId ?> .reading-grid.has-rail,
+    #<?= $componentId ?> .related-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .story-notes,
+    #<?= $componentId ?> .reader-rail {
+        position: relative;
+        top: auto;
+    }
+}
+
+@media (max-width: 560px) {
+    #<?= $componentId ?> {
+        padding: 56px 0 76px;
+    }
+
+    #<?= $componentId ?> .detail-shell {
+        width: min(100%, calc(100% - 1rem));
+    }
+
+    #<?= $componentId ?> .copy-toast {
+        width: calc(100% - 1rem);
+        text-align: center;
+    }
+}
+</style>

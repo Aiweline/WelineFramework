@@ -437,7 +437,7 @@ HTML;
         }
         
         // 5. 妫€鏌?referer 鏄惁鏉ヨ嚜缂栬緫鍣紙澶囩敤鏂规锛?
-        $referer = $_SERVER['HTTP_REFERER'] ?? '';
+        $referer = (string) (\w_env('http_referer', '') ?? '');
         if (strpos($referer, 'theme-editor') !== false) {
             return ThemeLayout::STATUS_DRAFT;
         }
@@ -476,7 +476,7 @@ HTML;
         }
         
         // 妫€鏌?referer 鏄惁鏉ヨ嚜缂栬緫鍣?
-        $referer = $_SERVER['HTTP_REFERER'] ?? '';
+        $referer = (string) (\w_env('http_referer', '') ?? '');
         if (strpos($referer, 'theme-editor') !== false) {
             return true;
         }

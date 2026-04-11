@@ -1,0 +1,490 @@
+<?php
+/**
+ * Teen Patti Royal Prism - Hero Slider Component
+ *
+ * @component_start
+ * code: hero-slider
+ * name: 首屏轮播Banner
+ * name_en: Hero Slider
+ * description: 首屏轮播Banner，与导航重叠效果，支持响应式图片和下载按钮
+ * category: content
+ * region: content
+ * thumbnail: asset/img/banner-03.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:banner => Banner设置
+ * banner.display => 显示Banner:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用本地prism-hero-stage.svg
+ * banner.image_desktop => 桌面端Banner图片:textarea:|默认使用本地prism-hero-stage.svg
+ * banner.alt => Banner图片描述:text:Teen Patti Royal Prism launch board
+ * banner.bg_color => Banner背景色:color:#fff4d8
+ *
+ * group:hero => Hero文案
+ * hero.title => Hero标题:text:
+ * hero.subtitle => Hero副标题:textarea:
+ * hero.stage_text => Hero舞台文案:text:
+ *
+ * group:download_btn => 下载按钮
+ * download_btn.display => 显示下载按钮:select:yes|yes,no
+ * download_btn.image => 下载徽章图片:textarea:|默认使用本地prism-floating-badge.svg
+ * download_btn.alt => 下载按钮文案:text:Download App
+ * download_btn.url => 下载链接:text:#download
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 附加类名:textarea:rs-slider slider-style2
+ * layout.margin_top => 顶部偏移:number:0|px
+ * layout.img_margin_top => 媒体偏移:number:0|px
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page') ?? null;
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    $value = $config[$key] ?? $default;
+    if ($value === '' && $default !== '') {
+        return $default;
+    }
+    return $value;
+};
+
+$bannerDisplayRaw = $getConfig('banner.display', 'yes');
+$bannerDisplay = ($bannerDisplayRaw === 'yes' || $bannerDisplayRaw === true || $bannerDisplayRaw === 'true' || $bannerDisplayRaw === 0 || $bannerDisplayRaw === '0');
+if (!$bannerDisplay) {
+    return;
+}
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$defaultStage = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-royal-prism/asset/img/prism-hero-stage.svg');
+$defaultDownloadBadge = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-royal-prism/asset/img/prism-floating-badge.svg');
+
+$bannerImageMobile = trim((string)$getConfig('banner.image_mobile', '')) ?: $defaultStage;
+$bannerImageDesktop = trim((string)$getConfig('banner.image_desktop', '')) ?: $defaultStage;
+$bannerAlt = (string)$getConfig('banner.alt', 'Teen Patti Royal Prism launch board');
+$bannerBgColor = (string)$getConfig('banner.bg_color', $colors['hero_bg'] ?? '#fff4d8');
+
+$downloadBtnDisplayRaw = $getConfig('download_btn.display', 'yes');
+$downloadBtnDisplay = ($downloadBtnDisplayRaw === 'yes' || $downloadBtnDisplayRaw === true || $downloadBtnDisplayRaw === 'true' || $downloadBtnDisplayRaw === 0 || $downloadBtnDisplayRaw === '0');
+$downloadBtnImage = trim((string)$getConfig('download_btn.image', '')) ?: $defaultDownloadBadge;
+$downloadBtnAlt = (string)$getConfig('download_btn.alt', 'Download App');
+$downloadBtnUrl = (string)$getConfig('download_btn.url', '#download');
+
+$sliderClasses = trim((string)$getConfig('layout.slider_classes', 'rs-slider slider-style2'));
+$marginTop = (int)$getConfig('layout.margin_top', '0');
+$imgMarginTop = (int)$getConfig('layout.img_margin_top', '0');
+
+$appName = $sanitizeTitle((string)$getConfig('app_info.app_name', ''));
+if ($appName === '') {
+    $appName = 'Teen Patti Royal Prism';
+}
+$pageTitleFallback = $page ? $sanitizeTitle((string)($page->getData('title') ?: $page->getData('meta_title') ?: $appName)) : $appName;
+$pageTitle = $sanitizeTitle((string)$getConfig('hero.title', $pageTitleFallback));
+if ($pageTitle === '') {
+    $pageTitle = $appName;
+}
+$subtitle = trim((string)$getConfig('hero.subtitle', $page ? (string)($page->getData('meta_description') ?: '') : ''));
+if ($subtitle === '') {
+    $subtitle = trim((string)$bannerAlt);
+    if ($subtitle === $pageTitle) {
+        $subtitle = '';
+    }
+}
+
+$heroMarqueeText = trim((string)$getConfig('hero.stage_text', ''));
+if ($heroMarqueeText === '') {
+    $heroMarqueeText = trim((string)$bannerAlt);
+}
+if ($heroMarqueeText === '') {
+    $heroMarqueeText = $pageTitle;
+}
+
+$stagePanels = [];
+foreach ([$appName, $pageTitle, $heroMarqueeText] as $panelValue) {
+    $panelValue = trim((string)$panelValue);
+    if ($panelValue === '' || in_array($panelValue, $stagePanels, true)) {
+        continue;
+    }
+    $stagePanels[] = $panelValue;
+}
+
+$componentId = 'prism-hero-' . uniqid();
+?>
+<section id="main-content" class="prism-hero-section <?= htmlspecialchars($sliderClasses) ?>" style="--hero-offset: <?= $marginTop ?>px; --media-offset: <?= $imgMarginTop ?>px;">
+    <div id="<?= $componentId ?>" class="prism-hero-wrap">
+        <div class="prism-hero-orbit orbit-a" data-prism-parallax data-prism-speed="0.05" aria-hidden="true"></div>
+        <div class="prism-hero-orbit orbit-b" data-prism-parallax data-prism-speed="0.09" aria-hidden="true"></div>
+        <div class="prism-hero-grid prism-section-shell">
+            <header class="prism-hero-copy" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                <span class="prism-hero-kicker"><?= htmlspecialchars($appName) ?></span>
+                <h1><?= htmlspecialchars($pageTitle) ?></h1>
+                <p class="prism-hero-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+
+                <div class="prism-hero-actions" id="download">
+                    <?php if ($downloadBtnDisplay): ?>
+                        <a class="prism-hero-primary" href="<?= htmlspecialchars($downloadBtnUrl) ?>">
+                            <span><?= htmlspecialchars($downloadBtnAlt) ?></span>
+                        </a>
+                        <a class="prism-hero-badge" href="<?= htmlspecialchars($downloadBtnUrl) ?>" aria-label="<?= htmlspecialchars($downloadBtnAlt) ?>">
+                            <img src="<?= htmlspecialchars($downloadBtnImage) ?>" alt="<?= htmlspecialchars($downloadBtnAlt) ?>" loading="lazy" decoding="async">
+                        </a>
+                    <?php endif; ?>
+                </div>
+            </header>
+
+            <div class="prism-hero-stage" data-prism-reveal data-prism-effect="animate__fadeInRight">
+                <?php if ($heroMarqueeText !== ''): ?>
+                    <article class="prism-stage-marquee prism-glass" data-prism-parallax data-prism-speed="0.08">
+                        <span class="marquee-chip"><?= htmlspecialchars($appName) ?></span>
+                        <strong><?= htmlspecialchars($heroMarqueeText) ?></strong>
+                    </article>
+                <?php endif; ?>
+
+                <figure class="prism-stage-billboard prism-glass" data-prism-parallax data-prism-speed="0.1">
+                    <picture>
+                        <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($bannerImageMobile) ?>">
+                        <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($bannerImageDesktop) ?>">
+                        <img src="<?= htmlspecialchars($bannerImageDesktop ?: $bannerImageMobile) ?>" alt="<?= htmlspecialchars($bannerAlt) ?>" fetchpriority="high" decoding="async">
+                    </picture>
+                </figure>
+
+                <?php if (!empty($stagePanels)): ?>
+                    <div class="prism-stage-panels">
+                        <?php foreach ($stagePanels as $index => $panel): ?>
+                            <article class="prism-panel prism-glass prism-panel-<?= (int)($index + 1) ?>" data-prism-parallax data-prism-speed="<?= htmlspecialchars(number_format(0.06 + ($index * 0.02), 2, '.', '')) ?>">
+                                <strong><?= htmlspecialchars($panel) ?></strong>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: clip;
+    margin-top: var(--hero-offset);
+    padding: clamp(6.8rem, 13vw, 10rem) 0 clamp(3rem, 8vw, 5.4rem);
+    background:
+        radial-gradient(800px 460px at 0% 0%, rgba(255, 210, 96, 0.36), transparent 62%),
+        radial-gradient(720px 420px at 100% 8%, rgba(0, 205, 182, 0.2), transparent 62%),
+        linear-gradient(180deg, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0) 28%),
+        <?= htmlspecialchars($bannerBgColor) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.24) 1px, transparent 1px);
+    background-size: 28px 28px;
+    opacity: 0.34;
+}
+
+#<?= $componentId ?> .prism-hero-orbit {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(10px);
+    opacity: 0.62;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .orbit-a {
+    top: 82px;
+    left: -88px;
+    width: 260px;
+    height: 260px;
+    background: radial-gradient(circle, rgba(255, 124, 73, 0.22), rgba(255, 124, 73, 0.03) 70%, transparent 76%);
+}
+
+#<?= $componentId ?> .orbit-b {
+    right: -76px;
+    bottom: 26px;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(0, 205, 182, 0.2), rgba(0, 205, 182, 0.02) 68%, transparent 76%);
+}
+
+#<?= $componentId ?> .prism-hero-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) minmax(340px, 1.08fr);
+    gap: clamp(1.4rem, 4vw, 3rem);
+    align-items: center;
+}
+
+#<?= $componentId ?> .prism-hero-copy {
+    display: grid;
+    gap: 1.15rem;
+}
+
+#<?= $componentId ?> .prism-hero-kicker {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    padding: 0.42rem 0.82rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.88);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #7b4f2d;
+    box-shadow: 0 18px 28px rgba(228, 167, 124, 0.12);
+}
+
+#<?= $componentId ?> h1 {
+    margin: 0;
+    max-width: 10.5ch;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: clamp(3rem, 7vw, 6.1rem);
+    line-height: 0.9;
+    letter-spacing: -0.07em;
+    color: #31180e;
+}
+
+#<?= $componentId ?> .prism-hero-subtitle {
+    margin: 0;
+    max-width: 37rem;
+    font-size: clamp(1rem, 2vw, 1.17rem);
+    line-height: 1.75;
+    color: #735647;
+}
+
+#<?= $componentId ?> .prism-hero-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    flex-wrap: wrap;
+}
+
+#<?= $componentId ?> .prism-hero-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.72rem;
+    padding: 0.95rem 1.25rem;
+    border-radius: 22px;
+    background: linear-gradient(135deg, #ffe181 0%, #ffb05f 44%, #ff7156 100%);
+    color: #33180d;
+    text-decoration: none;
+    font-weight: 800;
+    box-shadow: 0 24px 42px rgba(255, 119, 78, 0.24);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+#<?= $componentId ?> .prism-hero-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 30px 50px rgba(255, 119, 78, 0.32);
+}
+
+#<?= $componentId ?> .prism-hero-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#<?= $componentId ?> .prism-hero-badge img {
+    width: min(210px, 48vw);
+    filter: drop-shadow(0 16px 24px rgba(255, 129, 78, 0.18));
+}
+
+#<?= $componentId ?> .prism-hero-stage {
+    position: relative;
+    display: grid;
+    gap: 1rem;
+    padding-top: max(10px, var(--media-offset));
+}
+
+#<?= $componentId ?> .prism-stage-marquee,
+#<?= $componentId ?> .prism-panel,
+#<?= $componentId ?> .prism-stage-billboard {
+    position: relative;
+}
+
+#<?= $componentId ?> .prism-stage-marquee {
+    justify-self: end;
+    display: grid;
+    gap: 0.3rem;
+    width: min(360px, 82%);
+    padding: 1rem 1.1rem;
+    border-radius: 26px;
+    transform: rotate(3deg);
+}
+
+#<?= $componentId ?> .marquee-chip {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    padding: 0.26rem 0.58rem;
+    border-radius: 999px;
+    background: rgba(255, 232, 126, 0.72);
+    color: #7b4f2d;
+    font-size: 0.73rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .prism-stage-marquee strong {
+    font-size: 1.02rem;
+    line-height: 1.4;
+    color: #3a2014;
+}
+
+#<?= $componentId ?> .prism-stage-billboard {
+    padding: clamp(0.9rem, 2vw, 1.25rem);
+    border-radius: 34px;
+    transform: rotate(-2.2deg);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .prism-stage-billboard::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(130deg, rgba(255,255,255,0.54), rgba(255,255,255,0));
+}
+
+#<?= $componentId ?> .prism-stage-billboard picture {
+    display: block;
+    position: relative;
+    z-index: 1;
+    border-radius: 28px;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(255,255,255,0.54));
+}
+
+#<?= $componentId ?> .prism-stage-billboard img {
+    width: 100%;
+    height: auto;
+    min-height: 360px;
+    object-fit: cover;
+}
+
+#<?= $componentId ?> .prism-stage-panels {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.9rem;
+}
+
+#<?= $componentId ?> .prism-panel {
+    display: grid;
+    align-items: end;
+    min-height: 130px;
+    padding: 1rem;
+    border-radius: 26px;
+}
+
+#<?= $componentId ?> .prism-panel:nth-child(1) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.82), rgba(255, 240, 210, 0.74));
+}
+
+#<?= $componentId ?> .prism-panel:nth-child(2) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(218, 255, 245, 0.78));
+}
+
+#<?= $componentId ?> .prism-panel:nth-child(3) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.84), rgba(255, 228, 228, 0.78));
+}
+
+#<?= $componentId ?> .prism-panel strong {
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: clamp(1rem, 2vw, 1.16rem);
+    line-height: 1.18;
+    letter-spacing: -0.03em;
+    color: #332016;
+}
+
+@media (max-width: 1080px) {
+    #<?= $componentId ?> .prism-hero-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .prism-stage-marquee {
+        justify-self: start;
+        width: min(360px, 100%);
+        transform: none;
+    }
+
+    #<?= $componentId ?> .prism-stage-billboard {
+        transform: none;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        margin-top: 0;
+        padding: clamp(6.2rem, 20vw, 7.4rem) 0 2.6rem;
+    }
+
+    #<?= $componentId ?> .prism-hero-copy {
+        gap: 1rem;
+    }
+
+    #<?= $componentId ?> h1 {
+        max-width: 9ch;
+        font-size: clamp(2.7rem, 13vw, 4.2rem);
+    }
+
+    #<?= $componentId ?> .prism-hero-actions {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    #<?= $componentId ?> .prism-hero-primary,
+    #<?= $componentId ?> .prism-hero-badge {
+        width: 100%;
+        justify-content: center;
+    }
+
+    #<?= $componentId ?> .prism-hero-badge img {
+        width: min(240px, 100%);
+    }
+
+    #<?= $componentId ?> .prism-stage-billboard {
+        padding: 0.75rem;
+        border-radius: 26px;
+    }
+
+    #<?= $componentId ?> .prism-stage-billboard picture {
+        border-radius: 22px;
+    }
+
+    #<?= $componentId ?> .prism-stage-billboard img {
+        min-height: 0;
+    }
+
+    #<?= $componentId ?> .prism-stage-panels {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .prism-panel {
+        min-height: 0;
+    }
+}
+</style>
