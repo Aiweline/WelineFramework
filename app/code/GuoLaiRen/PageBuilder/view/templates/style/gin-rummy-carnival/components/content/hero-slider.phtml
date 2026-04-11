@@ -1,0 +1,902 @@
+<?php
+/**
+ * Gin Rummy Carnival - Hero Slider Component
+ *
+ * @component_start
+ * code: hero-slider
+ * name: Hero Banner
+ * name_en: Hero Slider
+ * description: Multi-panel hero cabin with tpmst-compatible banner fallbacks
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:banner => Banner设置（TPMST兼容）
+ * banner.display => 显示Banner:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用本地hero-carnival-graphic.svg
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用本地hero-carnival-graphic.svg
+ * banner.alt => Banner图片描述:text:Gin Rummy Carnival hero
+ * banner.bg_color => Banner背景颜色:color:#0b1525
+ *
+ * group:hero => Hero设置
+ * hero.display => 显示Hero:select:yes|yes,no
+ * hero.title => 主标题:text:Rule Every Turn with Gin Rummy Carnival
+ * hero.subtitle => 副标题:textarea:Join fast Gin Rummy tables with sharper visual cues, cleaner room discovery, and quicker action flow on every device.
+ * hero.cta_text => 主按钮文本:text:Install App
+ * hero.cta_url => 主按钮链接:text:#download
+ * hero.secondary_cta_text => 次按钮文本:text:Browse Rooms
+ * hero.secondary_cta_url => 次按钮链接:text:#tables
+ * hero.image => Hero图片地址:textarea:|留空使用默认图片
+ * hero.image_mobile => Hero移动端图片地址:textarea:|留空使用默认图片
+ * hero.alt => Hero图片描述:text:Gin Rummy Carnival hero
+ * hero.bg_color => Hero背景颜色:color:#0b1525
+ * hero.bg_image => 背景图片地址:textarea:|留空使用默认纹理
+ *
+ * group:download_btn => 下载按钮
+ * download_btn.display => 显示下载按钮:select:yes|yes,no
+ * download_btn.image => 下载按钮图片:textarea:|留空使用箭头图标
+ * download_btn.alt => 下载按钮描述:text:Install App
+ * download_btn.url => 下载链接:text:#download
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 区域附加类名:textarea:grc-hero-stage|Hero区域的附加类名
+ * layout.margin_top => 移动端顶部重叠:number:-72|px
+ * layout.img_margin_top => 桌面端图片偏移:number:0|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'grc-hero-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$normalizeDisplay = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroDisplay = $normalizeDisplay($getConfig('hero.display', $getConfig('banner.display', 'yes'))) === 'yes';
+if (!$heroDisplay) {
+    return;
+}
+
+$page = $this->getData('page');
+$pageTitle = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'Gin Rummy Carnival';
+$pageTitle = $sanitizeTitle($pageTitle);
+if ($pageTitle === '') {
+    $pageTitle = 'Gin Rummy Carnival';
+}
+
+$title = $sanitizeTitle((string) $getConfig('hero.title', ''));
+$bannerTitle = $sanitizeTitle((string) $getConfig('banner.alt', ''));
+if ($title === '' && $bannerTitle !== '' && stripos($bannerTitle, 'banner') === false && stripos($bannerTitle, 'hero') === false) {
+    $title = $bannerTitle;
+}
+if ($title === '') {
+    $title = $pageTitle !== '' ? $pageTitle : 'Rule Every Turn with Gin Rummy Carnival';
+}
+
+$subtitle = trim((string) $getConfig('hero.subtitle', ''));
+if ($subtitle === '') {
+    $subtitle = $page ? trim((string) ($page->getData('meta_description') ?: '')) : '';
+}
+if ($subtitle === '') {
+    $subtitle = 'Join fast Gin Rummy tables with sharper visual cues, cleaner room discovery, and quicker action flow on every device.';
+}
+
+$downloadDisplay = $normalizeDisplay($getConfig('download_btn.display', 'yes')) === 'yes';
+$downloadImage = trim((string) $getConfig('download_btn.image', ''));
+$ctaText = (string) $getConfig('hero.cta_text', $getConfig('download_btn.alt', 'Install App'));
+$ctaUrl = (string) $getConfig('hero.cta_url', $getConfig('download_btn.url', '#download'));
+$ctaHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string) $ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaHref, 'url');
+$ctaSecondaryText = (string) $getConfig('hero.secondary_cta_text', 'Browse Rooms');
+$ctaSecondaryUrl = (string) $getConfig('hero.secondary_cta_url', '#tables');
+$heroAlt = trim((string) $getConfig('hero.alt', $getConfig('banner.alt', '')));
+if ($heroAlt === '') {
+    $heroAlt = $title;
+}
+
+$heroImageDesktop = trim((string) $getConfig('hero.image', $getConfig('banner.image_desktop', '')));
+$heroImageMobile = trim((string) $getConfig('hero.image_mobile', $getConfig('banner.image_mobile', '')));
+$defaultHeroImage = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/gin-rummy-carnival/asset/img/hero-carnival-graphic.svg');
+$heroImageDesktop = $heroImageDesktop !== '' ? $heroImageDesktop : $defaultHeroImage;
+$heroImageMobile = $heroImageMobile !== '' ? $heroImageMobile : $heroImageDesktop;
+$bgColor = (string) $getConfig('hero.bg_color', $getConfig('banner.bg_color', $colors['hero_bg'] ?? '#0b1525'));
+$bgImage = trim((string) $getConfig('hero.bg_image', ''));
+$bgImage = $bgImage !== '' ? $bgImage : $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/gin-rummy-carnival/asset/img/poker-header-bg.svg');
+$sliderClasses = trim((string) $getConfig('layout.slider_classes', 'grc-hero-stage'));
+$marginTop = (int) $getConfig('layout.margin_top', '-72');
+$imgMarginTop = (int) $getConfig('layout.img_margin_top', '0');
+
+$wordTrim = static function ($value, $limit = 3) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return '';
+    }
+
+    $words = preg_split('/\s+/', preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value)) ?: [];
+    $words = array_values(array_filter($words, static function ($item) {
+        return $item !== '';
+    }));
+
+    return trim(implode(' ', array_slice($words, 0, max(1, (int) $limit))));
+};
+
+$splitHeadline = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return [];
+    }
+
+    $words = preg_split('/\s+/', $value) ?: [];
+    $words = array_values(array_filter($words, static function ($item) {
+        return $item !== '';
+    }));
+
+    $count = count($words);
+    if ($count <= 3) {
+        return [$value];
+    }
+
+    $pivot = (int) ceil($count / 2);
+    if ($count >= 6) {
+        $pivot = min(4, max(2, $pivot));
+    }
+
+    $first = implode(' ', array_slice($words, 0, $pivot));
+    $second = implode(' ', array_slice($words, $pivot));
+
+    return array_values(array_filter([$first, $second]));
+};
+
+$headlineCards = $splitHeadline($title);
+if (empty($headlineCards)) {
+    $headlineCards = ['Gin Rummy Carnival'];
+}
+
+$heroTags = [];
+foreach ([$wordTrim($title, 3), $wordTrim($subtitle, 4), $wordTrim($subtitle, 8)] as $item) {
+    $item = trim((string) $item);
+    if ($item !== '') {
+        $heroTags[] = $item;
+    }
+}
+$heroTags = array_values(array_unique($heroTags));
+$heroTags = array_slice($heroTags, 0, 4);
+?>
+
+<section id="<?= $componentId ?>" class="grc-hero <?= htmlspecialchars($sliderClasses) ?>" aria-labelledby="<?= $componentId ?>-title" style="--grc-hero-bg: <?= htmlspecialchars($bgColor) ?>; --grc-hero-overlap: <?= (int) $marginTop ?>px; --grc-hero-img-offset: <?= (int) $imgMarginTop ?>px;">
+    <div class="hero-texture" style="background-image:url('<?= htmlspecialchars($bgImage) ?>');"></div>
+    <div class="hero-suits" aria-hidden="true">
+        <span class="hero-suit hero-suit-spade">&spades;</span>
+        <span class="hero-suit hero-suit-heart">&hearts;</span>
+        <span class="hero-suit hero-suit-diamond">&diams;</span>
+        <span class="hero-suit hero-suit-club">&clubs;</span>
+    </div>
+
+    <div class="hero-shell">
+        <div class="hero-layout">
+            <header class="hero-copy wow animate__fadeInUp" data-wow-duration="0.88s">
+                <h1 id="<?= $componentId ?>-title" class="hero-title-stack">
+                    <?php foreach ($headlineCards as $index => $line): ?>
+                        <span class="title-card title-card-<?= (int) ($index + 1) ?>"><?= htmlspecialchars($line) ?></span>
+                    <?php endforeach; ?>
+                </h1>
+
+                <?php if ($subtitle !== ''): ?>
+                    <p class="hero-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+                <?php endif; ?>
+            </header>
+
+            <figure class="hero-poster wow animate__zoomIn" data-wow-duration="0.96s" aria-label="<?= htmlspecialchars($heroAlt) ?>">
+                <span class="poster-halo poster-halo-a" aria-hidden="true"></span>
+                <span class="poster-halo poster-halo-b" aria-hidden="true"></span>
+                <span class="poster-stack poster-stack-back" aria-hidden="true"></span>
+                <span class="poster-stack poster-stack-mid" aria-hidden="true"></span>
+
+                <div class="poster-frame">
+                    <picture>
+                        <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($heroImageMobile) ?>">
+                        <source media="(min-width: 768px)" srcset="<?= htmlspecialchars($heroImageDesktop) ?>">
+                        <img src="<?= htmlspecialchars($heroImageDesktop) ?>" alt="<?= htmlspecialchars($heroAlt) ?>" fetchpriority="high" decoding="async">
+                    </picture>
+                </div>
+
+                <?php foreach ($heroTags as $index => $tag): ?>
+                    <span class="poster-tag poster-tag-<?= (int) ($index + 1) ?>"><?= htmlspecialchars($tag) ?></span>
+                <?php endforeach; ?>
+            </figure>
+
+            <aside class="hero-dock wow animate__fadeInUp" data-wow-delay="0.12s" data-wow-duration="0.86s" id="download">
+                <div class="hero-actions">
+                    <?php if ($downloadDisplay && $ctaText !== ''): ?>
+                        <a class="hero-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>">
+                            <?php if ($downloadImage !== ''): ?>
+                                <img src="<?= htmlspecialchars($downloadImage) ?>" alt="" aria-hidden="true" class="hero-primary-icon">
+                            <?php endif; ?>
+                            <span><?= htmlspecialchars($ctaText) ?></span>
+                            <?php if ($downloadImage === ''): ?>
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M4 12h13.2l-4.8-4.8L14 5.6 21.1 12 14 19.2l-1.6-1.6 4.8-4.8H4z" fill="currentColor"></path>
+                                </svg>
+                            <?php endif; ?>
+                        </a>
+                    <?php endif; ?>
+
+                    <?php if ($ctaSecondaryText !== ''): ?>
+                        <a class="hero-secondary" href="<?= htmlspecialchars($ctaSecondaryUrl) ?>">
+                            <span><?= htmlspecialchars($ctaSecondaryText) ?></span>
+                        </a>
+                    <?php endif; ?>
+                </div>
+
+                <?php if (!empty($heroTags)): ?>
+                    <ul class="hero-strip" aria-label="Hero highlights">
+                        <?php foreach ($heroTags as $tag): ?>
+                            <li><?= htmlspecialchars($tag) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                <?php endif; ?>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(5rem, 8vw, 7rem) 0 clamp(3.2rem, 6vw, 4.8rem);
+    margin-top: 0;
+    background:
+        radial-gradient(880px 420px at 16% 0%, rgba(104, 255, 214, 0.22), transparent 68%),
+        radial-gradient(860px 420px at 100% 10%, rgba(255, 99, 158, 0.2), transparent 64%),
+        radial-gradient(680px 300px at 50% 100%, rgba(255, 196, 91, 0.2), transparent 68%),
+        linear-gradient(140deg, var(--grc-hero-bg, #071120) 0%, #0f2436 32%, #241531 64%, #2d140f 100%);
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 26%),
+        repeating-linear-gradient(128deg, rgba(255,255,255,0.035) 0 1px, transparent 1px 28px);
+    opacity: 0.22;
+}
+
+#<?= $componentId ?>::after {
+    inset: auto auto 6% -10%;
+    width: min(420px, 44%);
+    height: min(280px, 40%);
+    background: radial-gradient(circle, rgba(101,255,191,0.2) 0%, rgba(101,255,191,0) 70%);
+    filter: blur(12px);
+    opacity: 0.78;
+}
+
+#<?= $componentId ?> .hero-texture {
+    position: absolute;
+    inset: 0;
+    background-position: center;
+    background-size: cover;
+    mix-blend-mode: screen;
+    opacity: 0.09;
+    filter: saturate(0.9) brightness(0.68);
+}
+
+#<?= $componentId ?> .hero-suits {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .hero-suit {
+    position: absolute;
+    display: block;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-weight: 700;
+    line-height: 0.78;
+    opacity: 0.18;
+    text-shadow: 0 18px 34px rgba(4, 10, 22, 0.14);
+    filter: blur(0.4px);
+    transform-origin: center;
+    transition: transform 0.55s ease, opacity 0.45s ease;
+}
+
+#<?= $componentId ?> .hero-suit-spade {
+    top: -5%;
+    left: -1.6rem;
+    font-size: clamp(7.5rem, 18vw, 16rem);
+    color: rgba(138, 255, 214, 0.7);
+    transform: rotate(-13deg);
+    animation: heroSuitFloatA 10s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .hero-suit-heart {
+    right: 6%;
+    top: 6%;
+    font-size: clamp(8rem, 20vw, 18rem);
+    color: rgba(255, 126, 171, 0.52);
+    transform: rotate(17deg);
+    animation: heroSuitFloatB 12s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .hero-suit-diamond {
+    left: 34%;
+    bottom: -12%;
+    font-size: clamp(8.5rem, 22vw, 20rem);
+    color: rgba(255, 214, 108, 0.34);
+    transform: rotate(-11deg);
+    animation: heroSuitFloatC 11s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .hero-suit-club {
+    right: -1rem;
+    bottom: 12%;
+    font-size: clamp(7rem, 16vw, 14rem);
+    color: rgba(128, 225, 255, 0.36);
+    transform: rotate(10deg);
+    animation: heroSuitFloatD 13s ease-in-out infinite;
+}
+
+#<?= $componentId ?>:hover .hero-suit-spade,
+#<?= $componentId ?>:hover .hero-suit-heart,
+#<?= $componentId ?>:hover .hero-suit-diamond,
+#<?= $componentId ?>:hover .hero-suit-club {
+    animation: none;
+    opacity: 0.24;
+}
+
+#<?= $componentId ?>:hover .hero-suit-spade {
+    transform: rotate(-9deg) scale(1.06);
+}
+
+#<?= $componentId ?>:hover .hero-suit-heart {
+    transform: rotate(13deg) scale(1.08);
+}
+
+#<?= $componentId ?>:hover .hero-suit-diamond {
+    transform: rotate(-7deg) scale(1.05);
+}
+
+#<?= $componentId ?>:hover .hero-suit-club {
+    transform: rotate(6deg) scale(1.07);
+}
+
+#<?= $componentId ?> .hero-shell {
+    width: min(1280px, calc(100% - 0.9rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .hero-layout {
+    display: grid;
+    gap: 0.88rem;
+    align-items: start;
+}
+
+#<?= $componentId ?> .hero-copy,
+#<?= $componentId ?> .hero-poster,
+#<?= $componentId ?> .hero-dock {
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .hero-title-stack {
+    display: grid;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .title-card {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    max-width: min(100%, 11ch);
+    padding: 0.88rem 1rem 0.98rem;
+    border-radius: 26px;
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    font-size: clamp(2.2rem, 10vw, 4.9rem);
+    font-weight: 800;
+    line-height: 0.9;
+    letter-spacing: -0.08em;
+    text-wrap: balance;
+    box-shadow: 0 24px 40px rgba(2, 8, 18, 0.18);
+}
+
+#<?= $componentId ?> .title-card-1 {
+    color: #081221;
+    background: linear-gradient(92deg, #67ffd1 0%, #83ecff 48%, #ffd36d 100%);
+    transform: rotate(-2deg);
+}
+
+#<?= $componentId ?> .title-card-2 {
+    margin-left: auto;
+    color: #f6fbff;
+    background: linear-gradient(140deg, rgba(15,28,45,0.95) 0%, rgba(31,22,45,0.92) 100%);
+    transform: rotate(2.4deg);
+}
+
+#<?= $componentId ?> .hero-subtitle {
+    margin-top: 1rem;
+    max-width: 64ch;
+    color: #d5e4f3;
+    font-size: 0.98rem;
+    line-height: 1.85;
+}
+
+#<?= $componentId ?> .hero-poster {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 360px;
+    padding: 1.2rem 0 0.6rem;
+    isolation: isolate;
+}
+
+#<?= $componentId ?> .poster-halo {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(16px);
+    opacity: 0.94;
+}
+
+#<?= $componentId ?> .poster-halo-a {
+    width: 180px;
+    height: 180px;
+    left: 2%;
+    top: 10%;
+    background: radial-gradient(circle, rgba(101,255,191,0.28) 0%, rgba(101,255,191,0) 72%);
+}
+
+#<?= $componentId ?> .poster-halo-b {
+    width: 220px;
+    height: 220px;
+    right: 0;
+    bottom: 8%;
+    background: radial-gradient(circle, rgba(255,111,151,0.24) 0%, rgba(255,111,151,0) 74%);
+}
+
+#<?= $componentId ?> .poster-stack,
+#<?= $componentId ?> .poster-frame {
+    width: min(100%, 360px);
+    aspect-ratio: 6 / 7;
+}
+
+#<?= $componentId ?> .poster-stack {
+    position: absolute;
+    border-radius: 34px;
+    clip-path: polygon(0 9%, 9% 0, 100% 0, 100% 90%, 91% 100%, 0 100%);
+    background: linear-gradient(150deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.03) 100%);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.05);
+}
+
+#<?= $componentId ?> .poster-stack-back {
+    transform: translate(-16px, 18px) rotate(-12deg);
+}
+
+#<?= $componentId ?> .poster-stack-mid {
+    transform: translate(18px, -12px) rotate(10deg);
+}
+
+#<?= $componentId ?> .poster-frame {
+    position: relative;
+    z-index: 1;
+    padding: clamp(0.9rem, 3vw, 1.15rem);
+    border-radius: 38px;
+    clip-path: polygon(0 8%, 8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%);
+    background: linear-gradient(150deg, rgba(8,18,33,0.95) 0%, rgba(14,27,48,0.92) 46%, rgba(39,18,37,0.92) 100%);
+    box-shadow:
+        0 32px 54px rgba(3, 10, 22, 0.34),
+        inset 0 0 0 1px rgba(255,255,255,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#<?= $componentId ?> .poster-frame::before {
+    content: '';
+    position: absolute;
+    inset: 14px;
+    clip-path: polygon(0 8%, 8% 0, 100% 0, 100% 92%, 92% 100%, 0 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .poster-frame picture,
+#<?= $componentId ?> .poster-frame img {
+    position: relative;
+    z-index: 1;
+    display: block;
+    width: 100%;
+    height: auto;
+}
+
+#<?= $componentId ?> .poster-frame img {
+    max-height: 100%;
+    object-fit: contain;
+    margin-top: var(--grc-hero-img-offset, 0px);
+    filter: drop-shadow(0 28px 42px rgba(0, 0, 0, 0.28));
+}
+
+#<?= $componentId ?> .poster-tag {
+    position: absolute;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    max-width: min(46%, 160px);
+    min-height: 34px;
+    padding: 0.42rem 0.76rem;
+    border-radius: 999px;
+    background: rgba(8, 17, 31, 0.72);
+    color: #f3fbff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-align: center;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 16px 28px rgba(3, 10, 22, 0.18);
+}
+
+#<?= $componentId ?> .poster-tag-1 {
+    top: 2%;
+    left: 1%;
+}
+
+#<?= $componentId ?> .poster-tag-2 {
+    top: 14%;
+    right: 0;
+}
+
+#<?= $componentId ?> .poster-tag-3 {
+    bottom: 24%;
+    left: 0;
+}
+
+#<?= $componentId ?> .poster-tag-4 {
+    right: 8%;
+    bottom: 6%;
+}
+
+#<?= $componentId ?> .hero-dock {
+    margin-top: -1.3rem;
+    z-index: 2;
+    display: grid;
+    gap: 0.88rem;
+    padding: 1rem;
+    border-radius: 28px;
+    background: linear-gradient(145deg, rgba(12, 24, 42, 0.92) 0%, rgba(11, 16, 28, 0.9) 100%);
+    box-shadow: 0 20px 40px rgba(2, 8, 18, 0.22);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+}
+
+#<?= $componentId ?> .hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.62rem;
+}
+
+#<?= $componentId ?> .hero-primary,
+#<?= $componentId ?> .hero-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 50px;
+    padding: 0.76rem 1rem;
+    border-radius: 18px;
+    text-decoration: none;
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+}
+
+#<?= $componentId ?> .hero-primary {
+    gap: 0.56rem;
+    color: #061120;
+    background: linear-gradient(92deg, #00deff 0%, #89e8ff 46%, #ffd36d 100%);
+    box-shadow: 0 16px 28px rgba(0, 220, 255, 0.18);
+}
+
+#<?= $componentId ?> .hero-primary svg {
+    width: 16px;
+    height: 16px;
+}
+
+#<?= $componentId ?> .hero-primary-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    flex: 0 0 auto;
+}
+
+#<?= $componentId ?> .hero-secondary {
+    color: #eef6ff;
+    background: rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .hero-primary:hover,
+#<?= $componentId ?> .hero-secondary:hover {
+    transform: translateY(-2px);
+}
+
+#<?= $componentId ?> .hero-strip {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.55rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+}
+
+#<?= $componentId ?> .hero-strip::-webkit-scrollbar {
+    display: none;
+}
+
+#<?= $componentId ?> .hero-strip li {
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    gap: 0.48rem;
+    padding: 0.42rem 0.3rem 0.42rem 0;
+    border-radius: 0;
+    background: transparent;
+    color: #cddded;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: none;
+    white-space: nowrap;
+    cursor: default;
+}
+
+#<?= $componentId ?> .hero-strip li::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #67ffd1 0%, #ffd36d 100%);
+    box-shadow: 0 0 0 4px rgba(255,255,255,0.05);
+}
+
+@media (min-width: 1024px) {
+    #<?= $componentId ?> .hero-layout {
+        grid-template-columns: minmax(0, 0.94fr) minmax(360px, 0.86fr) minmax(280px, 0.68fr);
+        grid-template-areas: 'copy poster dock';
+        gap: 1.2rem;
+        align-items: center;
+    }
+
+    #<?= $componentId ?> .hero-copy {
+        grid-area: copy;
+        padding-right: 0.3rem;
+        margin-right: -1.2rem;
+        z-index: 2;
+    }
+
+    #<?= $componentId ?> .hero-poster {
+        grid-area: poster;
+        min-height: 620px;
+        padding: 1rem 0;
+    }
+
+    #<?= $componentId ?> .poster-stack,
+    #<?= $componentId ?> .poster-frame {
+        width: min(100%, 430px);
+    }
+
+    #<?= $componentId ?> .poster-tag-1 {
+        top: 6%;
+        left: -6%;
+    }
+
+    #<?= $componentId ?> .poster-tag-2 {
+        top: 16%;
+        right: -4%;
+    }
+
+    #<?= $componentId ?> .poster-tag-3 {
+        bottom: 22%;
+        left: -7%;
+    }
+
+    #<?= $componentId ?> .poster-tag-4 {
+        right: 0;
+        bottom: 12%;
+    }
+
+    #<?= $componentId ?> .hero-dock {
+        grid-area: dock;
+        margin-top: 0;
+        min-height: 430px;
+        align-content: center;
+        padding: 1.15rem;
+        border-radius: 32px;
+    }
+
+    #<?= $componentId ?> .hero-actions {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .hero-strip {
+        display: grid;
+        gap: 0.58rem;
+        overflow: visible;
+    }
+
+    #<?= $componentId ?> .hero-strip li {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        margin-top: var(--grc-hero-overlap, 0px);
+        padding: 4.8rem 0 3.1rem;
+    }
+
+    #<?= $componentId ?> .hero-shell {
+        width: min(100%, calc(100% - 0.75rem));
+    }
+
+    #<?= $componentId ?> .hero-suit {
+        opacity: 0.15;
+    }
+
+    #<?= $componentId ?> .hero-suit-spade {
+        top: 1%;
+        left: -1.4rem;
+        font-size: clamp(6.2rem, 22vw, 8.4rem);
+    }
+
+    #<?= $componentId ?> .hero-suit-heart {
+        top: 8%;
+        right: -0.4rem;
+        font-size: clamp(6.8rem, 24vw, 9.4rem);
+    }
+
+    #<?= $componentId ?> .hero-suit-diamond {
+        left: auto;
+        right: 18%;
+        bottom: 22%;
+        font-size: clamp(7.2rem, 24vw, 9.8rem);
+    }
+
+    #<?= $componentId ?> .hero-suit-club {
+        right: auto;
+        left: -0.9rem;
+        bottom: 10%;
+        font-size: clamp(5.8rem, 19vw, 8rem);
+    }
+
+    #<?= $componentId ?> .title-card {
+        max-width: min(100%, 9.8ch);
+        padding: 0.8rem 0.92rem 0.92rem;
+        border-radius: 22px;
+    }
+
+    #<?= $componentId ?> .hero-subtitle {
+        font-size: 0.92rem;
+    }
+
+    #<?= $componentId ?> .hero-poster {
+        min-height: 320px;
+        padding-top: 0.9rem;
+    }
+
+    #<?= $componentId ?> .poster-stack,
+    #<?= $componentId ?> .poster-frame {
+        width: min(100%, 310px);
+    }
+
+    #<?= $componentId ?> .poster-tag {
+        max-width: 44%;
+        font-size: 0.66rem;
+        letter-spacing: 0.07em;
+    }
+
+    #<?= $componentId ?> .hero-dock {
+        padding: 0.92rem;
+        border-radius: 24px;
+        background:none;
+        border:none;
+        box-shadow:none
+    }
+}
+
+@media (max-width: 420px) {
+    #<?= $componentId ?> .hero-actions {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .poster-tag-1 {
+        top: 2%;
+        left: 4%;
+    }
+
+    #<?= $componentId ?> .poster-tag-2 {
+        top: 18%;
+        right: 2%;
+    }
+
+    #<?= $componentId ?> .poster-tag-3 {
+        bottom: 18%;
+        left: 4%;
+    }
+
+    #<?= $componentId ?> .poster-tag-4 {
+        right: 4%;
+        bottom: 4%;
+    }
+}
+
+@keyframes heroSuitFloatA {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(-13deg); }
+    50% { transform: translate3d(0.7rem, 0.55rem, 0) rotate(-8deg); }
+}
+
+@keyframes heroSuitFloatB {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(17deg); }
+    50% { transform: translate3d(-0.8rem, 0.45rem, 0) rotate(11deg); }
+}
+
+@keyframes heroSuitFloatC {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(-11deg); }
+    50% { transform: translate3d(0.45rem, -0.7rem, 0) rotate(-6deg); }
+}
+
+@keyframes heroSuitFloatD {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(10deg); }
+    50% { transform: translate3d(-0.5rem, -0.55rem, 0) rotate(5deg); }
+}
+</style>

@@ -1,0 +1,28 @@
+<svg width="540" height="720" viewBox="0 0 540 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mbg" x1="90" y1="64" x2="434" y2="616" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7FBF5"/>
+      <stop offset="1" stop-color="#E5F2E6"/>
+    </linearGradient>
+    <linearGradient id="mfelt" x1="174" y1="168" x2="360" y2="486" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2E846A"/>
+      <stop offset="1" stop-color="#163E31"/>
+    </linearGradient>
+  </defs>
+  <rect width="540" height="720" rx="34" fill="url(#mbg)"/>
+  <circle cx="270" cy="344" r="170" stroke="#D3A03A" stroke-width="14" stroke-dasharray="15 18"/>
+  <circle cx="270" cy="344" r="138" fill="url(#mfelt)"/>
+  <rect x="126" y="208" width="116" height="170" rx="18" transform="rotate(-12 126 208)" fill="#FFFDF8"/>
+  <rect x="212" y="234" width="116" height="170" rx="18" fill="#FFFDF8"/>
+  <rect x="296" y="208" width="116" height="170" rx="18" transform="rotate(12 296 208)" fill="#FFFDF8"/>
+  <path d="M174 254L194 282L214 254H174Z" fill="#D9624C"/>
+  <path d="M316 250L336 278L356 250H316Z" fill="#D9624C"/>
+  <path d="M252 276C267 299 287 317 312 332C287 347 267 366 252 390C237 366 217 347 192 332C217 317 237 299 252 276Z" fill="#D3A03A"/>
+  <circle cx="118" cy="132" r="58" fill="#F0F6EC"/>
+  <circle cx="118" cy="132" r="42" stroke="#C7942C" stroke-width="10" stroke-dasharray="10 12"/>
+  <circle cx="118" cy="132" r="30" fill="#194E3D"/>
+  <text x="118" y="141" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="22" font-weight="800" fill="#F8F4E8">21</text>
+  <rect x="92" y="516" width="356" height="96" rx="28" fill="#FFFDF8" fill-opacity="0.8"/>
+  <text x="270" y="556" text-anchor="middle" font-family="Plus Jakarta Sans, Arial, sans-serif" font-size="24" font-weight="700" fill="#1E4436">Fast entry</text>
+  <text x="270" y="590" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="30" font-weight="800" fill="#C7942C">3 routes open</text>
+</svg>

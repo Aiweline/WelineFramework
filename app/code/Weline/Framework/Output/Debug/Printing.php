@@ -23,7 +23,7 @@ class Printing extends AbstractPrint
 
     public function printing(string $data = 'Printing!', string $message = 'Debug', string $color = self::NOTE, int $pad_length = 0): void
     {
-        if (php_sapi_name() !== 'cli') {
+        if (!\in_array(\php_sapi_name(), ['cli', 'phpdbg'], true)) {
             $data = explode(PHP_EOL, $data);
             d($data);
             return;

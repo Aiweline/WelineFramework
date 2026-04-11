@@ -1,0 +1,591 @@
+<?php
+/**
+ * @component_start
+ * code: advantages
+ * name: Advantages
+ * name_en: Advantages
+ * description: Asymmetric feature board for core product strengths
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#f4f8ff
+ * style.title_color => 标题颜色:color:#08111f
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.9)
+ * style.card_border_color => 卡片边框色:color:rgba(41,208,255,0.16)
+ * style.card_title_color => 卡片标题颜色:color:#08111f
+ * style.card_desc_color => 卡片描述颜色:color:#4d6078
+ * style.section_padding => 区域内边距(PC端):number:80|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Why Gin Rummy Carnival Changes The Pace
+ * texts.advantage_1_icon => 优势1编号:text:01
+ * texts.advantage_1_title => 优势1标题:text:Faster Read
+ * texts.advantage_1_desc => 优势1描述:textarea:Multiplier cues, install actions, and mode links stay visible without drowning the screen in repeated blocks.
+ * texts.advantage_2_icon => 优势2编号:text:02
+ * texts.advantage_2_title => 优势2标题:text:Trick Deck Structure
+ * texts.advantage_2_desc => 优势2描述:textarea:Each module is framed differently so players can scan the homepage like a route board instead of a generic landing stack.
+ * texts.advantage_3_icon => 优势3编号:text:03
+ * texts.advantage_3_title => 优势3标题:text:Responsive Lift
+ * texts.advantage_3_desc => 优势3描述:textarea:The same hierarchy holds on mobile, with cards reflowing into larger touch targets instead of shrinking into noise.
+ *
+ * @fields_end
+ */
+
+$componentId = 'grc-advantages-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+
+$bgColor = (string) $getConfig('style.bg_color', $getConfig('advantages.bg_color', '#f4f8ff'));
+$titleColor = (string) $getConfig('style.title_color', '#08111f');
+$cardBgColor = (string) $getConfig('style.card_bg_color', 'rgba(255,255,255,0.9)');
+$cardBorderColor = (string) $getConfig('style.card_border_color', 'rgba(41,208,255,0.16)');
+$cardTitleColor = (string) $getConfig('style.card_title_color', '#08111f');
+$cardDescColor = (string) $getConfig('style.card_desc_color', '#4d6078');
+$sectionPadding = max(48, (int) $getConfig('style.section_padding', '80'));
+$sectionPaddingMobile = max(34, (int) $getConfig('style.section_padding_mobile', '48'));
+$cardGap = max(12, (int) $getConfig('style.card_gap', '24'));
+
+$defaultSectionTitle = 'Why Gin Rummy Carnival Changes The Pace';
+$defaultItems = [
+    [
+        'icon' => '01',
+        'title' => 'Faster Read',
+        'desc' => 'Multiplier cues, install actions, and mode links stay visible without drowning the screen in repeated blocks.',
+    ],
+    [
+        'icon' => '02',
+        'title' => 'Trick Deck Structure',
+        'desc' => 'Each module is framed differently so players can scan the homepage like a route board instead of a generic landing stack.',
+    ],
+    [
+        'icon' => '03',
+        'title' => 'Responsive Lift',
+        'desc' => 'The same hierarchy holds on mobile, with cards reflowing into larger touch targets instead of shrinking into noise.',
+    ],
+];
+
+$title = (string) $getConfig('texts.title', $getConfig('advantages.title', $getConfig('texts.advantages_title', $defaultSectionTitle)));
+$items = [
+    [
+        'icon' => (string) $getConfig('texts.advantage_1_icon', $defaultItems[0]['icon']),
+        'title' => (string) $getConfig('texts.advantage_1_title', $defaultItems[0]['title']),
+        'desc' => (string) $getConfig('texts.advantage_1_desc', $defaultItems[0]['desc']),
+    ],
+    [
+        'icon' => (string) $getConfig('texts.advantage_2_icon', $defaultItems[1]['icon']),
+        'title' => (string) $getConfig('texts.advantage_2_title', $defaultItems[1]['title']),
+        'desc' => (string) $getConfig('texts.advantage_2_desc', $defaultItems[1]['desc']),
+    ],
+    [
+        'icon' => (string) $getConfig('texts.advantage_3_icon', $defaultItems[2]['icon']),
+        'title' => (string) $getConfig('texts.advantage_3_title', $defaultItems[2]['title']),
+        'desc' => (string) $getConfig('texts.advantage_3_desc', $defaultItems[2]['desc']),
+    ],
+];
+$titleTrail = implode(' / ', array_map(static function ($item) {
+    return $item['title'];
+}, $items));
+$cardEffects = ['animate__fadeInLeft', 'animate__fadeInUp', 'animate__fadeInRight'];
+?>
+
+<section id="<?= $componentId ?>" class="grc-advantages" aria-labelledby="<?= $componentId ?>-title">
+    <div class="adv-shell" id="advantages" style="--adv-gap: <?= (int) $cardGap ?>px;">
+        <div class="adv-stage">
+            <div class="adv-suits" aria-hidden="true">
+                <span class="adv-suit adv-suit-club">&clubs;</span>
+                <span class="adv-suit adv-suit-heart">&hearts;</span>
+                <span class="adv-suit adv-suit-spade">&spades;</span>
+            </div>
+            <header class="adv-head wow animate__fadeInDown" data-wow-duration="0.82s">
+                <?php if ($showTitle): ?>
+                    <h2 id="<?= $componentId ?>-title"><span><?= htmlspecialchars($title) ?></span></h2>
+                <?php endif; ?>
+                <p><?= htmlspecialchars($titleTrail) ?></p>
+            </header>
+
+            <div class="adv-core wow animate__zoomIn" data-wow-duration="0.84s" aria-label="Advantage core summary">
+                <strong><?= count($items) ?></strong>
+                <span><?= htmlspecialchars($title) ?></span>
+            </div>
+
+            <ol class="adv-rail" role="list">
+                <?php foreach ($items as $index => $item): ?>
+                    <li class="adv-stop adv-stop-<?= (int) ($index + 1) ?> wow <?= htmlspecialchars($cardEffects[$index % count($cardEffects)]) ?>" role="listitem" data-wow-delay="<?= htmlspecialchars(number_format(0.14 + ($index * 0.08), 2)) ?>s" data-wow-duration="<?= htmlspecialchars(number_format(0.82 + ($index * 0.05), 2)) ?>s">
+                        <article class="adv-card">
+                            <div class="adv-card-top">
+                                <span class="adv-index"><?= htmlspecialchars($item['icon']) ?></span>
+                                <span class="adv-line" aria-hidden="true"></span>
+                            </div>
+                            <h3><?= htmlspecialchars($item['title']) ?></h3>
+                            <p><?= htmlspecialchars($item['desc']) ?></p>
+                        </article>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int) $sectionPadding ?>px 0;
+    background:
+        radial-gradient(720px 320px at 0% 6%, rgba(255, 110, 154, 0.18), transparent 72%),
+        radial-gradient(760px 320px at 100% 14%, rgba(101, 255, 191, 0.16), transparent 70%),
+        linear-gradient(138deg, #fff3d7 0%, <?= htmlspecialchars($bgColor) ?> 46%, #eefef5 78%, #ffe9dd 100%);
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0) 24%),
+        repeating-linear-gradient(124deg, rgba(11, 26, 43, 0.04) 0 1px, transparent 1px 30px);
+    opacity: 0.28;
+}
+
+#<?= $componentId ?>::after {
+    inset: auto auto -10% 50%;
+    width: 42%;
+    height: 52%;
+    transform: translateX(-50%);
+    background: radial-gradient(circle, rgba(255,255,255,0.52) 0%, rgba(255,255,255,0) 68%);
+}
+
+#<?= $componentId ?> .adv-shell {
+    width: min(1280px, calc(100% - 1.1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-stage {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.94fr) minmax(180px, 0.54fr) minmax(260px, 0.94fr);
+    grid-template-areas:
+        'head core stop2'
+        'stop1 core stop2'
+        'stop1 core stop3';
+    gap: var(--adv-gap);
+    align-items: center;
+}
+
+#<?= $componentId ?> .adv-suits {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+}
+
+#<?= $componentId ?> .adv-suit {
+    position: absolute;
+    display: block;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-weight: 700;
+    line-height: 0.78;
+    opacity: 0.12;
+    filter: blur(0.35px);
+    transition: transform 0.5s ease, opacity 0.4s ease;
+}
+
+#<?= $componentId ?> .adv-suit-club {
+    top: 4%;
+    left: 22%;
+    font-size: clamp(6rem, 10vw, 9rem);
+    color: rgba(101, 255, 191, 0.72);
+    transform: rotate(-12deg);
+}
+
+#<?= $componentId ?> .adv-suit-heart {
+    right: 18%;
+    top: 14%;
+    font-size: clamp(6.5rem, 11vw, 9.6rem);
+    color: rgba(255, 118, 146, 0.52);
+    transform: rotate(10deg);
+}
+
+#<?= $componentId ?> .adv-suit-spade {
+    left: 47%;
+    bottom: 5%;
+    font-size: clamp(7rem, 12vw, 10.5rem);
+    color: rgba(255, 205, 114, 0.4);
+    transform: translateX(-50%) rotate(-6deg);
+}
+
+#<?= $componentId ?> .adv-stage:hover .adv-suit-club {
+    opacity: 0.16;
+    transform: rotate(-8deg) translateY(-0.2rem);
+}
+
+#<?= $componentId ?> .adv-stage:hover .adv-suit-heart {
+    opacity: 0.16;
+    transform: rotate(6deg) translateY(0.24rem);
+}
+
+#<?= $componentId ?> .adv-stage:hover .adv-suit-spade {
+    opacity: 0.15;
+    transform: translateX(-50%) rotate(-2deg) scale(1.04);
+}
+
+#<?= $componentId ?> .adv-head,
+#<?= $componentId ?> .adv-core,
+#<?= $componentId ?> .adv-stop {
+    min-width: 0;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-head {
+    grid-area: head;
+    align-self: start;
+}
+
+#<?= $componentId ?> .adv-head h2 span {
+    position: relative;
+    display: inline-block;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(2.15rem, 4.8vw, 4.15rem);
+    line-height: 0.92;
+    letter-spacing: -0.06em;
+    padding-left: 2.05rem;
+}
+
+#<?= $componentId ?> .adv-head h2 span::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.12em;
+    width: 12px;
+    height: calc(100% - 0.24em);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(101,255,191,0.98) 0%, rgba(255,111,151,0.9) 52%, rgba(255,205,114,0.94) 100%);
+    box-shadow:
+        10px 7px 0 -3px rgba(255,111,151,0.9),
+        10px 17px 0 -3px rgba(255,205,114,0.94);
+}
+
+#<?= $componentId ?> .adv-head h2 span::after {
+    content: '';
+    position: absolute;
+    left: 0.98rem;
+    top: 0.58em;
+    width: 26px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(101,255,191,0.82), rgba(255,111,151,0.22));
+}
+
+#<?= $componentId ?> .adv-head p {
+    margin-top: 0.92rem;
+    max-width: 30ch;
+    color: #5c6f84;
+    line-height: 1.84;
+}
+
+#<?= $componentId ?> .adv-core {
+    grid-area: core;
+    min-height: 420px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 1.2rem;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.78) 62%, rgba(255,255,255,0.38) 100%);
+    box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,0.84),
+        0 26px 56px rgba(17, 32, 55, 0.12);
+}
+
+#<?= $componentId ?> .adv-core::before,
+#<?= $componentId ?> .adv-core::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    width: 2px;
+    height: calc(50% - 54px);
+    background: linear-gradient(180deg, rgba(101,255,191,0) 0%, rgba(101,255,191,0.76) 38%, rgba(255,118,146,0.72) 100%);
+    transform: translateX(-50%);
+}
+
+#<?= $componentId ?> .adv-core::before {
+    top: 0;
+}
+
+#<?= $componentId ?> .adv-core::after {
+    bottom: 0;
+    transform: translateX(-50%) rotate(180deg);
+}
+
+#<?= $componentId ?> .adv-core strong {
+    display: block;
+    color: #0e223c;
+    font-size: clamp(3rem, 7vw, 5rem);
+    line-height: 0.9;
+    letter-spacing: -0.08em;
+}
+
+#<?= $componentId ?> .adv-core span {
+    display: block;
+    max-width: 11ch;
+    margin-top: 0.52rem;
+    color: #546880;
+    font-size: 0.84rem;
+    line-height: 1.7;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+}
+
+#<?= $componentId ?> .adv-rail {
+    display: contents;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+#<?= $componentId ?> .adv-stop-1 { grid-area: stop1; }
+#<?= $componentId ?> .adv-stop-2 { grid-area: stop2; }
+#<?= $componentId ?> .adv-stop-3 { grid-area: stop3; }
+
+#<?= $componentId ?> .adv-stop::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 26px;
+    height: 26px;
+    border-radius: 999px;
+    background: linear-gradient(130deg, rgba(101,255,191,1) 0%, rgba(255,205,114,0.96) 100%);
+    box-shadow: 0 0 0 10px rgba(255,255,255,0.36);
+    transform: translateY(-50%);
+}
+
+#<?= $componentId ?> .adv-stop-1::before,
+#<?= $componentId ?> .adv-stop-3::before {
+    right: calc(-1 * var(--adv-gap) / 2);
+}
+
+#<?= $componentId ?> .adv-stop-2::before {
+    left: calc(-1 * var(--adv-gap) / 2);
+}
+
+#<?= $componentId ?> .adv-card {
+    border-radius: 30px;
+    padding: 1.12rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, <?= htmlspecialchars($cardBgColor) ?> 100%);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    box-shadow: 0 22px 42px rgba(15, 30, 54, 0.1);
+}
+
+#<?= $componentId ?> .adv-card-top {
+    display: flex;
+    align-items: center;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .adv-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 58px;
+    min-height: 34px;
+    padding: 0.42rem 0.86rem;
+    border-radius: 999px;
+    background: linear-gradient(130deg, rgba(255,255,255,1) 0%, rgba(255,240,209,0.96) 100%);
+    color: #13263f;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    box-shadow: inset 0 0 0 1px rgba(255, 118, 146, 0.14);
+}
+
+#<?= $componentId ?> .adv-line {
+    flex: 1;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(101,255,191,0.74) 0%, rgba(255,118,146,0.16) 100%);
+}
+
+#<?= $componentId ?> .adv-card h3 {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: clamp(1.34rem, 2vw, 1.9rem);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .adv-card p {
+    margin-top: 0.86rem;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    line-height: 1.84;
+}
+
+@media (max-width: 1040px) {
+    #<?= $componentId ?> .adv-stage {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-areas:
+            'head head'
+            'core core'
+            'stop1 stop2'
+            'stop3 stop3';
+    }
+
+    #<?= $componentId ?> .adv-core {
+        min-height: 220px;
+        border-radius: 34px;
+    }
+
+    #<?= $componentId ?> .adv-core::before,
+    #<?= $componentId ?> .adv-core::after,
+    #<?= $componentId ?> .adv-stop::before {
+        display: none;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int) $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .adv-shell {
+        width: min(100%, calc(100% - 0.75rem));
+    }
+
+    #<?= $componentId ?> .adv-stage {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+            'head'
+            'core'
+            'stop1'
+            'stop2'
+            'stop3';
+        gap: 0.9rem;
+        position: relative;
+    }
+
+    #<?= $componentId ?> .adv-suit {
+        opacity: 0.1;
+    }
+
+    #<?= $componentId ?> .adv-suit-club {
+        top: 11%;
+        left: auto;
+        right: -0.4rem;
+        font-size: clamp(5rem, 24vw, 7.2rem);
+    }
+
+    #<?= $componentId ?> .adv-suit-heart {
+        top: auto;
+        right: auto;
+        left: -0.6rem;
+        bottom: 20%;
+        font-size: clamp(5.4rem, 24vw, 7.8rem);
+    }
+
+    #<?= $componentId ?> .adv-suit-spade {
+        left: auto;
+        right: 14%;
+        bottom: 5%;
+        transform: rotate(8deg);
+        font-size: clamp(5.8rem, 24vw, 8rem);
+    }
+
+    #<?= $componentId ?> .adv-head p {
+        max-width: none;
+    }
+
+    #<?= $componentId ?> .adv-core {
+        min-height: 180px;
+        border-radius: 28px;
+    }
+
+    #<?= $componentId ?> .adv-stop {
+        width: calc(100% - 1.6rem);
+    }
+
+    #<?= $componentId ?> .adv-stop-1,
+    #<?= $componentId ?> .adv-stop-3 {
+        margin-right: auto;
+        margin-left: 0;
+    }
+
+    #<?= $componentId ?> .adv-stop-2 {
+        margin-left: auto;
+        margin-right: 0;
+    }
+
+    #<?= $componentId ?> .adv-stop::before {
+        display: block;
+        width: 22px;
+        height: 22px;
+        top: 50%;
+        box-shadow: 0 0 0 8px rgba(255,255,255,0.3);
+    }
+
+    #<?= $componentId ?> .adv-stop::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        width: 20px;
+        height: 2px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(101,255,191,0.86), rgba(255,111,151,0.24));
+    }
+
+    #<?= $componentId ?> .adv-stop-1::before,
+    #<?= $componentId ?> .adv-stop-3::before {
+        right: -11px;
+        left: auto;
+    }
+
+    #<?= $componentId ?> .adv-stop-1::after,
+    #<?= $componentId ?> .adv-stop-3::after {
+        right: -9px;
+        transform: translate(100%, -50%);
+    }
+
+    #<?= $componentId ?> .adv-stop-2::before {
+        left: -11px;
+    }
+
+    #<?= $componentId ?> .adv-stop-2::after {
+        left: -9px;
+        transform: translate(-100%, -50%);
+        background: linear-gradient(90deg, rgba(255,111,151,0.24), rgba(101,255,191,0.86));
+    }
+
+    #<?= $componentId ?> .adv-card {
+        border-radius: 24px;
+    }
+}
+</style>

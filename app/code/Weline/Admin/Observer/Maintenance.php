@@ -72,7 +72,6 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
             $request->setData('WELINE_USER_LANG', $lang);
             // 同步到 WelineEnv 和 $_SERVER
             \Weline\Framework\Env\WelineEnv::set('user.lang', $lang, 'Maintenance Observer');
-            $_SERVER['WELINE_USER_LANG'] = $lang;
             
             // 标记为已处理，阻止 MaintenanceInterceptor 继续执行
             $data->setData('handled', true);

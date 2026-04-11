@@ -1,0 +1,28 @@
+{
+    "page_type": "cookie_policy",
+    "name": "Cookie政策默认布局",
+    "description": "Cookie政策页面标准布局，符合GDPR/CCPA国际规范",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "cookie-policy-default",
+                "config": {
+                    "show_toc": true,
+                    "show_last_updated": true,
+                    "content_width": "narrow",
+                    "legal_type": "cookie_policy"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Cookie政策页面，header和footer从首页继承"
+}

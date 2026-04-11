@@ -36,6 +36,87 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $this->printing = $printing;
     }
 
+    private function isCoverageRequested(array $args, array $data): bool
+    {
+        foreach (['coverage', 'c', 'coverage-html', 'coverage-text', 'coverage-xml', 'coverage-clover'] as $key) {
+            if (isset($args[$key]) || isset($data[$key])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function resolvePhpCommandForTests(bool $coverageRequested): string
+    {
+        if (!$coverageRequested) {
+            return escapeshellarg(PHP_BINARY);
+        }
+
+        if (extension_loaded('xdebug')) {
+            putenv('XDEBUG_MODE=coverage');
+            $_SERVER['XDEBUG_MODE'] = 'coverage';
+            return escapeshellarg(PHP_BINARY);
+        }
+
+        if (extension_loaded('pcov')) {
+            return escapeshellarg(PHP_BINARY);
+        }
+
+        $phpDir = dirname(PHP_BINARY);
+        $phpdbg = \PHP_OS_FAMILY === 'Windows'
+            ? $phpDir . DS . 'phpdbg.exe'
+            : $phpDir . DS . 'phpdbg';
+
+        if (is_file($phpdbg)) {
+            $this->printing->note(__('未检测到 Xdebug/PCOV，覆盖率模式自动切换到 phpdbg 驱动'));
+            return escapeshellarg($phpdbg) . ' -qrr';
+        }
+
+        $this->printing->warning(__('未检测到可用覆盖率驱动（Xdebug/PCOV/phpdbg），PHPUnit 可能无法生成覆盖率报告'));
+        return escapeshellarg(PHP_BINARY);
+    }
+
+    private function appendCoverageArguments(string $phpunitCommand, array $args, array $data, string $reportPath): string
+    {
+        if (!$this->isCoverageRequested($args, $data)) {
+            return $phpunitCommand;
+        }
+
+        $coverageHtml = $args['coverage-html'] ?? $data['coverage-html'] ?? ($reportPath . DS . 'coverage-html');
+        $coverageText = $args['coverage-text'] ?? $data['coverage-text'] ?? ($reportPath . DS . 'coverage.txt');
+        $coverageClover = $args['coverage-clover'] ?? $data['coverage-clover'] ?? ($reportPath . DS . 'coverage.xml');
+
+        $phpunitCommand .= ' --coverage-html ' . escapeshellarg((string) $coverageHtml);
+        $phpunitCommand .= ' --coverage-text=' . escapeshellarg((string) $coverageText);
+        $phpunitCommand .= ' --coverage-clover ' . escapeshellarg((string) $coverageClover);
+
+        if (isset($args['coverage-xml']) || isset($data['coverage-xml'])) {
+            $coverageXml = $args['coverage-xml'] ?? $data['coverage-xml'];
+            $phpunitCommand .= ' --coverage-xml ' . escapeshellarg((string) $coverageXml);
+        }
+
+        return $phpunitCommand;
+    }
+
+    private function normalizeCoverageSourcePath(string $path): string
+    {
+        return str_replace('\\', '/', rtrim($path, "\\/"));
+    }
+
+    private function resolveCoverageSourceForTestFile(string $testFile): string
+    {
+        $normalized = str_replace(['/', '\\'], DS, $testFile);
+        foreach ([DS . 'Test' . DS, DS . 'test' . DS] as $marker) {
+            $pos = strpos($normalized, $marker);
+            if ($pos !== false) {
+                return $this->normalizeCoverageSourcePath(substr($normalized, 0, $pos));
+            }
+        }
+
+        return '../../app/code';
+    }
+
     /**
      * @inheritDoc
      */
@@ -417,11 +498,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
         
         $ds = DS;
         // PHPUnit 10.x 不支持 --verbose 参数，使用 --testdox 代替以获得更好的输出
-        $phpunitCommand = PHP_BINARY . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testdox";
+        $coverageRequested = str_contains($php_unit_xml, '<coverage') || $this->isCoverageRequested($args, $data);
+        $phpBinaryCommand = $this->resolvePhpCommandForTests($coverageRequested);
+        $phpunitCommand = $phpBinaryCommand . ' ' . VENDOR_PATH . "{$ds}phpunit{$ds}phpunit{$ds}phpunit --configuration $php_unit_config_path --testdox";
         // 如果指定了 debug 参数，添加 --debug
         if (isset($args['debug']) || isset($data['debug'])) {
             $phpunitCommand .= ' --debug';
         }
+        $phpunitCommand = $this->appendCoverageArguments($phpunitCommand, $args, $data, $php_unit_report_path);
         
         if ($fileName) {
             # 文件模式：运行指定文件的测试
@@ -1460,8 +1544,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $php_unit_xml .= '</testsuites>
 <coverage processUncoveredFiles="true">
         <include>
-            <directory suffix=".php">../../app</directory>
+            <directory suffix=".php">' . $coverageSource . '</directory>
         </include>
+        <exclude>
+            <directory suffix=".php">' . $coverageSource . '/Test</directory>
+            <directory suffix=".php">' . $coverageSource . '/test</directory>
+            <directory suffix=".php">' . $coverageSource . '/view</directory>
+            <directory suffix=".php">' . $coverageSource . '/Console</directory>
+            <directory suffix=".php">' . $coverageSource . '/env</directory>
+        </exclude>
     </coverage>
      <logging>
         <junit outputFile="' . $reportPath . '/junit.xml"/>
@@ -1509,6 +1600,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             return '';
         }
         
+        $coverageSource = $this->normalizeCoverageSourcePath($targetModule['base_path']);
         $php_unit_xml = '<?xml version=\'1.0\' encoding=\'UTF-8\'?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="http://schema.phpunit.de/6.2/phpunit.xsd"
@@ -1529,8 +1621,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
     </testsuites>
 <coverage processUncoveredFiles="true">
         <include>
-            <directory suffix=".php">../../app</directory>
+            <directory suffix=".php">' . $coverageSource . '</directory>
         </include>
+        <exclude>
+            <directory suffix=".php">' . $coverageSource . '/Test</directory>
+            <directory suffix=".php">' . $coverageSource . '/test</directory>
+            <directory suffix=".php">' . $coverageSource . '/view</directory>
+            <directory suffix=".php">' . $coverageSource . '/Console</directory>
+            <directory suffix=".php">' . $coverageSource . '/env</directory>
+        </exclude>
     </coverage>
      <logging>
         <junit outputFile="' . $reportPath . '/junit.xml"/>
@@ -1599,8 +1698,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $php_unit_xml .= '</testsuites>';
                 $php_unit_xml .= '<coverage processUncoveredFiles="true">';
                 $php_unit_xml .= '<include>';
-                $php_unit_xml .= '<directory suffix=".php">../../app</directory>';
+                $php_unit_xml .= '<directory suffix=".php">../../app/code</directory>';
                 $php_unit_xml .= '</include>';
+                $php_unit_xml .= '<exclude>';
+                $php_unit_xml .= '<directory suffix=".php">../../app/code/*/*/Test</directory>';
+                $php_unit_xml .= '<directory suffix=".php">../../app/code/*/*/test</directory>';
+                $php_unit_xml .= '<directory suffix=".php">../../app/code/*/*/view</directory>';
+                $php_unit_xml .= '<directory suffix=".php">../../app/code/*/*/Console</directory>';
+                $php_unit_xml .= '<directory suffix=".php">../../app/code/*/*/env</directory>';
+                $php_unit_xml .= '</exclude>';
                 $php_unit_xml .= '</coverage>';
                 $php_unit_xml .= '<logging>';
                 $php_unit_xml .= '<junit outputFile="' . $reportPath . '/junit.xml"/>';
@@ -1638,8 +1744,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
     </testsuites>
 <coverage processUncoveredFiles="true">
         <include>
-            <directory suffix=".php">../../app</directory>
+            <directory suffix=".php">' . $coverageSource . '</directory>
         </include>
+        <exclude>
+            <directory suffix=".php">' . $coverageSource . '/Test</directory>
+            <directory suffix=".php">' . $coverageSource . '/test</directory>
+            <directory suffix=".php">' . $coverageSource . '/view</directory>
+            <directory suffix=".php">' . $coverageSource . '/Console</directory>
+            <directory suffix=".php">' . $coverageSource . '/env</directory>
+        </exclude>
     </coverage>
      <logging>
         <junit outputFile="' . $reportPath . '/junit.xml"/>
@@ -1911,6 +2024,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             return '';
         }
         
+        $coverageSource = $this->resolveCoverageSourceForTestFile($testFile);
         $php_unit_xml = '<?xml version="1.0" encoding="UTF-8"?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/9.6/phpunit.xsd"
@@ -1931,8 +2045,15 @@ class Run implements \Weline\Framework\Console\CommandInterface
     </testsuites>
 <coverage processUncoveredFiles="true">
         <include>
-            <directory suffix=".php">../../app</directory>
+            <directory suffix=".php">' . $coverageSource . '</directory>
         </include>
+        <exclude>
+            <directory suffix=".php">' . $coverageSource . '/Test</directory>
+            <directory suffix=".php">' . $coverageSource . '/test</directory>
+            <directory suffix=".php">' . $coverageSource . '/view</directory>
+            <directory suffix=".php">' . $coverageSource . '/Console</directory>
+            <directory suffix=".php">' . $coverageSource . '/env</directory>
+        </exclude>
     </coverage>
      <logging>
         <junit outputFile="' . $reportPath . '/junit.xml"/>

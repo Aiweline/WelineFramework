@@ -1,0 +1,539 @@
+<?php
+/**
+ * Roulette Supernova - Footer Component
+ *
+ * @component_start
+ * code: footer-links
+ * name: 页脚链接
+ * name_en: Footer Links
+ * description: Roulette Supernova footer with seam crest, compact brand core, and compliant link navigation.
+ * category: footer
+ * region: footer
+ * @component_end
+ *
+ * @fields_start
+ * group:display => 显示控制
+ * display.show_links => 显示链接:select:yes|yes,no
+ * display.show_disclaimer => 显示免责声明:select:yes|yes,no
+ * display.show_copyright => 显示版权信息:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.background_color => 背景颜色:color:#08080d
+ * style.text_color => 文字颜色:color:#c6b9af
+ * style.link_color => 链接颜色:color:#f7f1e8
+ * style.link_hover_color => 链接悬停颜色:color:#dfff5a
+ * style.border_top => 显示顶部边框:select:no|yes,no
+ * style.border_color => 边框颜色:color:#2a2522
+ *
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1280
+ * layout.padding_horizontal => 左右内边距:responsive:14/18|px
+ * layout.padding_vertical => 上下内边距:responsive:32/48|px
+ *
+ * group:footer => 页脚品牌设置
+ * footer.logo_text => 品牌名称:text:Roulette Supernova
+ * footer.logo_url => 品牌Logo地址:textarea:|默认使用本地roulette-logo-icon.svg
+ *
+ * group:content => 内容配置
+ * content.footer_links => 页脚链接:textarea:Home=>/\r\nTables=>#tables\r\nEdge=>#advantages\r\nReviews=>#reviews\r\nFAQ=>#faq\r\nSupport=>/contact|配置格式：名字=>url，一行一个
+ * content.copyright_text => 版权信息:text:© 2026 Roulette Supernova. All rights reserved.
+ * content.disclaimer_text => 免责声明:textarea:18+ Only. Check local rules and play responsibly before joining any roulette or gaming-related activity.
+ * content.use_custom_links => 使用自定义链接组:select:yes|yes,no
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
+ *
+ * group:typography => 排版设置
+ * typography.font_size => 字体大小:responsive:13/14|px
+ * typography.line_height => 行高:number:1.7
+ *
+ * @fields_end
+ */
+
+$componentId = 'rsn-footer-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$parseResponsive = static function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string) $value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string) ($parts[0] ?? '')),
+        'desktop' => trim((string) ($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCss = static function ($parsed) {
+    $mobile = (float) $parsed['mobile'];
+    $desktop = (float) $parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$showLinks = $normalizeToggle($getConfig('display.show_links', 'yes')) !== 'no';
+$showDisclaimer = $normalizeToggle($getConfig('display.show_disclaimer', 'yes')) !== 'no';
+$showCopyright = $normalizeToggle($getConfig('display.show_copyright', 'yes')) !== 'no';
+
+$bgColor = (string) $getConfig('style.background_color', $colors['footer_bg'] ?? '#08080d');
+$textColor = (string) $getConfig('style.text_color', $colors['footer_text'] ?? '#c6b9af');
+$linkColor = (string) $getConfig('style.link_color', $colors['footer_link'] ?? '#f7f1e8');
+$linkHoverColor = (string) $getConfig('style.link_hover_color', $colors['footer_link_hover'] ?? '#dfff5a');
+$borderTop = $normalizeToggle($getConfig('style.border_top', 'no'), 'no') === 'yes';
+$borderColor = (string) $getConfig('style.border_color', '#2a2522');
+$maxWidth = (int) $getConfig('layout.max_width', '1280');
+$paddingHorizontal = $genResponsiveCss($parseResponsive($getConfig('layout.padding_horizontal', '14/18') . 'px'));
+$paddingVertical = $genResponsiveCss($parseResponsive($getConfig('layout.padding_vertical', '32/48') . 'px'));
+$fontSize = $genResponsiveCss($parseResponsive($getConfig('typography.font_size', '13/14') . 'px'));
+$lineHeight = (float) $getConfig('typography.line_height', '1.7');
+
+$logoText = trim((string) $getConfigAny(['footer.logo_text', 'logo.text', 'header.logo.text'], 'Roulette Supernova'));
+if ($logoText === '') {
+    $logoText = 'Roulette Supernova';
+}
+$logoIconUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/roulette-supernova/asset/img/roulette-logo-icon.svg');
+$logoUrl = trim((string) $getConfigAny(['footer.logo_url', 'logo.url', 'header.logo.url'], ''));
+$logoUrl = $logoUrl !== '' ? $logoUrl : ($page && $page->getData('logo') ? (string) $page->getData('logo') : $logoIconUrl);
+
+$copyright = trim((string) $getConfigAny(['content.copyright_text', 'footer.copyright'], '© 2026 Roulette Supernova. All rights reserved.'));
+$disclaimer = trim((string) $getConfigAny(['content.disclaimer_text', 'footer.disclaimer_text'], '18+ Only. Check local rules and play responsibly before joining any roulette or gaming-related activity.'));
+
+$useCustomLinksRaw = trim((string) $getConfig('content.use_custom_links', ''));
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($getConfig('content.use_subpages', 'no'), 'no') !== 'yes';
+$links = [];
+
+if (!$useCustomLinks && $page) {
+    $footerPages = method_exists($page, 'getHeaderNavigationPages')
+        ? $page->getHeaderNavigationPages(30)
+        : $page->getNavigationPages([], 30);
+
+    foreach ($footerPages as $footerPage) {
+        $text = trim((string) ($footerPage['title'] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+
+        $type = (string) ($footerPage['type'] ?? '');
+        $configuredLabel = trim((string) $getConfigAny([
+            'content_footer_labels.content.footer_label_' . $type,
+            'content.footer_label_' . $type,
+        ], ''));
+
+        $links[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : $text,
+            'href' => (string) ($footerPage['url'] ?? '#'),
+        ];
+    }
+}
+
+if (empty($links)) {
+    $linksConfig = (string) $getConfigAny(
+        ['content.footer_links', 'footer.links'],
+        "Home=>/\nTables=>#tables\nEdge=>#advantages\nReviews=>#reviews\nFAQ=>#faq\nSupport=>/contact"
+    );
+
+    if (strpos($linksConfig, '\n') !== false && strpos($linksConfig, "\n") === false) {
+        $linksConfig = str_replace('\n', "\n", $linksConfig);
+    }
+
+    $items = preg_split('/\r?\n/', $linksConfig);
+    if (!is_array($items) || count(array_filter(array_map('trim', $items))) === 0) {
+        $items = explode(',', $linksConfig);
+    }
+
+    foreach ($items as $item) {
+        $item = trim((string) $item);
+        if ($item === '') {
+            continue;
+        }
+
+        if (strpos($item, '=>') !== false) {
+            $parts = array_map('trim', explode('=>', $item, 2));
+        } elseif (strpos($item, '|') !== false) {
+            $parts = array_map('trim', explode('|', $item, 2));
+        } else {
+            $parts = [$item, '#'];
+        }
+
+        if (($parts[0] ?? '') === '') {
+            continue;
+        }
+
+        $links[] = [
+            'text' => $parts[0],
+            'href' => ($parts[1] ?? '') !== '' ? $parts[1] : '#',
+        ];
+    }
+}
+
+if (empty($links)) {
+    $links = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQ', 'href' => '/faq'],
+    ];
+}
+
+$linkGroups = array_chunk($links, max(1, (int) ceil(count($links) / 2)));
+
+$downloadText = trim((string) $getConfigAny(['download_button.text', 'header.download_button.text', 'navigation.cta_text'], 'Download'));
+$downloadUrl = trim((string) $getConfigAny(['download_button.url', 'header.download_button.url', 'navigation.cta_url'], '#download'));
+$downloadHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string) $downloadUrl);
+$downloadRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadHref, 'url');
+$floatingDownloadAsset = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/roulette-supernova/asset/img/roulette-floating-download.svg');
+$showFloatingDownload = $downloadText !== '' && $downloadUrl !== '';
+?>
+
+<footer id="<?= $componentId ?>" class="rsn-footer">
+    <div class="footer-seam" aria-hidden="true">
+        <div class="seam-line"></div>
+        <div class="seam-crest">
+            <span class="crest-ring ring-outer"></span>
+            <span class="crest-ring ring-inner"></span>
+            <span class="crest-ball"></span>
+        </div>
+    </div>
+
+    <div class="footer-shell">
+        <div class="footer-brand">
+            <a href="/" class="brand-pill" aria-label="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?> home">
+                <img src="<?= htmlspecialchars($logoUrl, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>">
+                <strong><?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?></strong>
+            </a>
+        </div>
+
+        <?php if ($showLinks && !empty($links)): ?>
+            <div class="footer-links-zone">
+                <?php foreach ($linkGroups as $group): ?>
+                    <nav class="footer-nav" aria-label="Footer navigation">
+                        <?php foreach ($group as $link): ?>
+                            <a href="<?= htmlspecialchars($link['href'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($link['text'], ENT_QUOTES, 'UTF-8') ?></a>
+                        <?php endforeach; ?>
+                    </nav>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+
+    <?php if (($showCopyright && $copyright !== '') || ($showDisclaimer && $disclaimer !== '')): ?>
+        <div class="footer-base">
+            <?php if ($showCopyright && $copyright !== ''): ?>
+                <p class="footer-copyright"><?= htmlspecialchars($copyright, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+            <?php if ($showDisclaimer && $disclaimer !== ''): ?>
+                <p class="footer-disclaimer"><?= htmlspecialchars($disclaimer, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+        </div>
+    <?php endif; ?>
+</footer>
+
+<?php if ($showFloatingDownload): ?>
+    <a
+        id="<?= $componentId ?>-float"
+        class="floating-download"
+        href="<?= htmlspecialchars($downloadRef, ENT_QUOTES, 'UTF-8') ?>"
+        aria-label="<?= htmlspecialchars($downloadText, ENT_QUOTES, 'UTF-8') ?>"
+        title="<?= htmlspecialchars($downloadText, ENT_QUOTES, 'UTF-8') ?>"
+    >
+        <img src="<?= htmlspecialchars($floatingDownloadAsset, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($downloadText, ENT_QUOTES, 'UTF-8') ?>">
+    </a>
+<?php endif; ?>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@600;700;800&display=swap');
+#<?= $componentId ?> {
+    position: relative;
+    padding: <?= htmlspecialchars($paddingVertical, ENT_QUOTES, 'UTF-8') ?> <?= htmlspecialchars($paddingHorizontal, ENT_QUOTES, 'UTF-8') ?> 2rem;
+    background:
+        radial-gradient(720px 220px at 20% 0%, rgba(255,91,69,0.16), transparent 72%),
+        radial-gradient(560px 220px at 82% 0%, rgba(77,246,255,0.12), transparent 74%),
+        linear-gradient(180deg, rgba(9,9,15,0.98) 0%, <?= htmlspecialchars($bgColor, ENT_QUOTES, 'UTF-8') ?> 100%);
+    color: <?= htmlspecialchars($textColor, ENT_QUOTES, 'UTF-8') ?>;
+    overflow: hidden;
+    <?= $borderTop ? 'border-top: 1px solid ' . htmlspecialchars($borderColor, ENT_QUOTES, 'UTF-8') . ';' : '' ?>
+}
+
+#<?= $componentId ?> .footer-seam {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: min(<?= (int) $maxWidth ?>px, calc(100% - 1.6rem));
+    height: 96px;
+    transform: translate(-50%, -48px);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .seam-line {
+    position: absolute;
+    inset: 48px 0 auto;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,91,69,0) 0%, rgba(255,91,69,0.9) 24%, rgba(247,241,232,0.94) 50%, rgba(223,255,90,0.86) 76%, rgba(223,255,90,0) 100%);
+    box-shadow: 0 0 22px rgba(255,91,69,0.18);
+}
+
+#<?= $componentId ?> .seam-crest {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 96px;
+    height: 96px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: rgba(8,8,13,0.98);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 22px 50px rgba(0,0,0,0.36);
+}
+
+#<?= $componentId ?> .crest-ring,
+#<?= $componentId ?> .crest-ball {
+    position: absolute;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .ring-outer {
+    inset: 10px;
+    border: 2px solid rgba(255,91,69,0.42);
+}
+
+#<?= $componentId ?> .ring-inner {
+    inset: 24px;
+    border: 2px solid rgba(223,255,90,0.48);
+}
+
+#<?= $componentId ?> .crest-ball {
+    width: 14px;
+    height: 14px;
+    background: #f7f1e8;
+    box-shadow: 0 0 0 4px rgba(255,91,69,0.22);
+}
+
+#<?= $componentId ?> .footer-shell,
+#<?= $componentId ?> .footer-base {
+    width: min(<?= (int) $maxWidth ?>px, 100%);
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+    font-size: <?= htmlspecialchars($fontSize, ENT_QUOTES, 'UTF-8') ?>;
+    line-height: <?= htmlspecialchars((string) $lineHeight, ENT_QUOTES, 'UTF-8') ?>;
+}
+
+#<?= $componentId ?> .footer-shell {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
+    gap: 1.4rem 2rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .brand-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    min-width: 0;
+    text-decoration: none;
+    color: inherit;
+}
+
+#<?= $componentId ?> .brand-pill img {
+    width: 72px;
+    height: 72px;
+    flex: 0 0 auto;
+}
+
+#<?= $componentId ?> .brand-pill strong {
+    display: block;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: clamp(1.2rem, 2vw, 1.6rem);
+    font-weight: 700;
+    color: #f7f1e8;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .footer-links-zone {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem 2rem;
+    justify-items: end;
+}
+
+#<?= $componentId ?> .footer-nav {
+    display: grid;
+    gap: 0.8rem;
+    width: min(100%, 220px);
+}
+
+#<?= $componentId ?> .footer-nav a {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.62rem;
+    color: <?= htmlspecialchars($linkColor, ENT_QUOTES, 'UTF-8') ?>;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .footer-nav a::before {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff5b45 0%, #dfff5a 100%);
+    box-shadow: 0 0 14px rgba(255,91,69,0.2);
+}
+
+#<?= $componentId ?> .footer-nav a:hover,
+#<?= $componentId ?> .footer-nav a:focus-visible {
+    color: <?= htmlspecialchars($linkHoverColor, ENT_QUOTES, 'UTF-8') ?>;
+}
+
+#<?= $componentId ?> .footer-base {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.8rem 1.2rem;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .footer-copyright {
+    color: <?= htmlspecialchars($textColor, ENT_QUOTES, 'UTF-8') ?>;
+    opacity: 0.82;
+}
+
+#<?= $componentId ?> .footer-disclaimer {
+    max-width: 42rem;
+    color: <?= htmlspecialchars($textColor, ENT_QUOTES, 'UTF-8') ?>;
+    opacity: 0.82;
+}
+
+#<?= $componentId ?>-float {
+    position: fixed;
+    right: clamp(0.7rem, 2vw, 1.4rem);
+    bottom: clamp(1rem, 2.6vw, 1.8rem);
+    z-index: 45;
+    width: clamp(86px, 10vw, 124px);
+    transition: transform 0.28s ease, filter 0.28s ease;
+}
+
+#<?= $componentId ?>-float::before {
+    content: '';
+    position: absolute;
+    inset: 16% 14%;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(255,191,71,0.26) 0%, rgba(255,91,69,0.16) 42%, rgba(255,91,69,0) 74%);
+    filter: blur(14px);
+    z-index: -1;
+}
+
+#<?= $componentId ?>-float img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+#<?= $componentId ?>-float:hover,
+#<?= $componentId ?>-float:focus-visible {
+    transform: translateY(-4px) scale(1.03) rotate(-2deg);
+    filter: drop-shadow(0 18px 28px rgba(0,0,0,0.32));
+}
+
+@media (max-width: 900px) {
+    #<?= $componentId ?> .footer-shell {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .footer-links-zone {
+        justify-items: start;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding-top: 4.2rem;
+    }
+
+    #<?= $componentId ?> .footer-seam {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .seam-crest {
+        width: 84px;
+        height: 84px;
+    }
+
+    #<?= $componentId ?> .brand-pill img {
+        width: 62px;
+        height: 62px;
+    }
+
+    #<?= $componentId ?> .footer-links-zone {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    #<?= $componentId ?> .footer-nav {
+        width: 100%;
+    }
+
+    #<?= $componentId ?> .footer-base {
+        flex-direction: column;
+    }
+
+    #<?= $componentId ?>-float {
+        width: 92px;
+        right: 0.55rem;
+        bottom: 0.85rem;
+    }
+}
+</style>
+

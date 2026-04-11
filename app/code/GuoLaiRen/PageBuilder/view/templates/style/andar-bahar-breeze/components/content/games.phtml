@@ -1,0 +1,498 @@
+<?php
+/**
+ * Andar Bahar Breeze - Games Showcase Component
+ *
+ * @component_start
+ * code: games-showcase
+ * name: 游戏展示区
+ * name_en: Games Showcase
+ * description: 参考原始games逻辑的三卡游戏展示，使用更有层次的特色排版
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_subtitle => 显示副标题:select:yes|yes,no
+ * display.show_description => 显示卡片描述:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#183940
+ * style.accent_color => 强调色:color:#59c7bf
+ * style.title_color => 标题颜色:color:#f5fffc
+ * style.subtitle_color => 副标题颜色:color:rgba(228,245,242,0.8)
+ * style.panel_bg_color => 外层面板背景:color:rgba(255,255,255,0.1)
+ * style.card_bg_color => 内容卡片背景:color:rgba(247,255,252,0.94)
+ * style.card_border_color => 卡片边框色:color:rgba(255,255,255,0.16)
+ * style.card_radius => 卡片圆角:number:24|px
+ * style.section_padding => 区域内边距(PC端):number:88|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:52|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:images => 图片配置
+ * images.image_1_desktop => 游戏1桌面端图片:textarea:|留空使用默认图
+ * images.image_1_mobile => 游戏1移动端图片:textarea:|留空使用默认图
+ * images.image_2 => 游戏2图片:textarea:|留空使用默认图
+ * images.image_3 => 游戏3图片:textarea:|留空使用默认图
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Explore the Breeze Game Lounge
+ * texts.subtitle => 副标题:textarea:The original games block is still about showing actual card games. This version keeps that meaning, but uses a featured game stage instead of a basic repeated grid.
+ * texts.game_1_title => 游戏1标题:text:Andar Bahar Classic
+ * texts.game_1_desc => 游戏1描述:textarea:The signature deck game stays front and center with quicker table recognition and a cleaner hero-style presentation.
+ * texts.game_1_link => 游戏1链接:text:#download
+ * texts.game_2_title => 游戏2标题:text:Teen Patti Live
+ * texts.game_2_desc => 游戏2描述:textarea:A brighter live-card option for players who want a sharper social table and faster glance reading.
+ * texts.game_2_link => 游戏2链接:text:#download
+ * texts.game_3_title => 游戏3标题:text:Rummy Circle
+ * texts.game_3_desc => 游戏3描述:textarea:A calmer card flow built around structured hands, steady pacing, and a softer lounge feel.
+ * texts.game_3_link => 游戏3链接:text:#download
+ *
+ * @fields_end
+ */
+
+$componentId = 'abb-games-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showSubtitle = $getConfig('display.show_subtitle', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', '#183940');
+$accentColor = $getConfig('style.accent_color', '#59c7bf');
+$titleColor = $getConfig('style.title_color', '#f5fffc');
+$subtitleColor = $getConfig('style.subtitle_color', 'rgba(228,245,242,0.8)');
+$panelBgColor = $getConfig('style.panel_bg_color', 'rgba(255,255,255,0.1)');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(247,255,252,0.94)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(255,255,255,0.16)');
+$cardRadius = (int)$getConfig('style.card_radius', '24');
+$sectionPadding = (int)$getConfig('style.section_padding', '88');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '52');
+$cardGap = (int)$getConfig('style.card_gap', '24');
+
+$title = $getConfig('texts.title', 'Explore the Breeze Game Lounge');
+$subtitle = $getConfig('texts.subtitle', 'The original games block is still about showing actual card games. This version keeps that meaning, but uses a featured game stage instead of a basic repeated grid.');
+
+$defaultImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/andar-bahar-breeze/asset/img/game/breeze-game-1.svg');
+$defaultImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/andar-bahar-breeze/asset/img/game/breeze-game-1-m.svg');
+$defaultImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/andar-bahar-breeze/asset/img/game/breeze-game-2.svg');
+$defaultImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/andar-bahar-breeze/asset/img/game/breeze-game-3.svg');
+
+$image1Desktop = $getConfig('images.image_1_desktop', '') ?: $defaultImage1Desktop;
+$image1Mobile = $getConfig('images.image_1_mobile', '') ?: $defaultImage1Mobile;
+$image2 = $getConfig('images.image_2', '') ?: $defaultImage2;
+$image3 = $getConfig('images.image_3', '') ?: $defaultImage3;
+
+$fallbackGames = [
+    [
+        'name' => $getConfig('texts.game_1_title', 'Andar Bahar Classic'),
+        'description' => $getConfig('texts.game_1_desc', 'The signature deck game stays front and center with quicker table recognition and a cleaner hero-style presentation.'),
+        'link' => $getConfig('texts.game_1_link', '#download'),
+        'image' => $image1Desktop,
+        'image_mobile' => $image1Mobile,
+        'label' => 'Featured deck',
+        'tone' => 'teal',
+    ],
+    [
+        'name' => $getConfig('texts.game_2_title', 'Teen Patti Live'),
+        'description' => $getConfig('texts.game_2_desc', 'A brighter live-card option for players who want a sharper social table and faster glance reading.'),
+        'link' => $getConfig('texts.game_2_link', '#download'),
+        'image' => $image2,
+        'image_mobile' => $image2,
+        'label' => 'Live card room',
+        'tone' => 'sand',
+    ],
+    [
+        'name' => $getConfig('texts.game_3_title', 'Rummy Circle'),
+        'description' => $getConfig('texts.game_3_desc', 'A calmer card flow built around structured hands, steady pacing, and a softer lounge feel.'),
+        'link' => $getConfig('texts.game_3_link', '#download'),
+        'image' => $image3,
+        'image_mobile' => $image3,
+        'label' => 'Calm table pick',
+        'tone' => 'sky',
+    ],
+];
+
+$games = [];
+$gamesConfig = $getConfig('games.items', '');
+foreach (preg_split('/\r?\n/', str_replace('\\n', "\n", $gamesConfig)) as $line) {
+    $line = trim($line);
+    if ($line === '') {
+        continue;
+    }
+
+    $parts = array_map('trim', explode('|', $line));
+    if (count($parts) >= 2) {
+        $games[] = [
+            'name' => $parts[0],
+            'description' => $parts[1],
+            'link' => $parts[2] ?? '#download',
+        ];
+    }
+}
+
+$mergedGames = [];
+for ($i = 0; $i < 3; $i++) {
+    $base = $fallbackGames[$i];
+    $source = $games[$i] ?? [];
+    $mergedGames[] = [
+        'name' => $source['name'] ?? $base['name'],
+        'description' => $source['description'] ?? $base['description'],
+        'link' => $source['link'] ?? $base['link'],
+        'image' => $base['image'],
+        'image_mobile' => $base['image_mobile'],
+        'label' => $base['label'],
+        'tone' => $base['tone'],
+    ];
+}
+
+$games = $mergedGames;
+$featuredGame = $games[0];
+$sideGames = array_slice($games, 1);
+?>
+
+<section id="<?= $componentId ?>" class="abb-games" aria-labelledby="<?= $componentId ?>-title">
+    <div class="games-shell">
+        <header class="games-head" id="tables">
+            <span class="games-kicker">Game lounge</span>
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($showSubtitle): ?>
+                <p class="games-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <div class="games-stage">
+            <article class="game-card game-card-featured game-tone-<?= htmlspecialchars($featuredGame['tone']) ?>">
+                <div class="game-card-glow" aria-hidden="true"></div>
+                <div class="game-media game-media-featured">
+                    <picture>
+                        <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($featuredGame['image_mobile']) ?>">
+                        <source media="(min-width: 768px)" srcset="<?= htmlspecialchars($featuredGame['image']) ?>">
+                        <img src="<?= htmlspecialchars($featuredGame['image_mobile']) ?>" alt="<?= htmlspecialchars($featuredGame['name']) ?>">
+                    </picture>
+                </div>
+                <div class="game-body game-body-featured">
+                    <div class="game-topline">
+                        <span class="game-pill"><?= htmlspecialchars($featuredGame['label']) ?></span>
+                        <span class="game-pill game-pill-soft">Breeze selection</span>
+                    </div>
+                    <h3><?= htmlspecialchars($featuredGame['name']) ?></h3>
+                    <?php if ($showDescription): ?>
+                        <p><?= htmlspecialchars($featuredGame['description']) ?></p>
+                    <?php endif; ?>
+                    <a class="game-link" href="<?= htmlspecialchars($featuredGame['link']) ?>">Open game</a>
+                </div>
+            </article>
+
+            <div class="game-side-stack">
+                <?php foreach ($sideGames as $game): ?>
+                    <article class="game-card game-card-side game-tone-<?= htmlspecialchars($game['tone']) ?>">
+                        <div class="game-card-glow" aria-hidden="true"></div>
+                        <div class="game-media game-media-side">
+                            <img src="<?= htmlspecialchars($game['image']) ?>" alt="<?= htmlspecialchars($game['name']) ?>">
+                        </div>
+                        <div class="game-body">
+                            <div class="game-topline">
+                                <span class="game-pill"><?= htmlspecialchars($game['label']) ?></span>
+                            </div>
+                            <h3><?= htmlspecialchars($game['name']) ?></h3>
+                            <?php if ($showDescription): ?>
+                                <p><?= htmlspecialchars($game['description']) ?></p>
+                            <?php endif; ?>
+                            <a class="game-link" href="<?= htmlspecialchars($game['link']) ?>">Open game</a>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --games-radius: <?= $cardRadius ?>px;
+    --games-gap: <?= $cardGap ?>px;
+    position: relative;
+    padding: <?= $sectionPadding ?>px 0;
+    background:
+        radial-gradient(620px 260px at 12% 8%, rgba(255, 231, 169, 0.18), transparent 72%),
+        radial-gradient(680px 320px at 88% 12%, rgba(89, 199, 191, 0.18), transparent 74%),
+        linear-gradient(135deg, <?= htmlspecialchars($bgColor) ?> 0%, #21444b 48%, #1b5962 100%);
+    overflow: hidden;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.24;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .games-shell {
+    width: var(--abb-shell-width, min(1240px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .games-head {
+    max-width: 760px;
+}
+
+#<?= $componentId ?> .games-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.82rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.16);
+    color: #c9f7ef;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .games-head h2 {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(2rem, 4.8vw, 3.9rem);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .games-subtitle {
+    margin-top: 0.95rem;
+    color: <?= htmlspecialchars($subtitleColor) ?>;
+    line-height: 1.85;
+    font-size: 1rem;
+    max-width: 46rem;
+}
+
+#<?= $componentId ?> .games-stage {
+    display: grid;
+    gap: var(--games-gap);
+    margin-top: 2rem;
+    align-items: stretch;
+}
+
+#<?= $componentId ?> .game-side-stack {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--games-gap);
+}
+
+#<?= $componentId ?> .game-card-featured {
+    display: grid;
+    grid-template-columns: minmax(0, 1.04fr) minmax(300px, 0.96fr);
+    align-items: stretch;
+}
+
+#<?= $componentId ?> .game-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: calc(var(--games-radius) + 10px);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, <?= htmlspecialchars($panelBgColor) ?> 100%);
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.18);
+    backdrop-filter: blur(16px);
+    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+#<?= $componentId ?> .game-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.24);
+    border-color: rgba(255,255,255,0.24);
+}
+
+#<?= $componentId ?> .game-card-glow {
+    position: absolute;
+    inset: auto -18% -32% auto;
+    width: 240px;
+    height: 240px;
+    border-radius: 999px;
+    filter: blur(24px);
+    opacity: 0.34;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .game-tone-teal .game-card-glow {
+    background: radial-gradient(circle, rgba(89,199,191,0.62) 0%, transparent 74%);
+}
+
+#<?= $componentId ?> .game-tone-sand .game-card-glow {
+    background: radial-gradient(circle, rgba(255,223,159,0.58) 0%, transparent 74%);
+}
+
+#<?= $componentId ?> .game-tone-sky .game-card-glow {
+    background: radial-gradient(circle, rgba(141,201,255,0.58) 0%, transparent 74%);
+}
+
+#<?= $componentId ?> .game-media {
+    position: relative;
+    overflow: hidden;
+    background: rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .game-media::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255,255,255,0) 36%, rgba(20,57,64,0.18) 100%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .game-media-featured {
+    aspect-ratio: auto;
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .game-media-side {
+    aspect-ratio: 16 / 8.4;
+}
+
+#<?= $componentId ?> .game-media img,
+#<?= $componentId ?> .game-media picture {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+#<?= $componentId ?> .game-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .game-body {
+    position: relative;
+    z-index: 1;
+    padding: 1.15rem 1.15rem 1.2rem;
+}
+
+#<?= $componentId ?> .game-body-featured {
+    padding: 1.25rem 1.25rem 1.35rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+#<?= $componentId ?> .game-topline {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .game-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.44rem 0.78rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.14);
+    color: #d6fff6;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .game-pill-soft {
+    color: #ffeab6;
+}
+
+#<?= $componentId ?> .game-body h3 {
+    margin-top: 1rem;
+    color: #ffffff;
+    font-size: clamp(1.45rem, 3vw, 2.3rem);
+    line-height: 1.06;
+}
+
+#<?= $componentId ?> .game-card-featured .game-body h3 {
+    font-size: clamp(2rem, 4vw, 3rem);
+}
+
+#<?= $componentId ?> .game-body p {
+    margin-top: 0.82rem;
+    color: #d7efeb;
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .game-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    margin-top: 1.1rem;
+    padding: 0.72rem 1.14rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, <?= htmlspecialchars($accentColor) ?> 0%, #8dc9ff 100%);
+    color: #163038;
+    font-size: 0.88rem;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 18px 34px rgba(25, 95, 106, 0.24);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+#<?= $componentId ?> .game-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 38px rgba(25, 95, 106, 0.28);
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .game-card-featured,
+    #<?= $componentId ?> .game-side-stack {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 760px) {
+    #<?= $componentId ?> {
+        padding: <?= $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .game-card,
+    #<?= $componentId ?> .game-body,
+    #<?= $componentId ?> .game-body-featured {
+        border-radius: 24px;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> .games-head h2 {
+        font-size: clamp(1.9rem, 10vw, 3rem);
+    }
+
+    #<?= $componentId ?> .game-card-featured .game-body h3,
+    #<?= $componentId ?> .game-body h3 {
+        font-size: clamp(1.6rem, 8.6vw, 2.4rem);
+    }
+
+    #<?= $componentId ?> .game-link {
+        width: 100%;
+    }
+}
+</style>

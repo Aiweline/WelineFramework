@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Http\Sse\SseContext;
@@ -130,5 +131,25 @@ final class WlsFiberContextConcurrencyTest extends TestCase
         self::assertSame([], Url::$parserServer);
         self::assertSame([], Url::$parserCache);
         self::assertSame('sess-a.test:9001', $_SERVER['HTTP_HOST']);
+    }
+
+    public function testRestoreAlsoReinstatesCapturedContextSnapshot(): void
+    {
+        Context::enter(new Context([
+            'route' => ['area' => 'backend'],
+            'input' => ['uri' => '/captured'],
+        ]));
+
+        $ctx = WlsFiberContext::capture();
+
+        Context::enter(new Context([
+            'route' => ['area' => 'frontend'],
+            'input' => ['uri' => '/stale'],
+        ]));
+
+        $ctx->restore();
+
+        self::assertSame('backend', Context::current()->get('route.area'));
+        self::assertSame('/captured', Context::current()->get('input.uri'));
     }
 }

@@ -1,0 +1,662 @@
+<?php
+/**
+ * Aviator Afterburn - Footer Component
+ *
+ * @component_start
+ * code: footer-links
+ * name: 页脚链接
+ * name_en: Footer Links
+ * description: 引擎尾焰风页脚，支持品牌信息与链接导航
+ * category: footer
+ * region: footer
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_links => 显示链接:select:yes|yes,no
+ * display.show_disclaimer => 显示免责声明:select:yes|yes,no
+ * display.show_copyright => 显示版权信息:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.background_color => 背景基础色:color:#050b13
+ * style.text_color => 正文颜色:color:#edf4ff
+ * style.link_color => 链接颜色:color:#edf4ff
+ * style.link_hover_color => 链接悬停颜色:color:#ffffff
+ * style.link_font_size => 链接字号:number:14|px
+ * style.link_font_weight => 链接字重:number:700
+ * style.link_gap => 链接间距:number:18|px
+ *
+ * group:footer => 页脚品牌
+ * footer.logo.text => 品牌名称:text:Aviator Afterburn
+ * footer.logo.url => 品牌图标:textarea:|留空使用默认图标
+ * footer.logo.subline => 品牌副标题:text:Faster lift. Cleaner flight paths.
+ *
+ * group:content => 内容配置
+ * content.footer_links => 页脚链接:textarea:Home=>/\r\nFlight Modes=>#tables\r\nWhy Us=>#advantages\r\nPlayer Notes=>#reviews\r\nFAQ=>#faq\r\nSupport=>/contact|配置格式：名字=>url，一行一个。URL为空时自动补#
+ * content.copyright_text => 版权信息:text:© 2026 Aviator Afterburn. All rights reserved.
+ * content.disclaimer_text => 免责声明:textarea:18+ Only. Play responsibly and review local rules before participating in any gaming-related activity.
+ * content.use_custom_links => 使用自定义链接组:select:yes|yes,no
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
+ *
+ * @fields_end
+ */
+
+$componentId = 'aab-footer-' . uniqid();
+$floatingId = $componentId . '-floating';
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$showLinks = $normalizeToggle($getConfig('display.show_links', 'yes')) !== 'no';
+$showDisclaimer = $normalizeToggle($getConfig('display.show_disclaimer', 'yes')) !== 'no';
+$showCopyright = $normalizeToggle($getConfig('display.show_copyright', 'yes')) !== 'no';
+
+$backgroundColor = (string) $getConfig('style.background_color', '#050b13');
+$textColor = (string) $getConfig('style.text_color', '#edf4ff');
+$linkColor = (string) $getConfig('style.link_color', '#edf4ff');
+$linkHoverColor = (string) $getConfig('style.link_hover_color', '#ffffff');
+$linkFontSize = (int) $getConfig('style.link_font_size', '14');
+$linkFontWeight = (int) $getConfig('style.link_font_weight', '700');
+$linkGap = (int) $getConfig('style.link_gap', '18');
+
+$logoText = (string) $getConfigAny(['footer.logo.text', 'footer.logo_text', 'logo.text'], 'Aviator Afterburn');
+$logoIconUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/aviator-afterburn/asset/img/afterburn-logo-icon.svg');
+$floatingIconDefault = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/aviator-afterburn/asset/img/floating-download-afterburn.svg');
+$logoUrl = $getConfigAny(['footer.logo.url', 'footer.logo_url', 'logo.url'], '') ?: $logoIconUrl;
+$tagline = (string) $getConfigAny(['footer.logo.subline', 'footer.tagline', 'logo.subline'], 'Faster lift. Cleaner flight paths.');
+$copyright = (string) $getConfigAny(['content.copyright_text', 'footer.copyright'], '© 2026 Aviator Afterburn. All rights reserved.');
+$disclaimerText = (string) $getConfigAny(['content.disclaimer_text', 'footer.disclaimer_text'], '18+ Only. Play responsibly and review local rules before participating in any gaming-related activity.');
+$floatingDisplay = true;
+$floatingImage = trim((string) $getConfigAny(['download.image'], '')) ?: $floatingIconDefault;
+$floatingText = trim((string) $getConfigAny(['download_button.text', 'header.download_button.text', 'navigation.cta_text'], 'Download'));
+$floatingUrl = trim((string) $getConfigAny(['download_button.url', 'header.download_button.url', 'navigation.cta_url', 'download.primary_url', 'download_btn.url', 'hero.cta_url'], '#download'));
+
+$links = [];
+$useCustomLinksRaw = (string) $getConfig('content.use_custom_links', '');
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($getConfig('content.use_subpages', 'no'), 'no') !== 'yes';
+if (!$useCustomLinks && $page) {
+    $subpages = method_exists($page, 'getHeaderNavigationPages')
+        ? $page->getHeaderNavigationPages(30)
+        : $page->getNavigationPages([], 30);
+    foreach ($subpages as $subpage) {
+        $type = trim((string) ($subpage['type'] ?? ''));
+        $label = $type !== '' ? trim((string) $getConfigAny([
+            'content.footer_label_' . $type,
+            'content_footer_labels.content.footer_label_' . $type,
+        ], '')) : '';
+        $links[] = [
+            'text' => $label !== '' ? $label : ($subpage['title'] ?? ''),
+            'href' => $subpage['url'] ?? '#',
+        ];
+    }
+}
+
+if (empty($links)) {
+    $linksConfig = (string) $getConfigAny(
+        ['content.footer_links', 'footer.links'],
+        "Home=>/\nFlight Modes=>#tables\nWhy Us=>#advantages\nPlayer Notes=>#reviews\nFAQ=>#faq\nSupport=>/contact"
+    );
+
+    if (strpos($linksConfig, '\\n') !== false && strpos($linksConfig, "\n") === false) {
+        $linksConfig = str_replace('\\n', "\n", $linksConfig);
+    }
+
+    $items = preg_split('/\r?\n/', $linksConfig);
+    if (!is_array($items) || count(array_filter(array_map('trim', $items))) === 0) {
+        $items = explode(',', $linksConfig);
+    }
+
+    foreach ($items as $item) {
+        $item = trim((string) $item);
+        if ($item === '') {
+            continue;
+        }
+        if (strpos($item, '=>') !== false) {
+            $parts = array_map('trim', explode('=>', $item, 2));
+        } elseif (strpos($item, '|') !== false) {
+            $parts = array_map('trim', explode('|', $item, 2));
+        } else {
+            $parts = [$item, '#'];
+        }
+        if (!empty($parts[0])) {
+            $links[] = ['text' => $parts[0], 'href' => ($parts[1] ?? '') !== '' ? $parts[1] : '#'];
+        }
+    }
+}
+
+if (empty($links)) {
+    $links = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQ', 'href' => '/faq'],
+    ];
+}
+
+$linkColumns = [[], []];
+foreach ($links as $index => $link) {
+    $linkColumns[$index % 2][] = $link;
+}
+?>
+
+<footer id="<?= $componentId ?>" class="aab-footer">
+    <div class="footer-seam">
+        <span class="seam-glow seam-left" aria-hidden="true"></span>
+        <span class="seam-glow seam-right" aria-hidden="true"></span>
+        <span class="seam-track seam-track-one" aria-hidden="true"></span>
+        <span class="seam-track seam-track-two" aria-hidden="true"></span>
+        <span class="seam-orb" aria-hidden="true"></span>
+
+        <section class="footer-brand" aria-labelledby="<?= $componentId ?>-brand">
+            <div class="brand-badge">
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+            </div>
+            <div class="brand-copy">
+                <h2 id="<?= $componentId ?>-brand"><?= htmlspecialchars($logoText) ?></h2>
+                <?php if ($tagline !== ''): ?>
+                    <p><?= htmlspecialchars($tagline) ?></p>
+                <?php endif; ?>
+            </div>
+        </section>
+    </div>
+
+    <?php if ($showLinks): ?>
+        <div class="footer-shell">
+            <nav class="footer-nav" aria-label="Footer navigation">
+                <div class="nav-column nav-column-left">
+                    <?php foreach ($linkColumns[0] as $link): ?>
+                        <a class="footer-link-chip" href="<?= htmlspecialchars($link['href']) ?>">
+                            <span class="chip-spark" aria-hidden="true"></span>
+                            <span><?= htmlspecialchars($link['text']) ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="nav-column nav-column-right">
+                    <?php foreach ($linkColumns[1] as $link): ?>
+                        <a class="footer-link-chip" href="<?= htmlspecialchars($link['href']) ?>">
+                            <span class="chip-spark" aria-hidden="true"></span>
+                            <span><?= htmlspecialchars($link['text']) ?></span>
+                        </a>
+                    <?php endforeach; ?>
+                </div>
+            </nav>
+        </div>
+    <?php endif; ?>
+
+    <div class="footer-base">
+        <?php if ($showCopyright): ?>
+            <p class="footer-copy"><?= htmlspecialchars($copyright) ?></p>
+        <?php endif; ?>
+        <?php if ($showDisclaimer && $disclaimerText !== ''): ?>
+            <p class="footer-note"><?= nl2br(htmlspecialchars($disclaimerText)) ?></p>
+        <?php endif; ?>
+    </div>
+</footer>
+<?php if ($floatingDisplay && $floatingImage !== ''): ?>
+    <a id="<?= $floatingId ?>" class="aab-floating-download" href="<?= htmlspecialchars($floatingUrl ?: '#download') ?>" aria-label="<?= htmlspecialchars($floatingText) ?>" title="<?= htmlspecialchars($floatingText) ?>">
+        <span class="floating-glow" aria-hidden="true"></span>
+        <img src="<?= htmlspecialchars($floatingImage) ?>" alt="<?= htmlspecialchars($floatingText) ?>" width="184" height="248" loading="lazy" decoding="async">
+    </a>
+    <script>
+    (function () {
+        var trigger = document.getElementById('<?= $floatingId ?>');
+        if (!trigger) {
+            return;
+        }
+        trigger.addEventListener('click', function (event) {
+            var href = trigger.getAttribute('href') || '';
+            if (href && href !== '#download') {
+                return;
+            }
+            var target = document.getElementById('download')
+                || document.querySelector('[data-download-anchor]')
+                || document.querySelector('.banner-pocket')
+                || document.querySelector('.download-dock')
+                || document.querySelector('.hero-actions')
+                || document.getElementById('tables');
+            if (!target) {
+                return;
+            }
+            event.preventDefault();
+            target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+    })();
+    </script>
+<?php endif; ?>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: 5.8rem clamp(0.75rem, 2vw, 1rem) 2rem;
+    overflow: hidden;
+    isolation: isolate;
+    background:
+        radial-gradient(700px 220px at 50% 0%, rgba(255,107,44,0.28), transparent 60%),
+        radial-gradient(460px 180px at 16% 16%, rgba(41,208,255,0.16), transparent 68%),
+        radial-gradient(520px 180px at 84% 8%, rgba(255,191,63,0.12), transparent 70%),
+        linear-gradient(180deg, #0f1a2d 0%, #08111f 48%, <?= htmlspecialchars($backgroundColor) ?> 100%);
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        repeating-linear-gradient(128deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 32px),
+        linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 26%);
+    opacity: 0.42;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -48px;
+    width: min(920px, 92%);
+    height: 180px;
+    transform: translateX(-50%);
+    background:
+        radial-gradient(circle at 50% 0%, rgba(255,107,44,0.22) 0%, rgba(255,107,44,0.08) 28%, rgba(41,208,255,0.06) 46%, transparent 72%);
+    filter: blur(22px);
+    opacity: 0.48;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .footer-seam,
+#<?= $componentId ?> .footer-shell,
+#<?= $componentId ?> .footer-base {
+    width: min(1260px, 100%);
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .footer-seam {
+    height: 148px;
+    margin-bottom: 0.55rem;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .seam-glow,
+#<?= $componentId ?> .seam-track,
+#<?= $componentId ?> .seam-orb {
+    position: absolute;
+}
+
+#<?= $componentId ?> .seam-glow {
+    top: 16px;
+    width: 260px;
+    height: 72px;
+    border-radius: 999px;
+    filter: blur(18px);
+}
+
+#<?= $componentId ?> .seam-left {
+    left: 4%;
+    background: radial-gradient(circle, rgba(255,107,44,0.3) 0%, rgba(255,107,44,0.02) 72%, transparent 82%);
+}
+
+#<?= $componentId ?> .seam-right {
+    right: 4%;
+    background: radial-gradient(circle, rgba(41,208,255,0.26) 0%, rgba(41,208,255,0.02) 72%, transparent 82%);
+}
+
+#<?= $componentId ?> .seam-track {
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .seam-track-one {
+    top: 30px;
+    width: min(980px, 96%);
+    height: 2px;
+    background: linear-gradient(90deg, rgba(255,107,44,0), rgba(255,107,44,0.88), rgba(255,191,63,0.9), rgba(41,208,255,0.82), rgba(41,208,255,0));
+}
+
+#<?= $componentId ?> .seam-track-two {
+    top: 48px;
+    width: min(680px, 72%);
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.34), rgba(255,255,255,0));
+}
+
+#<?= $componentId ?> .seam-orb {
+    left: 50%;
+    top: 22px;
+    width: 18px;
+    height: 18px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: radial-gradient(circle, #ffffff 0%, #ffbf3f 54%, rgba(255,107,44,0) 100%);
+    box-shadow: 0 0 0 10px rgba(255,191,63,0.06), 0 0 26px rgba(41,208,255,0.18);
+}
+
+#<?= $componentId ?> .footer-shell {
+    position: relative;
+}
+
+#<?= $componentId ?> .footer-link-chip {
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(41,208,255,0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.025) 100%);
+    box-shadow: 0 22px 40px rgba(8,17,31,0.18);
+}
+
+#<?= $componentId ?> .footer-brand {
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    z-index: 2;
+    width: max-content;
+    max-width: min(100%, 34rem);
+    display: grid;
+    justify-items: center;
+    gap: 0.65rem;
+    transform: translateX(-50%);
+    text-align: center;
+    pointer-events: auto;
+}
+
+#<?= $componentId ?> .brand-badge {
+    width: 76px;
+    height: 76px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 24px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.96) 0%, rgba(236,247,255,0.92) 100%);
+    border: 1px solid rgba(41,208,255,0.14);
+    box-shadow: 0 18px 34px rgba(8,17,31,0.26);
+}
+
+#<?= $componentId ?> .brand-badge img {
+    width: 42px;
+    height: 42px;
+    display: block;
+}
+
+#<?= $componentId ?> .brand-copy h2 {
+    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+    font-size: clamp(1.5rem, 2.6vw, 2rem);
+    line-height: 1;
+    letter-spacing: -0.04em;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?> .brand-copy p {
+    margin-top: 0.42rem;
+    color: <?= htmlspecialchars($textColor) ?>;
+    line-height: 1.72;
+    max-width: 26rem;
+}
+
+#<?= $componentId ?> .footer-nav {
+    width: min(100%, 960px);
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.72rem 0.86rem;
+}
+
+#<?= $componentId ?> .nav-column {
+    display: grid;
+    gap: <?= $linkGap ?>px;
+}
+
+#<?= $componentId ?> .nav-column-left {
+    justify-items: end;
+}
+
+#<?= $componentId ?> .nav-column-right {
+    justify-items: start;
+}
+
+#<?= $componentId ?> .footer-link-chip {
+    width: min(100%, 260px);
+    min-height: 48px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.72rem;
+    padding: 0.72rem 0.92rem;
+    border-radius: 18px;
+    text-decoration: none;
+    color: <?= htmlspecialchars($linkColor) ?>;
+    font-size: <?= $linkFontSize ?>px;
+    font-weight: <?= $linkFontWeight ?>;
+    transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+}
+
+#<?= $componentId ?> .nav-column-left .footer-link-chip:nth-child(odd) {
+    transform: translateX(-12px);
+}
+
+#<?= $componentId ?> .nav-column-right .footer-link-chip:nth-child(odd) {
+    transform: translateX(12px);
+}
+
+#<?= $componentId ?> .footer-link-chip:hover {
+    color: <?= htmlspecialchars($linkHoverColor) ?>;
+    border-color: rgba(255,107,44,0.26);
+    background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,107,44,0.08) 100%);
+}
+
+#<?= $componentId ?> .nav-column-left .footer-link-chip:hover {
+    transform: translateX(-12px) translateY(-2px);
+}
+
+#<?= $componentId ?> .nav-column-right .footer-link-chip:hover {
+    transform: translateX(12px) translateY(-2px);
+}
+
+#<?= $componentId ?> .chip-spark {
+    width: 1.05rem;
+    height: 0.36rem;
+    flex-shrink: 0;
+    border-radius: 999px;
+    position: relative;
+    background: linear-gradient(90deg, #ffbf3f 0%, #29d0ff 100%);
+    box-shadow: 0 0 16px rgba(41,208,255,0.18);
+}
+
+#<?= $componentId ?> .chip-spark::after {
+    content: '';
+    position: absolute;
+    right: -0.1rem;
+    top: 50%;
+    width: 0.32rem;
+    height: 0.32rem;
+    border-radius: 999px;
+    background: #fdfefe;
+    transform: translateY(-50%);
+    box-shadow: 0 0 10px rgba(255,255,255,0.4);
+}
+
+#<?= $componentId ?> .footer-base {
+    margin-top: 1.3rem;
+    padding-top: 0.95rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.8rem 1rem;
+}
+
+#<?= $componentId ?> .footer-base::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: min(960px, 100%);
+    height: 1px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, rgba(255,107,44,0), rgba(255,107,44,0.28), rgba(41,208,255,0.32), rgba(41,208,255,0));
+}
+
+#<?= $componentId ?> .footer-copy,
+#<?= $componentId ?> .footer-note {
+    color: <?= htmlspecialchars($textColor) ?>;
+    line-height: 1.68;
+    font-size: 0.86rem;
+}
+
+#<?= $componentId ?> .footer-copy {
+    font-weight: 800;
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> {
+        padding-top: 5rem;
+    }
+
+    #<?= $componentId ?> .footer-nav {
+        width: min(100%, 760px);
+        margin: 0 auto;
+    }
+
+    #<?= $componentId ?> .nav-column-left,
+    #<?= $componentId ?> .nav-column-right {
+        justify-items: stretch;
+    }
+
+    #<?= $componentId ?> .footer-link-chip,
+    #<?= $componentId ?> .nav-column-left .footer-link-chip,
+    #<?= $componentId ?> .nav-column-right .footer-link-chip,
+    #<?= $componentId ?> .nav-column-left .footer-link-chip:hover,
+    #<?= $componentId ?> .nav-column-right .footer-link-chip:hover {
+        width: 100%;
+        transform: none;
+    }
+
+    #<?= $componentId ?> .footer-base {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding: 4.8rem 0.72rem 1.85rem;
+    }
+
+    #<?= $componentId ?> .footer-brand {
+        top: 8px;
+        width: min(100%, 18rem);
+    }
+
+    #<?= $componentId ?> .footer-nav {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.66rem;
+    }
+
+    #<?= $componentId ?> .nav-column-left .footer-link-chip:nth-child(odd) {
+        transform: translateX(-10px) rotate(-1.5deg);
+    }
+
+    #<?= $componentId ?> .nav-column-left .footer-link-chip:nth-child(even) {
+        transform: translateX(6px) rotate(1deg);
+    }
+
+    #<?= $componentId ?> .nav-column-right .footer-link-chip:nth-child(odd) {
+        transform: translateX(8px) rotate(1.2deg);
+    }
+
+    #<?= $componentId ?> .nav-column-right .footer-link-chip:nth-child(even) {
+        transform: translateX(-10px) rotate(-1deg);
+    }
+}
+
+#<?= $componentId ?> + .aab-floating-download {
+    position: fixed;
+    right: clamp(0.6rem, 1.8vw, 1rem);
+    bottom: clamp(0.75rem, 2.4vw, 1.15rem);
+    z-index: 65;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: clamp(82px, 7.4vw, 106px);
+    text-decoration: none;
+    transition: transform 0.22s ease;
+}
+
+#<?= $componentId ?> + .aab-floating-download .floating-glow {
+    position: absolute;
+    inset: auto 20% 7% 20%;
+    height: 24px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(41,208,255,0.16) 0%, rgba(255,107,44,0.08) 54%, rgba(255,107,44,0) 84%);
+    filter: blur(12px);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> + .aab-floating-download img {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+#<?= $componentId ?> + .aab-floating-download:hover,
+#<?= $componentId ?> + .aab-floating-download:focus-visible {
+    transform: translateY(-3px);
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> + .aab-floating-download {
+        width: 88px;
+        right: 0.55rem;
+        bottom: 0.7rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .footer-link-chip {
+        transition: none;
+    }
+
+    #<?= $componentId ?> + .aab-floating-download {
+        transition: none;
+    }
+}
+</style>
+</body>
+</html>

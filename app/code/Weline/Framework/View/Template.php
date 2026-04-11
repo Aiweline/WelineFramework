@@ -12,6 +12,7 @@ namespace Weline\Framework\View;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
@@ -69,6 +70,7 @@ class Template extends DataObject
     private CachePoolInterface $viewCache;
 
     private static ?Template $instance = null;
+    private static ?\WeakMap $fiberInstances = null;
 
     private function __clone()
     {
@@ -76,6 +78,18 @@ class Template extends DataObject
 
     public static function getInstance(): Template
     {
+        $fiber = self::currentFiber();
+        if ($fiber !== null) {
+            self::$fiberInstances ??= new \WeakMap();
+            if (!isset(self::$fiberInstances[$fiber])) {
+                $instance = new self();
+                $instance->init();
+                self::$fiberInstances[$fiber] = $instance;
+            }
+
+            return self::$fiberInstances[$fiber];
+        }
+
         if (self::$instance === null) {
             self::$instance = new self();
             self::$instance->init();
@@ -92,7 +106,39 @@ class Template extends DataObject
      */
     public static function resetInstance(): void
     {
+        $fiber = self::currentFiber();
+        if ($fiber !== null) {
+            if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
+                unset(self::$fiberInstances[$fiber]);
+            }
+            return;
+        }
+
         self::$instance = null;
+        self::$fiberInstances = null;
+    }
+
+    private static function currentFiber(): ?\Fiber
+    {
+        if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
+            return null;
+        }
+
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            return null;
+        }
+
+        return \Fiber::getCurrent();
+    }
+
+    private function isRequestRuntime(): bool
+    {
+        if (!\defined('CLI') || !CLI) {
+            return true;
+        }
+
+        $context = Context::getCurrent();
+        return $context !== null && $context->get('meta.type') === 'request';
     }
 
     /**
@@ -141,7 +187,7 @@ class Template extends DataObject
             $this->viewCache ?? $this->viewCache = w_cache('view');
         $this->request = ObjectManager::getInstance(Request::class);
 
-        if (!CLI) {
+        if ($this->isRequestRuntime()) {
             if (empty($this->view_dir)) {
                 $this->view_dir = $this->request->getRouterData('module_path') . DataInterface::dir . DS;
             }
@@ -651,7 +697,7 @@ class Template extends DataObject
         $hookFilesWithMeta = [];
         try {
             /** @var \Weline\Framework\Hook\Config\HookReader $hookReader */
-            $hookReader = ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
+            $hookReader = ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
             $hookReader->setPath($name);
             $hookFiles = $hookReader->getFileList(); // 已按顺序排序
             

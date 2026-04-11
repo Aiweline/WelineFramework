@@ -234,6 +234,14 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame(3.0, $readyBudget);
     }
 
+    public function testPostFailureSpinBudgetUsesFullSpinMaxWhenOnlyMaintenanceCandidatesExist(): void
+    {
+        $core = new PassthroughCore('127.0.0.1', 19981, 2);
+        $this->setPrivateProperty($core, 'maintenanceWorkerPorts', [19992]);
+
+        self::assertSame(3.0, (float) $this->invokePrivateMethod($core, 'resolvePostFailureSpinBudgetSeconds'));
+    }
+
     public function testPostFailureSpinBudgetNonEmptyPoolUsesFullSpinMax(): void
     {
         $core = $this->createWarmupStubCore([

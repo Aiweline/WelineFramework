@@ -14,8 +14,10 @@ namespace Weline\Framework\Runtime;
 
 use Weline\Framework\App;
 use Weline\Framework\App\Env;
+use Weline\Framework\Context;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Runtime\StateManager;
@@ -51,33 +53,44 @@ class WlsRuntime implements RuntimeInterface
      * 请求计数
      */
     private int $requestCount = 0;
+
+    /**
+     * Pending response state must stay request-scoped. Store it per fiber so
+     * one request cannot overwrite another request's cookies/headers/status
+     * during scheduler yields.
+     *
+     * @var \WeakMap<\Fiber, array{cookies: array, headers: array, status_code:?int, explicit: bool}>|null
+     */
+    private ?\WeakMap $fiberPendingResponseStates = null;
+
+    /**
+     * Fallback pending response state for non-fiber callers such as unit tests.
+     *
+     * @var array{cookies: array, headers: array, status_code:?int, explicit: bool}
+     */
+    private array $mainPendingResponseState = [
+        'cookies' => [],
+        'headers' => [],
+        'status_code' => null,
+        'explicit' => false,
+    ];
     
     /**
      * 超全局变量模拟器
      */
-    private ?GlobalsEmulator $globalsEmulator = null;
-    
     /**
      * 待发送的 Cookie（在 StateManager 重置前从 HeaderCollector 提取）
      * Worker 在构建 HTTP 响应时读取这些 Cookie 并添加 Set-Cookie 头
      */
-    private array $pendingCookies = [];
-    
     /**
      * 待发送的响应头（在 StateManager 重置前从 HeaderCollector 提取）
      */
-    private array $pendingHeaders = [];
-
     /**
      * Pending HTTP status captured before request state is reset.
      */
-    private ?int $pendingStatusCode = null;
-
     /**
      * Whether the pending HTTP status was explicitly overridden by application code.
      */
-    private bool $pendingStatusCodeExplicit = false;
-
     /** WLS 运行时性能配置缓存 */
     private ?array $performanceConfig = null;
     
@@ -121,7 +134,6 @@ class WlsRuntime implements RuntimeInterface
         // 预加载常用对象（进程级缓存）
         $this->eventManager = ObjectManager::getInstance(EventsManager::class);
         $this->router = ObjectManager::getInstance(Router::class);
-        $this->globalsEmulator = new GlobalsEmulator();
         
         // Router 在 WLS 模式下是进程级单例。
         // 请求级状态由 Router::__init() 在每个请求开始时重置，
@@ -139,6 +151,23 @@ class WlsRuntime implements RuntimeInterface
         if (!$this->bootstrapped) {
             $this->bootstrap();
         }
+
+        Context::enter($request !== null
+            ? Context::fromRequest($request, [
+                'mode' => self::MODE_WLS,
+                'type' => 'request',
+                'instance' => (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? ''),
+                'process_tag' => (string)($_SERVER['WLS_PROCESS_TAG'] ?? 'WLS'),
+            ])
+            : Context::fromGlobals([
+                'mode' => self::MODE_WLS,
+                'type' => 'request',
+                'instance' => (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? ''),
+                'process_tag' => (string)($_SERVER['WLS_PROCESS_TAG'] ?? 'WLS'),
+            ])
+        );
+
+        $globalsEmulator = null;
         
         $this->requestCount++;
         
@@ -178,7 +207,9 @@ class WlsRuntime implements RuntimeInterface
                 if ($resolvedClass !== Request::class) {
                     ObjectManager::setInstance($resolvedClass, $request);
                 }
-                $this->globalsEmulator->emulate($request);
+                $globalsEmulator = new GlobalsEmulator();
+                $globalsEmulator->emulate($request);
+                WelineEnv::getInstance()->initFromRequest($request);
             }
             // WLS：请求入口再清一次 URL/ACL 请求级缓存，避免上一 finally 未跑全、fiber 交错或 parser 前
             // 观察者调用 getUrlPath 导致 static $url_paths / Acl 路由判定沿用旧路径，误判无权限跳 admin。
@@ -206,14 +237,13 @@ class WlsRuntime implements RuntimeInterface
             if (Runtime::isPersistent()) {
                 StateManager::runWlsPersistentRequestEntryBaseline();
             }
+            $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
+            Context::current()->set('runtime.request_count', $this->requestCount);
+            $app = new App(Context::current(), false);
+            $app->bootstrapRequestCycle();
             $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
-            // 同步到 WelineEnv
             WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
             WelineEnv::set('request.method', $_SERVER['REQUEST_METHOD'] ?? 'GET', 'WlsRuntime handle');
-            // 早期从 URL 提取语言/货币，供 RequestContext::syncFromServer() 使用
-            $this->parseUrlLangCurrency($timing['uri']);
-            // 在 $_SERVER 已为当前请求后再初始化请求上下文
-            RequestContext::init();
             
             // DEV 环境或前端模式：记录请求日志
             $isDev = \defined('DEV') && DEV;
@@ -222,20 +252,12 @@ class WlsRuntime implements RuntimeInterface
                 $this->logWlsRequest($request, $isFrontend);
             }
             
-            $_SERVER['WELINE_PARSER_URL'] = true;
-            $_SERVER['WELINE_IS_MEDIA'] = false;
-            $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
-            // 同步到 WelineEnv
-            WelineEnv::set('parser_url', 'true', 'WlsRuntime handle');
             WelineEnv::set('wls.request_count', (string) $this->requestCount, 'WlsRuntime handle');
-            
-            // 语言/货币已在 init() 前通过 parseUrlLangCurrency() 从 URL 提取，run_before 可直接使用
-            
             $t1 = \microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::pushCurrentParent('run_before');
             }
-            $this->eventManager->dispatch('Weline_Framework::App::run_before');
+            $app->dispatchRunBefore();
             $t2 = \microtime(true);
             $timing['run_before_ms'] = \round(($t2 - $t1) * 1000, 2);
             if (RequestLifecycleTrace::isEnabled()) {
@@ -253,13 +275,13 @@ class WlsRuntime implements RuntimeInterface
             // 注意：Url 类的静态变量重置现在由 StateManager 自动处理
             // 通过 Url::registerStateResets() 注册到 StateManager
             $urlParserStart = \microtime(true);
-            $parse = \Weline\Framework\Http\Url::parser();
+            $parse = $app->parseUrl();
             $urlParserEnd = \microtime(true);
             $timing['url_parser_call_ms'] = \round(($urlParserEnd - $urlParserStart) * 1000, 2);
             
             if (\is_array($parse)) {
                 $processUrlStart = \microtime(true);
-                $this->processUrlParse($parse);
+                $app->applyParsedUrl($parse);
                 $processUrlEnd = \microtime(true);
                 $timing['process_url_parse_ms'] = \round(($processUrlEnd - $processUrlStart) * 1000, 2);
             }
@@ -268,10 +290,6 @@ class WlsRuntime implements RuntimeInterface
             // 关键修复：Url::parser() 修改了 $_SERVER['REQUEST_URI']（去除了区域/货币/语言前缀）
             // 如果在 parser 之前有代码调用了 Request::getUri()（如 run_before 事件观察者），
             // 原始 URI 已被缓存在 Request 对象上，必须清除，否则 Router 会使用旧 URI 导致间歇性 404
-            if ($request !== null) {
-                $request->invalidateUriCache();
-            }
-            
             $t3 = \microtime(true);
             $timing['url_parser_ms'] = \round(($t3 - $t2) * 1000, 2);
             if (RequestLifecycleTrace::isEnabled()) {
@@ -283,8 +301,7 @@ class WlsRuntime implements RuntimeInterface
             // 会出现 request_area / is_backend 与当前 $_SERVER 不一致（误判后台、命中错误路由缓存）。
             // 每请求必须从 OM 取当前 Router 单例再初始化。
             $routerInitStart = \microtime(true);
-            $this->router = ObjectManager::getInstance(Router::class);
-            $this->router->__init();
+            $router = $app->initializeRouter();
             $routerInitEnd = \microtime(true);
             $timing['router_init_ms'] = \round(($routerInitEnd - $routerInitStart) * 1000, 2);
             if (RequestLifecycleTrace::isEnabled()) {
@@ -292,15 +309,13 @@ class WlsRuntime implements RuntimeInterface
             }
             SchedulerSystem::yield();
             // 请求早期统一启动 Session（与 App::run 一致）；静态资源不启动，避免 Set-Cookie 与无意义 IO
-            if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
-                \Weline\Framework\Session\SessionFactory::getInstance()->createSession()->start(null);
-            }
+            $app->startSessionIfNeeded();
             // 路由处理（含控制器、视图，通常为主要耗时）；push 使控制器链路与事件挂到 router_start 下
             $routerStartStart = \microtime(true);
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::pushCurrentParent('router_start');
             }
-            $result = $this->router->start();
+            $result = $app->runRouter($router);
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::popCurrentParent();
             }
@@ -318,9 +333,7 @@ class WlsRuntime implements RuntimeInterface
             if (RequestLifecycleTrace::isEnabled()) {
                 RequestLifecycleTrace::pushCurrentParent('run_after');
             }
-            $data = new \Weline\Framework\DataObject\DataObject(['result' => $result]);
-            $this->eventManager->dispatch('Weline_Framework::App::run_after', $data);
-            $result = $data->getData('result');
+            $result = $app->dispatchRunAfter($result);
             $runAfterEnd = \microtime(true);
             $timing['run_after_ms'] = \round(($runAfterEnd - $runAfterStart) * 1000, 2);
             if (RequestLifecycleTrace::isEnabled()) {
@@ -367,15 +380,11 @@ class WlsRuntime implements RuntimeInterface
                 return '';  // SSE 响应已流式发送，不需要返回内容
             }
             
-            if (\is_array($result)) {
-                return \json_encode($result);
-            }
-            
-            $resultStr = (string) $result;
+            $resultStr = $app->normalizeOutput($result);
             $timing['pre_telemetry_total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
             $telemetryStart = \microtime(true);
             // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
-            $resultStr = TelemetryBroadcaster::broadcast($resultStr, $request);
+            $resultStr = $app->broadcastTelemetry($resultStr, $request);
             $timing['telemetry_ms'] = \round((\microtime(true) - $telemetryStart) * 1000, 2);
             $timing['dev_tool_ms'] = RequestLifecycleTrace::sumDurationsByName('dev_tool_panel');
             $timing['total_ms'] = \round((\microtime(true) - $t0) * 1000, 2);
@@ -423,30 +432,24 @@ class WlsRuntime implements RuntimeInterface
             }
             
             // 创建重定向响应，并立即把 HeaderCollector 中的 Cookie 写入响应（登录 302 必须带 Set-Cookie，不依赖 Worker 合并）
-            $redirectResponse = \Weline\Framework\Http\WlsResponse::redirect($redirectUrl, $redirectEx->getStatusCode());
+            $redirectResponse = Response::text('', $redirectEx->getStatusCode());
+            $redirectResponse->setHeader('Location', $redirectUrl);
+            $redirectResponse->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            $redirectResponse->setHeader('Pragma', 'no-cache');
+            $redirectResponse->setHeader('Expires', '0');
             $hc = \Weline\Framework\Http\HeaderCollector::getInstance();
             $cookies = $hc->getCookies();
             foreach ($cookies as $cookie) {
-                $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
-                if (isset($cookie['expire']) && $cookie['expire'] !== 0) {
-                    $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
-                }
-                if (!empty($cookie['path'])) {
-                    $parts[] = 'Path=' . $cookie['path'];
-                }
-                if (!empty($cookie['domain'])) {
-                    $parts[] = 'Domain=' . $cookie['domain'];
-                }
-                if (!empty($cookie['secure'])) {
-                    $parts[] = 'Secure';
-                }
-                if (!empty($cookie['httpOnly'])) {
-                    $parts[] = 'HttpOnly';
-                }
-                if (!empty($cookie['sameSite'])) {
-                    $parts[] = 'SameSite=' . $cookie['sameSite'];
-                }
-                $redirectResponse->addCookieHeader(\implode('; ', $parts));
+                $redirectResponse->setCookie(
+                    (string)$cookie['name'],
+                    (string)$cookie['value'],
+                    (int)($cookie['expire'] ?? 0),
+                    (string)($cookie['path'] ?? '/'),
+                    (string)($cookie['domain'] ?? ''),
+                    (bool)($cookie['secure'] ?? false),
+                    (bool)($cookie['httpOnly'] ?? true),
+                    (string)($cookie['sameSite'] ?? 'Lax')
+                );
             }
             // 诊断头：便于在浏览器中确认 302 是否带 Cookie（0=未带，排查 Session/Nginx）
             $redirectResponse->setHeader('X-WLS-Redirect-Cookies', (string)\count($cookies));
@@ -478,7 +481,7 @@ class WlsRuntime implements RuntimeInterface
             }
             
             // 创建错误响应
-            return \Weline\Framework\Http\WlsResponse::fromContent($errorContent, $noRouterEx->getStatusCode())->toHttpString(false);
+            return Response::fromContent($errorContent, $noRouterEx->getStatusCode(), 'text/html; charset=utf-8')->toHttpString(false);
             
         } catch (\Weline\Framework\Http\ResponseTerminateException $terminateEx) {
             // 通用响应终止异常：使用异常的 toHttpString() 方法
@@ -534,6 +537,9 @@ class WlsRuntime implements RuntimeInterface
             $this->snapshotPendingResponseState($hc);
             // 确保总是重置状态（存在挂起 Fiber 时仍执行完整 reset，见 WlsConcurrency 类说明）
             $this->reset();
+            if ($globalsEmulator !== null) {
+                $globalsEmulator->reset();
+            }
             $t7 = \microtime(true);
             $timing['reset_ms'] = \round(($t7 - $t6) * 1000, 2);
             $timing['total_ms'] = \round(($t7 - $t0) * 1000, 2);
@@ -549,6 +555,7 @@ class WlsRuntime implements RuntimeInterface
             WelineEnv::set('server.remote_addr', $timing['ip'], 'WlsRuntime finally');
             WelineEnv::set('wls.redirect_count', (string) $timing['redirect_count'], 'WlsRuntime finally');
             $this->recordPerformanceTiming($timing, $isDev);
+            Context::leave();
         }
     }
     
@@ -573,13 +580,22 @@ class WlsRuntime implements RuntimeInterface
         // 同步到 WelineEnv
         WelineEnv::set('area', $area, 'WlsRuntime processUrlParse');
         $isBackendArea = ($area === 'backend' || $area === 'rest_backend');
-        if (isset($_SERVER['REQUEST_METHOD']) && isset($parse['uri'])) {
+        if (isset($parse['uri'])) {
             $uri = \Weline\Framework\Http\Url::decode_url($parse['uri']);
             // 后台/API 后台不覆盖 REQUEST_URI，保留 parser 已设置的带 /admin/ 前缀的路径，否则 Router 会拿到 pure_uri 导致 404
             if (!$isBackendArea) {
                 $parse['server']['REQUEST_URI'] = $uri;
             }
             $parse['server']['QUERY_STRING'] = \Weline\Framework\Http\Url::parse_url($uri, 'query');
+        }
+        // 兜底防污染：WLS 多请求复用进程下，backend 场景也必须确保 REQUEST_URI 来自当前请求，
+        // 否则前一个 frontend/preview 请求可能残留，导致后台路由命中错误页面（需手动刷新才恢复）。
+        if (!isset($parse['server']['REQUEST_URI']) || $parse['server']['REQUEST_URI'] === '') {
+            if (isset($parse['uri']) && $parse['uri'] !== '') {
+                $parse['server']['REQUEST_URI'] = \Weline\Framework\Http\Url::decode_url((string)$parse['uri']);
+            } else {
+                $parse['server']['REQUEST_URI'] = (string)($_SERVER['REQUEST_URI'] ?? '/');
+            }
         }
         
         // 合并而非替换 $_SERVER
@@ -648,6 +664,13 @@ class WlsRuntime implements RuntimeInterface
         // CheckFullPageCache 在 url_parsed_after 事件中可以使用此标志判断
         $_SERVER['WELINE_URL_PARSED'] = true;
         WelineEnv::set('url_parsed', true, 'WlsRuntime processUrlParse');
+        WelineEnv::getInstance()->initFromSnapshot(
+            \is_array($_GET ?? null) ? $_GET : [],
+            \is_array($_POST ?? null) ? $_POST : [],
+            \is_array($_COOKIE ?? null) ? $_COOKIE : [],
+            \is_array($_FILES ?? null) ? $_FILES : [],
+            \is_array($_SERVER ?? null) ? $_SERVER : [],
+        );
     }
     
     /**
@@ -741,20 +764,22 @@ class WlsRuntime implements RuntimeInterface
         $isDev = \defined('DEV') && DEV;
         if ($isDev) {
             $this->logWlsError($e);
-            return \Weline\Framework\Http\WlsResponse::fromContent(
+            return Response::fromContent(
                 $this->formatExceptionAsHtml($e, $statusCode, $message),
-                $statusCode
-            )->setHeader('Content-Type', 'text/html; charset=UTF-8')->toHttpString(false);
+                $statusCode,
+                'text/html; charset=UTF-8'
+            )->toHttpString(false);
         }
         
         // DEBUG 和生产模式：使用统一的 ErrorResponse 生成 JSON
         $isDebug = \defined('DEBUG') && DEBUG;
         $response = \Weline\Framework\Exception\ErrorResponse::fromException($e, $isDebug);
         
-        return \Weline\Framework\Http\WlsResponse::fromContent(
+        return Response::fromContent(
             \Weline\Framework\Exception\ErrorResponse::toJson($response),
-            $statusCode
-        )->setHeader('Content-Type', 'application/json; charset=UTF-8')->toHttpString(false);
+            $statusCode,
+            'application/json; charset=UTF-8'
+        )->toHttpString(false);
     }
     
     /**
@@ -1036,6 +1061,37 @@ class WlsRuntime implements RuntimeInterface
         @\file_put_contents($logFile, \json_encode($data, $flags) . "\n", \FILE_APPEND);
     }
 
+    private function absorbResponseObject(Response $response): string
+    {
+        $requestResponse = ObjectManager::getInstance(Request::class)->getResponse();
+        $requestResponse->setHttpResponseCode($response->getStatusCode());
+
+        foreach ($response->getHeaders() as $name => $value) {
+            if (\is_array($value)) {
+                foreach ($value as $headerValue) {
+                    $requestResponse->setHeader($name, (string)$headerValue);
+                }
+            } else {
+                $requestResponse->setHeader($name, (string)$value);
+            }
+        }
+
+        foreach ($response->getCookies() as $cookie) {
+            $requestResponse->setCookie(
+                (string)$cookie['name'],
+                (string)$cookie['value'],
+                (int)($cookie['expire'] ?? 0),
+                (string)($cookie['path'] ?? '/'),
+                (string)($cookie['domain'] ?? ''),
+                (bool)($cookie['secure'] ?? false),
+                (bool)($cookie['httpOnly'] ?? true),
+                (string)($cookie['sameSite'] ?? 'Lax')
+            );
+        }
+
+        return $response->getBody();
+    }
+
     /**
      * SSE 协议请求（EventSource）统一识别。
      *
@@ -1097,7 +1153,7 @@ class WlsRuntime implements RuntimeInterface
 
         // EventSource 对非 200 状态码兼容性差，可能导致 failed 事件体无法被前端读取。
         // 统一使用 200 作为传输状态，真实业务错误码放在 data.code/http_status 中。
-        $response = \Weline\Framework\Http\WlsResponse::fromContent($payload, 200, 'text/event-stream; charset=utf-8');
+        $response = Response::fromContent($payload, 200, 'text/event-stream; charset=utf-8');
         $response->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
         $response->setHeader('Pragma', 'no-cache');
         $response->setHeader('X-Accel-Buffering', 'no');
@@ -1142,14 +1198,18 @@ class WlsRuntime implements RuntimeInterface
         StateManager::reset($omitCallbacks);
         
         // 重置超全局变量
-        if ($this->globalsEmulator !== null) {
-            $this->globalsEmulator->reset();
-        }
         
         // 触发状态重置事件（允许其他模块清理状态）
-        if ($this->eventManager !== null) {
+        $eventManager = $this->eventManager;
+        if (Runtime::isPersistent()) {
             try {
-                $this->eventManager->dispatch('Weline_Framework::Runtime::reset');
+                $eventManager = ObjectManager::getInstance(EventsManager::class);
+            } catch (\Throwable) {
+            }
+        }
+        if ($eventManager !== null) {
+            try {
+                $eventManager->dispatch('Weline_Framework::Runtime::reset');
             } catch (\Throwable $e) {
                 w_log_error('[WlsRuntime] Reset event error: ' . $e->getMessage());
             }
@@ -1176,7 +1236,6 @@ class WlsRuntime implements RuntimeInterface
         $this->bootstrapped = false;
         $this->eventManager = null;
         $this->router = null;
-        $this->globalsEmulator = null;
     }
     
     /**
@@ -1205,8 +1264,10 @@ class WlsRuntime implements RuntimeInterface
      */
     public function consumePendingCookies(): array
     {
-        $cookies = $this->pendingCookies;
-        $this->pendingCookies = [];
+        $state = $this->getPendingResponseState();
+        $cookies = $state['cookies'];
+        $state['cookies'] = [];
+        $this->setPendingResponseState($state);
         return $cookies;
     }
     
@@ -1217,8 +1278,10 @@ class WlsRuntime implements RuntimeInterface
      */
     public function consumePendingHeaders(): array
     {
-        $headers = $this->pendingHeaders;
-        $this->pendingHeaders = [];
+        $state = $this->getPendingResponseState();
+        $headers = $state['headers'];
+        $state['headers'] = [];
+        $this->setPendingResponseState($state);
         return $headers;
     }
 
@@ -1227,22 +1290,74 @@ class WlsRuntime implements RuntimeInterface
      */
     public function consumePendingResponseStatus(): array
     {
+        $state = $this->getPendingResponseState();
         $status = [
-            'status_code' => $this->pendingStatusCode,
-            'explicit' => $this->pendingStatusCodeExplicit,
+            'status_code' => $state['status_code'],
+            'explicit' => $state['explicit'],
         ];
-        $this->pendingStatusCode = null;
-        $this->pendingStatusCodeExplicit = false;
+        $state['status_code'] = null;
+        $state['explicit'] = false;
+        $this->setPendingResponseState($state);
 
         return $status;
     }
 
     protected function snapshotPendingResponseState(\Weline\Framework\Http\HeaderCollector $headerCollector): void
     {
-        $this->pendingCookies = $headerCollector->getCookies();
-        $this->pendingHeaders = $headerCollector->getHeaders();
-        $this->pendingStatusCode = $headerCollector->getStatusCode();
-        $this->pendingStatusCodeExplicit = $headerCollector->hasExplicitStatusCode();
+        $this->setPendingResponseState([
+            'cookies' => $headerCollector->getCookies(),
+            'headers' => $headerCollector->getHeaders(),
+            'status_code' => $headerCollector->getStatusCode(),
+            'explicit' => $headerCollector->hasExplicitStatusCode(),
+        ]);
+    }
+
+    /**
+     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool}
+     */
+    private function getPendingResponseState(): array
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            return $this->mainPendingResponseState;
+        }
+
+        if ($this->fiberPendingResponseStates === null) {
+            $this->fiberPendingResponseStates = new \WeakMap();
+        }
+
+        return $this->fiberPendingResponseStates[$fiber] ?? $this->emptyPendingResponseState();
+    }
+
+    /**
+     * @param array{cookies: array, headers: array, status_code:?int, explicit: bool} $state
+     */
+    private function setPendingResponseState(array $state): void
+    {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber === null) {
+            $this->mainPendingResponseState = $state;
+            return;
+        }
+
+        if ($this->fiberPendingResponseStates === null) {
+            $this->fiberPendingResponseStates = new \WeakMap();
+        }
+
+        $this->fiberPendingResponseStates[$fiber] = $state;
+    }
+
+    /**
+     * @return array{cookies: array, headers: array, status_code:?int, explicit: bool}
+     */
+    private function emptyPendingResponseState(): array
+    {
+        return [
+            'cookies' => [],
+            'headers' => [],
+            'status_code' => null,
+            'explicit' => false,
+        ];
     }
     
     /**

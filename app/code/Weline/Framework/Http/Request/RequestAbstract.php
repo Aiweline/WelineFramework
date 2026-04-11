@@ -13,6 +13,7 @@ use Weline\Framework\App\Debug;
 use Weline\Framework\App\State;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Controller\Data\DataInterface;
+use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Cache\KeyBuilder;
@@ -71,15 +72,17 @@ abstract class RequestAbstract extends RequestFilter
         if (str_contains($query_str ?? '', '.')) {
             $query_str = str_replace('&amp;', '&', $query_str);
             $query_str_arr = explode('&', $query_str);
+            $queryParams = Context::current()->query();
             foreach ($query_str_arr as $item) {
                 if (str_contains($item, '.')) {
                     $item = explode('=', $item);
                     if (str_contains($item[0], '.')) {
-                        $_GET[$item[0]] = $item[1];
-                        unset($_GET[str_replace('.', '_', $item[0])]);
+                        $queryParams[$item[0]] = $item[1] ?? '';
+                        unset($queryParams[str_replace('.', '_', $item[0])]);
                     }
                 }
             }
+            Context::current()->set('input.query', $queryParams);
         }
         if (empty($this->cache)) {
             $this->cache = w_cache('request');
@@ -677,8 +680,8 @@ abstract class RequestAbstract extends RequestFilter
     {
         $scheme = $this->getSsl();
         // 优先使用 HTTP_HOST（客户端 Host 头通常带端口），保证生成的 URL 携带当前请求端口
-        $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? 'localhost';
-        $port = $_SERVER['SERVER_PORT'] ?? '';
+        $host = (string) ($this->getServer('HTTP_HOST') ?: $this->getServer('SERVER_NAME') ?: 'localhost');
+        $port = (string) ($this->getServer('SERVER_PORT') ?: '');
         $withPort = false;
         if (\str_contains($host, ':')) {
             $withPort = false;
@@ -688,8 +691,8 @@ abstract class RequestAbstract extends RequestFilter
                 ($scheme === 'https' && $port == 443)
             );
         }
-        $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-        $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+        $requestUri = (string) ($this->getServer('REQUEST_URI') ?: '');
+        $scriptName = (string) ($this->getServer('SCRIPT_NAME') ?: '');
         $basePath = '';
         if (!empty($requestUri)) {
             $basePath = parse_url($requestUri, PHP_URL_PATH);

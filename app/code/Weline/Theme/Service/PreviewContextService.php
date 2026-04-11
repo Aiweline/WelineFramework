@@ -460,7 +460,7 @@ final class PreviewContextService
 
     private function getRawQueryParams(): array
     {
-        $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $requestUri = (string) (\w_env('request.uri', '') ?? '');
         $query = (string)\parse_url($requestUri, \PHP_URL_QUERY);
         if ($query === '') {
             return [];
@@ -473,7 +473,7 @@ final class PreviewContextService
 
     private function detectShellFromRequest(): string
     {
-        $uri = \strtolower((string)($_SERVER['REQUEST_URI'] ?? ''));
+        $uri = \strtolower((string) (\w_env('request.uri', '') ?? ''));
         if (\str_contains($uri, 'pagebuilder/backend/page/') || $this->request->getParam('visual_editor') === '1') {
             return self::SHELL_PAGEBUILDER;
         }
@@ -514,7 +514,7 @@ final class PreviewContextService
 
     private function extractRequestPath(): string
     {
-        $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '/');
+        $requestUri = (string) (\w_env('request.uri', '/') ?? '/');
         $path = (string)\parse_url($requestUri, \PHP_URL_PATH);
         $path = $path !== '' ? $path : '/';
         return $path[0] === '/' ? $path : ('/' . $path);

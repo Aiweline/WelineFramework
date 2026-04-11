@@ -1,0 +1,152 @@
+:root {
+    --prism-max-width: 1240px;
+    --prism-body-bg: #fff9ef;
+    --prism-text: #2f1a12;
+    --prism-muted: #6b4e41;
+    --prism-border: rgba(126, 91, 67, 0.14);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.6;
+    color: var(--prism-text);
+    background:
+        radial-gradient(920px 420px at 0% 4%, rgba(255, 210, 138, 0.32), transparent 60%),
+        radial-gradient(820px 420px at 100% 10%, rgba(31, 202, 182, 0.16), transparent 60%),
+        linear-gradient(180deg, #fffdf9 0%, var(--prism-body-bg) 40%, #fff6ec 100%);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+picture,
+video,
+canvas,
+svg {
+    display: block;
+    max-width: 100%;
+}
+
+input,
+button,
+textarea,
+select {
+    font: inherit;
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+ul,
+ol,
+dl {
+    margin-top: 0;
+}
+
+ul,
+ol {
+    padding-left: 1.2rem;
+}
+
+.container,
+.section-inner,
+.tpmst-section-inner,
+.prism-shell,
+.prism-section-shell {
+    width: min(var(--prism-max-width), calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.col {
+    flex: 1 1 0;
+}
+
+.d-none {
+    display: none !important;
+}
+
+.d-flex {
+    display: flex !important;
+}
+
+.text-center {
+    text-align: center !important;
+}
+
+.position-relative {
+    position: relative !important;
+}
+
+.position-absolute {
+    position: absolute !important;
+}
+
+.position-fixed {
+    position: fixed !important;
+}
+
+.sticky-top {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+
+.justify-content-center {
+    justify-content: center !important;
+}
+
+.justify-content-between {
+    justify-content: space-between !important;
+}
+
+.align-items-center,
+.align-self-center {
+    align-items: center !important;
+}
+
+.m-0 {
+    margin: 0 !important;
+}
+
+.p-0 {
+    padding: 0 !important;
+}
+
+@media (min-width: 768px) {
+    .d-md-none {
+        display: none !important;
+    }
+}
+
+@media (min-width: 992px) {
+    .d-lg-none {
+        display: none !important;
+    }
+
+    .d-lg-block {
+        display: block !important;
+    }
+}

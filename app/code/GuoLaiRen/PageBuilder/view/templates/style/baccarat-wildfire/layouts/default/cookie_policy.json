@@ -1,0 +1,32 @@
+{
+    "page_type": "cookie_policy",
+    "name": "Cookie政策页面布局",
+    "description": "Baccarat Wildfire 主题Cookie政策页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "cookie-policy-default",
+                "config": {
+                    "display.show_toc": "yes",
+                    "display.show_last_updated": "yes",
+                    "display.show_icon": "yes",
+                    "layout.content_width": "medium",
+                    "layout.header_padding": "80",
+                    "layout.content_padding": "52",
+                    "header.title": "Cookie Policy",
+                    "toc.title": "On This Page"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Cookie政策页面布局"
+}
