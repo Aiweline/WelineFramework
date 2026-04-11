@@ -1,0 +1,33 @@
+<svg width="920" height="760" viewBox="0 0 920 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wheelRing" x1="204" y1="126" x2="682" y2="598" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF5B45"/>
+      <stop offset="0.5" stop-color="#FFBF47"/>
+      <stop offset="1" stop-color="#DFFF5A"/>
+    </linearGradient>
+    <radialGradient id="wheelGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(460 380) rotate(90) scale(290)">
+      <stop stop-color="#FF5B45" stop-opacity="0.18"/>
+      <stop offset="0.55" stop-color="#4DF6FF" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#4DF6FF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="chipRed" x1="88" y1="76" x2="156" y2="142" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF7A62"/>
+      <stop offset="1" stop-color="#C93229"/>
+    </linearGradient>
+    <linearGradient id="chipDark" x1="686" y1="110" x2="756" y2="182" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16131B"/>
+      <stop offset="1" stop-color="#0A2B20"/>
+    </linearGradient>
+  </defs>
+  <circle cx="460" cy="380" r="304" fill="url(#wheelGlow)"/>
+  <circle cx="460" cy="380" r="252" fill="#0B0B12" stroke="url(#wheelRing)" stroke-width="18"/>
+  <circle cx="460" cy="380" r="212" fill="#12121A" stroke="rgba(255,255,255,0.08)" stroke-width="2"/>
+  <path d="M460 168L500 345L678 305L544 426L660 560L488 490L460 652L432 490L260 560L376 426L242 305L420 345L460 168Z" fill="#F7F1E8" fill-opacity="0.93"/>
+  <circle cx="460" cy="380" r="42" fill="#FF5B45"/>
+  <circle cx="460" cy="380" r="16" fill="#F7F1E8"/>
+  <circle cx="122" cy="114" r="42" fill="url(#chipRed)" stroke="#F7F1E8" stroke-width="10"/>
+  <circle cx="122" cy="114" r="18" fill="#F7F1E8" fill-opacity="0.16" stroke="#F7F1E8" stroke-width="3" stroke-dasharray="3 7"/>
+  <circle cx="722" cy="146" r="42" fill="url(#chipDark)" stroke="#DFFF5A" stroke-width="10"/>
+  <circle cx="722" cy="146" r="18" fill="#F7F1E8" fill-opacity="0.08" stroke="#F7F1E8" stroke-width="3" stroke-dasharray="3 7"/>
+  <circle cx="760" cy="268" r="12" fill="#F7F1E8" stroke="#FF5B45" stroke-width="5"/>
+</svg>

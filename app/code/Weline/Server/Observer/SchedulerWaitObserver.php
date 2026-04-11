@@ -25,6 +25,20 @@ class SchedulerWaitObserver implements ObserverInterface
     public static function setScheduler(FiberScheduler $scheduler): void
     {
         self::$scheduler = $scheduler;
+        SchedulerSystem::setWaitDispatcher(static function (string $type, array $params) use ($scheduler): void {
+            $fiber = $params['fiber'] ?? \Fiber::getCurrent();
+            if (!($fiber instanceof \Fiber)) {
+                return;
+            }
+
+            match ($type) {
+                'sleep' => $scheduler->addSleepTimer($fiber, (int) ($params['seconds'] ?? 1)),
+                'usleep' => $scheduler->addUsleepTimer($fiber, (int) ($params['microseconds'] ?? 1000)),
+                'yield' => $scheduler->addYieldTimer($fiber),
+                'yield_delay' => $scheduler->addYieldDelayTimer($fiber, (int) ($params['milliseconds'] ?? 1)),
+                default => null,
+            };
+        });
     }
 
     public static function getScheduler(): ?FiberScheduler

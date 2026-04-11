@@ -16,6 +16,8 @@ use Weline\Framework\Manager\ObjectManager;
 class SchedulerSystem
 {
     private static bool $schedulerActive = false;
+    /** @var null|callable(string, array): void */
+    private static $waitDispatcher = null;
 
     /**
      * 标记调度器已激活（由 WLS Server 模块在 Worker 启动时调用）
@@ -31,6 +33,7 @@ class SchedulerSystem
     public static function disableScheduler(): void
     {
         self::$schedulerActive = false;
+        self::$waitDispatcher = null;
     }
 
     /**
@@ -39,6 +42,16 @@ class SchedulerSystem
     public static function isSchedulerActive(): bool
     {
         return self::$schedulerActive;
+    }
+
+    /**
+     * 注入调度等待分发器，WLS 运行时优先直连调度器，避免为 sleep/yield 再走事件系统。
+     *
+     * @param null|callable(string, array): void $dispatcher
+     */
+    public static function setWaitDispatcher(?callable $dispatcher): void
+    {
+        self::$waitDispatcher = $dispatcher;
     }
 
     /**
@@ -58,7 +71,7 @@ class SchedulerSystem
         }
 
         self::dispatchWait('sleep', ['seconds' => $seconds]);
-        \Fiber::suspend();
+        self::suspendCurrentFiber();
     }
 
     /**
@@ -78,7 +91,7 @@ class SchedulerSystem
         }
 
         self::dispatchWait('usleep', ['microseconds' => $microseconds]);
-        \Fiber::suspend();
+        self::suspendCurrentFiber();
     }
 
     /**
@@ -86,6 +99,11 @@ class SchedulerSystem
      */
     private static function dispatchWait(string $type, array $params): void
     {
+        if (\is_callable(self::$waitDispatcher)) {
+            (self::$waitDispatcher)($type, $params);
+            return;
+        }
+
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = [
@@ -110,7 +128,7 @@ class SchedulerSystem
         }
 
         self::dispatchWait('yield', []);
-        \Fiber::suspend();
+        self::suspendCurrentFiber();
     }
 
     /**
@@ -131,6 +149,18 @@ class SchedulerSystem
         }
 
         self::dispatchWait('yield_delay', ['milliseconds' => $milliseconds]);
-        \Fiber::suspend();
+        self::suspendCurrentFiber();
+    }
+
+    private static function suspendCurrentFiber(): void
+    {
+        try {
+            \Fiber::suspend();
+        } catch (\FiberError $e) {
+            if (\str_contains($e->getMessage(), 'force-closed fiber')) {
+                return;
+            }
+            throw $e;
+        }
     }
 }

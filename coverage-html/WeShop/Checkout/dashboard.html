@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\WeShop\Checkout</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">WeShop</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Checkout</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#11">WeShop\Checkout\Api\Rest\V1\Checkout</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Index.php.html#10">WeShop\Checkout\Controller\Frontend\Checkout\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#11">WeShop\Checkout\Controller\Frontend\Checkout\Methods</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#11">WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#14">WeShop\Checkout\Controller\Frontend\Checkout\Success</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Index.php.html#7">WeShop\Checkout\Controller\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/PlaceOrder.php.html#7">WeShop\Checkout\Controller\PlaceOrder</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Success.php.html#7">WeShop\Checkout\Controller\Success</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#14">WeShop\Checkout\Service\CheckoutPageDataService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#14">WeShop\Checkout\Service\CheckoutService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#12">WeShop\Checkout\Service\OrderSuccessPageDataService</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Service/CheckoutService.php.html#14">WeShop\Checkout\Service\CheckoutService</a></td><td class="text-right">6642</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#14">WeShop\Checkout\Service\CheckoutPageDataService</a></td><td class="text-right">6320</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#11">WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder</a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#11">WeShop\Checkout\Api\Rest\V1\Checkout</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#11">WeShop\Checkout\Controller\Frontend\Checkout\Methods</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#12">WeShop\Checkout\Service\OrderSuccessPageDataService</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#14">WeShop\Checkout\Controller\Frontend\Checkout\Success</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Index.php.html#10">WeShop\Checkout\Controller\Frontend\Checkout\Index</a></td><td class="text-right">56</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#13"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#19"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::getMethods">getMethods</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#24"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::postMethods">postMethods</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#58"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::fetchJson">fetchJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#72"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::readShippingAddress">readShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#82"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::readRequestValue">readRequestValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#100"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::buildEmptyMethodsPayload">buildEmptyMethodsPayload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Index.php.html#16"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Index::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Index.php.html#22"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#13"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#19"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#55"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::post">post</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#63"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::readShippingAddress">readShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#73"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::readRequestValue">readRequestValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#13"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#19"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#76"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::post">post</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#84"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::readShippingAddress">readShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#94"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::readRequestValue">readRequestValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#20"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Success::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#27"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Success::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#62"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Success::getCustomerSession">getCustomerSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#67"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Success::getOrderService">getOrderService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#72"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Success::getOrderSuccessPageDataService">getOrderSuccessPageDataService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Index.php.html#9"><abbr title="WeShop\Checkout\Controller\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/PlaceOrder.php.html#9"><abbr title="WeShop\Checkout\Controller\PlaceOrder::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/PlaceOrder.php.html#14"><abbr title="WeShop\Checkout\Controller\PlaceOrder::post">post</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Success.php.html#9"><abbr title="WeShop\Checkout\Controller\Success::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#16"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#29"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::build">build</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#78"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::buildDynamicMethodData">buildDynamicMethodData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#89"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapCartItems">mapCartItems</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#118"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapRetryOrderItems">mapRetryOrderItems</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#144"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::normalizeSummary">normalizeSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#159"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapSavedAddresses">mapSavedAddresses</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#193"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveInitialShippingContext">resolveInitialShippingContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#204"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePrimaryShippingAddress">resolvePrimaryShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#220"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::buildMethodDataPayload">buildMethodDataPayload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#280"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveSelectedShippingAddress">resolveSelectedShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#298"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mergeShippingAddress">mergeShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#320"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveShippingContext">resolveShippingContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#340"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapShippingMethods">mapShippingMethods</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#404"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::buildCountries">buildCountries</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#421"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapPaymentMethods">mapPaymentMethods</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#473"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::prioritizeSelectedMethod">prioritizeSelectedMethod</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#502"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveSelectedMethodCode">resolveSelectedMethodCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#513"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePaymentFlow">resolvePaymentFlow</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#523"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePaymentFlowLabel">resolvePaymentFlowLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#533"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePaymentBadge">resolvePaymentBadge</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#547"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePaymentCheckoutNote">resolvePaymentCheckoutNote</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#567"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveCheckoutCurrency">resolveCheckoutCurrency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#16"><abbr title="WeShop\Checkout\Service\CheckoutService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#23"><abbr title="WeShop\Checkout\Service\CheckoutService::createOrderFromCart">createOrderFromCart</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#107"><abbr title="WeShop\Checkout\Service\CheckoutService::previewCheckoutSummary">previewCheckoutSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#140"><abbr title="WeShop\Checkout\Service\CheckoutService::placeOrder">placeOrder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#185"><abbr title="WeShop\Checkout\Service\CheckoutService::getCheckoutPaymentMethods">getCheckoutPaymentMethods</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#193"><abbr title="WeShop\Checkout\Service\CheckoutService::getCheckoutShippingMethods">getCheckoutShippingMethods</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#201"><abbr title="WeShop\Checkout\Service\CheckoutService::validateCheckoutData">validateCheckoutData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#221"><abbr title="WeShop\Checkout\Service\CheckoutService::query">query</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#232"><abbr title="WeShop\Checkout\Service\CheckoutService::buildCheckoutSummary">buildCheckoutSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#253"><abbr title="WeShop\Checkout\Service\CheckoutService::normalizeCheckoutData">normalizeCheckoutData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#271"><abbr title="WeShop\Checkout\Service\CheckoutService::calculateSubtotalFromCartItems">calculateSubtotalFromCartItems</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#290"><abbr title="WeShop\Checkout\Service\CheckoutService::calculateCheckoutShipping">calculateCheckoutShipping</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#317"><abbr title="WeShop\Checkout\Service\CheckoutService::calculateCheckoutTaxDetails">calculateCheckoutTaxDetails</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#378"><abbr title="WeShop\Checkout\Service\CheckoutService::normalizeShippingAddress">normalizeShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#405"><abbr title="WeShop\Checkout\Service\CheckoutService::mapCartItemsForShipping">mapCartItemsForShipping</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#432"><abbr title="WeShop\Checkout\Service\CheckoutService::buildCheckoutTaxContext">buildCheckoutTaxContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#475"><abbr title="WeShop\Checkout\Service\CheckoutService::getEventsManager">getEventsManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#483"><abbr title="WeShop\Checkout\Service\CheckoutService::resolveSavedShippingAddress">resolveSavedShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#494"><abbr title="WeShop\Checkout\Service\CheckoutService::reuseRetryPaymentOrder">reuseRetryPaymentOrder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#508"><abbr title="WeShop\Checkout\Service\CheckoutService::normalizePaymentStatus">normalizePaymentStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#519"><abbr title="WeShop\Checkout\Service\CheckoutService::readOrderIncrementId">readOrderIncrementId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#531"><abbr title="WeShop\Checkout\Service\CheckoutService::readOrderSummary">readOrderSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#553"><abbr title="WeShop\Checkout\Service\CheckoutService::normalizeSummary">normalizeSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#14"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#24"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::build">build</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#65"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::normalizeOrderSummary">normalizeOrderSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#98"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::mapOrderItems">mapOrderItems</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#127"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::normalizeShippingAddress">normalizeShippingAddress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#149"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::normalizePaymentMethod">normalizePaymentMethod</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#19"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::index">index</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#23"><abbr title="WeShop\Checkout\Service\CheckoutService::createOrderFromCart">createOrderFromCart</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#340"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapShippingMethods">mapShippingMethods</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Success.php.html#27"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Success::index">index</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#421"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapPaymentMethods">mapPaymentMethods</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#473"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::prioritizeSelectedMethod">prioritizeSelectedMethod</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#107"><abbr title="WeShop\Checkout\Service\CheckoutService::previewCheckoutSummary">previewCheckoutSummary</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#378"><abbr title="WeShop\Checkout\Service\CheckoutService::normalizeShippingAddress">normalizeShippingAddress</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#432"><abbr title="WeShop\Checkout\Service\CheckoutService::buildCheckoutTaxContext">buildCheckoutTaxContext</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Index.php.html#22"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Index::index">index</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#220"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::buildMethodDataPayload">buildMethodDataPayload</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#317"><abbr title="WeShop\Checkout\Service\CheckoutService::calculateCheckoutTaxDetails">calculateCheckoutTaxDetails</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#65"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::normalizeOrderSummary">normalizeOrderSummary</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#82"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::readRequestValue">readRequestValue</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#19"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::index">index</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#73"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::readRequestValue">readRequestValue</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#94"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::readRequestValue">readRequestValue</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#29"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::build">build</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#298"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mergeShippingAddress">mergeShippingAddress</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#140"><abbr title="WeShop\Checkout\Service\CheckoutService::placeOrder">placeOrder</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#483"><abbr title="WeShop\Checkout\Service\CheckoutService::resolveSavedShippingAddress">resolveSavedShippingAddress</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#24"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::postMethods">postMethods</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#72"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::readShippingAddress">readShippingAddress</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/Methods.php.html#63"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\Methods::readShippingAddress">readShippingAddress</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Frontend/Checkout/PlaceOrder.php.html#84"><abbr title="WeShop\Checkout\Controller\Frontend\Checkout\PlaceOrder::readShippingAddress">readShippingAddress</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#89"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapCartItems">mapCartItems</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#280"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveSelectedShippingAddress">resolveSelectedShippingAddress</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#547"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePaymentCheckoutNote">resolvePaymentCheckoutNote</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#201"><abbr title="WeShop\Checkout\Service\CheckoutService::validateCheckoutData">validateCheckoutData</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#405"><abbr title="WeShop\Checkout\Service\CheckoutService::mapCartItemsForShipping">mapCartItemsForShipping</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#118"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapRetryOrderItems">mapRetryOrderItems</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#159"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::mapSavedAddresses">mapSavedAddresses</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#204"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePrimaryShippingAddress">resolvePrimaryShippingAddress</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#502"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveSelectedMethodCode">resolveSelectedMethodCode</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#271"><abbr title="WeShop\Checkout\Service\CheckoutService::calculateSubtotalFromCartItems">calculateSubtotalFromCartItems</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#290"><abbr title="WeShop\Checkout\Service\CheckoutService::calculateCheckoutShipping">calculateCheckoutShipping</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#494"><abbr title="WeShop\Checkout\Service\CheckoutService::reuseRetryPaymentOrder">reuseRetryPaymentOrder</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#24"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::build">build</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/OrderSuccessPageDataService.php.html#98"><abbr title="WeShop\Checkout\Service\OrderSuccessPageDataService::mapOrderItems">mapOrderItems</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Api/Rest/V1/Checkout.php.html#58"><abbr title="WeShop\Checkout\Api\Rest\V1\Checkout::fetchJson">fetchJson</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#320"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveShippingContext">resolveShippingContext</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#404"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::buildCountries">buildCountries</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#533"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolvePaymentBadge">resolvePaymentBadge</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutPageDataService.php.html#567"><abbr title="WeShop\Checkout\Service\CheckoutPageDataService::resolveCheckoutCurrency">resolveCheckoutCurrency</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#185"><abbr title="WeShop\Checkout\Service\CheckoutService::getCheckoutPaymentMethods">getCheckoutPaymentMethods</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#193"><abbr title="WeShop\Checkout\Service\CheckoutService::getCheckoutShippingMethods">getCheckoutShippingMethods</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#253"><abbr title="WeShop\Checkout\Service\CheckoutService::normalizeCheckoutData">normalizeCheckoutData</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#519"><abbr title="WeShop\Checkout\Service\CheckoutService::readOrderIncrementId">readOrderIncrementId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CheckoutService.php.html#531"><abbr title="WeShop\Checkout\Service\CheckoutService::readOrderSummary">readOrderSummary</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([11,0,0,0,0,0,0,0,0,0,0,1], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([80,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,18,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#11\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout<\/a>"],[0,7,"<a href=\"Controller\/Frontend\/Checkout\/Index.php.html#10\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Index<\/a>"],[0,16,"<a href=\"Controller\/Frontend\/Checkout\/Methods.php.html#11\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Methods<\/a>"],[0,22,"<a href=\"Controller\/Frontend\/Checkout\/PlaceOrder.php.html#11\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\PlaceOrder<\/a>"],[0,13,"<a href=\"Controller\/Frontend\/Checkout\/Success.php.html#14\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Success<\/a>"],[0,1,"<a href=\"Controller\/Index.php.html#7\">WeShop\\Checkout\\Controller\\Index<\/a>"],[100,0,"<a href=\"Controller\/Methods.php.html#7\">WeShop\\Checkout\\Controller\\Methods<\/a>"],[0,2,"<a href=\"Controller\/PlaceOrder.php.html#7\">WeShop\\Checkout\\Controller\\PlaceOrder<\/a>"],[0,1,"<a href=\"Controller\/Success.php.html#7\">WeShop\\Checkout\\Controller\\Success<\/a>"],[0,79,"<a href=\"Service\/CheckoutPageDataService.php.html#14\">WeShop\\Checkout\\Service\\CheckoutPageDataService<\/a>"],[0,81,"<a href=\"Service\/CheckoutService.php.html#14\">WeShop\\Checkout\\Service\\CheckoutService<\/a>"],[0,15,"<a href=\"Service\/OrderSuccessPageDataService.php.html#12\">WeShop\\Checkout\\Service\\OrderSuccessPageDataService<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#13\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout::__construct<\/a>"],[0,1,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#19\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout::getMethods<\/a>"],[0,4,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#24\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout::postMethods<\/a>"],[0,2,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#58\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout::fetchJson<\/a>"],[0,4,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#72\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout::readShippingAddress<\/a>"],[0,5,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#82\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout::readRequestValue<\/a>"],[0,1,"<a href=\"Api\/Rest\/V1\/Checkout.php.html#100\">WeShop\\Checkout\\Api\\Rest\\V1\\Checkout::buildEmptyMethodsPayload<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/Index.php.html#16\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Index::__construct<\/a>"],[0,6,"<a href=\"Controller\/Frontend\/Checkout\/Index.php.html#22\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/Methods.php.html#13\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Methods::__construct<\/a>"],[0,5,"<a href=\"Controller\/Frontend\/Checkout\/Methods.php.html#19\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Methods::index<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/Methods.php.html#55\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Methods::post<\/a>"],[0,4,"<a href=\"Controller\/Frontend\/Checkout\/Methods.php.html#63\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Methods::readShippingAddress<\/a>"],[0,5,"<a href=\"Controller\/Frontend\/Checkout\/Methods.php.html#73\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Methods::readRequestValue<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/PlaceOrder.php.html#13\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\PlaceOrder::__construct<\/a>"],[0,11,"<a href=\"Controller\/Frontend\/Checkout\/PlaceOrder.php.html#19\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\PlaceOrder::index<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/PlaceOrder.php.html#76\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\PlaceOrder::post<\/a>"],[0,4,"<a href=\"Controller\/Frontend\/Checkout\/PlaceOrder.php.html#84\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\PlaceOrder::readShippingAddress<\/a>"],[0,5,"<a href=\"Controller\/Frontend\/Checkout\/PlaceOrder.php.html#94\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\PlaceOrder::readRequestValue<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/Success.php.html#20\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Success::__construct<\/a>"],[0,9,"<a href=\"Controller\/Frontend\/Checkout\/Success.php.html#27\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Success::index<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/Success.php.html#62\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Success::getCustomerSession<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/Success.php.html#67\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Success::getOrderService<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Checkout\/Success.php.html#72\">WeShop\\Checkout\\Controller\\Frontend\\Checkout\\Success::getOrderSuccessPageDataService<\/a>"],[0,1,"<a href=\"Controller\/Index.php.html#9\">WeShop\\Checkout\\Controller\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/PlaceOrder.php.html#9\">WeShop\\Checkout\\Controller\\PlaceOrder::index<\/a>"],[0,1,"<a href=\"Controller\/PlaceOrder.php.html#14\">WeShop\\Checkout\\Controller\\PlaceOrder::post<\/a>"],[0,1,"<a href=\"Controller\/Success.php.html#9\">WeShop\\Checkout\\Controller\\Success::index<\/a>"],[0,1,"<a href=\"Service\/CheckoutPageDataService.php.html#16\">WeShop\\Checkout\\Service\\CheckoutPageDataService::__construct<\/a>"],[0,5,"<a href=\"Service\/CheckoutPageDataService.php.html#29\">WeShop\\Checkout\\Service\\CheckoutPageDataService::build<\/a>"],[0,1,"<a href=\"Service\/CheckoutPageDataService.php.html#78\">WeShop\\Checkout\\Service\\CheckoutPageDataService::buildDynamicMethodData<\/a>"],[0,4,"<a href=\"Service\/CheckoutPageDataService.php.html#89\">WeShop\\Checkout\\Service\\CheckoutPageDataService::mapCartItems<\/a>"],[0,3,"<a href=\"Service\/CheckoutPageDataService.php.html#118\">WeShop\\Checkout\\Service\\CheckoutPageDataService::mapRetryOrderItems<\/a>"],[0,1,"<a href=\"Service\/CheckoutPageDataService.php.html#144\">WeShop\\Checkout\\Service\\CheckoutPageDataService::normalizeSummary<\/a>"],[0,3,"<a href=\"Service\/CheckoutPageDataService.php.html#159\">WeShop\\Checkout\\Service\\CheckoutPageDataService::mapSavedAddresses<\/a>"],[0,1,"<a href=\"Service\/CheckoutPageDataService.php.html#193\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolveInitialShippingContext<\/a>"],[0,3,"<a href=\"Service\/CheckoutPageDataService.php.html#204\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolvePrimaryShippingAddress<\/a>"],[0,6,"<a href=\"Service\/CheckoutPageDataService.php.html#220\">WeShop\\Checkout\\Service\\CheckoutPageDataService::buildMethodDataPayload<\/a>"],[0,4,"<a href=\"Service\/CheckoutPageDataService.php.html#280\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolveSelectedShippingAddress<\/a>"],[0,5,"<a href=\"Service\/CheckoutPageDataService.php.html#298\">WeShop\\Checkout\\Service\\CheckoutPageDataService::mergeShippingAddress<\/a>"],[0,2,"<a href=\"Service\/CheckoutPageDataService.php.html#320\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolveShippingContext<\/a>"],[0,10,"<a href=\"Service\/CheckoutPageDataService.php.html#340\">WeShop\\Checkout\\Service\\CheckoutPageDataService::mapShippingMethods<\/a>"],[0,2,"<a href=\"Service\/CheckoutPageDataService.php.html#404\">WeShop\\Checkout\\Service\\CheckoutPageDataService::buildCountries<\/a>"],[0,8,"<a href=\"Service\/CheckoutPageDataService.php.html#421\">WeShop\\Checkout\\Service\\CheckoutPageDataService::mapPaymentMethods<\/a>"],[0,7,"<a href=\"Service\/CheckoutPageDataService.php.html#473\">WeShop\\Checkout\\Service\\CheckoutPageDataService::prioritizeSelectedMethod<\/a>"],[0,3,"<a href=\"Service\/CheckoutPageDataService.php.html#502\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolveSelectedMethodCode<\/a>"],[0,1,"<a href=\"Service\/CheckoutPageDataService.php.html#513\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolvePaymentFlow<\/a>"],[0,1,"<a href=\"Service\/CheckoutPageDataService.php.html#523\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolvePaymentFlowLabel<\/a>"],[0,2,"<a href=\"Service\/CheckoutPageDataService.php.html#533\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolvePaymentBadge<\/a>"],[0,4,"<a href=\"Service\/CheckoutPageDataService.php.html#547\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolvePaymentCheckoutNote<\/a>"],[0,2,"<a href=\"Service\/CheckoutPageDataService.php.html#567\">WeShop\\Checkout\\Service\\CheckoutPageDataService::resolveCheckoutCurrency<\/a>"],[0,1,"<a href=\"Service\/CheckoutService.php.html#16\">WeShop\\Checkout\\Service\\CheckoutService::__construct<\/a>"],[0,11,"<a href=\"Service\/CheckoutService.php.html#23\">WeShop\\Checkout\\Service\\CheckoutService::createOrderFromCart<\/a>"],[0,7,"<a href=\"Service\/CheckoutService.php.html#107\">WeShop\\Checkout\\Service\\CheckoutService::previewCheckoutSummary<\/a>"],[0,5,"<a href=\"Service\/CheckoutService.php.html#140\">WeShop\\Checkout\\Service\\CheckoutService::placeOrder<\/a>"],[0,2,"<a href=\"Service\/CheckoutService.php.html#185\">WeShop\\Checkout\\Service\\CheckoutService::getCheckoutPaymentMethods<\/a>"],[0,2,"<a href=\"Service\/CheckoutService.php.html#193\">WeShop\\Checkout\\Service\\CheckoutService::getCheckoutShippingMethods<\/a>"],[0,4,"<a href=\"Service\/CheckoutService.php.html#201\">WeShop\\Checkout\\Service\\CheckoutService::validateCheckoutData<\/a>"],[0,1,"<a href=\"Service\/CheckoutService.php.html#221\">WeShop\\Checkout\\Service\\CheckoutService::query<\/a>"],[0,1,"<a href=\"Service\/CheckoutService.php.html#232\">WeShop\\Checkout\\Service\\CheckoutService::buildCheckoutSummary<\/a>"],[0,2,"<a href=\"Service\/CheckoutService.php.html#253\">WeShop\\Checkout\\Service\\CheckoutService::normalizeCheckoutData<\/a>"],[0,3,"<a href=\"Service\/CheckoutService.php.html#271\">WeShop\\Checkout\\Service\\CheckoutService::calculateSubtotalFromCartItems<\/a>"],[0,3,"<a href=\"Service\/CheckoutService.php.html#290\">WeShop\\Checkout\\Service\\CheckoutService::calculateCheckoutShipping<\/a>"],[0,6,"<a href=\"Service\/CheckoutService.php.html#317\">WeShop\\Checkout\\Service\\CheckoutService::calculateCheckoutTaxDetails<\/a>"],[0,7,"<a href=\"Service\/CheckoutService.php.html#378\">WeShop\\Checkout\\Service\\CheckoutService::normalizeShippingAddress<\/a>"],[0,4,"<a href=\"Service\/CheckoutService.php.html#405\">WeShop\\Checkout\\Service\\CheckoutService::mapCartItemsForShipping<\/a>"],[0,7,"<a href=\"Service\/CheckoutService.php.html#432\">WeShop\\Checkout\\Service\\CheckoutService::buildCheckoutTaxContext<\/a>"],[0,1,"<a href=\"Service\/CheckoutService.php.html#475\">WeShop\\Checkout\\Service\\CheckoutService::getEventsManager<\/a>"],[0,5,"<a href=\"Service\/CheckoutService.php.html#483\">WeShop\\Checkout\\Service\\CheckoutService::resolveSavedShippingAddress<\/a>"],[0,3,"<a href=\"Service\/CheckoutService.php.html#494\">WeShop\\Checkout\\Service\\CheckoutService::reuseRetryPaymentOrder<\/a>"],[0,1,"<a href=\"Service\/CheckoutService.php.html#508\">WeShop\\Checkout\\Service\\CheckoutService::normalizePaymentStatus<\/a>"],[0,2,"<a href=\"Service\/CheckoutService.php.html#519\">WeShop\\Checkout\\Service\\CheckoutService::readOrderIncrementId<\/a>"],[0,2,"<a href=\"Service\/CheckoutService.php.html#531\">WeShop\\Checkout\\Service\\CheckoutService::readOrderSummary<\/a>"],[0,1,"<a href=\"Service\/CheckoutService.php.html#553\">WeShop\\Checkout\\Service\\CheckoutService::normalizeSummary<\/a>"],[0,1,"<a href=\"Service\/OrderSuccessPageDataService.php.html#14\">WeShop\\Checkout\\Service\\OrderSuccessPageDataService::__construct<\/a>"],[0,3,"<a href=\"Service\/OrderSuccessPageDataService.php.html#24\">WeShop\\Checkout\\Service\\OrderSuccessPageDataService::build<\/a>"],[0,6,"<a href=\"Service\/OrderSuccessPageDataService.php.html#65\">WeShop\\Checkout\\Service\\OrderSuccessPageDataService::normalizeOrderSummary<\/a>"],[0,3,"<a href=\"Service\/OrderSuccessPageDataService.php.html#98\">WeShop\\Checkout\\Service\\OrderSuccessPageDataService::mapOrderItems<\/a>"],[0,1,"<a href=\"Service\/OrderSuccessPageDataService.php.html#127\">WeShop\\Checkout\\Service\\OrderSuccessPageDataService::normalizeShippingAddress<\/a>"],[0,1,"<a href=\"Service\/OrderSuccessPageDataService.php.html#149\">WeShop\\Checkout\\Service\\OrderSuccessPageDataService::normalizePaymentMethod<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

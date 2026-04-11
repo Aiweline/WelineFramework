@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\WeShop\GiftCard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">WeShop</a></li>
+         <li class="breadcrumb-item"><a href="index.html">GiftCard</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/GiftCard/Delete.php.html#10">WeShop\GiftCard\Controller\Backend\GiftCard\Delete</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Index.php.html#10">WeShop\GiftCard\Controller\Backend\GiftCard\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Save.php.html#10">WeShop\GiftCard\Controller\Backend\GiftCard\Save</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/View.php.html#10">WeShop\GiftCard\Controller\Backend\GiftCard\View</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/GiftCard/Index.php.html#11">WeShop\GiftCard\Controller\Frontend\GiftCard\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Index.php.html#7">WeShop\GiftCard\Controller\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#9">WeShop\GiftCard\Service\GiftCardAdminPageDataService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardPageDataService.php.html#9">WeShop\GiftCard\Service\GiftCardPageDataService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#10">WeShop\GiftCard\Service\GiftCardService</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Service/GiftCardService.php.html#10">WeShop\GiftCard\Service\GiftCardService</a></td><td class="text-right">2652</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#9">WeShop\GiftCard\Service\GiftCardAdminPageDataService</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Service/GiftCardPageDataService.php.html#9">WeShop\GiftCard\Service\GiftCardPageDataService</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Delete.php.html#10">WeShop\GiftCard\Controller\Backend\GiftCard\Delete</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Save.php.html#10">WeShop\GiftCard\Controller\Backend\GiftCard\Save</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/View.php.html#10">WeShop\GiftCard\Controller\Backend\GiftCard\View</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Frontend/GiftCard/Index.php.html#11">WeShop\GiftCard\Controller\Frontend\GiftCard\Index</a></td><td class="text-right">20</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/GiftCard/Delete.php.html#12"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Delete::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Delete.php.html#17"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Delete::delete">delete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Delete.php.html#33"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Delete::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Index.php.html#12"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Index::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Index.php.html#17"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Save.php.html#12"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Save::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Save.php.html#17"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Save::post">post</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Save.php.html#44"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Save::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/View.php.html#12"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\View::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/View.php.html#17"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\View::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/GiftCard/Index.php.html#17"><abbr title="WeShop\GiftCard\Controller\Frontend\GiftCard\Index::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/GiftCard/Index.php.html#23"><abbr title="WeShop\GiftCard\Controller\Frontend\GiftCard\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Index.php.html#9"><abbr title="WeShop\GiftCard\Controller\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#11"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#16"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::getPageData">getPageData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#32"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::sanitizeFilters">sanitizeFilters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#51"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::normalizeModel">normalizeModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#69"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::normalizeRecord">normalizeRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#89"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::getEmptyRecord">getEmptyRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardPageDataService.php.html#11"><abbr title="WeShop\GiftCard\Service\GiftCardPageDataService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardPageDataService.php.html#19"><abbr title="WeShop\GiftCard\Service\GiftCardPageDataService::build">build</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardPageDataService.php.html#37"><abbr title="WeShop\GiftCard\Service\GiftCardPageDataService::mapItems">mapItems</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#17"><abbr title="WeShop\GiftCard\Service\GiftCardService::getStatusOptions">getStatusOptions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#27"><abbr title="WeShop\GiftCard\Service\GiftCardService::isValidStatus">isValidStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#32"><abbr title="WeShop\GiftCard\Service\GiftCardService::createGiftCard">createGiftCard</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#38"><abbr title="WeShop\GiftCard\Service\GiftCardService::useGiftCard">useGiftCard</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#84"><abbr title="WeShop\GiftCard\Service\GiftCardService::getCustomerGiftCards">getCustomerGiftCards</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#102"><abbr title="WeShop\GiftCard\Service\GiftCardService::getCustomerGiftCardSummary">getCustomerGiftCardSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#132"><abbr title="WeShop\GiftCard\Service\GiftCardService::getGiftCardRecord">getGiftCardRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#141"><abbr title="WeShop\GiftCard\Service\GiftCardService::deleteGiftCard">deleteGiftCard</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#159"><abbr title="WeShop\GiftCard\Service\GiftCardService::getGiftCardList">getGiftCardList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#191"><abbr title="WeShop\GiftCard\Service\GiftCardService::getGiftCardSummary">getGiftCardSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#227"><abbr title="WeShop\GiftCard\Service\GiftCardService::saveGiftCard">saveGiftCard</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#293"><abbr title="WeShop\GiftCard\Service\GiftCardService::generateCardNumber">generateCardNumber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#298"><abbr title="WeShop\GiftCard\Service\GiftCardService::normalizeDateTime">normalizeDateTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#313"><abbr title="WeShop\GiftCard\Service\GiftCardService::assertUniqueCardNumber">assertUniqueCardNumber</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Service/GiftCardService.php.html#38"><abbr title="WeShop\GiftCard\Service\GiftCardService::useGiftCard">useGiftCard</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#227"><abbr title="WeShop\GiftCard\Service\GiftCardService::saveGiftCard">saveGiftCard</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#32"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::sanitizeFilters">sanitizeFilters</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#159"><abbr title="WeShop\GiftCard\Service\GiftCardService::getGiftCardList">getGiftCardList</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/View.php.html#17"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\View::index">index</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/GiftCardPageDataService.php.html#37"><abbr title="WeShop\GiftCard\Service\GiftCardPageDataService::mapItems">mapItems</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#102"><abbr title="WeShop\GiftCard\Service\GiftCardService::getCustomerGiftCardSummary">getCustomerGiftCardSummary</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#191"><abbr title="WeShop\GiftCard\Service\GiftCardService::getGiftCardSummary">getGiftCardSummary</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#298"><abbr title="WeShop\GiftCard\Service\GiftCardService::normalizeDateTime">normalizeDateTime</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Delete.php.html#17"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Delete::delete">delete</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/GiftCard/Save.php.html#17"><abbr title="WeShop\GiftCard\Controller\Backend\GiftCard\Save::post">post</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Frontend/GiftCard/Index.php.html#23"><abbr title="WeShop\GiftCard\Controller\Frontend\GiftCard\Index::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#16"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::getPageData">getPageData</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#141"><abbr title="WeShop\GiftCard\Service\GiftCardService::deleteGiftCard">deleteGiftCard</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#313"><abbr title="WeShop\GiftCard\Service\GiftCardService::assertUniqueCardNumber">assertUniqueCardNumber</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/GiftCardAdminPageDataService.php.html#69"><abbr title="WeShop\GiftCard\Service\GiftCardAdminPageDataService::normalizeRecord">normalizeRecord</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#84"><abbr title="WeShop\GiftCard\Service\GiftCardService::getCustomerGiftCards">getCustomerGiftCards</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/GiftCardService.php.html#132"><abbr title="WeShop\GiftCard\Service\GiftCardService::getGiftCardRecord">getGiftCardRecord</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([9,0,0,0,0,0,0,0,0,0,0,1], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([36,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,5,"<a href=\"Controller\/Backend\/GiftCard\/Delete.php.html#10\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Delete<\/a>"],[0,2,"<a href=\"Controller\/Backend\/GiftCard\/Index.php.html#10\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Index<\/a>"],[0,5,"<a href=\"Controller\/Backend\/GiftCard\/Save.php.html#10\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Save<\/a>"],[0,5,"<a href=\"Controller\/Backend\/GiftCard\/View.php.html#10\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\View<\/a>"],[0,4,"<a href=\"Controller\/Frontend\/GiftCard\/Index.php.html#11\">WeShop\\GiftCard\\Controller\\Frontend\\GiftCard\\Index<\/a>"],[0,1,"<a href=\"Controller\/Index.php.html#7\">WeShop\\GiftCard\\Controller\\Index<\/a>"],[100,0,"<a href=\"Model\/GiftCard.php.html#15\">WeShop\\GiftCard\\Model\\GiftCard<\/a>"],[0,13,"<a href=\"Service\/GiftCardAdminPageDataService.php.html#9\">WeShop\\GiftCard\\Service\\GiftCardAdminPageDataService<\/a>"],[0,6,"<a href=\"Service\/GiftCardPageDataService.php.html#9\">WeShop\\GiftCard\\Service\\GiftCardPageDataService<\/a>"],[0,51,"<a href=\"Service\/GiftCardService.php.html#10\">WeShop\\GiftCard\\Service\\GiftCardService<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Controller\/Backend\/GiftCard\/Delete.php.html#12\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Delete::__construct<\/a>"],[0,3,"<a href=\"Controller\/Backend\/GiftCard\/Delete.php.html#17\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Delete::delete<\/a>"],[0,1,"<a href=\"Controller\/Backend\/GiftCard\/Delete.php.html#33\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Delete::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/GiftCard\/Index.php.html#12\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Index::__construct<\/a>"],[0,1,"<a href=\"Controller\/Backend\/GiftCard\/Index.php.html#17\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/GiftCard\/Save.php.html#12\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Save::__construct<\/a>"],[0,3,"<a href=\"Controller\/Backend\/GiftCard\/Save.php.html#17\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Save::post<\/a>"],[0,1,"<a href=\"Controller\/Backend\/GiftCard\/Save.php.html#44\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\Save::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/GiftCard\/View.php.html#12\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\View::__construct<\/a>"],[0,4,"<a href=\"Controller\/Backend\/GiftCard\/View.php.html#17\">WeShop\\GiftCard\\Controller\\Backend\\GiftCard\\View::index<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/GiftCard\/Index.php.html#17\">WeShop\\GiftCard\\Controller\\Frontend\\GiftCard\\Index::__construct<\/a>"],[0,3,"<a href=\"Controller\/Frontend\/GiftCard\/Index.php.html#23\">WeShop\\GiftCard\\Controller\\Frontend\\GiftCard\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/Index.php.html#9\">WeShop\\GiftCard\\Controller\\Index::index<\/a>"],[0,1,"<a href=\"Service\/GiftCardAdminPageDataService.php.html#11\">WeShop\\GiftCard\\Service\\GiftCardAdminPageDataService::__construct<\/a>"],[0,3,"<a href=\"Service\/GiftCardAdminPageDataService.php.html#16\">WeShop\\GiftCard\\Service\\GiftCardAdminPageDataService::getPageData<\/a>"],[0,5,"<a href=\"Service\/GiftCardAdminPageDataService.php.html#32\">WeShop\\GiftCard\\Service\\GiftCardAdminPageDataService::sanitizeFilters<\/a>"],[0,1,"<a href=\"Service\/GiftCardAdminPageDataService.php.html#51\">WeShop\\GiftCard\\Service\\GiftCardAdminPageDataService::normalizeModel<\/a>"],[0,2,"<a href=\"Service\/GiftCardAdminPageDataService.php.html#69\">WeShop\\GiftCard\\Service\\GiftCardAdminPageDataService::normalizeRecord<\/a>"],[0,1,"<a href=\"Service\/GiftCardAdminPageDataService.php.html#89\">WeShop\\GiftCard\\Service\\GiftCardAdminPageDataService::getEmptyRecord<\/a>"],[0,1,"<a href=\"Service\/GiftCardPageDataService.php.html#11\">WeShop\\GiftCard\\Service\\GiftCardPageDataService::__construct<\/a>"],[0,1,"<a href=\"Service\/GiftCardPageDataService.php.html#19\">WeShop\\GiftCard\\Service\\GiftCardPageDataService::build<\/a>"],[0,4,"<a href=\"Service\/GiftCardPageDataService.php.html#37\">WeShop\\GiftCard\\Service\\GiftCardPageDataService::mapItems<\/a>"],[0,1,"<a href=\"Service\/GiftCardService.php.html#17\">WeShop\\GiftCard\\Service\\GiftCardService::getStatusOptions<\/a>"],[0,1,"<a href=\"Service\/GiftCardService.php.html#27\">WeShop\\GiftCard\\Service\\GiftCardService::isValidStatus<\/a>"],[0,1,"<a href=\"Service\/GiftCardService.php.html#32\">WeShop\\GiftCard\\Service\\GiftCardService::createGiftCard<\/a>"],[0,10,"<a href=\"Service\/GiftCardService.php.html#38\">WeShop\\GiftCard\\Service\\GiftCardService::useGiftCard<\/a>"],[0,2,"<a href=\"Service\/GiftCardService.php.html#84\">WeShop\\GiftCard\\Service\\GiftCardService::getCustomerGiftCards<\/a>"],[0,4,"<a href=\"Service\/GiftCardService.php.html#102\">WeShop\\GiftCard\\Service\\GiftCardService::getCustomerGiftCardSummary<\/a>"],[0,2,"<a href=\"Service\/GiftCardService.php.html#132\">WeShop\\GiftCard\\Service\\GiftCardService::getGiftCardRecord<\/a>"],[0,3,"<a href=\"Service\/GiftCardService.php.html#141\">WeShop\\GiftCard\\Service\\GiftCardService::deleteGiftCard<\/a>"],[0,5,"<a href=\"Service\/GiftCardService.php.html#159\">WeShop\\GiftCard\\Service\\GiftCardService::getGiftCardList<\/a>"],[0,4,"<a href=\"Service\/GiftCardService.php.html#191\">WeShop\\GiftCard\\Service\\GiftCardService::getGiftCardSummary<\/a>"],[0,10,"<a href=\"Service\/GiftCardService.php.html#227\">WeShop\\GiftCard\\Service\\GiftCardService::saveGiftCard<\/a>"],[0,1,"<a href=\"Service\/GiftCardService.php.html#293\">WeShop\\GiftCard\\Service\\GiftCardService::generateCardNumber<\/a>"],[0,4,"<a href=\"Service\/GiftCardService.php.html#298\">WeShop\\GiftCard\\Service\\GiftCardService::normalizeDateTime<\/a>"],[0,3,"<a href=\"Service\/GiftCardService.php.html#313\">WeShop\\GiftCard\\Service\\GiftCardService::assertUniqueCardNumber<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

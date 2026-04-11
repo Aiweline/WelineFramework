@@ -1,0 +1,381 @@
+<?php
+/**
+ * Twenty Nine Tempest - Main Layout
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$templateCode = 'twenty-nine-tempest';
+$pageType = $page ? (string) ($page->getData('type') ?: '') : '';
+
+$layoutConfigRaw = $this->getData('layout_config');
+if (is_string($layoutConfigRaw)) {
+    $layoutConfig = json_decode($layoutConfigRaw, true) ?: [];
+} else {
+    $layoutConfig = is_array($layoutConfigRaw) ? $layoutConfigRaw : [];
+}
+
+$headerRaw = $layoutConfig['header'] ?? [];
+$footerRaw = $layoutConfig['footer'] ?? [];
+$headerComponents = is_array($headerRaw) && !isset($headerRaw[0]) && isset($headerRaw['component'])
+    ? [['code' => $headerRaw['component'], 'enabled' => true, 'config' => $headerRaw['config'] ?? []]]
+    : (is_array($headerRaw) ? $headerRaw : []);
+$contentComponents = is_array($layoutConfig['content'] ?? null) ? $layoutConfig['content'] : [];
+$footerComponents = is_array($footerRaw) && !isset($footerRaw[0]) && isset($footerRaw['component'])
+    ? [['code' => $footerRaw['component'], 'enabled' => true, 'config' => $footerRaw['config'] ?? []]]
+    : (is_array($footerRaw) ? $footerRaw : []);
+
+if (empty($headerComponents)) {
+    $headerComponents = [['code' => 'header-nav', 'enabled' => true, 'config' => []]];
+}
+
+if (empty($contentComponents)) {
+    if ($pageType === 'about_page') {
+        $contentComponents = [['code' => 'about-content', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'contact_page') {
+        $contentComponents = [['code' => 'contact-content', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'games_page') {
+        $contentComponents = [['code' => 'games-showcase', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'faq_page') {
+        $contentComponents = [['code' => 'faq', 'enabled' => true, 'config' => []]];
+    } elseif (in_array($pageType, ['privacy_policy', 'terms_of_service', 'refund_policy', 'shipping_policy', 'cookie_policy'], true)) {
+        $contentComponents = [['code' => 'legal-content', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'blog_list') {
+        $contentComponents = [['code' => 'blog-list', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'blog_category') {
+        $contentComponents = [['code' => 'blog-category', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'blog_post') {
+        $contentComponents = [['code' => 'blog-detail', 'enabled' => true, 'config' => []]];
+    } else {
+        $contentComponents = [
+            ['code' => 'hero-slider', 'enabled' => true, 'config' => ['banner.display' => 'yes', 'download_btn.display' => 'yes', 'layout.slider_classes' => 'tnt-hero-stage', 'layout.margin_top' => '-72', 'layout.img_margin_top' => '0']],
+            ['code' => 'advantages', 'enabled' => true, 'config' => []],
+            ['code' => 'games-showcase', 'enabled' => true, 'config' => []],
+            ['code' => 'testimonials', 'enabled' => true, 'config' => []],
+            ['code' => 'faq', 'enabled' => true, 'config' => []],
+        ];
+    }
+}
+
+if (empty($footerComponents)) {
+    $footerComponents = [['code' => 'footer-links', 'enabled' => true, 'config' => []]];
+}
+
+$componentFiles = [
+    'header-nav' => 'header/nav.phtml',
+    'header-simple' => 'header/simple.phtml',
+    'header-dark' => 'header/dark.phtml',
+    'hero-slider' => 'content/hero-slider.phtml',
+    'advantages' => 'content/advantages.phtml',
+    'games-showcase' => 'content/games.phtml',
+    'games' => 'content/games.phtml',
+    'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
+    'testimonials' => 'content/testimonials.phtml',
+    'faq' => 'content/faq.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-category' => 'content/blog-category.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
+    'footer-links' => 'footer/links.phtml',
+    'footer-simple' => 'footer/simple.phtml',
+];
+
+$renderComponent = function ($component) use ($componentFiles, $page, $styleSettings, &$colors) {
+    $code = $component['code'] ?? '';
+    $enabled = $component['enabled'] ?? true;
+    $componentConfig = $component['config'] ?? [];
+
+    if (!$enabled || empty($code)) {
+        return '';
+    }
+
+    $file = $componentFiles[$code] ?? null;
+    if (!$file) {
+        return "<!-- Component not found: {$code} -->";
+    }
+
+    ob_start();
+    $this->assign('page', $page);
+    $this->assign('style', $styleSettings);
+    $this->assign('style_settings', $styleSettings);
+    $this->assign('component_config', is_array($componentConfig) ? $componentConfig : []);
+    $this->assign('colors', is_array($colors) ? $colors : []);
+    $this->assign('__tnt_shell_managed', true);
+    $this->assign('__pagebuilder_shell_managed', true);
+    echo $this->fetchTemplate("GuoLaiRen_PageBuilder::style/twenty-nine-tempest/components/{$file}");
+    return ob_get_clean();
+};
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sanitizeTitle = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') return $value;
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$pageTitleRaw = $page ? $page->getData('title') : 'Twenty Nine Tempest';
+$pageTitle = $sanitizeTitle($pageTitleRaw);
+if ($pageTitle === '') {
+    $pageTitle = 'Twenty Nine Tempest';
+}
+$pageDescription = $page ? $page->getData('meta_description') : '';
+if (!defined('TWENTY_NINE_TEMPEST_DOC_OPENED')) {
+    define('TWENTY_NINE_TEMPEST_DOC_OPENED', true);
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <?php if ($pageDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($pageDescription) ?>">
+    <?php endif; ?>
+
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/animate.css@4.1.1/animate.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'cb-emerald': '<?= htmlspecialchars($colors['accent_primary'] ?? '#1eb980') ?>',
+                    'cb-amber': '<?= htmlspecialchars($colors['accent_secondary'] ?? '#f2a93b') ?>',
+                    'cb-ink': '<?= htmlspecialchars($colors['body_bg'] ?? '#0b1525') ?>',
+                    'cb-deep': '<?= htmlspecialchars($colors['section_bg_2'] ?? '#0f2538') ?>',
+                }
+            }
+        }
+    }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        [hidden] { display: none !important; }
+        html { scroll-behavior: smooth; }
+        body.tnt-theme .wow { visibility: visible; }
+        html.tnt-wow-ready body.tnt-theme .wow { visibility: hidden; }
+        body.tnt-theme .animate__animated {
+            animation-duration: 0.88s;
+            animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+            backface-visibility: hidden;
+            will-change: transform, opacity;
+        }
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(1200px 600px at 15% 10%, rgba(30, 185, 128, 0.18), transparent 60%),
+                radial-gradient(800px 500px at 85% 20%, rgba(242, 169, 59, 0.12), transparent 55%),
+                <?= htmlspecialchars($colors['body_bg'] ?? '#0b1525') ?>;
+            color: #ffffff;
+            overflow-x: hidden;
+        }
+        h1, h2, h3, h4, h5 { font-family: 'Space Grotesk', 'Manrope', sans-serif; }
+        @media (prefers-reduced-motion: reduce) {
+            body.tnt-theme .wow,
+            html.tnt-wow-ready body.tnt-theme .wow {
+                visibility: visible !important;
+            }
+            body.tnt-theme .animate__animated {
+                animation: none !important;
+            }
+        }
+    </style>
+    <script>
+    (function () {
+        if (window.__tntWowBootstrapped) {
+            return;
+        }
+        window.__tntWowBootstrapped = true;
+
+        var isEmbeddedFrame = function () {
+            try {
+                return !!window.parent && window.parent !== window;
+            } catch (error) {
+                return true;
+            }
+        };
+
+        var isPreviewContext = function () {
+            try {
+                var search = new URLSearchParams(window.location.search);
+                return !!window.__PAGEBUILDER_PREVIEW__
+                    || search.get('preview') === '1'
+                    || (isEmbeddedFrame() && (document.referrer || '').indexOf('/pagebuilder/backend/') !== -1);
+            } catch (error) {
+                return !!window.__PAGEBUILDER_PREVIEW__;
+            }
+        };
+
+        var playPreviewAnimation = function (element, fallbackDelay) {
+            if (!element || element.dataset.tntPreviewAnimated === '1') {
+                return;
+            }
+
+            element.dataset.tntPreviewAnimated = '1';
+            element.style.visibility = 'visible';
+
+            var effectClasses = Array.prototype.filter.call(element.classList, function (className) {
+                return className.indexOf('animate__') === 0 && className !== 'animate__animated';
+            });
+
+            if (!effectClasses.length) {
+                effectClasses.push('animate__fadeInUp');
+            }
+
+            element.classList.remove('animate__animated');
+            effectClasses.forEach(function (className) {
+                element.classList.remove(className);
+            });
+
+            void element.offsetWidth;
+
+            effectClasses.forEach(function (className) {
+                element.classList.add(className);
+            });
+
+            element.style.animationDelay = element.getAttribute('data-wow-delay') || fallbackDelay;
+
+            var duration = element.getAttribute('data-wow-duration');
+            if (duration) {
+                element.style.animationDuration = duration;
+            }
+
+            requestAnimationFrame(function () {
+                element.classList.add('animate__animated');
+            });
+        };
+
+        var initPreviewAnimations = function (root) {
+            var scope = root && root.querySelectorAll ? root : document;
+            var wowElements = scope.querySelectorAll('.wow');
+
+            wowElements.forEach(function (element, index) {
+                playPreviewAnimation(element, Math.min(index * 70, 420) + 'ms');
+            });
+        };
+
+        var observePreviewMutations = function () {
+            if (window.__tntPreviewObserverStarted || !window.MutationObserver || !document.body) {
+                return;
+            }
+
+            window.__tntPreviewObserverStarted = true;
+
+            var observer = new MutationObserver(function (mutations) {
+                mutations.forEach(function (mutation) {
+                    mutation.addedNodes.forEach(function (node) {
+                        if (!node || node.nodeType !== 1) {
+                            return;
+                        }
+
+                        if (node.matches && node.matches('.wow')) {
+                            playPreviewAnimation(node, '0ms');
+                        }
+
+                        if (node.querySelectorAll) {
+                            initPreviewAnimations(node);
+                        }
+                    });
+                });
+            });
+
+            observer.observe(document.body, { childList: true, subtree: true });
+            window.__tntPreviewObserver = observer;
+        };
+
+        var initWow = function () {
+            try {
+                if (isPreviewContext()) {
+                    document.documentElement.classList.remove('tnt-wow-ready');
+                    initPreviewAnimations();
+                    observePreviewMutations();
+                    return;
+                }
+
+                if (!window.WOW) {
+                    document.documentElement.classList.remove('tnt-wow-ready');
+                    initPreviewAnimations();
+                    return;
+                }
+
+                document.documentElement.classList.add('tnt-wow-ready');
+                new window.WOW({
+                    boxClass: 'wow',
+                    animateClass: 'animate__animated',
+                    offset: 24,
+                    mobile: true,
+                    live: true
+                }).init();
+            } catch (error) {
+                document.documentElement.classList.remove('tnt-wow-ready');
+                initPreviewAnimations();
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initWow, { once: true });
+        } else {
+            initWow();
+        }
+    })();
+    </script>
+</head>
+<body class="tnt-theme">
+    <header class="abpro-region-header" data-region="header">
+        <?php if (!empty($headerComponents)): ?>
+            <?php foreach ($headerComponents as $component): ?>
+                <?php if ($component['enabled'] ?? true): ?>
+                <div class="abpro-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </header>
+
+    <main class="abpro-region-content" data-region="content">
+        <?php if (!empty($contentComponents)): ?>
+            <?php foreach ($contentComponents as $index => $component): ?>
+                <?php if ($component['enabled'] ?? true): ?>
+                <div class="abpro-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>" data-index="<?= $index ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </main>
+
+    <footer class="abpro-region-footer" data-region="footer">
+        <?php if (!empty($footerComponents)): ?>
+            <?php foreach ($footerComponents as $component): ?>
+                <?php if ($component['enabled'] ?? true): ?>
+                <div class="abpro-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+                <?php endif; ?>
+            <?php endforeach; ?>
+        <?php endif; ?>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<svg width="720" height="420" viewBox="0 0 720 420" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="720" height="420" rx="32" fill="#EEF4EA"/>
+  <ellipse cx="360" cy="220" rx="236" ry="112" fill="#113A2F"/>
+  <ellipse cx="360" cy="220" rx="206" ry="88" stroke="#D3A03A" stroke-width="12"/>
+  <circle cx="252" cy="176" r="56" fill="#FFF8E8" fill-opacity="0.95"/>
+  <circle cx="468" cy="176" r="56" fill="#FFF8E8" fill-opacity="0.95"/>
+  <text x="252" y="184" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="28" font-weight="800" fill="#1F3F35">10</text>
+  <text x="468" y="184" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="28" font-weight="800" fill="#1F3F35">A</text>
+  <circle cx="360" cy="238" r="48" fill="#D3A03A"/>
+  <circle cx="360" cy="238" r="34" fill="#164334"/>
+  <text x="360" y="248" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="24" font-weight="800" fill="#FFFDF8">VIP</text>
+  <path d="M204 320H516" stroke="#FFFDF8" stroke-opacity="0.3" stroke-width="2" stroke-dasharray="8 10"/>
+  <rect x="194" y="302" width="332" height="62" rx="18" fill="#FFFDF8" fill-opacity="0.84"/>
+  <text x="360" y="342" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="28" font-weight="700" fill="#1F3F35">VIP salon</text>
+</svg>

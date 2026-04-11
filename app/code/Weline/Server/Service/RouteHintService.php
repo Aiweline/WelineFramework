@@ -171,6 +171,19 @@ class RouteHintService
         $hint = self::generateHint($sni, $ttl);
         $response->setHeader(self::HEADER_NAME, $hint);
     }
+
+    /**
+     * Add a route hint header to the unified framework Response.
+     */
+    public static function addHintToFrameworkResponse(\Weline\Framework\Http\Response $response, string $sni = '', ?int $ttl = null): void
+    {
+        if (!self::isEnabled()) {
+            return;
+        }
+
+        $hint = self::generateHint($sni, $ttl);
+        $response->setHeader(self::HEADER_NAME, $hint);
+    }
     
     /**
      * 从请求中提取 SNI（如果可用）

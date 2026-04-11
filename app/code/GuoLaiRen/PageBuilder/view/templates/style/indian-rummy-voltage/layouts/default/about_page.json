@@ -1,0 +1,28 @@
+{
+    "page_type": "about_page",
+    "name": "关于我们默认布局",
+    "description": "关于我们页面标准布局，包含公司介绍、团队、价值观等区块",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "about-content",
+                "enabled": true,
+                "instance_id": "about-content-default",
+                "config": {
+                    "display.show_team": "yes",
+                    "display.show_values": "yes",
+                    "display.show_stats": "yes",
+                    "display.show_cta": "yes"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "header 和 footer 为空数组表示从首页继承"
+}

@@ -35,7 +35,7 @@ class SiteBuilderAgent extends BackendController
     {
         $selectedProvider = \trim((string)$this->request->getGet('provider', ''));
         if ($selectedProvider === '') {
-            $selectedProvider = 'websites_default';
+            $selectedProvider = 'pagebuilder';
         }
 
         $fakeMode = $this->isFakeModeRequested();
@@ -50,6 +50,14 @@ class SiteBuilderAgent extends BackendController
         $this->assign('selected_provider_context', $this->extractProviderContext($providerConfig));
         $this->assign('selected_stage_guides', $this->buildStageGuides($providerConfig, $scope, 'prepare'));
         $this->assign('create_session_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/create-session'));
+        $this->assign('plan_generate_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/generate'));
+        $this->assign('plan_revise_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/revise'));
+        $this->assign('plan_stream_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/stream'));
+        $this->assign('plan_confirm_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/confirm'));
+        $this->assign('plan_local_pool_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/local-pool'));
+        $this->assign('plan_reserve_local_pool_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/reserve-local-pool'));
+        $this->assign('plan_select_domain_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/select-domain'));
+        $this->assign('plan_create_session_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-plan/create-session'));
         $this->assign('delete_session_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/delete-session'));
         $this->assign('recommend_domain_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/recommend-domain'));
         $this->assign('recommend_domain_sse_url', $this->getUrlHelper()->getBackendUrl('*/backend/site-builder-agent/recommend-domain-sse'));
@@ -60,7 +68,7 @@ class SiteBuilderAgent extends BackendController
         $this->assign('breadcrumb_parent', __('网站服务'));
         $this->assign('breadcrumb_current', __('AI 建站工作台'));
 
-        return $this->fetch();
+        return $this->fetch('index-v1');
     }
 
     #[Acl('Weline_Websites::site_builder_agent_workspace', 'AI Site Workspace', 'mdi mdi-view-dashboard-outline', 'View and edit resumable AI site workspaces', 'Weline_Websites::site_builder_agent')]

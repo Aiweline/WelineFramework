@@ -1,0 +1,32 @@
+{
+    "page_type": "refund_policy",
+    "name": "法律文档默认布局",
+    "description": "隐私政策、服务条款等法律文档页面标准布局",
+    "version": "1.0.0",
+    "applicable_types": ["privacy_policy", "terms_of_service", "refund_policy", "shipping_policy"],
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "legal-content-default",
+                "config": {
+                    "header.title": "退款政策",
+                    "header.icon": "💰",
+                    "content.body": "本退款政策说明在何种条件下可申请退款以及我们如何处理退款。请在购买或充值前仔细阅读。",
+                    "toc.items": "概述|本退款政策说明在何种条件下可申请退款以及我们如何处理退款。\n退款资格|重复扣款、因技术错误导致的错误扣款或法律要求的情形下，我们可考虑退款。已使用的服务或已完全交付的服务不适用退款。\n如何申请退款|请携带账户信息、交易参考号及退款原因联系客服。我们将在法律规定的时限内审核并回复。\n处理时间|获批的退款一般在5–10个工作日内处理。款项到账时间取决于您的银行或支付机构。\n联系我们|如有疑问或需提交退款申请，请使用“联系我们”页面或平台提供的客服邮箱。",
+                    "display.show_toc": "yes",
+                    "display.show_last_updated": "yes",
+                    "layout.content_width": "medium"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "header 和 footer 为空数组表示从首页继承"
+}
