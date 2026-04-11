@@ -21,6 +21,16 @@ $handle = $this->getData('visual_config_handle') ?: ($page ? $page->getData('han
 $styleSettings = $page ? $page->getStyleSettings() : [];
 $isTemplateConfigMode = $this->getData('is_template_config_mode') ?: false;
 
+// 虚拟主题 / 会话预览：由 virtual-edit 等入口 assign，普通编辑页为 0 / 空串（与 form_component_back 对齐）
+$virtualThemeIdForVisual = (int)($this->getData('visual_config_virtual_theme_id') ?: 0);
+$visualPublicId = (string)($this->getData('visual_public_id') ?? '');
+$visualPageTypeForPreview = (string)($this->getData('visual_page_type') ?? '');
+$visualPreviewUrlBootstrap = (string)($this->getData('visual_preview_url') ?? '');
+$isVisualVirtualMode = (bool)($this->getData('visual_is_virtual_mode') ?? false);
+$previewIframeSrc = ($isVisualVirtualMode && $visualPreviewUrlBootstrap !== '')
+    ? $visualPreviewUrlBootstrap
+    : $this->getBackendUrl('*/backend/preview/full', ['page_id' => (int)$pageId, 'visual_editor' => '1']);
+
 // AI 组件配置生成所需：页面类型、页面描述、各类型提示词（供前端手风琴展示）
 $pageType = $page ? (string)($page->getData('type') ?? 'custom_page') : 'custom_page';
 $aiDescription = $page ? (string)($page->getData('ai_description') ?? '') : '';
@@ -1684,7 +1694,7 @@ body.visual-config-editor-open .swal2-popup .card:hover {
         <!-- 中间预览面板 -->
         <div class="preview-panel">
             <div class="preview-container device-desktop" id="previewContainer">
-                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= $this->getBackendUrl('*/backend/preview/full', ['page_id' => $pageId, 'visual_editor' => '1']) ?>"></iframe>
+                <iframe id="previewIframe" class="preview-iframe" data-skip-parse="src" src="<?= htmlspecialchars($previewIframeSrc, ENT_QUOTES, 'UTF-8') ?>"></iframe>
                 <div class="preview-loading" id="previewLoading">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden"><?= __('加载中...') ?></span>
@@ -1706,6 +1716,11 @@ body.visual-config-editor-open .swal2-popup .card:hover {
 <link href='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.css)' rel='stylesheet' type='text/css'/>
 <!-- SweetAlert2 JS -->
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
+<script>
+window.visualVirtualThemeId = window.visualVirtualThemeId || <?= (int)$virtualThemeIdForVisual ?>;
+window.visualPublicId = <?= json_encode($visualPublicId, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+window.visualPageType = <?= json_encode($visualPageTypeForPreview, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS) ?>;
+</script>
 <!-- 早期挂载一个全局入口，确保表单可调用，即使主脚本延迟/异常 -->
 <script>
 /** 挂到 body，避免嵌在表单 .card 内时 theme .card:hover transform 产生层叠上下文锁住 fixed */
@@ -2248,17 +2263,24 @@ window.refreshPreview = function(savedPosition) {
     const styleCode = window.currentTemplateStyleCode || '';
     const templatePageId = window.currentTemplatePageId || 0;
     
-    // 构建预览 URL（使用全局 pageId 或从 window 获取）
+    // 构建预览 URL（page_id 模式 或 虚拟主题 public_id + page_type）
     const currentPageId = typeof pageId !== 'undefined' ? pageId : (window.pageId || window.visualPageId || 0);
-    let previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId + '&visual_editor=1';
+    const useVirtualPreview = typeof window.visualPublicId === 'string' && window.visualPublicId.trim() !== ''
+        && typeof window.visualPageType === 'string' && window.visualPageType.trim() !== '';
+    let previewUrl;
+    if (useVirtualPreview) {
+        previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?public_id=' + encodeURIComponent(window.visualPublicId)
+            + '&page_type=' + encodeURIComponent(window.visualPageType) + '&visual_editor=1';
+    } else {
+        previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + currentPageId + '&visual_editor=1';
+    }
     
-    if (isTemplateMode && styleCode) {
+    if (!useVirtualPreview && isTemplateMode && styleCode) {
         previewUrl += '&style_code=' + encodeURIComponent(styleCode);
         if (templatePageId) {
             previewUrl = '<?= $this->getBackendUrl('*/backend/preview/full') ?>?page_id=' + templatePageId + '&style_code=' + encodeURIComponent(styleCode) + '&visual_editor=1';
         }
     } else {
-        // 普通页面配置模式：如果有外部样式选择，带上样式代码
         const externalStyleSelect = document.getElementById('style');
         const externalStyleCode = externalStyleSelect ? externalStyleSelect.value : (typeof window.currentStyle !== 'undefined' ? window.currentStyle : '');
         if (externalStyleCode) {
@@ -2267,6 +2289,10 @@ window.refreshPreview = function(savedPosition) {
         if (window.currentVisualLanguage) {
             previewUrl += '&locale=' + encodeURIComponent(window.currentVisualLanguage);
         }
+    }
+    
+    if (typeof window.visualVirtualThemeId === 'number' && window.visualVirtualThemeId > 0) {
+        previewUrl += '&virtual_theme_id=' + encodeURIComponent(String(window.visualVirtualThemeId));
     }
     
     previewUrl += '&t=' + Date.now();
