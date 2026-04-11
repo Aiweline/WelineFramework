@@ -4,35 +4,32 @@ declare(strict_types=1);
 
 namespace GuoLaiRen\PageBuilder\Test\Integration;
 
-use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
 use GuoLaiRen\PageBuilder\Controller\Backend\Page as PageController;
 use GuoLaiRen\PageBuilder\Controller\Backend\Preview as PreviewController;
+use GuoLaiRen\PageBuilder\Controller\Frontend\Page as FrontendPageController;
 use GuoLaiRen\PageBuilder\Model\AiSiteAgentSession;
 use GuoLaiRen\PageBuilder\Model\Page;
-use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
-use Weline\Backend\Model\BackendUser;
-use Weline\Framework\Http\Request;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Session\SessionFactory;
-use Weline\Framework\UnitTest\TestCore;
+use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
 
 /**
+ * AI 建站工作台端到端验收（集成测试，需 DB + 后台登录上下文）。
+ *
+ * 阶段对应 guided UI：
+ * - 阶段 1「说说你的网站」：post-create-session + post-merge-scope（scope_patch 模拟用户填写的站点信息）
+ * - 阶段 2「看看效果」：runBuildOperation（内存 SSE）模拟生成虚拟主题与页面；get-state-json 校验预览/编辑 URL
+ * - 阶段 3「准备上线」：post-publish-checklist + runPublishOperation；校验正式页面与后台预览 HTML
+ *
+ * 前端 workspace.phtml 应使用本控制器 assign 的 URL（与 get-state-json 返回的 visual_* 同源）：
+ * state_json_url、merge_scope_url、operation_sse_url、start_publish_url 等，勿写死路径。
+ *
  * @group integration
  * @group pagebuilder_workbench
  */
-class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
+class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
-    private AiSiteAgentSessionService $sessionService;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->sessionService = ObjectManager::getInstance(AiSiteAgentSessionService::class);
-        $this->loginAsBackendAdmin();
-    }
-
     public function testWorkbenchCanCreateBuildAndPublishWebsiteSuccessfully(): void
     {
         $suffix = \date('YmdHis') . '-' . \substr(\bin2hex(\random_bytes(4)), 0, 8);
@@ -238,6 +235,30 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
         self::assertSame($siteTitle, $website->getName());
         self::assertSame('page_builder', (string)$website->getScope());
         self::assertStringContainsString($targetDomain, $website->getUrl());
+
+        // 模拟访客站「本地已建站」：前端 Live 模式按 page_id 渲染首页（与线上根域名访问同一套 PageRenderService）
+        $homePageId = (int)($publishedPages[Page::TYPE_HOME]['page_id'] ?? 0);
+        self::assertGreaterThan(0, $homePageId);
+        WebsiteData::setWebsite($website);
+        $this->prepareFrontendRequest(
+            '/pagebuilder/frontend/page/view',
+            'GET',
+            'view',
+            ['page_id' => $homePageId],
+            [],
+            'Frontend/Page'
+        );
+        /** @var FrontendPageController $frontendPage */
+        $frontendPage = ObjectManager::getInstance(FrontendPageController::class);
+        \ob_start();
+        try {
+            $frontendPage->view();
+        } finally {
+            $liveHtml = (string)\ob_get_clean();
+        }
+        self::assertNotSame('', \trim($liveHtml), 'Published home should render non-empty HTML on frontend live view.');
+        self::assertStringContainsString('<!DOCTYPE', $liveHtml);
+        self::assertStringNotContainsString('Component not found:', $liveHtml);
     }
 
     public function testWorkbenchBuildCanOpenVirtualPreviewAndEditorRoutesDirectly(): void
@@ -438,90 +459,6 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
     }
 
     /**
-     * @param array<string, scalar|array> $query
-     * @param array<string, scalar|array> $post
-     * @return array<string, mixed>
-     */
-    private function invokeJsonAction(
-        string $path,
-        string $httpMethod,
-        string $controllerMethod,
-        array $query = [],
-        array $post = []
-    ): array {
-        $this->prepareBackendRequest($path, $httpMethod, $controllerMethod, $query, $post);
-
-        /** @var AiSiteAgent $controller */
-        $controller = ObjectManager::getInstance(AiSiteAgent::class);
-        $result = match ($controllerMethod) {
-            'postCreateSession' => $controller->postCreateSession(),
-            'postMergeScope' => $controller->postMergeScope(),
-            'postStartBuild' => $controller->postStartBuild(),
-            'postStartRefineComponent' => $controller->postStartRefineComponent(),
-            'postPublishChecklist' => $controller->postPublishChecklist(),
-            'postStartPublish' => $controller->postStartPublish(),
-            'postSwitchPreviewPage' => $controller->postSwitchPreviewPage(),
-            'getStateJson' => $controller->getStateJson(),
-            default => throw new \RuntimeException('Unsupported controller method: ' . $controllerMethod),
-        };
-
-        $decoded = \json_decode((string)$result, true);
-        self::assertIsArray($decoded, 'Controller JSON response must decode to array: ' . $result);
-
-        return $decoded;
-    }
-
-    private function invokePrivateOperation(string $method, InMemorySseWriter $writer, string $publicId): array
-    {
-        /** @var AiSiteAgent $controller */
-        $controller = ObjectManager::getInstance(AiSiteAgent::class);
-        $session = $this->sessionService->loadByPublicId($publicId, 1);
-        self::assertNotNull($session);
-
-        $reflection = new \ReflectionMethod($controller, $method);
-        $reflection->setAccessible(true);
-        $result = $reflection->invoke($controller, $writer, $session, 1);
-        self::assertIsArray($result);
-
-        return $result;
-    }
-
-    /**
-     * @param array<string, scalar|array> $query
-     * @param array<string, scalar|array> $post
-     */
-    private function prepareBackendRequest(
-        string $path,
-        string $httpMethod,
-        string $controllerMethod,
-        array $query = [],
-        array $post = [],
-        string $controllerName = 'Backend/AiSiteAgent'
-    ): void {
-        self::initRequest($path);
-
-        /** @var Request $request */
-        $request = ObjectManager::getInstance(Request::class);
-        Request::clearStaticUrlPathCache();
-        $request->setBackend();
-        $request->setServer('WELINE_AREA', 'backend');
-        $request->setServer('REQUEST_URI', $path);
-        $request->setMethod($httpMethod);
-        $request->setData('router/module', 'GuoLaiRen_PageBuilder');
-        $request->setData('router/module_path', BP . 'app/code/GuoLaiRen/PageBuilder/');
-        $request->setData('router/class/controller_name', $controllerName);
-        $request->setData('router/class/method', $controllerMethod);
-        $request->setData('router/backend_router', 'pagebuilder');
-
-        foreach ($query as $key => $value) {
-            $request->setGet((string)$key, $value);
-        }
-        foreach ($post as $key => $value) {
-            $request->setPost((string)$key, $value);
-        }
-    }
-
-    /**
      * @return array{
      *   public_id:string,
      *   site_title:string,
@@ -614,65 +551,5 @@ class AiSiteWorkbenchSuccessIntegrationTest extends TestCore
             'page_types' => $pageTypes,
             'build_state' => $buildState,
         ];
-    }
-
-    private function loginAsBackendAdmin(): void
-    {
-        /** @var BackendUser $admin */
-        $admin = ObjectManager::getInstance(BackendUser::class);
-        $admin->clearData()->clearQuery()->load(1);
-        self::assertGreaterThan(0, (int)$admin->getId(), 'Backend admin user #1 is required for workbench integration tests.');
-
-        $backendSession = SessionFactory::getInstance()->createBackendSession();
-        $backendSession->login($admin);
-    }
-}
-
-final class InMemorySseWriter extends \Weline\Framework\Http\Sse\SseWriter
-{
-    /** @var list<array{event:string,data:mixed}> */
-    private array $events = [];
-
-    public function start(): static
-    {
-        return $this;
-    }
-
-    public function sendEvent(string $event, mixed $data = null, ?int $id = null): static
-    {
-        $this->events[] = ['event' => $event, 'data' => $data];
-        return $this;
-    }
-
-    public function sendError(string $message, int $code = 500): static
-    {
-        $this->events[] = ['event' => 'error', 'data' => ['message' => $message, 'code' => $code]];
-        return $this;
-    }
-
-    public function complete(mixed $data = null): void
-    {
-        $this->events[] = ['event' => 'done', 'data' => $data];
-    }
-
-    public function isAlive(): bool
-    {
-        return true;
-    }
-
-    /**
-     * @return list<array{event:string,data:mixed}>
-     */
-    public function eventsByName(string $eventName): array
-    {
-        return \array_values(\array_filter(
-            $this->events,
-            static fn(array $event): bool => $event['event'] === $eventName
-        ));
-    }
-
-    public function countEvents(string $eventName): int
-    {
-        return \count($this->eventsByName($eventName));
     }
 }
