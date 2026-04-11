@@ -1,0 +1,624 @@
+<?php
+/**
+ * Twenty Nine Tempest - About Content Component
+ *
+ * @component_start
+ * code: about-content
+ * name: 关于我们内容
+ * name_en: About Content
+ * description: 品牌关于页面内容展示组件
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_stats => 显示数据统计:select:yes|yes,no
+ * display.show_values => 显示价值观:select:yes|yes,no
+ * display.show_team => 显示团队成员:select:yes|yes,no
+ * display.show_cta => 显示CTA:select:yes|yes,no
+ *
+ * group:hero => 顶部横幅
+ * hero.title => 页面标题:text:About Twenty Nine Tempest
+ * hero.subtitle => 页面副标题:textarea:Twenty Nine Tempest refines the classic trick-taking experience with clearer room reading, faster support access, and dependable mobile play.
+ * hero.bg_color => 背景色:color:#0b1830
+ * hero.bg_gradient_end => 渐变结束色:color:#09111d
+ * hero.title_color => 标题颜色:color:#eef7ff
+ * hero.text_color => 文字颜色:color:#c7d9ea
+ * hero.padding => 内边距:number:72|px
+ *
+ * group:stats => 数据统计
+ * stats.stat_1_number => 统计1数字:text:5+
+ * stats.stat_1_label => 统计1标签:text:Years refining table flow
+ * stats.stat_2_number => 统计2数字:text:1M+
+ * stats.stat_2_label => 统计2标签:text:29 Card sessions served
+ * stats.stat_3_number => 统计3数字:text:24/7
+ * stats.stat_3_label => 统计3标签:text:Support desk coverage
+ * stats.stat_4_number => 统计4数字:text:20+
+ * stats.stat_4_label => 统计4标签:text:Regions reached
+ * stats.number_color => 数字颜色:color:#ffd45d
+ * stats.label_color => 标签颜色:color:#b7cadb
+ * stats.card_bg => 卡片背景:color:#0f2034
+ *
+ * group:story => 故事区块
+ * story.title => 标题:text:Our Story
+ * story.subtitle => 副标题:text:Built to make every 29 Card route easier to read.
+ * story.content => 内容:textarea:
+ * story.bg_color => 背景色:color:#0c1526
+ * story.title_color => 标题颜色:color:#eef7ff
+ *
+ * group:values => 价值观区块
+ * values.title => 标题:text:Our Core Values
+ * values.subtitle => 副标题:text:Three editable pillars keep the page useful when creating new 29 Card sites.
+ * values.value_1_icon => 价值1图标:text:FP
+ * values.value_1_title => 价值1标题:text:Fair Play
+ * values.value_1_desc => 价值1描述:textarea:Table signals, rule expectations, and outcome cues should stay transparent from the first tap.
+ * values.value_2_icon => 价值2图标:text:MC
+ * values.value_2_title => 价值2标题:text:Mobile Clarity
+ * values.value_2_desc => 价值2描述:textarea:Layouts, routes, and controls should remain readable during quick 29 Card browsing on smaller screens.
+ * values.value_3_icon => 价值3图标:text:FS
+ * values.value_3_title => 价值3标题:text:Fast Support
+ * values.value_3_desc => 价值3描述:textarea:Account, payout, and gameplay questions should reach the right desk without extra friction.
+ * values.bg_color => 背景色:color:#101d31
+ *
+ * group:team => 团队区块
+ * team.title => 标题:text:Team Grid
+ * team.subtitle => 副标题:text:The operators shaping route clarity, support speed, and product flow.
+ * team.member_1_icon => 成员1图标:text:R1
+ * team.member_1_name => 成员1姓名:text:John Smith
+ * team.member_1_role => 成员1职位:text:Chief Executive Officer
+ * team.member_2_icon => 成员2图标:text:R2
+ * team.member_2_name => 成员2姓名:text:Sarah Johnson
+ * team.member_2_role => 成员2职位:text:Chief Technology Officer
+ * team.member_3_icon => 成员3图标:text:R3
+ * team.member_3_name => 成员3姓名:text:Michael Chen
+ * team.member_3_role => 成员3职位:text:Product Director
+ * team.member_4_icon => 成员4图标:text:R4
+ * team.member_4_name => 成员4姓名:text:Emily Wang
+ * team.member_4_role => 成员4职位:text:Design Director
+ *
+ * group:cta => CTA区块
+ * cta.title => 标题:text:Ready for the next hand?
+ * cta.description => 描述:textarea:Move from overview to download and support without rebuilding the page structure later.
+ * cta.button_text => 按钮文字:text:Contact Us
+ * cta.button_url => 按钮链接:text:/contact
+ * cta.button_bg => 按钮背景基础色:color:#ffd45d
+ * cta.button_text_color => 按钮文字颜色:color:#08131f
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$componentId = 'tnt-about-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+
+$getConfigAny = static function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+
+    return $default;
+};
+
+$getConfig = static function ($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+if ($normalizeToggle($getConfigAny(['display.display.show_section', 'display.show_section', 'about.display'], 'yes')) === 'no') {
+    return;
+}
+
+$showStats = $normalizeToggle($getConfigAny(['display.display.show_stats', 'display.show_stats'], 'yes')) !== 'no';
+$showValues = $normalizeToggle($getConfigAny(['display.display.show_values', 'display.show_values'], 'yes')) !== 'no';
+$showTeam = $normalizeToggle($getConfigAny(['display.display.show_team', 'display.show_team'], 'yes')) !== 'no';
+$showCta = $normalizeToggle($getConfigAny(['display.display.show_cta', 'display.show_cta'], 'yes')) !== 'no';
+
+$pageTitle = $page ? trim((string) ($page->getData('title') ?? '')) : '';
+$pageMeta = $page ? trim((string) ($page->getData('meta_description') ?? '')) : '';
+$pageContentRaw = $page ? (string) ($page->getData('content') ?? '') : '';
+
+$title = trim((string) $getConfigAny(['hero.hero.title', 'hero.title'], $pageTitle));
+if ($title === '') {
+    $title = 'About Twenty Nine Tempest';
+}
+$subtitle = trim((string) $getConfigAny(['hero.hero.subtitle', 'hero.subtitle'], $pageMeta !== '' ? $pageMeta : 'Twenty Nine Tempest refines the classic trick-taking experience with clearer room reading, faster support access, and dependable mobile play.'));
+$heroBg = (string) $getConfigAny(['hero.hero.bg_color', 'hero.bg_color'], $colors['hero_bg'] ?? '#0b1830');
+$heroBgEnd = (string) $getConfigAny(['hero.hero.bg_gradient_end', 'hero.bg_gradient_end'], $colors['hero_bg_gradient_end'] ?? '#09111d');
+$heroTitleColor = (string) $getConfigAny(['hero.hero.title_color', 'hero.title_color'], $colors['heading_color'] ?? '#eef7ff');
+$heroTextColor = (string) $getConfigAny(['hero.hero.text_color', 'hero.text_color'], $colors['text_secondary'] ?? '#c7d9ea');
+$heroPadding = max(48, (int) $getConfigAny(['hero.hero.padding', 'hero.padding'], '72'));
+
+$statsNumberColor = (string) $getConfigAny(['stats.stats.number_color', 'stats.number_color'], $colors['accent_primary'] ?? '#ffd45d');
+$statsLabelColor = (string) $getConfigAny(['stats.stats.label_color', 'stats.label_color'], $colors['text_muted'] ?? '#b7cadb');
+$statsCardBg = (string) $getConfigAny(['stats.stats.card_bg', 'stats.card_bg'], '#0f2034');
+$storyBg = (string) $getConfigAny(['story.story.bg_color', 'story.bg_color'], $colors['section_bg_1'] ?? '#0c1526');
+$storyTitleColor = (string) $getConfigAny(['story.story.title_color', 'story.title_color'], $colors['heading_color'] ?? '#eef7ff');
+$valuesBg = (string) $getConfigAny(['values.values.bg_color', 'values.bg_color'], $colors['section_bg_2'] ?? '#101d31');
+$ctaButtonBg = (string) $getConfigAny(['cta.cta.button_bg', 'cta.button_bg'], $colors['button_primary_bg'] ?? '#ffd45d');
+$ctaButtonTextColor = (string) $getConfigAny(['cta.cta.button_text_color', 'cta.button_text_color'], $colors['button_primary_text'] ?? '#08131f');
+
+$defaultStats = [
+    ['5+', 'Years refining table flow'],
+    ['1M+', '29 Card sessions served'],
+    ['24/7', 'Support desk coverage'],
+    ['20+', 'Regions reached'],
+];
+$stats = [];
+for ($i = 1; $i <= 4; $i++) {
+    $number = trim((string) $getConfigAny(["stats.stats.stat_{$i}_number", "stats.stat_{$i}_number"], $defaultStats[$i - 1][0]));
+    $label = trim((string) $getConfigAny(["stats.stats.stat_{$i}_label", "stats.stat_{$i}_label"], $defaultStats[$i - 1][1]));
+    if ($number === '' && $label === '') {
+        continue;
+    }
+    $stats[] = ['value' => $number, 'label' => $label];
+}
+
+$storyTitle = trim((string) $getConfigAny(['story.story.title', 'story.title'], 'Our Story'));
+$storySubtitle = trim((string) $getConfigAny(['story.story.subtitle', 'story.subtitle'], 'Built to make every 29 Card route easier to read.'));
+$storyContentField = trim((string) $getConfigAny(['story.story.content', 'story.content'], ''));
+$storyHtml = '';
+if ($storyContentField !== '') {
+    $storyHtml = trim(strip_tags($storyContentField)) === $storyContentField
+        ? '<p>' . nl2br(htmlspecialchars($storyContentField, ENT_QUOTES, 'UTF-8')) . '</p>'
+        : $storyContentField;
+} elseif (trim($pageContentRaw) !== '') {
+    $storyHtml = trim(strip_tags($pageContentRaw)) === trim($pageContentRaw)
+        ? '<p>' . nl2br(htmlspecialchars($pageContentRaw, ENT_QUOTES, 'UTF-8')) . '</p>'
+        : $pageContentRaw;
+} else {
+    $storyHtml = '<p>Twenty Nine Tempest keeps the familiar card rhythm of 29 Card while improving how players discover tables, read feature cues, and reach support across desktop and mobile.</p>';
+}
+
+$valuesTitle = trim((string) $getConfigAny(['values.values.title', 'values.title'], 'Our Core Values'));
+$valuesSubtitle = trim((string) $getConfigAny(['values.values.subtitle', 'values.subtitle'], 'Three editable pillars keep the page useful when creating new 29 Card sites.'));
+$defaultValues = [
+    ['FP', 'Fair Play', 'Table signals, rule expectations, and outcome cues should stay transparent from the first tap.'],
+    ['MC', 'Mobile Clarity', 'Layouts, routes, and controls should remain readable during quick 29 Card browsing on smaller screens.'],
+    ['FS', 'Fast Support', 'Account, payout, and gameplay questions should reach the right desk without extra friction.'],
+];
+$values = [];
+for ($i = 1; $i <= 3; $i++) {
+    $icon = trim((string) $getConfigAny(["values.values.value_{$i}_icon", "values.value_{$i}_icon"], $defaultValues[$i - 1][0]));
+    $itemTitle = trim((string) $getConfigAny(["values.values.value_{$i}_title", "values.value_{$i}_title"], $defaultValues[$i - 1][1]));
+    $itemDesc = trim((string) $getConfigAny(["values.values.value_{$i}_desc", "values.value_{$i}_desc"], $defaultValues[$i - 1][2]));
+    if ($itemTitle === '' && $itemDesc === '') {
+        continue;
+    }
+    $values[] = ['icon' => $icon, 'title' => $itemTitle, 'description' => $itemDesc];
+}
+
+$teamTitle = trim((string) $getConfigAny(['team.team.title', 'team.title'], 'Team Grid'));
+$teamSubtitle = trim((string) $getConfigAny(['team.team.subtitle', 'team.subtitle'], 'The operators shaping route clarity, support speed, and product flow.'));
+$defaultTeam = [
+    ['R1', 'John Smith', 'Chief Executive Officer'],
+    ['R2', 'Sarah Johnson', 'Chief Technology Officer'],
+    ['R3', 'Michael Chen', 'Product Director'],
+    ['R4', 'Emily Wang', 'Design Director'],
+];
+$team = [];
+for ($i = 1; $i <= 4; $i++) {
+    $memberName = trim((string) $getConfigAny(["team.team.member_{$i}_name", "team.member_{$i}_name"], $defaultTeam[$i - 1][1]));
+    $memberRole = trim((string) $getConfigAny(["team.team.member_{$i}_role", "team.member_{$i}_role"], $defaultTeam[$i - 1][2]));
+    if ($memberName === '' && $memberRole === '') {
+        continue;
+    }
+    $team[] = [
+        'icon' => trim((string) $getConfigAny(["team.team.member_{$i}_icon", "team.member_{$i}_icon"], $defaultTeam[$i - 1][0])),
+        'name' => $memberName,
+        'role' => $memberRole,
+    ];
+}
+
+$ctaTitle = trim((string) $getConfigAny(['cta.cta.title', 'cta.title'], 'Ready for the next hand?'));
+$ctaDescription = trim((string) $getConfigAny(['cta.cta.description', 'cta.description'], 'Move from overview to download and support without rebuilding the page structure later.'));
+$ctaButtonText = trim((string) $getConfigAny(['cta.cta.button_text', 'cta.button_text'], 'Contact Us'));
+$ctaButtonUrl = trim((string) $getConfigAny(['cta.cta.button_url', 'cta.button_url'], '/contact'));
+?>
+<section id="<?= $componentId ?>" class="tnt-about-page" aria-labelledby="<?= $componentId ?>-title" style="--about-hero-bg: <?= htmlspecialchars($heroBg, ENT_QUOTES, 'UTF-8') ?>; --about-hero-end: <?= htmlspecialchars($heroBgEnd, ENT_QUOTES, 'UTF-8') ?>; --about-hero-title: <?= htmlspecialchars($heroTitleColor, ENT_QUOTES, 'UTF-8') ?>; --about-hero-text: <?= htmlspecialchars($heroTextColor, ENT_QUOTES, 'UTF-8') ?>; --about-stats-number: <?= htmlspecialchars($statsNumberColor, ENT_QUOTES, 'UTF-8') ?>; --about-stats-label: <?= htmlspecialchars($statsLabelColor, ENT_QUOTES, 'UTF-8') ?>; --about-stats-card: <?= htmlspecialchars($statsCardBg, ENT_QUOTES, 'UTF-8') ?>; --about-story-bg: <?= htmlspecialchars($storyBg, ENT_QUOTES, 'UTF-8') ?>; --about-story-title: <?= htmlspecialchars($storyTitleColor, ENT_QUOTES, 'UTF-8') ?>; --about-values-bg: <?= htmlspecialchars($valuesBg, ENT_QUOTES, 'UTF-8') ?>; --about-cta-bg: <?= htmlspecialchars($ctaButtonBg, ENT_QUOTES, 'UTF-8') ?>; --about-cta-text: <?= htmlspecialchars($ctaButtonTextColor, ENT_QUOTES, 'UTF-8') ?>; --about-hero-padding: <?= (int) $heroPadding ?>px;">
+    <div class="about-shell">
+        <header class="about-hero">
+            <div class="about-hero-copy">
+                <h1 id="<?= $componentId ?>-title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h1>
+                <?php if ($subtitle !== ''): ?>
+                    <p><?= htmlspecialchars($subtitle, ENT_QUOTES, 'UTF-8') ?></p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($showStats && !empty($stats)): ?>
+                <dl class="about-snapshot" aria-label="Brand statistics">
+                    <?php foreach ($stats as $index => $stat): ?>
+                        <div class="snapshot-card snapshot-card-<?= (int) ($index + 1) ?>">
+                            <?php echo '<dt>' . htmlspecialchars($stat['label'], ENT_QUOTES, 'UTF-8') . '</dt>'; ?>
+                            <?php echo '<dd>' . htmlspecialchars($stat['value'], ENT_QUOTES, 'UTF-8') . '</dd>'; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </dl>
+            <?php endif; ?>
+        </header>
+
+        <div class="about-main<?= !$showStats || count($stats) < 2 ? ' single-column' : '' ?>">
+            <section class="story-card" aria-labelledby="<?= $componentId ?>-story-title">
+                <?php if ($storyTitle !== ''): ?>
+                    <h2 id="<?= $componentId ?>-story-title"><?= htmlspecialchars($storyTitle, ENT_QUOTES, 'UTF-8') ?></h2>
+                <?php endif; ?>
+                <?php if ($storySubtitle !== ''): ?>
+                    <p class="story-subtitle"><?= htmlspecialchars($storySubtitle, ENT_QUOTES, 'UTF-8') ?></p>
+                <?php endif; ?>
+                <div class="story-prose"><?= $storyHtml ?></div>
+            </section>
+
+            <?php if ($showStats && !empty($stats)): ?>
+                <aside class="stats-ladder">
+                    <?php foreach ($stats as $index => $stat): ?>
+                        <article class="ladder-card ladder-card-<?= (int) ($index + 1) ?>">
+                            <span class="ladder-order"><?= sprintf('%02d', $index + 1) ?></span>
+                            <strong><?= htmlspecialchars($stat['value'], ENT_QUOTES, 'UTF-8') ?></strong>
+                            <p><?= htmlspecialchars($stat['label'], ENT_QUOTES, 'UTF-8') ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </aside>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($showValues && !empty($values)): ?>
+            <section class="values-stage" aria-labelledby="<?= $componentId ?>-values-title">
+                <header class="section-head">
+                    <h2 id="<?= $componentId ?>-values-title"><?= htmlspecialchars($valuesTitle, ENT_QUOTES, 'UTF-8') ?></h2>
+                    <?php if ($valuesSubtitle !== ''): ?>
+                        <p><?= htmlspecialchars($valuesSubtitle, ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php endif; ?>
+                </header>
+                <div class="values-grid">
+                    <?php foreach ($values as $index => $value): ?>
+                        <article class="value-card value-card-<?= (int) ($index + 1) ?>">
+                            <?php if ($value['icon'] !== ''): ?>
+                                <span class="value-mark"><?= htmlspecialchars($value['icon'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                            <h3><?= htmlspecialchars($value['title'], ENT_QUOTES, 'UTF-8') ?></h3>
+                            <?php if ($value['description'] !== ''): ?>
+                                <p><?= htmlspecialchars($value['description'], ENT_QUOTES, 'UTF-8') ?></p>
+                            <?php endif; ?>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($showTeam && !empty($team)): ?>
+            <section class="team-stage" aria-labelledby="<?= $componentId ?>-team-title">
+                <header class="section-head">
+                    <h2 id="<?= $componentId ?>-team-title"><?= htmlspecialchars($teamTitle, ENT_QUOTES, 'UTF-8') ?></h2>
+                    <?php if ($teamSubtitle !== ''): ?>
+                        <p><?= htmlspecialchars($teamSubtitle, ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php endif; ?>
+                </header>
+                <div class="team-grid">
+                    <?php foreach ($team as $index => $member): ?>
+                        <article class="team-card team-card-<?= (int) ($index + 1) ?>">
+                            <?php if ($member['icon'] !== ''): ?>
+                                <span class="team-badge"><?= htmlspecialchars($member['icon'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                            <h3><?= htmlspecialchars($member['name'], ENT_QUOTES, 'UTF-8') ?></h3>
+                            <?php if ($member['role'] !== ''): ?>
+                                <p><?= htmlspecialchars($member['role'], ENT_QUOTES, 'UTF-8') ?></p>
+                            <?php endif; ?>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($showCta && ($ctaTitle !== '' || $ctaDescription !== '' || $ctaButtonText !== '')): ?>
+            <section class="cta-stage" aria-labelledby="<?= $componentId ?>-cta-title">
+                <div class="cta-copy">
+                    <?php if ($ctaTitle !== ''): ?>
+                        <h2 id="<?= $componentId ?>-cta-title"><?= htmlspecialchars($ctaTitle, ENT_QUOTES, 'UTF-8') ?></h2>
+                    <?php endif; ?>
+                    <?php if ($ctaDescription !== ''): ?>
+                        <p><?= htmlspecialchars($ctaDescription, ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php endif; ?>
+                </div>
+                <?php if ($ctaButtonText !== ''): ?>
+                    <a class="cta-link" href="<?= htmlspecialchars($ctaButtonUrl !== '' ? $ctaButtonUrl : '#', ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($ctaButtonText, ENT_QUOTES, 'UTF-8') ?></a>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.5rem, 8vw, 6.25rem) 0;
+    background:
+        radial-gradient(900px 420px at 8% 10%, rgba(24, 240, 255, 0.18), transparent 70%),
+        radial-gradient(760px 360px at 92% 18%, rgba(255, 122, 77, 0.18), transparent 68%),
+        linear-gradient(180deg, var(--about-hero-bg) 0%, var(--about-hero-end) 100%);
+    color: var(--about-hero-title);
+}
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(122deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 28px);
+    opacity: 0.28;
+    pointer-events: none;
+}
+#<?= $componentId ?> .about-shell {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+#<?= $componentId ?> .about-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+    gap: 1rem;
+    align-items: start;
+    padding-top: var(--about-hero-padding);
+}
+#<?= $componentId ?> .about-hero-copy h1,
+#<?= $componentId ?> .section-head h2,
+#<?= $componentId ?> .cta-copy h2,
+#<?= $componentId ?> .story-card h2 {
+    margin: 0;
+    letter-spacing: -0.05em;
+    line-height: 0.95;
+}
+#<?= $componentId ?> .about-hero-copy h1 {
+    color: var(--about-hero-title);
+    font-size: clamp(2.4rem, 5vw, 5rem);
+}
+#<?= $componentId ?> .about-hero-copy p,
+#<?= $componentId ?> .section-head p,
+#<?= $componentId ?> .story-subtitle,
+#<?= $componentId ?> .cta-copy p,
+#<?= $componentId ?> .ladder-card p,
+#<?= $componentId ?> .value-card p,
+#<?= $componentId ?> .team-card p,
+#<?= $componentId ?> .snapshot-card dt {
+    color: var(--about-hero-text);
+    line-height: 1.82;
+}
+#<?= $componentId ?> .about-hero-copy p {
+    margin-top: 1rem;
+    max-width: 34rem;
+}
+#<?= $componentId ?> .about-snapshot {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+    margin: 0;
+}
+#<?= $componentId ?> .snapshot-card,
+#<?= $componentId ?> .story-card,
+#<?= $componentId ?> .ladder-card,
+#<?= $componentId ?> .value-card,
+#<?= $componentId ?> .team-card,
+#<?= $componentId ?> .cta-stage {
+    border-radius: 26px;
+}
+#<?= $componentId ?> .snapshot-card {
+    padding: 1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+#<?= $componentId ?> .snapshot-card dt {
+    margin: 0;
+    font-size: 0.82rem;
+}
+#<?= $componentId ?> .snapshot-card dd {
+    margin: 0.5rem 0 0;
+    color: var(--about-stats-number);
+    font-size: clamp(1.6rem, 3vw, 2.8rem);
+    font-weight: 800;
+    line-height: 1;
+}
+#<?= $componentId ?> .about-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .about-main.single-column {
+    grid-template-columns: 1fr;
+}
+#<?= $componentId ?> .story-card {
+    padding: 1.35rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)), var(--about-story-bg);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+#<?= $componentId ?> .story-card h2 {
+    color: var(--about-story-title);
+    font-size: clamp(1.9rem, 3.4vw, 3.6rem);
+}
+#<?= $componentId ?> .story-subtitle {
+    margin-top: 0.8rem;
+}
+#<?= $componentId ?> .story-prose {
+    margin-top: 1rem;
+    color: var(--about-hero-text);
+    max-width: 72ch;
+}
+#<?= $componentId ?> .story-prose > *:first-child {
+    margin-top: 0;
+}
+#<?= $componentId ?> .story-prose > *:last-child {
+    margin-bottom: 0;
+}
+#<?= $componentId ?> .story-prose p,
+#<?= $componentId ?> .story-prose li {
+    line-height: 1.88;
+}
+#<?= $componentId ?> .story-prose h2,
+#<?= $componentId ?> .story-prose h3,
+#<?= $componentId ?> .story-prose h4 {
+    color: var(--about-story-title);
+}
+#<?= $componentId ?> .stats-ladder {
+    display: grid;
+    gap: 0.85rem;
+}
+#<?= $componentId ?> .ladder-card {
+    padding: 1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)), var(--about-stats-card);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+#<?= $componentId ?> .ladder-order {
+    display: inline-flex;
+    color: rgba(255,255,255,0.42);
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+#<?= $componentId ?> .ladder-card strong {
+    display: block;
+    margin-top: 0.7rem;
+    color: var(--about-stats-number);
+    font-size: clamp(1.5rem, 2.6vw, 2.4rem);
+    line-height: 1;
+}
+#<?= $componentId ?> .ladder-card p {
+    margin-top: 0.55rem;
+}
+#<?= $componentId ?> .values-stage,
+#<?= $componentId ?> .team-stage {
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .section-head {
+    display: grid;
+    gap: 0.72rem;
+    max-width: 42rem;
+}
+#<?= $componentId ?> .section-head h2 {
+    font-size: clamp(1.9rem, 3.2vw, 3.2rem);
+}
+#<?= $componentId ?> .values-grid,
+#<?= $componentId ?> .team-grid {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .values-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+#<?= $componentId ?> .team-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+#<?= $componentId ?> .value-card,
+#<?= $componentId ?> .team-card {
+    padding: 1.15rem;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+#<?= $componentId ?> .value-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02)), var(--about-values-bg);
+}
+#<?= $componentId ?> .team-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02)), rgba(8, 18, 31, 0.72);
+}
+#<?= $componentId ?> .value-mark,
+#<?= $componentId ?> .team-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3.25rem;
+    min-height: 3.25rem;
+    padding: 0.4rem 0.7rem;
+    border-radius: 18px;
+    background: linear-gradient(135deg, rgba(255,212,93,0.98), rgba(255,122,77,0.92));
+    color: #08131f;
+    font-size: 0.82rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+}
+#<?= $componentId ?> .value-card h3,
+#<?= $componentId ?> .team-card h3 {
+    margin: 0.92rem 0 0;
+    color: var(--about-hero-title);
+    font-size: 1.12rem;
+    line-height: 1.3;
+}
+#<?= $componentId ?> .value-card p,
+#<?= $componentId ?> .team-card p {
+    margin-top: 0.7rem;
+}
+#<?= $componentId ?> .cta-stage {
+    margin-top: 1rem;
+    padding: 1.2rem;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+    background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)), rgba(7, 17, 29, 0.78);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+#<?= $componentId ?> .cta-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    padding: 0.9rem 1.2rem;
+    border-radius: 20px;
+    text-decoration: none;
+    color: var(--about-cta-text);
+    background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(255,255,255,0)), var(--about-cta-bg);
+    font-size: 0.84rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .about-hero,
+    #<?= $componentId ?> .about-main,
+    #<?= $componentId ?> .cta-stage {
+        grid-template-columns: 1fr;
+    }
+    #<?= $componentId ?> .team-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 760px) {
+    #<?= $componentId ?> .about-shell {
+        width: min(100%, calc(100% - 0.8rem));
+    }
+    #<?= $componentId ?> .about-snapshot,
+    #<?= $componentId ?> .values-grid,
+    #<?= $componentId ?> .team-grid {
+        grid-template-columns: 1fr;
+    }
+    #<?= $componentId ?> .story-card,
+    #<?= $componentId ?> .ladder-card,
+    #<?= $componentId ?> .value-card,
+    #<?= $componentId ?> .team-card,
+    #<?= $componentId ?> .cta-stage,
+    #<?= $componentId ?> .snapshot-card {
+        border-radius: 22px;
+    }
+}
+</style>

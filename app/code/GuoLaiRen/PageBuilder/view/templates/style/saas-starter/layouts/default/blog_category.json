@@ -1,0 +1,23 @@
+{
+    "page_type": "blog_category",
+    "name": "博客分类",
+    "description": "SaaS Starter 博客分类页默认布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-category",
+                "enabled": true,
+                "instance_id": "blog-category-default",
+                "config": {}
+            }
+        ],
+        "footer": []
+    },
+    "notes": "分类文章由 blog_posts 与 current_category 渲染"
+}

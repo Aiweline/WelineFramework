@@ -1,0 +1,326 @@
+<?php
+/**
+ * Three Patti Mela Pop - Content
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @fields_start
+ *
+ * group:slider => Hero轮播
+ * slider.display => 显示轮播:select:yes|yes,no
+ * slider.items => 轮播项:json:[]|兼容轮播数据的JSON数组
+ * slider.autoplay => 自动播放:select:yes|yes,no
+ * slider.autoplay_interval => 自动播放间隔:number:5000|ms
+ * slider.bg_color => 轮播背景色:color:#ffe067
+ * slider.banner_image_mobile => 默认移动端横幅图:textarea:|使用本地banner-2.jpg
+ * slider.banner_image_desktop => 默认桌面端横幅图:textarea:|使用本地banner-03.webp
+ * slider.download_btn_image => 默认下载按钮图片:textarea:|使用本地download-btn-m.webp
+ *
+ * group:hero => 首屏模块
+ * hero.display => 显示首屏模块:select:yes|yes,no
+ * hero.title => 首屏标题:text:
+ * hero.subtitle => 首屏副标题:textarea:
+ * hero.cta_text => 首屏按钮文本:text:Download
+ * hero.cta_url => 首屏按钮链接:text:#download
+ *
+ * group:advantages => 优势模块
+ * advantages.title => 区域标题:text:Our Advantages
+ * advantages.display => 显示此区域:select:yes|yes,no
+ * advantages.bg_color => 背景颜色:color:#fff0c9
+ * advantages.icon_1 => 优势1图标:textarea:|使用本地our-advantages/icon01.webp
+ * advantages.icon_2 => 优势2图标:textarea:|使用本地our-advantages/icon02.webp
+ * advantages.icon_3 => 优势3图标:textarea:|使用本地our-advantages/icon03.webp
+ *
+ * group:games => 游戏展示
+ * games.title => 区域标题:text:Game Modes
+ * games.display => 显示此区域:select:yes|yes,no
+ * games.bg_color => 背景颜色:color:#dcfff6
+ * games.image_1_desktop => 游戏1桌面端图片:textarea:|使用本地game/game-i1.webp
+ * games.image_1_mobile => 游戏1移动端图片:textarea:|使用本地game/game-i1-m.webp
+ * games.image_2 => 游戏2图片:textarea:|使用本地game/game-i2.webp
+ * games.image_3 => 游戏3图片:textarea:|使用本地game/game-i3.webp
+ *
+ * group:app_info => 应用信息
+ * app_info.display => 显示应用信息:select:yes|yes,no
+ * app_info.app_name => 应用名称:text:Three Patti Mela Pop
+ * app_info.app_size => 应用大小:text:80.4 MB
+ * app_info.app_version => 版本:text:V5.1
+ * app_info.app_updated => 更新日期:text:23-03-2026
+ * app_info.app_requires => 系统要求:text:Android 5.0 and up
+ *
+ * group:testimonials => 用户评价
+ * testimonials.title => 区域标题:text:Testimonials
+ * testimonials.display => 显示此区域:select:yes|yes,no
+ * testimonials.bg_color => 背景颜色:color:#ffe1f1
+ * testimonials.avatar_1 => 评价1头像:textarea:|使用本地user/Rajesh-Kumar-1.avif
+ * testimonials.avatar_2 => 评价2头像:textarea:|使用本地user/Priya-Sharma-2.avif
+ * testimonials.avatar_3 => 评价3头像:textarea:|使用本地user/Amit-Patel-3.avif
+ *
+ * group:faq => 常见问题
+ * faq.title => 区域标题:text:FAQs
+ * faq.display => 显示此区域:select:yes|yes,no
+ * faq.bg_color => 背景颜色:color:#e4efff
+ *
+ * group:styles => 全局样式
+ * styles.section_padding => 区域内边距:responsive:60/100|px[MD]
+ * styles.text_color => 正文颜色:color:#2d170b
+ * styles.heading_color => 标题颜色:color:#2d170b
+ * styles.link_color => 链接颜色:color:#ff5a36
+ *
+ * group:texts => 文本内容
+ * texts.advantages_title => 优势模块标题:text:Our Advantages
+ * texts.advantages_summary => 优势模块辅助文案:text:Three bright lanes covering Teen Patti Speed, Rummy Master, and Slots Meta.
+ * texts.games_title => 游戏模块标题:text:Game Modes
+ * texts.games_summary => 游戏模块辅助文案:text:Three play routes moving through Three Patti, Rummy, and Slots.
+ * texts.testimonials_title => 评价模块标题:text:Testimonials
+ * texts.faq_title => FAQ标题:text:FAQs
+ * texts.faq_intro => FAQ辅助文案:text:Short answers covering install flow, table entry, and play basics.
+ * texts.app_name => 应用名称:text:Three Patti Mela Pop
+ * texts.app_size => 应用大小:text:80.4 MB
+ * texts.app_version => 版本:text:V5.1
+ * texts.app_updated => 更新日期:text:23-03-2026
+ * texts.app_requires => 系统要求:text:Android 5.0 and up
+ * texts.advantage_1_title => 优势1标题:text:Teen Patti Speed
+ * texts.advantage_1_desc => 优势1描述:textarea:Fast-paced variant where players bet quickly, aiming for the best three-card hand.
+ * texts.advantage_2_title => 优势2标题:text:Rummy Master
+ * texts.advantage_2_desc => 优势2描述:textarea:Skillfully meld cards into sets and sequences in a race to declare victory.
+ * texts.advantage_3_title => 优势3标题:text:Slots Meta
+ * texts.advantage_3_desc => 优势3描述:textarea:A dazzling array of themed slots with bonuses in a quest for jackpot wins.
+ * texts.game_teen_patti_speed => 兼容-优势1标题:text:Teen Patti Speed
+ * texts.game_teen_patti_speed_desc => 兼容-优势1描述:textarea:Fast-paced variant where players bet quickly, aiming for the best three-card hand.
+ * texts.game_rummy_master => 兼容-优势2标题:text:Rummy Master
+ * texts.game_rummy_master_desc => 兼容-优势2描述:textarea:Skillfully meld cards into sets and sequences in a race to declare victory.
+ * texts.game_slots_meta => 兼容-优势3标题:text:Slots Meta
+ * texts.game_slots_meta_desc => 兼容-优势3描述:textarea:A dazzling array of themed slots with bonuses in a quest for jackpot wins.
+ * texts.game_1_title => 游戏1标题:text:Three Patti
+ * texts.game_1_desc => 游戏1描述:textarea:Three-card action with quick rounds, bluff pressure, and a clean mobile-first table flow.
+ * texts.game_2_title => 游戏2标题:text:Rummy
+ * texts.game_2_desc => 游戏2描述:textarea:Sequence building and set play for players who want a longer tactical rhythm.
+ * texts.game_3_title => 游戏3标题:text:Slots
+ * texts.game_3_desc => 游戏3描述:textarea:Short bursts of chance-driven play that balance the card-heavy sections of the site.
+ * texts.game_teen_patti => 兼容-游戏1标题:text:Three Patti
+ * texts.game_teen_patti_desc => 兼容-游戏1描述:textarea:Three-card action with quick rounds, bluff pressure, and a clean mobile-first table flow.
+ * texts.game_rummy => 兼容-游戏2标题:text:Rummy
+ * texts.game_rummy_desc => 兼容-游戏2描述:textarea:Sequence building and set play for players who want a longer tactical rhythm.
+ * texts.game_slots => 兼容-游戏3标题:text:Slots
+ * texts.game_slots_desc => 兼容-游戏3描述:textarea:Short bursts of chance-driven play that balance the card-heavy sections of the site.
+ * texts.faq_1_question => FAQ问题1:text:What is the app about?
+ * texts.faq_1_answer => FAQ答案1:textarea:This bright 3 Patti landing experience is designed for quick scanning, bold visuals, and fast entry into play.
+ * texts.faq_2_question => FAQ问题2:text:How do I download the app?
+ * texts.faq_2_answer => FAQ答案2:textarea:Use the main download button or the floating download shortcut to reach the latest installation package for your device.
+ * texts.faq_3_question => FAQ问题3:text:Is the app safe to install?
+ * texts.faq_3_answer => FAQ答案3:textarea:Download from the official source, review device permissions, and follow your local platform guidance before installing.
+ * texts.faq_4_question => FAQ问题4:text:What helps new players settle in faster?
+ * texts.faq_4_answer => FAQ答案4:textarea:Start with the rules, learn the table pace, and use lower-pressure rooms before moving into faster matches.
+ * texts.faq_5_question => FAQ问题5:text:What game modes are highlighted?
+ * texts.faq_5_answer => FAQ答案5:textarea:The homepage supports a three-card spotlight along with companion sections for Rummy and Slots.
+ * texts.faq_question_1 => 兼容-FAQ问题1:text:What is the app about?
+ * texts.faq_answer_1 => 兼容-FAQ答案1:textarea:This bright 3 Patti landing experience is designed for quick scanning, bold visuals, and fast entry into play.
+ * texts.faq_question_2 => 兼容-FAQ问题2:text:How do I download the app?
+ * texts.faq_answer_2 => 兼容-FAQ答案2:textarea:Use the main download button or the floating download shortcut to reach the latest installation package for your device.
+ * texts.faq_question_3 => 兼容-FAQ问题3:text:Is the app safe to install?
+ * texts.faq_answer_3 => 兼容-FAQ答案3:textarea:Download from the official source, review device permissions, and follow your local platform guidance before installing.
+ * texts.faq_question_4 => 兼容-FAQ问题4:text:What helps new players settle in faster?
+ * texts.faq_answer_4 => 兼容-FAQ答案4:textarea:Start with the rules, learn the table pace, and use lower-pressure rooms before moving into faster matches.
+ * texts.faq_question_5 => 兼容-FAQ问题5:text:What game modes are highlighted?
+ * texts.faq_answer_5 => 兼容-FAQ答案5:textarea:The homepage supports a three-card spotlight along with companion sections for Rummy and Slots.
+ * texts.testimonial_1_name => 评价1姓名:text:Rajesh Kumar (Mumbai)
+ * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1内容:textarea:The bright layout makes it easy to jump from the hero straight into the section I need.
+ * texts.testimonial_2_name => 评价2姓名:text:Priya Sharma (Delhi)
+ * texts.testimonial_2_rating => 评价2评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2内容:textarea:The mobile cards feel lively without getting cluttered, and the FAQ is much easier to scan.
+ * texts.testimonial_3_name => 评价3姓名:text:Amit Patel (Ahmedabad)
+ * texts.testimonial_3_rating => 评价3评分:text:⭐⭐⭐⭐☆
+ * texts.testimonial_3_content => 评价3内容:textarea:The poster-style game section stands out right away and still keeps the content readable.
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = $page ? $page->getData('style') : 'three-patti-mela-pop';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'three-patti-mela-pop';
+}
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+if (!function_exists('mela_content_color')) {
+    function mela_content_color(array $colors, string $key, string $default = ''): string
+    {
+        return $colors[$key] ?? $default;
+    }
+}
+
+$layoutConfigRaw = $this->getData('layout_config');
+if (is_string($layoutConfigRaw)) {
+    $layoutConfig = json_decode($layoutConfigRaw, true) ?: [];
+} else {
+    $layoutConfig = is_array($layoutConfigRaw) ? $layoutConfigRaw : [];
+}
+$contentComponents = $layoutConfig['content'] ?? [];
+if (!is_array($contentComponents)) {
+    $contentComponents = [];
+}
+$pageType = $page ? (string)($page->getData('type') ?: '') : '';
+
+if (empty($contentComponents)) {
+    if ($pageType === 'about_page') {
+        $contentComponents = [
+            [
+                'code' => 'about-content',
+                'enabled' => true,
+                'config' => [
+                    'layout' => 'standard',
+                    'show_team' => true,
+                    'show_values' => true,
+                    'show_stats' => true,
+                    'show_cta' => true,
+                ],
+            ],
+        ];
+    } elseif ($pageType === 'contact_page') {
+        $contentComponents = [
+            [
+                'code' => 'contact-content',
+                'enabled' => true,
+                'config' => [
+                    'layout' => 'split',
+                    'show_map' => true,
+                    'show_form' => true,
+                    'show_social' => true,
+                    'show_info' => true,
+                ],
+            ],
+        ];
+    } else {
+        $contentComponents = [
+            [
+                'code' => 'hero-slider',
+                'enabled' => true,
+                'config' => [
+                    'banner.display' => 'yes',
+                    'download_btn.display' => 'yes',
+                    'layout.slider_classes' => 'mela-hero-stage',
+                    'layout.margin_top' => '-72',
+                ],
+            ],
+            ['code' => 'advantages', 'enabled' => true, 'config' => []],
+            ['code' => 'games', 'enabled' => true, 'config' => []],
+            ['code' => 'testimonials', 'enabled' => true, 'config' => []],
+            ['code' => 'faq', 'enabled' => true, 'config' => []],
+        ];
+    }
+}
+
+$componentFiles = [
+    'hero-slider' => 'content/hero-slider.phtml',
+    'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
+    'advantages' => 'content/advantages.phtml',
+    'games' => 'content/games.phtml',
+    'testimonials' => 'content/testimonials.phtml',
+    'faq' => 'content/faq.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
+    'blog-category' => 'content/blog-category.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
+];
+
+$renderComponent = function (array $component, int $index) use ($componentFiles, $page, $styleSettings, $colors) {
+    $code = $component['code'] ?? $component['component'] ?? '';
+    $enabled = $component['enabled'] ?? true;
+    $componentConfig = $component['config'] ?? [];
+
+    if (!$enabled || $code === '') {
+        return '';
+    }
+
+    $file = $componentFiles[$code] ?? null;
+    if (!$file) {
+        return '<!-- Unknown content component: ' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . ' -->';
+    }
+
+    $this->assign('page', $page);
+    $this->assign('style', $styleSettings);
+    $this->assign('style_settings', $styleSettings);
+    $this->assign('component_config', is_array($componentConfig) ? $componentConfig : []);
+    $this->assign('component_instance_id', 'mela-content-' . $code . '-' . $index);
+    $this->assign('colors', $colors);
+
+    try {
+        return $this->fetchTemplate('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/components/' . $file);
+    } catch (\Throwable $e) {
+        return '<!-- Error rendering content component ' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . ': ' . htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8') . ' -->';
+    }
+};
+
+$bodyBg = mela_content_color($colors, 'body_bg', '#fff7de');
+$textColor = mela_content_color($colors, 'text_primary', '#2d170b');
+$linkColor = mela_content_color($colors, 'link_color', '#ff5a36');
+$customContent = $page ? trim((string)($page->getData('content') ?? '')) : '';
+?>
+<style>
+.mela-content-region {
+    min-height: 50vh;
+    background: <?= htmlspecialchars($bodyBg) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+.mela-content-region a {
+    color: <?= htmlspecialchars($linkColor) ?>;
+}
+
+.mela-content-fallback {
+    width: min(920px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    padding: clamp(4rem, 7vw, 6rem) 0;
+}
+
+.mela-content-fallback > :first-child {
+    margin-top: 0;
+}
+
+.mela-content-fallback > :last-child {
+    margin-bottom: 0;
+}
+
+.mela-content-empty {
+    width: min(720px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    padding: 4rem 0;
+    text-align: center;
+    color: <?= htmlspecialchars(mela_content_color($colors, 'text_muted', '#97725a')) ?>;
+}
+</style>
+
+<main class="mela-content-region">
+    <?php if (!empty($contentComponents)): ?>
+        <?php foreach ($contentComponents as $index => $component): ?>
+            <?= $renderComponent((array)$component, (int)$index) ?>
+        <?php endforeach; ?>
+    <?php elseif ($customContent !== ''): ?>
+        <div class="mela-content-fallback"><?= $customContent ?></div>
+    <?php else: ?>
+        <div class="mela-content-empty">Content components can be added here.</div>
+    <?php endif; ?>
+</main>

@@ -1,0 +1,734 @@
+<?php
+/**
+ * Rummy Overdrive Blog List Component
+ *
+ * @fields_start
+ * blog.title|Blog list title|text|Overdrive Rummy Guides & Updates
+ * blog.subtitle|Blog list subtitle|text|Fresh reads on table rhythm, room modes, mobile flow, and platform updates.
+ * blog.posts_per_page|Posts per page|number|9
+ * blog.show_sidebar|Show sidebar|select:yes=Yes,no=No|yes
+ * blog.show_category|Show category|select:yes=Yes,no=No|yes
+ * blog.show_date|Show date|select:yes=Yes,no=No|yes
+ * blog.show_author|Show author|select:yes=Yes,no=No|yes
+ * blog.card_style|Card style|select:default=Default,minimal=Minimal,featured=Featured|default
+ * @fields_end
+ */
+
+$componentId = 'rov-blog-list-' . uniqid();
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', __('Overdrive Rummy Guides & Updates'));
+$subtitle = $getConfig('blog.subtitle', __('Fresh reads on table rhythm, room modes, mobile flow, and platform updates.'));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$cardStyle = $getConfig('blog.card_style', 'default');
+
+$primaryColor = $getConfig('color_scheme.primary', '#ff4d7a');
+$secondaryColor = $getConfig('color_scheme.secondary', '#2be7ff');
+$accentColor = '#d2ff3f';
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/rummy-overdrive/asset/img/poker-header-bg.svg');
+
+$featuredPost = $blogPosts[0] ?? null;
+$briefPosts = array_slice($blogPosts, 1, 2);
+$lanePosts = array_slice($blogPosts, 3);
+$cardStyleClass = 'style-' . preg_replace('/[^a-z0-9-]+/i', '', (string)$cardStyle);
+$storyCount = count($blogPosts);
+$categoryCount = count($blogCategories);
+?>
+
+<section id="<?= $componentId ?>" class="rov-blog-list">
+    <div class="blog-shell">
+        <header class="dispatch-head wow animate__animated animate__fadeInUp">
+            <div class="head-copy">
+                <span class="headline-chip">Overdrive Journal</span>
+                <h1><?= htmlspecialchars($title) ?></h1>
+                <?php if ($subtitle): ?>
+                    <p><?= htmlspecialchars($subtitle) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="head-stats">
+                <article class="stat-chip">
+                    <strong><?= (int)$storyCount ?></strong>
+                    <span><?= __('Published reads') ?></span>
+                </article>
+                <article class="stat-chip">
+                    <strong><?= (int)$categoryCount ?></strong>
+                    <span><?= __('Tracked topics') ?></span>
+                </article>
+            </div>
+        </header>
+
+        <?php if (empty($blogPosts)): ?>
+            <div class="blog-empty wow animate__animated animate__fadeInUp">
+                <div class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" opacity="0.34" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                    </svg>
+                </div>
+                <h2><?= __('No stories are live yet.') ?></h2>
+                <p><?= __('New rummy notes, update logs, and table explainers will appear here once posts are published.') ?></p>
+            </div>
+        <?php else: ?>
+            <div class="blog-board<?= $showSidebar ? ' has-rail' : '' ?>">
+                <div class="board-main">
+                    <?php if ($featuredPost): ?>
+                        <div class="lead-grid">
+                            <article class="lead-story wow animate__animated animate__fadeInUp">
+                                <?php if (!empty($featuredPost['cover_image'])): ?>
+                                    <a href="<?= htmlspecialchars($featuredPost['url']) ?>" class="lead-media">
+                                        <img src="<?= htmlspecialchars($featuredPost['cover_image']) ?>" alt="<?= htmlspecialchars($featuredPost['title']) ?>" loading="lazy">
+                                    </a>
+                                <?php endif; ?>
+
+                                <div class="lead-copy">
+                                    <div class="meta-row">
+                                        <?php if ($showCategory && !empty($featuredPost['category_name'])): ?>
+                                            <span class="story-chip"><?= htmlspecialchars($featuredPost['category_name']) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($showDate && !empty($featuredPost['published_at'])): ?>
+                                            <span class="story-date"><?= date('M d, Y', strtotime($featuredPost['published_at'])) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <span class="story-kicker"><?= __('Lead Story') ?></span>
+                                    <h2>
+                                        <a href="<?= htmlspecialchars($featuredPost['url']) ?>"><?= htmlspecialchars($featuredPost['title']) ?></a>
+                                    </h2>
+
+                                    <?php if (!empty($featuredPost['summary'])): ?>
+                                        <p class="lead-summary">
+                                            <?= htmlspecialchars(mb_substr($featuredPost['summary'], 0, 240)) ?><?= mb_strlen($featuredPost['summary']) > 240 ? '...' : '' ?>
+                                        </p>
+                                    <?php endif; ?>
+
+                                    <div class="story-foot">
+                                        <?php if ($showAuthor && !empty($featuredPost['author'])): ?>
+                                            <span class="story-author"><?= htmlspecialchars($featuredPost['author']) ?></span>
+                                        <?php endif; ?>
+                                        <a href="<?= htmlspecialchars($featuredPost['url']) ?>" class="story-link">
+                                            <?= __('Read Story') ?>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                            </article>
+
+                            <?php if (!empty($briefPosts)): ?>
+                                <div class="brief-stack">
+                                    <?php foreach ($briefPosts as $index => $post): ?>
+                                        <article class="brief-card wow animate__animated animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.08 + ($index * 0.08), 2)) ?>s">
+                                            <div class="meta-row">
+                                                <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                                    <span class="story-chip"><?= htmlspecialchars($post['category_name']) ?></span>
+                                                <?php endif; ?>
+                                                <?php if ($showDate && !empty($post['published_at'])): ?>
+                                                    <span class="story-date"><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                                <?php endif; ?>
+                                            </div>
+
+                                            <h3>
+                                                <a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a>
+                                            </h3>
+
+                                            <?php if (!empty($post['summary'])): ?>
+                                                <p>
+                                                    <?= htmlspecialchars(mb_substr($post['summary'], 0, 120)) ?><?= mb_strlen($post['summary']) > 120 ? '...' : '' ?>
+                                                </p>
+                                            <?php endif; ?>
+
+                                            <div class="story-foot compact">
+                                                <?php if ($showAuthor && !empty($post['author'])): ?>
+                                                    <span class="story-author"><?= htmlspecialchars($post['author']) ?></span>
+                                                <?php endif; ?>
+                                                <a href="<?= htmlspecialchars($post['url']) ?>" class="story-link"><?= __('Open') ?></a>
+                                            </div>
+                                        </article>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if (!empty($lanePosts)): ?>
+                        <div class="lane-grid <?= htmlspecialchars($cardStyleClass) ?>">
+                            <?php foreach ($lanePosts as $index => $post): ?>
+                                <?php
+                                $isWide = $cardStyle === 'featured' && $index === 0;
+                                $hasCover = !empty($post['cover_image']);
+                                $cardClasses = 'lane-card';
+                                if ($isWide) {
+                                    $cardClasses .= ' is-wide';
+                                }
+                                if ($hasCover) {
+                                    $cardClasses .= ' has-cover';
+                                }
+                                ?>
+                                <article class="<?= htmlspecialchars($cardClasses) ?> wow animate__animated animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.04 * (($index % 4) + 1), 2)) ?>s">
+                                    <?php if ($hasCover): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="lane-media">
+                                            <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <div class="lane-copy">
+                                        <div class="meta-row">
+                                            <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                                <span class="story-chip"><?= htmlspecialchars($post['category_name']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if ($showDate && !empty($post['published_at'])): ?>
+                                                <span class="story-date"><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <h3>
+                                            <a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a>
+                                        </h3>
+
+                                        <?php if ($cardStyle !== 'minimal' && !empty($post['summary'])): ?>
+                                            <p class="lane-summary">
+                                                <?= htmlspecialchars(mb_substr($post['summary'], 0, $isWide ? 180 : 130)) ?><?= mb_strlen($post['summary']) > ($isWide ? 180 : 130) ? '...' : '' ?>
+                                            </p>
+                                        <?php endif; ?>
+
+                                        <div class="story-foot">
+                                            <?php if ($showAuthor && !empty($post['author'])): ?>
+                                                <span class="story-author"><?= htmlspecialchars($post['author']) ?></span>
+                                            <?php endif; ?>
+                                            <a href="<?= htmlspecialchars($post['url']) ?>" class="story-link">
+                                                <?= __('Read More') ?>
+                                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                                                </svg>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="signal-rail wow animate__animated animate__fadeInRight">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker"><?= __('Category Radar') ?></span>
+                                <h4><?= __('Browse by topic') ?></h4>
+                                <div class="category-cloud">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="category-pill"><?= htmlspecialchars($category['name']) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recentPosts)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker"><?= __('Fresh Signals') ?></span>
+                                <h4><?= __('Recent posts') ?></h4>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: 88px 0;
+    background:
+        radial-gradient(980px 420px at 12% 10%, rgba(255, 77, 122, 0.2), transparent 64%),
+        radial-gradient(820px 420px at 88% 18%, rgba(43, 231, 255, 0.16), transparent 68%),
+        linear-gradient(180deg, #060912 0%, #0d1221 48%, #070910 100%);
+    color: #eef3ff;
+    overflow: hidden;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.08;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 36px 36px;
+    opacity: 0.08;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .blog-shell {
+    width: min(1240px, calc(100% - 2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .dispatch-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.72fr);
+    gap: 1rem;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .headline-chip,
+#<?= $componentId ?> .story-chip,
+#<?= $componentId ?> .story-date,
+#<?= $componentId ?> .story-kicker,
+#<?= $componentId ?> .rail-kicker {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .headline-chip {
+    padding: 0.38rem 0.84rem;
+    color: <?= htmlspecialchars($accentColor) ?>;
+    border: 1px solid rgba(210, 255, 63, 0.2);
+    background: rgba(210, 255, 63, 0.08);
+}
+
+#<?= $componentId ?> .head-copy h1 {
+    margin-top: 1rem;
+    color: #f7f9ff;
+    font-size: clamp(2.3rem, 4.4vw, 3.9rem);
+    line-height: 1.02;
+    letter-spacing: -0.05em;
+}
+
+#<?= $componentId ?> .head-copy p {
+    margin-top: 0.95rem;
+    max-width: 720px;
+    color: #aab9d4;
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .head-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.85rem;
+}
+
+#<?= $componentId ?> .stat-chip,
+#<?= $componentId ?> .lead-story,
+#<?= $componentId ?> .brief-card,
+#<?= $componentId ?> .lane-card,
+#<?= $componentId ?> .rail-card,
+#<?= $componentId ?> .blog-empty {
+    border-radius: 28px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: linear-gradient(160deg, rgba(12, 16, 29, 0.94) 0%, rgba(7, 10, 18, 0.97) 100%);
+    box-shadow: 0 24px 56px rgba(0, 0, 0, 0.28);
+}
+
+#<?= $componentId ?> .stat-chip {
+    padding: 1rem 1.05rem;
+    display: grid;
+    gap: 0.35rem;
+}
+
+#<?= $componentId ?> .stat-chip strong {
+    color: #f7f9ff;
+    font-size: 1.32rem;
+    line-height: 1.1;
+}
+
+#<?= $componentId ?> .stat-chip span {
+    color: #93a4c2;
+    line-height: 1.65;
+    font-size: 0.84rem;
+}
+
+#<?= $componentId ?> .stat-chip-wide strong {
+    font-size: 1rem;
+}
+
+#<?= $componentId ?> .blog-empty {
+    padding: 2rem 1.2rem;
+    text-align: center;
+    display: grid;
+    gap: 0.7rem;
+    justify-items: center;
+}
+
+#<?= $componentId ?> .blog-empty h2 {
+    color: #f7f9ff;
+    font-size: 1.55rem;
+}
+
+#<?= $componentId ?> .blog-empty p {
+    max-width: 620px;
+    color: #aab9d4;
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .blog-board {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .blog-board.has-rail {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.28fr);
+    align-items: start;
+}
+
+#<?= $componentId ?> .board-main {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .lead-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.12fr) minmax(260px, 0.88fr);
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .lead-story {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.95fr) minmax(0, 1.05fr);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .lead-media,
+#<?= $componentId ?> .lane-media {
+    display: block;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .lead-media img,
+#<?= $componentId ?> .lane-media img,
+#<?= $componentId ?> .recent-link img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .lead-copy,
+#<?= $componentId ?> .lane-copy,
+#<?= $componentId ?> .brief-card {
+    padding: clamp(1.1rem, 2.6vw, 1.5rem);
+}
+
+#<?= $componentId ?> .lead-copy,
+#<?= $componentId ?> .lane-copy {
+    display: grid;
+    align-content: start;
+    gap: 0.78rem;
+}
+
+#<?= $componentId ?> .story-kicker {
+    padding: 0.35rem 0.76rem;
+    color: #ff8c42;
+    border: 1px solid rgba(255, 140, 66, 0.18);
+    background: rgba(255, 140, 66, 0.08);
+}
+
+#<?= $componentId ?> .meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .story-chip {
+    padding: 0.32rem 0.72rem;
+    color: #05070e;
+    background: linear-gradient(135deg, <?= htmlspecialchars($primaryColor) ?> 0%, #ff8c42 100%);
+}
+
+#<?= $componentId ?> .story-date {
+    padding: 0.32rem 0.72rem;
+    color: #aab9d4;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+#<?= $componentId ?> .lead-copy h2,
+#<?= $componentId ?> .brief-card h3,
+#<?= $componentId ?> .lane-copy h3,
+#<?= $componentId ?> .rail-card h4 {
+    margin: 0;
+    color: #f7f9ff;
+}
+
+#<?= $componentId ?> .lead-copy h2 {
+    font-size: clamp(1.7rem, 3vw, 2.45rem);
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .brief-card h3,
+#<?= $componentId ?> .lane-copy h3 {
+    font-size: 1.18rem;
+    line-height: 1.35;
+}
+
+#<?= $componentId ?> .lead-copy a,
+#<?= $componentId ?> .brief-card a,
+#<?= $componentId ?> .lane-copy a,
+#<?= $componentId ?> .rail-card a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .lead-summary,
+#<?= $componentId ?> .brief-card p,
+#<?= $componentId ?> .lane-summary {
+    color: #aab9d4;
+    line-height: 1.78;
+}
+
+#<?= $componentId ?> .story-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.7rem;
+}
+
+#<?= $componentId ?> .story-foot.compact {
+    margin-top: auto;
+}
+
+#<?= $componentId ?> .story-author {
+    color: #8ea0bf;
+    font-size: 0.88rem;
+}
+
+#<?= $componentId ?> .story-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .brief-stack,
+#<?= $componentId ?> .signal-rail,
+#<?= $componentId ?> .recent-stack {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .brief-card {
+    display: grid;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .lane-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .lane-card {
+    display: grid;
+    gap: 0;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .lane-card.has-cover {
+    grid-template-columns: 132px minmax(0, 1fr);
+}
+
+#<?= $componentId ?> .lane-card.is-wide {
+    grid-column: span 2;
+}
+
+#<?= $componentId ?> .lane-card.is-wide.has-cover {
+    grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.1fr);
+}
+
+#<?= $componentId ?> .lane-media {
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .lane-media img {
+    transition: transform 0.28s ease;
+}
+
+#<?= $componentId ?> .lane-card:hover .lane-media img,
+#<?= $componentId ?> .lead-story:hover .lead-media img {
+    transform: scale(1.04);
+}
+
+#<?= $componentId ?> .lane-grid.style-minimal .lane-summary {
+    display: none;
+}
+
+#<?= $componentId ?> .signal-rail {
+    position: sticky;
+    top: 110px;
+}
+
+#<?= $componentId ?> .rail-card {
+    padding: 1.1rem;
+}
+
+#<?= $componentId ?> .rail-kicker {
+    padding: 0.3rem 0.7rem;
+    color: <?= htmlspecialchars($accentColor) ?>;
+    border: 1px solid rgba(210, 255, 63, 0.18);
+    background: rgba(210, 255, 63, 0.08);
+}
+
+#<?= $componentId ?> .rail-card h4 {
+    margin-top: 0.9rem;
+    font-size: 1.08rem;
+}
+
+#<?= $componentId ?> .category-cloud {
+    margin-top: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .category-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.56rem 0.86rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    color: #dce6f8;
+    font-size: 0.82rem;
+}
+
+#<?= $componentId ?> .recent-link {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+    padding: 0.55rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+#<?= $componentId ?> .recent-link img {
+    border-radius: 14px;
+    aspect-ratio: 1 / 1;
+}
+
+#<?= $componentId ?> .recent-link span {
+    display: grid;
+    gap: 0.25rem;
+}
+
+#<?= $componentId ?> .recent-link strong {
+    color: #f7f9ff;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+#<?= $componentId ?> .recent-link small {
+    color: #8ea0bf;
+    font-size: 0.76rem;
+}
+
+@media (max-width: 1140px) {
+    #<?= $componentId ?> .blog-board.has-rail {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .signal-rail {
+        position: relative;
+        top: auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 920px) {
+    #<?= $componentId ?> .dispatch-head,
+    #<?= $componentId ?> .lead-grid,
+    #<?= $componentId ?> .lead-story {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .head-stats {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 720px) {
+    #<?= $componentId ?> {
+        padding: 76px 0;
+    }
+
+    #<?= $componentId ?> .blog-shell {
+        width: min(100%, calc(100% - 1rem));
+    }
+
+    #<?= $componentId ?> .head-stats,
+    #<?= $componentId ?> .lane-grid,
+    #<?= $componentId ?> .signal-rail {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .lane-card.has-cover,
+    #<?= $componentId ?> .lane-card.is-wide.has-cover {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .lane-card.is-wide {
+        grid-column: auto;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .lane-media img,
+    #<?= $componentId ?> .lead-media img {
+        transition: none;
+    }
+}
+</style>

@@ -1,0 +1,30 @@
+{
+    "page_type": "cookie_policy",
+    "name": "Cookie政策页面布局",
+    "description": "Twenty Nine Tempest 主题Cookie政策页面布局",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "cookie-policy-default",
+                "config": {
+                    "content.badge": "Legal",
+                    "content.title": "Cookie Policy",
+                    "content.last_updated": "March 18, 2026",
+                    "content.body": "This Cookie Policy explains how Twenty Nine Tempest uses cookies and similar technologies to deliver site features, remember preferences, and improve performance.",
+                    "layout.width": "medium",
+                    "toc.items": "What Are Cookies|Cookies are small data files stored on your device when you browse our pages. They help keep experiences faster and more consistent.\nTypes of Cookies We Use|We use essential cookies for platform features, analytics cookies to understand usage patterns, and preference cookies to remember settings.\nThird-Party Cookies|Some pages may use cookies from analytics or media partners to measure performance and improve content delivery.\nManaging Cookies|You can control cookies through browser settings. Disabling essential cookies may affect some functions.\nUpdates|We may revise this Cookie Policy from time to time. Updates will be posted here with a refreshed effective date."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Cookie政策页面布局"
+}

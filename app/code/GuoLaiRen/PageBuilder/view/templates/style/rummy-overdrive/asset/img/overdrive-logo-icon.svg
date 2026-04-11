@@ -1,0 +1,22 @@
+<svg width="160" height="160" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rovLogoBg" x1="26" y1="16" x2="136" y2="144" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4D7A"/>
+      <stop offset="0.56" stop-color="#FF8C42"/>
+      <stop offset="1" stop-color="#D2FF3F"/>
+    </linearGradient>
+    <linearGradient id="rovLogoCore" x1="38" y1="28" x2="124" y2="132" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#131A31"/>
+      <stop offset="1" stop-color="#05070E"/>
+    </linearGradient>
+  </defs>
+  <rect x="16" y="16" width="128" height="128" rx="36" fill="url(#rovLogoCore)"/>
+  <rect x="16" y="16" width="128" height="128" rx="36" stroke="url(#rovLogoBg)" stroke-width="6"/>
+  <rect x="44" y="40" width="44" height="62" rx="12" fill="#F8FAFF" transform="rotate(-10 44 40)"/>
+  <rect x="74" y="48" width="44" height="62" rx="12" fill="#F8FAFF" transform="rotate(8 74 48)"/>
+  <path d="M68 58L74 67L68 76L62 67L68 58Z" fill="#131A31"/>
+  <path d="M90 69C84 78 80 83 80 90C80 98 86 104 94 104C101 104 108 98 108 91C108 83 99 75 90 69Z" fill="#FF4D7A"/>
+  <path d="M90 108L77 89H103L90 108Z" fill="#FF4D7A"/>
+  <circle cx="120" cy="40" r="9" fill="#D2FF3F" fill-opacity="0.85"/>
+  <path d="M122 22L125 29L132 32L125 35L122 42L119 35L112 32L119 29L122 22Z" fill="#2BE7FF"/>
+</svg>

@@ -115,8 +115,6 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
             $arguments[] = '--reuseport';
         }
 
-        $arguments = \array_merge($arguments, $this->buildSharedStateArguments($context));
-
         $loopDriver = (string) $context->getConfig('wls.loop.driver', 'auto');
         $loopDriver = \strtolower(\trim($loopDriver));
         if ($loopDriver === '') {
@@ -178,41 +176,5 @@ class MaintenanceWorkerProvider extends AbstractServiceProvider
     {
         $this->dynamicEnabled = false;
         $this->dynamicInstanceCount = 0;
-    }
-
-    /**
-     * @return string[]
-     */
-    private function buildSharedStateArguments(ServiceContext $context): array
-    {
-        $runtime = (new SharedStateRuntimeResolver())->resolve($context->envConfig, $context->envConfig, $context->instanceName);
-        $session = \is_array($runtime['session'] ?? null) ? $runtime['session'] : [];
-        $memory = \is_array($runtime['memory'] ?? null) ? $runtime['memory'] : [];
-
-        $sessionHost = \trim((string) ($session['host'] ?? '127.0.0.1'));
-        if ($sessionHost === '') {
-            $sessionHost = '127.0.0.1';
-        }
-        $defaultSessionPort = 19970 + MasterProcess::getProjectPortOffset();
-        $sessionPort = (int) ($session['port'] ?? $defaultSessionPort);
-        $sessionTokenFileName = \trim((string) ($session['token_file_name'] ?? 'session_server.token'));
-
-        $memoryHost = \trim((string) ($memory['host'] ?? '127.0.0.1'));
-        if ($memoryHost === '') {
-            $memoryHost = '127.0.0.1';
-        }
-        // 默认端口 19971 + 项目偏移量，确保多项目不冲突
-        $defaultMemoryPort = 19971 + MasterProcess::getProjectPortOffset();
-        $memoryPort = (int) ($memory['port'] ?? $defaultMemoryPort);
-        $memoryTokenFileName = \trim((string) ($memory['token_file_name'] ?? 'memory_server.token'));
-
-        return [
-            '--session-host=' . $sessionHost,
-            '--session-port=' . ($sessionPort > 0 ? $sessionPort : $defaultSessionPort),
-            '--session-token-file-name=' . ($sessionTokenFileName !== '' ? $sessionTokenFileName : 'session_server.token'),
-            '--memory-host=' . $memoryHost,
-            '--memory-port=' . ($memoryPort > 0 ? $memoryPort : $defaultMemoryPort),
-            '--memory-token-file-name=' . ($memoryTokenFileName !== '' ? $memoryTokenFileName : 'memory_server.token'),
-        ];
     }
 }

@@ -473,7 +473,20 @@ class SseWriter
         }
         // 发送结束注释，便于客户端/代理识别流结束
         $this->writeWithRetry(": stream closed\n\n");
-        // 刷新输出，确保数据发送完毕
+
+        // WLS 模式：连接生命周期由 worker 管理（writeBuffers → pendingClose → fclose），
+        // 此处不得直接 fflush/fclose self::$connection，因为 Fiber 并发下该静态变量
+        // 可能已被上下文切换指向其他请求的连接，直接操作会导致：
+        //   1. fflush 刷错连接的缓冲区
+        //   2. fclose 关闭其他请求正在使用的连接
+        // 仅重置 SseContext 状态，让 worker 的 sendResponseAndCleanup / pendingClose 负责关连。
+        if (\defined('WLS_MODE') && WLS_MODE) {
+            $this->started = false;
+            SseContext::reset();
+            return;
+        }
+
+        // FPM/CLI 模式：直接刷新并关闭连接
         if (SseContext::getConnection() !== null && \is_resource(SseContext::getConnection())) {
             @\fflush(SseContext::getConnection());
         }

@@ -1,0 +1,783 @@
+<?php
+/**
+ * Indian Rummy Voltage - Hero Slider Component
+ *
+ * @fields_start
+ *
+ * group:hero => 首屏设置
+ * hero.display => 显示首屏:select:yes|yes,no
+ * hero.title => 首屏标题:text:Indian Rummy Voltage
+ * hero.subtitle => 首屏副标题:textarea:Play Indian Rummy with voltage-fast rooms, smooth card flow, and secure table action.
+ * hero.image_mobile => 移动端首屏图片:textarea:|默认使用本地banner-2.jpg
+ * hero.image => 桌面端首屏图片:textarea:|默认使用本地banner-03.webp
+ * hero.alt => 首屏图片替代文本:text:Indian Rummy Voltage hero banner
+ * hero.bg_color => 首屏背景色:color:#102930
+ * hero.cta_text => 首屏按钮文本:text:DOWNLOAD APP
+ * hero.cta_url => 首屏按钮链接:text:#download
+ *
+ * group:download_btn => 下载按钮
+ * download_btn.image => 下载按钮图片:textarea:|默认使用本地download-btn-m.webp
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 区块样式类:textarea:rs-slider slider-style2|额外类名
+ * layout.margin_top => 桌面端顶部重叠:number:-75|px
+ * layout.img_margin_top => 桌面端图片偏移:number:-10|px
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page') ?? $page ?? null;
+$componentConfig = $component_config ?? $this->getData('component_config') ?? [];
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+
+$getConfigAny = static function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+    return $default;
+};
+
+$getConfig = static function ($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$normalizeSwitch = static function ($value, $default = 'yes') {
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    if ($value === true || $value === 'true' || $value === 'yes') {
+        return 'yes';
+    }
+    if ($value === false || $value === 'false' || $value === 'no') {
+        return 'no';
+    }
+    return $default;
+};
+
+$bannerDisplay = $normalizeSwitch($getConfigAny(['hero.display', 'banner.display'], 'yes'), 'yes');
+if ($bannerDisplay !== 'yes') {
+    return;
+}
+
+$bannerAlt = (string)$getConfigAny(['hero.alt', 'banner.alt'], 'Indian Rummy Voltage hero banner');
+$bannerBgColor = (string)$getConfigAny(['hero.bg_color', 'banner.bg_color'], '#102930');
+$downloadDisplay = $normalizeSwitch($getConfigAny(['download_btn.display', 'hero.display'], 'yes'), 'yes') === 'yes';
+$downloadBtnAlt = (string)$getConfigAny(['hero.cta_text', 'download_btn.alt'], 'DOWNLOAD APP');
+$downloadBtnUrl = (string)$getConfigAny(['hero.cta_url', 'download_btn.url'], '#download');
+$sliderClasses = (string)$getConfig('layout.slider_classes', 'rs-slider slider-style2');
+$marginTop = (int)$getConfig('layout.margin_top', -75);
+$imgMarginTop = (int)$getConfig('layout.img_margin_top', -10);
+
+$defaultBannerMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/banner-2.jpg');
+$defaultBannerDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/banner-03.webp');
+$defaultDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/download-btn-m.webp');
+
+$bannerImageMobile = trim((string)$getConfigAny(['hero.image_mobile', 'banner.image_mobile'], ''));
+$bannerImageDesktop = trim((string)$getConfigAny(['hero.image', 'banner.image_desktop'], ''));
+$downloadBtnImage = trim((string)$getConfig('download_btn.image', ''));
+
+$finalBannerMobile = $bannerImageMobile !== '' ? $bannerImageMobile : (string)$defaultBannerMobile;
+$finalBannerDesktop = $bannerImageDesktop !== '' ? $bannerImageDesktop : (string)$defaultBannerDesktop;
+$finalDownloadBtn = $downloadBtnImage !== '' ? $downloadBtnImage : (string)$defaultDownloadBtn;
+
+$isPreviewPlaceholder = static function ($value) {
+    $text = trim((string)$value);
+    if ($text === '') {
+        return false;
+    }
+    $signals = [
+        '预览模式',
+        '模板默认配置',
+        'preview mode',
+        'default template',
+        'template default'
+    ];
+    foreach ($signals as $signal) {
+        if (stripos($text, $signal) !== false) {
+            return true;
+        }
+    }
+    return false;
+};
+
+$pageTitle = $page ? trim((string)($page->getData('title') ?: '')) : '';
+$heroName = trim((string)$getConfig('hero.title', $pageTitle));
+if ($heroName === '' || $isPreviewPlaceholder($heroName)) {
+    $heroName = 'Indian Rummy Voltage';
+}
+$heroMeta = $page ? trim((string)($page->getData('meta_description') ?: '')) : '';
+$heroSubtitleDefault = ($heroMeta !== '' && !$isPreviewPlaceholder($heroMeta))
+    ? $heroMeta
+    : 'Play Indian Rummy with voltage-fast rooms, smooth card flow, and secure table action.';
+$heroSubtitle = trim((string)$getConfig('hero.subtitle', $heroSubtitleDefault));
+
+$instanceId = 'rv-hero-slider-' . uniqid();
+$modeChips = ['Classic Room', 'Turbo Hands', 'Points Sprint'];
+$spotGradId = $instanceId . '-spot-grad';
+$spotCoreGradId = $instanceId . '-spot-core-grad';
+?>
+
+<section id="<?= $instanceId ?>" class="rvhero <?= htmlspecialchars($sliderClasses) ?>" aria-label="<?= htmlspecialchars($heroName) ?> hero">
+    <span class="rvhero-spotlight" aria-hidden="true"></span>
+    <svg class="rvhero-spotlight-svg" viewBox="0 0 720 720" aria-hidden="true" focusable="false">
+        <defs>
+            <linearGradient id="<?= htmlspecialchars($spotGradId) ?>" x1="0.5" y1="0" x2="0.5" y2="1">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.82" />
+                <stop offset="42%" stop-color="#ffe4a4" stop-opacity="0.46" />
+                <stop offset="100%" stop-color="#73dcff" stop-opacity="0" />
+            </linearGradient>
+            <linearGradient id="<?= htmlspecialchars($spotCoreGradId) ?>" x1="0.5" y1="0" x2="0.5" y2="1">
+                <stop offset="0%" stop-color="#ffffff" stop-opacity="0.88" />
+                <stop offset="36%" stop-color="#ffeec0" stop-opacity="0.58" />
+                <stop offset="100%" stop-color="#ffeec0" stop-opacity="0" />
+            </linearGradient>
+        </defs>
+        <path class="rvhero-spot-cone" d="M342 18 L378 18 L720 706 L0 706 Z" fill="url(#<?= htmlspecialchars($spotGradId) ?>)"></path>
+        <path class="rvhero-spot-core" d="M352 26 L368 26 L448 706 L272 706 Z" fill="url(#<?= htmlspecialchars($spotCoreGradId) ?>)"></path>
+        <ellipse class="rvhero-spot-base" cx="360" cy="76" rx="74" ry="22"></ellipse>
+        <circle class="rvhero-spot-lamp" cx="360" cy="64" r="20"></circle>
+    </svg>
+
+    <div class="rvhero-shell">
+        <div class="rvhero-stage">
+            <div class="rvhero-table" style="--rvhero-banner-offset: <?= (int)$imgMarginTop ?>px;">
+                <span class="rvhero-radar rvhero-radar-a" aria-hidden="true"></span>
+                <span class="rvhero-radar rvhero-radar-b" aria-hidden="true"></span>
+                <span class="rvhero-orbit-dot" aria-hidden="true"></span>
+
+                <picture>
+                    <?php if ($finalBannerMobile): ?>
+                        <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($finalBannerMobile) ?>">
+                    <?php endif; ?>
+                    <?php if ($finalBannerDesktop): ?>
+                        <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($finalBannerDesktop) ?>">
+                    <?php endif; ?>
+                    <img class="rvhero-banner" src="<?= htmlspecialchars($finalBannerDesktop ?: $finalBannerMobile) ?>" alt="<?= htmlspecialchars($bannerAlt) ?>" fetchpriority="high" decoding="async">
+                </picture>
+
+                <?php if ($downloadDisplay && $finalDownloadBtn !== ''): ?>
+                    <a class="rvhero-download" href="<?= htmlspecialchars($downloadBtnUrl) ?>" aria-label="<?= htmlspecialchars($downloadBtnAlt) ?>">
+                        <img src="<?= htmlspecialchars($finalDownloadBtn) ?>" alt="<?= htmlspecialchars($downloadBtnAlt) ?>" loading="eager" decoding="async" width="220" height="58">
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="rvhero-copy">
+            <p class="rvhero-tag"><?= htmlspecialchars($heroName) ?></p>
+            <h1><?= htmlspecialchars($heroName) ?></h1>
+            <p class="rvhero-subtitle"><?= htmlspecialchars($heroSubtitle) ?></p>
+
+            <div class="rvhero-chip-row" aria-label="mode chips">
+                <?php foreach ($modeChips as $chip): ?>
+                    <span><?= htmlspecialchars($chip) ?></span>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="rvhero-metric-board" aria-hidden="true">
+                <p><span>Entry</span><strong>1.2s</strong></p>
+                <p><span>Live Rooms</span><strong>24/7</strong></p>
+                <p><span>Sync</span><strong>Stable</strong></p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $instanceId ?> {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    margin-top: <?= $marginTop ?>px;
+    padding: 114px 0 72px;
+    background:
+        radial-gradient(1040px 520px at 76% -8%, rgba(255, 228, 168, 0.24), transparent 64%),
+        radial-gradient(980px 560px at 24% 108%, rgba(76, 222, 255, 0.2), transparent 68%),
+        radial-gradient(860px 440px at 76% 24%, rgba(255, 210, 124, 0.14), transparent 72%),
+        linear-gradient(180deg, rgba(8, 13, 21, 0.98) 0%, rgba(9, 22, 36, 0.98) 56%, rgba(11, 29, 40, 0.99) 100%),
+        <?= htmlspecialchars($bannerBgColor) ?>;
+}
+
+#<?= $instanceId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(132deg, rgba(255, 228, 168, 0.14) 18%, rgba(255, 228, 168, 0.02) 42%, rgba(95, 214, 255, 0.02) 62%, transparent 82%),
+        repeating-linear-gradient(55deg, rgba(255, 255, 255, 0.02) 0 1px, transparent 1px 30px),
+        repeating-linear-gradient(-55deg, rgba(108, 203, 255, 0.03) 0 1px, transparent 1px 30px);
+    opacity: .34;
+    z-index: 0;
+}
+
+#<?= $instanceId ?>::after {
+    content: '';
+    position: absolute;
+    inset: -24% -16% -14% -16%;
+    height: auto;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        linear-gradient(132deg, rgba(255, 230, 177, 0.16) 22%, rgba(255, 230, 177, 0.02) 48%, rgba(95, 214, 255, 0.03) 64%, transparent 84%),
+        radial-gradient(56% 86% at 76% 8%, rgba(255, 224, 148, 0.28), transparent 78%),
+        radial-gradient(64% 92% at 40% 92%, rgba(95, 214, 255, 0.18), transparent 82%);
+    animation: rvhero-floor-pulse 8.4s ease-in-out infinite;
+}
+
+#<?= $instanceId ?> .rvhero-shell {
+    width: min(1220px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+    gap: 1rem;
+    align-items: center;
+}
+
+#<?= $instanceId ?> .rvhero-stage {
+    position: relative;
+    min-width: 0;
+    isolation: isolate;
+}
+
+#<?= $instanceId ?> .rvhero-stage::before,
+#<?= $instanceId ?> .rvhero-stage::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+    z-index: 0;
+}
+
+#<?= $instanceId ?> .rvhero-stage::before {
+    inset: auto -18% -26% -18%;
+    height: 56%;
+    background:
+        radial-gradient(56% 80% at 50% 0%, rgba(255, 218, 132, 0.4), rgba(255, 218, 132, 0.12) 54%, transparent 78%),
+        radial-gradient(66% 94% at 50% 0%, rgba(95, 214, 255, 0.24), transparent 82%);
+    filter: blur(2px);
+    opacity: .78;
+    animation: rvhero-floor-breathe 7.6s ease-in-out infinite;
+}
+
+#<?= $instanceId ?> .rvhero-stage::after {
+    inset: 8% -8% 8% -8%;
+    background:
+        radial-gradient(54% 78% at 50% 100%, rgba(255, 241, 213, 0.2), rgba(255, 241, 213, 0.08) 36%, transparent 74%),
+        radial-gradient(56% 84% at 50% 100%, rgba(120, 221, 255, 0.16), transparent 78%);
+    mix-blend-mode: screen;
+    opacity: .48;
+    animation: rvhero-up-haze 9.4s linear infinite;
+}
+
+#<?= $instanceId ?> .rvhero-spotlight {
+    position: absolute;
+    left: 86%;
+    top: -12%;
+    width: min(74vw, 800px);
+    height: min(98vw, 760px);
+    transform: translateX(-50%) rotate(var(--rv-spot-angle, 30deg));
+    transform-origin: 50% 0;
+    pointer-events: none;
+    z-index: 1;
+    opacity: .84;
+    filter: blur(2px);
+    mix-blend-mode: screen;
+    clip-path: polygon(46% 0%, 54% 0%, 100% 100%, 0% 100%);
+    --rv-spot-angle: 46deg;
+    --rv-spot-sway: 2.6deg;
+    background:
+        radial-gradient(58% 90% at 50% 0%, rgba(255, 244, 218, 0.78), rgba(255, 220, 143, 0.34) 42%, rgba(90, 212, 255, 0.2) 60%, rgba(90, 212, 255, 0) 84%);
+    animation:
+        rvhero-spot-sway 8.2s ease-in-out infinite,
+        rvhero-spot-breathe 4.8s ease-in-out infinite;
+}
+
+#<?= $instanceId ?> .rvhero-spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 8% 40% 30% 40%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 230, 169, 0.24) 62%, rgba(255, 230, 169, 0));
+    filter: blur(6px);
+    opacity: .88;
+}
+
+#<?= $instanceId ?> .rvhero-spotlight::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 2.4%;
+    width: min(24vw, 230px);
+    aspect-ratio: 1;
+    border-radius: 999px;
+    transform: translateX(-50%);
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255, 247, 225, 0.96), rgba(255, 221, 140, 0.54) 42%, rgba(99, 218, 255, 0.28) 58%, rgba(99, 218, 255, 0) 82%);
+    box-shadow:
+        0 0 20px rgba(255, 224, 156, 0.5),
+        0 0 48px rgba(99, 218, 255, 0.34);
+    animation: rvhero-lamp-core 3.6s ease-in-out infinite;
+}
+
+#<?= $instanceId ?> .rvhero-spotlight-svg {
+    position: absolute;
+    left: 86%;
+    top: -10%;
+    width: min(74vw, 800px);
+    height: auto;
+    pointer-events: none;
+    z-index: 1;
+    transform: translateX(-50%) rotate(var(--rv-spot-angle, 30deg));
+    transform-origin: 50% 0;
+    mix-blend-mode: screen;
+    opacity: .78;
+    --rv-spot-angle: 46deg;
+    --rv-spot-sway: 2.6deg;
+    animation:
+        rvhero-spot-sway 8.2s ease-in-out infinite,
+        rvhero-svg-breathe 4.8s ease-in-out infinite;
+}
+
+#<?= $instanceId ?> .rvhero-spot-cone {
+    opacity: .68;
+}
+
+#<?= $instanceId ?> .rvhero-spot-core {
+    opacity: .8;
+}
+
+#<?= $instanceId ?> .rvhero-spot-base {
+    fill: rgba(99, 218, 255, 0.24);
+}
+
+#<?= $instanceId ?> .rvhero-spot-lamp {
+    fill: rgba(255, 236, 186, 0.76);
+}
+
+#<?= $instanceId ?> .rvhero-table {
+    position: relative;
+    z-index: 2;
+    padding: .95rem;
+    border-radius: 999px;
+    background:
+        repeating-linear-gradient(120deg, rgba(255, 255, 255, 0.04) 0 2px, transparent 2px 18px),
+        repeating-linear-gradient(-120deg, rgba(255, 255, 255, 0.025) 0 2px, transparent 2px 18px),
+        #10243c;
+    border: 1px solid rgba(143, 224, 255, 0.44);
+    box-shadow:
+        0 32px 58px rgba(0, 0, 0, 0.4),
+        inset 0 0 0 2px rgba(143, 224, 255, 0.22),
+        inset 0 -24px 44px rgba(0, 0, 0, 0.34);
+}
+
+#<?= $instanceId ?> .rvhero-table::after {
+    content: '';
+    position: absolute;
+    inset: 12% 9%;
+    border-radius: 999px;
+    pointer-events: none;
+    background: linear-gradient(110deg, rgba(255, 255, 255, 0) 28%, rgba(255, 218, 132, 0.22) 48%, rgba(143, 224, 255, 0.24) 52%, rgba(255, 255, 255, 0) 72%);
+    mix-blend-mode: screen;
+    opacity: .56;
+    animation: rvhero-table-scan 4.6s cubic-bezier(.36, .01, .19, .99) infinite;
+}
+
+#<?= $instanceId ?> .rvhero-table::before {
+    content: '';
+    position: absolute;
+    inset: 8% 5%;
+    border-radius: 999px;
+    border: 1px solid rgba(143, 224, 255, 0.34);
+    pointer-events: none;
+}
+
+#<?= $instanceId ?> .rvhero-radar {
+    position: absolute;
+    inset: 14% 11%;
+    border-radius: 999px;
+    border: 1px solid rgba(143, 224, 255, 0.34);
+    pointer-events: none;
+    animation: rvhero-radar 3.4s ease-out infinite;
+}
+
+#<?= $instanceId ?> .rvhero-radar-b {
+    inset: 20% 17%;
+    animation-delay: -1.6s;
+}
+
+#<?= $instanceId ?> .rvhero-orbit-dot {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    margin-left: -7px;
+    margin-top: -7px;
+    background: radial-gradient(circle at 35% 35%, #ecf8ff 0%, #8fe0ff 55%, #4fc0ff 100%);
+    box-shadow: 0 0 12px rgba(143, 224, 255, 0.8);
+    transform-origin: 0 0;
+    animation: rvhero-orbit 5.4s linear infinite;
+}
+
+#<?= $instanceId ?> .rvhero-table picture {
+    display: block;
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+}
+
+#<?= $instanceId ?> .rvhero-banner {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1.22 / 1;
+    object-fit: cover;
+    margin-top: var(--rvhero-banner-offset, 0px);
+    filter: saturate(1.08) contrast(1.04);
+}
+
+#<?= $instanceId ?> .rvhero-download {
+    position: absolute;
+    left: 50%;
+    bottom: 1.1rem;
+    transform: translateX(-50%);
+    z-index: 4;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    padding: .42rem .52rem;
+    background: linear-gradient(135deg, rgba(8, 17, 24, 0.92), rgba(8, 17, 24, 0.68));
+    box-shadow: 0 14px 26px rgba(0, 0, 0, 0.36);
+}
+
+#<?= $instanceId ?> .rvhero-download img {
+    display: block;
+    width: min(240px, 68vw);
+    height: auto;
+}
+
+#<?= $instanceId ?> .rvhero-copy {
+    min-width: 0;
+    position: relative;
+    z-index: 2;
+}
+
+#<?= $instanceId ?> .rvhero-tag {
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    padding: .34rem .78rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 208, 103, 0.42);
+    background: rgba(255, 208, 103, 0.12);
+    color: #ffe8bd;
+    font-size: .7rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .rvhero-copy h1 {
+    margin: .82rem 0 0;
+    color: #fff4dd;
+    font-size: clamp(2.06rem, 5.6vw, 4rem);
+    line-height: .96;
+    letter-spacing: .02em;
+}
+
+#<?= $instanceId ?> .rvhero-subtitle {
+    margin: .86rem 0 0;
+    color: #dce8ef;
+    font-size: clamp(.95rem, 1.45vw, 1.08rem);
+    line-height: 1.76;
+    max-width: 520px;
+}
+
+#<?= $instanceId ?> .rvhero-chip-row {
+    margin-top: 1.04rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .44rem;
+}
+
+#<?= $instanceId ?> .rvhero-chip-row span {
+    display: inline-flex;
+    align-items: center;
+    padding: .38rem .68rem;
+    border-radius: 999px;
+    border: 1px solid rgba(143, 255, 218, 0.34);
+    background: rgba(8, 36, 46, 0.52);
+    color: #d6fff2;
+    font-size: .7rem;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+#<?= $instanceId ?> .rvhero-metric-board {
+    margin-top: 1.06rem;
+    display: grid;
+    gap: .56rem;
+    max-width: 420px;
+}
+
+#<?= $instanceId ?> .rvhero-metric-board p {
+    margin: 0;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: .6rem;
+    align-items: center;
+    padding: .56rem .72rem;
+    border-radius: 12px;
+    background: rgba(8, 22, 33, 0.52);
+    border: 1px solid rgba(255, 208, 103, 0.2);
+    color: #dce8ef;
+}
+
+#<?= $instanceId ?> .rvhero-metric-board span {
+    font-size: .74rem;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: #9dc1d4;
+    font-weight: 700;
+}
+
+#<?= $instanceId ?> .rvhero-metric-board strong {
+    font-size: .9rem;
+    color: #ffe4a6;
+    letter-spacing: .04em;
+}
+
+@keyframes rvhero-floor-pulse {
+    0%, 100% {
+        transform: translate3d(0, 0, 0) scale(1);
+        opacity: .5;
+    }
+    50% {
+        transform: translate3d(0, -1.2%, 0) scale(1.04);
+        opacity: .78;
+    }
+}
+
+@keyframes rvhero-floor-breathe {
+    0%, 100% {
+        transform: scale(1);
+        opacity: .58;
+    }
+    50% {
+        transform: scale(1.06);
+        opacity: .82;
+    }
+}
+
+@keyframes rvhero-up-haze {
+    0% {
+        transform: translate3d(0, 0, 0) scale(1);
+        opacity: .36;
+    }
+    50% {
+        transform: translate3d(0, -2.8%, 0) scale(1.04);
+        opacity: .54;
+    }
+    100% {
+        transform: translate3d(0, -4.8%, 0) scale(1.06);
+        opacity: .28;
+    }
+}
+
+@keyframes rvhero-spot-sway {
+    0%, 100% {
+        transform: translateX(-50%) rotate(calc(var(--rv-spot-angle, 30deg) - var(--rv-spot-sway, 2deg)));
+    }
+    50% {
+        transform: translateX(-50%) rotate(calc(var(--rv-spot-angle, 30deg) + var(--rv-spot-sway, 2deg)));
+    }
+}
+
+@keyframes rvhero-spot-breathe {
+    0%, 100% {
+        opacity: .64;
+        filter: blur(2px) saturate(1);
+    }
+    50% {
+        opacity: .92;
+        filter: blur(1px) saturate(1.14);
+    }
+}
+
+@keyframes rvhero-svg-breathe {
+    0%, 100% {
+        opacity: .62;
+    }
+    50% {
+        opacity: .9;
+    }
+}
+
+@keyframes rvhero-lamp-core {
+    0%, 100% {
+        transform: translateX(-50%) scale(.94);
+        opacity: .74;
+    }
+    50% {
+        transform: translateX(-50%) scale(1.08);
+        opacity: .98;
+    }
+}
+
+@keyframes rvhero-table-scan {
+    0% {
+        transform: translateX(-34%) skewX(-6deg);
+        opacity: 0;
+    }
+    34% {
+        opacity: .52;
+    }
+    58% {
+        opacity: .42;
+    }
+    100% {
+        transform: translateX(34%) skewX(-6deg);
+        opacity: 0;
+    }
+}
+
+@keyframes rvhero-radar {
+    0% { transform: scale(.92); opacity: .46; }
+    58% { transform: scale(1.08); opacity: .18; }
+    100% { transform: scale(1.16); opacity: 0; }
+}
+
+@keyframes rvhero-orbit {
+    0% { transform: rotate(0deg) translateX(min(20vw, 210px)) rotate(0deg); }
+    100% { transform: rotate(360deg) translateX(min(20vw, 210px)) rotate(-360deg); }
+}
+
+@media (max-width: 900px) {
+    #<?= $instanceId ?> {
+        margin-top: 0;
+        padding: 92px 0 56px;
+    }
+
+    #<?= $instanceId ?> .rvhero-shell {
+        width: calc(100% - 1rem);
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+
+    #<?= $instanceId ?> .rvhero-stage {
+        order: 1;
+    }
+
+    #<?= $instanceId ?> .rvhero-copy {
+        order: 2;
+    }
+
+    #<?= $instanceId ?> .rvhero-spotlight {
+        display: block;
+        left: 98%;
+        top: -8%;
+        width: 126vw;
+        height: 146vw;
+        opacity: .28;
+        --rv-spot-angle: 46deg;
+        --rv-spot-sway: 3deg;
+        animation: rvhero-spot-sway 5.2s ease-in-out infinite, rvhero-spot-breathe 4.2s ease-in-out infinite;
+    }
+
+    #<?= $instanceId ?> .rvhero-spotlight-svg {
+        left: 98%;
+        top: -6%;
+        width: 120vw;
+        z-index: 3;
+        opacity: .8;
+        --rv-spot-angle: 46deg;
+        --rv-spot-sway: 3deg;
+        animation: rvhero-spot-sway 5.2s ease-in-out infinite, rvhero-svg-breathe 4.2s ease-in-out infinite;
+    }
+
+    #<?= $instanceId ?> .rvhero-stage::before {
+        inset: auto -10% -14% -10%;
+        height: 46%;
+        opacity: .74;
+    }
+
+    #<?= $instanceId ?> .rvhero-stage::after {
+        inset: 16% -6% 8% -6%;
+        opacity: .5;
+    }
+
+    #<?= $instanceId ?> .rvhero-spotlight-svg .rvhero-spot-cone {
+        opacity: .78;
+    }
+
+    #<?= $instanceId ?> .rvhero-spotlight-svg .rvhero-spot-core {
+        opacity: .92;
+    }
+
+    #<?= $instanceId ?> .rvhero-table::after {
+        inset: 14% 8%;
+        opacity: .38;
+    }
+
+    #<?= $instanceId ?> .rvhero-table {
+        border-radius: 26px;
+        padding: .66rem;
+    }
+
+    #<?= $instanceId ?> .rvhero-table::before,
+    #<?= $instanceId ?> .rvhero-radar {
+        border-radius: 20px;
+    }
+
+    #<?= $instanceId ?> .rvhero-orbit-dot {
+        display: none;
+    }
+
+    #<?= $instanceId ?> .rvhero-banner {
+        margin-top: 0;
+        aspect-ratio: 1.15 / 1;
+        border-radius: 16px;
+    }
+
+    #<?= $instanceId ?> .rvhero-download {
+        bottom: .82rem;
+        width: calc(100% - 1.2rem);
+        max-width: 300px;
+    }
+
+    #<?= $instanceId ?> .rvhero-download img {
+        width: 100%;
+    }
+
+    #<?= $instanceId ?> .rvhero-copy h1 {
+        font-size: clamp(2rem, 8vw, 2.8rem);
+    }
+
+    #<?= $instanceId ?> .rvhero-subtitle {
+        max-width: none;
+        font-size: .95rem;
+        line-height: 1.66;
+    }
+
+    #<?= $instanceId ?> .rvhero-metric-board {
+        max-width: none;
+        grid-template-columns: 1fr;
+    }
+}
+</style>

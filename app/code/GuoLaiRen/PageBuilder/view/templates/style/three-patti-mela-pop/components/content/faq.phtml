@@ -1,0 +1,487 @@
+<?php
+/**
+ * Three Patti Mela Pop - FAQ Component
+ *
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: 常见问题展示模块，采用左右分栏问答布局
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.first_open => 默认展开第一项:select:no|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#e4efff
+ * style.title_color => 标题颜色:color:#2d170b
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.item_bg_color => 问答项背景色:color:rgba(255,255,255,0.76)
+ * style.item_border_radius => 问答项圆角:number:18|px
+ * style.item_border_color => 问答项边框颜色:color:rgba(45,23,11,0.12)
+ * style.item_gap => 问答项间距:number:15|px
+ * style.question_color => 问题文字颜色:color:#2d170b
+ * style.question_font_size => 问题字号(PC端):number:16|px
+ * style.question_font_size_mobile => 问题字号(移动端):number:14|px
+ * style.question_padding => 问题区域内边距:number:20|px
+ * style.question_hover_bg => 问题悬停背景色:color:rgba(255,255,255,0.08)
+ * style.icon_color => 图标颜色:color:#ff5a36
+ * style.icon_size => 图标尺寸:number:20|px
+ * style.answer_color => 答案文字颜色:color:#6b4b34
+ * style.answer_font_size => 答案字号:number:14|px
+ * style.answer_padding => 答案区域内边距:number:20|px
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:FAQs
+ * texts.intro => FAQ辅助文案:text:Short answers covering install flow, table entry, and play basics.
+ * texts.faq_1_question => FAQ问题1:text:What is the app about?
+ * texts.faq_1_answer => FAQ答案1:textarea:This bright 3 Patti landing experience is designed for quick scanning, bold visuals, and fast entry into play.
+ * texts.faq_2_question => FAQ问题2:text:How do I download the app?
+ * texts.faq_2_answer => FAQ答案2:textarea:Use the main download button or the floating download shortcut to reach the latest installation package for your device.
+ * texts.faq_3_question => FAQ问题3:text:Is the app safe to install?
+ * texts.faq_3_answer => FAQ答案3:textarea:Download from the official source, review device permissions, and follow your local platform guidance before installing.
+ * texts.faq_4_question => FAQ问题4:text:What helps new players settle in faster?
+ * texts.faq_4_answer => FAQ答案4:textarea:Start with the rules, learn the table pace, and use lower-pressure rooms before moving into faster matches.
+ * texts.faq_5_question => FAQ问题5:text:What game modes are highlighted?
+ * texts.faq_5_answer => FAQ答案5:textarea:The homepage supports a three-card spotlight along with companion sections for Rummy and Slots.
+ *
+ * @fields_end
+ */
+
+$componentId = 'mela-faq-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('faq.bg_color', $colors['faq_bg'] ?? '#e4efff'));
+$titleColor = $getConfig('style.title_color', $colors['heading_color'] ?? '#2d170b');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$itemBgColor = $getConfig('style.item_bg_color', $colors['card_bg'] ?? 'rgba(255,255,255,0.76)');
+$itemBorderRadius = $getConfig('style.item_border_radius', '18');
+$itemBorderColor = $getConfig('style.item_border_color', $colors['card_border'] ?? 'rgba(45,23,11,0.12)');
+$itemGap = $getConfig('style.item_gap', '15');
+$questionColor = $getConfig('style.question_color', $colors['heading_color'] ?? '#2d170b');
+$questionFontSize = $getConfig('style.question_font_size', '16');
+$questionFontSizeMobile = $getConfig('style.question_font_size_mobile', '14');
+$questionPadding = $getConfig('style.question_padding', '20');
+$questionHoverBg = $getConfig('style.question_hover_bg', 'rgba(255,255,255,0.08)');
+$iconColor = $getConfig('style.icon_color', $colors['accent_primary'] ?? '#ff5a36');
+$iconSize = $getConfig('style.icon_size', '20');
+$answerColor = $getConfig('style.answer_color', $colors['text_secondary'] ?? '#6b4b34');
+$answerFontSize = $getConfig('style.answer_font_size', '14');
+$answerPadding = $getConfig('style.answer_padding', '20');
+$sectionPadding = $getConfig('style.section_padding', '60');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '40');
+
+$title = $getConfig('texts.title', $getConfig('faq.title', $getConfig('texts.faq_title', 'FAQs')));
+$faqIntro = trim((string)$getConfig('texts.intro', $getConfig('texts.faq_intro', 'Short answers covering install flow, table entry, and play basics.')));
+$faqs = array_values(array_filter([
+    [
+        'question' => $getConfig('texts.faq_1_question', $getConfig('texts.faq_question_1', 'What is the app about?')),
+        'answer' => $getConfig('texts.faq_1_answer', $getConfig('texts.faq_answer_1', 'This bright 3 Patti landing experience is designed for quick scanning, bold visuals, and fast entry into play.')),
+    ],
+    [
+        'question' => $getConfig('texts.faq_2_question', $getConfig('texts.faq_question_2', 'How do I download the app?')),
+        'answer' => $getConfig('texts.faq_2_answer', $getConfig('texts.faq_answer_2', 'Use the main download button or the floating download shortcut to reach the latest installation package for your device.')),
+    ],
+    [
+        'question' => $getConfig('texts.faq_3_question', $getConfig('texts.faq_question_3', 'Is the app safe to install?')),
+        'answer' => $getConfig('texts.faq_3_answer', $getConfig('texts.faq_answer_3', 'Download from the official source, review device permissions, and follow your local platform guidance before installing.')),
+    ],
+    [
+        'question' => $getConfig('texts.faq_4_question', $getConfig('texts.faq_question_4', 'What helps new players settle in faster?')),
+        'answer' => $getConfig('texts.faq_4_answer', $getConfig('texts.faq_answer_4', 'Start with the rules, learn the table pace, and use lower-pressure rooms before moving into faster matches.')),
+    ],
+    [
+        'question' => $getConfig('texts.faq_5_question', $getConfig('texts.faq_question_5', 'What game modes are highlighted?')),
+        'answer' => $getConfig('texts.faq_5_answer', $getConfig('texts.faq_answer_5', 'The homepage supports a three-card spotlight along with companion sections for Rummy and Slots.')),
+    ],
+], static function ($item) {
+    return trim((string)($item['question'] ?? '')) !== '';
+}));
+?>
+<section id="<?= $componentId ?>" class="mela-faq" aria-labelledby="<?= $componentId ?>-title">
+    <span class="faq-ribbon faq-ribbon-a" aria-hidden="true" data-mela-parallax data-mela-speed="0.04"></span>
+    <span class="faq-ribbon faq-ribbon-b" aria-hidden="true" data-mela-parallax data-mela-speed="0.06"></span>
+
+    <div class="faq-shell">
+        <div class="faq-layout">
+            <header class="faq-header">
+                <div class="faq-headcopy">
+                    <span class="faq-headrail wow animate__fadeInUp" aria-hidden="true"><i></i><i></i><i></i></span>
+                    <?php if ($showTitle): ?>
+                        <h2 id="<?= $componentId ?>-title" class="faq-title wow animate__fadeInUp"><span><?= htmlspecialchars($title) ?></span></h2>
+                    <?php endif; ?>
+                    <?php if ($faqIntro !== ''): ?>
+                        <p class="faq-intro wow animate__fadeInUp" data-wow-delay="0.05s"><?= htmlspecialchars($faqIntro) ?></p>
+                    <?php endif; ?>
+                </div>
+            </header>
+
+            <div class="faq-stack">
+                <?php foreach ($faqs as $index => $faq): ?>
+                    <?php $isOpen = $firstOpen && $index === 0; ?>
+                    <article class="faq-card<?= $isOpen ? ' is-open' : '' ?> wow animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.06 * ($index + 1), 2)) ?>s">
+                        <button class="faq-trigger" type="button" aria-expanded="<?= $isOpen ? 'true' : 'false' ?>" aria-controls="<?= $componentId ?>-panel-<?= $index ?>">
+                            <span class="faq-question-text"><?= htmlspecialchars($faq['question']) ?></span>
+                            <span class="faq-icon" aria-hidden="true"></span>
+                        </button>
+                        <div id="<?= $componentId ?>-panel-<?= $index ?>" class="faq-panel"<?= $isOpen ? '' : ' hidden' ?>>
+                            <div class="faq-answer"><?= nl2br(htmlspecialchars($faq['answer'])) ?></div>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    background:
+        radial-gradient(560px 240px at 100% 0%, rgba(255,255,255,0.56), transparent 70%),
+        radial-gradient(460px 220px at 10% 88%, rgba(93,141,255,0.14), transparent 70%),
+        <?= htmlspecialchars($bgColor) ?>;
+    overflow: clip;
+}
+
+#<?= $componentId ?> .faq-shell {
+    width: var(--mela-shell, min(1280px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .faq-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: clamp(1.2rem, 4vw, 2.4rem);
+    align-items: start;
+}
+
+#<?= $componentId ?> .faq-header {
+    display: flex;
+    justify-content: flex-end;
+    position: sticky;
+    top: 7rem;
+}
+
+#<?= $componentId ?> .faq-headcopy {
+    display: grid;
+    justify-items: end;
+    gap: 0.72rem;
+    max-width: 28rem;
+}
+
+#<?= $componentId ?> .faq-headrail {
+    display: inline-flex;
+    gap: 0.42rem;
+    opacity: 0.72;
+}
+
+#<?= $componentId ?> .faq-headrail i {
+    display: block;
+    height: 0.36rem;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .faq-headrail i:nth-child(1) {
+    width: 2.8rem;
+    background: linear-gradient(90deg, rgba(255, 90, 54, 0.96), rgba(255, 183, 3, 0.92));
+}
+
+#<?= $componentId ?> .faq-headrail i:nth-child(2) {
+    width: 0.82rem;
+    background: rgba(255,255,255,0.76);
+}
+
+#<?= $componentId ?> .faq-headrail i:nth-child(3) {
+    width: 1.35rem;
+    background: linear-gradient(90deg, rgba(93, 141, 255, 0.88), rgba(0, 194, 168, 0.84));
+}
+
+#<?= $componentId ?> .faq-title {
+    margin: 0;
+    text-align: right;
+    font-size: clamp(<?= htmlspecialchars($titleFontSizeMobile) ?>px, 4.8vw, <?= htmlspecialchars($titleFontSize) ?>px);
+    line-height: 0.95;
+    color: <?= htmlspecialchars($titleColor) ?>;
+}
+
+#<?= $componentId ?> .faq-title span {
+    position: relative;
+    display: inline-block;
+    padding: 0.14rem 0 0.52rem;
+}
+
+#<?= $componentId ?> .faq-title span::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -0.18rem;
+    width: min(2.9rem, 34%);
+    height: 0.26rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 90, 54, 0.92) 0%, rgba(255, 183, 3, 0.88) 100%);
+    box-shadow: 0 8px 16px rgba(255, 183, 3, 0.12);
+}
+
+#<?= $componentId ?> .faq-title span::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0.08rem;
+    width: min(5.1rem, 48%);
+    height: 0.2rem;
+    border-radius: 999px;
+    background:
+        linear-gradient(90deg, rgba(255, 90, 54, 0.86), rgba(93, 141, 255, 0.76) 62%, rgba(0, 194, 168, 0));
+    pointer-events: none;
+    opacity: 0.84;
+}
+
+#<?= $componentId ?> .faq-intro {
+    margin: 0;
+    text-align: right;
+    font-size: 0.98rem;
+    line-height: 1.72;
+    color: <?= htmlspecialchars($answerColor) ?>;
+}
+
+#<?= $componentId ?> .faq-stack {
+    display: grid;
+    gap: <?= htmlspecialchars($itemGap) ?>px;
+}
+
+#<?= $componentId ?> .faq-card {
+    border-radius: <?= htmlspecialchars($itemBorderRadius) ?>px;
+    border: 1px solid <?= htmlspecialchars($itemBorderColor) ?>;
+    background: <?= htmlspecialchars($itemBgColor) ?>;
+    box-shadow: 0 18px 34px rgba(93, 141, 255, 0.1);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .faq-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: <?= htmlspecialchars($questionPadding) ?>px;
+    border: 0;
+    background: transparent;
+    color: <?= htmlspecialchars($questionColor) ?>;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    font-size: <?= htmlspecialchars($questionFontSize) ?>px;
+    font-weight: 700;
+    transition: background 0.22s ease;
+}
+
+#<?= $componentId ?> .faq-trigger:hover,
+#<?= $componentId ?> .faq-card.is-open .faq-trigger {
+    background: <?= htmlspecialchars($questionHoverBg) ?>;
+}
+
+#<?= $componentId ?> .faq-question-text {
+    flex: 1;
+}
+
+#<?= $componentId ?> .faq-icon {
+    position: relative;
+    width: <?= htmlspecialchars($iconSize) ?>px;
+    height: <?= htmlspecialchars($iconSize) ?>px;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .faq-icon::before,
+#<?= $componentId ?> .faq-icon::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 100%;
+    height: 2px;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($iconColor) ?>;
+    transform: translate(-50%, -50%);
+    transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+#<?= $componentId ?> .faq-icon::after {
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+#<?= $componentId ?> .faq-card.is-open .faq-icon::after {
+    opacity: 0;
+}
+
+#<?= $componentId ?> .faq-panel {
+    padding: 0 <?= htmlspecialchars($answerPadding) ?>px <?= htmlspecialchars($answerPadding) ?>px;
+}
+
+#<?= $componentId ?> .faq-answer {
+    font-size: <?= htmlspecialchars($answerFontSize) ?>px;
+    line-height: 1.82;
+    color: <?= htmlspecialchars($answerColor) ?>;
+}
+
+#<?= $componentId ?> .faq-ribbon {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .faq-ribbon-a {
+    left: -4rem;
+    top: 4rem;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, rgba(255,255,255,0.46), rgba(255,255,255,0) 72%);
+}
+
+#<?= $componentId ?> .faq-ribbon-b {
+    right: 6%;
+    bottom: -1rem;
+    width: 11rem;
+    height: 11rem;
+    background: radial-gradient(circle, rgba(255,79,123,0.16), rgba(255,79,123,0) 72%);
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .faq-layout {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .faq-header {
+        justify-content: flex-start;
+        position: relative;
+        top: auto;
+    }
+
+    #<?= $componentId ?> .faq-headcopy {
+        justify-items: start;
+        max-width: none;
+    }
+
+    #<?= $componentId ?> .faq-title {
+        text-align: left;
+    }
+
+    #<?= $componentId ?> .faq-intro {
+        text-align: left;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+
+    #<?= $componentId ?> .faq-shell {
+        width: min(100%, calc(100% - 0.85rem));
+    }
+
+    #<?= $componentId ?> .faq-stack {
+        gap: 0.8rem;
+    }
+
+    #<?= $componentId ?> .faq-title span {
+        padding-bottom: 0.42rem;
+    }
+
+    #<?= $componentId ?> .faq-title span::before {
+        top: -0.12rem;
+        width: min(2.2rem, 34%);
+        height: 0.22rem;
+    }
+
+    #<?= $componentId ?> .faq-title span::after {
+        left: 0;
+        bottom: 0;
+        width: min(3.8rem, 52%);
+        height: 0.18rem;
+    }
+
+    #<?= $componentId ?> .faq-card:nth-child(odd) {
+        margin-right: 0.8rem;
+    }
+
+    #<?= $componentId ?> .faq-card:nth-child(even) {
+        margin-left: 0.8rem;
+    }
+
+    #<?= $componentId ?> .faq-trigger {
+        padding: 16px;
+        font-size: <?= htmlspecialchars($questionFontSizeMobile) ?>px;
+    }
+
+    #<?= $componentId ?> .faq-panel {
+        padding: 0 16px 16px;
+    }
+}
+</style>
+<script>
+(function () {
+    var container = document.getElementById('<?= $componentId ?>');
+    if (!container) {
+        return;
+    }
+
+    var cards = Array.prototype.slice.call(container.querySelectorAll('.faq-card'));
+    cards.forEach(function (card) {
+        var trigger = card.querySelector('.faq-trigger');
+        var panel = card.querySelector('.faq-panel');
+        if (!trigger || !panel) {
+            return;
+        }
+        trigger.addEventListener('click', function () {
+            var isOpen = card.classList.contains('is-open');
+            cards.forEach(function (otherCard) {
+                var otherTrigger = otherCard.querySelector('.faq-trigger');
+                var otherPanel = otherCard.querySelector('.faq-panel');
+                otherCard.classList.remove('is-open');
+                if (otherTrigger) {
+                    otherTrigger.setAttribute('aria-expanded', 'false');
+                }
+                if (otherPanel) {
+                    otherPanel.hidden = true;
+                }
+            });
+            if (!isOpen) {
+                card.classList.add('is-open');
+                trigger.setAttribute('aria-expanded', 'true');
+                panel.hidden = false;
+            }
+        });
+    });
+})();
+</script>

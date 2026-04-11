@@ -1,0 +1,103 @@
+<?php
+/**
+ * SaaS Starter — 博客列表
+ *
+ * @var array $blog_posts
+ * @var array $blog_categories
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$colors = $this->getData('colors') ?: [];
+if (!is_array($colors)) {
+    $colors = [];
+}
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+
+$getConfig = static function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', __('Latest Blog Posts'));
+$subtitle = $getConfig('blog.subtitle', '');
+$accent = $colors['accent_primary'] ?? '#10b981';
+$textPrimary = $colors['text_primary'] ?? '#f1f5f9';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.04)';
+$cardBorder = $colors['card_border'] ?? 'rgba(255,255,255,0.08)';
+?>
+<style>
+.ss-blog-list { --a: <?= htmlspecialchars($accent) ?>; --tp: <?= htmlspecialchars($textPrimary) ?>; --ts: <?= htmlspecialchars($textSecondary) ?>; }
+.ss-blog-list .ss-bl-shell { max-width: 1200px; margin: 0 auto; padding: 0 20px 80px; }
+.ss-blog-list .ss-bl-head { margin-bottom: 2.5rem; }
+.ss-blog-list .ss-bl-head h1 { font-size: clamp(1.75rem, 4vw, 2.25rem); color: var(--tp); margin-bottom: 0.5rem; }
+.ss-blog-list .ss-bl-head p { color: var(--ts); max-width: 640px; }
+.ss-blog-list .ss-bl-layout { display: grid; gap: 2rem; }
+@media (min-width: 992px) { .ss-blog-list .ss-bl-layout.with-cat { grid-template-columns: 220px 1fr; } }
+.ss-blog-list .ss-bl-cats { display: flex; flex-direction: column; gap: 8px; }
+.ss-blog-list .ss-bl-cats a { color: var(--ts); text-decoration: none; font-size: 0.9rem; padding: 8px 12px; border-radius: 8px; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; }
+.ss-blog-list .ss-bl-cats a:hover { color: var(--a); border-color: var(--a); }
+.ss-blog-list .ss-bl-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.ss-blog-list .ss-bl-card { border-radius: 16px; overflow: hidden; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; background: <?= htmlspecialchars($cardBg) ?>; transition: transform 0.2s, border-color 0.2s; }
+.ss-blog-list .ss-bl-card:hover { transform: translateY(-4px); border-color: var(--a); }
+.ss-blog-list .ss-bl-card a { text-decoration: none; color: inherit; }
+.ss-blog-list .ss-bl-card img { width: 100%; height: 160px; object-fit: cover; }
+.ss-blog-list .ss-bl-card-body { padding: 1.25rem; }
+.ss-blog-list .ss-bl-card-body h2 { font-size: 1.1rem; color: var(--tp); margin-bottom: 0.5rem; line-height: 1.35; }
+.ss-blog-list .ss-bl-meta { font-size: 0.8rem; color: var(--ts); }
+.ss-blog-list .ss-bl-empty { text-align: center; padding: 4rem 1rem; color: var(--ts); }
+</style>
+
+<section class="ss-blog-list">
+    <div class="ss-bl-shell">
+        <header class="ss-bl-head">
+            <h1><?= htmlspecialchars($title) ?></h1>
+            <?php if ($subtitle !== ''): ?>
+                <p><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <div class="ss-bl-layout<?= !empty($blogCategories) ? ' with-cat' : '' ?>">
+            <?php if (!empty($blogCategories)): ?>
+                <nav class="ss-bl-cats" aria-label="categories">
+                    <?php foreach ($blogCategories as $cat): ?>
+                        <a href="<?= htmlspecialchars((string) ($cat['url'] ?? '#')) ?>"><?= htmlspecialchars((string) ($cat['name'] ?? '')) ?></a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
+
+            <div>
+                <?php if (empty($blogPosts)): ?>
+                    <div class="ss-bl-empty"><?= __('暂时还没有博客文章，稍后再来看看吧～') ?></div>
+                <?php else: ?>
+                    <div class="ss-bl-grid">
+                        <?php foreach ($blogPosts as $post): ?>
+                            <article class="ss-bl-card">
+                                <a href="<?= htmlspecialchars((string) ($post['url'] ?? '#')) ?>">
+                                    <?php if (!empty($post['cover_image'])): ?>
+                                        <img src="<?= htmlspecialchars((string) $post['cover_image']) ?>" alt="<?= htmlspecialchars((string) ($post['title'] ?? '')) ?>" loading="lazy">
+                                    <?php endif; ?>
+                                    <div class="ss-bl-card-body">
+                                        <h2><?= htmlspecialchars((string) ($post['title'] ?? '')) ?></h2>
+                                        <div class="ss-bl-meta">
+                                            <?php if (!empty($post['published_at'])): ?>
+                                                <?= htmlspecialchars(date('Y-m-d', strtotime((string) $post['published_at']))) ?>
+                                            <?php endif; ?>
+                                            <?php if (!empty($post['category_name'])): ?>
+                                                · <?= htmlspecialchars((string) $post['category_name']) ?>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </a>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</section>

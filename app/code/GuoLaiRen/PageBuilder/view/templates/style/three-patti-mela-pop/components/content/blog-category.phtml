@@ -1,0 +1,638 @@
+<?php
+/**
+ * Three Patti Mela Pop - Blog Category Component
+ *
+ * @component_start
+ * code: blog-category
+ * name: Mela Category Stream
+ * name_en: Blog Category
+ * description: Flowing category archive with spotlight lead, alternating stream cards, and bright archive rail.
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ * blog.title|博客标题|text|Category Posts
+ * blog.subtitle|副标题|text|Browse articles by category
+ * blog.show_sidebar|显示侧边栏|select:yes=Yes,no=No|yes
+ * blog.show_category|显示分类|select:yes=Yes,no=No|yes
+ * blog.show_date|显示日期|select:yes=Yes,no=No|yes
+ * blog.show_author|显示作者|select:yes=Yes,no=No|yes
+ * blog.card_style|卡片样式|select:default=Default,minimal=Minimal,featured=Featured|default
+ * blog.article_singular|文章数量单数标签|text|Article
+ * blog.article_plural|文章数量复数标签|text|Articles
+ * blog.empty_title|空状态标题|text|No posts in this category yet
+ * blog.empty_desc|空状态描述|text|Check back later or return to the main blog list.
+ * blog.back_to_blog_text|返回博客文案|text|Back to Blog
+ * blog.read_article_text|聚焦文章按钮文案|text|Read Article
+ * blog.read_more_text|列表按钮文案|text|Read More
+ * blog.categories_title|分类标题|text|Categories
+ * blog.recent_posts_title|最近文章标题|text|Recent Posts
+ * @fields_end
+ */
+
+$componentId = 'mela-blog-category-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$currentCategory = $this->getData('current_category') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$title = trim((string) $getConfig('blog.title', $currentCategory['name'] ?? 'Category Posts'));
+$subtitle = trim((string) $getConfig('blog.subtitle', 'Browse articles by category'));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$cardStyle = trim((string) $getConfig('blog.card_style', 'default'));
+if (!in_array($cardStyle, ['default', 'minimal', 'featured'], true)) {
+    $cardStyle = 'default';
+}
+$articleSingular = trim((string) $getConfig('blog.article_singular', 'Article'));
+$articlePlural = trim((string) $getConfig('blog.article_plural', 'Articles'));
+$emptyTitle = trim((string) $getConfig('blog.empty_title', 'No posts in this category yet'));
+$emptyDesc = trim((string) $getConfig('blog.empty_desc', 'Check back later or return to the main blog list.'));
+$backToBlogText = trim((string) $getConfig('blog.back_to_blog_text', 'Back to Blog'));
+$readArticleText = trim((string) $getConfig('blog.read_article_text', 'Read Article'));
+$readMoreText = trim((string) $getConfig('blog.read_more_text', 'Read More'));
+$categoriesTitle = trim((string) $getConfig('blog.categories_title', 'Categories'));
+$recentPostsTitle = trim((string) $getConfig('blog.recent_posts_title', 'Recent Posts'));
+
+$primaryColor = $getConfig('color_scheme.primary', $colors['accent_primary'] ?? '#ff5a36');
+$secondaryColor = $getConfig('color_scheme.secondary', $colors['accent_secondary'] ?? '#00c2a8');
+$bgColor = $getConfig('color_scheme.background', $colors['blog_bg'] ?? 'linear-gradient(180deg, #fff7de 0%, #ffeec7 100%)');
+$textColor = $getConfig('color_scheme.text', $colors['text_primary'] ?? '#2d170b');
+$mutedColor = $colors['text_muted'] ?? '#97725a';
+$surface = $colors['card_bg'] ?? 'rgba(255,255,255,0.76)';
+$borderLight = $colors['border_light'] ?? 'rgba(45,23,11,0.12)';
+
+$excerpt = static function ($text, $length = 150) {
+    $text = trim((string) $text);
+    if ($text === '') {
+        return '';
+    }
+    return mb_strlen($text) > $length ? mb_substr($text, 0, $length) . '...' : $text;
+};
+$formatDate = static function ($value) {
+    $timestamp = strtotime((string) $value);
+    return $timestamp ? date('M d, Y', $timestamp) : '';
+};
+
+$categoryDescription = trim((string) ($currentCategory['description'] ?? ''));
+$currentCategoryId = $currentCategory['id'] ?? null;
+$spotlightPost = $blogPosts[0] ?? null;
+$streamPosts = array_slice($blogPosts, 1);
+if ($spotlightPost === null && !empty($streamPosts)) {
+    $spotlightPost = array_shift($streamPosts);
+}
+?>
+<section id="<?= $componentId ?>" class="mela-blog-category mode-<?= htmlspecialchars($cardStyle) ?>" aria-labelledby="<?= $componentId ?>-title">
+    <span class="blog-float float-a" aria-hidden="true" data-mela-parallax data-mela-speed="0.04"></span>
+    <span class="blog-float float-b" aria-hidden="true" data-mela-parallax data-mela-speed="0.06"></span>
+
+    <div class="blog-shell">
+        <header class="category-masthead">
+            <div class="masthead-copy wow animate__fadeInUp">
+                <?php if (!empty($currentCategory['name'])): ?>
+                    <span class="category-badge"><?= htmlspecialchars($currentCategory['name']) ?></span>
+                <?php endif; ?>
+                <h1 id="<?= $componentId ?>-title"><?= htmlspecialchars($title !== '' ? $title : 'Category Posts') ?></h1>
+                <?php if ($subtitle !== ''): ?>
+                    <p><?= htmlspecialchars($subtitle) ?></p>
+                <?php endif; ?>
+                <?php if ($categoryDescription !== ''): ?>
+                    <div class="category-description"><?= htmlspecialchars($categoryDescription) ?></div>
+                <?php endif; ?>
+            </div>
+
+            <div class="category-count wow animate__fadeInUp" data-wow-delay="0.06s" aria-label="Category post count">
+                <span class="count-suits" aria-hidden="true">♣</span>
+                <strong><?= count($blogPosts) ?></strong>
+                <span><?= htmlspecialchars(count($blogPosts) === 1 ? ($articleSingular !== '' ? $articleSingular : 'Article') : ($articlePlural !== '' ? $articlePlural : 'Articles')) ?></span>
+            </div>
+        </header>
+
+        <?php if (empty($blogPosts)): ?>
+            <div class="category-empty wow animate__fadeInUp">
+                <h2><?= htmlspecialchars($emptyTitle !== '' ? $emptyTitle : 'No posts in this category yet') ?></h2>
+                <p><?= htmlspecialchars($emptyDesc !== '' ? $emptyDesc : 'Check back later or return to the main blog list.') ?></p>
+                <a class="empty-link" href="/blog"><?= htmlspecialchars($backToBlogText !== '' ? $backToBlogText : 'Back to Blog') ?></a>
+            </div>
+        <?php else: ?>
+            <?php if ($spotlightPost): ?>
+                <article class="spotlight-ribbon wow animate__fadeInUp" data-wow-delay="0.04s">
+                    <div class="spotlight-copy">
+                        <div class="post-meta">
+                            <?php if ($showCategory && !empty($spotlightPost['category_name'])): ?>
+                                <span class="meta-chip"><?= htmlspecialchars($spotlightPost['category_name']) ?></span>
+                            <?php endif; ?>
+                            <?php if ($showDate && !empty($spotlightPost['published_at'])): ?>
+                                <span class="meta-date"><?= htmlspecialchars($formatDate($spotlightPost['published_at'])) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <h2><a href="<?= htmlspecialchars($spotlightPost['url']) ?>"><?= htmlspecialchars($spotlightPost['title']) ?></a></h2>
+                        <?php if (!empty($spotlightPost['summary'])): ?>
+                            <p><?= htmlspecialchars($excerpt($spotlightPost['summary'], 220)) ?></p>
+                        <?php endif; ?>
+                        <div class="spotlight-foot">
+                            <?php if ($showAuthor && !empty($spotlightPost['author'])): ?>
+                                <span class="meta-author"><?= htmlspecialchars($spotlightPost['author']) ?></span>
+                            <?php endif; ?>
+                            <a class="story-link" href="<?= htmlspecialchars($spotlightPost['url']) ?>"><?= htmlspecialchars($readArticleText !== '' ? $readArticleText : 'Read Article') ?></a>
+                        </div>
+                    </div>
+                    <?php if (!empty($spotlightPost['cover_image'])): ?>
+                        <a class="spotlight-media" href="<?= htmlspecialchars($spotlightPost['url']) ?>">
+                            <img src="<?= htmlspecialchars($spotlightPost['cover_image']) ?>" alt="<?= htmlspecialchars($spotlightPost['title']) ?>" loading="lazy" decoding="async">
+                        </a>
+                    <?php endif; ?>
+                </article>
+            <?php endif; ?>
+
+            <div class="category-flow<?= $showSidebar ? ' has-rail' : '' ?>">
+                <div class="stream-list">
+                    <?php foreach ($streamPosts as $index => $post): ?>
+                        <article class="stream-card<?= $index % 2 ? ' is-reverse' : '' ?> wow animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.05 * (($index % 6) + 1), 2)) ?>s">
+                            <?php if (!empty($post['cover_image'])): ?>
+                                <a class="stream-media" href="<?= htmlspecialchars($post['url']) ?>">
+                                    <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy" decoding="async">
+                                </a>
+                            <?php endif; ?>
+                            <div class="stream-copy">
+                                <div class="post-meta">
+                                    <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                        <span class="meta-chip"><?= htmlspecialchars($post['category_name']) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($showDate && !empty($post['published_at'])): ?>
+                                        <span class="meta-date"><?= htmlspecialchars($formatDate($post['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <h3><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h3>
+                                <?php if (!empty($post['summary'])): ?>
+                                    <p><?= htmlspecialchars($excerpt($post['summary'], 170)) ?></p>
+                                <?php endif; ?>
+                                <div class="stream-foot">
+                                    <?php if ($showAuthor && !empty($post['author'])): ?>
+                                        <span class="meta-author"><?= htmlspecialchars($post['author']) ?></span>
+                                    <?php endif; ?>
+                                    <a class="story-link" href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($readMoreText !== '' ? $readMoreText : 'Read More') ?></a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="stream-rail">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card wow animate__fadeInUp" aria-labelledby="<?= $componentId ?>-categories-title">
+                                <h2 id="<?= $componentId ?>-categories-title"><?= htmlspecialchars($categoriesTitle !== '' ? $categoriesTitle : 'Categories') ?></h2>
+                                <div class="category-stack">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <?php $isActive = $currentCategoryId !== null && isset($category['id']) && (string) $category['id'] === (string) $currentCategoryId; ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="<?= $isActive ? 'is-active' : '' ?>">
+                                            <span><?= htmlspecialchars($category['name']) ?></span>
+                                            <?php if (isset($category['post_count'])): ?>
+                                                <em><?= (int) $category['post_count'] ?></em>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recentPosts)): ?>
+                            <section class="rail-card wow animate__fadeInUp" data-wow-delay="0.08s" aria-labelledby="<?= $componentId ?>-recent-title">
+                                <h2 id="<?= $componentId ?>-recent-title"><?= htmlspecialchars($recentPostsTitle !== '' ? $recentPostsTitle : 'Recent Posts') ?></h2>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                                        <a class="recent-item" href="<?= htmlspecialchars($post['url']) ?>">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy" decoding="async">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <em><?= htmlspecialchars($formatDate($post['published_at'])) ?></em>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: clamp(7rem, 11vw, 8.6rem) 0 clamp(3.2rem, 6vw, 4.6rem);
+    background:
+        radial-gradient(920px 420px at 10% 0%, rgba(255,255,255,0.38), transparent 72%),
+        radial-gradient(640px 320px at 88% 18%, rgba(255, 90, 54, 0.12), transparent 72%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+    overflow: clip;
+}
+
+#<?= $componentId ?> .blog-shell {
+    width: var(--mela-shell, min(1280px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .category-masthead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: end;
+}
+
+#<?= $componentId ?> .category-badge,
+#<?= $componentId ?> .meta-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.32rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.62);
+    border: 1px solid <?= htmlspecialchars($borderLight) ?>;
+    color: <?= htmlspecialchars($primaryColor) ?>;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .masthead-copy h1 {
+    margin: 0.85rem 0 0;
+    font-size: clamp(2.3rem, 6vw, 4.2rem);
+    line-height: 0.94;
+}
+
+#<?= $componentId ?> .masthead-copy p,
+#<?= $componentId ?> .category-description {
+    margin: 0.95rem 0 0;
+    color: <?= htmlspecialchars($mutedColor) ?>;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .category-count,
+#<?= $componentId ?> .spotlight-ribbon,
+#<?= $componentId ?> .stream-card,
+#<?= $componentId ?> .rail-card,
+#<?= $componentId ?> .category-empty {
+    position: relative;
+    border-radius: 2rem;
+    border: 1px solid <?= htmlspecialchars($borderLight) ?>;
+    box-shadow: 0 20px 38px rgba(45,23,11,0.08);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .category-count {
+    min-width: 10rem;
+    padding: 1rem 1.1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(232,252,247,0.88));
+    text-align: center;
+}
+
+#<?= $componentId ?> .count-suits {
+    display: inline-flex;
+    color: rgba(45, 23, 11, 0.26);
+}
+
+#<?= $componentId ?> .category-count strong,
+#<?= $componentId ?> .category-count span {
+    display: block;
+}
+
+#<?= $componentId ?> .category-count strong {
+    margin-top: 0.45rem;
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-size: clamp(2rem, 5vw, 2.9rem);
+    line-height: 0.92;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?> .category-count span:last-child {
+    margin-top: 0.35rem;
+    color: <?= htmlspecialchars($mutedColor) ?>;
+    font-size: 0.88rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .category-empty {
+    margin-top: clamp(1.3rem, 4vw, 1.9rem);
+    padding: 1.5rem;
+    background: <?= htmlspecialchars($surface) ?>;
+}
+
+#<?= $componentId ?> .category-empty h2 {
+    margin: 0;
+    font-size: 1.6rem;
+}
+
+#<?= $componentId ?> .category-empty p {
+    margin: 0.75rem 0 0;
+    color: <?= htmlspecialchars($mutedColor) ?>;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .empty-link,
+#<?= $componentId ?> .story-link {
+    display: inline-flex;
+    align-items: center;
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .empty-link {
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .spotlight-ribbon {
+    margin-top: clamp(1.3rem, 4vw, 1.9rem);
+    display: grid;
+    grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+    background: <?= htmlspecialchars($surface) ?>;
+}
+
+#<?= $componentId ?> .spotlight-ribbon::after {
+    content: '♥';
+    position: absolute;
+    right: 1rem;
+    bottom: 0.6rem;
+    font-size: 3.4rem;
+    line-height: 1;
+    color: rgba(45, 23, 11, 0.05);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .spotlight-copy,
+#<?= $componentId ?> .stream-copy {
+    display: grid;
+    gap: 0.85rem;
+    padding: 1.2rem;
+}
+
+#<?= $componentId ?> .spotlight-media,
+#<?= $componentId ?> .stream-media,
+#<?= $componentId ?> .recent-item img {
+    display: block;
+}
+
+#<?= $componentId ?> .spotlight-media img,
+#<?= $componentId ?> .stream-media img,
+#<?= $componentId ?> .recent-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .spotlight-media {
+    min-height: 23rem;
+}
+
+#<?= $componentId ?> .post-meta,
+#<?= $componentId ?> .spotlight-foot,
+#<?= $componentId ?> .stream-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+#<?= $componentId ?> .meta-date,
+#<?= $componentId ?> .meta-author {
+    color: <?= htmlspecialchars($mutedColor) ?>;
+    font-size: 0.88rem;
+}
+
+#<?= $componentId ?> .spotlight-copy h2,
+#<?= $componentId ?> .stream-copy h3 {
+    margin: 0;
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .spotlight-copy h2 {
+    font-size: clamp(1.7rem, 3vw, 2.45rem);
+}
+
+#<?= $componentId ?> .stream-copy h3 {
+    font-size: clamp(1.2rem, 2.4vw, 1.6rem);
+}
+
+#<?= $componentId ?> .spotlight-copy h2 a,
+#<?= $componentId ?> .stream-copy h3 a,
+#<?= $componentId ?> .recent-item strong,
+#<?= $componentId ?> .rail-card h2 {
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?> .spotlight-copy p,
+#<?= $componentId ?> .stream-copy p {
+    margin: 0;
+    color: <?= htmlspecialchars($mutedColor) ?>;
+    line-height: 1.84;
+}
+
+#<?= $componentId ?> .category-flow {
+    margin-top: 1rem;
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .category-flow.has-rail {
+    grid-template-columns: minmax(0, 1fr) minmax(18rem, 20rem);
+    align-items: start;
+}
+
+#<?= $componentId ?> .stream-list {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .stream-card {
+    display: grid;
+    grid-template-columns: minmax(14rem, 18rem) minmax(0, 1fr);
+    background: <?= htmlspecialchars($surface) ?>;
+}
+
+#<?= $componentId ?> .stream-card.is-reverse {
+    grid-template-columns: minmax(0, 1fr) minmax(14rem, 18rem);
+}
+
+#<?= $componentId ?> .stream-card.is-reverse .stream-media {
+    order: 2;
+}
+
+#<?= $componentId ?> .stream-card:nth-child(odd) {
+    border-left: 4px solid rgba(255, 90, 54, 0.28);
+}
+
+#<?= $componentId ?> .stream-card:nth-child(even) {
+    border-right: 4px solid rgba(0, 194, 168, 0.24);
+}
+
+#<?= $componentId ?> .stream-media {
+    min-height: 14rem;
+}
+
+#<?= $componentId ?> .stream-rail {
+    position: sticky;
+    top: 7rem;
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .rail-card {
+    padding: 1.1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,233,0.9));
+}
+
+#<?= $componentId ?> .rail-card h2 {
+    margin: 0;
+    font-size: 1.08rem;
+}
+
+#<?= $componentId ?> .category-stack,
+#<?= $componentId ?> .recent-stack {
+    margin-top: 1rem;
+    display: grid;
+    gap: 0.8rem;
+}
+
+#<?= $componentId ?> .category-stack a {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.7rem;
+    padding: 0.72rem 0.8rem;
+    border-radius: 1rem;
+    background: rgba(255,255,255,0.56);
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?> .category-stack a.is-active {
+    color: <?= htmlspecialchars($primaryColor) ?>;
+    background: rgba(255, 239, 209, 0.88);
+}
+
+#<?= $componentId ?> .category-stack em,
+#<?= $componentId ?> .recent-item em {
+    color: <?= htmlspecialchars($mutedColor) ?>;
+    font-style: normal;
+}
+
+#<?= $componentId ?> .recent-item {
+    display: grid;
+    grid-template-columns: 4.2rem minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .recent-item img {
+    width: 4.2rem;
+    height: 4.2rem;
+    border-radius: 1rem;
+}
+
+#<?= $componentId ?> .recent-item strong,
+#<?= $componentId ?> .recent-item em {
+    display: block;
+}
+
+#<?= $componentId ?> .recent-item em {
+    margin-top: 0.2rem;
+    font-size: 0.84rem;
+}
+
+#<?= $componentId ?> .blog-float {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .float-a {
+    left: -5rem;
+    top: 4rem;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, rgba(255,255,255,0.5), rgba(255,255,255,0) 72%);
+}
+
+#<?= $componentId ?> .float-b {
+    right: -2rem;
+    bottom: 4rem;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, rgba(0,194,168,0.14), rgba(0,194,168,0) 72%);
+}
+
+#<?= $componentId ?>.mode-minimal .spotlight-ribbon,
+#<?= $componentId ?>.mode-minimal .stream-card,
+#<?= $componentId ?>.mode-minimal .rail-card {
+    box-shadow: 0 14px 24px rgba(45,23,11,0.05);
+}
+
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .spotlight-ribbon,
+    #<?= $componentId ?> .category-flow.has-rail {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .stream-rail {
+        position: relative;
+        top: auto;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .blog-shell {
+        width: min(100%, calc(100% - 0.85rem));
+    }
+
+    #<?= $componentId ?> .category-masthead,
+    #<?= $componentId ?> .stream-card,
+    #<?= $componentId ?> .stream-card.is-reverse {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .category-count,
+    #<?= $componentId ?> .spotlight-ribbon,
+    #<?= $componentId ?> .stream-card,
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .category-empty {
+        border-radius: 1.5rem;
+    }
+
+    #<?= $componentId ?> .stream-card:nth-child(odd) {
+        margin-left: -0.35rem;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+    }
+
+    #<?= $componentId ?> .stream-card:nth-child(even) {
+        margin-right: -0.35rem;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    #<?= $componentId ?> .stream-card.is-reverse .stream-media {
+        order: 0;
+    }
+}
+</style>

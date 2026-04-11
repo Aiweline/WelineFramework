@@ -639,14 +639,40 @@ class Processer
                     $output = '';
                     $stderr = '';
                     if (isset($psPipes[1])) {
-                        $output = \trim(\stream_get_contents($psPipes[1]));
+                        @\stream_set_blocking($psPipes[1], false);
+                        $startedAt = \microtime(true);
+                        $buffer = '';
+                        while ((\microtime(true) - $startedAt) < 0.35) {
+                            $chunk = @\fread($psPipes[1], 256);
+                            if (\is_string($chunk) && $chunk !== '') {
+                                $buffer .= $chunk;
+                                if (\str_contains($buffer, "\n")) {
+                                    break;
+                                }
+                            } else {
+                                \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
+                            }
+                        }
+                        $output = \trim($buffer);
                         @\fclose($psPipes[1]);
                     }
                     if (isset($psPipes[2])) {
-                        $stderr = \trim(\stream_get_contents($psPipes[2]));
+                        @\stream_set_blocking($psPipes[2], false);
+                        $bufferErr = '';
+                        $startedAt = \microtime(true);
+                        while ((\microtime(true) - $startedAt) < 0.1) {
+                            $chunkErr = @\fread($psPipes[2], 256);
+                            if (\is_string($chunkErr) && $chunkErr !== '') {
+                                $bufferErr .= $chunkErr;
+                            } else {
+                                \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
+                            }
+                        }
+                        $stderr = \trim($bufferErr);
                         @\fclose($psPipes[2]);
                     }
-                    @\proc_close($psProcess);
+                    $status = @\proc_get_status($psProcess);
+                    self::finishWindowsDetachedHelperProcess($psProcess, $status);
                     @\unlink($scriptPath);
 
                     if (\is_numeric($output) && $output !== '' && (int)$output > 0) {
@@ -877,10 +903,7 @@ class Processer
                 @\fclose($psPipes[2]);
             }
             $status = @\proc_get_status($psProcess);
-            if (($status['running'] ?? false) === true) {
-                @\proc_terminate($psProcess);
-            }
-            @\proc_close($psProcess);
+            self::finishWindowsDetachedHelperProcess($psProcess, $status);
             @\unlink($scriptPath);
 
             if ($output !== '' && \ctype_digit($output) && (int) $output > 0) {
@@ -950,19 +973,9 @@ class Processer
         if (!\is_dir($dir)) {
             @\mkdir($dir, 0777, true);
         }
-        // 写入时加锁，避免并发写导致文件损坏
-        $fp = @\fopen($pid_file, 'cb');
-        if ($fp && \flock($fp, \LOCK_EX)) {
-            \ftruncate($fp, 0);
-            \fwrite($fp, $payload);
-            \flock($fp, \LOCK_UN);
-            \fclose($fp);
-        } else {
-            if ($fp) {
-                \fclose($fp);
-            }
-            @\file_put_contents($pid_file, $payload);
-        }
+        // 带 PID 的记录文件天然是一进程一文件，使用原子写可避免 Windows
+        // 上阻塞 flock 把 Master 启动链卡死在 registerMasterPid()。
+        self::atomicWrite($pid_file, $payload);
         
         // 更新索引（写顺序：先 *-pid.json 已完成，再 name_index，再 pid_index）
         self::updateIndexes($pname, $pid, $pid_file);
@@ -1298,13 +1311,8 @@ class Processer
         $dir       = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
         if ($pid > 0) {
             $path = $dir . $task_name . '-' . $pid . '-pid.json';
-            if (!\is_file($path)) {
-                if (!\is_dir($dir)) {
-                    @\mkdir($dir, 0777, true);
-                }
-                if (\is_dir($dir)) {
-                    @\touch($path);
-                }
+            if (!\is_dir($dir)) {
+                @\mkdir($dir, 0777, true);
             }
             return $path;
         }
@@ -2301,7 +2309,8 @@ class Processer
 
                 return null;
             }
-            @\proc_close($psProcess);
+            $status = @\proc_get_status($psProcess);
+            self::finishWindowsDetachedHelperProcess($psProcess, $status);
         } elseif ($execAvailable) {
             \set_error_handler(function ($type, $msg) use (&$lastError) {
                 $lastError = $msg;
@@ -2405,6 +2414,39 @@ class Processer
             static fn (array $item): bool => (bool) ($item['block'] ?? false)
                 && (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
         ));
+    }
+
+    /**
+     * Windows detached PowerShell helpers have occasionally blocked for minutes
+     * inside proc_close() even after the child process was already started and
+     * a PID had been returned. We prefer a small bounded wait here and skip the
+     * blocking close path if the helper refuses to exit promptly.
+     *
+     * @param resource $process
+     * @param array<string,mixed>|null $status
+     */
+    private static function finishWindowsDetachedHelperProcess($process, ?array $status = null): void
+    {
+        if (!\is_resource($process)) {
+            return;
+        }
+
+        $status ??= @\proc_get_status($process);
+        if (($status['running'] ?? false) === true) {
+            @\proc_terminate($process);
+            $deadline = \microtime(true) + 0.1;
+            do {
+                \Weline\Framework\Runtime\SchedulerSystem::usleep(10_000);
+                $status = @\proc_get_status($process);
+                if (($status['running'] ?? false) !== true) {
+                    break;
+                }
+            } while (\microtime(true) < $deadline);
+        }
+
+        if (($status['running'] ?? false) === false) {
+            @\proc_close($process);
+        }
     }
 
     /**
@@ -3765,8 +3807,16 @@ CMD;
             \fflush($fp);
             \flock($fp, \LOCK_UN);
             \fclose($fp);
-            // rename 在同目录下是原子操作
-            return @\rename($tmpPath, $path);
+            // rename 在同目录下通常是原子操作；Windows 目标已存在时 rename
+            // 可能失败，因此这里补一层可恢复覆盖逻辑。
+            if (@\rename($tmpPath, $path)) {
+                return true;
+            }
+            if (\is_file($path) && @\unlink($path) && @\rename($tmpPath, $path)) {
+                return true;
+            }
+            @\unlink($tmpPath);
+            return false;
         }
         \fclose($fp);
         @\unlink($tmpPath);
@@ -3982,24 +4032,26 @@ CMD;
             return $record;
         }
 
-        $cmdLine = self::getProcessCommandLine($pid);
-        if ($cmdLine === '') {
-            return $record;
+        $identitySource = $pname;
+        if ($pid !== \getmypid()) {
+            $cmdLine = self::getProcessCommandLine($pid);
+            if ($cmdLine !== '') {
+                $identitySource = $cmdLine;
+                $record['command_line_hash'] = \sha1($cmdLine);
+            }
         }
 
-        $record['command_line_hash'] = \sha1($cmdLine);
-
-        $processName = self::extractCommandLineArg($cmdLine, 'name');
+        $processName = self::extractCommandLineArg($identitySource, 'name');
         if ($processName !== '') {
             $record['process_name'] = self::normalizeName($processName);
         }
 
-        $launchId = self::extractCommandLineArg($cmdLine, 'launch-id');
+        $launchId = self::extractCommandLineArg($identitySource, 'launch-id');
         if ($launchId !== '') {
             $record['launch_id'] = $launchId;
         }
 
-        $epoch = self::extractCommandLineArg($cmdLine, 'epoch');
+        $epoch = self::extractCommandLineArg($identitySource, 'epoch');
         if ($epoch !== '' && \is_numeric($epoch)) {
             $record['epoch'] = (int) $epoch;
         }

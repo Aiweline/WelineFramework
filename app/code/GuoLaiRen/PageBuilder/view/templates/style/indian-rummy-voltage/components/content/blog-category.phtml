@@ -1,0 +1,637 @@
+<?php
+/**
+ * Indian Rummy Voltage - Blog Category Component
+ *
+ * @fields_start
+ * group:blog => 博客设置
+ * blog.title => 博客标题:text:Category Posts
+ * blog.subtitle => 副标题:text:Browse articles by category
+ * blog.posts_per_page => 每页文章数:number:9
+ * blog.show_sidebar => 显示侧边栏:select:yes|yes,no
+ * blog.show_category => 显示分类:select:yes|yes,no
+ * blog.show_date => 显示日期:select:yes|yes,no
+ * blog.show_author => 显示作者:select:yes|yes,no
+ * blog.card_style => 卡片样式:select:default|default,minimal,featured
+ * blog.article_singular => 文章数量单数标签:text:Post
+ * blog.article_plural => 文章数量复数标签:text:Posts
+ * blog.empty_title => 空状态标题:text:No posts in this category yet
+ * blog.empty_desc => 空状态描述:text:Try another category or return to the main blog index.
+ * blog.back_to_blog_text => 返回博客文案:text:Back to Blog
+ * blog.read_more_text => 列表按钮文案:text:Read More
+ * blog.categories_title => 分类标题:text:Categories
+ * blog.recent_posts_title => 最近文章标题:text:Recent Posts
+ * blog.untitled_post_text => 缺省文章标题:text:Untitled Post
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$currentCategory = $this->getData('current_category') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+$config = array_merge(is_array($style) ? $style : [], is_array($componentConfig) ? $componentConfig : []);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    if ($value === true || $value === 'true' || $value === 'yes') {
+        return 'yes';
+    }
+    if ($value === false || $value === 'false' || $value === 'no') {
+        return 'no';
+    }
+    return $default;
+};
+
+$title = trim((string)$getConfig('blog.title', $currentCategory['name'] ?? 'Category Posts'));
+$subtitle = trim((string)$getConfig('blog.subtitle', 'Browse articles by category'));
+$postsPerPage = max(1, (int)$getConfig('blog.posts_per_page', 9));
+$showSidebar = $normalizeToggle($getConfig('blog.show_sidebar', 'yes')) === 'yes';
+$showCategory = $normalizeToggle($getConfig('blog.show_category', 'yes')) === 'yes';
+$showDate = $normalizeToggle($getConfig('blog.show_date', 'yes')) === 'yes';
+$showAuthor = $normalizeToggle($getConfig('blog.show_author', 'yes')) === 'yes';
+$cardStyle = trim((string)$getConfig('blog.card_style', 'default'));
+if (!in_array($cardStyle, ['default', 'minimal', 'featured'], true)) {
+    $cardStyle = 'default';
+}
+$articleSingular = trim((string)$getConfig('blog.article_singular', 'Post'));
+$articlePlural = trim((string)$getConfig('blog.article_plural', 'Posts'));
+$emptyTitle = trim((string)$getConfig('blog.empty_title', 'No posts in this category yet'));
+$emptyDesc = trim((string)$getConfig('blog.empty_desc', 'Try another category or return to the main blog index.'));
+$backToBlogText = trim((string)$getConfig('blog.back_to_blog_text', 'Back to Blog'));
+$readMoreText = trim((string)$getConfig('blog.read_more_text', 'Read More'));
+$categoriesTitle = trim((string)$getConfig('blog.categories_title', 'Categories'));
+$recentPostsTitle = trim((string)$getConfig('blog.recent_posts_title', 'Recent Posts'));
+$untitledPostText = trim((string)$getConfig('blog.untitled_post_text', 'Untitled Post'));
+
+$primaryColor = $getConfig('color_scheme.primary', '#ffd067');
+$secondaryColor = $getConfig('color_scheme.secondary', '#00d8ae');
+$bgColor = $getConfig('color_scheme.background', '#0d2133');
+$textColor = $getConfig('color_scheme.text', '#f4f7ff');
+
+$posts = array_slice($blogPosts, 0, $postsPerPage);
+$recent = !empty($recentPosts) ? array_slice($recentPosts, 0, 5) : array_slice($posts, 0, 5);
+
+$formatDate = static function ($value) {
+    if (!$value) {
+        return '';
+    }
+    $timestamp = strtotime((string)$value);
+    return $timestamp ? date('M d, Y', $timestamp) : (string)$value;
+};
+?>
+
+<section class="rv-section rv-blog-category" id="blog-category">
+    <div class="section-inner">
+        <header class="blog-head">
+            <?php if (!empty($currentCategory['name'])): ?>
+                <p class="category-pill"><?= htmlspecialchars($currentCategory['name']) ?></p>
+            <?php endif; ?>
+
+            <div class="blog-head-row">
+                <h2><?= htmlspecialchars($title !== '' ? $title : 'Category Posts') ?></h2>
+                <?php if (!empty($posts)): ?>
+                    <span class="post-count"><?= count($posts) ?> <?= htmlspecialchars(count($posts) === 1 ? ($articleSingular !== '' ? $articleSingular : 'Post') : ($articlePlural !== '' ? $articlePlural : 'Posts')) ?></span>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($subtitle): ?>
+                <p class="head-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($currentCategory['description'])): ?>
+                <p class="head-desc"><?= htmlspecialchars($currentCategory['description']) ?></p>
+            <?php endif; ?>
+
+            <?php if (!empty($blogCategories)): ?>
+                <nav class="category-rail" aria-label="Blog categories">
+                    <?php foreach ($blogCategories as $category): ?>
+                        <?php
+                        $categoryName = $category['name'] ?? '';
+                        $categoryUrl = $category['url'] ?? '#';
+                        $isActive = !empty($currentCategory['id']) && !empty($category['id']) && (string)$category['id'] === (string)$currentCategory['id'];
+                        if ($categoryName === '') {
+                            continue;
+                        }
+                        ?>
+                        <a href="<?= htmlspecialchars($categoryUrl) ?>" class="<?= $isActive ? 'active' : '' ?>">
+                            <span><?= htmlspecialchars($categoryName) ?></span>
+                            <?php if (isset($category['post_count'])): ?>
+                                <em><?= (int)$category['post_count'] ?></em>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
+        </header>
+
+        <div class="blog-layout<?= $showSidebar ? ' with-sidebar' : ' full-width' ?>">
+            <main class="posts-grid" aria-label="Category posts">
+                <?php if (empty($posts)): ?>
+                    <article class="empty-state">
+                        <h3><?= htmlspecialchars($emptyTitle !== '' ? $emptyTitle : 'No posts in this category yet') ?></h3>
+                        <p><?= htmlspecialchars($emptyDesc !== '' ? $emptyDesc : 'Try another category or return to the main blog index.') ?></p>
+                        <a class="empty-link" href="/blog"><?= htmlspecialchars($backToBlogText !== '' ? $backToBlogText : 'Back to Blog') ?></a>
+                    </article>
+                <?php else: ?>
+                    <?php foreach ($posts as $index => $post): ?>
+                        <?php
+                        $postUrl = !empty($post['url']) ? $post['url'] : '#';
+                        $postTitle = !empty($post['title']) ? $post['title'] : ($untitledPostText !== '' ? $untitledPostText : 'Untitled Post');
+                        $postSummary = !empty($post['summary']) ? $post['summary'] : '';
+                        $postImage = !empty($post['cover_image']) ? $post['cover_image'] : '';
+                        $postCategory = !empty($post['category_name']) ? $post['category_name'] : '';
+                        $postDate = $formatDate($post['published_at'] ?? '');
+                        $postAuthor = !empty($post['author']) ? $post['author'] : '';
+                        $laneClass = 'lane-' . (($index % 3) + 1);
+                        $orderNumber = str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT);
+                        ?>
+                        <article class="post-card style-<?= htmlspecialchars($cardStyle) ?> <?= htmlspecialchars($laneClass) ?><?= $index === 0 && $cardStyle === 'featured' ? ' is-featured' : '' ?>">
+                            <?php if ($postImage): ?>
+                                <a class="post-image" href="<?= htmlspecialchars($postUrl) ?>">
+                                    <img src="<?= htmlspecialchars($postImage) ?>" alt="<?= htmlspecialchars($postTitle) ?>" loading="lazy" decoding="async">
+                                </a>
+                            <?php endif; ?>
+
+                            <div class="post-body">
+                                <span class="post-order"><?= htmlspecialchars($orderNumber) ?></span>
+                                <div class="post-meta">
+                                    <?php if ($showCategory && $postCategory): ?>
+                                        <span class="post-chip"><?= htmlspecialchars($postCategory) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($showDate && $postDate): ?>
+                                        <span class="post-date"><?= htmlspecialchars($postDate) ?></span>
+                                    <?php endif; ?>
+                                </div>
+
+                                <h3><a href="<?= htmlspecialchars($postUrl) ?>"><?= htmlspecialchars($postTitle) ?></a></h3>
+
+                                <?php if ($postSummary): ?>
+                                    <p class="post-summary">
+                                        <?= htmlspecialchars(mb_substr($postSummary, 0, 170)) ?><?= mb_strlen($postSummary) > 170 ? '...' : '' ?>
+                                    </p>
+                                <?php endif; ?>
+
+                                <div class="post-footer">
+                                    <?php if ($showAuthor && $postAuthor): ?>
+                                        <span class="post-author"><?= htmlspecialchars($postAuthor) ?></span>
+                                    <?php endif; ?>
+                                    <a class="read-more" href="<?= htmlspecialchars($postUrl) ?>"><?= htmlspecialchars($readMoreText !== '' ? $readMoreText : 'Read More') ?></a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </main>
+
+            <?php if ($showSidebar): ?>
+                <aside class="sidebar">
+                    <?php if (!empty($blogCategories)): ?>
+                        <section class="sidebar-card">
+                            <h4><?= htmlspecialchars($categoriesTitle !== '' ? $categoriesTitle : 'Categories') ?></h4>
+                            <ul>
+                                <?php foreach ($blogCategories as $category): ?>
+                                    <?php
+                                    $categoryName = $category['name'] ?? '';
+                                    $categoryUrl = $category['url'] ?? '#';
+                                    $isActive = !empty($currentCategory['id']) && !empty($category['id']) && (string)$category['id'] === (string)$currentCategory['id'];
+                                    if ($categoryName === '') {
+                                        continue;
+                                    }
+                                    ?>
+                                    <li class="<?= $isActive ? 'active' : '' ?>">
+                                        <a href="<?= htmlspecialchars($categoryUrl) ?>">
+                                            <span><?= htmlspecialchars($categoryName) ?></span>
+                                            <?php if (isset($category['post_count'])): ?>
+                                                <small><?= (int)$category['post_count'] ?></small>
+                                            <?php endif; ?>
+                                        </a>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </section>
+                    <?php endif; ?>
+
+                    <?php if (!empty($recent)): ?>
+                        <section class="sidebar-card">
+                            <h4><?= htmlspecialchars($recentPostsTitle !== '' ? $recentPostsTitle : 'Recent Posts') ?></h4>
+                            <ul class="recent-list">
+                                <?php foreach ($recent as $post): ?>
+                                    <?php
+                                    $postUrl = $post['url'] ?? '#';
+                                    $postTitle = $post['title'] ?? ($untitledPostText !== '' ? $untitledPostText : 'Untitled Post');
+                                    $postDate = $formatDate($post['published_at'] ?? '');
+                                    ?>
+                                    <li>
+                                        <a href="<?= htmlspecialchars($postUrl) ?>">
+                                            <span class="recent-title"><?= htmlspecialchars($postTitle) ?></span>
+                                            <?php if ($postDate): ?>
+                                                <span class="recent-date"><?= htmlspecialchars($postDate) ?></span>
+                                            <?php endif; ?>
+                                        </a>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </section>
+                    <?php endif; ?>
+                </aside>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+.rv-blog-category {
+    padding: 56px 0;
+    background:
+        radial-gradient(880px 320px at 4% -4%, rgba(83, 224, 197, 0.2), transparent 72%),
+        radial-gradient(760px 300px at 98% 100%, rgba(255, 138, 61, 0.18), transparent 74%),
+        repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 22px),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+.rv-blog-category .section-inner {
+    width: min(1180px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+.rv-blog-category .blog-head {
+    display: grid;
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.rv-blog-category .category-pill {
+    margin: 0;
+    width: fit-content;
+    padding: 0.24rem 0.65rem;
+    border-radius: 999px;
+    color: #34f3cd;
+    border: 1px solid rgba(83, 224, 197, 0.4);
+    background: rgba(83, 224, 197, 0.1);
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+.rv-blog-category .blog-head-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.rv-blog-category .blog-head h2 {
+    margin: 0;
+    font-size: clamp(1.85rem, 4vw, 2.8rem);
+    background: linear-gradient(120deg, <?= htmlspecialchars($primaryColor) ?>, <?= htmlspecialchars($secondaryColor) ?>);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.rv-blog-category .post-count {
+    border: 1px solid rgba(255, 233, 207, 0.24);
+    border-radius: 999px;
+    padding: 0.32rem 0.64rem;
+    color: rgba(255, 245, 234, 0.82);
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.rv-blog-category .head-subtitle {
+    margin: 0;
+    max-width: 760px;
+    color: rgba(255, 245, 234, 0.78);
+    line-height: 1.74;
+}
+
+.rv-blog-category .head-desc {
+    margin: 0;
+    max-width: 760px;
+    color: rgba(255, 245, 234, 0.62);
+    line-height: 1.7;
+}
+
+.rv-blog-category .category-rail {
+    margin-top: 0.2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.48rem;
+}
+
+.rv-blog-category .category-rail a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    padding: 0.3rem 0.58rem;
+    border-radius: 999px;
+    text-decoration: none;
+    color: rgba(255, 245, 234, 0.82);
+    border: 1px solid rgba(255, 233, 207, 0.2);
+    background: rgba(255, 245, 232, 0.05);
+    font-size: 0.73rem;
+    line-height: 1;
+}
+
+.rv-blog-category .category-rail a.active {
+    color: #13202e;
+    border-color: rgba(83, 224, 197, 0.55);
+    background: linear-gradient(115deg, rgba(83, 224, 197, 0.98), rgba(121, 238, 214, 0.94));
+}
+
+.rv-blog-category .category-rail em {
+    font-style: normal;
+    opacity: 0.74;
+}
+
+.rv-blog-category .blog-layout {
+    display: grid;
+    gap: 16px;
+}
+
+.rv-blog-category .blog-layout.with-sidebar {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+}
+
+.rv-blog-category .posts-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.rv-blog-category .post-card {
+    grid-column: span 3;
+    border-radius: 16px;
+    overflow: hidden;
+    background: linear-gradient(170deg, rgba(255, 245, 232, 0.1), rgba(255, 245, 232, 0.04));
+    display: grid;
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.18);
+}
+
+.rv-blog-category .post-card:first-child {
+    grid-column: span 6;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.rv-blog-category .post-card:first-child .post-image {
+    aspect-ratio: auto;
+    min-height: 100%;
+}
+
+.rv-blog-category .post-card.lane-1 {
+    box-shadow: inset 0 3px 0 rgba(83, 224, 197, 0.5), 0 12px 22px rgba(0, 0, 0, 0.18);
+}
+
+.rv-blog-category .post-card.lane-2 {
+    box-shadow: inset 0 3px 0 rgba(255, 138, 61, 0.46), 0 12px 22px rgba(0, 0, 0, 0.18);
+}
+
+.rv-blog-category .post-card.lane-3 {
+    box-shadow: inset 0 3px 0 rgba(255, 214, 168, 0.4), 0 12px 22px rgba(0, 0, 0, 0.18);
+}
+
+.rv-blog-category .post-card.style-minimal .post-image {
+    display: none;
+}
+
+.rv-blog-category .post-card.style-featured.is-featured {
+    grid-column: span 6;
+}
+
+.rv-blog-category .post-image {
+    display: block;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+}
+
+.rv-blog-category .post-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.rv-blog-category .post-card:hover .post-image img {
+    transform: scale(1.05);
+}
+
+.rv-blog-category .post-body {
+    padding: 14px;
+    display: grid;
+    gap: 0.72rem;
+}
+
+.rv-blog-category .post-order {
+    justify-self: end;
+    border-radius: 999px;
+    background: rgba(255, 245, 234, 0.14);
+    color: rgba(255, 245, 234, 0.78);
+    font-size: 0.66rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    padding: 0.18rem 0.52rem;
+    font-weight: 700;
+}
+
+.rv-blog-category .post-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.58rem;
+    flex-wrap: wrap;
+}
+
+.rv-blog-category .post-chip {
+    font-size: 0.7rem;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: #34f3cd;
+    border: 1px solid rgba(83, 224, 197, 0.4);
+    border-radius: 999px;
+    padding: 0.18rem 0.5rem;
+}
+
+.rv-blog-category .post-date {
+    font-size: 0.75rem;
+    color: rgba(255, 245, 234, 0.65);
+}
+
+.rv-blog-category .post-body h3 {
+    margin: 0;
+    font-size: 1.08rem;
+    line-height: 1.42;
+}
+
+.rv-blog-category .post-body h3 a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.rv-blog-category .post-summary {
+    margin: 0;
+    color: rgba(255, 245, 234, 0.82);
+    line-height: 1.72;
+    font-size: 0.9rem;
+}
+
+.rv-blog-category .post-footer {
+    margin-top: 0.1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.7rem;
+}
+
+.rv-blog-category .post-author {
+    color: rgba(255, 245, 234, 0.68);
+    font-size: 0.78rem;
+}
+
+.rv-blog-category .read-more {
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.82rem;
+}
+
+.rv-blog-category .sidebar {
+    display: grid;
+    gap: 14px;
+    align-content: start;
+    position: sticky;
+    top: 96px;
+    height: fit-content;
+}
+
+.rv-blog-category .sidebar-card {
+    border-radius: 14px;
+    background: linear-gradient(165deg, rgba(255, 245, 232, 0.1), rgba(255, 245, 232, 0.05));
+    padding: 14px;
+    box-shadow: 0 12px 22px rgba(0, 0, 0, 0.16);
+}
+
+.rv-blog-category .sidebar-card h4 {
+    margin: 0;
+    color: <?= htmlspecialchars($primaryColor) ?>;
+    font-size: 1rem;
+}
+
+.rv-blog-category .sidebar-card ul {
+    margin: 0.75rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.56rem;
+}
+
+.rv-blog-category .sidebar-card li a {
+    color: rgba(255, 245, 234, 0.85);
+    text-decoration: none;
+    display: flex;
+    justify-content: space-between;
+    gap: 0.6rem;
+}
+
+.rv-blog-category .sidebar-card li.active a {
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+}
+
+.rv-blog-category .sidebar-card small {
+    color: rgba(255, 245, 234, 0.58);
+}
+
+.rv-blog-category .recent-list .recent-title {
+    display: block;
+    font-size: 0.88rem;
+}
+
+.rv-blog-category .recent-list .recent-date {
+    display: block;
+    font-size: 0.74rem;
+    color: rgba(255, 245, 234, 0.58);
+    margin-top: 0.2rem;
+}
+
+.rv-blog-category .empty-state {
+    grid-column: 1 / -1;
+    border-radius: 16px;
+    padding: 28px;
+    text-align: center;
+    background: linear-gradient(165deg, rgba(255, 245, 232, 0.1), rgba(255, 245, 232, 0.05));
+}
+
+.rv-blog-category .empty-state h3 {
+    margin: 0;
+    color: <?= htmlspecialchars($primaryColor) ?>;
+}
+
+.rv-blog-category .empty-state p {
+    margin: 0.7rem 0 0;
+    color: rgba(255, 245, 234, 0.78);
+}
+
+.rv-blog-category .empty-link {
+    display: inline-block;
+    margin-top: 0.9rem;
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+    text-decoration: none;
+    font-weight: 700;
+}
+
+@media (max-width: 1200px) {
+    .rv-blog-category .blog-layout.with-sidebar {
+        grid-template-columns: 1fr;
+    }
+
+    .rv-blog-category .sidebar {
+        position: static;
+    }
+}
+
+@media (max-width: 1024px) {
+    .rv-blog-category .posts-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .rv-blog-category .post-card,
+    .rv-blog-category .post-card.style-featured.is-featured,
+    .rv-blog-category .post-card:first-child {
+        grid-column: span 1;
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    .rv-blog-category {
+        padding: 44px 0;
+    }
+
+    .rv-blog-category .section-inner {
+        width: calc(100% - 1rem);
+    }
+
+    .rv-blog-category .posts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .rv-blog-category .post-count {
+        display: none;
+    }
+}
+</style>
