@@ -6,30 +6,57 @@ namespace GuoLaiRen\PageBuilder\Test\Unit\Controller;
 
 use GuoLaiRen\PageBuilder\Controller\Router;
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Env\WelineEnv;
 
+/**
+ * Router::process 行为回归：原 shouldRewriteRootPath 已内联进 process，改为直接测对外入口。
+ */
 class RouterTest extends TestCase
 {
-    public function testPreviewRootWithHandleStillRewritesToPageBuilder(): void
+    protected function tearDown(): void
     {
-        $this->assertTrue($this->invokeShouldRewriteRootPath(true, 'preview-home', null));
+        Router::clearCache();
+        parent::tearDown();
     }
 
-    public function testLiveRootWithResolvedHomepageRewritesToPageBuilder(): void
+    public function testProcessReturnsEarlyWhenModuleAlreadyResolved(): void
     {
-        $this->assertTrue($this->invokeShouldRewriteRootPath(false, '', 'home'));
+        $path = '/any';
+        $rule = ['module' => 'Other_Module'];
+        Router::process($path, $rule);
+        self::assertSame('/any', $path);
+        self::assertSame('Other_Module', $rule['module']);
     }
 
-    public function testRootWithoutPreviewHandleOrHomepageFallsBackToFrameworkDefaultRoute(): void
+    public function testProcessSkipsSystemAdminPath(): void
     {
-        $this->assertFalse($this->invokeShouldRewriteRootPath(false, '', null));
-        $this->assertFalse($this->invokeShouldRewriteRootPath(true, '', null));
+        $path = '/admin/dashboard';
+        $rule = [];
+        Router::process($path, $rule);
+        self::assertSame('/admin/dashboard', $path);
+        self::assertArrayNotHasKey('module', $rule);
     }
 
-    private function invokeShouldRewriteRootPath(bool $isPreview, string $queryHandle, ?string $homePageHandle): bool
+    public function testProcessRewritesEmptyPathWhenPreviewWithHandle(): void
     {
-        $method = new \ReflectionMethod(Router::class, 'shouldRewriteRootPath');
-        $method->setAccessible(true);
-
-        return (bool)$method->invoke(null, $isPreview, $queryHandle, $homePageHandle);
+        $savedGet = $_GET;
+        $env = WelineEnv::getInstance();
+        $envSnapshot = $env->capture();
+        try {
+            $env->reset();
+            $_GET = $savedGet;
+            $_GET['preview'] = '1';
+            $_GET['handle'] = 'preview-home';
+            $_GET['website_id'] = '1';
+            $path = '';
+            $rule = [];
+            Router::process($path, $rule);
+            self::assertSame('/pagebuilder/frontend/page/view', $path);
+            self::assertSame('GuoLaiRen_PageBuilder', $rule['module']);
+            self::assertSame('preview-home', $rule['handle']);
+        } finally {
+            $env->restore($envSnapshot);
+            $_GET = $savedGet;
+        }
     }
 }

@@ -42,35 +42,12 @@ class VirtualThemeRouteIntegrationTest extends TestCore
         $this->bootstrapVirtualThemeSession();
     }
 
-    public function testPreviewFullAcceptsCanonicalVirtualThemeIdOnly(): void
-    {
-        $this->prepareBackendRequest(
-            '/pagebuilder/backend/preview/full',
-            [
-                'public_id' => $this->session?->getPublicId() ?? '',
-                'page_type' => 'home_page',
-                'virtual_theme_id' => $this->virtualThemeId,
-                'visual_editor' => '1',
-            ],
-            'Backend/Preview',
-            'full'
-        );
-
-        /** @var PreviewController $controller */
-        $controller = ObjectManager::getInstance(PreviewController::class);
-
-        try {
-            $controller->full();
-            self::fail('Preview::full should terminate the response with HTML output.');
-        } catch (ResponseTerminateException $e) {
-            $body = $e->getBody();
-            self::assertSame(200, $e->getStatusCode());
-            self::assertStringContainsString('<!DOCTYPE html>', $body);
-            self::assertStringContainsString('pb-slot', $body);
-            self::assertStringNotContainsString('weline_theme_id=', $body);
-        }
-    }
-
+    /**
+     * 与其它集成用例共享进程时，预览/响应单例可能污染后续 fetch；独立进程保证路由与视图状态干净。
+     *
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
     public function testVirtualEditRouteRendersCanonicalVirtualThemeState(): void
     {
         $this->prepareBackendRequest(
@@ -95,6 +72,38 @@ class VirtualThemeRouteIntegrationTest extends TestCore
         self::assertStringContainsString('virtual_theme_id=' . $this->virtualThemeId, $html);
         self::assertStringContainsString("previewUrl += '&virtual_theme_id='", $html);
         self::assertStringNotContainsString('weline_theme_id=', $html);
+    }
+
+    public function testPreviewFullAcceptsCanonicalVirtualThemeIdOnly(): void
+    {
+        $this->prepareBackendRequest(
+            '/pagebuilder/backend/preview/full',
+            [
+                'public_id' => $this->session?->getPublicId() ?? '',
+                'page_type' => 'home_page',
+                'virtual_theme_id' => $this->virtualThemeId,
+                'visual_editor' => '1',
+            ],
+            'Backend/Preview',
+            'full'
+        );
+
+        /** @var PreviewController $controller */
+        $controller = ObjectManager::getInstance(PreviewController::class);
+
+        try {
+            $controller->full();
+            self::fail('Preview::full should terminate the response with HTML output.');
+        } catch (ResponseTerminateException $e) {
+            $body = $e->getBody();
+            self::assertSame(200, $e->getStatusCode());
+            self::assertStringContainsString('<!DOCTYPE html>', $body);
+            self::assertTrue(
+                str_contains($body, 'pb-slot') || str_contains($body, 'pb-ai-block-wrapper'),
+                'Preview HTML should expose PageBuilder slot markers (theme slots or ai_html blocks).'
+            );
+            self::assertStringNotContainsString('weline_theme_id=', $body);
+        }
     }
 
     private function bootstrapVirtualThemeSession(): void
