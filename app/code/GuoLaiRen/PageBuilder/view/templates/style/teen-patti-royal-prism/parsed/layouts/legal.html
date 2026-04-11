@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Head content rendered by $this->renderHead() -->
+    <style>
+        .legal-content {
+            padding: 60px 20px;
+            background: #f8f9fa;
+        }
+        .legal-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 40px 50px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+        .legal-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        .legal-updated {
+            font-size: 0.875rem;
+            color: #666;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        .legal-body {
+            font-size: 1rem;
+            line-height: 1.8;
+            color: #444;
+        }
+    </style>
+</head>
+<body class="page-legal">
+    <!-- Header Region (继承自首页) -->
+    <header class="site-header" data-region="header">
+        <!-- Inherited from home page -->
+    </header>
+    
+    <!-- Main Content Region -->
+    <main class="site-content legal-content" data-region="content">
+        <div class="legal-container">
+            <h1 class="legal-title">Privacy Policy / Terms of Service / etc.</h1>
+            <p class="legal-updated">Last Updated: January 1, 2024</p>
+            <div class="legal-body">
+                <!-- Legal document content from database -->
+                <h2>Section 1</h2>
+                <p>Legal content goes here...</p>
+                
+                <h2>Section 2</h2>
+                <p>More legal content...</p>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Footer Region (继承自首页) -->
+    <footer class="site-footer" data-region="footer">
+        <!-- Inherited from home page -->
+    </footer>
+    
+    <!-- Footer scripts -->
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+    "page_type": "refund_policy",
+    "name": "Refund Policy Page Layout",
+    "description": "Gin Rummy Carnival refund policy page layout",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "refund-policy-default",
+                "config": {
+                    "content.badge": "Legal",
+                    "content.title": "Refund Policy",
+                    "content.last_updated": "March 18, 2026",
+                    "content.body": "This Refund Policy outlines how Gin Rummy Carnival reviews payment disputes, failed deposits, duplicate charges, and other refund-related requests.",
+                    "layout.width": "medium",
+                    "toc.items": "Eligibility for Review|Refund reviews are available for failed transactions, duplicate charges, or technical processing errors. Gameplay losses are not refundable.\nRequest Process|Contact support with your registered email, transaction ID, and a clear description of the issue.\nProcessing Time|Most verified requests are reviewed within 5 to 7 business days, depending on the payment provider.\nRefund Destination|Approved refunds are generally returned to the original payment method whenever possible.\nNon-Refundable Items|Completed entries, consumed bonuses, and finished event purchases are not refundable.\nSupport Contact|Reach support with the subject line Refund Request and include full transaction details for faster handling."
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Refund policy page layout"
+}

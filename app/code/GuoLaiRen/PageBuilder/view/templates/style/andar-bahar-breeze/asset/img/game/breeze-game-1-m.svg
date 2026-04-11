@@ -1,0 +1,31 @@
+<svg width="720" height="960" viewBox="0 0 720 960" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="mbg1" x1="72" y1="54" x2="648" y2="888" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1B4D56"/>
+      <stop offset="0.58" stop-color="#21626C"/>
+      <stop offset="1" stop-color="#14373E"/>
+    </linearGradient>
+    <radialGradient id="mglow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(540 178) rotate(131.245) scale(208 184)">
+      <stop stop-color="#FFE6A4" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#FFE6A4" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="720" height="960" rx="34" fill="url(#mbg1)"/>
+  <circle cx="540" cy="178" r="210" fill="url(#mglow1)"/>
+  <text x="64" y="122" fill="#F7FFF8" font-size="44" font-family="Arial, Helvetica, sans-serif" font-weight="700">Andar Bahar</text>
+  <text x="64" y="170" fill="#C8F7EE" font-size="26" font-family="Arial, Helvetica, sans-serif">Classic breeze table</text>
+  <ellipse cx="360" cy="556" rx="252" ry="126" fill="#38BDB4"/>
+  <ellipse cx="360" cy="556" rx="214" ry="102" fill="#165E59" fill-opacity="0.4"/>
+  <rect x="254" y="292" width="120" height="170" rx="18" transform="rotate(-11 254 292)" fill="#FFFDF7"/>
+  <rect x="370" y="310" width="120" height="170" rx="18" transform="rotate(10 370 310)" fill="#F4FFF8"/>
+  <circle cx="308" cy="378" r="28" fill="#F4C15D"/>
+  <circle cx="426" cy="396" r="28" fill="#4AC9C0"/>
+  <circle cx="240" cy="700" r="42" fill="#FFE7A9"/>
+  <circle cx="240" cy="700" r="28" fill="#16434A"/>
+  <circle cx="240" cy="700" r="16" fill="#FFE7A9"/>
+  <circle cx="500" cy="724" r="42" fill="#A9EEE8"/>
+  <circle cx="500" cy="724" r="28" fill="#16434A"/>
+  <circle cx="500" cy="724" r="16" fill="#A9EEE8"/>
+  <path d="M64 818H658" stroke="rgba(255,255,255,0.18)" stroke-width="2" stroke-linecap="round"/>
+  <text x="64" y="876" fill="#E8FFF8" font-size="24" font-family="Arial, Helvetica, sans-serif">Quick entry  ·  Focused rounds</text>
+</svg>

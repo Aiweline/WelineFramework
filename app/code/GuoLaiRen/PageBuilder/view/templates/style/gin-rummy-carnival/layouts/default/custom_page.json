@@ -1,0 +1,16 @@
+{
+    "page_type": "custom_page",
+    "name": "Custom Page Layout",
+    "description": "Gin Rummy Carnival custom blank page layout",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [],
+        "footer": []
+    },
+    "notes": "Blank content area. Header and footer inherit from home_page."
+}

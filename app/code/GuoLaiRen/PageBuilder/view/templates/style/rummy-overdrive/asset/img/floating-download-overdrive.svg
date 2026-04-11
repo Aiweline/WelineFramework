@@ -1,0 +1,54 @@
+<svg width="184" height="256" viewBox="0 0 184 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="rovFloatStroke" x1="42" y1="18" x2="142" y2="232" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4D7A"/>
+      <stop offset="0.52" stop-color="#FF8C42"/>
+      <stop offset="1" stop-color="#D2FF3F"/>
+    </linearGradient>
+    <linearGradient id="rovFloatPanel" x1="52" y1="24" x2="136" y2="220" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#131A31"/>
+      <stop offset="1" stop-color="#05070E"/>
+    </linearGradient>
+    <linearGradient id="rovFloatBadge" x1="62" y1="38" x2="122" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2BE7FF"/>
+      <stop offset="1" stop-color="#82FFF2"/>
+    </linearGradient>
+    <linearGradient id="rovFloatCTA" x1="48" y1="178" x2="136" y2="214" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF4D7A"/>
+      <stop offset="0.48" stop-color="#FF8C42"/>
+      <stop offset="1" stop-color="#D2FF3F"/>
+    </linearGradient>
+    <filter id="rovFloatShadow" x="0" y="0" width="184" height="256" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="18"/>
+      <feGaussianBlur stdDeviation="16"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0.027451 0 0 0 0 0.0627451 0 0 0 0.34 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+  <ellipse cx="92" cy="238" rx="42" ry="9" fill="#2BE7FF" fill-opacity="0.18"/>
+  <g filter="url(#rovFloatShadow)">
+    <rect x="34" y="12" width="116" height="216" rx="34" fill="url(#rovFloatPanel)"/>
+    <rect x="34.5" y="12.5" width="115" height="215" rx="33.5" stroke="url(#rovFloatStroke)" stroke-width="3"/>
+    <rect x="58" y="36" width="68" height="20" rx="10" fill="url(#rovFloatBadge)"/>
+    <text x="92" y="50" text-anchor="middle" font-family="Sora, Arial, sans-serif" font-size="10" font-weight="800" letter-spacing="1.8" fill="#05070E">APK</text>
+    <circle cx="132" cy="34" r="8" fill="#D2FF3F" fill-opacity="0.9"/>
+    <path d="M136 18L138.6 24.4L145 27L138.6 29.6L136 36L133.4 29.6L127 27L133.4 24.4L136 18Z" fill="#2BE7FF"/>
+    <g transform="translate(56 72)">
+      <rect x="0" y="8" width="44" height="62" rx="14" transform="rotate(-10 0 8)" fill="#F8FAFF"/>
+      <rect x="34" y="0" width="44" height="62" rx="14" transform="rotate(8 34 0)" fill="#F8FAFF"/>
+      <path d="M23 32L29 41L23 50L17 41L23 32Z" fill="#131A31"/>
+      <path d="M53 24C46 34 42 39 42 46C42 54 48 60 56 60C64 60 70 54 70 46C70 39 64 32 53 24Z" fill="#FF4D7A"/>
+      <path d="M53 64L40 46H66L53 64Z" fill="#FF4D7A"/>
+      <circle cx="76" cy="70" r="8" fill="#2BE7FF" fill-opacity="0.9"/>
+    </g>
+    <rect x="46" y="170" width="92" height="42" rx="21" fill="url(#rovFloatCTA)"/>
+    <circle cx="69" cy="191" r="15" fill="#05070E" fill-opacity="0.18"/>
+    <path d="M69 182V196" stroke="#05070E" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M63 191L69 197L75 191" stroke="#05070E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="103" y="188" text-anchor="middle" font-family="Sora, Arial, sans-serif" font-size="8" font-weight="700" letter-spacing="1.2" fill="#05070E">RUMMY</text>
+    <text x="103" y="202" text-anchor="middle" font-family="Space Grotesk, Arial, sans-serif" font-size="16" font-weight="800" fill="#05070E">GET APP</text>
+  </g>
+</svg>

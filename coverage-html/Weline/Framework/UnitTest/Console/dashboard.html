@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Framework\UnitTest\Console</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Framework</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">UnitTest</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Console</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="E2e/Run.php.html#11">Weline\Framework\UnitTest\Console\E2e\Run</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#25">Weline\Framework\UnitTest\Console\PhpUnit\Run</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#24">Weline\Framework\UnitTest\Console\PhpUnit\Status</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#23">Weline\Framework\UnitTest\Console\PhpUnit\Stop</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Test/Pest/Run.php.html#16">Weline\Framework\UnitTest\Console\Test\Pest\Run</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="PhpUnit/Run.php.html#25">Weline\Framework\UnitTest\Console\PhpUnit\Run</a></td><td class="text-right">424452</td></tr>
+       <tr><td><a href="E2e/Run.php.html#11">Weline\Framework\UnitTest\Console\E2e\Run</a></td><td class="text-right">7310</td></tr>
+       <tr><td><a href="Test/Pest/Run.php.html#16">Weline\Framework\UnitTest\Console\Test\Pest\Run</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#24">Weline\Framework\UnitTest\Console\PhpUnit\Status</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#23">Weline\Framework\UnitTest\Console\PhpUnit\Stop</a></td><td class="text-right">210</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="E2e/Run.php.html#16"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#85"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#90"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::help">help</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#125"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildPlaywrightArgs">buildPlaywrightArgs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#208"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::hasAnyHeadMode">hasAnyHeadMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#221"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildPlaywrightCommand">buildPlaywrightCommand</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#239"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildCollectCommand">buildCollectCommand</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#249"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::parseControlOptions">parseControlOptions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#275"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::loadCollectedTests">loadCollectedTests</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#300"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::resolveModuleFiles">resolveModuleFiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#316"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildCaseGrep">buildCaseGrep</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="E2e/Run.php.html#327"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::printModules">printModules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#30"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#39"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::isCoverageRequested">isCoverageRequested</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#50"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::resolvePhpCommandForTests">resolvePhpCommandForTests</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#80"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::appendCoverageArguments">appendCoverageArguments</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#102"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::normalizeCoverageSourcePath">normalizeCoverageSourcePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#107"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::resolveCoverageSourceForTestFile">resolveCoverageSourceForTestFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#123"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#792"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::openBrowser">openBrowser</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#823"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::isInteractiveConsole">isInteractiveConsole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#848"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startWatchMode">startWatchMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#870"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startPhpUnitServerBackground">startPhpUnitServerBackground</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#977"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::displayTestLogs">displayTestLogs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#988"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::colorizeLogLine">colorizeLogLine</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1018"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::checkRequiredFunctions">checkRequiredFunctions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1057"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethod1">startServerMethod1</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1111"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethod2">startServerMethod2</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1180"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethod3">startServerMethod3</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1235"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::stopPhpUnitServer">stopPhpUnitServer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1359"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::updateServerInfo">updateServerInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1392"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateSuiteConfig">generateSuiteConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1577"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateModuleConfig">generateModuleConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1654"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateFileConfig">generateFileConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1776"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::findTestFile">findTestFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1949"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::findTestFileInModule">findTestFileInModule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2019"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateModuleFileConfig">generateModuleFileConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2078"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::buildFullClassName">buildFullClassName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2123"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2128"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::help">help</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2306"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::checkTestMethodExists">checkTestMethodExists</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2341"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateTestReport">generateTestReport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2558"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::countTestMethodsInFile">countTestMethodsInFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2592"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::countTestMethodsInModule">countTestMethodsInModule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2643"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::countTestMethodsInSuite">countTestMethodsInSuite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2686"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateCustomHtmlReport">generateCustomHtmlReport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2886"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateHtmlContent">generateHtmlContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3474"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::getPortFromArgs">getPortFromArgs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3501"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::displayTestTree">displayTestTree</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3576"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::extractModuleName">extractModuleName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3594"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethodBackup">startServerMethodBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3692"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::resolveTestPath">resolveTestPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#29"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Status::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#41"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Status::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#55"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Status::checkPhpUnitServerStatus">checkPhpUnitServerStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#137"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Status::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#142"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Status::help">help</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#28"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#40"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#54"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::stopPhpUnitServer">stopPhpUnitServer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#93"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::isProcessRunning">isProcessRunning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#110"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::updateServerInfo">updateServerInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#140"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#145"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::help">help</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Test/Pest/Run.php.html#18"><abbr title="Weline\Framework\UnitTest\Console\Test\Pest\Run::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Test/Pest/Run.php.html#27"><abbr title="Weline\Framework\UnitTest\Console\Test\Pest\Run::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Test/Pest/Run.php.html#88"><abbr title="Weline\Framework\UnitTest\Console\Test\Pest\Run::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Test/Pest/Run.php.html#96"><abbr title="Weline\Framework\UnitTest\Console\Test\Pest\Run::help">help</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="PhpUnit/Run.php.html#123"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::execute">execute</abbr></a></td><td class="text-right">24492</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2341"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateTestReport">generateTestReport</abbr></a></td><td class="text-right">4422</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2686"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateCustomHtmlReport">generateCustomHtmlReport</abbr></a></td><td class="text-right">3080</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1776"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::findTestFile">findTestFile</abbr></a></td><td class="text-right">2352</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2886"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateHtmlContent">generateHtmlContent</abbr></a></td><td class="text-right">1260</td></tr>
+       <tr><td><a href="E2e/Run.php.html#125"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildPlaywrightArgs">buildPlaywrightArgs</abbr></a></td><td class="text-right">812</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1392"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateSuiteConfig">generateSuiteConfig</abbr></a></td><td class="text-right">812</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1949"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::findTestFileInModule">findTestFileInModule</abbr></a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3594"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethodBackup">startServerMethodBackup</abbr></a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3501"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::displayTestTree">displayTestTree</abbr></a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1235"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::stopPhpUnitServer">stopPhpUnitServer</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#870"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startPhpUnitServerBackground">startPhpUnitServerBackground</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="E2e/Run.php.html#16"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::execute">execute</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#988"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::colorizeLogLine">colorizeLogLine</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Test/Pest/Run.php.html#27"><abbr title="Weline\Framework\UnitTest\Console\Test\Pest\Run::execute">execute</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2592"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::countTestMethodsInModule">countTestMethodsInModule</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2643"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::countTestMethodsInSuite">countTestMethodsInSuite</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3474"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::getPortFromArgs">getPortFromArgs</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#55"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Status::checkPhpUnitServerStatus">checkPhpUnitServerStatus</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1111"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethod2">startServerMethod2</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2078"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::buildFullClassName">buildFullClassName</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1057"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethod1">startServerMethod1</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="E2e/Run.php.html#275"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::loadCollectedTests">loadCollectedTests</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1180"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startServerMethod3">startServerMethod3</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="E2e/Run.php.html#249"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::parseControlOptions">parseControlOptions</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#823"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::isInteractiveConsole">isInteractiveConsole</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1577"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateModuleConfig">generateModuleConfig</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1654"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateFileConfig">generateFileConfig</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2558"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::countTestMethodsInFile">countTestMethodsInFile</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="E2e/Run.php.html#300"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::resolveModuleFiles">resolveModuleFiles</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#50"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::resolvePhpCommandForTests">resolvePhpCommandForTests</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1018"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::checkRequiredFunctions">checkRequiredFunctions</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="E2e/Run.php.html#208"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::hasAnyHeadMode">hasAnyHeadMode</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="E2e/Run.php.html#327"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::printModules">printModules</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#792"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::openBrowser">openBrowser</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2306"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::checkTestMethodExists">checkTestMethodExists</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="E2e/Run.php.html#221"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildPlaywrightCommand">buildPlaywrightCommand</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#39"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::isCoverageRequested">isCoverageRequested</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#80"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::appendCoverageArguments">appendCoverageArguments</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#848"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::startWatchMode">startWatchMode</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#54"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::stopPhpUnitServer">stopPhpUnitServer</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="E2e/Run.php.html#316"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildCaseGrep">buildCaseGrep</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#107"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::resolveCoverageSourceForTestFile">resolveCoverageSourceForTestFile</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#1359"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::updateServerInfo">updateServerInfo</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3692"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::resolveTestPath">resolveTestPath</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#110"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::updateServerInfo">updateServerInfo</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="E2e/Run.php.html#239"><abbr title="Weline\Framework\UnitTest\Console\E2e\Run::buildCollectCommand">buildCollectCommand</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#2019"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::generateModuleFileConfig">generateModuleFileConfig</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PhpUnit/Run.php.html#3576"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Run::extractModuleName">extractModuleName</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PhpUnit/Status.php.html#41"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Status::execute">execute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#40"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::execute">execute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PhpUnit/Stop.php.html#93"><abbr title="Weline\Framework\UnitTest\Console\PhpUnit\Stop::isProcessRunning">isProcessRunning</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([5,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([68,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,85,"<a href=\"E2e\/Run.php.html#11\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run<\/a>"],[0,651,"<a href=\"PhpUnit\/Run.php.html#25\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run<\/a>"],[0,16,"<a href=\"PhpUnit\/Status.php.html#24\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Status<\/a>"],[0,14,"<a href=\"PhpUnit\/Stop.php.html#23\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop<\/a>"],[0,18,"<a href=\"Test\/Pest\/Run.php.html#16\">Weline\\Framework\\UnitTest\\Console\\Test\\Pest\\Run<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,15,"<a href=\"E2e\/Run.php.html#16\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::execute<\/a>"],[0,1,"<a href=\"E2e\/Run.php.html#85\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::tip<\/a>"],[0,1,"<a href=\"E2e\/Run.php.html#90\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::help<\/a>"],[0,28,"<a href=\"E2e\/Run.php.html#125\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::buildPlaywrightArgs<\/a>"],[0,5,"<a href=\"E2e\/Run.php.html#208\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::hasAnyHeadMode<\/a>"],[0,4,"<a href=\"E2e\/Run.php.html#221\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::buildPlaywrightCommand<\/a>"],[0,2,"<a href=\"E2e\/Run.php.html#239\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::buildCollectCommand<\/a>"],[0,7,"<a href=\"E2e\/Run.php.html#249\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::parseControlOptions<\/a>"],[0,8,"<a href=\"E2e\/Run.php.html#275\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::loadCollectedTests<\/a>"],[0,6,"<a href=\"E2e\/Run.php.html#300\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::resolveModuleFiles<\/a>"],[0,3,"<a href=\"E2e\/Run.php.html#316\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::buildCaseGrep<\/a>"],[0,5,"<a href=\"E2e\/Run.php.html#327\">Weline\\Framework\\UnitTest\\Console\\E2e\\Run::printModules<\/a>"],[0,1,"<a href=\"PhpUnit\/Run.php.html#30\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::__construct<\/a>"],[0,4,"<a href=\"PhpUnit\/Run.php.html#39\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::isCoverageRequested<\/a>"],[0,6,"<a href=\"PhpUnit\/Run.php.html#50\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::resolvePhpCommandForTests<\/a>"],[0,4,"<a href=\"PhpUnit\/Run.php.html#80\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::appendCoverageArguments<\/a>"],[0,1,"<a href=\"PhpUnit\/Run.php.html#102\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::normalizeCoverageSourcePath<\/a>"],[0,3,"<a href=\"PhpUnit\/Run.php.html#107\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::resolveCoverageSourceForTestFile<\/a>"],[0,156,"<a href=\"PhpUnit\/Run.php.html#123\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::execute<\/a>"],[0,5,"<a href=\"PhpUnit\/Run.php.html#792\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::openBrowser<\/a>"],[0,7,"<a href=\"PhpUnit\/Run.php.html#823\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::isInteractiveConsole<\/a>"],[0,4,"<a href=\"PhpUnit\/Run.php.html#848\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::startWatchMode<\/a>"],[0,16,"<a href=\"PhpUnit\/Run.php.html#870\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::startPhpUnitServerBackground<\/a>"],[0,1,"<a href=\"PhpUnit\/Run.php.html#977\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::displayTestLogs<\/a>"],[0,15,"<a href=\"PhpUnit\/Run.php.html#988\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::colorizeLogLine<\/a>"],[0,6,"<a href=\"PhpUnit\/Run.php.html#1018\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::checkRequiredFunctions<\/a>"],[0,9,"<a href=\"PhpUnit\/Run.php.html#1057\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::startServerMethod1<\/a>"],[0,10,"<a href=\"PhpUnit\/Run.php.html#1111\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::startServerMethod2<\/a>"],[0,8,"<a href=\"PhpUnit\/Run.php.html#1180\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::startServerMethod3<\/a>"],[0,17,"<a href=\"PhpUnit\/Run.php.html#1235\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::stopPhpUnitServer<\/a>"],[0,3,"<a href=\"PhpUnit\/Run.php.html#1359\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::updateServerInfo<\/a>"],[0,28,"<a href=\"PhpUnit\/Run.php.html#1392\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::generateSuiteConfig<\/a>"],[0,7,"<a href=\"PhpUnit\/Run.php.html#1577\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::generateModuleConfig<\/a>"],[0,7,"<a href=\"PhpUnit\/Run.php.html#1654\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::generateFileConfig<\/a>"],[0,48,"<a href=\"PhpUnit\/Run.php.html#1776\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::findTestFile<\/a>"],[0,24,"<a href=\"PhpUnit\/Run.php.html#1949\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::findTestFileInModule<\/a>"],[0,2,"<a href=\"PhpUnit\/Run.php.html#2019\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::generateModuleFileConfig<\/a>"],[0,10,"<a href=\"PhpUnit\/Run.php.html#2078\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::buildFullClassName<\/a>"],[0,1,"<a href=\"PhpUnit\/Run.php.html#2123\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::tip<\/a>"],[0,1,"<a href=\"PhpUnit\/Run.php.html#2128\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::help<\/a>"],[0,5,"<a href=\"PhpUnit\/Run.php.html#2306\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::checkTestMethodExists<\/a>"],[0,66,"<a href=\"PhpUnit\/Run.php.html#2341\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::generateTestReport<\/a>"],[0,7,"<a href=\"PhpUnit\/Run.php.html#2558\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::countTestMethodsInFile<\/a>"],[0,14,"<a href=\"PhpUnit\/Run.php.html#2592\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::countTestMethodsInModule<\/a>"],[0,11,"<a href=\"PhpUnit\/Run.php.html#2643\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::countTestMethodsInSuite<\/a>"],[0,55,"<a href=\"PhpUnit\/Run.php.html#2686\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::generateCustomHtmlReport<\/a>"],[0,35,"<a href=\"PhpUnit\/Run.php.html#2886\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::generateHtmlContent<\/a>"],[0,11,"<a href=\"PhpUnit\/Run.php.html#3474\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::getPortFromArgs<\/a>"],[0,18,"<a href=\"PhpUnit\/Run.php.html#3501\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::displayTestTree<\/a>"],[0,2,"<a href=\"PhpUnit\/Run.php.html#3576\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::extractModuleName<\/a>"],[0,20,"<a href=\"PhpUnit\/Run.php.html#3594\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::startServerMethodBackup<\/a>"],[0,3,"<a href=\"PhpUnit\/Run.php.html#3692\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Run::resolveTestPath<\/a>"],[0,1,"<a href=\"PhpUnit\/Status.php.html#29\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Status::__construct<\/a>"],[0,2,"<a href=\"PhpUnit\/Status.php.html#41\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Status::execute<\/a>"],[0,11,"<a href=\"PhpUnit\/Status.php.html#55\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Status::checkPhpUnitServerStatus<\/a>"],[0,1,"<a href=\"PhpUnit\/Status.php.html#137\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Status::tip<\/a>"],[0,1,"<a href=\"PhpUnit\/Status.php.html#142\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Status::help<\/a>"],[0,1,"<a href=\"PhpUnit\/Stop.php.html#28\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop::__construct<\/a>"],[0,2,"<a href=\"PhpUnit\/Stop.php.html#40\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop::execute<\/a>"],[0,4,"<a href=\"PhpUnit\/Stop.php.html#54\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop::stopPhpUnitServer<\/a>"],[0,2,"<a href=\"PhpUnit\/Stop.php.html#93\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop::isProcessRunning<\/a>"],[0,3,"<a href=\"PhpUnit\/Stop.php.html#110\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop::updateServerInfo<\/a>"],[0,1,"<a href=\"PhpUnit\/Stop.php.html#140\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop::tip<\/a>"],[0,1,"<a href=\"PhpUnit\/Stop.php.html#145\">Weline\\Framework\\UnitTest\\Console\\PhpUnit\\Stop::help<\/a>"],[0,1,"<a href=\"Test\/Pest\/Run.php.html#18\">Weline\\Framework\\UnitTest\\Console\\Test\\Pest\\Run::__construct<\/a>"],[0,15,"<a href=\"Test\/Pest\/Run.php.html#27\">Weline\\Framework\\UnitTest\\Console\\Test\\Pest\\Run::execute<\/a>"],[0,1,"<a href=\"Test\/Pest\/Run.php.html#88\">Weline\\Framework\\UnitTest\\Console\\Test\\Pest\\Run::tip<\/a>"],[0,1,"<a href=\"Test\/Pest\/Run.php.html#96\">Weline\\Framework\\UnitTest\\Console\\Test\\Pest\\Run::help<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

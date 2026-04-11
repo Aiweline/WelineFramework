@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\DataTable\Helper</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">DataTable</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Helper</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="DependencyManager.php.html#8">Weline\DataTable\Helper\DependencyManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#11">Weline\DataTable\Helper\ErrorHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Field.php.html#8">Weline\DataTable\Helper\Field</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#10">Weline\DataTable\Helper\FrontendAccess</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#14">Weline\DataTable\Helper\ImportManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#11">Weline\DataTable\Helper\PermissionManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#11">Weline\DataTable\Helper\StreamExporter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#9">Weline\DataTable\Helper\TableContext</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#11">Weline\DataTable\Helper\TransactionManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#11">Weline\DataTable\Helper\ValidationManager</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="TableContext.php.html#9">Weline\DataTable\Helper\TableContext</a></td><td class="text-right">8556</td></tr>
+       <tr><td><a href="ValidationManager.php.html#11">Weline\DataTable\Helper\ValidationManager</a></td><td class="text-right">7482</td></tr>
+       <tr><td><a href="ImportManager.php.html#14">Weline\DataTable\Helper\ImportManager</a></td><td class="text-right">4692</td></tr>
+       <tr><td><a href="StreamExporter.php.html#11">Weline\DataTable\Helper\StreamExporter</a></td><td class="text-right">3306</td></tr>
+       <tr><td><a href="DependencyManager.php.html#8">Weline\DataTable\Helper\DependencyManager</a></td><td class="text-right">2070</td></tr>
+       <tr><td><a href="TransactionManager.php.html#11">Weline\DataTable\Helper\TransactionManager</a></td><td class="text-right">1806</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#11">Weline\DataTable\Helper\ErrorHandler</a></td><td class="text-right">870</td></tr>
+       <tr><td><a href="PermissionManager.php.html#11">Weline\DataTable\Helper\PermissionManager</a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#10">Weline\DataTable\Helper\FrontendAccess</a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Field.php.html#8">Weline\DataTable\Helper\Field</a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="DependencyManager.php.html#16"><abbr title="Weline\DataTable\Helper\DependencyManager::parseDependencies">parseDependencies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DependencyManager.php.html#71"><abbr title="Weline\DataTable\Helper\DependencyManager::calculateSaveOrder">calculateSaveOrder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DependencyManager.php.html#137"><abbr title="Weline\DataTable\Helper\DependencyManager::getDefaultDependencies">getDefaultDependencies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DependencyManager.php.html#181"><abbr title="Weline\DataTable\Helper\DependencyManager::validateDependencies">validateDependencies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DependencyManager.php.html#218"><abbr title="Weline\DataTable\Helper\DependencyManager::applyDependencies">applyDependencies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DependencyManager.php.html#246"><abbr title="Weline\DataTable\Helper\DependencyManager::getTableDependencies">getTableDependencies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DependencyManager.php.html#275"><abbr title="Weline\DataTable\Helper\DependencyManager::checkDeleteConstraints">checkDeleteConstraints</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DependencyManager.php.html#320"><abbr title="Weline\DataTable\Helper\DependencyManager::countRelatedRecords">countRelatedRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#21"><abbr title="Weline\DataTable\Helper\ErrorHandler::handleException">handleException</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#67"><abbr title="Weline\DataTable\Helper\ErrorHandler::logException">logException</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#99"><abbr title="Weline\DataTable\Helper\ErrorHandler::validateRequiredParams">validateRequiredParams</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#123"><abbr title="Weline\DataTable\Helper\ErrorHandler::validateModel">validateModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#145"><abbr title="Weline\DataTable\Helper\ErrorHandler::safeExecute">safeExecute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#162"><abbr title="Weline\DataTable\Helper\ErrorHandler::formatErrorMessage">formatErrorMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Field.php.html#10"><abbr title="Weline\DataTable\Helper\Field::sort">sort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#12"><abbr title="Weline\DataTable\Helper\FrontendAccess::isAllowed">isAllowed</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#28"><abbr title="Weline\DataTable\Helper\FrontendAccess::deniedComment">deniedComment</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#40"><abbr title="Weline\DataTable\Helper\FrontendAccess::isUnitTest">isUnitTest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#31"><abbr title="Weline\DataTable\Helper\ImportManager::parseFile">parseFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#56"><abbr title="Weline\DataTable\Helper\ImportManager::parseExcel">parseExcel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#116"><abbr title="Weline\DataTable\Helper\ImportManager::parseCsv">parseCsv</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#186"><abbr title="Weline\DataTable\Helper\ImportManager::parseJson">parseJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#223"><abbr title="Weline\DataTable\Helper\ImportManager::mapFields">mapFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#246"><abbr title="Weline\DataTable\Helper\ImportManager::validateData">validateData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#304"><abbr title="Weline\DataTable\Helper\ImportManager::validateType">validateType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#336"><abbr title="Weline\DataTable\Helper\ImportManager::checkExists">checkExists</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ImportManager.php.html#354"><abbr title="Weline\DataTable\Helper\ImportManager::batchImport">batchImport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#38"><abbr title="Weline\DataTable\Helper\PermissionManager::canViewField">canViewField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#59"><abbr title="Weline\DataTable\Helper\PermissionManager::canEditField">canEditField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#78"><abbr title="Weline\DataTable\Helper\PermissionManager::canPerformAction">canPerformAction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#95"><abbr title="Weline\DataTable\Helper\PermissionManager::canAccessRecord">canAccessRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#136"><abbr title="Weline\DataTable\Helper\PermissionManager::filterViewableFields">filterViewableFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#151"><abbr title="Weline\DataTable\Helper\PermissionManager::filterEditableFields">filterEditableFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#165"><abbr title="Weline\DataTable\Helper\PermissionManager::getFieldPermissions">getFieldPermissions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#184"><abbr title="Weline\DataTable\Helper\PermissionManager::getActionPermissions">getActionPermissions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#203"><abbr title="Weline\DataTable\Helper\PermissionManager::getDataScope">getDataScope</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#225"><abbr title="Weline\DataTable\Helper\PermissionManager::requirePermission">requirePermission</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PermissionManager.php.html#242"><abbr title="Weline\DataTable\Helper\PermissionManager::requireFieldPermission">requireFieldPermission</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#56"><abbr title="Weline\DataTable\Helper\StreamExporter::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#64"><abbr title="Weline\DataTable\Helper\StreamExporter::export">export</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#103"><abbr title="Weline\DataTable\Helper\StreamExporter::initializeExport">initializeExport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#119"><abbr title="Weline\DataTable\Helper\StreamExporter::calculateTotalRecords">calculateTotalRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#133"><abbr title="Weline\DataTable\Helper\StreamExporter::applyConditions">applyConditions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#145"><abbr title="Weline\DataTable\Helper\StreamExporter::createTempFile">createTempFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#165"><abbr title="Weline\DataTable\Helper\StreamExporter::writeHeader">writeHeader</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#184"><abbr title="Weline\DataTable\Helper\StreamExporter::writeCsvHeader">writeCsvHeader</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#198"><abbr title="Weline\DataTable\Helper\StreamExporter::exportDataInPages">exportDataInPages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#234"><abbr title="Weline\DataTable\Helper\StreamExporter::writeRecord">writeRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#250"><abbr title="Weline\DataTable\Helper\StreamExporter::writeCsvRecord">writeCsvRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#267"><abbr title="Weline\DataTable\Helper\StreamExporter::writeJsonRecord">writeJsonRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#289"><abbr title="Weline\DataTable\Helper\StreamExporter::updateProgress">updateProgress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#308"><abbr title="Weline\DataTable\Helper\StreamExporter::finalizeExport">finalizeExport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#329"><abbr title="Weline\DataTable\Helper\StreamExporter::getExportResult">getExportResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#343"><abbr title="Weline\DataTable\Helper\StreamExporter::getFileExtension">getFileExtension</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#359"><abbr title="Weline\DataTable\Helper\StreamExporter::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#375"><abbr title="Weline\DataTable\Helper\StreamExporter::setPageSize">setPageSize</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#384"><abbr title="Weline\DataTable\Helper\StreamExporter::setFormat">setFormat</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#393"><abbr title="Weline\DataTable\Helper\StreamExporter::setFields">setFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#402"><abbr title="Weline\DataTable\Helper\StreamExporter::setProgressCallback">setProgressCallback</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#411"><abbr title="Weline\DataTable\Helper\StreamExporter::getStats">getStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StreamExporter.php.html#419"><abbr title="Weline\DataTable\Helper\StreamExporter::__destruct">__destruct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#34"><abbr title="Weline\DataTable\Helper\TableContext::setTableContext">setTableContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#51"><abbr title="Weline\DataTable\Helper\TableContext::getTableContext">getTableContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#60"><abbr title="Weline\DataTable\Helper\TableContext::getCurrentTableContext">getCurrentTableContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#77"><abbr title="Weline\DataTable\Helper\TableContext::pushChildTag">pushChildTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#89"><abbr title="Weline\DataTable\Helper\TableContext::popTag">popTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#98"><abbr title="Weline\DataTable\Helper\TableContext::clearTableContext">clearTableContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#115"><abbr title="Weline\DataTable\Helper\TableContext::getAllTableContexts">getAllTableContexts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#125"><abbr title="Weline\DataTable\Helper\TableContext::findParentTableContext">findParentTableContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#150"><abbr title="Weline\DataTable\Helper\TableContext::inheritTableAttributes">inheritTableAttributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#201"><abbr title="Weline\DataTable\Helper\TableContext::getChildScopeSuffix">getChildScopeSuffix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#220"><abbr title="Weline\DataTable\Helper\TableContext::validateRequiredAttributes">validateRequiredAttributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#233"><abbr title="Weline\DataTable\Helper\TableContext::cleanupExpiredContexts">cleanupExpiredContexts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#243"><abbr title="Weline\DataTable\Helper\TableContext::getRenderStack">getRenderStack</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#260"><abbr title="Weline\DataTable\Helper\TableContext::clearRenderStack">clearRenderStack</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#272"><abbr title="Weline\DataTable\Helper\TableContext::recordTemplateField">recordTemplateField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#300"><abbr title="Weline\DataTable\Helper\TableContext::getTemplateFields">getTemplateFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#319"><abbr title="Weline\DataTable\Helper\TableContext::getAllAvailableFields">getAllAvailableFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#395"><abbr title="Weline\DataTable\Helper\TableContext::getModelFields">getModelFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#444"><abbr title="Weline\DataTable\Helper\TableContext::getFieldType">getFieldType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#462"><abbr title="Weline\DataTable\Helper\TableContext::getDefaultWidth">getDefaultWidth</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#479"><abbr title="Weline\DataTable\Helper\TableContext::clearTemplateFields">clearTemplateFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#487"><abbr title="Weline\DataTable\Helper\TableContext::clearAllTemplateFields">clearAllTemplateFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TableContext.php.html#495"><abbr title="Weline\DataTable\Helper\TableContext::clearAll">clearAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#27"><abbr title="Weline\DataTable\Helper\TransactionManager::getConnection">getConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#38"><abbr title="Weline\DataTable\Helper\TransactionManager::beginTransaction">beginTransaction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#79"><abbr title="Weline\DataTable\Helper\TransactionManager::commit">commit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#120"><abbr title="Weline\DataTable\Helper\TransactionManager::rollback">rollback</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#161"><abbr title="Weline\DataTable\Helper\TransactionManager::executeInTransaction">executeInTransaction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#181"><abbr title="Weline\DataTable\Helper\TransactionManager::getTransactionLevel">getTransactionLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#186"><abbr title="Weline\DataTable\Helper\TransactionManager::inTransaction">inTransaction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#194"><abbr title="Weline\DataTable\Helper\TransactionManager::getTransactionStack">getTransactionStack</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#202"><abbr title="Weline\DataTable\Helper\TransactionManager::getSavepoints">getSavepoints</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#207"><abbr title="Weline\DataTable\Helper\TransactionManager::rollbackAll">rollbackAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#228"><abbr title="Weline\DataTable\Helper\TransactionManager::getStatistics">getStatistics</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#244"><abbr title="Weline\DataTable\Helper\TransactionManager::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#254"><abbr title="Weline\DataTable\Helper\TransactionManager::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TransactionManager.php.html#267"><abbr title="Weline\DataTable\Helper\TransactionManager::sanitizeSavepointName">sanitizeSavepointName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#37"><abbr title="Weline\DataTable\Helper\ValidationManager::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#68"><abbr title="Weline\DataTable\Helper\ValidationManager::validateField">validateField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#98"><abbr title="Weline\DataTable\Helper\ValidationManager::applyRule">applyRule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#197"><abbr title="Weline\DataTable\Helper\ValidationManager::checkUnique">checkUnique</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#225"><abbr title="Weline\DataTable\Helper\ValidationManager::validateCrossField">validateCrossField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#270"><abbr title="Weline\DataTable\Helper\ValidationManager::asyncValidate">asyncValidate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationManager.php.html#299"><abbr title="Weline\DataTable\Helper\ValidationManager::generateRules">generateRules</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ValidationManager.php.html#98"><abbr title="Weline\DataTable\Helper\ValidationManager::applyRule">applyRule</abbr></a></td><td class="text-right">1980</td></tr>
+       <tr><td><a href="TableContext.php.html#395"><abbr title="Weline\DataTable\Helper\TableContext::getModelFields">getModelFields</abbr></a></td><td class="text-right">650</td></tr>
+       <tr><td><a href="ValidationManager.php.html#299"><abbr title="Weline\DataTable\Helper\ValidationManager::generateRules">generateRules</abbr></a></td><td class="text-right">462</td></tr>
+       <tr><td><a href="DependencyManager.php.html#71"><abbr title="Weline\DataTable\Helper\DependencyManager::calculateSaveOrder">calculateSaveOrder</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ImportManager.php.html#246"><abbr title="Weline\DataTable\Helper\ImportManager::validateData">validateData</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ImportManager.php.html#304"><abbr title="Weline\DataTable\Helper\ImportManager::validateType">validateType</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ImportManager.php.html#116"><abbr title="Weline\DataTable\Helper\ImportManager::parseCsv">parseCsv</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="ImportManager.php.html#56"><abbr title="Weline\DataTable\Helper\ImportManager::parseExcel">parseExcel</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#21"><abbr title="Weline\DataTable\Helper\ErrorHandler::handleException">handleException</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="TableContext.php.html#150"><abbr title="Weline\DataTable\Helper\TableContext::inheritTableAttributes">inheritTableAttributes</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="TransactionManager.php.html#79"><abbr title="Weline\DataTable\Helper\TransactionManager::commit">commit</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="TransactionManager.php.html#120"><abbr title="Weline\DataTable\Helper\TransactionManager::rollback">rollback</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="ValidationManager.php.html#225"><abbr title="Weline\DataTable\Helper\ValidationManager::validateCrossField">validateCrossField</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="DependencyManager.php.html#16"><abbr title="Weline\DataTable\Helper\DependencyManager::parseDependencies">parseDependencies</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ImportManager.php.html#186"><abbr title="Weline\DataTable\Helper\ImportManager::parseJson">parseJson</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="TableContext.php.html#319"><abbr title="Weline\DataTable\Helper\TableContext::getAllAvailableFields">getAllAvailableFields</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="TableContext.php.html#444"><abbr title="Weline\DataTable\Helper\TableContext::getFieldType">getFieldType</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="TableContext.php.html#462"><abbr title="Weline\DataTable\Helper\TableContext::getDefaultWidth">getDefaultWidth</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="DependencyManager.php.html#181"><abbr title="Weline\DataTable\Helper\DependencyManager::validateDependencies">validateDependencies</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#99"><abbr title="Weline\DataTable\Helper\ErrorHandler::validateRequiredParams">validateRequiredParams</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="ImportManager.php.html#31"><abbr title="Weline\DataTable\Helper\ImportManager::parseFile">parseFile</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="PermissionManager.php.html#95"><abbr title="Weline\DataTable\Helper\PermissionManager::canAccessRecord">canAccessRecord</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="TransactionManager.php.html#38"><abbr title="Weline\DataTable\Helper\TransactionManager::beginTransaction">beginTransaction</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="DependencyManager.php.html#137"><abbr title="Weline\DataTable\Helper\DependencyManager::getDefaultDependencies">getDefaultDependencies</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="DependencyManager.php.html#218"><abbr title="Weline\DataTable\Helper\DependencyManager::applyDependencies">applyDependencies</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#67"><abbr title="Weline\DataTable\Helper\ErrorHandler::logException">logException</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ImportManager.php.html#354"><abbr title="Weline\DataTable\Helper\ImportManager::batchImport">batchImport</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="StreamExporter.php.html#343"><abbr title="Weline\DataTable\Helper\StreamExporter::getFileExtension">getFileExtension</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="TableContext.php.html#125"><abbr title="Weline\DataTable\Helper\TableContext::findParentTableContext">findParentTableContext</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ValidationManager.php.html#197"><abbr title="Weline\DataTable\Helper\ValidationManager::checkUnique">checkUnique</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="DependencyManager.php.html#246"><abbr title="Weline\DataTable\Helper\DependencyManager::getTableDependencies">getTableDependencies</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="DependencyManager.php.html#275"><abbr title="Weline\DataTable\Helper\DependencyManager::checkDeleteConstraints">checkDeleteConstraints</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#162"><abbr title="Weline\DataTable\Helper\ErrorHandler::formatErrorMessage">formatErrorMessage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#12"><abbr title="Weline\DataTable\Helper\FrontendAccess::isAllowed">isAllowed</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#40"><abbr title="Weline\DataTable\Helper\FrontendAccess::isUnitTest">isUnitTest</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="PermissionManager.php.html#242"><abbr title="Weline\DataTable\Helper\PermissionManager::requireFieldPermission">requireFieldPermission</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="StreamExporter.php.html#165"><abbr title="Weline\DataTable\Helper\StreamExporter::writeHeader">writeHeader</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="StreamExporter.php.html#198"><abbr title="Weline\DataTable\Helper\StreamExporter::exportDataInPages">exportDataInPages</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="StreamExporter.php.html#234"><abbr title="Weline\DataTable\Helper\StreamExporter::writeRecord">writeRecord</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="StreamExporter.php.html#267"><abbr title="Weline\DataTable\Helper\StreamExporter::writeJsonRecord">writeJsonRecord</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="StreamExporter.php.html#359"><abbr title="Weline\DataTable\Helper\StreamExporter::cleanup">cleanup</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="TableContext.php.html#98"><abbr title="Weline\DataTable\Helper\TableContext::clearTableContext">clearTableContext</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="TableContext.php.html#243"><abbr title="Weline\DataTable\Helper\TableContext::getRenderStack">getRenderStack</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="TransactionManager.php.html#161"><abbr title="Weline\DataTable\Helper\TransactionManager::executeInTransaction">executeInTransaction</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#123"><abbr title="Weline\DataTable\Helper\ErrorHandler::validateModel">validateModel</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="FrontendAccess.php.html#28"><abbr title="Weline\DataTable\Helper\FrontendAccess::deniedComment">deniedComment</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ImportManager.php.html#223"><abbr title="Weline\DataTable\Helper\ImportManager::mapFields">mapFields</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StreamExporter.php.html#64"><abbr title="Weline\DataTable\Helper\StreamExporter::export">export</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StreamExporter.php.html#133"><abbr title="Weline\DataTable\Helper\StreamExporter::applyConditions">applyConditions</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StreamExporter.php.html#145"><abbr title="Weline\DataTable\Helper\StreamExporter::createTempFile">createTempFile</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StreamExporter.php.html#184"><abbr title="Weline\DataTable\Helper\StreamExporter::writeCsvHeader">writeCsvHeader</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StreamExporter.php.html#250"><abbr title="Weline\DataTable\Helper\StreamExporter::writeCsvRecord">writeCsvRecord</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StreamExporter.php.html#289"><abbr title="Weline\DataTable\Helper\StreamExporter::updateProgress">updateProgress</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StreamExporter.php.html#308"><abbr title="Weline\DataTable\Helper\StreamExporter::finalizeExport">finalizeExport</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="TableContext.php.html#60"><abbr title="Weline\DataTable\Helper\TableContext::getCurrentTableContext">getCurrentTableContext</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="TableContext.php.html#201"><abbr title="Weline\DataTable\Helper\TableContext::getChildScopeSuffix">getChildScopeSuffix</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="TableContext.php.html#220"><abbr title="Weline\DataTable\Helper\TableContext::validateRequiredAttributes">validateRequiredAttributes</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="TableContext.php.html#300"><abbr title="Weline\DataTable\Helper\TableContext::getTemplateFields">getTemplateFields</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="TransactionManager.php.html#207"><abbr title="Weline\DataTable\Helper\TransactionManager::rollbackAll">rollbackAll</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="TransactionManager.php.html#267"><abbr title="Weline\DataTable\Helper\TransactionManager::sanitizeSavepointName">sanitizeSavepointName</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ValidationManager.php.html#37"><abbr title="Weline\DataTable\Helper\ValidationManager::validate">validate</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ValidationManager.php.html#68"><abbr title="Weline\DataTable\Helper\ValidationManager::validateField">validateField</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DependencyManager.php.html#320"><abbr title="Weline\DataTable\Helper\DependencyManager::countRelatedRecords">countRelatedRecords</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ErrorHandler.php.html#145"><abbr title="Weline\DataTable\Helper\ErrorHandler::safeExecute">safeExecute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Field.php.html#10"><abbr title="Weline\DataTable\Helper\Field::sort">sort</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ImportManager.php.html#336"><abbr title="Weline\DataTable\Helper\ImportManager::checkExists">checkExists</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PermissionManager.php.html#38"><abbr title="Weline\DataTable\Helper\PermissionManager::canViewField">canViewField</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PermissionManager.php.html#59"><abbr title="Weline\DataTable\Helper\PermissionManager::canEditField">canEditField</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PermissionManager.php.html#225"><abbr title="Weline\DataTable\Helper\PermissionManager::requirePermission">requirePermission</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="StreamExporter.php.html#103"><abbr title="Weline\DataTable\Helper\StreamExporter::initializeExport">initializeExport</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="TableContext.php.html#272"><abbr title="Weline\DataTable\Helper\TableContext::recordTemplateField">recordTemplateField</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="TransactionManager.php.html#27"><abbr title="Weline\DataTable\Helper\TransactionManager::getConnection">getConnection</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="TransactionManager.php.html#228"><abbr title="Weline\DataTable\Helper\TransactionManager::getStatistics">getStatistics</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ValidationManager.php.html#270"><abbr title="Weline\DataTable\Helper\ValidationManager::asyncValidate">asyncValidate</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([10,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([105,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,45,"<a href=\"DependencyManager.php.html#8\">Weline\\DataTable\\Helper\\DependencyManager<\/a>"],[0,29,"<a href=\"ErrorHandler.php.html#11\">Weline\\DataTable\\Helper\\ErrorHandler<\/a>"],[0,2,"<a href=\"Field.php.html#8\">Weline\\DataTable\\Helper\\Field<\/a>"],[0,11,"<a href=\"FrontendAccess.php.html#10\">Weline\\DataTable\\Helper\\FrontendAccess<\/a>"],[0,68,"<a href=\"ImportManager.php.html#14\">Weline\\DataTable\\Helper\\ImportManager<\/a>"],[0,22,"<a href=\"PermissionManager.php.html#11\">Weline\\DataTable\\Helper\\PermissionManager<\/a>"],[0,57,"<a href=\"StreamExporter.php.html#11\">Weline\\DataTable\\Helper\\StreamExporter<\/a>"],[0,92,"<a href=\"TableContext.php.html#9\">Weline\\DataTable\\Helper\\TableContext<\/a>"],[0,42,"<a href=\"TransactionManager.php.html#11\">Weline\\DataTable\\Helper\\TransactionManager<\/a>"],[0,86,"<a href=\"ValidationManager.php.html#11\">Weline\\DataTable\\Helper\\ValidationManager<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,7,"<a href=\"DependencyManager.php.html#16\">Weline\\DataTable\\Helper\\DependencyManager::parseDependencies<\/a>"],[0,12,"<a href=\"DependencyManager.php.html#71\">Weline\\DataTable\\Helper\\DependencyManager::calculateSaveOrder<\/a>"],[0,5,"<a href=\"DependencyManager.php.html#137\">Weline\\DataTable\\Helper\\DependencyManager::getDefaultDependencies<\/a>"],[0,6,"<a href=\"DependencyManager.php.html#181\">Weline\\DataTable\\Helper\\DependencyManager::validateDependencies<\/a>"],[0,5,"<a href=\"DependencyManager.php.html#218\">Weline\\DataTable\\Helper\\DependencyManager::applyDependencies<\/a>"],[0,4,"<a href=\"DependencyManager.php.html#246\">Weline\\DataTable\\Helper\\DependencyManager::getTableDependencies<\/a>"],[0,4,"<a href=\"DependencyManager.php.html#275\">Weline\\DataTable\\Helper\\DependencyManager::checkDeleteConstraints<\/a>"],[0,2,"<a href=\"DependencyManager.php.html#320\">Weline\\DataTable\\Helper\\DependencyManager::countRelatedRecords<\/a>"],[0,9,"<a href=\"ErrorHandler.php.html#21\">Weline\\DataTable\\Helper\\ErrorHandler::handleException<\/a>"],[0,5,"<a href=\"ErrorHandler.php.html#67\">Weline\\DataTable\\Helper\\ErrorHandler::logException<\/a>"],[0,6,"<a href=\"ErrorHandler.php.html#99\">Weline\\DataTable\\Helper\\ErrorHandler::validateRequiredParams<\/a>"],[0,3,"<a href=\"ErrorHandler.php.html#123\">Weline\\DataTable\\Helper\\ErrorHandler::validateModel<\/a>"],[0,2,"<a href=\"ErrorHandler.php.html#145\">Weline\\DataTable\\Helper\\ErrorHandler::safeExecute<\/a>"],[0,4,"<a href=\"ErrorHandler.php.html#162\">Weline\\DataTable\\Helper\\ErrorHandler::formatErrorMessage<\/a>"],[0,2,"<a href=\"Field.php.html#10\">Weline\\DataTable\\Helper\\Field::sort<\/a>"],[0,4,"<a href=\"FrontendAccess.php.html#12\">Weline\\DataTable\\Helper\\FrontendAccess::isAllowed<\/a>"],[0,3,"<a href=\"FrontendAccess.php.html#28\">Weline\\DataTable\\Helper\\FrontendAccess::deniedComment<\/a>"],[0,4,"<a href=\"FrontendAccess.php.html#40\">Weline\\DataTable\\Helper\\FrontendAccess::isUnitTest<\/a>"],[0,6,"<a href=\"ImportManager.php.html#31\">Weline\\DataTable\\Helper\\ImportManager::parseFile<\/a>"],[0,10,"<a href=\"ImportManager.php.html#56\">Weline\\DataTable\\Helper\\ImportManager::parseExcel<\/a>"],[0,11,"<a href=\"ImportManager.php.html#116\">Weline\\DataTable\\Helper\\ImportManager::parseCsv<\/a>"],[0,7,"<a href=\"ImportManager.php.html#186\">Weline\\DataTable\\Helper\\ImportManager::parseJson<\/a>"],[0,3,"<a href=\"ImportManager.php.html#223\">Weline\\DataTable\\Helper\\ImportManager::mapFields<\/a>"],[0,12,"<a href=\"ImportManager.php.html#246\">Weline\\DataTable\\Helper\\ImportManager::validateData<\/a>"],[0,12,"<a href=\"ImportManager.php.html#304\">Weline\\DataTable\\Helper\\ImportManager::validateType<\/a>"],[0,2,"<a href=\"ImportManager.php.html#336\">Weline\\DataTable\\Helper\\ImportManager::checkExists<\/a>"],[0,5,"<a href=\"ImportManager.php.html#354\">Weline\\DataTable\\Helper\\ImportManager::batchImport<\/a>"],[0,2,"<a href=\"PermissionManager.php.html#38\">Weline\\DataTable\\Helper\\PermissionManager::canViewField<\/a>"],[0,2,"<a href=\"PermissionManager.php.html#59\">Weline\\DataTable\\Helper\\PermissionManager::canEditField<\/a>"],[0,1,"<a href=\"PermissionManager.php.html#78\">Weline\\DataTable\\Helper\\PermissionManager::canPerformAction<\/a>"],[0,6,"<a href=\"PermissionManager.php.html#95\">Weline\\DataTable\\Helper\\PermissionManager::canAccessRecord<\/a>"],[0,1,"<a href=\"PermissionManager.php.html#136\">Weline\\DataTable\\Helper\\PermissionManager::filterViewableFields<\/a>"],[0,1,"<a href=\"PermissionManager.php.html#151\">Weline\\DataTable\\Helper\\PermissionManager::filterEditableFields<\/a>"],[0,1,"<a href=\"PermissionManager.php.html#165\">Weline\\DataTable\\Helper\\PermissionManager::getFieldPermissions<\/a>"],[0,1,"<a href=\"PermissionManager.php.html#184\">Weline\\DataTable\\Helper\\PermissionManager::getActionPermissions<\/a>"],[0,1,"<a href=\"PermissionManager.php.html#203\">Weline\\DataTable\\Helper\\PermissionManager::getDataScope<\/a>"],[0,2,"<a href=\"PermissionManager.php.html#225\">Weline\\DataTable\\Helper\\PermissionManager::requirePermission<\/a>"],[0,4,"<a href=\"PermissionManager.php.html#242\">Weline\\DataTable\\Helper\\PermissionManager::requireFieldPermission<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#56\">Weline\\DataTable\\Helper\\StreamExporter::__construct<\/a>"],[0,3,"<a href=\"StreamExporter.php.html#64\">Weline\\DataTable\\Helper\\StreamExporter::export<\/a>"],[0,2,"<a href=\"StreamExporter.php.html#103\">Weline\\DataTable\\Helper\\StreamExporter::initializeExport<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#119\">Weline\\DataTable\\Helper\\StreamExporter::calculateTotalRecords<\/a>"],[0,3,"<a href=\"StreamExporter.php.html#133\">Weline\\DataTable\\Helper\\StreamExporter::applyConditions<\/a>"],[0,3,"<a href=\"StreamExporter.php.html#145\">Weline\\DataTable\\Helper\\StreamExporter::createTempFile<\/a>"],[0,4,"<a href=\"StreamExporter.php.html#165\">Weline\\DataTable\\Helper\\StreamExporter::writeHeader<\/a>"],[0,3,"<a href=\"StreamExporter.php.html#184\">Weline\\DataTable\\Helper\\StreamExporter::writeCsvHeader<\/a>"],[0,4,"<a href=\"StreamExporter.php.html#198\">Weline\\DataTable\\Helper\\StreamExporter::exportDataInPages<\/a>"],[0,4,"<a href=\"StreamExporter.php.html#234\">Weline\\DataTable\\Helper\\StreamExporter::writeRecord<\/a>"],[0,3,"<a href=\"StreamExporter.php.html#250\">Weline\\DataTable\\Helper\\StreamExporter::writeCsvRecord<\/a>"],[0,4,"<a href=\"StreamExporter.php.html#267\">Weline\\DataTable\\Helper\\StreamExporter::writeJsonRecord<\/a>"],[0,3,"<a href=\"StreamExporter.php.html#289\">Weline\\DataTable\\Helper\\StreamExporter::updateProgress<\/a>"],[0,3,"<a href=\"StreamExporter.php.html#308\">Weline\\DataTable\\Helper\\StreamExporter::finalizeExport<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#329\">Weline\\DataTable\\Helper\\StreamExporter::getExportResult<\/a>"],[0,5,"<a href=\"StreamExporter.php.html#343\">Weline\\DataTable\\Helper\\StreamExporter::getFileExtension<\/a>"],[0,4,"<a href=\"StreamExporter.php.html#359\">Weline\\DataTable\\Helper\\StreamExporter::cleanup<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#375\">Weline\\DataTable\\Helper\\StreamExporter::setPageSize<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#384\">Weline\\DataTable\\Helper\\StreamExporter::setFormat<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#393\">Weline\\DataTable\\Helper\\StreamExporter::setFields<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#402\">Weline\\DataTable\\Helper\\StreamExporter::setProgressCallback<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#411\">Weline\\DataTable\\Helper\\StreamExporter::getStats<\/a>"],[0,1,"<a href=\"StreamExporter.php.html#419\">Weline\\DataTable\\Helper\\StreamExporter::__destruct<\/a>"],[0,1,"<a href=\"TableContext.php.html#34\">Weline\\DataTable\\Helper\\TableContext::setTableContext<\/a>"],[0,1,"<a href=\"TableContext.php.html#51\">Weline\\DataTable\\Helper\\TableContext::getTableContext<\/a>"],[0,3,"<a href=\"TableContext.php.html#60\">Weline\\DataTable\\Helper\\TableContext::getCurrentTableContext<\/a>"],[0,1,"<a href=\"TableContext.php.html#77\">Weline\\DataTable\\Helper\\TableContext::pushChildTag<\/a>"],[0,1,"<a href=\"TableContext.php.html#89\">Weline\\DataTable\\Helper\\TableContext::popTag<\/a>"],[0,4,"<a href=\"TableContext.php.html#98\">Weline\\DataTable\\Helper\\TableContext::clearTableContext<\/a>"],[0,1,"<a href=\"TableContext.php.html#115\">Weline\\DataTable\\Helper\\TableContext::getAllTableContexts<\/a>"],[0,5,"<a href=\"TableContext.php.html#125\">Weline\\DataTable\\Helper\\TableContext::findParentTableContext<\/a>"],[0,9,"<a href=\"TableContext.php.html#150\">Weline\\DataTable\\Helper\\TableContext::inheritTableAttributes<\/a>"],[0,3,"<a href=\"TableContext.php.html#201\">Weline\\DataTable\\Helper\\TableContext::getChildScopeSuffix<\/a>"],[0,3,"<a href=\"TableContext.php.html#220\">Weline\\DataTable\\Helper\\TableContext::validateRequiredAttributes<\/a>"],[0,1,"<a href=\"TableContext.php.html#233\">Weline\\DataTable\\Helper\\TableContext::cleanupExpiredContexts<\/a>"],[0,4,"<a href=\"TableContext.php.html#243\">Weline\\DataTable\\Helper\\TableContext::getRenderStack<\/a>"],[0,1,"<a href=\"TableContext.php.html#260\">Weline\\DataTable\\Helper\\TableContext::clearRenderStack<\/a>"],[0,2,"<a href=\"TableContext.php.html#272\">Weline\\DataTable\\Helper\\TableContext::recordTemplateField<\/a>"],[0,3,"<a href=\"TableContext.php.html#300\">Weline\\DataTable\\Helper\\TableContext::getTemplateFields<\/a>"],[0,7,"<a href=\"TableContext.php.html#319\">Weline\\DataTable\\Helper\\TableContext::getAllAvailableFields<\/a>"],[0,25,"<a href=\"TableContext.php.html#395\">Weline\\DataTable\\Helper\\TableContext::getModelFields<\/a>"],[0,7,"<a href=\"TableContext.php.html#444\">Weline\\DataTable\\Helper\\TableContext::getFieldType<\/a>"],[0,7,"<a href=\"TableContext.php.html#462\">Weline\\DataTable\\Helper\\TableContext::getDefaultWidth<\/a>"],[0,1,"<a href=\"TableContext.php.html#479\">Weline\\DataTable\\Helper\\TableContext::clearTemplateFields<\/a>"],[0,1,"<a href=\"TableContext.php.html#487\">Weline\\DataTable\\Helper\\TableContext::clearAllTemplateFields<\/a>"],[0,1,"<a href=\"TableContext.php.html#495\">Weline\\DataTable\\Helper\\TableContext::clearAll<\/a>"],[0,2,"<a href=\"TransactionManager.php.html#27\">Weline\\DataTable\\Helper\\TransactionManager::getConnection<\/a>"],[0,6,"<a href=\"TransactionManager.php.html#38\">Weline\\DataTable\\Helper\\TransactionManager::beginTransaction<\/a>"],[0,8,"<a href=\"TransactionManager.php.html#79\">Weline\\DataTable\\Helper\\TransactionManager::commit<\/a>"],[0,8,"<a href=\"TransactionManager.php.html#120\">Weline\\DataTable\\Helper\\TransactionManager::rollback<\/a>"],[0,4,"<a href=\"TransactionManager.php.html#161\">Weline\\DataTable\\Helper\\TransactionManager::executeInTransaction<\/a>"],[0,1,"<a href=\"TransactionManager.php.html#181\">Weline\\DataTable\\Helper\\TransactionManager::getTransactionLevel<\/a>"],[0,1,"<a href=\"TransactionManager.php.html#186\">Weline\\DataTable\\Helper\\TransactionManager::inTransaction<\/a>"],[0,1,"<a href=\"TransactionManager.php.html#194\">Weline\\DataTable\\Helper\\TransactionManager::getTransactionStack<\/a>"],[0,1,"<a href=\"TransactionManager.php.html#202\">Weline\\DataTable\\Helper\\TransactionManager::getSavepoints<\/a>"],[0,3,"<a href=\"TransactionManager.php.html#207\">Weline\\DataTable\\Helper\\TransactionManager::rollbackAll<\/a>"],[0,2,"<a href=\"TransactionManager.php.html#228\">Weline\\DataTable\\Helper\\TransactionManager::getStatistics<\/a>"],[0,1,"<a href=\"TransactionManager.php.html#244\">Weline\\DataTable\\Helper\\TransactionManager::cleanup<\/a>"],[0,1,"<a href=\"TransactionManager.php.html#254\">Weline\\DataTable\\Helper\\TransactionManager::log<\/a>"],[0,3,"<a href=\"TransactionManager.php.html#267\">Weline\\DataTable\\Helper\\TransactionManager::sanitizeSavepointName<\/a>"],[0,3,"<a href=\"ValidationManager.php.html#37\">Weline\\DataTable\\Helper\\ValidationManager::validate<\/a>"],[0,3,"<a href=\"ValidationManager.php.html#68\">Weline\\DataTable\\Helper\\ValidationManager::validateField<\/a>"],[0,44,"<a href=\"ValidationManager.php.html#98\">Weline\\DataTable\\Helper\\ValidationManager::applyRule<\/a>"],[0,5,"<a href=\"ValidationManager.php.html#197\">Weline\\DataTable\\Helper\\ValidationManager::checkUnique<\/a>"],[0,8,"<a href=\"ValidationManager.php.html#225\">Weline\\DataTable\\Helper\\ValidationManager::validateCrossField<\/a>"],[0,2,"<a href=\"ValidationManager.php.html#270\">Weline\\DataTable\\Helper\\ValidationManager::asyncValidate<\/a>"],[0,21,"<a href=\"ValidationManager.php.html#299\">Weline\\DataTable\\Helper\\ValidationManager::generateRules<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

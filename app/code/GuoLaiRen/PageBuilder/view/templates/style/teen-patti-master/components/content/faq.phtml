@@ -1,0 +1,320 @@
+<?php
+/**
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: FAQ折叠面板
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_intro => 显示简介:select:yes|yes,no
+ * display.first_open => 首个问题默认展开:select:no|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景主色:color:#2a3f7a
+ * style.accent_color => 强调色:color:#fbd26b
+ * style.title_color => 标题颜色:color:#ffffff
+ * style.text_color => 正文颜色:color:#e5e7eb
+ * style.panel_bg_color => 卡片背景色:color:rgba(10,12,32,0.9)
+ * style.card_border_color => 卡片边框色:color:rgba(251,191,36,0.4)
+ * style.card_radius => 卡片圆角:number:18|px
+ * style.section_padding => 区域内边距(PC端):number:64|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ *
+ * group:texts => 文本内容
+ * texts.badge => 徽标文字:text:Teen Patti Support
+ * texts.title => 区域标题:text:Frequently Asked Questions
+ * texts.intro => 简介:textarea:Everything you need to know about Teen Patti Master, gameplay, rewards, and secure withdrawals.
+ * texts.tag_1 => 标签1:text:Quick Rules
+ * texts.tag_2 => 标签2:text:Fair Play
+ * texts.tag_3 => 标签3:text:Fast Payouts
+ * texts.faq_1_question => 问题1:text:How do I start playing?
+ * texts.faq_1_answer => 答案1:textarea:Simply download the app, register, and start playing instantly!
+ * texts.faq_2_question => 问题2:text:Is it safe and fair?
+ * texts.faq_2_answer => 答案2:textarea:Yes! We use certified RNG and SSL encryption for complete security.
+ * texts.faq_3_question => 问题3:text:How do I withdraw winnings?
+ * texts.faq_3_answer => 答案3:textarea:Withdrawals are processed within 24 hours to your bank account.
+ * texts.faq_4_question => 问题4:text:What is the minimum deposit?
+ * texts.faq_4_answer => 答案4:textarea:You can start playing with as little as ₹100.
+ * texts.faq_5_question => 问题5:text:
+ * texts.faq_5_answer => 答案5:textarea:
+ * texts.faq_6_question => 问题6:text:
+ * texts.faq_6_answer => 答案6:textarea:
+ *
+ * @fields_end
+ */
+
+$componentId = 'tpm-faq-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+// 显示控制
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
+if (!$display) return;
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showIntro = $getConfig('display.show_intro', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
+
+// 样式配置
+$bgColor = $getConfig('style.bg_color', $getConfig('faq.bg_color', '#2a3f7a'));
+$accentColor = $getConfig('style.accent_color', '#fbd26b');
+$titleColor = $getConfig('style.title_color', '#ffffff');
+$textColor = $getConfig('style.text_color', '#e5e7eb');
+$panelBgColor = $getConfig('style.panel_bg_color', 'rgba(10,12,32,0.9)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(251,191,36,0.4)');
+$cardRadius = $getConfig('style.card_radius', '18');
+$sectionPadding = $getConfig('style.section_padding', '64');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '48');
+
+// 文本内容
+$badgeText = $getConfig('texts.badge', 'Teen Patti Support');
+$title = $getConfig('texts.title', $getConfig('faq.title', 'Frequently Asked Questions'));
+$intro = $getConfig('texts.intro', 'Everything you need to know about Teen Patti Master, gameplay, rewards, and secure withdrawals.');
+$tags = array_filter([
+    $getConfig('texts.tag_1', 'Quick Rules'),
+    $getConfig('texts.tag_2', 'Fair Play'),
+    $getConfig('texts.tag_3', 'Fast Payouts'),
+]);
+$faqs = [
+    [
+        'question' => $getConfig('texts.faq_1_question', 'What is Teen Patti Master?'),
+        'answer' => $getConfig('texts.faq_1_answer', "Teen Patti Master is India's best online card game, which combines strategy and luck for real cash prizes.")
+    ],
+    [
+        'question' => $getConfig('texts.faq_2_question', 'How to Download Teen Patti Master APK?'),
+        'answer' => $getConfig('texts.faq_2_answer', "Go to a reliable website and select the download option for the most recent version. It's free, safe, and mobile-friendly.")
+    ],
+    [
+        'question' => $getConfig('texts.faq_3_question', 'Is Teen Patti Master Safe to Play?'),
+        'answer' => $getConfig('texts.faq_3_answer', 'Yes, Teen Patti Master is designed to be secure, with features like SSL encryption to protect data.')
+    ],
+    [
+        'question' => $getConfig('texts.faq_4_question', 'How to Win Real Cash?'),
+        'answer' => $getConfig('texts.faq_4_answer', 'Win real money by mastering methods like bluffing with strong hands (e.g., Trail or Pure Sequence).')
+    ],
+    [
+        'question' => $getConfig('texts.faq_5_question', 'What are the Game Variants?'),
+        'answer' => $getConfig('texts.faq_5_answer', 'Teen Patti Master includes variants such as AK47, Muflis, and Joker for varied teen patti action.')
+    ],
+];
+?>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    background: linear-gradient(180deg, <?= htmlspecialchars($bgColor) ?> 0%, #1b254d 45%, #2e306f 100%);
+    overflow: hidden;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 160px;
+    opacity: .01;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='160' viewBox='0 0 1600 160'%3E%3Cpath d='M0 90 C 200 30 420 40 620 90 C 820 140 1060 150 1280 90 C 1480 40 1560 30 1600 40 L1600 160 L0 160 Z' fill='%23324f8a' opacity='0.7'/%3E%3Cpath d='M0 120 C 240 90 460 110 660 130 C 860 150 1100 150 1320 120 C 1480 100 1560 90 1600 80 L1600 160 L0 160 Z' fill='%23512a88' opacity='0.55'/%3E%3Cpath d='M0 145 C 220 130 420 140 600 150 C 780 160 1040 160 1240 145 C 1420 130 1540 120 1600 110 L1600 160 L0 160 Z' fill='%231f2f63' opacity='0.55'/%3E%3C/svg%3E") center bottom/cover no-repeat;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .faq-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    display: grid;
+    gap: 2.5rem;
+}
+
+#<?= $componentId ?> .faq-intro-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(251, 191, 36, 0.15);
+    color: <?= htmlspecialchars($accentColor) ?>;
+    font-size: 0.85rem;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+}
+
+#<?= $componentId ?> .faq-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    color: <?= htmlspecialchars($textColor) ?>;
+    font-size: 0.85rem;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+#<?= $componentId ?> .faq-card {
+    position: relative;
+    border-radius: <?= htmlspecialchars($cardRadius) ?>px;
+    padding: 2px;
+    background: linear-gradient(135deg, rgba(251, 191, 36, 0.4), rgba(88, 20, 121, 0.4));
+    transition: transform 0.25s ease;
+}
+
+#<?= $componentId ?> .faq-card:hover {
+    transform: translateY(-4px);
+}
+
+#<?= $componentId ?> .faq-card-inner {
+    background: <?= htmlspecialchars($panelBgColor) ?>;
+    border-radius: calc(<?= htmlspecialchars($cardRadius) ?>px - 2px);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+}
+
+#<?= $componentId ?> .faq-toggle {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+#<?= $componentId ?> .faq-index {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(251, 191, 36, 0.2);
+    color: <?= htmlspecialchars($accentColor) ?>;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .faq-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    color: <?= htmlspecialchars($accentColor) ?>;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    transition: transform 0.25s ease;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .faq-answer {
+    display: none;
+    padding: 0 1.25rem 1.25rem;
+    color: <?= htmlspecialchars($textColor) ?>;
+    opacity: 0.95;
+    line-height: 1.6;
+}
+
+#<?= $componentId ?> .faq-card.is-open .faq-answer {
+    display: block;
+}
+
+#<?= $componentId ?> .faq-card.is-open .faq-icon {
+    transform: rotate(45deg);
+}
+
+@media (min-width: 992px) {
+    #<?= $componentId ?> .faq-inner {
+        grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+        align-items: start;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+
+    #<?= $componentId ?> .faq-inner {
+        padding: 0 15px;
+    }
+}
+</style>
+
+<section id="<?= $componentId ?>" class="tpmst-section tpmst-faq-component !py-16 !md:py-24">
+    <div class="faq-inner">
+        <div class="space-y-6">
+            <?php if ($showIntro && $badgeText): ?>
+                <span class="faq-intro-badge"><?= htmlspecialchars($badgeText) ?></span>
+            <?php endif; ?>
+            <?php if ($showTitle): ?>
+                <h2 class="text-3xl md:text-5xl font-bold text-white leading-tight" style="color: <?= htmlspecialchars($titleColor) ?>;">
+                    <?= htmlspecialchars($title) ?>
+                </h2>
+            <?php endif; ?>
+            <?php if ($showIntro && $intro): ?>
+                <p class="text-slate-200 text-base md:text-lg leading-relaxed"><?= htmlspecialchars($intro) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($tags)): ?>
+                <div class="flex flex-wrap gap-3">
+                    <?php foreach ($tags as $tag): ?>
+                        <span class="faq-chip"><?= htmlspecialchars($tag) ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="space-y-3">
+            <?php foreach ($faqs as $index => $faq): ?>
+                <div class="faq-card<?= ($firstOpen && $index === 0) ? ' is-open' : '' ?>">
+                    <div class="faq-card-inner">
+                        <button class="faq-toggle w-full text-left p-3 md:p-4 hover:bg-white/5 transition" type="button">
+                            <span class="faq-index"><?= sprintf('%02d', $index + 1) ?></span>
+                            <span class="font-semibold text-white text-sm md:text-base flex-1"><?= htmlspecialchars($faq['question']) ?></span>
+                            <span class="faq-icon">+</span>
+                        </button>
+                        <div class="faq-answer text-sm md:text-base">
+                            <?= nl2br(htmlspecialchars($faq['answer'])) ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<script>
+(function() {
+    var container = document.getElementById('<?= $componentId ?>');
+    if (!container) return;
+
+    container.querySelectorAll('.faq-toggle').forEach(function(toggle) {
+        toggle.addEventListener('click', function() {
+            var item = this.closest('.faq-card');
+            if (!item) return;
+
+            var wasOpen = item.classList.contains('is-open');
+            container.querySelectorAll('.faq-card').forEach(function(card) {
+                card.classList.remove('is-open');
+            });
+
+            if (!wasOpen) {
+                item.classList.add('is-open');
+            }
+        });
+    });
+})();
+</script>

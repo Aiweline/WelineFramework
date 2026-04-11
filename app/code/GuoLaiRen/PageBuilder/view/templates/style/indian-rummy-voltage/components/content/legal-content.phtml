@@ -1,0 +1,529 @@
+<?php
+/**
+ * Indian Rummy Voltage - Legal Content Component
+ *
+ * @component_start
+ * code: legal-content
+ * name: 法律文档内容
+ * name_en: Legal Content
+ * description: 法律文档内容展示组件，支持目录、更新时间显示，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_toc => 显示目录:select:yes|yes,no
+ * display.show_last_updated => 显示更新时间:select:yes|yes,no
+ * display.show_icon => 显示图标:select:yes|yes,no
+ *
+ * group:layout => 布局设置
+ * layout.content_width => 内容宽度:select:narrow|narrow,medium,wide
+ * layout.header_padding => 头部内边距:number:80|px
+ * layout.content_padding => 内容内边距:number:60|px
+ *
+ * group:header => 头部设置
+ * header.title => 页面标题:text:|留空使用页面标题
+ * header.kicker => 页面提示语:text:Legal Center
+ * header.updated_label => 更新时间前缀:text:Updated
+ * header.icon => 自定义图标:text:|如:🔒 📜 💰
+ * header.bg_color => 背景色:color:#0a2a3c
+ * header.bg_gradient_end => 渐变结束色:color:#17233f
+ * header.title_color => 标题颜色:color:#ffd067
+ * header.text_color => 文字颜色:color:#d4deef
+ *
+ * group:toc => 目录设置
+ * toc.title => 目录标题:text:Contents
+ * toc.items => 自定义目录项:textarea:|每行一个标题，留空则自动从H2提取
+ * toc.bg_color => 目录背景色:color:rgba(255,255,255,0.05)
+ * toc.border_color => 目录边框色:color:rgba(255,255,255,0.1)
+ *
+ * group:content => 内容设置
+ * content.body => 内容正文:textarea:
+ * content.empty_text => 空状态提示:text:Legal content will appear here.
+ * content.bg_color => 内容区背景色:color:#0d2133
+ * content.text_color => 内容文字颜色:color:#d4deef
+ * content.heading_color => 标题颜色:color:#ffd067
+ * content.link_color => 链接颜色:color:#00d8ae
+ *
+ * @fields_end
+ */
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $component_config ?? $this->getData('component_config') ?? [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = static function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$showToc = $normalizeToggle($getConfigAny(['display.display.show_toc', 'display.show_toc'], 'yes')) !== 'no';
+$showLastUpdated = $normalizeToggle($getConfigAny(['display.display.show_last_updated', 'display.show_last_updated'], 'yes')) !== 'no';
+$showIcon = $normalizeToggle($getConfigAny(['display.display.show_icon', 'display.show_icon'], 'yes')) !== 'no';
+
+$contentWidth = $getConfigAny(['layout.layout.content_width', 'layout.content_width'], 'narrow');
+$headerPadding = max(28, (int)($getConfigAny(['layout.layout.header_padding', 'layout.header_padding'], '80')));
+$contentPadding = max(20, (int)($getConfigAny(['layout.layout.content_padding', 'layout.content_padding'], '60')));
+
+$headerTitle = $getConfigAny(['header.header.title', 'header.title'], '');
+$headerKicker = trim((string) $getConfigAny(['header.header.kicker', 'header.kicker'], 'Legal Center'));
+$updatedLabel = trim((string) $getConfigAny(['header.header.updated_label', 'header.updated_label'], 'Updated'));
+$headerIcon = $getConfigAny(['header.header.icon', 'header.icon'], '');
+$headerBgColorConfig = $getConfigAny(['header.header.bg_color', 'header.bg_color'], '');
+$headerGradientEndConfig = $getConfigAny(['header.header.bg_gradient_end', 'header.bg_gradient_end'], '');
+$headerTitleColorConfig = $getConfigAny(['header.header.title_color', 'header.title_color'], '');
+$headerTextColorConfig = $getConfigAny(['header.header.text_color', 'header.text_color'], '');
+
+$tocTitle = $getConfigAny(['toc.toc.title', 'toc.title'], 'Contents');
+$tocItemsRaw = trim((string) $getConfigAny(['toc.toc.items', 'toc.items'], ''));
+$tocBgColorConfig = $getConfigAny(['toc.toc.bg_color', 'toc.bg_color'], '');
+$tocBorderColorConfig = $getConfigAny(['toc.toc.border_color', 'toc.border_color'], '');
+
+$contentBodyConfig = (string) $getConfigAny(['content.content.body', 'content.body'], '');
+$contentEmptyText = trim((string) $getConfigAny(['content.content.empty_text', 'content.empty_text'], 'Legal content will appear here.'));
+$contentBgColorConfig = $getConfigAny(['content.content.bg_color', 'content.bg_color'], '');
+$contentTextColorConfig = $getConfigAny(['content.content.text_color', 'content.text_color'], '');
+$contentHeadingColorConfig = $getConfigAny(['content.content.heading_color', 'content.heading_color'], '');
+$contentLinkColorConfig = $getConfigAny(['content.content.link_color', 'content.link_color'], '');
+
+$page = $this->getData('page');
+$pageTitle = $headerTitle ?: ($page ? ($page->getData('title') ?? '') : '');
+$pageContent = $contentBodyConfig !== '' ? $contentBodyConfig : ($page ? ($page->getData('content') ?? '') : '');
+$lastUpdated = $page ? ($page->getData('updated_at') ?? $page->getData('created_at') ?? '') : '';
+$pageType = $page ? ($page->getData('type') ?? '') : '';
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroBg = $headerBgColorConfig ?: ($colors['hero_bg'] ?? '#0a2a3c');
+$heroGradientEnd = $headerGradientEndConfig ?: ($colors['hero_bg_gradient_end'] ?? '#17233f');
+$sectionBg = $contentBgColorConfig ?: ($colors['section_bg_1'] ?? '#0d2133');
+$textPrimary = $colors['text_primary'] ?? '#f4f7ff';
+$textSecondary = $contentTextColorConfig ?: ($colors['text_secondary'] ?? '#d4deef');
+$textMuted = $headerTextColorConfig ?: ($colors['text_muted'] ?? '#90a6c2');
+$accentPrimary = $headerTitleColorConfig ?: ($colors['heading_color_alt'] ?? $colors['accent_primary_vibrant'] ?? '#ffd067');
+$accentSecondary = $colors['accent_secondary'] ?? '#00d8ae';
+$accentAlt = $colors['accent_primary'] ?? '#ff5a5d';
+$cardBg = $tocBgColorConfig ?: ($colors['card_bg'] ?? 'rgba(255, 255, 255, 0.9)');
+$borderLight = $tocBorderColorConfig ?: ($colors['border_light'] ?? 'rgba(157, 186, 231, 0.24)');
+$contentHeadingColor = $contentHeadingColorConfig ?: $accentPrimary;
+$contentLinkColor = $contentLinkColorConfig ?: $accentSecondary;
+
+$typeIcons = [
+    'privacy_policy' => '🔒',
+    'terms_of_service' => '📜',
+    'refund_policy' => '💰',
+    'shipping_policy' => '🚚',
+    'cookie_policy' => '🍪',
+];
+$currentIcon = $headerIcon ?: ($typeIcons[$pageType] ?? '📄');
+
+$maxWidth = match ($contentWidth) {
+    'wide' => '1200px',
+    'medium' => '1000px',
+    default => '820px',
+};
+
+$tocItems = [];
+if ($showToc && $tocItemsRaw !== '') {
+    if (strpos($tocItemsRaw, '\\n') !== false && strpos($tocItemsRaw, "\n") === false) {
+        $tocItemsRaw = str_replace('\\n', "\n", $tocItemsRaw);
+    }
+    foreach (preg_split('/\r?\n/', $tocItemsRaw) as $line) {
+        $title = trim((string) $line);
+        if ($title === '') {
+            continue;
+        }
+        $tocItems[] = [
+            'id' => 'section-' . (count($tocItems) + 1),
+            'title' => $title,
+        ];
+    }
+} elseif ($showToc && $pageContent !== '') {
+    preg_match_all('/<h2[^>]*>(.*?)<\/h2>/i', $pageContent, $matches);
+    if (!empty($matches[1])) {
+        foreach ($matches[1] as $index => $heading) {
+            $tocItems[] = [
+                'id' => 'section-' . ($index + 1),
+                'title' => trim(strip_tags((string)$heading)),
+            ];
+        }
+
+        $headingCounter = 0;
+        $pageContent = preg_replace_callback('/<h2([^>]*)>(.*?)<\/h2>/i', static function ($match) use (&$headingCounter) {
+            $headingCounter++;
+            return '<h2' . $match[1] . ' id="section-' . $headingCounter . '">' . $match[2] . '</h2>';
+        }, $pageContent);
+    }
+}
+
+$instanceId = $component_instance_id ?? 'legal-content-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>" class="rv-section rv-legal-content">
+    <div class="rv-inner">
+        <div class="rv-shell">
+            <header class="rv-legal-head">
+                <div class="rv-title-wrap">
+                    <p class="rv-kicker"><?= htmlspecialchars((string)$headerKicker) ?></p>
+                    <h1>
+                        <?php if ($showIcon): ?>
+                            <span class="rv-icon"><?= htmlspecialchars((string)$currentIcon) ?></span>
+                        <?php endif; ?>
+                        <?= htmlspecialchars((string)$pageTitle) ?>
+                    </h1>
+                </div>
+                <?php if ($showLastUpdated && $lastUpdated): ?>
+                    <p class="rv-updated">
+                        <?= htmlspecialchars((string)$updatedLabel) ?>:
+                        <time datetime="<?= date('Y-m-d', strtotime((string)$lastUpdated)) ?>"><?= date('F j, Y', strtotime((string)$lastUpdated)) ?></time>
+                    </p>
+                <?php endif; ?>
+                <?php if (!empty($tocItems)): ?>
+                    <p class="rv-head-note"><?= count($tocItems) ?> <?= __('Sections') ?></p>
+                <?php endif; ?>
+            </header>
+
+            <div class="rv-legal-grid<?= empty($tocItems) ? ' no-toc' : '' ?>">
+                <?php if (!empty($tocItems)): ?>
+                    <aside class="rv-toc" aria-label="<?= htmlspecialchars((string)$tocTitle) ?>">
+                        <div class="rv-toc-inner">
+                            <h2><?= htmlspecialchars((string)$tocTitle) ?></h2>
+                            <ol>
+                                <?php foreach ($tocItems as $item): ?>
+                                    <li>
+                                        <a href="#<?= htmlspecialchars((string)$item['id']) ?>">
+                                            <?= htmlspecialchars((string)$item['title']) ?>
+                                        </a>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ol>
+                        </div>
+                    </aside>
+                <?php endif; ?>
+
+                <article class="rv-article">
+                    <div class="rv-article-body">
+                        <?php if ($pageContent !== ''): ?>
+                            <?= $pageContent ?>
+                        <?php else: ?>
+                            <p><?= htmlspecialchars((string)$contentEmptyText) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $instanceId ?> {
+    padding: 42px 0 64px;
+    background:
+        radial-gradient(740px 260px at 4% 0%, rgba(169, 255, 94, 0.12), transparent 72%),
+        radial-gradient(760px 290px at 96% 100%, rgba(89, 215, 255, 0.12), transparent 74%),
+        repeating-linear-gradient(110deg, rgba(255, 255, 255, 0.026) 0 1px, transparent 1px 24px),
+        <?= htmlspecialchars((string)$sectionBg) ?>;
+}
+
+#<?= $instanceId ?> .rv-inner {
+    max-width: <?= htmlspecialchars((string)$maxWidth) ?>;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+#<?= $instanceId ?> .rv-shell {
+    border-radius: 18px;
+    background: rgba(255, 244, 250, 0.05);
+    overflow: hidden;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.2);
+}
+
+#<?= $instanceId ?> .rv-legal-head {
+    padding: <?= (int)$headerPadding ?>px 18px 16px;
+    background:
+        radial-gradient(460px 170px at 6% 10%, rgba(169, 255, 94, 0.12), transparent 74%),
+        linear-gradient(145deg, <?= htmlspecialchars((string)$heroBg) ?> 0%, <?= htmlspecialchars((string)$heroGradientEnd) ?> 100%);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+#<?= $instanceId ?> .rv-kicker {
+    margin: 0 0 0.6rem;
+    width: fit-content;
+    border-radius: 999px;
+    padding: 0.24rem 0.62rem;
+    border: 1px solid rgba(169, 255, 94, 0.36);
+    background: rgba(169, 255, 94, 0.14);
+    color: #d8ffb8;
+    font-size: 0.7rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .rv-title-wrap h1 {
+    margin: 0;
+    color: <?= htmlspecialchars((string)$contentHeadingColor) ?>;
+    font-size: clamp(1.6rem, 4vw, 2.3rem);
+    line-height: 1.1;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+#<?= $instanceId ?> .rv-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: rgba(255, 244, 250, 0.2);
+    font-size: 1rem;
+}
+
+#<?= $instanceId ?> .rv-updated {
+    margin: 0;
+    align-self: center;
+    color: <?= htmlspecialchars((string)$textMuted) ?>;
+    font-size: 0.82rem;
+}
+
+#<?= $instanceId ?> .rv-updated time {
+    color: <?= htmlspecialchars((string)$textSecondary) ?>;
+}
+
+#<?= $instanceId ?> .rv-head-note {
+    margin: 0;
+    border-radius: 999px;
+    background: rgba(255, 244, 250, 0.14);
+    color: <?= htmlspecialchars((string)$textSecondary) ?>;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.26rem 0.62rem;
+}
+
+#<?= $instanceId ?> .rv-legal-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+    gap: 10px;
+    padding: 10px;
+}
+
+#<?= $instanceId ?> .rv-legal-grid.no-toc {
+    grid-template-columns: 1fr;
+    padding: 10px 10px 12px;
+}
+
+#<?= $instanceId ?> .rv-toc {
+    order: 2;
+    background: linear-gradient(165deg, rgba(255, 244, 250, 0.09), rgba(255, 244, 250, 0.03));
+    border-radius: 14px;
+}
+
+#<?= $instanceId ?> .rv-toc-inner {
+    position: sticky;
+    top: 92px;
+    padding: 14px;
+}
+
+#<?= $instanceId ?> .rv-toc h2 {
+    margin: 0;
+    color: <?= htmlspecialchars((string)$accentAlt) ?>;
+    font-size: 0.88rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $instanceId ?> .rv-toc ol {
+    margin: 0.8rem 0 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: legal-toc;
+    display: grid;
+    gap: 0.35rem;
+}
+
+#<?= $instanceId ?> .rv-toc li {
+    counter-increment: legal-toc;
+}
+
+#<?= $instanceId ?> .rv-toc a {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+    padding: 0.35rem 0.4rem;
+    border-radius: 8px;
+    color: <?= htmlspecialchars((string)$textSecondary) ?>;
+    text-decoration: none;
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+#<?= $instanceId ?> .rv-toc a::before {
+    content: counter(legal-toc, decimal-leading-zero);
+    color: <?= htmlspecialchars((string)$accentSecondary) ?>;
+    font-size: 0.7rem;
+    font-weight: 700;
+    margin-top: 0.08rem;
+}
+
+#<?= $instanceId ?> .rv-toc a:hover {
+    background: rgba(255, 244, 250, 0.12);
+    color: <?= htmlspecialchars((string)$textPrimary) ?>;
+}
+
+#<?= $instanceId ?> .rv-article {
+    order: 1;
+    padding: <?= (int)$contentPadding ?>px 18px;
+    border-radius: 14px;
+    background:
+        linear-gradient(170deg, rgba(255, 244, 250, 0.09), rgba(255, 244, 250, 0.03)),
+        rgba(17, 12, 25, 0.56);
+}
+
+#<?= $instanceId ?> .rv-article-body {
+    color: <?= htmlspecialchars((string)$textSecondary) ?>;
+    line-height: 1.85;
+    font-size: 1rem;
+}
+
+#<?= $instanceId ?> .rv-article-body h2 {
+    margin: 1.9rem 0 0.8rem;
+    color: <?= htmlspecialchars((string)$contentHeadingColor) ?>;
+    font-size: clamp(1.2rem, 3vw, 1.5rem);
+    border-bottom: 1px dashed rgba(255, 206, 236, 0.22);
+    padding-bottom: 0.45rem;
+    scroll-margin-top: 100px;
+}
+
+#<?= $instanceId ?> .rv-article-body h2:first-child {
+    margin-top: 0;
+}
+
+#<?= $instanceId ?> .rv-article-body h3 {
+    margin: 1.4rem 0 0.55rem;
+    color: <?= htmlspecialchars((string)$textPrimary) ?>;
+    font-size: 1.06rem;
+}
+
+#<?= $instanceId ?> .rv-article-body p,
+#<?= $instanceId ?> .rv-article-body ul,
+#<?= $instanceId ?> .rv-article-body ol,
+#<?= $instanceId ?> .rv-article-body blockquote,
+#<?= $instanceId ?> .rv-article-body table {
+    margin-bottom: 0.95rem;
+}
+
+#<?= $instanceId ?> .rv-article-body a {
+    color: <?= htmlspecialchars((string)$contentLinkColor) ?>;
+    text-decoration: underline;
+}
+
+#<?= $instanceId ?> .rv-article-body strong {
+    color: <?= htmlspecialchars((string)$textPrimary) ?>;
+}
+
+#<?= $instanceId ?> .rv-article-body ul,
+#<?= $instanceId ?> .rv-article-body ol {
+    padding-left: 1.2rem;
+}
+
+#<?= $instanceId ?> .rv-article-body li {
+    margin-bottom: 0.45rem;
+}
+
+#<?= $instanceId ?> .rv-article-body blockquote {
+    margin-left: 0;
+    margin-right: 0;
+    padding: 0.72rem 0.85rem;
+    border-left: 3px solid <?= htmlspecialchars((string)$accentSecondary) ?>;
+    background: rgba(89, 215, 255, 0.1);
+    border-radius: 0 10px 10px 0;
+}
+
+#<?= $instanceId ?> .rv-article-body table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#<?= $instanceId ?> .rv-article-body th,
+#<?= $instanceId ?> .rv-article-body td {
+    border: 1px solid <?= htmlspecialchars((string)$borderLight) ?>;
+    padding: 0.58rem 0.64rem;
+    text-align: left;
+}
+
+#<?= $instanceId ?> .rv-article-body th {
+    color: <?= htmlspecialchars((string)$textPrimary) ?>;
+    background: rgba(255, 244, 250, 0.1);
+}
+
+@media (max-width: 980px) {
+    #<?= $instanceId ?> .rv-legal-grid {
+        grid-template-columns: 1fr;
+        padding: 10px;
+    }
+
+    #<?= $instanceId ?> .rv-toc {
+        border-bottom: 1px solid rgba(255, 206, 236, 0.12);
+    }
+
+    #<?= $instanceId ?> .rv-toc-inner {
+        position: static;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $instanceId ?> {
+        padding: 30px 0 44px;
+    }
+
+    #<?= $instanceId ?> .rv-inner {
+        padding: 0 10px;
+    }
+
+    #<?= $instanceId ?> .rv-shell {
+        border-radius: 14px;
+    }
+
+    #<?= $instanceId ?> .rv-legal-head {
+        padding: 22px 12px 12px;
+    }
+
+    #<?= $instanceId ?> .rv-article {
+        padding: 18px 12px;
+    }
+}
+</style>

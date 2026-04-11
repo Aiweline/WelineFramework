@@ -39,10 +39,24 @@ class RequestLifecycleTrace
      */
     public static function isEnabled(): bool
     {
+        $enabled = false;
         if (\defined('DEV') && DEV) {
-            return true;
+            $enabled = true;
+        } elseif (\defined('DEBUG') && DEBUG) {
+            $enabled = true;
         }
-        return \defined('DEBUG') && DEBUG;
+
+        if (!$enabled) {
+            return false;
+        }
+
+        // Master / Dispatcher / Session / Memory 等常驻进程不会进入请求级 init/cleanup，
+        // 若在这些进程继续启用 trace，spans 会永久累积。
+        if (\class_exists(RequestContext::class, false) && !RequestContext::isInitialized()) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

@@ -1,0 +1,1469 @@
+<?php
+/**
+ * Callbreak Sunlit Durbar Header Navigation Component
+ *
+ * @component_start
+ * code: header-nav
+ * name: Durbar Navigation Header
+ * name_en: Durbar Navigation Header
+ * description: Bright split-lane navigation with a centered crest and full-width mobile sun sheet.
+ * category: header
+ * region: header
+ * thumbnail: asset/img/durbar-logo-icon.svg
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文本:text:Callbreak Sunlit Durbar
+ * logo.subline => Logo副标题:text:Sunlit four-player callbreak arena
+ * logo.url => Logo地址:textarea:|默认使用本地durbar-logo-icon.svg
+ * logo.width => Logo宽度:responsive:70/70|px
+ * logo.height => Logo高度:responsive:|px[可选，留空跟随宽度]
+ *
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 导航背景色:color:rgba(255,248,244,0.8)
+ * navigation.bg_color_scrolled => 滚动后背景色:color:rgba(255,250,247,0.96)
+ * navigation.text_color => 导航文字颜色:color:#3a2332
+ * navigation.link_color => 链接颜色:color:#6a4b61
+ * navigation.link_hover_color => 链接悬停颜色:color:#ff4f87
+ * navigation.link_font_size => 链接字号:number:14|px
+ * navigation.link_font_weight => 链接字重:number:600
+ * navigation.link_gap => 链接间距:number:28|px
+ * navigation.padding_x => 水平内边距:number:20|px
+ * navigation.padding_y => 垂直内边距:number:12|px
+ * navigation.min_height => 最小高度:number:76|px
+ * navigation.box_shadow => 阴影:text:0 24px 48px rgba(171,92,136,0.18)
+ * navigation.backdrop_blur => 背景模糊:number:14|px
+ * navigation.items => 导航项:textarea:Home=>/\r\nAbout=>/about\r\nBlog=>/blog\r\nFAQs=>/faqs|每行一个，格式：名称=>链接
+ * navigation.use_custom_links => 使用自定义导航链接:select:yes|yes,no
+ * navigation.mobile_menu_label => 移动端菜单标题:text:Sun Tables
+ * group:navigation_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * navigation.label_home_page => 首页菜单名:text:
+ * navigation.label_about_page => 关于我们菜单名:text:
+ * navigation.label_blog_list => 博客菜单名:text:
+ * navigation.label_contact_page => 联系我们菜单名:text:
+ * navigation.label_terms_of_service => 条款菜单名:text:
+ * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ *
+ * group:download_button => 下载按钮
+ * download_button.display => 显示下载按钮:select:yes|yes,no
+ * download_button.text => 按钮文本:text:Get APK
+ * download_button.url => 按钮链接:text:#download
+ * download_button.bg_color => 按钮背景色:color:#ff4f87
+ * download_button.bg_hover_color => 按钮悬停背景色:color:#df336c
+ * download_button.text_color => 按钮文字颜色:color:#301526
+ * download_button.font_size => 按钮字号:number:13|px
+ * download_button.font_weight => 按钮字重:number:700
+ * download_button.border_radius => 按钮圆角:number:999|px
+ * download_button.padding_x => 按钮水平内边距:number:20|px
+ * download_button.padding_y => 按钮垂直内边距:number:11|px
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$parseResponsive = function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string)$value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string)($parts[0] ?? '')),
+        'desktop' => trim((string)($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = function ($parsed) {
+    $mobile = (float)$parsed['mobile'];
+    $desktop = (float)$parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$templateCode = $page ? $page->getData('style') : 'callbreak-sunlit-durbar';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'callbreak-sunlit-durbar';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$brandName = trim((string)$getConfigAny(['logo.text', 'header.logo.text', 'app_info.app_name'], ''));
+if ($brandName === '' && $page) {
+    $brandName = (string)($page->getData('title') ?: '');
+}
+$brandName = $sanitizeTitle($brandName);
+if ($brandName === '') {
+    $brandName = 'Callbreak Sunlit Durbar';
+}
+
+$brandSubline = trim((string)$getConfigAny(['logo.subline', 'header.logo.subline'], 'Sunlit four-player callbreak arena'));
+if ($brandSubline === '') {
+    $brandSubline = 'Sunlit four-player callbreak arena';
+}
+
+$logoDisplay = $normalizeToggle($getConfigAny(['logo.display', 'header.logo.display'], 'yes')) !== 'no';
+$defaultLogoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-sunlit-durbar/asset/img/durbar-logo-icon.svg');
+$logoUrl = $getConfigAny(['logo.url', 'header.logo.url'], '') ?: ($page && $page->getData('logo') ? $page->getData('logo') : $defaultLogoUrl);
+$logoWidth = $genResponsiveCSS($parseResponsive($getConfigAny(['logo.width', 'header.logo.width'], '70/70') . 'px'));
+$logoHeightConfig = $getConfigAny(['logo.height', 'header.logo.height'], '');
+$logoHeight = $logoHeightConfig === '' ? $logoWidth : $genResponsiveCSS($parseResponsive($logoHeightConfig . 'px'));
+
+$navDisplay = $normalizeToggle($getConfigAny(['navigation.display', 'header.navigation.display'], 'yes')) !== 'no';
+$navBgColor = $getConfigAny(['navigation.bg_color', 'header.navigation.bg_color'], $colors['nav_bg'] ?? 'rgba(255,248,244,0.8)');
+$navBgColorScrolled = $getConfigAny(['navigation.bg_color_scrolled', 'header.navigation.bg_color_scrolled'], $colors['nav_bg_scrolled'] ?? 'rgba(255,250,247,0.96)');
+$navTextColor = $getConfigAny(['navigation.text_color', 'header.navigation.text_color'], $colors['nav_text'] ?? '#3a2332');
+$navLinkColor = $getConfigAny(['navigation.link_color', 'header.navigation.link_color'], $colors['nav_link'] ?? '#6a4b61');
+$navLinkHoverColor = $getConfigAny(['navigation.link_hover_color', 'header.navigation.link_hover_color'], $colors['nav_link_hover'] ?? '#ff4f87');
+$navLinkFontSize = (int)$getConfig('navigation.link_font_size', '14');
+$navLinkFontWeight = (int)$getConfig('navigation.link_font_weight', '600');
+$navLinkGap = (int)$getConfig('navigation.link_gap', '28');
+$navPaddingX = (int)$getConfig('navigation.padding_x', '20');
+$navPaddingY = (int)$getConfig('navigation.padding_y', '12');
+$navMinHeight = (int)$getConfig('navigation.min_height', '76');
+$navRailHeight = max(72, min(88, $navMinHeight));
+$navBoxShadow = $getConfig('navigation.box_shadow', '0 24px 48px rgba(171,92,136,0.18)');
+$navBackdropBlur = (int)$getConfig('navigation.backdrop_blur', '14');
+$mobileMenuLabel = trim((string)$getConfigAny(['navigation.mobile_menu_label', 'header.navigation.mobile_menu_label'], 'Sun Tables'));
+if ($mobileMenuLabel === '') {
+    $mobileMenuLabel = 'Sun Tables';
+}
+
+$useCustomLinksRaw = trim((string)$getConfigAny(['navigation.use_custom_links', 'header.navigation.use_custom_links'], ''));
+$legacyUseSubpagesRaw = trim((string)$getConfig('navigation.use_subpages', ''));
+if ($useCustomLinksRaw !== '') {
+    $useCustomLinks = $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes';
+} elseif ($legacyUseSubpagesRaw !== '') {
+    $useCustomLinks = $normalizeToggle($legacyUseSubpagesRaw, 'no') !== 'yes';
+} else {
+    $useCustomLinks = true;
+}
+
+$downloadBtnDisplay = $normalizeToggle($getConfigAny(['download_button.display', 'header.download_button.display'], 'yes')) !== 'no';
+$downloadBtnText = trim((string)$getConfigAny(['download_button.text', 'header.download_button.text'], 'Get APK'));
+if ($downloadBtnText === '') {
+    $downloadBtnText = 'Get APK';
+}
+$downloadBtnUrl = $getConfigAny(['download_button.url', 'header.download_button.url'], '#download');
+$downloadBtnHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$downloadBtnUrl);
+$downloadBtnRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadBtnHref, 'url');
+$downloadBtnBgColor = $getConfigAny(['download_button.bg_color', 'header.download_button.bg_color'], $colors['accent_primary'] ?? '#ff4f87');
+$downloadBtnBgHoverColor = $getConfigAny(['download_button.bg_hover_color', 'header.download_button.bg_hover_color'], $colors['accent_primary_dark'] ?? '#df336c');
+$downloadBtnTextColor = $getConfigAny(['download_button.text_color', 'header.download_button.text_color'], $colors['button_primary_text'] ?? '#301526');
+$downloadBtnFontSize = (int)$getConfig('download_button.font_size', '13');
+$downloadBtnFontWeight = (int)$getConfig('download_button.font_weight', '700');
+$downloadBtnRadius = (int)$getConfigAny(['download_button.border_radius', 'header.download_button.border_radius'], '999');
+$downloadBtnPaddingX = (int)$getConfig('download_button.padding_x', '20');
+$downloadBtnPaddingY = (int)$getConfig('download_button.padding_y', '11');
+
+$navItems = [];
+if (!$useCustomLinks && $page) {
+    $navigationPages = [];
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $navigationPages = $page->getHeaderNavigationPages(10);
+    } elseif (method_exists($page, 'getNavigationPages')) {
+        $navigationPages = $page->getNavigationPages([], 10);
+    }
+    foreach ($navigationPages as $navPage) {
+        $type = trim((string)($navPage['type'] ?? ''));
+        $label = $type !== '' ? trim((string)$getConfig('navigation.label_' . $type, '')) : '';
+        if ($label === '' && $type !== '') {
+            $label = trim((string)$getConfig('header.navigation.label_' . $type, ''));
+        }
+        $navItems[] = [
+            'text' => $label !== '' ? $label : ($navPage['title'] ?? ''),
+            'href' => $navPage['url'] ?? '#',
+        ];
+    }
+}
+
+if (empty($navItems)) {
+    $navItemsConfig = $getConfigAny(['navigation.items', 'header.navigation.items'], "Home=>/\nAbout=>/about\nBlog=>/blog\nFAQs=>/faqs");
+    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+    }
+    foreach (preg_split('/\r?\n/', $navItemsConfig) as $line) {
+        $line = trim((string)$line);
+        if ($line === '' || strpos($line, '=>') === false) {
+            continue;
+        }
+        $parts = explode('=>', $line, 2);
+        $text = trim((string)($parts[0] ?? ''));
+        $href = trim((string)($parts[1] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        if ($href === '') {
+            $href = '/' . strtolower(trim((string)preg_replace('/[^a-zA-Z0-9]+/', '-', $text), '-'));
+        }
+        $navItems[] = ['text' => $text, 'href' => $href];
+    }
+}
+
+if (empty($navItems)) {
+    $navItems = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQs', 'href' => '/faqs'],
+    ];
+}
+
+$splitIndex = (int)ceil(count($navItems) / 2);
+$leftItems = array_slice($navItems, 0, $splitIndex);
+$rightItems = array_slice($navItems, $splitIndex);
+$componentId = 'csd-nav-' . uniqid();
+?>
+<script>
+window.tailwind = window.tailwind || {};
+window.tailwind.config = window.tailwind.config || {};
+window.tailwind.config.theme = window.tailwind.config.theme || {};
+window.tailwind.config.theme.extend = window.tailwind.config.theme.extend || {};
+window.tailwind.config.theme.extend.colors = Object.assign({}, window.tailwind.config.theme.extend.colors || {}, {
+    'csd-cream': '<?= htmlspecialchars($colors['body_bg'] ?? '#fffaf0') ?>',
+    'csd-peach': '<?= htmlspecialchars($colors['section_bg_3'] ?? '#ffe0c2') ?>',
+    'csd-mint': '<?= htmlspecialchars($colors['section_bg_2'] ?? '#ddfff5') ?>',
+    'csd-sun': '<?= htmlspecialchars($colors['accent_secondary'] ?? '#ffd24d') ?>',
+    'csd-coral': '<?= htmlspecialchars($colors['accent_primary'] ?? '#ff7a45') ?>',
+    'csd-ink': '<?= htmlspecialchars($colors['text_primary'] ?? '#2f1a12') ?>'
+});
+</script>
+<script src="https://cdn.tailwindcss.com" data-csd-tailwind="1"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Syne:wght@500;700;800&display=swap');
+
+#<?= $componentId ?> {
+    --csd-nav-bg: <?= htmlspecialchars($navBgColor) ?>;
+    --csd-nav-bg-scrolled: <?= htmlspecialchars($navBgColorScrolled) ?>;
+    --csd-nav-text: <?= htmlspecialchars($navTextColor) ?>;
+    --csd-link: <?= htmlspecialchars($navLinkColor) ?>;
+    --csd-link-hover: <?= htmlspecialchars($navLinkHoverColor) ?>;
+    --csd-accent: <?= htmlspecialchars($downloadBtnBgColor) ?>;
+    --csd-accent-hover: <?= htmlspecialchars($downloadBtnBgHoverColor) ?>;
+    --csd-ticket-text: <?= htmlspecialchars($downloadBtnTextColor) ?>;
+    --csd-shadow: <?= htmlspecialchars($navBoxShadow) ?>;
+    --csd-shell-width: min(1280px, calc(100% - 1rem));
+    position: fixed;
+    inset: 0 0 auto 0;
+    z-index: 1200;
+    pointer-events: none;
+    color: var(--csd-nav-text);
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+#<?= $componentId ?> * {
+    box-sizing: border-box;
+}
+
+#<?= $componentId ?> a,
+#<?= $componentId ?> button,
+#<?= $componentId ?> .csd-mobile-sheet {
+    pointer-events: auto;
+}
+
+#<?= $componentId ?> .csd-nav-band {
+    padding: 1.15rem 0.5rem 0;
+}
+
+#<?= $componentId ?> .csd-band-shell {
+    width: var(--csd-shell-width);
+    margin: 0 auto;
+    position: relative;
+}
+
+#<?= $componentId ?> .csd-nav-shell {
+    position: relative;
+    min-height: <?= $navRailHeight ?>px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(180px, 18vw, 260px) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.7rem;
+    padding: 10px <?= $navPaddingX ?>px 6px;
+    border-radius: 0;
+    overflow: visible;
+    background: var(--csd-nav-bg);
+    border: 1px solid rgba(255, 255, 255, 0.64);
+    backdrop-filter: blur(<?= $navBackdropBlur ?>px);
+    -webkit-backdrop-filter: blur(<?= $navBackdropBlur ?>px);
+    box-shadow: 0 14px 26px rgba(156, 94, 130, 0.1);
+    clip-path: polygon(
+        0 18px,
+        18px 0,
+        calc(50% - 186px) 0,
+        calc(50% - 112px) 16px,
+        calc(50% + 112px) 16px,
+        calc(50% + 186px) 0,
+        calc(100% - 18px) 0,
+        100% 18px,
+        100% calc(100% - 18px),
+        calc(100% - 18px) 100%,
+        18px 100%,
+        0 calc(100% - 18px)
+    );
+    transition: background 0.28s ease, box-shadow 0.28s ease, transform 0.28s ease, border-color 0.28s ease;
+}
+
+#<?= $componentId ?>.is-scrolled .csd-nav-shell,
+#<?= $componentId ?>.is-open .csd-nav-shell {
+    background: var(--csd-nav-bg-scrolled);
+    box-shadow: var(--csd-shadow);
+}
+
+#<?= $componentId ?> .csd-nav-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(280px 88px at 50% -10%, rgba(255, 222, 109, 0.7), transparent 76%),
+        radial-gradient(190px 120px at 8% 18%, rgba(255, 79, 135, 0.16), transparent 72%),
+        radial-gradient(180px 118px at 92% 14%, rgba(17, 199, 184, 0.18), transparent 72%),
+        linear-gradient(180deg, rgba(255,255,255,0.58), rgba(255,255,255,0));
+}
+
+#<?= $componentId ?> .csd-nav-shell::after {
+    content: '';
+    position: absolute;
+    inset: 8px;
+    clip-path: inherit;
+    border: 1px dashed rgba(255, 255, 255, 0.42);
+    opacity: 0.72;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .csd-shell-sun {
+    position: absolute;
+    left: 50%;
+    top: -36px;
+    width: min(420px, 48vw);
+    height: 116px;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 0;
+}
+
+#<?= $componentId ?> .csd-shell-sun::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(circle at 50% 100%, rgba(255, 224, 102, 0.88), rgba(255, 224, 102, 0) 62%),
+        repeating-conic-gradient(from -90deg at 50% 100%, rgba(255, 224, 102, 0.4) 0deg 4deg, transparent 4deg 10deg);
+    mask-image: radial-gradient(circle at 50% 100%, black 36%, transparent 74%);
+    -webkit-mask-image: radial-gradient(circle at 50% 100%, black 36%, transparent 74%);
+    opacity: 0.88;
+}
+
+#<?= $componentId ?> .csd-shell-sun::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -5px;
+    transform: translateX(-50%);
+    width: 148px;
+    height: 14px;
+    border-radius: 999px;
+    background:
+        radial-gradient(circle, rgba(255, 120, 92, 0.72) 0 2px, transparent 2.6px) center/26px 14px repeat-x;
+    opacity: 0.78;
+}
+
+#<?= $componentId ?> .csd-shell-pips {
+    position: absolute;
+    z-index: 0;
+    z-index: 0;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.22rem;
+    pointer-events: none;
+    opacity: 0.42;
+}
+
+#<?= $componentId ?> .csd-shell-pips-left {
+    left: 10px;
+    top: 8px;
+}
+
+#<?= $componentId ?> .csd-shell-pips-right {
+    right: 10px;
+    bottom: 8px;
+}
+
+#<?= $componentId ?> .csd-shell-pips i {
+    font-style: normal;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: rgba(106, 75, 97, 0.42);
+    font-size: 0.86rem;
+    line-height: 1;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+#<?= $componentId ?> .csd-shell-pips i:nth-child(1) {
+    transform: translateX(-2px) scale(1.28);
+}
+
+#<?= $componentId ?> .csd-shell-pips i:nth-child(2) {
+    transform: translateX(10px) scale(0.92);
+}
+
+#<?= $componentId ?> .csd-shell-pips i:nth-child(3) {
+    transform: translateX(-8px) scale(0.78);
+}
+
+#<?= $componentId ?> .csd-lane {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: <?= $navLinkGap ?>px;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .csd-lane-left {
+    justify-content: flex-start;
+}
+
+#<?= $componentId ?> .csd-lane-right {
+    justify-content: flex-end;
+}
+
+#<?= $componentId ?> .csd-lane[aria-hidden="true"] {
+    min-height: 1px;
+}
+
+#<?= $componentId ?> .csd-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    color: var(--csd-link);
+    text-decoration: none;
+    font-size: <?= $navLinkFontSize ?>px;
+    font-weight: <?= $navLinkFontWeight ?>;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    transition: color 0.22s ease, transform 0.22s ease;
+}
+
+#<?= $componentId ?> .csd-link::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -7px;
+    width: calc(100% + 0.4rem);
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--csd-link-hover), <?= htmlspecialchars($colors['accent_primary_vibrant'] ?? '#11c7b8') ?>);
+    transform: translateX(-50%) scaleX(0.45);
+    opacity: 0;
+    transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+#<?= $componentId ?> .csd-link:hover {
+    color: var(--csd-link-hover);
+    transform: translateY(-1px);
+}
+
+#<?= $componentId ?> .csd-link:hover::before,
+#<?= $componentId ?> .csd-mobile-link:hover::before {
+    opacity: 1;
+    transform: translateX(-50%) scaleX(1);
+}
+
+#<?= $componentId ?> .csd-crest {
+    position: relative;
+    align-self: start;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    min-width: 0;
+    text-decoration: none;
+    color: var(--csd-nav-text);
+    transform: translate(15px, 3px);
+}
+
+#<?= $componentId ?> .csd-crest-media {
+    position: relative;
+    flex: 0 0 auto;
+    width: calc(<?= $logoWidth ?> + 0.6rem);
+    height: calc(<?= $logoHeight ?> + 0.6rem);
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255, 226, 124, 0.98), rgba(255, 79, 135, 0.74) 58%, rgba(255,255,255,0) 62%),
+        radial-gradient(circle, rgba(255,255,255,0.72), rgba(255,255,255,0));
+    box-shadow: inset 0 0 0 8px rgba(255,255,255,0.48);
+}
+
+#<?= $componentId ?> .csd-crest-media img {
+    width: <?= $logoWidth ?>;
+    height: <?= $logoHeight ?>;
+    object-fit: contain;
+    filter: drop-shadow(0 10px 12px rgba(129, 58, 33, 0.14));
+}
+
+#<?= $componentId ?> .csd-crest-copy {
+    min-width: 0;
+    display: grid;
+    gap: 0.12rem;
+}
+
+#<?= $componentId ?> .csd-crest-copy strong {
+    display: block;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: clamp(1rem, 1.8vw, 1.16rem);
+    line-height: 0.96;
+    letter-spacing: -0.04em;
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .csd-crest-copy span {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(106, 75, 97, 0.82);
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .csd-actions {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.7rem;
+    justify-self: end;
+}
+
+#<?= $componentId ?> .csd-ticket,
+#<?= $componentId ?> .csd-mobile-ticket {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    min-height: 48px;
+    padding: calc(<?= $downloadBtnPaddingY ?>px - 1px) <?= $downloadBtnPaddingX ?>px;
+    border: 0;
+    border-radius: 18px;
+    text-decoration: none;
+    background: linear-gradient(135deg, <?= htmlspecialchars($downloadBtnBgColor) ?> 0%, <?= htmlspecialchars($colors['accent_secondary'] ?? '#ffe066') ?> 58%, #fff6cb 100%);
+    color: <?= htmlspecialchars($downloadBtnTextColor) ?>;
+    font-size: <?= $downloadBtnFontSize ?>px;
+    font-weight: <?= $downloadBtnFontWeight ?>;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 16px 26px rgba(255, 79, 135, 0.22);
+    clip-path: polygon(0 14%, 88% 14%, 100% 50%, 88% 86%, 0 86%, 0 0);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease, background 0.22s ease;
+}
+
+#<?= $componentId ?> .csd-mobile-ticket {
+    min-height: 58px;
+    padding-top: calc(<?= $downloadBtnPaddingY ?>px + 4px);
+    padding-bottom: calc(<?= $downloadBtnPaddingY ?>px + 4px);
+}
+
+#<?= $componentId ?> .csd-ticket::before,
+#<?= $componentId ?> .csd-mobile-ticket::before {
+    content: '⇣';
+    font-size: 1.05rem;
+    line-height: 1;
+}
+
+#<?= $componentId ?> .csd-ticket::after,
+#<?= $componentId ?> .csd-mobile-ticket::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    border: 1px dashed rgba(51, 24, 13, 0.24);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .csd-ticket:hover,
+#<?= $componentId ?> .csd-mobile-ticket:hover {
+    background: linear-gradient(135deg, <?= htmlspecialchars($downloadBtnBgHoverColor) ?> 0%, <?= htmlspecialchars($colors['accent_secondary_hover'] ?? '#ffc93d') ?> 58%, #fff8dc 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 20px 32px rgba(255, 79, 135, 0.28);
+    filter: saturate(1.04);
+}
+
+#<?= $componentId ?> .csd-ticket-ping {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 0.3rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #ffffff;
+    color: var(--csd-accent);
+    font-size: 0.6rem;
+    font-weight: 800;
+    box-shadow: 0 10px 16px rgba(255, 79, 135, 0.16);
+    animation: csd-ticket-bounce 1.8s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .csd-toggle {
+    width: 44px;
+    height: 44px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    border: 0;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--csd-nav-text);
+    box-shadow: 0 14px 24px rgba(201, 141, 104, 0.14);
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .csd-toggle-bars {
+    position: relative;
+    width: 18px;
+    height: 14px;
+}
+
+#<?= $componentId ?> .csd-toggle-bars span {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transition: transform 0.24s ease, opacity 0.24s ease, top 0.24s ease;
+}
+
+#<?= $componentId ?> .csd-toggle-bars span:nth-child(1) {
+    top: 0;
+}
+
+#<?= $componentId ?> .csd-toggle-bars span:nth-child(2) {
+    top: 6px;
+}
+
+#<?= $componentId ?> .csd-toggle-bars span:nth-child(3) {
+    top: 12px;
+}
+
+#<?= $componentId ?>.is-open .csd-toggle-bars span:nth-child(1) {
+    top: 6px;
+    transform: rotate(45deg);
+}
+
+#<?= $componentId ?>.is-open .csd-toggle-bars span:nth-child(2) {
+    opacity: 0;
+}
+
+#<?= $componentId ?>.is-open .csd-toggle-bars span:nth-child(3) {
+    top: 6px;
+    transform: rotate(-45deg);
+}
+
+#<?= $componentId ?> .csd-mobile-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1190;
+    background: rgba(76, 45, 32, 0.2);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.24s ease;
+}
+
+#<?= $componentId ?> .csd-mobile-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 1195;
+    transform: translateX(102%);
+    opacity: 0;
+    transition: transform 0.28s ease, opacity 0.28s ease;
+}
+
+#<?= $componentId ?> .csd-mobile-sheet-inner {
+    width: 100%;
+    min-height: 100dvh;
+    padding: 0;
+    transform: translateX(18px) scale(0.985);
+    opacity: 0;
+    transition: transform 0.32s ease, opacity 0.32s ease;
+}
+
+#<?= $componentId ?> .csd-mobile-surface {
+    width: 100%;
+    min-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    overflow: hidden;
+    background:
+        radial-gradient(320px 200px at 50% -2%, rgba(255, 224, 102, 0.55), transparent 70%),
+        radial-gradient(260px 220px at 8% 22%, rgba(255, 79, 135, 0.18), transparent 72%),
+        radial-gradient(320px 240px at 100% 18%, rgba(17, 199, 184, 0.16), transparent 74%),
+        linear-gradient(180deg, rgba(255,251,247,0.99), rgba(255,233,242,0.76));
+    box-shadow: none;
+}
+
+#<?= $componentId ?> .csd-mobile-surface::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(255, 224, 102, 0.48), rgba(255, 224, 102, 0) 26%),
+        linear-gradient(90deg, rgba(255,255,255,0.28) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.22) 1px, transparent 1px);
+    background-size: 100% 100%, 28px 28px, 28px 28px;
+    opacity: 0.46;
+}
+
+#<?= $componentId ?> .csd-mobile-stage {
+    position: relative;
+    min-height: 100dvh;
+    padding: 1rem 0.85rem 1.3rem;
+}
+
+#<?= $componentId ?> .csd-mobile-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.95rem;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .csd-mobile-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .csd-mobile-brand-badge {
+    width: 52px;
+    height: 52px;
+    display: grid;
+    place-items: center;
+    border-radius: 20px;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255, 220, 130, 0.95), rgba(255, 142, 82, 0.86) 60%, rgba(255,255,255,0) 64%);
+    box-shadow: inset 0 0 0 6px rgba(255,255,255,0.48);
+}
+
+#<?= $componentId ?> .csd-mobile-brand-badge img {
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
+}
+
+#<?= $componentId ?> .csd-mobile-brand-copy {
+    min-width: 0;
+    display: grid;
+    gap: 0.16rem;
+}
+
+#<?= $componentId ?> .csd-mobile-brand-copy p {
+    margin: 0;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: rgba(92, 64, 51, 0.72);
+}
+
+#<?= $componentId ?> .csd-mobile-brand-copy strong {
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: clamp(1.02rem, 4.4vw, 1.28rem);
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .csd-mobile-close {
+    width: 42px;
+    height: 42px;
+    border: 0;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.9);
+    color: var(--csd-nav-text);
+    box-shadow: 0 12px 22px rgba(201, 141, 104, 0.12);
+    cursor: pointer;
+    font-size: 1.2rem;
+    line-height: 1;
+}
+
+#<?= $componentId ?> .csd-mobile-caption {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    margin-bottom: 1rem;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .csd-mobile-caption span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.34rem 0.72rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.92);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .csd-mobile-caption i {
+    flex: 1;
+    height: 3px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 79, 135, 0.92), rgba(17, 199, 184, 0.72));
+}
+
+#<?= $componentId ?> .csd-mobile-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.62rem;
+    align-items: start;
+}
+
+#<?= $componentId ?> .csd-mobile-link {
+    position: relative;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 0.85rem;
+    min-height: 72px;
+    padding: 0.88rem 0.95rem 0.88rem 0.9rem;
+    border-radius: 22px;
+    text-decoration: none;
+    color: var(--csd-nav-text);
+    overflow: hidden;
+    box-shadow: 0 16px 30px rgba(171, 92, 136, 0.1);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+#<?= $componentId ?> .csd-mobile-link::before {
+    content: attr(data-mark);
+    position: relative;
+    right: auto;
+    top: auto;
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.66);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.44);
+    font-size: 0.94rem;
+    font-weight: 800;
+    line-height: 1;
+    color: rgba(96, 55, 83, 0.78);
+    transition: transform 0.24s ease, color 0.24s ease;
+}
+
+#<?= $componentId ?> .csd-mobile-link::after {
+    content: '';
+    position: absolute;
+    left: 4.2rem;
+    right: 0.95rem;
+    bottom: 0;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,79,135,0.84), rgba(17,199,184,0.72));
+    opacity: 0.22;
+}
+
+#<?= $componentId ?> .csd-mobile-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 36px rgba(171, 92, 136, 0.14);
+}
+
+#<?= $componentId ?> .csd-mobile-link:hover::before {
+    transform: scale(1.06);
+    color: rgba(92, 64, 51, 0.22);
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n+1) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255, 246, 208, 0.95));
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n+2) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(221, 255, 245, 0.95));
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n+3) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(255, 228, 239, 0.95));
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.95), rgba(223, 244, 255, 0.95));
+}
+
+#<?= $componentId ?> .csd-mobile-link small {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(92, 64, 51, 0.7);
+}
+
+#<?= $componentId ?> .csd-mobile-link strong {
+    display: block;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    max-width: none;
+    font-size: 1.02rem;
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .csd-mobile-link-text {
+    min-width: 0;
+    display: grid;
+    gap: 0.16rem;
+}
+
+#<?= $componentId ?> .csd-mobile-link em {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    font-style: normal;
+    font-size: 1rem;
+    opacity: 0.42;
+    justify-self: end;
+    padding-left: 0.35rem;
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(odd) {
+    margin-right: 0.7rem;
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(even) {
+    margin-left: 0.7rem;
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n+1) {
+    border-radius: 26px 18px 24px 18px;
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n+2) {
+    border-radius: 18px 26px 18px 24px;
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n+3) {
+    border-radius: 24px 18px 28px 18px;
+}
+
+#<?= $componentId ?> .csd-mobile-link:nth-child(4n) {
+    border-radius: 18px 24px 18px 28px;
+}
+
+#<?= $componentId ?> .csd-mobile-foot {
+    position: relative;
+    z-index: 1;
+    margin-top: 1rem;
+    display: grid;
+    gap: 0.8rem;
+}
+
+#<?= $componentId ?>.is-open .csd-mobile-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+#<?= $componentId ?>.is-open .csd-mobile-sheet {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+#<?= $componentId ?>.is-open .csd-mobile-sheet-inner {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+}
+
+body.csd-nav-lock {
+    overflow: hidden;
+}
+
+@keyframes csd-ticket-bounce {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-3px);
+    }
+}
+
+@media (max-width: 1140px) {
+    #<?= $componentId ?> .csd-nav-shell {
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        clip-path: polygon(
+            0 14px,
+            14px 0,
+            calc(100% - 14px) 0,
+            100% 14px,
+            100% calc(100% - 14px),
+            calc(100% - 14px) 100%,
+            14px 100%,
+            0 calc(100% - 14px)
+        );
+    }
+
+    #<?= $componentId ?> .csd-lane {
+        display: none;
+    }
+
+    #<?= $componentId ?> .csd-crest {
+        transform: none;
+        margin-top: 0;
+        justify-self: start;
+        border-radius: 999px;
+    }
+
+    #<?= $componentId ?> .csd-shell-sun {
+        width: 190px;
+        height: 74px;
+        top: -16px;
+        left: 90px;
+        transform: none;
+    }
+
+    #<?= $componentId ?> .csd-shell-sun::after {
+        display: none;
+    }
+
+    #<?= $componentId ?> .csd-shell-pips {
+        opacity: 0.28;
+    }
+
+    #<?= $componentId ?> .csd-shell-pips-left {
+        left: auto;
+        right: 86px;
+        top: 8px;
+    }
+
+    #<?= $componentId ?> .csd-shell-pips-right {
+        right: 18px;
+        bottom: auto;
+        top: 10px;
+    }
+
+    #<?= $componentId ?> .csd-toggle {
+        display: inline-flex;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .csd-nav-band {
+        padding-top: 0.55rem;
+    }
+
+    #<?= $componentId ?> .csd-nav-shell {
+        min-height: 68px;
+        padding: 10px 12px;
+        gap: 0.7rem;
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        clip-path: polygon(
+            0 12px,
+            12px 0,
+            calc(100% - 12px) 0,
+            100% 12px,
+            100% calc(100% - 12px),
+            calc(100% - 12px) 100%,
+            12px 100%,
+            0 calc(100% - 12px)
+        );
+    }
+
+    #<?= $componentId ?> .csd-nav-shell::after {
+        inset: 6px;
+    }
+
+    #<?= $componentId ?> .csd-shell-sun {
+        width: 150px;
+        height: 56px;
+        top: -11px;
+        left: 72px;
+    }
+
+    #<?= $componentId ?> .csd-shell-pips-left {
+        right: 72px;
+    }
+
+    #<?= $componentId ?> .csd-shell-pips-right {
+        right: 14px;
+    }
+
+    #<?= $componentId ?> .csd-crest {
+        width: auto;
+        max-width: 100%;
+        margin-top: 0;
+        gap: 0.65rem;
+        border-radius: 22px;
+    }
+
+    #<?= $componentId ?> .csd-crest-copy span {
+        letter-spacing: 0.12em;
+    }
+
+    #<?= $componentId ?> .csd-actions {
+        gap: 0.5rem;
+    }
+
+    #<?= $componentId ?> .csd-mobile-sheet-inner {
+        padding: 0;
+    }
+
+    #<?= $componentId ?> .csd-mobile-stage {
+        padding: 0.8rem 0.72rem 1.1rem;
+    }
+}
+
+@media (max-width: 560px) {
+    #<?= $componentId ?> .csd-mobile-link:nth-child(odd),
+    #<?= $componentId ?> .csd-mobile-link:nth-child(even) {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    #<?= $componentId ?> .csd-mobile-link:hover {
+        transform: translateY(-2px);
+    }
+}
+
+@media (max-width: 480px) {
+    #<?= $componentId ?> .csd-ticket {
+        display: none;
+    }
+
+    #<?= $componentId ?> .csd-nav-shell {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    #<?= $componentId ?> .csd-crest-copy span {
+        display: none;
+    }
+}
+</style>
+<header id="<?= $componentId ?>" aria-label="Site header">
+    <div class="csd-nav-band">
+        <div class="csd-band-shell">
+            <div class="csd-nav-shell">
+                <span class="csd-shell-sun" aria-hidden="true"></span>
+                <span class="csd-shell-pips csd-shell-pips-left" aria-hidden="true"><i>✦</i><i>●</i><i>◌</i></span>
+                <span class="csd-shell-pips csd-shell-pips-right" aria-hidden="true"><i>▲</i><i>✦</i><i>▬</i></span>
+                <?php if ($navDisplay && !empty($leftItems)): ?>
+                    <nav class="csd-lane csd-lane-left" aria-label="Primary navigation left">
+                        <?php foreach ($leftItems as $item): ?>
+                            <a class="csd-link" href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a>
+                        <?php endforeach; ?>
+                    </nav>
+                <?php else: ?>
+                    <div class="csd-lane csd-lane-left" aria-hidden="true"></div>
+                <?php endif; ?>
+
+                <?php if ($logoDisplay): ?>
+                    <a class="csd-crest" href="/" aria-label="<?= htmlspecialchars($brandName) ?>">
+                        <span class="csd-crest-media">
+                            <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($brandName) ?>" loading="eager" decoding="async">
+                        </span>
+                        <span class="csd-crest-copy">
+                            <strong><?= htmlspecialchars($brandName) ?></strong>
+                            <span><?= htmlspecialchars($brandSubline) ?></span>
+                        </span>
+                    </a>
+                <?php else: ?>
+                    <div class="csd-crest" aria-hidden="true">
+                        <span class="csd-crest-copy">
+                            <strong><?= htmlspecialchars($brandName) ?></strong>
+                            <span><?= htmlspecialchars($brandSubline) ?></span>
+                        </span>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($navDisplay && !empty($rightItems)): ?>
+                    <nav class="csd-lane csd-lane-right" aria-label="Primary navigation right">
+                        <?php foreach ($rightItems as $item): ?>
+                            <a class="csd-link" href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a>
+                        <?php endforeach; ?>
+                    </nav>
+                <?php else: ?>
+                    <div class="csd-lane csd-lane-right" aria-hidden="true"></div>
+                <?php endif; ?>
+
+                <div class="csd-actions">
+                    <?php if ($downloadBtnDisplay): ?>
+                        <a
+                            role="button"
+                            tabindex="0"
+                            class="csd-ticket"
+                            href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>"
+                            data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>"
+                        >
+                            <span><?= htmlspecialchars($downloadBtnText) ?></span>
+                            <b class="csd-ticket-ping">APK</b>
+                        </a>
+                    <?php endif; ?>
+
+                    <?php if ($navDisplay): ?>
+                        <button
+                            class="csd-toggle"
+                            type="button"
+                            aria-expanded="false"
+                            aria-controls="<?= htmlspecialchars($componentId) ?>-mobile-sheet"
+                            aria-label="Toggle navigation"
+                        >
+                            <span class="csd-toggle-bars" aria-hidden="true">
+                                <span></span>
+                                <span></span>
+                                <span></span>
+                            </span>
+                        </button>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <?php if ($navDisplay): ?>
+        <button class="csd-mobile-backdrop" type="button" hidden tabindex="-1" aria-hidden="true"></button>
+        <div class="csd-mobile-sheet" id="<?= htmlspecialchars($componentId) ?>-mobile-sheet" hidden>
+            <div class="csd-mobile-sheet-inner">
+                <div class="csd-mobile-surface">
+                    <div class="csd-mobile-stage">
+                        <div class="csd-mobile-top">
+                            <div class="csd-mobile-brand">
+                                <span class="csd-mobile-brand-badge">
+                                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($brandName) ?>" loading="lazy" decoding="async">
+                                </span>
+                                <div class="csd-mobile-brand-copy">
+                                    <p><?= htmlspecialchars($mobileMenuLabel) ?></p>
+                                    <strong><?= htmlspecialchars($brandName) ?></strong>
+                                </div>
+                            </div>
+                            <button class="csd-mobile-close" type="button" aria-label="Close navigation">x</button>
+                        </div>
+
+                        <div class="csd-mobile-caption">
+                            <span><?= htmlspecialchars($mobileMenuLabel) ?></span>
+                            <i aria-hidden="true"></i>
+                        </div>
+
+                        <nav class="csd-mobile-grid" aria-label="Mobile navigation">
+                            <?php foreach ($navItems as $index => $item): ?>
+                                <?php
+                                $mobileMark = ['✦', '●', '▲', '◌'][$index % 4];
+                                ?>
+                                <a class="csd-mobile-link" href="<?= htmlspecialchars($item['href']) ?>" data-mark="<?= htmlspecialchars($mobileMark) ?>">
+                                    <span class="csd-mobile-link-text">
+                                        <small><?= htmlspecialchars(str_pad((string)($index + 1), 2, '0', STR_PAD_LEFT)) ?></small>
+                                        <strong><?= htmlspecialchars($item['text']) ?></strong>
+                                    </span>
+                                    <em aria-hidden="true"><?= htmlspecialchars(($index % 2 === 0) ? '↗' : '✦') ?></em>
+                                </a>
+                            <?php endforeach; ?>
+                        </nav>
+
+                        <?php if ($downloadBtnDisplay): ?>
+                            <div class="csd-mobile-foot">
+                                <a
+                                    role="button"
+                                    tabindex="0"
+                                    class="csd-mobile-ticket"
+                                    href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadBtnRef)) ?>"
+                                    data-glr-ref="<?= htmlspecialchars($downloadBtnRef) ?>"
+                                >
+                                    <span><?= htmlspecialchars($downloadBtnText) ?></span>
+                                </a>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+    <?php endif; ?>
+</header>
+<script>
+(function () {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var toggle = root.querySelector('.csd-toggle');
+    var closeButton = root.querySelector('.csd-mobile-close');
+    var backdrop = root.querySelector('.csd-mobile-backdrop');
+    var sheet = root.querySelector('.csd-mobile-sheet');
+    var body = document.body;
+    var closeTimer = null;
+
+    var syncScrollState = function () {
+        if (window.scrollY > 20) {
+            root.classList.add('is-scrolled');
+        } else {
+            root.classList.remove('is-scrolled');
+        }
+    };
+
+    var setOpen = function (isOpen) {
+        if (closeTimer) {
+            window.clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+
+        if (isOpen) {
+            body.classList.add('csd-nav-lock');
+            if (sheet) {
+                sheet.hidden = false;
+            }
+            if (backdrop) {
+                backdrop.hidden = false;
+            }
+
+            window.requestAnimationFrame(function () {
+                window.requestAnimationFrame(function () {
+                    root.classList.add('is-open');
+                });
+            });
+        } else {
+            root.classList.remove('is-open');
+            body.classList.remove('csd-nav-lock');
+            closeTimer = window.setTimeout(function () {
+                if (sheet) {
+                    sheet.hidden = true;
+                }
+                if (backdrop) {
+                    backdrop.hidden = true;
+                }
+            }, 340);
+        }
+
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        }
+    };
+
+    syncScrollState();
+    window.addEventListener('scroll', syncScrollState, { passive: true });
+
+    if (toggle) {
+        toggle.addEventListener('click', function () {
+            setOpen(!root.classList.contains('is-open'));
+        });
+    }
+
+    if (closeButton) {
+        closeButton.addEventListener('click', function () {
+            setOpen(false);
+        });
+    }
+
+    if (backdrop) {
+        backdrop.addEventListener('click', function () {
+            setOpen(false);
+        });
+    }
+
+    root.querySelectorAll('.csd-mobile-link').forEach(function (link) {
+        link.addEventListener('click', function () {
+            setOpen(false);
+        });
+    });
+
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 1140 && root.classList.contains('is-open')) {
+            setOpen(false);
+        }
+    });
+}());
+</script>

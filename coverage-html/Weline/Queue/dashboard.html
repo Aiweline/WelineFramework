@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Queue</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Queue</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Queue.php.html#29">Weline\Queue\Controller\Backend\Queue</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#16">Weline\Queue\Controller\Backend\Type</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#20">Weline\Queue\Cron\Queue</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#20">Weline\Queue\Helper\EavHelper</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Helper.php.html#22">Weline\Queue\Helper\Helper</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#20">Weline\Queue\Model\Queue</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#18">Weline\Queue\Model\Queue\Type</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#21">Weline\Queue\Model\Queue\Type\Attributes</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/QueueCollect.php.html#25">Weline\Queue\Observer\QueueCollect</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#24">Weline\Queue\Queue\AbstractQueue</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#26">Weline\Queue\Queue\AbstractQueueWithAttribute</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#20">Weline\Queue\Queue\R\Test</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/Test.php.html#18">Weline\Queue\Queue\Test</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Queue.php.html#29">Weline\Queue\Controller\Backend\Queue</a></td><td class="text-right">16512</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#24">Weline\Queue\Queue\AbstractQueue</a></td><td class="text-right">12656</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#26">Weline\Queue\Queue\AbstractQueueWithAttribute</a></td><td class="text-right">10100</td></tr>
+       <tr><td><a href="Model/Queue.php.html#20">Weline\Queue\Model\Queue</a></td><td class="text-right">5112</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#21">Weline\Queue\Model\Queue\Type\Attributes</a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#16">Weline\Queue\Controller\Backend\Type</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#18">Weline\Queue\Model\Queue\Type</a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="Helper/Helper.php.html#22">Weline\Queue\Helper\Helper</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#20">Weline\Queue\Cron\Queue</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#20">Weline\Queue\Helper\EavHelper</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#20">Weline\Queue\Queue\R\Test</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Queue/Test.php.html#18">Weline\Queue\Queue\Test</a></td><td class="text-right">42</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Queue.php.html#35"><abbr title="Weline\Queue\Controller\Backend\Queue::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#41"><abbr title="Weline\Queue\Controller\Backend\Queue::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#80"><abbr title="Weline\Queue\Controller\Backend\Queue::getQueueStats">getQueueStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#102"><abbr title="Weline\Queue\Controller\Backend\Queue::form">form</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#269"><abbr title="Weline\Queue\Controller\Backend\Queue::getSearchType">getSearchType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#297"><abbr title="Weline\Queue\Controller\Backend\Queue::getTypeAttributes">getTypeAttributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#331"><abbr title="Weline\Queue\Controller\Backend\Queue::getTypeData">getTypeData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#352"><abbr title="Weline\Queue\Controller\Backend\Queue::show">show</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#389"><abbr title="Weline\Queue\Controller\Backend\Queue::dowloadResult">dowloadResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#415"><abbr title="Weline\Queue\Controller\Backend\Queue::getDelete">getDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#463"><abbr title="Weline\Queue\Controller\Backend\Queue::getDetailResult">getDetailResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#477"><abbr title="Weline\Queue\Controller\Backend\Queue::getDetailContent">getDetailContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#491"><abbr title="Weline\Queue\Controller\Backend\Queue::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#536"><abbr title="Weline\Queue\Controller\Backend\Queue::stop">stop</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#588"><abbr title="Weline\Queue\Controller\Backend\Queue::continue">continue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#634"><abbr title="Weline\Queue\Controller\Backend\Queue::postApiAction">postApiAction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#738"><abbr title="Weline\Queue\Controller\Backend\Queue::postApiBatch">postApiBatch</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#20"><abbr title="Weline\Queue\Controller\Backend\Type::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#25"><abbr title="Weline\Queue\Controller\Backend\Type::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#37"><abbr title="Weline\Queue\Controller\Backend\Type::enable">enable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#72"><abbr title="Weline\Queue\Controller\Backend\Type::disable">disable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#107"><abbr title="Weline\Queue\Controller\Backend\Type::show">show</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#26"><abbr title="Weline\Queue\Cron\Queue::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#38"><abbr title="Weline\Queue\Cron\Queue::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#46"><abbr title="Weline\Queue\Cron\Queue::execute_name">execute_name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#54"><abbr title="Weline\Queue\Cron\Queue::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#65"><abbr title="Weline\Queue\Cron\Queue::cron_time">cron_time</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#73"><abbr title="Weline\Queue\Cron\Queue::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#148"><abbr title="Weline\Queue\Cron\Queue::unlock_timeout">unlock_timeout</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#22"><abbr title="Weline\Queue\Helper\EavHelper::getQueueEntity">getQueueEntity</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#34"><abbr title="Weline\Queue\Helper\EavHelper::getType">getType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#45"><abbr title="Weline\Queue\Helper\EavHelper::getQueueAttributeSet">getQueueAttributeSet</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#69"><abbr title="Weline\Queue\Helper\EavHelper::getQueueAttributeGroup">getQueueAttributeGroup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#101"><abbr title="Weline\Queue\Helper\EavHelper::getQueueAttribute">getQueueAttribute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Helper.php.html#24"><abbr title="Weline\Queue\Helper\Helper::collect">collect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#65"><abbr title="Weline\Queue\Model\Queue::getTypeId">getTypeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#69"><abbr title="Weline\Queue\Model\Queue::getPid">getPid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#73"><abbr title="Weline\Queue\Model\Queue::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#77"><abbr title="Weline\Queue\Model\Queue::getStartAt">getStartAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#81"><abbr title="Weline\Queue\Model\Queue::getEndAt">getEndAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#85"><abbr title="Weline\Queue\Model\Queue::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#89"><abbr title="Weline\Queue\Model\Queue::getContent">getContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#93"><abbr title="Weline\Queue\Model\Queue::getResult">getResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#97"><abbr title="Weline\Queue\Model\Queue::getAuto">getAuto</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#101"><abbr title="Weline\Queue\Model\Queue::setTypeId">setTypeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#105"><abbr title="Weline\Queue\Model\Queue::setPid">setPid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#109"><abbr title="Weline\Queue\Model\Queue::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#113"><abbr title="Weline\Queue\Model\Queue::setModule">setModule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#117"><abbr title="Weline\Queue\Model\Queue::getModule">getModule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#121"><abbr title="Weline\Queue\Model\Queue::setStartAt">setStartAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#125"><abbr title="Weline\Queue\Model\Queue::setEndAt">setEndAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#129"><abbr title="Weline\Queue\Model\Queue::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#133"><abbr title="Weline\Queue\Model\Queue::setContent">setContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#137"><abbr title="Weline\Queue\Model\Queue::setProcess">setProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#141"><abbr title="Weline\Queue\Model\Queue::getProcess">getProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#167"><abbr title="Weline\Queue\Model\Queue::init">init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#171"><abbr title="Weline\Queue\Model\Queue::setResult">setResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#175"><abbr title="Weline\Queue\Model\Queue::setFinished">setFinished</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#179"><abbr title="Weline\Queue\Model\Queue::isFinished">isFinished</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#183"><abbr title="Weline\Queue\Model\Queue::isRunning">isRunning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#187"><abbr title="Weline\Queue\Model\Queue::isPending">isPending</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#191"><abbr title="Weline\Queue\Model\Queue::isFailed">isFailed</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#195"><abbr title="Weline\Queue\Model\Queue::isError">isError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#199"><abbr title="Weline\Queue\Model\Queue::isSuccess">isSuccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#203"><abbr title="Weline\Queue\Model\Queue::isDone">isDone</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#207"><abbr title="Weline\Queue\Model\Queue::setAuto">setAuto</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#211"><abbr title="Weline\Queue\Model\Queue::getType">getType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#221"><abbr title="Weline\Queue\Model\Queue::getAttributes">getAttributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#233"><abbr title="Weline\Queue\Model\Queue::getAttribute">getAttribute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#251"><abbr title="Weline\Queue\Model\Queue::getTypeAttributes">getTypeAttributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#264"><abbr title="Weline\Queue\Model\Queue::getTypeAttributesParams">getTypeAttributesParams</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#333"><abbr title="Weline\Queue\Model\Queue::getRunningItems">getRunningItems</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue.php.html#340"><abbr title="Weline\Queue\Model\Queue::validateAttribute">validateAttribute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#39"><abbr title="Weline\Queue\Model\Queue\Type::getTypeId">getTypeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#43"><abbr title="Weline\Queue\Model\Queue\Type::getModuleName">getModuleName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#47"><abbr title="Weline\Queue\Model\Queue\Type::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#51"><abbr title="Weline\Queue\Model\Queue\Type::getEnable">getEnable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#55"><abbr title="Weline\Queue\Model\Queue\Type::setEnable">setEnable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#59"><abbr title="Weline\Queue\Model\Queue\Type::getTip">getTip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#63"><abbr title="Weline\Queue\Model\Queue\Type::getClass">getClass</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#67"><abbr title="Weline\Queue\Model\Queue\Type::setTypeId">setTypeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#71"><abbr title="Weline\Queue\Model\Queue\Type::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#75"><abbr title="Weline\Queue\Model\Queue\Type::setTip">setTip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#79"><abbr title="Weline\Queue\Model\Queue\Type::setModuleName">setModuleName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#83"><abbr title="Weline\Queue\Model\Queue\Type::setClass">setClass</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#87"><abbr title="Weline\Queue\Model\Queue\Type::setAttributes">setAttributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#91"><abbr title="Weline\Queue\Model\Queue\Type::getAttributes">getAttributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#104"><abbr title="Weline\Queue\Model\Queue\Type::getAttribute">getAttribute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#43"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::setTypeId">setTypeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#47"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::setCode">setCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#51"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#55"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getTypeId">getTypeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#59"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#63"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#67"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getAttributeId">getAttributeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#71"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::setAttributeId">setAttributeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#75"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getAttributesByTypeId">getAttributesByTypeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#126"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getAttributesByTypeCode">getAttributesByTypeCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/QueueCollect.php.html#31"><abbr title="Weline\Queue\Observer\QueueCollect::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#40"><abbr title="Weline\Queue\Queue\AbstractQueue::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#46"><abbr title="Weline\Queue\Queue\AbstractQueue::enable">enable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#51"><abbr title="Weline\Queue\Queue\AbstractQueue::init">init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#67"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_values">queue_values</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#98"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_total">queue_total</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#112"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_validate_total">queue_validate_total</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#126"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_status_total">queue_status_total</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#141"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_process">queue_process</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#191"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_dislay">queue_dislay</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#198"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_result">queue_result</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#208"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_update">queue_update</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#232"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_error">queue_error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#240"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_error_result">queue_error_result</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#245"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_status">queue_status</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#264"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_file">queue_file</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#277"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_status_item">queue_status_item</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#298"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_fatal_error">queue_fatal_error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#308"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_finished">queue_finished</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#338"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_output">queue_output</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#413"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_validate">queue_validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#436"><abbr title="Weline\Queue\Queue\AbstractQueue::item_start">item_start</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#460"><abbr title="Weline\Queue\Queue\AbstractQueue::item_success">item_success</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#474"><abbr title="Weline\Queue\Queue\AbstractQueue::item_exist">item_exist</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#486"><abbr title="Weline\Queue\Queue\AbstractQueue::item_error">item_error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#501"><abbr title="Weline\Queue\Queue\AbstractQueue::get_file_data">get_file_data</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#47"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#52"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setTitles">setTitles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#58"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::initQueue">initQueue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#75"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setTotal">setTotal</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#82"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setValidateTotal">setValidateTotal</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#88"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setSuccess">setSuccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#95"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::appendError">appendError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#100"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setError">setError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#163"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::error">error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#233"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setFatalError">setFatalError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#241"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::fatal_error">fatal_error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#249"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setProcessMsg">setProcessMsg</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#267"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::unsetProcessMsg">unsetProcessMsg</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#295"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::processFatalError">processFatalError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#304"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setAdditionalError">setAdditionalError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#311"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::getItem">getItem</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#333"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::processing">processing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#339"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::processed">processed</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#353"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::process">process</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#373"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::finished">finished</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#408"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::output">output</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#556"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#578"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::getFileData">getFileData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#620"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::getValues">getValues</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#22"><abbr title="Weline\Queue\Queue\R\Test::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#27"><abbr title="Weline\Queue\Queue\R\Test::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#32"><abbr title="Weline\Queue\Queue\R\Test::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#37"><abbr title="Weline\Queue\Queue\R\Test::attributes">attributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#42"><abbr title="Weline\Queue\Queue\R\Test::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/Test.php.html#20"><abbr title="Weline\Queue\Queue\Test::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/Test.php.html#25"><abbr title="Weline\Queue\Queue\Test::attributes">attributes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/Test.php.html#30"><abbr title="Weline\Queue\Queue\Test::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/Test.php.html#35"><abbr title="Weline\Queue\Queue\Test::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Queue/Test.php.html#40"><abbr title="Weline\Queue\Queue\Test::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Queue.php.html#102"><abbr title="Weline\Queue\Controller\Backend\Queue::form">form</abbr></a></td><td class="text-right">1056</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#408"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::output">output</abbr></a></td><td class="text-right">552</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#634"><abbr title="Weline\Queue\Controller\Backend\Queue::postApiAction">postApiAction</abbr></a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#738"><abbr title="Weline\Queue\Controller\Backend\Queue::postApiBatch">postApiBatch</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Helper/Helper.php.html#24"><abbr title="Weline\Queue\Helper\Helper::collect">collect</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#338"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_output">queue_output</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#100"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setError">setError</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#163"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::error">error</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#501"><abbr title="Weline\Queue\Queue\AbstractQueue::get_file_data">get_file_data</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#578"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::getFileData">getFileData</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Model/Queue.php.html#141"><abbr title="Weline\Queue\Model\Queue::getProcess">getProcess</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Model/Queue.php.html#264"><abbr title="Weline\Queue\Model\Queue::getTypeAttributesParams">getTypeAttributesParams</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#67"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_values">queue_values</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#415"><abbr title="Weline\Queue\Controller\Backend\Queue::getDelete">getDelete</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#536"><abbr title="Weline\Queue\Controller\Backend\Queue::stop">stop</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#75"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getAttributesByTypeId">getAttributesByTypeId</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#491"><abbr title="Weline\Queue\Controller\Backend\Queue::reset">reset</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#588"><abbr title="Weline\Queue\Controller\Backend\Queue::continue">continue</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Cron/Queue.php.html#73"><abbr title="Weline\Queue\Cron\Queue::execute">execute</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#141"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_process">queue_process</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#436"><abbr title="Weline\Queue\Queue\AbstractQueue::item_start">item_start</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#37"><abbr title="Weline\Queue\Controller\Backend\Type::enable">enable</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#72"><abbr title="Weline\Queue\Controller\Backend\Type::disable">disable</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Model/Queue/Type/Attributes.php.html#126"><abbr title="Weline\Queue\Model\Queue\Type\Attributes::getAttributesByTypeCode">getAttributesByTypeCode</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#245"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_status">queue_status</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#277"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_status_item">queue_status_item</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#311"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::getItem">getItem</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#41"><abbr title="Weline\Queue\Controller\Backend\Queue::index">index</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#269"><abbr title="Weline\Queue\Controller\Backend\Queue::getSearchType">getSearchType</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#352"><abbr title="Weline\Queue\Controller\Backend\Queue::show">show</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#208"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_update">queue_update</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#413"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_validate">queue_validate</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#297"><abbr title="Weline\Queue\Controller\Backend\Queue::getTypeAttributes">getTypeAttributes</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#389"><abbr title="Weline\Queue\Controller\Backend\Queue::dowloadResult">dowloadResult</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/Queue.php.html#340"><abbr title="Weline\Queue\Model\Queue::validateAttribute">validateAttribute</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#308"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_finished">queue_finished</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#460"><abbr title="Weline\Queue\Queue\AbstractQueue::item_success">item_success</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#474"><abbr title="Weline\Queue\Queue\AbstractQueue::item_exist">item_exist</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#486"><abbr title="Weline\Queue\Queue\AbstractQueue::item_error">item_error</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#339"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::processed">processed</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#373"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::finished">finished</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#556"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::validate">validate</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#331"><abbr title="Weline\Queue\Controller\Backend\Queue::getTypeData">getTypeData</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#107"><abbr title="Weline\Queue\Controller\Backend\Type::show">show</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#45"><abbr title="Weline\Queue\Helper\EavHelper::getQueueAttributeSet">getQueueAttributeSet</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#69"><abbr title="Weline\Queue\Helper\EavHelper::getQueueAttributeGroup">getQueueAttributeGroup</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#101"><abbr title="Weline\Queue\Helper\EavHelper::getQueueAttribute">getQueueAttribute</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/Queue.php.html#233"><abbr title="Weline\Queue\Model\Queue::getAttribute">getAttribute</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/Queue/Type.php.html#91"><abbr title="Weline\Queue\Model\Queue\Type::getAttributes">getAttributes</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#51"><abbr title="Weline\Queue\Queue\AbstractQueue::init">init</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#98"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_total">queue_total</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#112"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_validate_total">queue_validate_total</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#232"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_error">queue_error</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#264"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_file">queue_file</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#249"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::setProcessMsg">setProcessMsg</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#267"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::unsetProcessMsg">unsetProcessMsg</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#463"><abbr title="Weline\Queue\Controller\Backend\Queue::getDetailResult">getDetailResult</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Queue.php.html#477"><abbr title="Weline\Queue\Controller\Backend\Queue::getDetailContent">getDetailContent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Type.php.html#25"><abbr title="Weline\Queue\Controller\Backend\Type::index">index</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#22"><abbr title="Weline\Queue\Helper\EavHelper::getQueueEntity">getQueueEntity</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/EavHelper.php.html#34"><abbr title="Weline\Queue\Helper\EavHelper::getType">getType</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#77"><abbr title="Weline\Queue\Model\Queue::getStartAt">getStartAt</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#81"><abbr title="Weline\Queue\Model\Queue::getEndAt">getEndAt</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#85"><abbr title="Weline\Queue\Model\Queue::getStatus">getStatus</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#89"><abbr title="Weline\Queue\Model\Queue::getContent">getContent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#93"><abbr title="Weline\Queue\Model\Queue::getResult">getResult</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#175"><abbr title="Weline\Queue\Model\Queue::setFinished">setFinished</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#207"><abbr title="Weline\Queue\Model\Queue::setAuto">setAuto</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#211"><abbr title="Weline\Queue\Model\Queue::getType">getType</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#221"><abbr title="Weline\Queue\Model\Queue::getAttributes">getAttributes</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Queue.php.html#251"><abbr title="Weline\Queue\Model\Queue::getTypeAttributes">getTypeAttributes</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#198"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_result">queue_result</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Queue/AbstractQueue.php.html#298"><abbr title="Weline\Queue\Queue\AbstractQueue::queue_fatal_error">queue_fatal_error</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#295"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::processFatalError">processFatalError</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#353"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::process">process</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Queue/AbstractQueueWithAttribute.php.html#620"><abbr title="Weline\Queue\Queue\AbstractQueueWithAttribute::getValues">getValues</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Queue/R/Test.php.html#42"><abbr title="Weline\Queue\Queue\R\Test::validate">validate</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Queue/Test.php.html#40"><abbr title="Weline\Queue\Queue\Test::validate">validate</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([13,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([158,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,128,"<a href=\"Controller\/Backend\/Queue.php.html#29\">Weline\\Queue\\Controller\\Backend\\Queue<\/a>"],[0,18,"<a href=\"Controller\/Backend\/Type.php.html#16\">Weline\\Queue\\Controller\\Backend\\Type<\/a>"],[0,13,"<a href=\"Cron\/Queue.php.html#20\">Weline\\Queue\\Cron\\Queue<\/a>"],[0,13,"<a href=\"Helper\/EavHelper.php.html#20\">Weline\\Queue\\Helper\\EavHelper<\/a>"],[0,15,"<a href=\"Helper\/Helper.php.html#22\">Weline\\Queue\\Helper\\Helper<\/a>"],[0,71,"<a href=\"Model\/Queue.php.html#20\">Weline\\Queue\\Model\\Queue<\/a>"],[0,17,"<a href=\"Model\/Queue\/Type.php.html#18\">Weline\\Queue\\Model\\Queue\\Type<\/a>"],[0,22,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#21\">Weline\\Queue\\Model\\Queue\\Type\\Attributes<\/a>"],[0,1,"<a href=\"Observer\/QueueCollect.php.html#25\">Weline\\Queue\\Observer\\QueueCollect<\/a>"],[0,112,"<a href=\"Queue\/AbstractQueue.php.html#24\">Weline\\Queue\\Queue\\AbstractQueue<\/a>"],[0,100,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#26\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute<\/a>"],[0,6,"<a href=\"Queue\/R\/Test.php.html#20\">Weline\\Queue\\Queue\\R\\Test<\/a>"],[0,6,"<a href=\"Queue\/Test.php.html#18\">Weline\\Queue\\Queue\\Test<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Controller\/Backend\/Queue.php.html#35\">Weline\\Queue\\Controller\\Backend\\Queue::__construct<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Queue.php.html#41\">Weline\\Queue\\Controller\\Backend\\Queue::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Queue.php.html#80\">Weline\\Queue\\Controller\\Backend\\Queue::getQueueStats<\/a>"],[0,32,"<a href=\"Controller\/Backend\/Queue.php.html#102\">Weline\\Queue\\Controller\\Backend\\Queue::form<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Queue.php.html#269\">Weline\\Queue\\Controller\\Backend\\Queue::getSearchType<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Queue.php.html#297\">Weline\\Queue\\Controller\\Backend\\Queue::getTypeAttributes<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Queue.php.html#331\">Weline\\Queue\\Controller\\Backend\\Queue::getTypeData<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Queue.php.html#352\">Weline\\Queue\\Controller\\Backend\\Queue::show<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Queue.php.html#389\">Weline\\Queue\\Controller\\Backend\\Queue::dowloadResult<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Queue.php.html#415\">Weline\\Queue\\Controller\\Backend\\Queue::getDelete<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Queue.php.html#463\">Weline\\Queue\\Controller\\Backend\\Queue::getDetailResult<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Queue.php.html#477\">Weline\\Queue\\Controller\\Backend\\Queue::getDetailContent<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Queue.php.html#491\">Weline\\Queue\\Controller\\Backend\\Queue::reset<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Queue.php.html#536\">Weline\\Queue\\Controller\\Backend\\Queue::stop<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Queue.php.html#588\">Weline\\Queue\\Controller\\Backend\\Queue::continue<\/a>"],[0,19,"<a href=\"Controller\/Backend\/Queue.php.html#634\">Weline\\Queue\\Controller\\Backend\\Queue::postApiAction<\/a>"],[0,15,"<a href=\"Controller\/Backend\/Queue.php.html#738\">Weline\\Queue\\Controller\\Backend\\Queue::postApiBatch<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Type.php.html#20\">Weline\\Queue\\Controller\\Backend\\Type::__construct<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Type.php.html#25\">Weline\\Queue\\Controller\\Backend\\Type::index<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Type.php.html#37\">Weline\\Queue\\Controller\\Backend\\Type::enable<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Type.php.html#72\">Weline\\Queue\\Controller\\Backend\\Type::disable<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Type.php.html#107\">Weline\\Queue\\Controller\\Backend\\Type::show<\/a>"],[0,1,"<a href=\"Cron\/Queue.php.html#26\">Weline\\Queue\\Cron\\Queue::__construct<\/a>"],[0,1,"<a href=\"Cron\/Queue.php.html#38\">Weline\\Queue\\Cron\\Queue::name<\/a>"],[0,1,"<a href=\"Cron\/Queue.php.html#46\">Weline\\Queue\\Cron\\Queue::execute_name<\/a>"],[0,1,"<a href=\"Cron\/Queue.php.html#54\">Weline\\Queue\\Cron\\Queue::tip<\/a>"],[0,1,"<a href=\"Cron\/Queue.php.html#65\">Weline\\Queue\\Cron\\Queue::cron_time<\/a>"],[0,7,"<a href=\"Cron\/Queue.php.html#73\">Weline\\Queue\\Cron\\Queue::execute<\/a>"],[0,1,"<a href=\"Cron\/Queue.php.html#148\">Weline\\Queue\\Cron\\Queue::unlock_timeout<\/a>"],[0,2,"<a href=\"Helper\/EavHelper.php.html#22\">Weline\\Queue\\Helper\\EavHelper::getQueueEntity<\/a>"],[0,2,"<a href=\"Helper\/EavHelper.php.html#34\">Weline\\Queue\\Helper\\EavHelper::getType<\/a>"],[0,3,"<a href=\"Helper\/EavHelper.php.html#45\">Weline\\Queue\\Helper\\EavHelper::getQueueAttributeSet<\/a>"],[0,3,"<a href=\"Helper\/EavHelper.php.html#69\">Weline\\Queue\\Helper\\EavHelper::getQueueAttributeGroup<\/a>"],[0,3,"<a href=\"Helper\/EavHelper.php.html#101\">Weline\\Queue\\Helper\\EavHelper::getQueueAttribute<\/a>"],[0,15,"<a href=\"Helper\/Helper.php.html#24\">Weline\\Queue\\Helper\\Helper::collect<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#65\">Weline\\Queue\\Model\\Queue::getTypeId<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#69\">Weline\\Queue\\Model\\Queue::getPid<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#73\">Weline\\Queue\\Model\\Queue::getName<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#77\">Weline\\Queue\\Model\\Queue::getStartAt<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#81\">Weline\\Queue\\Model\\Queue::getEndAt<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#85\">Weline\\Queue\\Model\\Queue::getStatus<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#89\">Weline\\Queue\\Model\\Queue::getContent<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#93\">Weline\\Queue\\Model\\Queue::getResult<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#97\">Weline\\Queue\\Model\\Queue::getAuto<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#101\">Weline\\Queue\\Model\\Queue::setTypeId<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#105\">Weline\\Queue\\Model\\Queue::setPid<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#109\">Weline\\Queue\\Model\\Queue::setName<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#113\">Weline\\Queue\\Model\\Queue::setModule<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#117\">Weline\\Queue\\Model\\Queue::getModule<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#121\">Weline\\Queue\\Model\\Queue::setStartAt<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#125\">Weline\\Queue\\Model\\Queue::setEndAt<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#129\">Weline\\Queue\\Model\\Queue::setStatus<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#133\">Weline\\Queue\\Model\\Queue::setContent<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#137\">Weline\\Queue\\Model\\Queue::setProcess<\/a>"],[0,10,"<a href=\"Model\/Queue.php.html#141\">Weline\\Queue\\Model\\Queue::getProcess<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#167\">Weline\\Queue\\Model\\Queue::init<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#171\">Weline\\Queue\\Model\\Queue::setResult<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#175\">Weline\\Queue\\Model\\Queue::setFinished<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#179\">Weline\\Queue\\Model\\Queue::isFinished<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#183\">Weline\\Queue\\Model\\Queue::isRunning<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#187\">Weline\\Queue\\Model\\Queue::isPending<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#191\">Weline\\Queue\\Model\\Queue::isFailed<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#195\">Weline\\Queue\\Model\\Queue::isError<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#199\">Weline\\Queue\\Model\\Queue::isSuccess<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#203\">Weline\\Queue\\Model\\Queue::isDone<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#207\">Weline\\Queue\\Model\\Queue::setAuto<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#211\">Weline\\Queue\\Model\\Queue::getType<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#221\">Weline\\Queue\\Model\\Queue::getAttributes<\/a>"],[0,3,"<a href=\"Model\/Queue.php.html#233\">Weline\\Queue\\Model\\Queue::getAttribute<\/a>"],[0,2,"<a href=\"Model\/Queue.php.html#251\">Weline\\Queue\\Model\\Queue::getTypeAttributes<\/a>"],[0,10,"<a href=\"Model\/Queue.php.html#264\">Weline\\Queue\\Model\\Queue::getTypeAttributesParams<\/a>"],[0,1,"<a href=\"Model\/Queue.php.html#333\">Weline\\Queue\\Model\\Queue::getRunningItems<\/a>"],[0,4,"<a href=\"Model\/Queue.php.html#340\">Weline\\Queue\\Model\\Queue::validateAttribute<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#39\">Weline\\Queue\\Model\\Queue\\Type::getTypeId<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#43\">Weline\\Queue\\Model\\Queue\\Type::getModuleName<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#47\">Weline\\Queue\\Model\\Queue\\Type::getName<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#51\">Weline\\Queue\\Model\\Queue\\Type::getEnable<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#55\">Weline\\Queue\\Model\\Queue\\Type::setEnable<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#59\">Weline\\Queue\\Model\\Queue\\Type::getTip<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#63\">Weline\\Queue\\Model\\Queue\\Type::getClass<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#67\">Weline\\Queue\\Model\\Queue\\Type::setTypeId<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#71\">Weline\\Queue\\Model\\Queue\\Type::setName<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#75\">Weline\\Queue\\Model\\Queue\\Type::setTip<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#79\">Weline\\Queue\\Model\\Queue\\Type::setModuleName<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#83\">Weline\\Queue\\Model\\Queue\\Type::setClass<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#87\">Weline\\Queue\\Model\\Queue\\Type::setAttributes<\/a>"],[0,3,"<a href=\"Model\/Queue\/Type.php.html#91\">Weline\\Queue\\Model\\Queue\\Type::getAttributes<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type.php.html#104\">Weline\\Queue\\Model\\Queue\\Type::getAttribute<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#43\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::setTypeId<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#47\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::setCode<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#51\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::setName<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#55\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::getTypeId<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#59\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::getCode<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#63\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::getName<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#67\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::getAttributeId<\/a>"],[0,1,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#71\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::setAttributeId<\/a>"],[0,8,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#75\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::getAttributesByTypeId<\/a>"],[0,6,"<a href=\"Model\/Queue\/Type\/Attributes.php.html#126\">Weline\\Queue\\Model\\Queue\\Type\\Attributes::getAttributesByTypeCode<\/a>"],[0,1,"<a href=\"Observer\/QueueCollect.php.html#31\">Weline\\Queue\\Observer\\QueueCollect::execute<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueue.php.html#40\">Weline\\Queue\\Queue\\AbstractQueue::__construct<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueue.php.html#46\">Weline\\Queue\\Queue\\AbstractQueue::enable<\/a>"],[0,3,"<a href=\"Queue\/AbstractQueue.php.html#51\">Weline\\Queue\\Queue\\AbstractQueue::init<\/a>"],[0,10,"<a href=\"Queue\/AbstractQueue.php.html#67\">Weline\\Queue\\Queue\\AbstractQueue::queue_values<\/a>"],[0,3,"<a href=\"Queue\/AbstractQueue.php.html#98\">Weline\\Queue\\Queue\\AbstractQueue::queue_total<\/a>"],[0,3,"<a href=\"Queue\/AbstractQueue.php.html#112\">Weline\\Queue\\Queue\\AbstractQueue::queue_validate_total<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueue.php.html#126\">Weline\\Queue\\Queue\\AbstractQueue::queue_status_total<\/a>"],[0,7,"<a href=\"Queue\/AbstractQueue.php.html#141\">Weline\\Queue\\Queue\\AbstractQueue::queue_process<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueue.php.html#191\">Weline\\Queue\\Queue\\AbstractQueue::queue_dislay<\/a>"],[0,2,"<a href=\"Queue\/AbstractQueue.php.html#198\">Weline\\Queue\\Queue\\AbstractQueue::queue_result<\/a>"],[0,5,"<a href=\"Queue\/AbstractQueue.php.html#208\">Weline\\Queue\\Queue\\AbstractQueue::queue_update<\/a>"],[0,3,"<a href=\"Queue\/AbstractQueue.php.html#232\">Weline\\Queue\\Queue\\AbstractQueue::queue_error<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueue.php.html#240\">Weline\\Queue\\Queue\\AbstractQueue::queue_error_result<\/a>"],[0,6,"<a href=\"Queue\/AbstractQueue.php.html#245\">Weline\\Queue\\Queue\\AbstractQueue::queue_status<\/a>"],[0,3,"<a href=\"Queue\/AbstractQueue.php.html#264\">Weline\\Queue\\Queue\\AbstractQueue::queue_file<\/a>"],[0,6,"<a href=\"Queue\/AbstractQueue.php.html#277\">Weline\\Queue\\Queue\\AbstractQueue::queue_status_item<\/a>"],[0,2,"<a href=\"Queue\/AbstractQueue.php.html#298\">Weline\\Queue\\Queue\\AbstractQueue::queue_fatal_error<\/a>"],[0,4,"<a href=\"Queue\/AbstractQueue.php.html#308\">Weline\\Queue\\Queue\\AbstractQueue::queue_finished<\/a>"],[0,15,"<a href=\"Queue\/AbstractQueue.php.html#338\">Weline\\Queue\\Queue\\AbstractQueue::queue_output<\/a>"],[0,5,"<a href=\"Queue\/AbstractQueue.php.html#413\">Weline\\Queue\\Queue\\AbstractQueue::queue_validate<\/a>"],[0,7,"<a href=\"Queue\/AbstractQueue.php.html#436\">Weline\\Queue\\Queue\\AbstractQueue::item_start<\/a>"],[0,4,"<a href=\"Queue\/AbstractQueue.php.html#460\">Weline\\Queue\\Queue\\AbstractQueue::item_success<\/a>"],[0,4,"<a href=\"Queue\/AbstractQueue.php.html#474\">Weline\\Queue\\Queue\\AbstractQueue::item_exist<\/a>"],[0,4,"<a href=\"Queue\/AbstractQueue.php.html#486\">Weline\\Queue\\Queue\\AbstractQueue::item_error<\/a>"],[0,11,"<a href=\"Queue\/AbstractQueue.php.html#501\">Weline\\Queue\\Queue\\AbstractQueue::get_file_data<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#47\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::__construct<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#52\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setTitles<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#58\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::initQueue<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#75\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setTotal<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#82\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setValidateTotal<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#88\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setSuccess<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#95\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::appendError<\/a>"],[0,13,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#100\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setError<\/a>"],[0,12,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#163\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::error<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#233\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setFatalError<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#241\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::fatal_error<\/a>"],[0,3,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#249\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setProcessMsg<\/a>"],[0,3,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#267\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::unsetProcessMsg<\/a>"],[0,2,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#295\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::processFatalError<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#304\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::setAdditionalError<\/a>"],[0,6,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#311\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::getItem<\/a>"],[0,1,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#333\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::processing<\/a>"],[0,4,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#339\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::processed<\/a>"],[0,2,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#353\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::process<\/a>"],[0,4,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#373\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::finished<\/a>"],[0,23,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#408\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::output<\/a>"],[0,4,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#556\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::validate<\/a>"],[0,11,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#578\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::getFileData<\/a>"],[0,2,"<a href=\"Queue\/AbstractQueueWithAttribute.php.html#620\">Weline\\Queue\\Queue\\AbstractQueueWithAttribute::getValues<\/a>"],[0,1,"<a href=\"Queue\/R\/Test.php.html#22\">Weline\\Queue\\Queue\\R\\Test::name<\/a>"],[0,1,"<a href=\"Queue\/R\/Test.php.html#27\">Weline\\Queue\\Queue\\R\\Test::tip<\/a>"],[0,1,"<a href=\"Queue\/R\/Test.php.html#32\">Weline\\Queue\\Queue\\R\\Test::execute<\/a>"],[0,1,"<a href=\"Queue\/R\/Test.php.html#37\">Weline\\Queue\\Queue\\R\\Test::attributes<\/a>"],[0,2,"<a href=\"Queue\/R\/Test.php.html#42\">Weline\\Queue\\Queue\\R\\Test::validate<\/a>"],[0,1,"<a href=\"Queue\/Test.php.html#20\">Weline\\Queue\\Queue\\Test::name<\/a>"],[0,1,"<a href=\"Queue\/Test.php.html#25\">Weline\\Queue\\Queue\\Test::attributes<\/a>"],[0,1,"<a href=\"Queue\/Test.php.html#30\">Weline\\Queue\\Queue\\Test::tip<\/a>"],[0,1,"<a href=\"Queue\/Test.php.html#35\">Weline\\Queue\\Queue\\Test::execute<\/a>"],[0,2,"<a href=\"Queue\/Test.php.html#40\">Weline\\Queue\\Queue\\Test::validate<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

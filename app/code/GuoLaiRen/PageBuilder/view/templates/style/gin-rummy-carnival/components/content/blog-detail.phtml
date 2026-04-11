@@ -1,0 +1,793 @@
+<?php
+/**
+ * Gin Rummy Carnival Blog Detail Component
+ *
+ * @fields_start
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_cover|显示封面图|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_tags|显示标签|select:yes=是,no=否|yes
+ * blog.show_share|显示分享按钮|select:yes=是,no=否|yes
+ * blog.show_related|显示相关文章|select:yes=是,no=否|yes
+ * blog.related_count|相关文章数量|number|3
+ * blog.not_found_title|未找到标题|text|Article Not Found
+ * blog.not_found_desc|未找到描述|text|The article you are looking for does not exist or has been removed.
+ * blog.back_to_blog_text|返回博客文案|text|Back to Blog
+ * blog.breadcrumb_home_text|面包屑首页文案|text|Home
+ * blog.breadcrumb_blog_text|面包屑博客文案|text|Blog
+ * blog.views_suffix|阅读量后缀|text|views
+ * blog.jump_title|文内跳转标题|text|Jump Within
+ * blog.tags_title|标签标题|text|Tags
+ * blog.share_title|分享标题|text|Share
+ * blog.share_facebook_title|Facebook分享标题|text|Share on Facebook
+ * blog.share_twitter_title|Twitter分享标题|text|Share on X
+ * blog.share_linkedin_title|LinkedIn分享标题|text|Share on LinkedIn
+ * blog.share_copy_title|复制链接标题|text|Copy Link
+ * blog.share_facebook_text|Facebook按钮文案|text|FB
+ * blog.share_twitter_text|Twitter按钮文案|text|X
+ * blog.share_linkedin_text|LinkedIn按钮文案|text|IN
+ * blog.share_copy_text|复制链接按钮文案|text|CP
+ * blog.copy_success_text|复制成功提示|text|Link copied to clipboard!
+ * blog.categories_title|分类标题|text|Categories
+ * blog.recent_posts_title|最近文章标题|text|Recent Posts
+ * blog.related_title|相关文章标题|text|Related Articles
+ * blog.related_kicker|相关文章提示语|text|Continue Reading
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$currentPost = $this->getData('current_post') ?: [];
+$relatedPosts = $this->getData('related_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+$componentId = 'grc-blog-detail-' . uniqid();
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCover = $getConfig('blog.show_cover', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showTags = $getConfig('blog.show_tags', 'yes') === 'yes';
+$showShare = $getConfig('blog.show_share', 'yes') === 'yes';
+$showRelated = $getConfig('blog.show_related', 'yes') === 'yes';
+$relatedCount = (int) $getConfig('blog.related_count', 3);
+if ($relatedCount <= 0) {
+    $relatedCount = 3;
+}
+$notFoundTitle = trim((string) $getConfig('blog.not_found_title', 'Article Not Found'));
+$notFoundDesc = trim((string) $getConfig('blog.not_found_desc', 'The article you are looking for does not exist or has been removed.'));
+$backToBlogText = trim((string) $getConfig('blog.back_to_blog_text', 'Back to Blog'));
+$breadcrumbHomeText = trim((string) $getConfig('blog.breadcrumb_home_text', 'Home'));
+$breadcrumbBlogText = trim((string) $getConfig('blog.breadcrumb_blog_text', 'Blog'));
+$viewsSuffix = trim((string) $getConfig('blog.views_suffix', 'views'));
+$jumpTitle = trim((string) $getConfig('blog.jump_title', 'Jump Within'));
+$tagsTitle = trim((string) $getConfig('blog.tags_title', 'Tags'));
+$shareTitle = trim((string) $getConfig('blog.share_title', 'Share'));
+$shareFacebookTitle = trim((string) $getConfig('blog.share_facebook_title', 'Share on Facebook'));
+$shareTwitterTitle = trim((string) $getConfig('blog.share_twitter_title', 'Share on X'));
+$shareLinkedinTitle = trim((string) $getConfig('blog.share_linkedin_title', 'Share on LinkedIn'));
+$shareCopyTitle = trim((string) $getConfig('blog.share_copy_title', 'Copy Link'));
+$shareFacebookText = trim((string) $getConfig('blog.share_facebook_text', 'FB'));
+$shareTwitterText = trim((string) $getConfig('blog.share_twitter_text', 'X'));
+$shareLinkedinText = trim((string) $getConfig('blog.share_linkedin_text', 'IN'));
+$shareCopyText = trim((string) $getConfig('blog.share_copy_text', 'CP'));
+$copySuccessText = trim((string) $getConfig('blog.copy_success_text', 'Link copied to clipboard!'));
+$categoriesTitle = trim((string) $getConfig('blog.categories_title', 'Categories'));
+$recentPostsTitle = trim((string) $getConfig('blog.recent_posts_title', 'Recent Posts'));
+$relatedTitle = trim((string) $getConfig('blog.related_title', 'Related Articles'));
+$relatedKicker = trim((string) $getConfig('blog.related_kicker', 'Continue Reading'));
+
+$primaryColor = $getConfig('color_scheme.primary', '#1eb980');
+$secondaryColor = $getConfig('color_scheme.secondary', '#f2a93b');
+$bgColor = $getConfig('color_scheme.background', '#0b1525');
+$textColor = $getConfig('color_scheme.text', '#f8fafc');
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/gin-rummy-carnival/asset/img/poker-header-bg.svg');
+
+$tags = [];
+if (!empty($currentPost['tags'])) {
+    $tags = is_array($currentPost['tags']) ? $currentPost['tags'] : explode(',', $currentPost['tags']);
+    $tags = array_values(array_filter(array_map('trim', $tags), static function ($item) {
+        return $item !== '';
+    }));
+}
+
+$articleContent = (string) ($currentPost['content'] ?? '');
+$jumpLinks = [];
+if ($articleContent !== '') {
+    $headingIndex = 0;
+    $articleContent = preg_replace_callback('/<h([23])([^>]*)>(.*?)<\/h\1>/is', static function ($matches) use (&$jumpLinks, &$headingIndex) {
+        $text = trim(strip_tags($matches[3]));
+        if ($text === '') {
+            return $matches[0];
+        }
+
+        $slug = strtolower((string) preg_replace('/[^a-z0-9]+/i', '-', $text));
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'article-section';
+        }
+
+        $id = $slug . '-' . (++$headingIndex);
+        $jumpLinks[] = [
+            'id' => $id,
+            'label' => $text,
+            'level' => (int) $matches[1],
+        ];
+
+        return '<h' . $matches[1] . $matches[2] . ' id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">' . $matches[3] . '</h' . $matches[1] . '>';
+    }, $articleContent);
+}
+
+$hasRail = $showSidebar || ($showShare && !empty($currentPost)) || ($showTags && !empty($tags)) || !empty($jumpLinks);
+$shareUrl = urlencode((string) ($_SERVER['REQUEST_URI'] ?? ''));
+$shareTitle = urlencode((string) ($currentPost['title'] ?? ''));
+?>
+
+<?php if (empty($currentPost)): ?>
+    <section id="<?= $componentId ?>" class="grc-blog-detail">
+        <div class="detail-shell">
+            <div class="detail-empty">
+                <div class="empty-icon">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                </div>
+                <h2><?= htmlspecialchars($notFoundTitle !== '' ? $notFoundTitle : 'Article Not Found') ?></h2>
+                <p><?= htmlspecialchars($notFoundDesc !== '' ? $notFoundDesc : 'The article you are looking for does not exist or has been removed.') ?></p>
+                <a href="/blog" class="back-home"><?= htmlspecialchars($backToBlogText !== '' ? $backToBlogText : 'Back to Blog') ?></a>
+            </div>
+        </div>
+    </section>
+<?php else: ?>
+    <section id="<?= $componentId ?>" class="grc-blog-detail" aria-labelledby="<?= $componentId ?>-title">
+        <div class="detail-suits" aria-hidden="true">
+            <span class="detail-suit detail-suit-spade">&spades;</span>
+            <span class="detail-suit detail-suit-club">&clubs;</span>
+        </div>
+
+        <div class="detail-shell">
+            <nav class="detail-breadcrumb" aria-label="Breadcrumb">
+                <a href="/"><?= htmlspecialchars($breadcrumbHomeText !== '' ? $breadcrumbHomeText : 'Home') ?></a>
+                <span>/</span>
+                <a href="/blog"><?= htmlspecialchars($breadcrumbBlogText !== '' ? $breadcrumbBlogText : 'Blog') ?></a>
+                <span>/</span>
+                <strong><?= htmlspecialchars(function_exists('mb_substr') ? mb_substr($currentPost['title'], 0, 42) : substr($currentPost['title'], 0, 42)) ?><?= (function_exists('mb_strlen') ? mb_strlen($currentPost['title']) : strlen($currentPost['title'])) > 42 ? '...' : '' ?></strong>
+            </nav>
+
+            <header class="article-mast<?= $showCover && !empty($currentPost['cover_image']) ? ' has-cover' : '' ?> wow animate__fadeInUp" data-wow-duration="0.84s">
+                <div class="mast-copy">
+                    <?php if (!empty($currentPost['category_name'])): ?>
+                        <span class="mast-chip"><?= htmlspecialchars($currentPost['category_name']) ?></span>
+                    <?php endif; ?>
+
+                    <h1 id="<?= $componentId ?>-title"><?= htmlspecialchars($currentPost['title']) ?></h1>
+
+                    <div class="mast-meta">
+                        <?php if ($showDate && !empty($currentPost['published_at'])): ?>
+                            <span><?= date('F d, Y', strtotime($currentPost['published_at'])) ?></span>
+                        <?php endif; ?>
+                        <?php if ($showAuthor && !empty($currentPost['author'])): ?>
+                            <span><?= htmlspecialchars($currentPost['author']) ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($currentPost['view_count'])): ?>
+                            <span><?= number_format($currentPost['view_count']) ?> <?= htmlspecialchars($viewsSuffix !== '' ? $viewsSuffix : 'views') ?></span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if (!empty($currentPost['summary'])): ?>
+                        <p class="mast-summary"><?= htmlspecialchars($currentPost['summary']) ?></p>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($showCover && !empty($currentPost['cover_image'])): ?>
+                    <figure class="mast-cover">
+                        <img src="<?= htmlspecialchars($currentPost['cover_image']) ?>" alt="<?= htmlspecialchars($currentPost['title']) ?>">
+                    </figure>
+                <?php endif; ?>
+            </header>
+
+            <div class="detail-layout<?= $hasRail ? ' has-rail' : '' ?>">
+                <?php if ($hasRail): ?>
+                    <aside class="reader-tools wow animate__fadeInUp" data-wow-delay="0.08s" data-wow-duration="0.88s">
+                        <?php if (!empty($jumpLinks)): ?>
+                            <section class="tool-card">
+                                <span class="tool-kicker"><?= htmlspecialchars($jumpTitle !== '' ? $jumpTitle : 'Jump Within') ?></span>
+                                <div class="jump-links">
+                                    <?php foreach ($jumpLinks as $index => $item): ?>
+                                        <a href="#<?= htmlspecialchars($item['id']) ?>" class="jump-link level-<?= (int) $item['level'] ?>">
+                                            <small><?= sprintf('%02d', $index + 1) ?></small>
+                                            <span><?= htmlspecialchars($item['label']) ?></span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showTags && !empty($tags)): ?>
+                            <section class="tool-card">
+                                <span class="tool-kicker"><?= htmlspecialchars($tagsTitle !== '' ? $tagsTitle : 'Tags') ?></span>
+                                <div class="tag-list">
+                                    <?php foreach ($tags as $tag): ?>
+                                        <a href="/blog/tag/<?= urlencode($tag) ?>" class="tag-chip">#<?= htmlspecialchars($tag) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showShare): ?>
+                            <section class="tool-card">
+                                <span class="tool-kicker"><?= htmlspecialchars($shareTitle !== '' ? $shareTitle : 'Share') ?></span>
+                                <div class="share-row">
+                                    <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $shareUrl ?>" target="_blank" rel="noopener" class="share-btn" title="<?= htmlspecialchars($shareFacebookTitle !== '' ? $shareFacebookTitle : 'Share on Facebook') ?>"><?= htmlspecialchars($shareFacebookText !== '' ? $shareFacebookText : 'FB') ?></a>
+                                    <a href="https://twitter.com/intent/tweet?url=<?= $shareUrl ?>&text=<?= $shareTitle ?>" target="_blank" rel="noopener" class="share-btn" title="<?= htmlspecialchars($shareTwitterTitle !== '' ? $shareTwitterTitle : 'Share on X') ?>"><?= htmlspecialchars($shareTwitterText !== '' ? $shareTwitterText : 'X') ?></a>
+                                    <a href="https://www.linkedin.com/shareArticle?mini=true&url=<?= $shareUrl ?>&title=<?= $shareTitle ?>" target="_blank" rel="noopener" class="share-btn" title="<?= htmlspecialchars($shareLinkedinTitle !== '' ? $shareLinkedinTitle : 'Share on LinkedIn') ?>"><?= htmlspecialchars($shareLinkedinText !== '' ? $shareLinkedinText : 'IN') ?></a>
+                                    <button type="button" class="share-btn" title="<?= htmlspecialchars($shareCopyTitle !== '' ? $shareCopyTitle : 'Copy Link') ?>" onclick="copyToClipboard('<?= $componentId ?>')"><?= htmlspecialchars($shareCopyText !== '' ? $shareCopyText : 'CP') ?></button>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showSidebar && !empty($blogCategories)): ?>
+                            <section class="tool-card">
+                                <span class="tool-kicker"><?= htmlspecialchars($categoriesTitle !== '' ? $categoriesTitle : 'Categories') ?></span>
+                                <div class="category-list">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="category-entry"><?= htmlspecialchars($category['name']) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showSidebar && !empty($recentPosts)): ?>
+                            <section class="tool-card">
+                                <span class="tool-kicker"><?= htmlspecialchars($recentPostsTitle !== '' ? $recentPostsTitle : 'Recent Posts') ?></span>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 4) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+
+                <article class="reading-sheet wow animate__fadeInUp" data-wow-delay="0.12s" data-wow-duration="0.9s">
+                    <div class="sheet-body prose">
+                        <?= $articleContent ?>
+                    </div>
+
+                    <footer class="sheet-foot">
+                        <a href="/blog" class="back-home"><?= htmlspecialchars($backToBlogText !== '' ? $backToBlogText : 'Back to Blog') ?></a>
+                    </footer>
+                </article>
+            </div>
+
+            <?php if ($showRelated && !empty($relatedPosts)): ?>
+                <section class="related-strip wow animate__fadeInUp" data-wow-delay="0.16s" data-wow-duration="0.92s">
+                    <div class="related-head">
+                        <span class="tool-kicker"><?= htmlspecialchars($relatedKicker !== '' ? $relatedKicker : 'Continue Reading') ?></span>
+                        <h3><?= htmlspecialchars($relatedTitle !== '' ? $relatedTitle : 'Related Articles') ?></h3>
+                    </div>
+                    <div class="related-grid">
+                        <?php foreach (array_slice($relatedPosts, 0, $relatedCount) as $post): ?>
+                            <article class="related-card">
+                                <?php if (!empty($post['cover_image'])): ?>
+                                    <a href="<?= htmlspecialchars($post['url']) ?>" class="related-media">
+                                        <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                    </a>
+                                <?php endif; ?>
+                                <div class="related-copy">
+                                    <h4><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h4>
+                                    <?php if (!empty($post['published_at'])): ?>
+                                        <span><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <script>
+    function copyToClipboard(componentId) {
+        var text = window.location.href;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+                alert('<?= htmlspecialchars($copySuccessText !== '' ? $copySuccessText : 'Link copied to clipboard!') ?>');
+            });
+            return;
+        }
+
+        var temp = document.createElement('input');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        alert('<?= htmlspecialchars($copySuccessText !== '' ? $copySuccessText : 'Link copied to clipboard!') ?>');
+    }
+    </script>
+<?php endif; ?>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.6rem, 8vw, 6.8rem) 0;
+    background:
+        radial-gradient(960px 420px at 12% 8%, rgba(30, 185, 128, 0.18), transparent 68%),
+        radial-gradient(760px 360px at 92% 16%, rgba(242, 169, 59, 0.16), transparent 64%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.08;
+}
+
+#<?= $componentId ?>::after {
+    background: repeating-linear-gradient(128deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 28px);
+    opacity: 0.24;
+}
+
+#<?= $componentId ?> .detail-suits {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .detail-suit {
+    position: absolute;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    line-height: 0.78;
+    font-weight: 700;
+    opacity: 0.08;
+}
+
+#<?= $componentId ?> .detail-suit-spade {
+    top: 8%;
+    left: -0.8rem;
+    font-size: clamp(7rem, 16vw, 12rem);
+    color: rgba(30, 185, 128, 0.54);
+    transform: rotate(-8deg);
+}
+
+#<?= $componentId ?> .detail-suit-club {
+    right: -1rem;
+    bottom: 10%;
+    font-size: clamp(7.2rem, 18vw, 13rem);
+    color: rgba(242, 169, 59, 0.24);
+    transform: rotate(-12deg);
+}
+
+#<?= $componentId ?> .detail-shell {
+    width: min(1240px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> h1,
+#<?= $componentId ?> h2,
+#<?= $componentId ?> h3,
+#<?= $componentId ?> h4 {
+    margin: 0;
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+}
+
+#<?= $componentId ?> .detail-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    color: rgba(248,250,252,0.58);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .detail-breadcrumb a,
+#<?= $componentId ?> .detail-breadcrumb strong {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .article-mast {
+    margin-top: 1rem;
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 34px;
+    background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.03) 100%);
+    box-shadow: 0 24px 44px rgba(0, 0, 0, 0.2);
+}
+
+#<?= $componentId ?> .article-mast.has-cover {
+    grid-template-columns: minmax(0, 0.9fr) minmax(280px, 0.72fr);
+    align-items: center;
+}
+
+#<?= $componentId ?> .mast-chip,
+#<?= $componentId ?> .tool-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.48rem;
+    color: #7de5c7;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .mast-chip::before,
+#<?= $componentId ?> .tool-kicker::before {
+    content: '';
+    width: 34px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, <?= htmlspecialchars($secondaryColor) ?> 0%, rgba(242,169,59,0) 100%);
+}
+
+#<?= $componentId ?> .mast-copy h1 {
+    margin-top: 0.78rem;
+    font-size: clamp(2.5rem, 5.4vw, 4.8rem);
+    line-height: 0.92;
+    letter-spacing: -0.07em;
+}
+
+#<?= $componentId ?> .mast-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.62rem;
+    margin-top: 0.92rem;
+    color: rgba(248,250,252,0.62);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .mast-summary {
+    margin: 1rem 0 0;
+    max-width: 58ch;
+    color: rgba(248,250,252,0.76);
+    line-height: 1.86;
+}
+
+#<?= $componentId ?> .mast-cover {
+    margin: 0;
+    overflow: hidden;
+    border-radius: 30px;
+}
+
+#<?= $componentId ?> .mast-cover img,
+#<?= $componentId ?> .recent-link img,
+#<?= $componentId ?> .related-media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#<?= $componentId ?> .detail-layout {
+    margin-top: 1rem;
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .detail-layout.has-rail {
+    grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
+    align-items: start;
+}
+
+#<?= $componentId ?> .reader-tools {
+    display: grid;
+    gap: 0.86rem;
+    align-self: start;
+}
+
+#<?= $componentId ?> .tool-card,
+#<?= $componentId ?> .reading-sheet,
+#<?= $componentId ?> .detail-empty,
+#<?= $componentId ?> .related-card {
+    position: relative;
+    border-radius: 30px;
+    background: rgba(255,255,255,0.05);
+    box-shadow: 0 24px 42px rgba(0, 0, 0, 0.18);
+}
+
+#<?= $componentId ?> .tool-card,
+#<?= $componentId ?> .detail-empty,
+#<?= $componentId ?> .related-card {
+    padding: 0.95rem;
+}
+
+#<?= $componentId ?> .tool-card {
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+}
+
+#<?= $componentId ?> .tool-card + .tool-card {
+    padding-top: 1rem;
+    margin-top: 0.15rem;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .jump-links,
+#<?= $componentId ?> .category-list,
+#<?= $componentId ?> .recent-stack,
+#<?= $componentId ?> .tag-list,
+#<?= $componentId ?> .share-row {
+    display: grid;
+    gap: 0.62rem;
+    margin-top: 0.74rem;
+}
+
+#<?= $componentId ?> .jump-link,
+#<?= $componentId ?> .category-entry,
+#<?= $componentId ?> .tag-chip,
+#<?= $componentId ?> .share-btn {
+    color: #eef8ff;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .jump-link {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.66rem;
+    align-items: start;
+}
+
+#<?= $componentId ?> .jump-link small {
+    color: #7de5c7;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+#<?= $componentId ?> .jump-link.level-3 {
+    margin-left: 0.8rem;
+}
+
+#<?= $componentId ?> .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+#<?= $componentId ?> .tag-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0.42rem 0.7rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.07);
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+}
+
+#<?= $componentId ?> .share-row {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+#<?= $componentId ?> .share-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    border: none;
+    border-radius: 16px;
+    background: rgba(255,255,255,0.07);
+    font: inherit;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .recent-link {
+    display: grid;
+    grid-template-columns: 64px 1fr;
+    gap: 0.72rem;
+    align-items: center;
+    color: #eef8ff;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .recent-link img {
+    width: 64px;
+    height: 64px;
+    border-radius: 16px;
+}
+
+#<?= $componentId ?> .recent-link small {
+    color: rgba(248,250,252,0.56);
+}
+
+#<?= $componentId ?> .reading-sheet {
+    padding: 1.1rem;
+}
+
+#<?= $componentId ?> .sheet-body {
+    color: rgba(248,250,252,0.86);
+    line-height: 1.92;
+}
+
+#<?= $componentId ?> .sheet-body > *:first-child {
+    margin-top: 0;
+}
+
+#<?= $componentId ?> .sheet-body h2,
+#<?= $componentId ?> .sheet-body h3,
+#<?= $componentId ?> .sheet-body h4 {
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+    color: #f8fbff;
+}
+
+#<?= $componentId ?> .sheet-body h2 {
+    margin-top: 2rem;
+    font-size: clamp(1.9rem, 3vw, 2.6rem);
+}
+
+#<?= $componentId ?> .sheet-body h3 {
+    margin-top: 1.6rem;
+    font-size: clamp(1.3rem, 2.4vw, 1.86rem);
+}
+
+#<?= $componentId ?> .sheet-body a {
+    color: <?= htmlspecialchars($primaryColor) ?>;
+}
+
+#<?= $componentId ?> .sheet-body ul,
+#<?= $componentId ?> .sheet-body ol {
+    padding-left: 1.2rem;
+}
+
+#<?= $componentId ?> .sheet-body blockquote {
+    margin: 1.4rem 0;
+    padding: 1rem 1.1rem;
+    border-left: 3px solid <?= htmlspecialchars($secondaryColor) ?>;
+    background: rgba(255,255,255,0.04);
+    border-radius: 0 18px 18px 0;
+}
+
+#<?= $componentId ?> .sheet-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.4rem 0;
+}
+
+#<?= $componentId ?> .sheet-body table th,
+#<?= $componentId ?> .sheet-body table td {
+    padding: 0.72rem 0.78rem;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .sheet-foot {
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .back-home {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0.44rem 0.8rem;
+    border-radius: 999px;
+    color: #09192a;
+    text-decoration: none;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: linear-gradient(92deg, <?= htmlspecialchars($primaryColor) ?> 0%, <?= htmlspecialchars($secondaryColor) ?> 100%);
+}
+
+#<?= $componentId ?> .related-strip {
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .related-head {
+    display: grid;
+    gap: 0.7rem;
+}
+
+#<?= $componentId ?> .related-head h3 {
+    font-size: clamp(1.8rem, 3vw, 2.7rem);
+    line-height: 0.96;
+    letter-spacing: -0.05em;
+}
+
+#<?= $componentId ?> .related-grid {
+    margin-top: 0.9rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.86rem;
+}
+
+#<?= $componentId ?> .related-media {
+    display: block;
+    overflow: hidden;
+    border-radius: 22px;
+}
+
+#<?= $componentId ?> .related-copy {
+    margin-top: 0.78rem;
+}
+
+#<?= $componentId ?> .related-copy h4 a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .related-copy span {
+    display: block;
+    margin-top: 0.46rem;
+    color: rgba(248,250,252,0.58);
+    font-size: 0.76rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 1040px) {
+    #<?= $componentId ?> .article-mast.has-cover,
+    #<?= $componentId ?> .detail-layout.has-rail,
+    #<?= $componentId ?> .related-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 4.15rem 0 4.8rem;
+    }
+
+    #<?= $componentId ?> .detail-shell {
+        width: min(100%, calc(100% - 0.78rem));
+    }
+
+    #<?= $componentId ?> .article-mast,
+    #<?= $componentId ?> .tool-card,
+    #<?= $componentId ?> .reading-sheet,
+    #<?= $componentId ?> .detail-empty,
+    #<?= $componentId ?> .related-card {
+        border-radius: 26px;
+    }
+
+    #<?= $componentId ?> .tool-card {
+        border-radius: 0;
+    }
+
+    #<?= $componentId ?> .share-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+</style>

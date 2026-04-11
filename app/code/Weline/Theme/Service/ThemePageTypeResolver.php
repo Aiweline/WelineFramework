@@ -174,7 +174,7 @@ final class ThemePageTypeResolver
             }
         }
 
-        $requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
+        $requestUri = (string) (\w_env('request.uri', '') ?? '');
         return $this->detectLayoutTypeFromUri($requestUri);
     }
 

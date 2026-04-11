@@ -1,0 +1,83 @@
+<?php
+/**
+ * Court Piece Electric Mahal - Header
+ *
+ * @fields_start
+ *
+ * group:header => 头部区域设置（Header）
+ * header.logo.display => 显示Logo:select:yes|yes,no
+ * header.logo.text => Logo文本:text:Court Piece Electric Mahal
+ * header.logo.subline => Logo副标题:text:Electric Mahal
+ * header.logo.url => Logo地址:textarea:|默认使用本地mahal-emblem.svg
+ * header.logo.width => Logo宽度:responsive:68/72|px[移动端和PC端默认按主题设计输出]
+ * header.logo.height => Logo高度:responsive:|px[可选，默认跟随宽度]
+ * header.navigation.display => 显示导航:select:yes|yes,no
+ * header.navigation.bg_color => 导航背景色:color:#0a0a0f
+ * header.navigation.text_color => 导航文字颜色:color:#fff7ef
+ * header.navigation.link_color => 链接颜色:color:#f6ecff
+ * header.navigation.link_hover_color => 链接悬停颜色:color:#ffd166
+ * header.navigation.use_custom_links => 使用自定义导航链接:select:yes|yes,no
+ * header.navigation.use_subpages => 使用子页面作为导航:select:no|yes,no
+ * header.navigation.items => 导航项配置:textarea:Home=>/\r\nAbout=>/about\r\nBlog=>/blog\r\nFAQs=>/faqs|配置格式：名字=>url，一行一个
+ * group:header_nav_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * header.navigation.label_home_page => 首页菜单名:text:
+ * header.navigation.label_about_page => 关于我们菜单名:text:
+ * header.navigation.label_blog_list => 博客菜单名:text:
+ * header.navigation.label_contact_page => 联系我们菜单名:text:
+ * header.navigation.label_terms_of_service => 条款菜单名:text:
+ * header.navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * header.download_button.text => 下载按钮文本:text:Download App
+ * header.download_button.display => 显示下载按钮:select:yes|yes,no
+ * header.download_button.bg_color => 按钮背景颜色:color:#ff6b35
+ * header.download_button.hover_bg_color => 按钮悬停背景色:color:#ffd166
+ * header.download_button.text_color => 按钮文字颜色:color:#351500
+ * header.download_button.size => 按钮字体大小:responsive:13/14|px[保持当前主题视觉]
+ * header.download_button.padding => 按钮内边距:responsive:11/13|px[保持当前主题视觉]
+ * header.download_button.border_radius => 按钮圆角:number:999|px
+ * header.download_button.extra_classes => 按钮额外CSS类:textarea:|当前主题主要使用组件内样式，可留空
+ * header.download_button.url => 下载链接:text:#download
+ *
+ * group:banner => Banner横幅区域设置（Hero/Banner）【已独立为组件hero-slider】
+ * banner.display => 显示Banner区域:select:no|yes,no【建议使用hero-slider组件代替】
+ * banner.image_mobile => 移动端Banner图片:textarea:|【已迁移到hero-slider组件】
+ * banner.image_desktop => PC端Banner图片:textarea:|【已迁移到hero-slider组件】
+ * banner.alt => Banner图片描述:text:Court Piece Electric Mahal hero
+ * banner.download_btn_image => Banner中下载按钮图片:textarea:|【已迁移到hero-slider组件】
+ * banner.download_btn_alt => Banner中下载按钮描述:text:Download App
+ * banner.bg_color => Banner背景颜色:color:#2b0f54
+ * banner.padding_v => Banner上下内边距:responsive:0/0|px[MD]
+ * banner.slider_classes => Banner轮播区域CSS类:textarea:cpe-hero-stage
+ *
+ * group:color_scheme => 全局色系设置
+ * color_scheme.scheme => 选择色系:select:default|default,blue,purple,green,red
+ *
+ * group:pixel => 像素统计
+ * pixel.enabled => 启用像素统计:select:yes|yes,no
+ * pixel.name => 像素名称:text:{handle}
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+
+$templateCode = $page ? $page->getData('style') : 'court-piece-electric-mahal';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'court-piece-electric-mahal';
+}
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+$this->assign('component_config', is_array($componentConfig) ? $componentConfig : []);
+$this->assign('__cpe_shell_managed', true);
+$this->assign('__pagebuilder_shell_managed', true);
+?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/court-piece-electric-mahal/components/header/nav.phtml') ?>

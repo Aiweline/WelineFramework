@@ -24,6 +24,17 @@ class CodeFixer
         return $this->fixes;
     }
 
+    private function normalizePhpEchoTags(string $content, string $context): string
+    {
+        $original = $content;
+        $content = preg_replace('/<\?php\s*=\s*/i', '<?= ', $content);
+        $content = preg_replace('/<\?\s+=\s*/', '<?= ', $content);
+        if ($content !== $original) {
+            $this->addFix($context, '规范化了错误的 PHP 回显标签');
+        }
+        return $content;
+    }
+
     /**
      * 清除修复记录
      */
@@ -50,6 +61,7 @@ class CodeFixer
         
         // 3. 修复PHP标签问题
         $code = $this->fixPhpTags($code);
+        $code = $this->normalizePhpEchoTags($code, 'phtml');
         
         // 4. 修复未闭合的括号
         $code = $this->balanceBrackets($code);
@@ -178,6 +190,7 @@ class CodeFixer
         if ($html !== $original) {
             $this->addFix('html_content', '替换了反引号为单引号');
         }
+        $html = $this->normalizePhpEchoTags($html, 'html_content');
         return $html;
     }
 
@@ -304,6 +317,8 @@ class CodeFixer
         }
         
         // 修复大括号匹配
+        $css = $this->normalizePhpEchoTags($css, 'css');
+
         $openCount = substr_count($css, '{');
         $closeCount = substr_count($css, '}');
         if ($openCount > $closeCount) {

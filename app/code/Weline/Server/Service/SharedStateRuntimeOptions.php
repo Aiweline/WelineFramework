@@ -82,6 +82,12 @@ class SharedStateRuntimeOptions
                     'port' => $this->memory['port'],
                     'token_file_name' => $this->memory['token_file_name'],
                 ],
+                'shared_state' => [
+                    'runtime' => [
+                        'session' => $this->session,
+                        'memory' => $this->memory,
+                    ],
+                ],
             ],
         ];
     }
