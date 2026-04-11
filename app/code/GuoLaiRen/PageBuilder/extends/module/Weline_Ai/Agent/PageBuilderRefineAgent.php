@@ -213,6 +213,8 @@ SYSTEM_PROMPT;
         $allToolCalls = [];
         $finalContent = '';
         $useStreamFull = method_exists($provider, 'generateStreamFull');
+        /** @var callable(AiModel, string, array): array|null $streamFullCallable */
+        $streamFullCallable = $useStreamFull ? [$provider, 'generateStreamFull'] : null;
 
         while ($iteration < self::MAX_ITERATIONS) {
             if ($streamCallback) {
@@ -234,8 +236,8 @@ SYSTEM_PROMPT;
                     $streamCallback('heartbeat', ['ts' => time()]);
                 }
 
-                if ($useStreamFull) {
-                    $response = $provider->generateStreamFull($model, '', [
+                if ($streamFullCallable !== null) {
+                    $response = $streamFullCallable($model, '', [
                         'messages' => $messages,
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.6),
