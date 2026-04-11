@@ -12,11 +12,14 @@
 
 ### AI 建站（新架构计划，按模块拆分）
 
+- [计划-AI建站中台-PageBuilder拓展流程与进展.md](./计划-AI建站中台-PageBuilder拓展流程与进展.md) — **中台 + PageBuilder provider**：`Websites` 壳层、`pagebuilder` 拓展、计划/进展收敛（权威全文链到 `dev/ai/codex/AI工作台/`）
 - [计划-新AI建站工作台-页面区块与智能体.md](./计划-新AI建站工作台-页面区块与智能体.md) — **仅 PageBuilder**：`blocks[]`、`ai_html`、物化、Visual、`can_publish` 消费侧、PB 冒烟与 Playwright 中的 PB 段
 - [阶段2-预置工作区-双轨-IA.md](./阶段2-预置工作区-双轨-IA.md) — 阶段2 双轨切换与 `workspace_track` / `site_ready` 契约摘要
 - [`Weline/Server/doc/计划-AI建站-w_query与本机hosts.md`](../../../Weline/Server/doc/计划-AI建站-w_query与本机hosts.md) — **仅 WLS**：`w_query`/hosts、跨 OS、CI、与通配证书/Worker SSL 衔接
 - [`Weline/Websites/doc/计划-AI建站工作台-Websites侧.md`](../../../Weline/Websites/doc/计划-AI建站工作台-Websites侧.md) — **仅 Websites**：Agent Tools、本地供应商、订单生命周期、handoff、`site_ready`
 - [智能体组件生成计划.md](./智能体组件生成计划.md) — **另一能力**：`ai-generate` / 单组件生成，与上者区分
+
+**进度口径**：以 `dev/ai/codex/AI工作台/Websites-AI建站工作台-进度.md` 与 [计划-AI建站中台-PageBuilder拓展流程与进展.md](./计划-AI建站中台-PageBuilder拓展流程与进展.md) 为准；二者若有不一致，以**各自文首/维护说明中的最新修订日期**较新者为准。
 
 ### 使用与配置
 

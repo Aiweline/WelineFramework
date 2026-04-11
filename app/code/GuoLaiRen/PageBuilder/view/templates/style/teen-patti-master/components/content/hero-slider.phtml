@@ -1,0 +1,411 @@
+<?php
+/**
+ * Teen Patti Master - Hero Slider Component
+ *
+ * 全屏视差滚动Hero区域，带动画效果
+ *
+ * @component_start
+ * code: hero-slider
+ * name: Hero轮播区
+ * name_en: Hero Slider
+ * description: 全屏视差效果，动态渐变背景
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * hero.display => 显示首屏模块:select:yes|yes,no
+ *
+ * group:hero => Hero设置
+ * hero.title => 主标题:text:Experience the Thrill of Teen Patti Master
+ * hero.subtitle => 副标题:textarea:India's favorite 3-card showdown - play anytime, anywhere
+ * hero.alt => 主视觉描述:text:Teen Patti Master hero
+ * hero.cta_text => CTA按钮文字:text:Download Now
+ * hero.cta_url => CTA按钮链接:text:#download
+ * hero.secondary_cta_text => 次按钮文字:text:Register Now
+ * hero.secondary_cta_url => 次按钮链接:text:#register
+ * hero.image => 左侧图片:textarea:|留空使用默认图
+ * hero.image_mobile => 移动端主视觉:textarea:|留空跟随桌面图
+ * hero.bg_color => 背景基础色:color:#1a0f3d
+ * hero.bg_image => 背景图片:textarea:|留空使用渐变背景
+ *
+ * group:download_btn => 下载资源
+ * download_btn.display => 显示下载资源:select:no|yes,no
+ * download_btn.image => 下载按钮图片:textarea:
+ * download_btn.alt => 下载按钮描述:text:Download Now
+ * download_btn.url => 下载按钮链接:text:#download
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 区域CSS类:textarea:hero-slider
+ * layout.margin_top => 区域顶部偏移:number:0|px
+ * layout.img_margin_top => 图片顶部偏移:number:0|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'abpro-hero-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$display = $normalizeToggle($getConfigAny(['hero.display', 'banner.display'], 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$sliderClasses = trim((string) $getConfig('layout.slider_classes', 'hero-slider'));
+$marginTop = (int) $getConfig('layout.margin_top', 0);
+$imgMarginTop = (int) $getConfig('layout.img_margin_top', 0);
+$title = trim((string) $getConfigAny(['hero.title', 'banner.title'], 'Experience the Thrill of Teen Patti Master'));
+$subtitle = trim((string) $getConfigAny(['hero.subtitle', 'banner.subtitle'], "India's favorite 3-card showdown - play anytime, anywhere"));
+$heroAlt = trim((string) $getConfigAny(['hero.alt', 'banner.alt'], 'Teen Patti Master hero'));
+$heroBgColor = trim((string) $getConfigAny(['hero.bg_color', 'banner.bg_color'], '#1a0f3d'));
+$ctaText = trim((string) $getConfigAny(['hero.cta_text', 'download_btn.text', 'banner.download_btn_alt'], 'Download Now'));
+$ctaUrl = trim((string) $getConfigAny(['hero.cta_url', 'download_btn.url'], '#download'));
+$ctaSecondaryText = trim((string) $getConfig('hero.secondary_cta_text', 'Register Now'));
+$ctaSecondaryUrl = trim((string) $getConfig('hero.secondary_cta_url', '#register'));
+$heroImage = trim((string) $getConfigAny(['hero.image', 'banner.image_desktop', 'banner.image_mobile'], ''));
+$heroImage = $heroImage !== '' ? $heroImage : $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-master/asset/img/hero-info-graphic.svg');
+$heroImageMobile = trim((string) $getConfigAny(['hero.image_mobile', 'banner.image_mobile'], ''));
+$heroImageMobile = $heroImageMobile !== '' ? $heroImageMobile : $heroImage;
+$bgImage = trim((string) $getConfigAny(['hero.bg_image', 'banner.image_desktop'], ''));
+$downloadBtnDisplay = $normalizeToggle($getConfig('download_btn.display', 'no'), 'no') !== 'no';
+$downloadBtnImage = trim((string) $getConfigAny(['download_btn.image', 'banner.download_btn_image'], ''));
+$downloadBtnAlt = trim((string) $getConfigAny(['download_btn.alt', 'banner.download_btn_alt', 'hero.cta_text'], 'Download Now'));
+$downloadBtnUrl = trim((string) $getConfigAny(['download_btn.url', 'hero.cta_url'], '#download'));
+?>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-top: <?= (int) $marginTop ?>px;
+}
+
+#<?= $componentId ?> .hero-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1;
+}
+
+<?php if ($bgImage !== ''): ?>
+#<?= $componentId ?> .hero-bg::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url('<?= htmlspecialchars($bgImage) ?>');
+    background-size: cover;
+    background-position: center;
+    opacity: 0.3;
+}
+<?php endif; ?>
+
+#<?= $componentId ?> .hero-bg::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        radial-gradient(680px 320px at 18% 12%, rgba(255, 215, 0, 0.18), transparent 70%),
+        radial-gradient(560px 280px at 88% 16%, rgba(125, 31, 199, 0.26), transparent 72%),
+        linear-gradient(180deg, rgba(26, 15, 61, 0.78) 0%, rgba(12, 8, 34, 0.92) 100%),
+        <?= htmlspecialchars($heroBgColor, ENT_QUOTES, 'UTF-8') ?>;
+}
+
+#<?= $componentId ?> .hero-content {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    padding: clamp(2rem, 6vw, 5rem) clamp(1.5rem, 5vw, 4rem);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .hero-info-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .hero-figure {
+    width: 100%;
+    max-width: 380px;
+}
+
+#<?= $componentId ?> .hero-figure img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 24px;
+    filter: drop-shadow(0 30px 60px rgba(8, 4, 24, 0.55));
+    margin-top: <?= (int) $imgMarginTop ?>px;
+}
+
+#<?= $componentId ?> .hero-info {
+    width: 100%;
+    text-align: left;
+}
+
+#<?= $componentId ?> .hero-title {
+    font-size: clamp(2.2rem, 4.6vw, 3.9rem);
+    font-weight: 800;
+    background: linear-gradient(135deg, #ffd700 0%, #f59e0b 50%, #ffd700 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.05;
+    text-shadow:
+        0 0 12px rgba(251, 191, 36, 0.45),
+        0 0 26px rgba(255, 223, 128, 0.35);
+    animation: fadeInUp 1s ease-out;
+}
+
+#<?= $componentId ?> .hero-subtitle {
+    font-size: clamp(1.05rem, 1.9vw, 1.25rem);
+    color: #e5e7eb;
+    margin-top: 1.75rem;
+    line-height: 1.6;
+    animation: fadeInUp 1s ease-out 0.2s both;
+}
+
+#<?= $componentId ?> .entry-footer {
+    margin-top: 2rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .hero-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.05rem 2.6rem;
+    font-size: 1.05rem;
+    font-weight: 700;
+    border-radius: 9999px;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border: 2px solid transparent;
+    line-height: 1;
+    animation: fadeInUp 1s ease-out 0.4s both;
+}
+
+#<?= $componentId ?> .hero-cta.primary {
+    background: linear-gradient(270deg, rgba(171,0,229,1) 0%, rgba(88,20,121,1) 100%);
+    color: #ffffff;
+    border-color: #9a24c1;
+    box-shadow: 0 18px 45px rgba(88, 20, 121, 0.45);
+}
+
+#<?= $componentId ?> .hero-cta.secondary {
+    background: #231e23;
+    color: #ffffff;
+    box-shadow: 0 14px 35px rgba(0, 0, 0, 0.35);
+}
+
+#<?= $componentId ?> .hero-cta:hover {
+    transform: translateY(-4px);
+}
+
+#<?= $componentId ?> .hero-download-asset {
+    margin-top: 1.2rem;
+    display: inline-flex;
+    align-items: center;
+}
+
+#<?= $componentId ?> .hero-download-asset img {
+    display: block;
+    height: auto;
+    max-width: 220px;
+}
+
+#<?= $componentId ?> .floating-cards {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    z-index: 2;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .card-icon {
+    position: absolute;
+    font-size: 3rem;
+    opacity: 0.1;
+    animation: float 6s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .card-icon:nth-child(1) {
+    top: 10%;
+    left: 10%;
+    animation-delay: 0s;
+}
+
+#<?= $componentId ?> .card-icon:nth-child(2) {
+    top: 20%;
+    right: 15%;
+    animation-delay: 1s;
+}
+
+#<?= $componentId ?> .card-icon:nth-child(3) {
+    bottom: 15%;
+    left: 15%;
+    animation-delay: 2s;
+}
+
+#<?= $componentId ?> .card-icon:nth-child(4) {
+    bottom: 25%;
+    right: 10%;
+    animation-delay: 3s;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes float {
+    0%, 100% {
+        transform: translateY(0px) rotate(0deg);
+    }
+    25% {
+        transform: translateY(-20px) rotate(5deg);
+    }
+    50% {
+        transform: translateY(-40px) rotate(0deg);
+    }
+    75% {
+        transform: translateY(-20px) rotate(-5deg);
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        min-height: 80vh;
+    }
+
+    #<?= $componentId ?> .card-icon {
+        font-size: 2rem;
+    }
+}
+
+@media (min-width: 768px) {
+    #<?= $componentId ?> .hero-info-grid {
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 3.5rem;
+    }
+
+    #<?= $componentId ?> .hero-figure {
+        width: 42%;
+        max-width: none;
+        padding-right: 20px;
+    }
+
+    #<?= $componentId ?> .hero-info {
+        width: 58%;
+    }
+}
+</style>
+
+<section id="<?= $componentId ?>" class="<?= htmlspecialchars($sliderClasses) ?>">
+    <div class="hero-bg"></div>
+
+    <div class="floating-cards">
+        <div class="card-icon">🃏</div>
+        <div class="card-icon">♠️</div>
+        <div class="card-icon">♥️</div>
+        <div class="card-icon">♦️</div>
+    </div>
+
+    <div class="hero-content">
+        <div class="hero-info-grid">
+            <figure class="hero-figure">
+                <picture>
+                    <?php if ($heroImageMobile !== ''): ?>
+                    <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($heroImageMobile) ?>">
+                    <?php endif; ?>
+                    <img src="<?= htmlspecialchars($heroImage) ?>" alt="<?= htmlspecialchars($heroAlt) ?>" loading="lazy" decoding="async">
+                </picture>
+            </figure>
+
+            <div class="hero-info">
+                <header class="entry-header">
+                    <h1 class="hero-title entry-title"><?= htmlspecialchars($title) ?></h1>
+                </header>
+
+                <div class="entry-content">
+                    <p class="hero-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+                </div>
+
+                <footer class="entry-footer">
+                    <a href="<?= htmlspecialchars($ctaUrl !== '' ? $ctaUrl : '#download') ?>" class="hero-cta primary">
+                        <?= htmlspecialchars($ctaText) ?>
+                    </a>
+                    <?php if ($ctaSecondaryText !== ''): ?>
+                        <a href="<?= htmlspecialchars($ctaSecondaryUrl !== '' ? $ctaSecondaryUrl : '#register') ?>" class="hero-cta secondary">
+                            <?= htmlspecialchars($ctaSecondaryText) ?>
+                        </a>
+                    <?php endif; ?>
+                </footer>
+
+                <?php if ($downloadBtnDisplay && $downloadBtnImage !== ''): ?>
+                <a class="hero-download-asset" href="<?= htmlspecialchars($downloadBtnUrl !== '' ? $downloadBtnUrl : '#download') ?>" aria-label="<?= htmlspecialchars($downloadBtnAlt) ?>">
+                    <img src="<?= htmlspecialchars($downloadBtnImage) ?>" alt="<?= htmlspecialchars($downloadBtnAlt) ?>" loading="lazy" decoding="async">
+                </a>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</section>

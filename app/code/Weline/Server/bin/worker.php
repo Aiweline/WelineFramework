@@ -1396,6 +1396,8 @@ while (true) {
     $fiberScheduler->tick(function (\Fiber $fiber) use (&$activeFibers) {
         foreach ($activeFibers as $afData) {
             if ($afData['fiber'] === $fiber && isset($afData['context'])) {
+                // Fiber resume：直接恢复该 Fiber 的快照（包含 $_SERVER/$_GET 等超全局变量和 Request 对象）
+                // 不调用 reset()，避免清理掉该 Fiber 已建立的 Session 等状态
                 $afData['context']->restore();
                 return;
             }
@@ -1708,6 +1710,7 @@ function wlsProcessActiveFibersAfterTick(
         $af = $afData['fiber'];
         if ($af->isTerminated()) {
             if (isset($afData['context'])) {
+                // Fiber 终止时恢复其上下文（不恢复响应状态，因为响应已发送）
                 $afData['context']->restore(false);
             }
 
@@ -2559,6 +2562,10 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
  */
 function wlsFiberRequestContextEnter(mixed $conn): void
 {
+    // 关键修复：Fiber 启动时必须完全重置所有请求级状态，防止复用上一个 Fiber 的残留状态
+    // 这是 WLS 多 Fiber 并发的核心隔离点：每个新 Fiber 必须从干净的全局状态开始
+    \Weline\Framework\Runtime\StateManager::reset();
+
     \Weline\Framework\Runtime\RequestContext::cleanup();
     \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
     \Weline\Framework\Http\Sse\SseContext::reset();
@@ -3197,7 +3204,7 @@ function handleRequest(
             (bool) ($pendingResponseStatus['explicit'] ?? false)
         );
 
-        $response = \Weline\Framework\Http\WlsResponse::fromContent($result, $statusCode);
+        $response = \Weline\Framework\Http\Response::fromContent($result, $statusCode);
         
         // 合并应用通过 HeaderCollector 设置的响应头（否则 WLS 会“吞掉”页面/控制器设置的 header）
         $pendingHeaders = $runtime->consumePendingHeaders();
@@ -3211,31 +3218,21 @@ function handleRequest(
         // 合并应用通过 HeaderCollector 设置的 Cookie（与“HTTP/” 分支行为一致）
         $pendingCookies = $runtime->consumePendingCookies();
         foreach ($pendingCookies as $cookie) {
-            $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
-            if (isset($cookie['expire']) && $cookie['expire'] !== 0) {
-                $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
-            }
-            if (!empty($cookie['path'])) {
-                $parts[] = 'Path=' . $cookie['path'];
-            }
-            if (!empty($cookie['domain'])) {
-                $parts[] = 'Domain=' . $cookie['domain'];
-            }
-            if (!empty($cookie['secure'])) {
-                $parts[] = 'Secure';
-            }
-            if (!empty($cookie['httpOnly'])) {
-                $parts[] = 'HttpOnly';
-            }
-            if (!empty($cookie['sameSite'])) {
-                $parts[] = 'SameSite=' . $cookie['sameSite'];
-            }
-            $response->addCookieHeader(\implode('; ', $parts));
+            $response->setCookie(
+                (string)$cookie['name'],
+                (string)$cookie['value'],
+                (int)($cookie['expire'] ?? 0),
+                (string)($cookie['path'] ?? '/'),
+                (string)($cookie['domain'] ?? ''),
+                (bool)($cookie['secure'] ?? false),
+                (bool)($cookie['httpOnly'] ?? true),
+                (string)($cookie['sameSite'] ?? 'Lax')
+            );
         }
         
         // 添加路由提示头（用于 TCP 透传模式下的智能路由）
         $sni = \Weline\Server\Service\RouteHintService::extractSniFromRawRequest($rawRequest);
-        \Weline\Server\Service\RouteHintService::addHintToWlsResponse($response, $sni);
+        \Weline\Server\Service\RouteHintService::addHintToFrameworkResponse($response, $sni);
         
         // 添加 WLS 调试响应头（供开发工具面板使用）
         $response->setHeader('X-WLS-Worker-Id', (string) $workerId);
@@ -3312,8 +3309,7 @@ function handleRequest(
             $errorBody = '{"error":true,"message":"JSON encode failed"}';
         }
         
-        $response = new \Weline\Framework\Http\WlsResponse($errorBody, $statusCode);
-        $response->setHeader('Content-Type', 'application/json; charset=utf-8');
+        $response = \Weline\Framework\Http\Response::fromContent($errorBody, $statusCode, 'application/json; charset=utf-8');
         
         return $response->toHttpString(false);
     }
@@ -3526,7 +3522,7 @@ function handleStaticFile(string $uri, string $rawRequest): ?string
         'status' => 'miss',
         'uri' => $uriPath,
         'path' => $filename,
-    ];
+    ]);
 
     $validatedCached = null;
     $cacheHeaderStatus = 'MISS';

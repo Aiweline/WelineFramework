@@ -1,0 +1,70 @@
+<?php
+/**
+ * 博客列表布局模板
+ * 
+ * 页面类型: blog_list
+ * 描述: 博客文章列表页面布局，继承首页的 header/footer
+ * 
+ * 可用变量:
+ * - $page: Page 模型对象
+ * - $layout_config: 布局配置数组 ['header' => [], 'content' => [], 'footer' => []]
+ * - $style_setting: 样式配置数组
+ * - $mode: 渲染模式 (visual/preview/live)
+ * - $blog_posts: 博客文章列表
+ * - $blog_categories: 博客分类列表
+ * - $recent_posts: 最新文章列表
+ * - $pagination: 分页信息
+ */
+
+// 获取布局配置（header/footer 应该从首页继承而来）
+$layoutConfig = $layout_config ?? [];
+$headerComponents = $layoutConfig['header'] ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+$footerComponents = $layoutConfig['footer'] ?? [];
+
+// 渲染模式
+$isVisualMode = ($mode ?? 'live') === 'visual';
+
+// 博客数据
+$blogPosts = $blog_posts ?? [];
+$blogCategories = $blog_categories ?? [];
+$recentPosts = $recent_posts ?? [];
+?>
+<!DOCTYPE html>
+<html lang="<?= $lang ?? 'en' ?>">
+<head>
+    <?php $this->renderHead($page, $style_setting); ?>
+</head>
+<body class="page-blog page-blog-list">
+    <!-- Header Region (从首页继承) -->
+    <header class="site-header" data-region="header"<?= $isVisualMode ? ' data-slot-name="Header"' : '' ?>>
+        <?php $this->renderRegionComponents('header', $headerComponents, $page); ?>
+    </header>
+    
+    <!-- Main Content Region -->
+    <main class="site-content blog-content" data-region="content"<?= $isVisualMode ? ' data-slot-name="Content"' : '' ?>>
+        <div class="blog-container">
+            <?php if (empty($contentComponents)): ?>
+                <!-- 无自定义内容组件时显示默认博客列表 -->
+                <div class="blog-list-default">
+                    <?php $this->fetch('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/components/content/blog-list.phtml', [
+                        'blog_posts' => $blogPosts,
+                        'blog_categories' => $blogCategories,
+                        'recent_posts' => $recentPosts,
+                        'page' => $page,
+                    ]); ?>
+                </div>
+            <?php else: ?>
+                <?php $this->renderRegionComponents('content', $contentComponents, $page); ?>
+            <?php endif; ?>
+        </div>
+    </main>
+    
+    <!-- Footer Region (从首页继承) -->
+    <footer class="site-footer" data-region="footer"<?= $isVisualMode ? ' data-slot-name="Footer"' : '' ?>>
+        <?php $this->renderRegionComponents('footer', $footerComponents, $page); ?>
+    </footer>
+    
+    <?php $this->renderFooterScripts($page, $style_setting); ?>
+</body>
+</html>

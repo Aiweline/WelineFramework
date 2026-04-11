@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Websites\Adapter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Websites</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Adapter</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#23">Weline\Websites\Adapter\AliyunDomainRegistrar</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#17">Weline\Websites\Adapter\AwsRoute53Registrar</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#22">Weline\Websites\Adapter\AzureDnsRegistrar</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#34">Weline\Websites\Adapter\CloudflareRegistrar</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#25">Weline\Websites\Adapter\GnameRegistrar</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#26">Weline\Websites\Adapter\GoDaddyRegistrar</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#11">Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DnsCdnZoneRecordsProviderTrait.php.html#11">Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarCdnDefaultsTrait.php.html#13">Weline\Websites\Adapter\Concern\DomainRegistrarCdnDefaultsTrait</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarOptionalDefaultsTrait.php.html#6">Weline\Websites\Adapter\Concern\DomainRegistrarAccountDefaultsTrait</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarZoneDefaultsTrait.php.html#6">Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/RegistrarBatchCheckAvailabilityTrait.php.html#9">Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/RegistrarMapsDomainListToHostedTrait.php.html#12">Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/RegistrarProvisioningNormalizeNoopTrait.php.html#12">Weline\Websites\Adapter\Concern\RegistrarProvisioningNormalizeNoopTrait</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="CloudflareRegistrar.php.html#34">Weline\Websites\Adapter\CloudflareRegistrar</a></td><td class="text-right">54522</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#25">Weline\Websites\Adapter\GnameRegistrar</a></td><td class="text-right">33672</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#26">Weline\Websites\Adapter\GoDaddyRegistrar</a></td><td class="text-right">11990</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#17">Weline\Websites\Adapter\AwsRoute53Registrar</a></td><td class="text-right">4970</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#23">Weline\Websites\Adapter\AliyunDomainRegistrar</a></td><td class="text-right">2970</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#11">Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait</a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#22">Weline\Websites\Adapter\AzureDnsRegistrar</a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="Concern/DnsCdnZoneRecordsProviderTrait.php.html#11">Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait</a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Concern/RegistrarBatchCheckAvailabilityTrait.php.html#9">Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait</a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Concern/RegistrarMapsDomainListToHostedTrait.php.html#12">Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait</a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#30"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getRegistrarCode">getRegistrarCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#35"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getRegistrarName">getRegistrarName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#40"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#45"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#50"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getConfigFields">getConfigFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#84"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getConfigHelp">getConfigHelp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#103"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#121"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#158"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#220"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::buildAliyunContactJson">buildAliyunContactJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#257"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::resolveUserClientIp">resolveUserClientIp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#267"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#273"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#286"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::supportsDnsManagement">supportsDnsManagement</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#292"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#298"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#307"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#316"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#325"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#336"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::updateNameservers">updateNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#350"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#367"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::isDomainRegistrar">isDomainRegistrar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#24"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getRegistrarCode">getRegistrarCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#29"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getRegistrarName">getRegistrarName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#34"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#39"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#44"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getConfigFields">getConfigFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#74"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getConfigHelp">getConfigHelp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#93"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#111"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#144"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#212"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::buildAwsContact">buildAwsContact</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#261"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::normalizeAwsContactDetail">normalizeAwsContactDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#281"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::formatE164ForAws">formatE164ForAws</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#300"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#307"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::resolveRegion">resolveRegion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#314"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#352"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#381"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::supportsDnsManagement">supportsDnsManagement</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#386"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#391"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#399"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#407"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#415"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#425"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::updateNameservers">updateNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#433"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#442"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::isDomainRegistrar">isDomainRegistrar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#28"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getRegistrarCode">getRegistrarCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#33"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getRegistrarName">getRegistrarName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#38"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#43"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#48"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getConfigFields">getConfigFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#83"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getConfigHelp">getConfigHelp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#101"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#111"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#124"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#134"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#140"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#153"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::supportsDnsManagement">supportsDnsManagement</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#159"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#165"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#174"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#183"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#192"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#203"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::updateNameservers">updateNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#217"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#233"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::isDomainRegistrar">isDomainRegistrar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#44"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getRegistrarCode">getRegistrarCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#49"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getRegistrarName">getRegistrarName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#54"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#66"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::isDnsCdnCoupledProvider">isDnsCdnCoupledProvider</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#76"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::resolveZoneIdForDomain">resolveZoneIdForDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#101"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::normalizeProvisioningDnsCdnAccounts">normalizeProvisioningDnsCdnAccounts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#185"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::findCloudflareRegistrarAccountIdByApiToken">findCloudflareRegistrarAccountIdByApiToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#220"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::findCloudflareCdnAccountIdByApiToken">findCloudflareCdnAccountIdByApiToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#247"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#252"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getConfigFields">getConfigFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#278"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getConfigHelp">getConfigHelp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#303"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#318"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#394"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#492"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#558"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getHostedDomainList">getHostedDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#604"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::mapRegistrarStatus">mapRegistrarStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#616"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#653"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::supportsDnsManagement">supportsDnsManagement</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#658"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#717"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#788"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDnsRecordByNameAndType">getDnsRecordByNameAndType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#799"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#845"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#874"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#906"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::updateNameservers">updateNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#922"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#968"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getCloudflareNameservers">getCloudflareNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#981"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::addZone">addZone</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1046"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::zoneMissingViaApiMessage">zoneMissingViaApiMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1068"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getZoneId">getZoneId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1097"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::resolveAccountId">resolveAccountId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1119"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getAccountId">getAccountId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1149"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::mapZoneStatus">mapZoneStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1168"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::resolveProxiedValue">resolveProxiedValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1180"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::supportsCloudflareProxy">supportsCloudflareProxy</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1191"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::applyCdnSettingsToDnsRecords">applyCdnSettingsToDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1211"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::verifyCdnConfiguration">verifyCdnConfiguration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1255"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::extractRegistrarPriceFromLookup">extractRegistrarPriceFromLookup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1274"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::checkAvailabilityDnsFallback">checkAvailabilityDnsFallback</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1302"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::buildCloudflareRegistrantContact">buildCloudflareRegistrantContact</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1343"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1354"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::makeRequest">makeRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1432"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::isDomainRegistrar">isDomainRegistrar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#40"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getRegistrarCode">getRegistrarCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#45"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getRegistrarName">getRegistrarName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#50"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#55"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#60"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getConfigFields">getConfigFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#99"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getConfigHelp">getConfigHelp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#118"><abbr title="Weline\Websites\Adapter\GnameRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#157"><abbr title="Weline\Websites\Adapter\GnameRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#196"><abbr title="Weline\Websites\Adapter\GnameRegistrar::hasDnsRecords">hasDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#206"><abbr title="Weline\Websites\Adapter\GnameRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#275"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#332"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#382"><abbr title="Weline\Websites\Adapter\GnameRegistrar::modifyDns">modifyDns</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#419"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getAccountBalance">getAccountBalance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#427"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getContactTemplates">getContactTemplates</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#435"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getTemplates">getTemplates</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#455"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getTldPrices">getTldPrices</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#475"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getBalance">getBalance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#502"><abbr title="Weline\Websites\Adapter\GnameRegistrar::normalizeCredentials">normalizeCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#521"><abbr title="Weline\Websites\Adapter\GnameRegistrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#538"><abbr title="Weline\Websites\Adapter\GnameRegistrar::buildApiPath">buildApiPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#561"><abbr title="Weline\Websites\Adapter\GnameRegistrar::generateSignature">generateSignature</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#584"><abbr title="Weline\Websites\Adapter\GnameRegistrar::makeRequest">makeRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#728"><abbr title="Weline\Websites\Adapter\GnameRegistrar::configSsl">configSsl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#775"><abbr title="Weline\Websites\Adapter\GnameRegistrar::extractTld">extractTld</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#790"><abbr title="Weline\Websites\Adapter\GnameRegistrar::fetchTldPriceMap">fetchTldPriceMap</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#824"><abbr title="Weline\Websites\Adapter\GnameRegistrar::shouldConfirmPurchasedDomain">shouldConfirmPurchasedDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#854"><abbr title="Weline\Websites\Adapter\GnameRegistrar::confirmDomainOwnedByCurrentAccount">confirmDomainOwnedByCurrentAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#888"><abbr title="Weline\Websites\Adapter\GnameRegistrar::domainExistsInList">domainExistsInList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#915"><abbr title="Weline\Websites\Adapter\GnameRegistrar::normalizeStatus">normalizeStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#947"><abbr title="Weline\Websites\Adapter\GnameRegistrar::supportsDnsManagement">supportsDnsManagement</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#955"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1029"><abbr title="Weline\Websites\Adapter\GnameRegistrar::checkFqdnOriginPointsToServer">checkFqdnOriginPointsToServer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1109"><abbr title="Weline\Websites\Adapter\GnameRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1174"><abbr title="Weline\Websites\Adapter\GnameRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1211"><abbr title="Weline\Websites\Adapter\GnameRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1239"><abbr title="Weline\Websites\Adapter\GnameRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1266"><abbr title="Weline\Websites\Adapter\GnameRegistrar::updateNameservers">updateNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1280"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1307"><abbr title="Weline\Websites\Adapter\GnameRegistrar::fetchDefaultNameserversFromDnsList">fetchDefaultNameserversFromDnsList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1360"><abbr title="Weline\Websites\Adapter\GnameRegistrar::fetchDnsInfoById">fetchDnsInfoById</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1383"><abbr title="Weline\Websites\Adapter\GnameRegistrar::isDomainRegistrar">isDomainRegistrar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#49"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getRegistrarCode">getRegistrarCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#54"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getRegistrarName">getRegistrarName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#59"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#64"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#69"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getConfigFields">getConfigFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#111"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getConfigHelp">getConfigHelp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#133"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#148"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#194"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#269"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::buildGoDaddyContactFromFlat">buildGoDaddyContactFromFlat</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#306"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#352"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#378"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getAccountBalance">getAccountBalance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#390"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getTldPrices">getTldPrices</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#405"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getContactTemplates">getContactTemplates</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#419"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::supportsDnsManagement">supportsDnsManagement</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#424"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#452"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#495"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#540"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#585"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#613"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::updateNameservers">updateNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#637"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#649"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::isDomainRegistrar">isDomainRegistrar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#661"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#676"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::normalizeCredentials">normalizeCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#697"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::makeRequest">makeRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#800"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::isSuccessResponse">isSuccessResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#820"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::normalizeStatus">normalizeStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#13"><abbr title="Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait::checkFqdnOriginPointsToServer">checkFqdnOriginPointsToServer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#75"><abbr title="Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait::defaultCollectDirectAaaaForFqdn">defaultCollectDirectAaaaForFqdn</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#103"><abbr title="Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait::defaultRecordHostToFqdn">defaultRecordHostToFqdn</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DnsCdnZoneRecordsProviderTrait.php.html#13"><abbr title="Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait::listZoneDnsRecordsForAccount">listZoneDnsRecordsForAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarCdnDefaultsTrait.php.html#19"><abbr title="Weline\Websites\Adapter\Concern\DomainRegistrarCdnDefaultsTrait::applyCdnSettingsToDnsRecords">applyCdnSettingsToDnsRecords</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarCdnDefaultsTrait.php.html#29"><abbr title="Weline\Websites\Adapter\Concern\DomainRegistrarCdnDefaultsTrait::verifyCdnConfiguration">verifyCdnConfiguration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarOptionalDefaultsTrait.php.html#8"><abbr title="Weline\Websites\Adapter\Concern\DomainRegistrarAccountDefaultsTrait::getAccountBalance">getAccountBalance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarOptionalDefaultsTrait.php.html#13"><abbr title="Weline\Websites\Adapter\Concern\DomainRegistrarAccountDefaultsTrait::getTldPrices">getTldPrices</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarOptionalDefaultsTrait.php.html#18"><abbr title="Weline\Websites\Adapter\Concern\DomainRegistrarAccountDefaultsTrait::getContactTemplates">getContactTemplates</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarZoneDefaultsTrait.php.html#8"><abbr title="Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait::addZone">addZone</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/DomainRegistrarZoneDefaultsTrait.php.html#16"><abbr title="Weline\Websites\Adapter\Concern\DomainRegistrarZoneDefaultsTrait::getHostedDomainList">getHostedDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/RegistrarBatchCheckAvailabilityTrait.php.html#11"><abbr title="Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait::batchCheckAvailability">batchCheckAvailability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/RegistrarMapsDomainListToHostedTrait.php.html#14"><abbr title="Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait::getHostedDomainList">getHostedDomainList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Concern/RegistrarProvisioningNormalizeNoopTrait.php.html#14"><abbr title="Weline\Websites\Adapter\Concern\RegistrarProvisioningNormalizeNoopTrait::normalizeProvisioningDnsCdnAccounts">normalizeProvisioningDnsCdnAccounts</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="CloudflareRegistrar.php.html#101"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::normalizeProvisioningDnsCdnAccounts">normalizeProvisioningDnsCdnAccounts</abbr></a></td><td class="text-right">812</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1029"><abbr title="Weline\Websites\Adapter\GnameRegistrar::checkFqdnOriginPointsToServer">checkFqdnOriginPointsToServer</abbr></a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#212"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::buildAwsContact">buildAwsContact</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#269"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::buildGoDaddyContactFromFlat">buildGoDaddyContactFromFlat</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#584"><abbr title="Weline\Websites\Adapter\GnameRegistrar::makeRequest">makeRequest</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#318"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1307"><abbr title="Weline\Websites\Adapter\GnameRegistrar::fetchDefaultNameserversFromDnsList">fetchDefaultNameserversFromDnsList</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#955"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#194"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#697"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::makeRequest">makeRequest</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#394"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1109"><abbr title="Weline\Websites\Adapter\GnameRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1302"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::buildCloudflareRegistrantContact">buildCloudflareRegistrantContact</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#158"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#13"><abbr title="Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait::checkFqdnOriginPointsToServer">checkFqdnOriginPointsToServer</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#220"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::buildAliyunContactJson">buildAliyunContactJson</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#220"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::findCloudflareCdnAccountIdByApiToken">findCloudflareCdnAccountIdByApiToken</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#717"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1354"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::makeRequest">makeRequest</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#206"><abbr title="Weline\Websites\Adapter\GnameRegistrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#275"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#121"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#185"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::findCloudflareRegistrarAccountIdByApiToken">findCloudflareRegistrarAccountIdByApiToken</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#492"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1211"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::verifyCdnConfiguration">verifyCdnConfiguration</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1255"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::extractRegistrarPriceFromLookup">extractRegistrarPriceFromLookup</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#790"><abbr title="Weline\Websites\Adapter\GnameRegistrar::fetchTldPriceMap">fetchTldPriceMap</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#75"><abbr title="Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait::defaultCollectDirectAaaaForFqdn">defaultCollectDirectAaaaForFqdn</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#111"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#314"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#658"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#799"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#981"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::addZone">addZone</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1068"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getZoneId">getZoneId</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#728"><abbr title="Weline\Websites\Adapter\GnameRegistrar::configSsl">configSsl</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#148"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#261"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::normalizeAwsContactDetail">normalizeAwsContactDetail</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#788"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDnsRecordByNameAndType">getDnsRecordByNameAndType</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#922"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1119"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getAccountId">getAccountId</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1274"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::checkAvailabilityDnsFallback">checkAvailabilityDnsFallback</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#144"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::purchaseDomain">purchaseDomain</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1097"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::resolveAccountId">resolveAccountId</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#824"><abbr title="Weline\Websites\Adapter\GnameRegistrar::shouldConfirmPurchasedDomain">shouldConfirmPurchasedDomain</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#306"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getDomainList">getDomainList</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#452"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::addDnsRecord">addDnsRecord</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#495"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#540"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Concern/DefaultDnsZoneOriginMatchTrait.php.html#103"><abbr title="Weline\Websites\Adapter\Concern\DefaultDnsZoneOriginMatchTrait::defaultRecordHostToFqdn">defaultRecordHostToFqdn</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#103"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#76"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::resolveZoneIdForDomain">resolveZoneIdForDomain</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#558"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getHostedDomainList">getHostedDomainList</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#845"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#874"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1191"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::applyCdnSettingsToDnsRecords">applyCdnSettingsToDnsRecords</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#157"><abbr title="Weline\Websites\Adapter\GnameRegistrar::checkAvailability">checkAvailability</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#854"><abbr title="Weline\Websites\Adapter\GnameRegistrar::confirmDomainOwnedByCurrentAccount">confirmDomainOwnedByCurrentAccount</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1360"><abbr title="Weline\Websites\Adapter\GnameRegistrar::fetchDnsInfoById">fetchDnsInfoById</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#424"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getDnsRecords">getDnsRecords</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#800"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::isSuccessResponse">isSuccessResponse</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="AliyunDomainRegistrar.php.html#257"><abbr title="Weline\Websites\Adapter\AliyunDomainRegistrar::resolveUserClientIp">resolveUserClientIp</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#281"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::formatE164ForAws">formatE164ForAws</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#300"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#352"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AzureDnsRegistrar.php.html#101"><abbr title="Weline\Websites\Adapter\AzureDnsRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#303"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#616"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#118"><abbr title="Weline\Websites\Adapter\GnameRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#196"><abbr title="Weline\Websites\Adapter\GnameRegistrar::hasDnsRecords">hasDnsRecords</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#332"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#521"><abbr title="Weline\Websites\Adapter\GnameRegistrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#888"><abbr title="Weline\Websites\Adapter\GnameRegistrar::domainExistsInList">domainExistsInList</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1174"><abbr title="Weline\Websites\Adapter\GnameRegistrar::updateDnsRecord">updateDnsRecord</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1239"><abbr title="Weline\Websites\Adapter\GnameRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#352"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getDomainDetail">getDomainDetail</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#585"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::batchAddDnsRecords">batchAddDnsRecords</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#661"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#93"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::testConnection">testConnection</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AwsRoute53Registrar.php.html#307"><abbr title="Weline\Websites\Adapter\AwsRoute53Registrar::resolveRegion">resolveRegion</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#604"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::mapRegistrarStatus">mapRegistrarStatus</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1168"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::resolveProxiedValue">resolveProxiedValue</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CloudflareRegistrar.php.html#1343"><abbr title="Weline\Websites\Adapter\CloudflareRegistrar::validateCredentials">validateCredentials</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#382"><abbr title="Weline\Websites\Adapter\GnameRegistrar::modifyDns">modifyDns</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#435"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getTemplates">getTemplates</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#455"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getTldPrices">getTldPrices</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#475"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getBalance">getBalance</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#502"><abbr title="Weline\Websites\Adapter\GnameRegistrar::normalizeCredentials">normalizeCredentials</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#538"><abbr title="Weline\Websites\Adapter\GnameRegistrar::buildApiPath">buildApiPath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#561"><abbr title="Weline\Websites\Adapter\GnameRegistrar::generateSignature">generateSignature</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#775"><abbr title="Weline\Websites\Adapter\GnameRegistrar::extractTld">extractTld</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1211"><abbr title="Weline\Websites\Adapter\GnameRegistrar::deleteDnsRecord">deleteDnsRecord</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GnameRegistrar.php.html#1280"><abbr title="Weline\Websites\Adapter\GnameRegistrar::getProviderNameservers">getProviderNameservers</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#133"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::testConnection">testConnection</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#405"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::getContactTemplates">getContactTemplates</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#613"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::updateNameservers">updateNameservers</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GoDaddyRegistrar.php.html#820"><abbr title="Weline\Websites\Adapter\GoDaddyRegistrar::normalizeStatus">normalizeStatus</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Concern/DnsCdnZoneRecordsProviderTrait.php.html#13"><abbr title="Weline\Websites\Adapter\Concern\DnsCdnZoneRecordsProviderTrait::listZoneDnsRecordsForAccount">listZoneDnsRecordsForAccount</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Concern/RegistrarBatchCheckAvailabilityTrait.php.html#11"><abbr title="Weline\Websites\Adapter\Concern\RegistrarBatchCheckAvailabilityTrait::batchCheckAvailability">batchCheckAvailability</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Concern/RegistrarMapsDomainListToHostedTrait.php.html#14"><abbr title="Weline\Websites\Adapter\Concern\RegistrarMapsDomainListToHostedTrait::getHostedDomainList">getHostedDomainList</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([14,0,0,0,0,0,0,0,0,0,0,1], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([196,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,54,"<a href=\"AliyunDomainRegistrar.php.html#23\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar<\/a>"],[0,70,"<a href=\"AwsRoute53Registrar.php.html#17\">Weline\\Websites\\Adapter\\AwsRoute53Registrar<\/a>"],[0,22,"<a href=\"AzureDnsRegistrar.php.html#22\">Weline\\Websites\\Adapter\\AzureDnsRegistrar<\/a>"],[0,233,"<a href=\"CloudflareRegistrar.php.html#34\">Weline\\Websites\\Adapter\\CloudflareRegistrar<\/a>"],[0,183,"<a href=\"GnameRegistrar.php.html#25\">Weline\\Websites\\Adapter\\GnameRegistrar<\/a>"],[0,109,"<a href=\"GoDaddyRegistrar.php.html#26\">Weline\\Websites\\Adapter\\GoDaddyRegistrar<\/a>"],[0,24,"<a href=\"Concern\/DefaultDnsZoneOriginMatchTrait.php.html#11\">Weline\\Websites\\Adapter\\Concern\\DefaultDnsZoneOriginMatchTrait<\/a>"],[0,2,"<a href=\"Concern\/DnsCdnZoneRecordsProviderTrait.php.html#11\">Weline\\Websites\\Adapter\\Concern\\DnsCdnZoneRecordsProviderTrait<\/a>"],[0,2,"<a href=\"Concern\/DomainRegistrarCdnDefaultsTrait.php.html#13\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarCdnDefaultsTrait<\/a>"],[0,3,"<a href=\"Concern\/DomainRegistrarOptionalDefaultsTrait.php.html#6\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarAccountDefaultsTrait<\/a>"],[100,0,"<a href=\"Concern\/DomainRegistrarOptionalDefaultsTrait.php.html#25\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarOptionalDefaultsTrait<\/a>"],[0,2,"<a href=\"Concern\/DomainRegistrarZoneDefaultsTrait.php.html#6\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarZoneDefaultsTrait<\/a>"],[0,2,"<a href=\"Concern\/RegistrarBatchCheckAvailabilityTrait.php.html#9\">Weline\\Websites\\Adapter\\Concern\\RegistrarBatchCheckAvailabilityTrait<\/a>"],[0,2,"<a href=\"Concern\/RegistrarMapsDomainListToHostedTrait.php.html#12\">Weline\\Websites\\Adapter\\Concern\\RegistrarMapsDomainListToHostedTrait<\/a>"],[0,1,"<a href=\"Concern\/RegistrarProvisioningNormalizeNoopTrait.php.html#12\">Weline\\Websites\\Adapter\\Concern\\RegistrarProvisioningNormalizeNoopTrait<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"AliyunDomainRegistrar.php.html#30\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getRegistrarCode<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#35\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getRegistrarName<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#40\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getDescription<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#45\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getVersion<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#50\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getConfigFields<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#84\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getConfigHelp<\/a>"],[0,4,"<a href=\"AliyunDomainRegistrar.php.html#103\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::testConnection<\/a>"],[0,9,"<a href=\"AliyunDomainRegistrar.php.html#121\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::checkAvailability<\/a>"],[0,11,"<a href=\"AliyunDomainRegistrar.php.html#158\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::purchaseDomain<\/a>"],[0,10,"<a href=\"AliyunDomainRegistrar.php.html#220\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::buildAliyunContactJson<\/a>"],[0,3,"<a href=\"AliyunDomainRegistrar.php.html#257\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::resolveUserClientIp<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#267\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getDomainList<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#273\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getDomainDetail<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#286\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::supportsDnsManagement<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#292\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getDnsRecords<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#298\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::addDnsRecord<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#307\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::updateDnsRecord<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#316\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::deleteDnsRecord<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#325\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::batchAddDnsRecords<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#336\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::updateNameservers<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#350\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::getProviderNameservers<\/a>"],[0,1,"<a href=\"AliyunDomainRegistrar.php.html#367\">Weline\\Websites\\Adapter\\AliyunDomainRegistrar::isDomainRegistrar<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#24\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getRegistrarCode<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#29\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getRegistrarName<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#34\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getDescription<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#39\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getVersion<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#44\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getConfigFields<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#74\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getConfigHelp<\/a>"],[0,2,"<a href=\"AwsRoute53Registrar.php.html#93\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::testConnection<\/a>"],[0,7,"<a href=\"AwsRoute53Registrar.php.html#111\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::checkAvailability<\/a>"],[0,5,"<a href=\"AwsRoute53Registrar.php.html#144\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::purchaseDomain<\/a>"],[0,17,"<a href=\"AwsRoute53Registrar.php.html#212\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::buildAwsContact<\/a>"],[0,6,"<a href=\"AwsRoute53Registrar.php.html#261\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::normalizeAwsContactDetail<\/a>"],[0,3,"<a href=\"AwsRoute53Registrar.php.html#281\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::formatE164ForAws<\/a>"],[0,3,"<a href=\"AwsRoute53Registrar.php.html#300\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::validateCredentials<\/a>"],[0,2,"<a href=\"AwsRoute53Registrar.php.html#307\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::resolveRegion<\/a>"],[0,7,"<a href=\"AwsRoute53Registrar.php.html#314\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getDomainList<\/a>"],[0,3,"<a href=\"AwsRoute53Registrar.php.html#352\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getDomainDetail<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#381\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::supportsDnsManagement<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#386\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getDnsRecords<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#391\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::addDnsRecord<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#399\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::updateDnsRecord<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#407\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::deleteDnsRecord<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#415\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::batchAddDnsRecords<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#425\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::updateNameservers<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#433\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::getProviderNameservers<\/a>"],[0,1,"<a href=\"AwsRoute53Registrar.php.html#442\">Weline\\Websites\\Adapter\\AwsRoute53Registrar::isDomainRegistrar<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#28\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getRegistrarCode<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#33\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getRegistrarName<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#38\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getDescription<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#43\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getVersion<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#48\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getConfigFields<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#83\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getConfigHelp<\/a>"],[0,3,"<a href=\"AzureDnsRegistrar.php.html#101\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::testConnection<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#111\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::checkAvailability<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#124\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::purchaseDomain<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#134\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getDomainList<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#140\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getDomainDetail<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#153\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::supportsDnsManagement<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#159\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getDnsRecords<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#165\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::addDnsRecord<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#174\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::updateDnsRecord<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#183\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::deleteDnsRecord<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#192\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::batchAddDnsRecords<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#203\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::updateNameservers<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#217\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::getProviderNameservers<\/a>"],[0,1,"<a href=\"AzureDnsRegistrar.php.html#233\">Weline\\Websites\\Adapter\\AzureDnsRegistrar::isDomainRegistrar<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#44\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getRegistrarCode<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#49\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getRegistrarName<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#54\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getDescription<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#66\">Weline\\Websites\\Adapter\\CloudflareRegistrar::isDnsCdnCoupledProvider<\/a>"],[0,4,"<a href=\"CloudflareRegistrar.php.html#76\">Weline\\Websites\\Adapter\\CloudflareRegistrar::resolveZoneIdForDomain<\/a>"],[0,28,"<a href=\"CloudflareRegistrar.php.html#101\">Weline\\Websites\\Adapter\\CloudflareRegistrar::normalizeProvisioningDnsCdnAccounts<\/a>"],[0,8,"<a href=\"CloudflareRegistrar.php.html#185\">Weline\\Websites\\Adapter\\CloudflareRegistrar::findCloudflareRegistrarAccountIdByApiToken<\/a>"],[0,10,"<a href=\"CloudflareRegistrar.php.html#220\">Weline\\Websites\\Adapter\\CloudflareRegistrar::findCloudflareCdnAccountIdByApiToken<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#247\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getVersion<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#252\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getConfigFields<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#278\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getConfigHelp<\/a>"],[0,3,"<a href=\"CloudflareRegistrar.php.html#303\">Weline\\Websites\\Adapter\\CloudflareRegistrar::testConnection<\/a>"],[0,15,"<a href=\"CloudflareRegistrar.php.html#318\">Weline\\Websites\\Adapter\\CloudflareRegistrar::checkAvailability<\/a>"],[0,13,"<a href=\"CloudflareRegistrar.php.html#394\">Weline\\Websites\\Adapter\\CloudflareRegistrar::purchaseDomain<\/a>"],[0,8,"<a href=\"CloudflareRegistrar.php.html#492\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getDomainList<\/a>"],[0,4,"<a href=\"CloudflareRegistrar.php.html#558\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getHostedDomainList<\/a>"],[0,2,"<a href=\"CloudflareRegistrar.php.html#604\">Weline\\Websites\\Adapter\\CloudflareRegistrar::mapRegistrarStatus<\/a>"],[0,3,"<a href=\"CloudflareRegistrar.php.html#616\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getDomainDetail<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#653\">Weline\\Websites\\Adapter\\CloudflareRegistrar::supportsDnsManagement<\/a>"],[0,7,"<a href=\"CloudflareRegistrar.php.html#658\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getDnsRecords<\/a>"],[0,10,"<a href=\"CloudflareRegistrar.php.html#717\">Weline\\Websites\\Adapter\\CloudflareRegistrar::addDnsRecord<\/a>"],[0,6,"<a href=\"CloudflareRegistrar.php.html#788\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getDnsRecordByNameAndType<\/a>"],[0,7,"<a href=\"CloudflareRegistrar.php.html#799\">Weline\\Websites\\Adapter\\CloudflareRegistrar::updateDnsRecord<\/a>"],[0,4,"<a href=\"CloudflareRegistrar.php.html#845\">Weline\\Websites\\Adapter\\CloudflareRegistrar::deleteDnsRecord<\/a>"],[0,4,"<a href=\"CloudflareRegistrar.php.html#874\">Weline\\Websites\\Adapter\\CloudflareRegistrar::batchAddDnsRecords<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#906\">Weline\\Websites\\Adapter\\CloudflareRegistrar::updateNameservers<\/a>"],[0,6,"<a href=\"CloudflareRegistrar.php.html#922\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getProviderNameservers<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#968\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getCloudflareNameservers<\/a>"],[0,7,"<a href=\"CloudflareRegistrar.php.html#981\">Weline\\Websites\\Adapter\\CloudflareRegistrar::addZone<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#1046\">Weline\\Websites\\Adapter\\CloudflareRegistrar::zoneMissingViaApiMessage<\/a>"],[0,7,"<a href=\"CloudflareRegistrar.php.html#1068\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getZoneId<\/a>"],[0,5,"<a href=\"CloudflareRegistrar.php.html#1097\">Weline\\Websites\\Adapter\\CloudflareRegistrar::resolveAccountId<\/a>"],[0,6,"<a href=\"CloudflareRegistrar.php.html#1119\">Weline\\Websites\\Adapter\\CloudflareRegistrar::getAccountId<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#1149\">Weline\\Websites\\Adapter\\CloudflareRegistrar::mapZoneStatus<\/a>"],[0,2,"<a href=\"CloudflareRegistrar.php.html#1168\">Weline\\Websites\\Adapter\\CloudflareRegistrar::resolveProxiedValue<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#1180\">Weline\\Websites\\Adapter\\CloudflareRegistrar::supportsCloudflareProxy<\/a>"],[0,4,"<a href=\"CloudflareRegistrar.php.html#1191\">Weline\\Websites\\Adapter\\CloudflareRegistrar::applyCdnSettingsToDnsRecords<\/a>"],[0,8,"<a href=\"CloudflareRegistrar.php.html#1211\">Weline\\Websites\\Adapter\\CloudflareRegistrar::verifyCdnConfiguration<\/a>"],[0,8,"<a href=\"CloudflareRegistrar.php.html#1255\">Weline\\Websites\\Adapter\\CloudflareRegistrar::extractRegistrarPriceFromLookup<\/a>"],[0,6,"<a href=\"CloudflareRegistrar.php.html#1274\">Weline\\Websites\\Adapter\\CloudflareRegistrar::checkAvailabilityDnsFallback<\/a>"],[0,12,"<a href=\"CloudflareRegistrar.php.html#1302\">Weline\\Websites\\Adapter\\CloudflareRegistrar::buildCloudflareRegistrantContact<\/a>"],[0,2,"<a href=\"CloudflareRegistrar.php.html#1343\">Weline\\Websites\\Adapter\\CloudflareRegistrar::validateCredentials<\/a>"],[0,10,"<a href=\"CloudflareRegistrar.php.html#1354\">Weline\\Websites\\Adapter\\CloudflareRegistrar::makeRequest<\/a>"],[0,1,"<a href=\"CloudflareRegistrar.php.html#1432\">Weline\\Websites\\Adapter\\CloudflareRegistrar::isDomainRegistrar<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#40\">Weline\\Websites\\Adapter\\GnameRegistrar::getRegistrarCode<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#45\">Weline\\Websites\\Adapter\\GnameRegistrar::getRegistrarName<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#50\">Weline\\Websites\\Adapter\\GnameRegistrar::getDescription<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#55\">Weline\\Websites\\Adapter\\GnameRegistrar::getVersion<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#60\">Weline\\Websites\\Adapter\\GnameRegistrar::getConfigFields<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#99\">Weline\\Websites\\Adapter\\GnameRegistrar::getConfigHelp<\/a>"],[0,3,"<a href=\"GnameRegistrar.php.html#118\">Weline\\Websites\\Adapter\\GnameRegistrar::testConnection<\/a>"],[0,4,"<a href=\"GnameRegistrar.php.html#157\">Weline\\Websites\\Adapter\\GnameRegistrar::checkAvailability<\/a>"],[0,3,"<a href=\"GnameRegistrar.php.html#196\">Weline\\Websites\\Adapter\\GnameRegistrar::hasDnsRecords<\/a>"],[0,10,"<a href=\"GnameRegistrar.php.html#206\">Weline\\Websites\\Adapter\\GnameRegistrar::purchaseDomain<\/a>"],[0,10,"<a href=\"GnameRegistrar.php.html#275\">Weline\\Websites\\Adapter\\GnameRegistrar::getDomainList<\/a>"],[0,3,"<a href=\"GnameRegistrar.php.html#332\">Weline\\Websites\\Adapter\\GnameRegistrar::getDomainDetail<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#382\">Weline\\Websites\\Adapter\\GnameRegistrar::modifyDns<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#419\">Weline\\Websites\\Adapter\\GnameRegistrar::getAccountBalance<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#427\">Weline\\Websites\\Adapter\\GnameRegistrar::getContactTemplates<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#435\">Weline\\Websites\\Adapter\\GnameRegistrar::getTemplates<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#455\">Weline\\Websites\\Adapter\\GnameRegistrar::getTldPrices<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#475\">Weline\\Websites\\Adapter\\GnameRegistrar::getBalance<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#502\">Weline\\Websites\\Adapter\\GnameRegistrar::normalizeCredentials<\/a>"],[0,3,"<a href=\"GnameRegistrar.php.html#521\">Weline\\Websites\\Adapter\\GnameRegistrar::validateCredentials<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#538\">Weline\\Websites\\Adapter\\GnameRegistrar::buildApiPath<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#561\">Weline\\Websites\\Adapter\\GnameRegistrar::generateSignature<\/a>"],[0,16,"<a href=\"GnameRegistrar.php.html#584\">Weline\\Websites\\Adapter\\GnameRegistrar::makeRequest<\/a>"],[0,7,"<a href=\"GnameRegistrar.php.html#728\">Weline\\Websites\\Adapter\\GnameRegistrar::configSsl<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#775\">Weline\\Websites\\Adapter\\GnameRegistrar::extractTld<\/a>"],[0,8,"<a href=\"GnameRegistrar.php.html#790\">Weline\\Websites\\Adapter\\GnameRegistrar::fetchTldPriceMap<\/a>"],[0,5,"<a href=\"GnameRegistrar.php.html#824\">Weline\\Websites\\Adapter\\GnameRegistrar::shouldConfirmPurchasedDomain<\/a>"],[0,4,"<a href=\"GnameRegistrar.php.html#854\">Weline\\Websites\\Adapter\\GnameRegistrar::confirmDomainOwnedByCurrentAccount<\/a>"],[0,3,"<a href=\"GnameRegistrar.php.html#888\">Weline\\Websites\\Adapter\\GnameRegistrar::domainExistsInList<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#915\">Weline\\Websites\\Adapter\\GnameRegistrar::normalizeStatus<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#947\">Weline\\Websites\\Adapter\\GnameRegistrar::supportsDnsManagement<\/a>"],[0,14,"<a href=\"GnameRegistrar.php.html#955\">Weline\\Websites\\Adapter\\GnameRegistrar::getDnsRecords<\/a>"],[0,20,"<a href=\"GnameRegistrar.php.html#1029\">Weline\\Websites\\Adapter\\GnameRegistrar::checkFqdnOriginPointsToServer<\/a>"],[0,13,"<a href=\"GnameRegistrar.php.html#1109\">Weline\\Websites\\Adapter\\GnameRegistrar::addDnsRecord<\/a>"],[0,3,"<a href=\"GnameRegistrar.php.html#1174\">Weline\\Websites\\Adapter\\GnameRegistrar::updateDnsRecord<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#1211\">Weline\\Websites\\Adapter\\GnameRegistrar::deleteDnsRecord<\/a>"],[0,3,"<a href=\"GnameRegistrar.php.html#1239\">Weline\\Websites\\Adapter\\GnameRegistrar::batchAddDnsRecords<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#1266\">Weline\\Websites\\Adapter\\GnameRegistrar::updateNameservers<\/a>"],[0,2,"<a href=\"GnameRegistrar.php.html#1280\">Weline\\Websites\\Adapter\\GnameRegistrar::getProviderNameservers<\/a>"],[0,15,"<a href=\"GnameRegistrar.php.html#1307\">Weline\\Websites\\Adapter\\GnameRegistrar::fetchDefaultNameserversFromDnsList<\/a>"],[0,4,"<a href=\"GnameRegistrar.php.html#1360\">Weline\\Websites\\Adapter\\GnameRegistrar::fetchDnsInfoById<\/a>"],[0,1,"<a href=\"GnameRegistrar.php.html#1383\">Weline\\Websites\\Adapter\\GnameRegistrar::isDomainRegistrar<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#49\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getRegistrarCode<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#54\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getRegistrarName<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#59\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getDescription<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#64\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getVersion<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#69\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getConfigFields<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#111\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getConfigHelp<\/a>"],[0,2,"<a href=\"GoDaddyRegistrar.php.html#133\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::testConnection<\/a>"],[0,7,"<a href=\"GoDaddyRegistrar.php.html#148\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::checkAvailability<\/a>"],[0,14,"<a href=\"GoDaddyRegistrar.php.html#194\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::purchaseDomain<\/a>"],[0,17,"<a href=\"GoDaddyRegistrar.php.html#269\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::buildGoDaddyContactFromFlat<\/a>"],[0,5,"<a href=\"GoDaddyRegistrar.php.html#306\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getDomainList<\/a>"],[0,3,"<a href=\"GoDaddyRegistrar.php.html#352\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getDomainDetail<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#378\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getAccountBalance<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#390\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getTldPrices<\/a>"],[0,2,"<a href=\"GoDaddyRegistrar.php.html#405\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getContactTemplates<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#419\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::supportsDnsManagement<\/a>"],[0,4,"<a href=\"GoDaddyRegistrar.php.html#424\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getDnsRecords<\/a>"],[0,5,"<a href=\"GoDaddyRegistrar.php.html#452\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::addDnsRecord<\/a>"],[0,5,"<a href=\"GoDaddyRegistrar.php.html#495\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::updateDnsRecord<\/a>"],[0,5,"<a href=\"GoDaddyRegistrar.php.html#540\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::deleteDnsRecord<\/a>"],[0,3,"<a href=\"GoDaddyRegistrar.php.html#585\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::batchAddDnsRecords<\/a>"],[0,2,"<a href=\"GoDaddyRegistrar.php.html#613\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::updateNameservers<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#637\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::getProviderNameservers<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#649\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::isDomainRegistrar<\/a>"],[0,3,"<a href=\"GoDaddyRegistrar.php.html#661\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::validateCredentials<\/a>"],[0,1,"<a href=\"GoDaddyRegistrar.php.html#676\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::normalizeCredentials<\/a>"],[0,14,"<a href=\"GoDaddyRegistrar.php.html#697\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::makeRequest<\/a>"],[0,4,"<a href=\"GoDaddyRegistrar.php.html#800\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::isSuccessResponse<\/a>"],[0,2,"<a href=\"GoDaddyRegistrar.php.html#820\">Weline\\Websites\\Adapter\\GoDaddyRegistrar::normalizeStatus<\/a>"],[0,11,"<a href=\"Concern\/DefaultDnsZoneOriginMatchTrait.php.html#13\">Weline\\Websites\\Adapter\\Concern\\DefaultDnsZoneOriginMatchTrait::checkFqdnOriginPointsToServer<\/a>"],[0,8,"<a href=\"Concern\/DefaultDnsZoneOriginMatchTrait.php.html#75\">Weline\\Websites\\Adapter\\Concern\\DefaultDnsZoneOriginMatchTrait::defaultCollectDirectAaaaForFqdn<\/a>"],[0,5,"<a href=\"Concern\/DefaultDnsZoneOriginMatchTrait.php.html#103\">Weline\\Websites\\Adapter\\Concern\\DefaultDnsZoneOriginMatchTrait::defaultRecordHostToFqdn<\/a>"],[0,2,"<a href=\"Concern\/DnsCdnZoneRecordsProviderTrait.php.html#13\">Weline\\Websites\\Adapter\\Concern\\DnsCdnZoneRecordsProviderTrait::listZoneDnsRecordsForAccount<\/a>"],[0,1,"<a href=\"Concern\/DomainRegistrarCdnDefaultsTrait.php.html#19\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarCdnDefaultsTrait::applyCdnSettingsToDnsRecords<\/a>"],[0,1,"<a href=\"Concern\/DomainRegistrarCdnDefaultsTrait.php.html#29\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarCdnDefaultsTrait::verifyCdnConfiguration<\/a>"],[0,1,"<a href=\"Concern\/DomainRegistrarOptionalDefaultsTrait.php.html#8\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarAccountDefaultsTrait::getAccountBalance<\/a>"],[0,1,"<a href=\"Concern\/DomainRegistrarOptionalDefaultsTrait.php.html#13\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarAccountDefaultsTrait::getTldPrices<\/a>"],[0,1,"<a href=\"Concern\/DomainRegistrarOptionalDefaultsTrait.php.html#18\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarAccountDefaultsTrait::getContactTemplates<\/a>"],[0,1,"<a href=\"Concern\/DomainRegistrarZoneDefaultsTrait.php.html#8\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarZoneDefaultsTrait::addZone<\/a>"],[0,1,"<a href=\"Concern\/DomainRegistrarZoneDefaultsTrait.php.html#16\">Weline\\Websites\\Adapter\\Concern\\DomainRegistrarZoneDefaultsTrait::getHostedDomainList<\/a>"],[0,2,"<a href=\"Concern\/RegistrarBatchCheckAvailabilityTrait.php.html#11\">Weline\\Websites\\Adapter\\Concern\\RegistrarBatchCheckAvailabilityTrait::batchCheckAvailability<\/a>"],[0,2,"<a href=\"Concern\/RegistrarMapsDomainListToHostedTrait.php.html#14\">Weline\\Websites\\Adapter\\Concern\\RegistrarMapsDomainListToHostedTrait::getHostedDomainList<\/a>"],[0,1,"<a href=\"Concern\/RegistrarProvisioningNormalizeNoopTrait.php.html#14\">Weline\\Websites\\Adapter\\Concern\\RegistrarProvisioningNormalizeNoopTrait::normalizeProvisioningDnsCdnAccounts<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

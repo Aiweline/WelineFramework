@@ -1,0 +1,32 @@
+{
+  "page_type": "terms_of_service",
+  "name": "Sunrise Terms of Service",
+  "description": "Dragon Tiger Sunrise terms of service page layout",
+  "version": "1.0.0",
+  "layout_config": {
+    "header": [
+      {
+        "code": "header-nav",
+        "enabled": true,
+        "instance_id": "header-nav-1",
+        "config": {}
+      }
+    ],
+    "content": [
+      {
+        "code": "legal-content",
+        "enabled": true,
+        "instance_id": "legal-content-1",
+        "config": {}
+      }
+    ],
+    "footer": [
+      {
+        "code": "footer-links",
+        "enabled": true,
+        "instance_id": "footer-links-1",
+        "config": {}
+      }
+    ]
+  }
+}

@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Framework\Runtime</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Framework</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Runtime</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="FpmRuntime.php.html#16">Weline\Framework\Runtime\FpmRuntime</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#16">Weline\Framework\Runtime\GlobalsEmulator</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#15">Weline\Framework\Runtime\RequestContext</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestExitException.php.html#12">Weline\Framework\Runtime\RequestExitException</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#14">Weline\Framework\Runtime\RequestLifecycleTrace</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#25">Weline\Framework\Runtime\Runtime</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#16">Weline\Framework\Runtime\SchedulerSystem</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#24">Weline\Framework\Runtime\StateManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#23">Weline\Framework\Runtime\StatePollutionDetector</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="System.php.html#15">Weline\Framework\Runtime\System</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#20">Weline\Framework\Runtime\TelemetryBroadcaster</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsConcurrency.php.html#19">Weline\Framework\Runtime\WlsConcurrency</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#19">Weline\Framework\Runtime\WlsFiberContext</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#35">Weline\Framework\Runtime\WlsRuntime</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="WlsRuntime.php.html#35">Weline\Framework\Runtime\WlsRuntime</a></td><td class="text-right">46872</td></tr>
+       <tr><td><a href="StateManager.php.html#24">Weline\Framework\Runtime\StateManager</a></td><td class="text-right">10506</td></tr>
+       <tr><td><a href="RequestContext.php.html#15">Weline\Framework\Runtime\RequestContext</a></td><td class="text-right">5256</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#14">Weline\Framework\Runtime\RequestLifecycleTrace</a></td><td class="text-right">2550</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#23">Weline\Framework\Runtime\StatePollutionDetector</a></td><td class="text-right">930</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#16">Weline\Framework\Runtime\GlobalsEmulator</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#16">Weline\Framework\Runtime\SchedulerSystem</a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#19">Weline\Framework\Runtime\WlsFiberContext</a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#16">Weline\Framework\Runtime\FpmRuntime</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Runtime.php.html#25">Weline\Framework\Runtime\Runtime</a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#20">Weline\Framework\Runtime\TelemetryBroadcaster</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="WlsConcurrency.php.html#19">Weline\Framework\Runtime\WlsConcurrency</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="System.php.html#15">Weline\Framework\Runtime\System</a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="FpmRuntime.php.html#20"><abbr title="Weline\Framework\Runtime\FpmRuntime::bootstrap">bootstrap</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#30"><abbr title="Weline\Framework\Runtime\FpmRuntime::handle">handle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#58"><abbr title="Weline\Framework\Runtime\FpmRuntime::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#64"><abbr title="Weline\Framework\Runtime\FpmRuntime::terminate">terminate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#71"><abbr title="Weline\Framework\Runtime\FpmRuntime::getMode">getMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#76"><abbr title="Weline\Framework\Runtime\FpmRuntime::isPersistent">isPersistent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#81"><abbr title="Weline\Framework\Runtime\FpmRuntime::isBootstrapped">isBootstrapped</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#86"><abbr title="Weline\Framework\Runtime\FpmRuntime::syncCurrentContextFromGlobals">syncCurrentContextFromGlobals</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#20"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::emulate">emulate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#30"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::populateFromRequest">populateFromRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#60"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::buildServerArray">buildServerArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#132"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#174"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::isEmulated">isEmulated</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#30"><abbr title="Weline\Framework\Runtime\RequestContext::init">init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#42"><abbr title="Weline\Framework\Runtime\RequestContext::getRequestId">getRequestId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#47"><abbr title="Weline\Framework\Runtime\RequestContext::getId">getId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#58"><abbr title="Weline\Framework\Runtime\RequestContext::setId">setId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#65"><abbr title="Weline\Framework\Runtime\RequestContext::getStartTime">getStartTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#75"><abbr title="Weline\Framework\Runtime\RequestContext::getElapsedMs">getElapsedMs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#80"><abbr title="Weline\Framework\Runtime\RequestContext::set">set</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#89"><abbr title="Weline\Framework\Runtime\RequestContext::get">get</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#100"><abbr title="Weline\Framework\Runtime\RequestContext::has">has</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#111"><abbr title="Weline\Framework\Runtime\RequestContext::remove">remove</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#123"><abbr title="Weline\Framework\Runtime\RequestContext::all">all</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#133"><abbr title="Weline\Framework\Runtime\RequestContext::onCleanup">onCleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#146"><abbr title="Weline\Framework\Runtime\RequestContext::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#170"><abbr title="Weline\Framework\Runtime\RequestContext::isInitialized">isInitialized</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#180"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineArea">getWelineArea</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#190"><abbr title="Weline\Framework\Runtime\RequestContext::setWelineArea">setWelineArea</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#198"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineAreaRoute">getWelineAreaRoute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#208"><abbr title="Weline\Framework\Runtime\RequestContext::setWelineAreaRoute">setWelineAreaRoute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#216"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineWebsiteId">getWelineWebsiteId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#226"><abbr title="Weline\Framework\Runtime\RequestContext::setWelineWebsiteId">setWelineWebsiteId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#234"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode">getWelineWebsiteCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#244"><abbr title="Weline\Framework\Runtime\RequestContext::setWelineWebsiteCode">setWelineWebsiteCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#252"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineWebsiteUrl">getWelineWebsiteUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#262"><abbr title="Weline\Framework\Runtime\RequestContext::setWelineWebsiteUrl">setWelineWebsiteUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#270"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineUserLang">getWelineUserLang</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#280"><abbr title="Weline\Framework\Runtime\RequestContext::setWelineUserLang">setWelineUserLang</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#288"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineUserCurrency">getWelineUserCurrency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#298"><abbr title="Weline\Framework\Runtime\RequestContext::setWelineUserCurrency">setWelineUserCurrency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#306"><abbr title="Weline\Framework\Runtime\RequestContext::isBackendArea">isBackendArea</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#312"><abbr title="Weline\Framework\Runtime\RequestContext::syncFromServer">syncFromServer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#346"><abbr title="Weline\Framework\Runtime\RequestContext::resetWelineVars">resetWelineVars</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#365"><abbr title="Weline\Framework\Runtime\RequestContext::websiteId">websiteId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#375"><abbr title="Weline\Framework\Runtime\RequestContext::locale">locale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#384"><abbr title="Weline\Framework\Runtime\RequestContext::currency">currency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#393"><abbr title="Weline\Framework\Runtime\RequestContext::area">area</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#402"><abbr title="Weline\Framework\Runtime\RequestContext::ensureContext">ensureContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestContext.php.html#414"><abbr title="Weline\Framework\Runtime\RequestContext::generateRequestId">generateRequestId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestExitException.php.html#14"><abbr title="Weline\Framework\Runtime\RequestExitException::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestExitException.php.html#20"><abbr title="Weline\Framework\Runtime\RequestExitException::getExitCode">getExitCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#40"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#65"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::registerStateManager">registerStateManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#85"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan">recordSpan</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#126"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::pushCurrentParent">pushCurrentParent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#138"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::popCurrentParent">popCurrentParent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#149"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::getCurrentParent">getCurrentParent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#160"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::startSpan">startSpan</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#172"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::endSpan">endSpan</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#187"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::getSpans">getSpans</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#201"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::getSpansWithDbSummary">getSpansWithDbSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#252"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::sumDurationsByName">sumDurationsByName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#269"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#39"><abbr title="Weline\Framework\Runtime\Runtime::isPersistent">isPersistent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#49"><abbr title="Weline\Framework\Runtime\Runtime::isWls">isWls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#70"><abbr title="Weline\Framework\Runtime\Runtime::isFpm">isFpm</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#83"><abbr title="Weline\Framework\Runtime\Runtime::isCli">isCli</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#93"><abbr title="Weline\Framework\Runtime\Runtime::getMode">getMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#106"><abbr title="Weline\Framework\Runtime\Runtime::detectMode">detectMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#125"><abbr title="Weline\Framework\Runtime\Runtime::resetModeCache">resetModeCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Runtime.php.html#135"><abbr title="Weline\Framework\Runtime\Runtime::setMode">setMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#25"><abbr title="Weline\Framework\Runtime\SchedulerSystem::enableScheduler">enableScheduler</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#33"><abbr title="Weline\Framework\Runtime\SchedulerSystem::disableScheduler">disableScheduler</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#42"><abbr title="Weline\Framework\Runtime\SchedulerSystem::isSchedulerActive">isSchedulerActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#52"><abbr title="Weline\Framework\Runtime\SchedulerSystem::setWaitDispatcher">setWaitDispatcher</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#62"><abbr title="Weline\Framework\Runtime\SchedulerSystem::sleep">sleep</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#82"><abbr title="Weline\Framework\Runtime\SchedulerSystem::usleep">usleep</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#100"><abbr title="Weline\Framework\Runtime\SchedulerSystem::dispatchWait">dispatchWait</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#124"><abbr title="Weline\Framework\Runtime\SchedulerSystem::yield">yield</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#139"><abbr title="Weline\Framework\Runtime\SchedulerSystem::yieldDelay">yieldDelay</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#155"><abbr title="Weline\Framework\Runtime\SchedulerSystem::suspendCurrentFiber">suspendCurrentFiber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#82"><abbr title="Weline\Framework\Runtime\StateManager::registerResetCallback">registerResetCallback</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#90"><abbr title="Weline\Framework\Runtime\StateManager::unregisterResetCallback">unregisterResetCallback</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#113"><abbr title="Weline\Framework\Runtime\StateManager::registerStaticReset">registerStaticReset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#130"><abbr title="Weline\Framework\Runtime\StateManager::registerStaticResets">registerStaticResets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#140"><abbr title="Weline\Framework\Runtime\StateManager::unregisterStaticReset">unregisterStaticReset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#155"><abbr title="Weline\Framework\Runtime\StateManager::registerSingletonReset">registerSingletonReset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#163"><abbr title="Weline\Framework\Runtime\StateManager::unregisterSingletonReset">unregisterSingletonReset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#171"><abbr title="Weline\Framework\Runtime\StateManager::resetStaticProperties">resetStaticProperties</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#208"><abbr title="Weline\Framework\Runtime\StateManager::resetSingletonInstances">resetSingletonInstances</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#232"><abbr title="Weline\Framework\Runtime\StateManager::setInstanceScope">setInstanceScope</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#243"><abbr title="Weline\Framework\Runtime\StateManager::getInstanceScope">getInstanceScope</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#251"><abbr title="Weline\Framework\Runtime\StateManager::setRequestInstance">setRequestInstance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#259"><abbr title="Weline\Framework\Runtime\StateManager::getRequestInstance">getRequestInstance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#267"><abbr title="Weline\Framework\Runtime\StateManager::hasRequestInstance">hasRequestInstance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#275"><abbr title="Weline\Framework\Runtime\StateManager::getPooledInstance">getPooledInstance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#286"><abbr title="Weline\Framework\Runtime\StateManager::returnToPool">returnToPool</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#317"><abbr title="Weline\Framework\Runtime\StateManager::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#352"><abbr title="Weline\Framework\Runtime\StateManager::runWlsPersistentRequestEntryBaseline">runWlsPersistentRequestEntryBaseline</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#464"><abbr title="Weline\Framework\Runtime\StateManager::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#477"><abbr title="Weline\Framework\Runtime\StateManager::getStats">getStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#497"><abbr title="Weline\Framework\Runtime\StateManager::getStaticResets">getStaticResets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#505"><abbr title="Weline\Framework\Runtime\StateManager::getSingletonResets">getSingletonResets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StateManager.php.html#524"><abbr title="Weline\Framework\Runtime\StateManager::registerFrameworkResets">registerFrameworkResets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#98"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::scan">scan</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#163"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::isSafeStatic">isSafeStatic</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#176"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::isDangerousStatic">isDangerousStatic</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#192"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::generateReport">generateReport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#215"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::autoDetect">autoDetect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="System.php.html#23"><abbr title="Weline\Framework\Runtime\System::exit">exit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#29"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::broadcast">broadcast</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#63"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::resolveRequest">resolveRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#73"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::buildRequestSnapshot">buildRequestSnapshot</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#101"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::buildSummary">buildSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#135"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::buildExtensions">buildExtensions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsConcurrency.php.html#29"><abbr title="Weline\Framework\Runtime\WlsConcurrency::setOtherSuspendedFiberCountProvider">setOtherSuspendedFiberCountProvider</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsConcurrency.php.html#37"><abbr title="Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount">getOtherSuspendedRequestFiberCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsConcurrency.php.html#56"><abbr title="Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers">callbackNamesOmittableWithPeerFibers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#44"><abbr title="Weline\Framework\Runtime\WlsFiberContext::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#48"><abbr title="Weline\Framework\Runtime\WlsFiberContext::capture">capture</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#81"><abbr title="Weline\Framework\Runtime\WlsFiberContext::restore">restore</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#177"><abbr title="Weline\Framework\Runtime\WlsFiberContext::getSseConnection">getSseConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#100"><abbr title="Weline\Framework\Runtime\WlsRuntime::bootstrap">bootstrap</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#148"><abbr title="Weline\Framework\Runtime\WlsRuntime::handle">handle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#565"><abbr title="Weline\Framework\Runtime\WlsRuntime::processUrlParse">processUrlParse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#692"><abbr title="Weline\Framework\Runtime\WlsRuntime::parseUrlLangCurrency">parseUrlLangCurrency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#758"><abbr title="Weline\Framework\Runtime\WlsRuntime::handleException">handleException</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#788"><abbr title="Weline\Framework\Runtime\WlsRuntime::formatExceptionAsHtml">formatExceptionAsHtml</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#855"><abbr title="Weline\Framework\Runtime\WlsRuntime::logWlsRequest">logWlsRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#879"><abbr title="Weline\Framework\Runtime\WlsRuntime::logWlsError">logWlsError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#900"><abbr title="Weline\Framework\Runtime\WlsRuntime::applyPerformanceHeaders">applyPerformanceHeaders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#926"><abbr title="Weline\Framework\Runtime\WlsRuntime::recordPerformanceTiming">recordPerformanceTiming</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#982"><abbr title="Weline\Framework\Runtime\WlsRuntime::getPerformanceConfig">getPerformanceConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1006"><abbr title="Weline\Framework\Runtime\WlsRuntime::shouldWriteRequestLog">shouldWriteRequestLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1016"><abbr title="Weline\Framework\Runtime\WlsRuntime::shouldWriteErrorLog">shouldWriteErrorLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1026"><abbr title="Weline\Framework\Runtime\WlsRuntime::getRuntimeLogFile">getRuntimeLogFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1031"><abbr title="Weline\Framework\Runtime\WlsRuntime::getPerformanceLogFile">getPerformanceLogFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1036"><abbr title="Weline\Framework\Runtime\WlsRuntime::resolveLogPath">resolveLogPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1049"><abbr title="Weline\Framework\Runtime\WlsRuntime::appendJsonLine">appendJsonLine</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1064"><abbr title="Weline\Framework\Runtime\WlsRuntime::absorbResponseObject">absorbResponseObject</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1104"><abbr title="Weline\Framework\Runtime\WlsRuntime::isSseRequest">isSseRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1143"><abbr title="Weline\Framework\Runtime\WlsRuntime::buildSseFailedResponse">buildSseFailedResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1166"><abbr title="Weline\Framework\Runtime\WlsRuntime::extractSseErrorMessage">extractSseErrorMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1192"><abbr title="Weline\Framework\Runtime\WlsRuntime::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1222"><abbr title="Weline\Framework\Runtime\WlsRuntime::terminate">terminate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1244"><abbr title="Weline\Framework\Runtime\WlsRuntime::getMode">getMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1252"><abbr title="Weline\Framework\Runtime\WlsRuntime::isPersistent">isPersistent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1265"><abbr title="Weline\Framework\Runtime\WlsRuntime::consumePendingCookies">consumePendingCookies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1279"><abbr title="Weline\Framework\Runtime\WlsRuntime::consumePendingHeaders">consumePendingHeaders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1291"><abbr title="Weline\Framework\Runtime\WlsRuntime::consumePendingResponseStatus">consumePendingResponseStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1305"><abbr title="Weline\Framework\Runtime\WlsRuntime::snapshotPendingResponseState">snapshotPendingResponseState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1318"><abbr title="Weline\Framework\Runtime\WlsRuntime::getPendingResponseState">getPendingResponseState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1335"><abbr title="Weline\Framework\Runtime\WlsRuntime::setPendingResponseState">setPendingResponseState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1353"><abbr title="Weline\Framework\Runtime\WlsRuntime::emptyPendingResponseState">emptyPendingResponseState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1366"><abbr title="Weline\Framework\Runtime\WlsRuntime::isBootstrapped">isBootstrapped</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1374"><abbr title="Weline\Framework\Runtime\WlsRuntime::getRequestCount">getRequestCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1389"><abbr title="Weline\Framework\Runtime\WlsRuntime::reload">reload</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="WlsRuntime.php.html#148"><abbr title="Weline\Framework\Runtime\WlsRuntime::handle">handle</abbr></a></td><td class="text-right">5402</td></tr>
+       <tr><td><a href="StateManager.php.html#524"><abbr title="Weline\Framework\Runtime\StateManager::registerFrameworkResets">registerFrameworkResets</abbr></a></td><td class="text-right">870</td></tr>
+       <tr><td><a href="StateManager.php.html#352"><abbr title="Weline\Framework\Runtime\StateManager::runWlsPersistentRequestEntryBaseline">runWlsPersistentRequestEntryBaseline</abbr></a></td><td class="text-right">812</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#565"><abbr title="Weline\Framework\Runtime\WlsRuntime::processUrlParse">processUrlParse</abbr></a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#692"><abbr title="Weline\Framework\Runtime\WlsRuntime::parseUrlLangCurrency">parseUrlLangCurrency</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#926"><abbr title="Weline\Framework\Runtime\WlsRuntime::recordPerformanceTiming">recordPerformanceTiming</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#98"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::scan">scan</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#60"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::buildServerArray">buildServerArray</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#201"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::getSpansWithDbSummary">getSpansWithDbSummary</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#81"><abbr title="Weline\Framework\Runtime\WlsFiberContext::restore">restore</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#85"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan">recordSpan</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="WlsFiberContext.php.html#48"><abbr title="Weline\Framework\Runtime\WlsFiberContext::capture">capture</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#40"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled">isEnabled</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#100"><abbr title="Weline\Framework\Runtime\WlsRuntime::bootstrap">bootstrap</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="RequestContext.php.html#312"><abbr title="Weline\Framework\Runtime\RequestContext::syncFromServer">syncFromServer</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="StateManager.php.html#317"><abbr title="Weline\Framework\Runtime\StateManager::reset">reset</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1192"><abbr title="Weline\Framework\Runtime\WlsRuntime::reset">reset</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#86"><abbr title="Weline\Framework\Runtime\FpmRuntime::syncCurrentContextFromGlobals">syncCurrentContextFromGlobals</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#30"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::populateFromRequest">populateFromRequest</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="StateManager.php.html#171"><abbr title="Weline\Framework\Runtime\StateManager::resetStaticProperties">resetStaticProperties</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="StateManager.php.html#208"><abbr title="Weline\Framework\Runtime\StateManager::resetSingletonInstances">resetSingletonInstances</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#192"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::generateReport">generateReport</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#900"><abbr title="Weline\Framework\Runtime\WlsRuntime::applyPerformanceHeaders">applyPerformanceHeaders</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1104"><abbr title="Weline\Framework\Runtime\WlsRuntime::isSseRequest">isSseRequest</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#30"><abbr title="Weline\Framework\Runtime\FpmRuntime::handle">handle</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#132"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::reset">reset</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#252"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::sumDurationsByName">sumDurationsByName</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="StateManager.php.html#286"><abbr title="Weline\Framework\Runtime\StateManager::returnToPool">returnToPool</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#101"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::buildSummary">buildSummary</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#758"><abbr title="Weline\Framework\Runtime\WlsRuntime::handleException">handleException</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1064"><abbr title="Weline\Framework\Runtime\WlsRuntime::absorbResponseObject">absorbResponseObject</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1166"><abbr title="Weline\Framework\Runtime\WlsRuntime::extractSseErrorMessage">extractSseErrorMessage</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="RequestContext.php.html#146"><abbr title="Weline\Framework\Runtime\RequestContext::cleanup">cleanup</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Runtime.php.html#49"><abbr title="Weline\Framework\Runtime\Runtime::isWls">isWls</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Runtime.php.html#106"><abbr title="Weline\Framework\Runtime\Runtime::detectMode">detectMode</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#62"><abbr title="Weline\Framework\Runtime\SchedulerSystem::sleep">sleep</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#82"><abbr title="Weline\Framework\Runtime\SchedulerSystem::usleep">usleep</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#139"><abbr title="Weline\Framework\Runtime\SchedulerSystem::yieldDelay">yieldDelay</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#215"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::autoDetect">autoDetect</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#135"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::buildExtensions">buildExtensions</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1036"><abbr title="Weline\Framework\Runtime\WlsRuntime::resolveLogPath">resolveLogPath</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="RequestContext.php.html#47"><abbr title="Weline\Framework\Runtime\RequestContext::getId">getId</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="RequestContext.php.html#365"><abbr title="Weline\Framework\Runtime\RequestContext::websiteId">websiteId</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="RequestContext.php.html#402"><abbr title="Weline\Framework\Runtime\RequestContext::ensureContext">ensureContext</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#65"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::registerStateManager">registerStateManager</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#138"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::popCurrentParent">popCurrentParent</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#172"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::endSpan">endSpan</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#124"><abbr title="Weline\Framework\Runtime\SchedulerSystem::yield">yield</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#155"><abbr title="Weline\Framework\Runtime\SchedulerSystem::suspendCurrentFiber">suspendCurrentFiber</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StateManager.php.html#275"><abbr title="Weline\Framework\Runtime\StateManager::getPooledInstance">getPooledInstance</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#163"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::isSafeStatic">isSafeStatic</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="StatePollutionDetector.php.html#176"><abbr title="Weline\Framework\Runtime\StatePollutionDetector::isDangerousStatic">isDangerousStatic</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#63"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::resolveRequest">resolveRequest</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsConcurrency.php.html#37"><abbr title="Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount">getOtherSuspendedRequestFiberCount</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#855"><abbr title="Weline\Framework\Runtime\WlsRuntime::logWlsRequest">logWlsRequest</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#879"><abbr title="Weline\Framework\Runtime\WlsRuntime::logWlsError">logWlsError</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#982"><abbr title="Weline\Framework\Runtime\WlsRuntime::getPerformanceConfig">getPerformanceConfig</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1006"><abbr title="Weline\Framework\Runtime\WlsRuntime::shouldWriteRequestLog">shouldWriteRequestLog</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1049"><abbr title="Weline\Framework\Runtime\WlsRuntime::appendJsonLine">appendJsonLine</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1222"><abbr title="Weline\Framework\Runtime\WlsRuntime::terminate">terminate</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1318"><abbr title="Weline\Framework\Runtime\WlsRuntime::getPendingResponseState">getPendingResponseState</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1335"><abbr title="Weline\Framework\Runtime\WlsRuntime::setPendingResponseState">setPendingResponseState</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="FpmRuntime.php.html#20"><abbr title="Weline\Framework\Runtime\FpmRuntime::bootstrap">bootstrap</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="GlobalsEmulator.php.html#20"><abbr title="Weline\Framework\Runtime\GlobalsEmulator::emulate">emulate</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#65"><abbr title="Weline\Framework\Runtime\RequestContext::getStartTime">getStartTime</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#89"><abbr title="Weline\Framework\Runtime\RequestContext::get">get</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#100"><abbr title="Weline\Framework\Runtime\RequestContext::has">has</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#111"><abbr title="Weline\Framework\Runtime\RequestContext::remove">remove</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#123"><abbr title="Weline\Framework\Runtime\RequestContext::all">all</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#133"><abbr title="Weline\Framework\Runtime\RequestContext::onCleanup">onCleanup</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#170"><abbr title="Weline\Framework\Runtime\RequestContext::isInitialized">isInitialized</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#180"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineArea">getWelineArea</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#198"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineAreaRoute">getWelineAreaRoute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#216"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineWebsiteId">getWelineWebsiteId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#234"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineWebsiteCode">getWelineWebsiteCode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#252"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineWebsiteUrl">getWelineWebsiteUrl</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#270"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineUserLang">getWelineUserLang</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#288"><abbr title="Weline\Framework\Runtime\RequestContext::getWelineUserCurrency">getWelineUserCurrency</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#306"><abbr title="Weline\Framework\Runtime\RequestContext::isBackendArea">isBackendArea</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#346"><abbr title="Weline\Framework\Runtime\RequestContext::resetWelineVars">resetWelineVars</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#375"><abbr title="Weline\Framework\Runtime\RequestContext::locale">locale</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#384"><abbr title="Weline\Framework\Runtime\RequestContext::currency">currency</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#393"><abbr title="Weline\Framework\Runtime\RequestContext::area">area</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestContext.php.html#414"><abbr title="Weline\Framework\Runtime\RequestContext::generateRequestId">generateRequestId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#126"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::pushCurrentParent">pushCurrentParent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#149"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::getCurrentParent">getCurrentParent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="RequestLifecycleTrace.php.html#160"><abbr title="Weline\Framework\Runtime\RequestLifecycleTrace::startSpan">startSpan</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Runtime.php.html#70"><abbr title="Weline\Framework\Runtime\Runtime::isFpm">isFpm</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Runtime.php.html#83"><abbr title="Weline\Framework\Runtime\Runtime::isCli">isCli</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Runtime.php.html#93"><abbr title="Weline\Framework\Runtime\Runtime::getMode">getMode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SchedulerSystem.php.html#100"><abbr title="Weline\Framework\Runtime\SchedulerSystem::dispatchWait">dispatchWait</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="StateManager.php.html#130"><abbr title="Weline\Framework\Runtime\StateManager::registerStaticResets">registerStaticResets</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="StateManager.php.html#477"><abbr title="Weline\Framework\Runtime\StateManager::getStats">getStats</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="System.php.html#23"><abbr title="Weline\Framework\Runtime\System::exit">exit</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#29"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::broadcast">broadcast</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="TelemetryBroadcaster.php.html#73"><abbr title="Weline\Framework\Runtime\TelemetryBroadcaster::buildRequestSnapshot">buildRequestSnapshot</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1016"><abbr title="Weline\Framework\Runtime\WlsRuntime::shouldWriteErrorLog">shouldWriteErrorLog</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsRuntime.php.html#1143"><abbr title="Weline\Framework\Runtime\WlsRuntime::buildSseFailedResponse">buildSseFailedResponse</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([14,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([158,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,18,"<a href=\"FpmRuntime.php.html#16\">Weline\\Framework\\Runtime\\FpmRuntime<\/a>"],[0,26,"<a href=\"GlobalsEmulator.php.html#16\">Weline\\Framework\\Runtime\\GlobalsEmulator<\/a>"],[0,72,"<a href=\"RequestContext.php.html#15\">Weline\\Framework\\Runtime\\RequestContext<\/a>"],[0,2,"<a href=\"RequestExitException.php.html#12\">Weline\\Framework\\Runtime\\RequestExitException<\/a>"],[0,50,"<a href=\"RequestLifecycleTrace.php.html#14\">Weline\\Framework\\Runtime\\RequestLifecycleTrace<\/a>"],[0,17,"<a href=\"Runtime.php.html#25\">Weline\\Framework\\Runtime\\Runtime<\/a>"],[0,24,"<a href=\"SchedulerSystem.php.html#16\">Weline\\Framework\\Runtime\\SchedulerSystem<\/a>"],[0,102,"<a href=\"StateManager.php.html#24\">Weline\\Framework\\Runtime\\StateManager<\/a>"],[0,30,"<a href=\"StatePollutionDetector.php.html#23\">Weline\\Framework\\Runtime\\StatePollutionDetector<\/a>"],[0,2,"<a href=\"System.php.html#15\">Weline\\Framework\\Runtime\\System<\/a>"],[0,16,"<a href=\"TelemetryBroadcaster.php.html#20\">Weline\\Framework\\Runtime\\TelemetryBroadcaster<\/a>"],[0,5,"<a href=\"WlsConcurrency.php.html#19\">Weline\\Framework\\Runtime\\WlsConcurrency<\/a>"],[0,22,"<a href=\"WlsFiberContext.php.html#19\">Weline\\Framework\\Runtime\\WlsFiberContext<\/a>"],[0,216,"<a href=\"WlsRuntime.php.html#35\">Weline\\Framework\\Runtime\\WlsRuntime<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,2,"<a href=\"FpmRuntime.php.html#20\">Weline\\Framework\\Runtime\\FpmRuntime::bootstrap<\/a>"],[0,5,"<a href=\"FpmRuntime.php.html#30\">Weline\\Framework\\Runtime\\FpmRuntime::handle<\/a>"],[0,1,"<a href=\"FpmRuntime.php.html#58\">Weline\\Framework\\Runtime\\FpmRuntime::reset<\/a>"],[0,1,"<a href=\"FpmRuntime.php.html#64\">Weline\\Framework\\Runtime\\FpmRuntime::terminate<\/a>"],[0,1,"<a href=\"FpmRuntime.php.html#71\">Weline\\Framework\\Runtime\\FpmRuntime::getMode<\/a>"],[0,1,"<a href=\"FpmRuntime.php.html#76\">Weline\\Framework\\Runtime\\FpmRuntime::isPersistent<\/a>"],[0,1,"<a href=\"FpmRuntime.php.html#81\">Weline\\Framework\\Runtime\\FpmRuntime::isBootstrapped<\/a>"],[0,6,"<a href=\"FpmRuntime.php.html#86\">Weline\\Framework\\Runtime\\FpmRuntime::syncCurrentContextFromGlobals<\/a>"],[0,2,"<a href=\"GlobalsEmulator.php.html#20\">Weline\\Framework\\Runtime\\GlobalsEmulator::emulate<\/a>"],[0,6,"<a href=\"GlobalsEmulator.php.html#30\">Weline\\Framework\\Runtime\\GlobalsEmulator::populateFromRequest<\/a>"],[0,12,"<a href=\"GlobalsEmulator.php.html#60\">Weline\\Framework\\Runtime\\GlobalsEmulator::buildServerArray<\/a>"],[0,5,"<a href=\"GlobalsEmulator.php.html#132\">Weline\\Framework\\Runtime\\GlobalsEmulator::reset<\/a>"],[0,1,"<a href=\"GlobalsEmulator.php.html#174\">Weline\\Framework\\Runtime\\GlobalsEmulator::isEmulated<\/a>"],[0,1,"<a href=\"RequestContext.php.html#30\">Weline\\Framework\\Runtime\\RequestContext::init<\/a>"],[0,1,"<a href=\"RequestContext.php.html#42\">Weline\\Framework\\Runtime\\RequestContext::getRequestId<\/a>"],[0,3,"<a href=\"RequestContext.php.html#47\">Weline\\Framework\\Runtime\\RequestContext::getId<\/a>"],[0,1,"<a href=\"RequestContext.php.html#58\">Weline\\Framework\\Runtime\\RequestContext::setId<\/a>"],[0,2,"<a href=\"RequestContext.php.html#65\">Weline\\Framework\\Runtime\\RequestContext::getStartTime<\/a>"],[0,1,"<a href=\"RequestContext.php.html#75\">Weline\\Framework\\Runtime\\RequestContext::getElapsedMs<\/a>"],[0,1,"<a href=\"RequestContext.php.html#80\">Weline\\Framework\\Runtime\\RequestContext::set<\/a>"],[0,2,"<a href=\"RequestContext.php.html#89\">Weline\\Framework\\Runtime\\RequestContext::get<\/a>"],[0,2,"<a href=\"RequestContext.php.html#100\">Weline\\Framework\\Runtime\\RequestContext::has<\/a>"],[0,2,"<a href=\"RequestContext.php.html#111\">Weline\\Framework\\Runtime\\RequestContext::remove<\/a>"],[0,2,"<a href=\"RequestContext.php.html#123\">Weline\\Framework\\Runtime\\RequestContext::all<\/a>"],[0,2,"<a href=\"RequestContext.php.html#133\">Weline\\Framework\\Runtime\\RequestContext::onCleanup<\/a>"],[0,4,"<a href=\"RequestContext.php.html#146\">Weline\\Framework\\Runtime\\RequestContext::cleanup<\/a>"],[0,2,"<a href=\"RequestContext.php.html#170\">Weline\\Framework\\Runtime\\RequestContext::isInitialized<\/a>"],[0,2,"<a href=\"RequestContext.php.html#180\">Weline\\Framework\\Runtime\\RequestContext::getWelineArea<\/a>"],[0,1,"<a href=\"RequestContext.php.html#190\">Weline\\Framework\\Runtime\\RequestContext::setWelineArea<\/a>"],[0,2,"<a href=\"RequestContext.php.html#198\">Weline\\Framework\\Runtime\\RequestContext::getWelineAreaRoute<\/a>"],[0,1,"<a href=\"RequestContext.php.html#208\">Weline\\Framework\\Runtime\\RequestContext::setWelineAreaRoute<\/a>"],[0,2,"<a href=\"RequestContext.php.html#216\">Weline\\Framework\\Runtime\\RequestContext::getWelineWebsiteId<\/a>"],[0,1,"<a href=\"RequestContext.php.html#226\">Weline\\Framework\\Runtime\\RequestContext::setWelineWebsiteId<\/a>"],[0,2,"<a href=\"RequestContext.php.html#234\">Weline\\Framework\\Runtime\\RequestContext::getWelineWebsiteCode<\/a>"],[0,1,"<a href=\"RequestContext.php.html#244\">Weline\\Framework\\Runtime\\RequestContext::setWelineWebsiteCode<\/a>"],[0,2,"<a href=\"RequestContext.php.html#252\">Weline\\Framework\\Runtime\\RequestContext::getWelineWebsiteUrl<\/a>"],[0,1,"<a href=\"RequestContext.php.html#262\">Weline\\Framework\\Runtime\\RequestContext::setWelineWebsiteUrl<\/a>"],[0,2,"<a href=\"RequestContext.php.html#270\">Weline\\Framework\\Runtime\\RequestContext::getWelineUserLang<\/a>"],[0,1,"<a href=\"RequestContext.php.html#280\">Weline\\Framework\\Runtime\\RequestContext::setWelineUserLang<\/a>"],[0,2,"<a href=\"RequestContext.php.html#288\">Weline\\Framework\\Runtime\\RequestContext::getWelineUserCurrency<\/a>"],[0,1,"<a href=\"RequestContext.php.html#298\">Weline\\Framework\\Runtime\\RequestContext::setWelineUserCurrency<\/a>"],[0,2,"<a href=\"RequestContext.php.html#306\">Weline\\Framework\\Runtime\\RequestContext::isBackendArea<\/a>"],[0,7,"<a href=\"RequestContext.php.html#312\">Weline\\Framework\\Runtime\\RequestContext::syncFromServer<\/a>"],[0,2,"<a href=\"RequestContext.php.html#346\">Weline\\Framework\\Runtime\\RequestContext::resetWelineVars<\/a>"],[0,3,"<a href=\"RequestContext.php.html#365\">Weline\\Framework\\Runtime\\RequestContext::websiteId<\/a>"],[0,2,"<a href=\"RequestContext.php.html#375\">Weline\\Framework\\Runtime\\RequestContext::locale<\/a>"],[0,2,"<a href=\"RequestContext.php.html#384\">Weline\\Framework\\Runtime\\RequestContext::currency<\/a>"],[0,2,"<a href=\"RequestContext.php.html#393\">Weline\\Framework\\Runtime\\RequestContext::area<\/a>"],[0,3,"<a href=\"RequestContext.php.html#402\">Weline\\Framework\\Runtime\\RequestContext::ensureContext<\/a>"],[0,2,"<a href=\"RequestContext.php.html#414\">Weline\\Framework\\Runtime\\RequestContext::generateRequestId<\/a>"],[0,1,"<a href=\"RequestExitException.php.html#14\">Weline\\Framework\\Runtime\\RequestExitException::__construct<\/a>"],[0,1,"<a href=\"RequestExitException.php.html#20\">Weline\\Framework\\Runtime\\RequestExitException::getExitCode<\/a>"],[0,8,"<a href=\"RequestLifecycleTrace.php.html#40\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::isEnabled<\/a>"],[0,3,"<a href=\"RequestLifecycleTrace.php.html#65\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::registerStateManager<\/a>"],[0,9,"<a href=\"RequestLifecycleTrace.php.html#85\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::recordSpan<\/a>"],[0,2,"<a href=\"RequestLifecycleTrace.php.html#126\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::pushCurrentParent<\/a>"],[0,3,"<a href=\"RequestLifecycleTrace.php.html#138\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::popCurrentParent<\/a>"],[0,2,"<a href=\"RequestLifecycleTrace.php.html#149\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::getCurrentParent<\/a>"],[0,2,"<a href=\"RequestLifecycleTrace.php.html#160\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::startSpan<\/a>"],[0,3,"<a href=\"RequestLifecycleTrace.php.html#172\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::endSpan<\/a>"],[0,1,"<a href=\"RequestLifecycleTrace.php.html#187\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::getSpans<\/a>"],[0,11,"<a href=\"RequestLifecycleTrace.php.html#201\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::getSpansWithDbSummary<\/a>"],[0,5,"<a href=\"RequestLifecycleTrace.php.html#252\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::sumDurationsByName<\/a>"],[0,1,"<a href=\"RequestLifecycleTrace.php.html#269\">Weline\\Framework\\Runtime\\RequestLifecycleTrace::reset<\/a>"],[0,1,"<a href=\"Runtime.php.html#39\">Weline\\Framework\\Runtime\\Runtime::isPersistent<\/a>"],[0,4,"<a href=\"Runtime.php.html#49\">Weline\\Framework\\Runtime\\Runtime::isWls<\/a>"],[0,2,"<a href=\"Runtime.php.html#70\">Weline\\Framework\\Runtime\\Runtime::isFpm<\/a>"],[0,2,"<a href=\"Runtime.php.html#83\">Weline\\Framework\\Runtime\\Runtime::isCli<\/a>"],[0,2,"<a href=\"Runtime.php.html#93\">Weline\\Framework\\Runtime\\Runtime::getMode<\/a>"],[0,4,"<a href=\"Runtime.php.html#106\">Weline\\Framework\\Runtime\\Runtime::detectMode<\/a>"],[0,1,"<a href=\"Runtime.php.html#125\">Weline\\Framework\\Runtime\\Runtime::resetModeCache<\/a>"],[0,1,"<a href=\"Runtime.php.html#135\">Weline\\Framework\\Runtime\\Runtime::setMode<\/a>"],[0,1,"<a href=\"SchedulerSystem.php.html#25\">Weline\\Framework\\Runtime\\SchedulerSystem::enableScheduler<\/a>"],[0,1,"<a href=\"SchedulerSystem.php.html#33\">Weline\\Framework\\Runtime\\SchedulerSystem::disableScheduler<\/a>"],[0,1,"<a href=\"SchedulerSystem.php.html#42\">Weline\\Framework\\Runtime\\SchedulerSystem::isSchedulerActive<\/a>"],[0,1,"<a href=\"SchedulerSystem.php.html#52\">Weline\\Framework\\Runtime\\SchedulerSystem::setWaitDispatcher<\/a>"],[0,4,"<a href=\"SchedulerSystem.php.html#62\">Weline\\Framework\\Runtime\\SchedulerSystem::sleep<\/a>"],[0,4,"<a href=\"SchedulerSystem.php.html#82\">Weline\\Framework\\Runtime\\SchedulerSystem::usleep<\/a>"],[0,2,"<a href=\"SchedulerSystem.php.html#100\">Weline\\Framework\\Runtime\\SchedulerSystem::dispatchWait<\/a>"],[0,3,"<a href=\"SchedulerSystem.php.html#124\">Weline\\Framework\\Runtime\\SchedulerSystem::yield<\/a>"],[0,4,"<a href=\"SchedulerSystem.php.html#139\">Weline\\Framework\\Runtime\\SchedulerSystem::yieldDelay<\/a>"],[0,3,"<a href=\"SchedulerSystem.php.html#155\">Weline\\Framework\\Runtime\\SchedulerSystem::suspendCurrentFiber<\/a>"],[0,1,"<a href=\"StateManager.php.html#82\">Weline\\Framework\\Runtime\\StateManager::registerResetCallback<\/a>"],[0,1,"<a href=\"StateManager.php.html#90\">Weline\\Framework\\Runtime\\StateManager::unregisterResetCallback<\/a>"],[0,1,"<a href=\"StateManager.php.html#113\">Weline\\Framework\\Runtime\\StateManager::registerStaticReset<\/a>"],[0,2,"<a href=\"StateManager.php.html#130\">Weline\\Framework\\Runtime\\StateManager::registerStaticResets<\/a>"],[0,1,"<a href=\"StateManager.php.html#140\">Weline\\Framework\\Runtime\\StateManager::unregisterStaticReset<\/a>"],[0,1,"<a href=\"StateManager.php.html#155\">Weline\\Framework\\Runtime\\StateManager::registerSingletonReset<\/a>"],[0,1,"<a href=\"StateManager.php.html#163\">Weline\\Framework\\Runtime\\StateManager::unregisterSingletonReset<\/a>"],[0,6,"<a href=\"StateManager.php.html#171\">Weline\\Framework\\Runtime\\StateManager::resetStaticProperties<\/a>"],[0,6,"<a href=\"StateManager.php.html#208\">Weline\\Framework\\Runtime\\StateManager::resetSingletonInstances<\/a>"],[0,1,"<a href=\"StateManager.php.html#232\">Weline\\Framework\\Runtime\\StateManager::setInstanceScope<\/a>"],[0,1,"<a href=\"StateManager.php.html#243\">Weline\\Framework\\Runtime\\StateManager::getInstanceScope<\/a>"],[0,1,"<a href=\"StateManager.php.html#251\">Weline\\Framework\\Runtime\\StateManager::setRequestInstance<\/a>"],[0,1,"<a href=\"StateManager.php.html#259\">Weline\\Framework\\Runtime\\StateManager::getRequestInstance<\/a>"],[0,1,"<a href=\"StateManager.php.html#267\">Weline\\Framework\\Runtime\\StateManager::hasRequestInstance<\/a>"],[0,3,"<a href=\"StateManager.php.html#275\">Weline\\Framework\\Runtime\\StateManager::getPooledInstance<\/a>"],[0,5,"<a href=\"StateManager.php.html#286\">Weline\\Framework\\Runtime\\StateManager::returnToPool<\/a>"],[0,7,"<a href=\"StateManager.php.html#317\">Weline\\Framework\\Runtime\\StateManager::reset<\/a>"],[0,28,"<a href=\"StateManager.php.html#352\">Weline\\Framework\\Runtime\\StateManager::runWlsPersistentRequestEntryBaseline<\/a>"],[0,1,"<a href=\"StateManager.php.html#464\">Weline\\Framework\\Runtime\\StateManager::cleanup<\/a>"],[0,2,"<a href=\"StateManager.php.html#477\">Weline\\Framework\\Runtime\\StateManager::getStats<\/a>"],[0,1,"<a href=\"StateManager.php.html#497\">Weline\\Framework\\Runtime\\StateManager::getStaticResets<\/a>"],[0,1,"<a href=\"StateManager.php.html#505\">Weline\\Framework\\Runtime\\StateManager::getSingletonResets<\/a>"],[0,29,"<a href=\"StateManager.php.html#524\">Weline\\Framework\\Runtime\\StateManager::registerFrameworkResets<\/a>"],[0,14,"<a href=\"StatePollutionDetector.php.html#98\">Weline\\Framework\\Runtime\\StatePollutionDetector::scan<\/a>"],[0,3,"<a href=\"StatePollutionDetector.php.html#163\">Weline\\Framework\\Runtime\\StatePollutionDetector::isSafeStatic<\/a>"],[0,3,"<a href=\"StatePollutionDetector.php.html#176\">Weline\\Framework\\Runtime\\StatePollutionDetector::isDangerousStatic<\/a>"],[0,6,"<a href=\"StatePollutionDetector.php.html#192\">Weline\\Framework\\Runtime\\StatePollutionDetector::generateReport<\/a>"],[0,4,"<a href=\"StatePollutionDetector.php.html#215\">Weline\\Framework\\Runtime\\StatePollutionDetector::autoDetect<\/a>"],[0,2,"<a href=\"System.php.html#23\">Weline\\Framework\\Runtime\\System::exit<\/a>"],[0,2,"<a href=\"TelemetryBroadcaster.php.html#29\">Weline\\Framework\\Runtime\\TelemetryBroadcaster::broadcast<\/a>"],[0,3,"<a href=\"TelemetryBroadcaster.php.html#63\">Weline\\Framework\\Runtime\\TelemetryBroadcaster::resolveRequest<\/a>"],[0,2,"<a href=\"TelemetryBroadcaster.php.html#73\">Weline\\Framework\\Runtime\\TelemetryBroadcaster::buildRequestSnapshot<\/a>"],[0,5,"<a href=\"TelemetryBroadcaster.php.html#101\">Weline\\Framework\\Runtime\\TelemetryBroadcaster::buildSummary<\/a>"],[0,4,"<a href=\"TelemetryBroadcaster.php.html#135\">Weline\\Framework\\Runtime\\TelemetryBroadcaster::buildExtensions<\/a>"],[0,1,"<a href=\"WlsConcurrency.php.html#29\">Weline\\Framework\\Runtime\\WlsConcurrency::setOtherSuspendedFiberCountProvider<\/a>"],[0,3,"<a href=\"WlsConcurrency.php.html#37\">Weline\\Framework\\Runtime\\WlsConcurrency::getOtherSuspendedRequestFiberCount<\/a>"],[0,1,"<a href=\"WlsConcurrency.php.html#56\">Weline\\Framework\\Runtime\\WlsConcurrency::callbackNamesOmittableWithPeerFibers<\/a>"],[0,1,"<a href=\"WlsFiberContext.php.html#44\">Weline\\Framework\\Runtime\\WlsFiberContext::__construct<\/a>"],[0,9,"<a href=\"WlsFiberContext.php.html#48\">Weline\\Framework\\Runtime\\WlsFiberContext::capture<\/a>"],[0,11,"<a href=\"WlsFiberContext.php.html#81\">Weline\\Framework\\Runtime\\WlsFiberContext::restore<\/a>"],[0,1,"<a href=\"WlsFiberContext.php.html#177\">Weline\\Framework\\Runtime\\WlsFiberContext::getSseConnection<\/a>"],[0,8,"<a href=\"WlsRuntime.php.html#100\">Weline\\Framework\\Runtime\\WlsRuntime::bootstrap<\/a>"],[0,73,"<a href=\"WlsRuntime.php.html#148\">Weline\\Framework\\Runtime\\WlsRuntime::handle<\/a>"],[0,24,"<a href=\"WlsRuntime.php.html#565\">Weline\\Framework\\Runtime\\WlsRuntime::processUrlParse<\/a>"],[0,17,"<a href=\"WlsRuntime.php.html#692\">Weline\\Framework\\Runtime\\WlsRuntime::parseUrlLangCurrency<\/a>"],[0,5,"<a href=\"WlsRuntime.php.html#758\">Weline\\Framework\\Runtime\\WlsRuntime::handleException<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#788\">Weline\\Framework\\Runtime\\WlsRuntime::formatExceptionAsHtml<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#855\">Weline\\Framework\\Runtime\\WlsRuntime::logWlsRequest<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#879\">Weline\\Framework\\Runtime\\WlsRuntime::logWlsError<\/a>"],[0,6,"<a href=\"WlsRuntime.php.html#900\">Weline\\Framework\\Runtime\\WlsRuntime::applyPerformanceHeaders<\/a>"],[0,15,"<a href=\"WlsRuntime.php.html#926\">Weline\\Framework\\Runtime\\WlsRuntime::recordPerformanceTiming<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#982\">Weline\\Framework\\Runtime\\WlsRuntime::getPerformanceConfig<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#1006\">Weline\\Framework\\Runtime\\WlsRuntime::shouldWriteRequestLog<\/a>"],[0,2,"<a href=\"WlsRuntime.php.html#1016\">Weline\\Framework\\Runtime\\WlsRuntime::shouldWriteErrorLog<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1026\">Weline\\Framework\\Runtime\\WlsRuntime::getRuntimeLogFile<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1031\">Weline\\Framework\\Runtime\\WlsRuntime::getPerformanceLogFile<\/a>"],[0,4,"<a href=\"WlsRuntime.php.html#1036\">Weline\\Framework\\Runtime\\WlsRuntime::resolveLogPath<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#1049\">Weline\\Framework\\Runtime\\WlsRuntime::appendJsonLine<\/a>"],[0,5,"<a href=\"WlsRuntime.php.html#1064\">Weline\\Framework\\Runtime\\WlsRuntime::absorbResponseObject<\/a>"],[0,6,"<a href=\"WlsRuntime.php.html#1104\">Weline\\Framework\\Runtime\\WlsRuntime::isSseRequest<\/a>"],[0,2,"<a href=\"WlsRuntime.php.html#1143\">Weline\\Framework\\Runtime\\WlsRuntime::buildSseFailedResponse<\/a>"],[0,5,"<a href=\"WlsRuntime.php.html#1166\">Weline\\Framework\\Runtime\\WlsRuntime::extractSseErrorMessage<\/a>"],[0,7,"<a href=\"WlsRuntime.php.html#1192\">Weline\\Framework\\Runtime\\WlsRuntime::reset<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#1222\">Weline\\Framework\\Runtime\\WlsRuntime::terminate<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1244\">Weline\\Framework\\Runtime\\WlsRuntime::getMode<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1252\">Weline\\Framework\\Runtime\\WlsRuntime::isPersistent<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1265\">Weline\\Framework\\Runtime\\WlsRuntime::consumePendingCookies<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1279\">Weline\\Framework\\Runtime\\WlsRuntime::consumePendingHeaders<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1291\">Weline\\Framework\\Runtime\\WlsRuntime::consumePendingResponseStatus<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1305\">Weline\\Framework\\Runtime\\WlsRuntime::snapshotPendingResponseState<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#1318\">Weline\\Framework\\Runtime\\WlsRuntime::getPendingResponseState<\/a>"],[0,3,"<a href=\"WlsRuntime.php.html#1335\">Weline\\Framework\\Runtime\\WlsRuntime::setPendingResponseState<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1353\">Weline\\Framework\\Runtime\\WlsRuntime::emptyPendingResponseState<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1366\">Weline\\Framework\\Runtime\\WlsRuntime::isBootstrapped<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1374\">Weline\\Framework\\Runtime\\WlsRuntime::getRequestCount<\/a>"],[0,1,"<a href=\"WlsRuntime.php.html#1389\">Weline\\Framework\\Runtime\\WlsRuntime::reload<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

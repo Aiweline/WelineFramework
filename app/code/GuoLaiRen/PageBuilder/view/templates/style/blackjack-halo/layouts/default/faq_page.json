@@ -1,0 +1,32 @@
+{
+  "page_type": "faq_page",
+  "name": "Blackjack Halo FAQ Page",
+  "description": "Blackjack Halo FAQ page layout with inline timeline answers",
+  "version": "1.0.0",
+  "layout_config": {
+    "header": [
+      {
+        "code": "header-nav",
+        "enabled": true,
+        "instance_id": "header-nav-1",
+        "config": {}
+      }
+    ],
+    "content": [
+      {
+        "code": "faq",
+        "enabled": true,
+        "instance_id": "faq-1",
+        "config": {}
+      }
+    ],
+    "footer": [
+      {
+        "code": "footer-links",
+        "enabled": true,
+        "instance_id": "footer-links-1",
+        "config": {}
+      }
+    ]
+  }
+}

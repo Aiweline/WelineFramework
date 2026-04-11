@@ -1,0 +1,687 @@
+<?php
+/**
+ * Teen Patti Octane - Games Component
+ *
+ * @component_start
+ * code: games
+ * name: 游戏介绍
+ * name_en: Games Showcase
+ * description: 游戏/产品介绍卡片，支持图片和描述
+ * category: content
+ * region: content
+ * thumbnail: asset/img/game/game-i1.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示设置
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示卡片描述:select:yes|yes,no
+ *
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#2a120d
+ * style.title_color => 标题颜色:color:#ffd6a8
+ * style.title_font_size => 标题字号(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:24|px
+ * style.card_bg_color => 卡片背景色:color:rgba(255,245,232,0.08)
+ * style.card_border_radius => 卡片圆角:number:16|px
+ * style.card_border_color => 卡片边框颜色:color:rgba(255,233,207,0.18)
+ * style.card_title_color => 卡片标题颜色:color:#ffd6a8
+ * style.card_title_font_size => 卡片标题字号:number:20|px
+ * style.card_desc_color => 卡片描述颜色:color:#fff5ea
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:24|px
+ * style.card_content_padding => 卡片内容内边距:number:22|px
+ * style.hover_transform => 悬停位移:number:5|px
+ *
+ * group:images => 图片设置
+ * images.image_1_desktop => 游戏1桌面端图片:textarea:|默认使用本地图片
+ * images.image_1_mobile => 游戏1移动端图片:textarea:|默认使用本地图片
+ * images.image_2 => 游戏2图片:textarea:|默认使用本地图片
+ * images.image_3 => 游戏3图片:textarea:|默认使用本地图片
+ *
+ * group:texts => 文本设置
+ * texts.kicker => 顶部提示:text:Teen Patti Octane
+ * texts.panel_chip => 面板标签:text:Teen Patti Octane
+ * texts.title => 区域标题:text:Multiples Game
+ * texts.summary => 区域摘要:text:Three quick routes covering Teen Patti, Rummy, and Slots.
+ * texts.game_1_tag => 游戏1标签:text:Route 01
+ * texts.game_1_stamp => 游戏1角标:text:Main Table
+ * texts.game_1_title => 游戏1标题:text:Teen Patti Classic
+ * texts.game_1_desc => 游戏1描述:textarea:Core Teen Patti table flow with rapid room entry and stable rounds.
+ * texts.game_2_tag => 游戏2标签:text:Route 02
+ * texts.game_2_stamp => 游戏2角标:text:Skill Table
+ * texts.game_2_title => 游戏2标题:text:Rummy Turbo
+ * texts.game_2_desc => 游戏2描述:textarea:Sequence-focused matches with cleaner score rhythm and fast rematch entry.
+ * texts.game_3_tag => 游戏3标签:text:Route 03
+ * texts.game_3_stamp => 游戏3角标:text:Break Table
+ * texts.game_3_title => 游戏3标题:text:Slot Sprint
+ * texts.game_3_desc => 游戏3描述:textarea:Short spin sessions designed for fast breaks between card tables.
+ *
+ * @fields_end
+ */
+
+$componentId = 'oct-games-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('games.bg_color', '#2a120d'));
+$titleColor = $getConfig('style.title_color', '#ffd6a8');
+$titleFontSize = (int)$getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = (int)$getConfig('style.title_font_size_mobile', '24');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,245,232,0.08)');
+$cardBorderRadius = (int)$getConfig('style.card_border_radius', '16');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(255,233,207,0.18)');
+$cardTitleColor = $getConfig('style.card_title_color', '#ffd6a8');
+$cardTitleFontSize = (int)$getConfig('style.card_title_font_size', '20');
+$cardDescColor = $getConfig('style.card_desc_color', '#fff5ea');
+$cardDescFontSize = (int)$getConfig('style.card_desc_font_size', '14');
+$sectionPadding = (int)$getConfig('style.section_padding', '60');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '40');
+$cardGap = (int)$getConfig('style.card_gap', '24');
+$cardContentPadding = (int)$getConfig('style.card_content_padding', '22');
+$hoverTransform = (int)$getConfig('style.hover_transform', '5');
+
+$defaultImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-octane/asset/img/game/game-i1.webp');
+$defaultImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-octane/asset/img/game/game-i1-m.webp');
+$defaultImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-octane/asset/img/game/game-i2.webp');
+$defaultImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-octane/asset/img/game/game-i3.webp');
+
+$image1Desktop = $getConfig('images.image_1_desktop', $getConfig('games.image_1_desktop', '')) ?: $defaultImage1Desktop;
+$image1Mobile = $getConfig('images.image_1_mobile', $getConfig('games.image_1_mobile', '')) ?: $defaultImage1Mobile;
+$image2 = $getConfig('images.image_2', $getConfig('games.image_2', '')) ?: $defaultImage2;
+$image3 = $getConfig('images.image_3', $getConfig('games.image_3', '')) ?: $defaultImage3;
+
+$kicker = $getConfig('texts.kicker', 'Teen Patti Octane');
+$panelChip = $getConfig('texts.panel_chip', 'Teen Patti Octane');
+$title = $getConfig('texts.title', $getConfig('games.title', 'Multiples Game'));
+$summary = $getConfig('texts.summary', $getConfig('texts.games_summary', 'Three quick routes covering Teen Patti, Rummy, and Slots.'));
+$game1Tag = $getConfig('texts.game_1_tag', 'Route 01');
+$game1Stamp = $getConfig('texts.game_1_stamp', 'Main Table');
+$title1 = $getConfig('texts.game_1_title', $getConfig('texts.game_teen_patti', 'Teen Patti Classic'));
+$desc1 = $getConfig('texts.game_1_desc', $getConfig('texts.game_teen_patti_desc', 'Core Teen Patti table flow with rapid room entry and stable rounds.'));
+$game2Tag = $getConfig('texts.game_2_tag', 'Route 02');
+$game2Stamp = $getConfig('texts.game_2_stamp', 'Skill Table');
+$title2 = $getConfig('texts.game_2_title', $getConfig('texts.game_rummy', 'Rummy Turbo'));
+$desc2 = $getConfig('texts.game_2_desc', $getConfig('texts.game_rummy_desc', 'Sequence-focused matches with cleaner score rhythm and fast rematch entry.'));
+$game3Tag = $getConfig('texts.game_3_tag', 'Route 03');
+$game3Stamp = $getConfig('texts.game_3_stamp', 'Break Table');
+$title3 = $getConfig('texts.game_3_title', $getConfig('texts.game_slots', 'Slot Sprint'));
+$desc3 = $getConfig('texts.game_3_desc', $getConfig('texts.game_slots_desc', 'Short spin sessions designed for fast breaks between card tables.'));
+
+$games = [
+    [
+        'title' => $title1,
+        'desc' => $desc1,
+        'desktop' => $image1Desktop,
+        'mobile' => $image1Mobile,
+        'tag' => $game1Tag,
+        'stamp' => $game1Stamp,
+    ],
+    [
+        'title' => $title2,
+        'desc' => $desc2,
+        'desktop' => $image2,
+        'mobile' => $image2,
+        'tag' => $game2Tag,
+        'stamp' => $game2Stamp,
+    ],
+    [
+        'title' => $title3,
+        'desc' => $desc3,
+        'desktop' => $image3,
+        'mobile' => $image3,
+        'tag' => $game3Tag,
+        'stamp' => $game3Stamp,
+    ],
+];
+
+$leadGame = $games[0] ?? null;
+$sideGames = array_slice($games, 1);
+?>
+
+<section id="<?= $componentId ?>" class="oct-games" aria-labelledby="<?= $componentId ?>-title">
+    <div class="section-inner">
+        <?php if ($showTitle): ?>
+            <header class="games-head games-head-mobile">
+                <span class="games-kicker"><?= htmlspecialchars($kicker) ?></span>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            </header>
+        <?php endif; ?>
+
+        <div class="games-desktop-board" style="--route-gap: <?= (int)$cardGap ?>px; --route-radius: <?= (int)$cardBorderRadius ?>px;">
+            <div class="board-left-column<?= $showTitle ? '' : ' no-title' ?>">
+                <?php if ($showTitle): ?>
+                    <article class="board-title-panel">
+                        <div><span class="board-chip"><?= htmlspecialchars($panelChip) ?></span></div>
+                        <h2><?= htmlspecialchars($title) ?></h2>
+                        <p><?= htmlspecialchars($summary) ?></p>
+                    </article>
+                <?php endif; ?>
+
+                <?php if ($leadGame): ?>
+                    <article class="route-card route-lead">
+                        <span class="route-code"><?= htmlspecialchars($leadGame['tag']) ?></span>
+                        <span class="route-stamp"><?= htmlspecialchars($leadGame['stamp']) ?></span>
+                        <div class="route-image">
+                            <picture>
+                                <?php if (!empty($leadGame['mobile'])): ?>
+                                    <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($leadGame['mobile']) ?>">
+                                <?php endif; ?>
+                                <?php if (!empty($leadGame['desktop'])): ?>
+                                    <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($leadGame['desktop']) ?>">
+                                <?php endif; ?>
+                                <img src="<?= htmlspecialchars($leadGame['desktop'] ?: $leadGame['mobile']) ?>" alt="<?= htmlspecialchars($leadGame['title']) ?>" loading="lazy" decoding="async">
+                            </picture>
+                        </div>
+
+                        <div class="route-content">
+                            <h3><?= htmlspecialchars($leadGame['title']) ?></h3>
+                            <?php if ($showDescription): ?>
+                                <p><?= htmlspecialchars($leadGame['desc']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endif; ?>
+            </div>
+
+            <div class="board-right-column">
+                <?php foreach ($sideGames as $index => $game): ?>
+                    <article class="route-card route-side route-side-<?= (int)($index + 1) ?>">
+                        <span class="route-code"><?= htmlspecialchars($game['tag']) ?></span>
+                        <span class="route-stamp"><?= htmlspecialchars($game['stamp']) ?></span>
+                        <div class="route-image">
+                            <picture>
+                                <?php if (!empty($game['mobile'])): ?>
+                                    <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($game['mobile']) ?>">
+                                <?php endif; ?>
+                                <?php if (!empty($game['desktop'])): ?>
+                                    <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($game['desktop']) ?>">
+                                <?php endif; ?>
+                                <img src="<?= htmlspecialchars($game['desktop'] ?: $game['mobile']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" loading="lazy" decoding="async">
+                            </picture>
+                        </div>
+
+                        <div class="route-content">
+                            <h3><?= htmlspecialchars($game['title']) ?></h3>
+                            <?php if ($showDescription): ?>
+                                <p><?= htmlspecialchars($game['desc']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="games-mobile-bento" aria-label="Mobile match bento board">
+            <?php if ($leadGame): ?>
+                <article class="bento-card bento-main">
+                    <header class="bento-top">
+                        <span class="bento-route"><?= htmlspecialchars($leadGame['tag']) ?></span>
+                        <span class="bento-seal"><?= htmlspecialchars($leadGame['stamp']) ?></span>
+                    </header>
+                    <div class="bento-image">
+                        <picture>
+                            <?php if (!empty($leadGame['mobile'])): ?>
+                                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($leadGame['mobile']) ?>">
+                            <?php endif; ?>
+                            <?php if (!empty($leadGame['desktop'])): ?>
+                                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($leadGame['desktop']) ?>">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($leadGame['desktop'] ?: $leadGame['mobile']) ?>" alt="<?= htmlspecialchars($leadGame['title']) ?>" loading="lazy" decoding="async">
+                        </picture>
+                    </div>
+                    <div class="bento-copy">
+                        <h3><?= htmlspecialchars($leadGame['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($leadGame['desc']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endif; ?>
+
+            <div class="bento-split">
+                <?php foreach ($sideGames as $index => $game): ?>
+                    <article class="bento-card bento-mini bento-mini-<?= (int)($index + 1) ?>">
+                        <header class="bento-top">
+                            <span class="bento-route"><?= htmlspecialchars($game['tag']) ?></span>
+                            <span class="bento-seal"><?= htmlspecialchars($game['stamp']) ?></span>
+                        </header>
+                        <div class="bento-image">
+                            <picture>
+                                <?php if (!empty($game['mobile'])): ?>
+                                    <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($game['mobile']) ?>">
+                                <?php endif; ?>
+                                <?php if (!empty($game['desktop'])): ?>
+                                    <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($game['desktop']) ?>">
+                                <?php endif; ?>
+                                <img src="<?= htmlspecialchars($game['desktop'] ?: $game['mobile']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" loading="lazy" decoding="async">
+                            </picture>
+                        </div>
+                        <div class="bento-copy">
+                            <h3><?= htmlspecialchars($game['title']) ?></h3>
+                            <?php if ($showDescription): ?>
+                                <p><?= htmlspecialchars($game['desc']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background:
+        radial-gradient(860px 340px at 90% -6%, rgba(255, 182, 74, 0.3), transparent 62%),
+        radial-gradient(760px 340px at -2% 104%, rgba(255, 72, 124, 0.26), transparent 68%),
+        linear-gradient(180deg, rgba(52, 16, 12, 0.9) 0%, rgba(43, 12, 12, 0.95) 52%, rgba(26, 8, 12, 0.98) 100%),
+        <?= htmlspecialchars($bgColor) ?>;
+    border-top: 1px solid rgba(255, 176, 117, 0.02);
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .games-head {
+    max-width: 760px;
+    margin-bottom: 1.4rem;
+}
+
+#<?= $componentId ?> .games-head-mobile {
+    display: none;
+}
+
+#<?= $componentId ?> .games-kicker {
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.36rem 0.75rem;
+    border-radius: 999px;
+    color: #3ad9c7;
+    background: rgba(58, 217, 199, 0.1);
+    border: 1px solid rgba(58, 217, 199, 0.22);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .games-head h2 {
+    margin: 0.9rem 0 0;
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    padding-right: clamp(72px, 10vw, 164px);
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 5vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.04;
+}
+
+#<?= $componentId ?> .games-head h2::after,
+#<?= $componentId ?> .board-title-panel h2::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: clamp(56px, 8vw, 128px);
+    height: 10px;
+    transform: translateY(-50%);
+    background:
+        linear-gradient(270deg, rgba(83, 224, 197, 0), rgba(83, 224, 197, 0.74) 58%, rgba(255, 186, 124, 0.92) 100%) center/100% 2px no-repeat,
+        linear-gradient(-135deg, transparent 45%, rgba(255, 186, 124, 0.92) 46% 56%, transparent 57%) left center/10px 10px no-repeat;
+}
+
+#<?= $componentId ?> .games-desktop-board {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 0.86fr);
+    gap: var(--route-gap);
+    align-items: stretch;
+    min-height: clamp(400px, 44vw, 400px);
+}
+
+#<?= $componentId ?> .board-left-column {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: calc(var(--route-gap) * 0.72);
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .board-left-column.no-title {
+    grid-template-rows: 1fr;
+}
+
+#<?= $componentId ?> .board-right-column {
+    display: grid;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--route-gap) * 0.72);
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .board-title-panel {
+    border-radius: 18px;
+    border: none;
+    background: linear-gradient(155deg, rgba(35, 15, 9, 0.9), rgba(19, 10, 8, 0.84));
+    box-shadow: 0 18px 34px rgba(0, 0, 0, 0.3);
+    padding: 0.72rem;
+}
+
+#<?= $componentId ?> .board-chip {
+    display: inline-flex;
+    padding: 0.28rem 0.58rem;
+    border-radius: 999px;
+    color: #ffc47f;
+    border: 1px solid rgba(255, 196, 127, 0.32);
+    background: rgba(255, 196, 127, 0.1);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .board-title-panel h2 {
+    margin: 0.7rem 0 0;
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    padding-right: clamp(72px, 10vw, 164px);
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(30px, 3.3vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.05;
+}
+
+#<?= $componentId ?> .board-title-panel p {
+    margin: 0.58rem 0 0;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: 0.8rem;
+    line-height: 1.56;
+    opacity: 0.92;
+}
+
+#<?= $componentId ?> .route-card {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--route-radius);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background: <?= htmlspecialchars($cardBgColor) ?>;
+    overflow: hidden;
+    box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+    transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+
+#<?= $componentId ?> .route-side {
+    transform: scale(0.93);
+    transform-origin: left center;
+}
+
+#<?= $componentId ?> .route-card:hover {
+    transform: translateY(-<?= (int)$hoverTransform ?>px);
+    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.34);
+}
+
+#<?= $componentId ?> .route-side:hover {
+    transform: scale(0.93) translateY(-<?= (int)$hoverTransform ?>px);
+}
+
+#<?= $componentId ?> .route-code,
+#<?= $componentId ?> .route-stamp {
+    position: absolute;
+    z-index: 2;
+    font-size: 0.64rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+    border-radius: 999px;
+    padding: 0.2rem 0.48rem;
+}
+
+#<?= $componentId ?> .route-code {
+    left: 0.65rem;
+    top: 0.65rem;
+    color: #3ad9c7;
+    border: 1px solid rgba(58, 217, 199, 0.34);
+    background: rgba(58, 217, 199, 0.1);
+}
+
+#<?= $componentId ?> .route-stamp {
+    right: 0.65rem;
+    top: 0.65rem;
+    color: #ffd6aa;
+    border: 1px solid rgba(255, 214, 170, 0.34);
+    background: rgba(255, 214, 170, 0.1);
+}
+
+#<?= $componentId ?> .route-image {
+    position: relative;
+    height: clamp(180px, 19vw, 250px);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .route-side .route-image {
+    height: clamp(106px, 9.5vw, 146px);
+}
+
+#<?= $componentId ?> .route-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.35s ease;
+}
+
+#<?= $componentId ?> .route-card:hover .route-image img {
+    transform: scale(1.05);
+}
+
+#<?= $componentId ?> .route-content {
+    padding: max(14px, calc(<?= (int)$cardContentPadding ?>px - 4px));
+    display: grid;
+    gap: 0.42rem;
+    align-content: start;
+    flex: 1;
+}
+
+#<?= $componentId ?> .route-content h3,
+#<?= $componentId ?> .bento-card h3 {
+    margin: 0;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.25;
+}
+
+#<?= $componentId ?> .route-content p,
+#<?= $componentId ?> .bento-card p {
+    margin: 0;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.72;
+    opacity: 0.92;
+}
+
+#<?= $componentId ?> .games-mobile-bento {
+    display: none;
+}
+
+@media (max-width: 1080px) {
+    #<?= $componentId ?> .games-desktop-board {
+        grid-template-columns: 1fr;
+        min-height: auto;
+    }
+
+    #<?= $componentId ?> .board-right-column {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        grid-template-rows: none;
+    }
+
+    #<?= $componentId ?> .route-side {
+        transform: none;
+    }
+
+    #<?= $componentId ?> .route-side:hover {
+        transform: translateY(-<?= (int)$hoverTransform ?>px);
+    }
+
+    #<?= $componentId ?> .route-image,
+    #<?= $componentId ?> .route-side .route-image {
+        height: clamp(152px, 23vw, 216px);
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .section-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .games-desktop-board {
+        display: none;
+    }
+
+    #<?= $componentId ?> .games-mobile-bento {
+        display: grid;
+        gap: 0.62rem;
+    }
+
+    #<?= $componentId ?> .games-head-mobile {
+        display: block;
+    }
+
+    #<?= $componentId ?> .games-head h2 {
+        padding-right: clamp(52px, 18vw, 96px);
+    }
+
+    #<?= $componentId ?> .games-head h2::after {
+        width: clamp(40px, 14vw, 74px);
+        height: 8px;
+    }
+
+    #<?= $componentId ?> .bento-card {
+        position: relative;
+        border-radius: 18px;
+        border: 1px solid rgba(255, 223, 189, 0.24);
+        background: linear-gradient(160deg, rgba(35, 15, 9, 0.9), rgba(22, 10, 8, 0.84));
+        box-shadow: 0 16px 30px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+        animation: octBentoFade 0.45s ease both;
+    }
+
+    #<?= $componentId ?> .bento-main {
+        animation-delay: 0.02s;
+    }
+
+    #<?= $componentId ?> .bento-split {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.58rem;
+        align-items: start;
+    }
+
+    #<?= $componentId ?> .bento-mini-1 {
+        transform: rotate(-1.1deg);
+        animation-delay: 0.08s;
+    }
+
+    #<?= $componentId ?> .bento-mini-2 {
+        transform: rotate(1deg) translateY(0.34rem);
+        animation-delay: 0.14s;
+    }
+
+    #<?= $componentId ?> .bento-top {
+        display: none;
+    }
+
+    #<?= $componentId ?> .bento-image {
+        margin-top: 0;
+    }
+
+    #<?= $componentId ?> .bento-main .bento-image {
+        aspect-ratio: 16 / 9;
+    }
+
+    #<?= $componentId ?> .bento-mini .bento-image {
+        aspect-ratio: 4 / 5;
+    }
+
+    #<?= $componentId ?> .bento-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    #<?= $componentId ?> .bento-copy {
+        padding: 0.62rem 0.66rem 0.72rem;
+        display: grid;
+        gap: 0.34rem;
+    }
+
+    #<?= $componentId ?> .bento-main .bento-copy h3 {
+        margin-top: 0;
+    }
+
+    #<?= $componentId ?> .bento-mini .bento-copy h3 {
+        margin-top: 0;
+        font-size: clamp(14px, 3.9vw, 17px);
+        line-height: 1.3;
+    }
+
+    #<?= $componentId ?> .bento-mini .bento-copy p {
+        margin-top: 0.38rem;
+        font-size: 12px;
+        line-height: 1.56;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+}
+
+@keyframes octBentoFade {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .route-card,
+    #<?= $componentId ?> .bento-card {
+        transition: none;
+        animation: none;
+    }
+}
+</style>

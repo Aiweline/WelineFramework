@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
@@ -25,6 +26,7 @@ final class TemplateRequestRefreshTest extends TestCase
     {
         ObjectManager::setInstance(Request::class, $this->originalRequest);
         Template::resetInstance();
+        Context::leave();
         parent::tearDown();
     }
 
@@ -51,6 +53,24 @@ final class TemplateRequestRefreshTest extends TestCase
         } finally {
             @unlink($tempFile);
         }
+    }
+
+    public function testInitTreatsCliRequestContextAsRequestRuntime(): void
+    {
+        Context::enter(new Context([
+            'meta' => [
+                'type' => 'request',
+                'mode' => 'wls',
+            ],
+        ]));
+
+        $request = $this->createRequestStub('http://fresh.test/fresh');
+        ObjectManager::setInstance(Request::class, $request);
+
+        $template = Template::getInstance();
+
+        self::assertSame('Weline_Framework', $template->getData('title'));
+        self::assertSame('http://fresh.test/fresh', $template->getData('req')['url'] ?? null);
     }
 
     private function createRequestStub(string $baseUrl): Request

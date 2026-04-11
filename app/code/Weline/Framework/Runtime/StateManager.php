@@ -420,6 +420,17 @@ class StateManager
         if (\class_exists(\Weline\Widget\Taglib\Widget::class, false)) {
             \Weline\Widget\Taglib\Widget::resetRequestState();
         }
+        if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
+            \Weline\Framework\View\Taglib::clearStaticCaches();
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
+        }
+        if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
+            \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
+        }
+        if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Hooker::class);
+        }
 
         $pagebuilderSingletons = [
             \GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::class,
@@ -797,7 +808,11 @@ class StateManager
             if (!\class_exists(\Weline\Framework\Event\EventsManager::class, false)) {
                 return;
             }
-            $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
+            $instances = \Weline\Framework\Manager\ObjectManager::getInstances();
+            $eventsManager = $instances[\Weline\Framework\Event\EventsManager::class] ?? null;
+            if (!$eventsManager) {
+                return;
+            }
             if (\method_exists($eventsManager, 'resetRequestState')) {
                 $eventsManager->resetRequestState();
                 return;
@@ -811,6 +826,19 @@ class StateManager
         self::registerResetCallback('widget_taglib_cache', function () {
             if (\class_exists(\Weline\Widget\Taglib\Widget::class, false)) {
                 \Weline\Widget\Taglib\Widget::resetRequestState();
+            }
+        });
+        self::registerResetCallback('view_hook_runtime_cache', function () {
+            if (\class_exists(\Weline\Framework\View\Taglib::class, false)) {
+                \Weline\Framework\View\Taglib::clearStaticCaches();
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\View\Taglib::class);
+            }
+            if (\class_exists(\Weline\Framework\Hook\Config\HookReader::class, false)) {
+                \Weline\Framework\Hook\Config\HookReader::clearStaticCache();
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Config\HookReader::class);
+            }
+            if (\class_exists(\Weline\Framework\Hook\Hooker::class, false)) {
+                \Weline\Framework\Manager\ObjectManager::removeInstance(\Weline\Framework\Hook\Hooker::class);
             }
         });
 

@@ -23,21 +23,39 @@ use Weline\Framework\Runtime\SchedulerSystem;
 class SseContext
 {
     /**
+     * 常见的非阻塞/暂不可读 socket 错误码。
+     *
+     * @return list<int>
+     */
+    private static function wouldBlockErrors(): array
+    {
+        $errors = [11, 35, 10035];
+        if (\defined('SOCKET_EAGAIN')) {
+            $errors[] = (int)\constant('SOCKET_EAGAIN');
+        }
+        if (\defined('SOCKET_EWOULDBLOCK')) {
+            $errors[] = (int)\constant('SOCKET_EWOULDBLOCK');
+        }
+
+        return \array_values(\array_unique(\array_filter($errors, static fn ($error): bool => $error > 0)));
+    }
+
+    /**
      * 当前连接资源
      * @var resource|null
      */
     private static $connection = null;
-    
+
     /**
      * 是否已启用 SSE 模式
      */
     private static bool $sseEnabled = false;
-    
+
     /**
      * 是否已发送 HTTP 头
      */
     private static bool $headersSent = false;
-    
+
     /**
      * 回调函数（用于 FPM 模式兼容）
      * @var callable|null
@@ -143,13 +161,24 @@ class SseContext
      */
     public static function write(string $data): bool
     {
-        // 优先使用回调（FPM 模式）
+        // 优先使用回调（WLS Fiber 安全路径 / FPM 兼容）
         if (self::$writeCallback !== null) {
             (self::$writeCallback)($data);
             return true;
         }
 
-        // WLS 模式：直接写入连接
+        // WLS 模式（Fiber 并发）：禁止通过 self::$connection 直接写入。
+        // 在多 Fiber 并发下，self::$connection 是进程级静态变量，
+        // Fiber 上下文切换期间可能指向其他请求的连接，导致 SSE 数据
+        // 写入错误的 TCP 流（响应污染）。
+        // WLS 下所有 SSE 写入必须经由 writeCallback（worker.php 在
+        // Fiber 创建前注册，闭包绑定了正确的 connId/conn），
+        // 若 callback 未设置则说明当前 Fiber 不是 SSE 请求，拒绝写入。
+        if (\defined('WLS_MODE') && WLS_MODE) {
+            return false;
+        }
+
+        // 非 WLS 单进程模式：直接写入连接（无并发风险）
         if (self::$connection !== null && \is_resource(self::$connection)) {
             $result = @\fwrite(self::$connection, $data);
 
@@ -194,7 +223,48 @@ class SseContext
 
         // 检查连接是否已关闭
         $meta = @\stream_get_meta_data(self::$connection);
-        return $meta !== false && !($meta['eof'] ?? false) && !($meta['timed_out'] ?? false);
+        if ($meta === false || ($meta['eof'] ?? false) || ($meta['timed_out'] ?? false)) {
+            return false;
+        }
+
+        if (!\function_exists('socket_import_stream') || !\function_exists('socket_recv') || !\function_exists('stream_select')) {
+            return true;
+        }
+
+        $socket = @\socket_import_stream(self::$connection);
+        if ($socket === false) {
+            return true;
+        }
+
+        $read = [self::$connection];
+        $write = [];
+        $except = [self::$connection];
+        $changed = @\stream_select($read, $write, $except, 0, 0);
+        if ($changed === false) {
+            return true;
+        }
+        if ($except !== []) {
+            return false;
+        }
+        if ($changed === 0 || $read === []) {
+            return true;
+        }
+
+        $peekBuffer = '';
+        $peek = @\socket_recv($socket, $peekBuffer, 1, \MSG_PEEK);
+        if ($peek === 0) {
+            return false;
+        }
+        if ($peek === false) {
+            $error = \socket_last_error($socket);
+            if (\function_exists('socket_clear_error')) {
+                \socket_clear_error($socket);
+            }
+
+            return \in_array($error, self::wouldBlockErrors(), true);
+        }
+
+        return true;
     }
 
     /**
@@ -211,6 +281,12 @@ class SseContext
         if (self::$writeCallback !== null) {
             (self::$writeCallback)($data);
             return true;
+        }
+
+        // WLS Fiber 并发：与 write() 同理，禁止通过 self::$connection 直接写入，
+        // 防止 Fiber 上下文切换导致 SSE 数据写入错误连接。
+        if (\defined('WLS_MODE') && WLS_MODE) {
+            return false;
         }
 
         if (self::$connection !== null && \is_resource(self::$connection)) {

@@ -1,0 +1,618 @@
+<?php
+/**
+ * Twenty Nine Tempest - Footer Links
+ *
+ * @component_start
+ * code: footer-links
+ * name: Footer Links
+ * name_en: Footer Links
+ * description: Streamlined tempest footer with canonical footer/content field handling and shared floating download action.
+ * category: footer
+ * region: footer
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_links => 显示链接:select:yes|yes,no
+ * display.show_disclaimer => 显示免责声明:select:yes|yes,no
+ * display.show_copyright => 显示版权信息:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.background_color => 背景基础色:color:#0a1527
+ * style.text_color => 文字颜色:color:#9ebdda
+ * style.link_color => 链接颜色:color:#e8f3ff
+ * style.link_hover_color => 链接悬停颜色:color:#7be6ff
+ * style.link_font_size => 链接字号:number:15|px
+ * style.link_font_weight => 链接字重:number:700
+ * style.link_gap => 链接间距:number:10|px
+ * style.border_top => 显示顶部边框:select:no|yes,no
+ * style.border_color => 边框颜色:color:#1d3654
+ * style.border_width => 边框宽度:number:1|px
+ * style.section_padding => 区域内边距(PC端):number:48|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:34|px
+ * style.separator_display => 显示分隔符:select:yes|yes,no
+ * style.separator_char => 分隔符字符:text:·
+ * style.separator_color => 分隔符颜色:color:#587490
+ *
+ * group:disclaimer => 免责声明样式
+ * disclaimer.bg_color => 免责声明背景:color:#0e1d33
+ * disclaimer.border_radius => 免责声明圆角:number:20|px
+ * disclaimer.padding => 免责声明内边距:number:16|px
+ * disclaimer.font_size => 免责声明字号:number:14|px
+ * disclaimer.text_color => 免责声明颜色:color:#d5e4f7
+ *
+ * group:copyright => 版权信息样式
+ * copyright.font_size => 版权字号:number:14|px
+ * copyright.text_color => 版权颜色:color:#89a6c2
+ * copyright.margin_top => 版权上边距:number:8|px
+ *
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1240
+ * layout.padding_horizontal => 左右内边距:responsive:16/20|px
+ * layout.padding_vertical => 上下内边距:responsive:34/48|px
+ *
+ * group:footer => 页脚品牌设置
+ * footer.logo_text => 品牌名称:text:Twenty Nine Tempest
+ * footer.logo_url => 品牌图标:textarea:|留空使用默认图标
+ *
+ * group:content => 内容配置
+ * content.footer_links => 页脚链接:textarea:Home=>/\r\nAbout=>/about\r\nBlog=>/blog\r\nFAQs=>/faqs|配置格式：名字=>url，一行一个。留空URL时自动使用#
+ * content.copyright_text => 版权信息:text:© 2026 Twenty Nine Tempest. All rights reserved.
+ * content.disclaimer_text => 免责声明:textarea:18+ Only. Real-money gameplay involves risk. Please play responsibly and stay within your limits.
+ * content.use_custom_links => 使用自定义链接组:select:yes|yes,no
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
+ *
+ * group:typography => 字体排版
+ * typography.font_size => 字号:responsive:12/14|px
+ * typography.line_height => 行高:number:1.65
+ *
+ * @fields_end
+ */
+
+$componentId = 'tnt-footer-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$config = array_merge($styleSettings, $componentConfig);
+$standaloneShell = !($this->getData('__tnt_shell_managed') || $this->getData('__pagebuilder_shell_managed'));
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$parseResponsive = static function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string) $value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string) ($parts[0] ?? '')),
+        'desktop' => trim((string) ($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = static function ($parsed) {
+    $mobile = (float) $parsed['mobile'];
+    $desktop = (float) $parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$templateCode = $page ? $page->getData('style') : 'twenty-nine-tempest';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'twenty-nine-tempest';
+}
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$showLinks = $normalizeToggle($getConfig('display.show_links', 'yes')) !== 'no';
+$showDisclaimer = $normalizeToggle($getConfig('display.show_disclaimer', 'yes')) !== 'no';
+$showCopyright = $normalizeToggle($getConfig('display.show_copyright', 'yes')) !== 'no';
+
+$bgColor = (string) $getConfig('style.background_color', '#0a1527');
+$textColor = (string) $getConfig('style.text_color', '#9ebdda');
+$linkColor = (string) $getConfig('style.link_color', '#e8f3ff');
+$linkHoverColor = (string) $getConfig('style.link_hover_color', '#7be6ff');
+$linkFontSize = (int) $getConfig('style.link_font_size', '15');
+$linkFontWeight = (int) $getConfig('style.link_font_weight', '700');
+$linkGap = (int) $getConfig('style.link_gap', '10');
+$borderTop = $normalizeToggle($getConfig('style.border_top', 'no'), 'no') === 'yes';
+$borderColor = (string) $getConfig('style.border_color', '#1d3654');
+$borderWidth = (int) $getConfig('style.border_width', '1');
+$sectionPadding = (int) $getConfig('style.section_padding', '48');
+$sectionPaddingMobile = (int) $getConfig('style.section_padding_mobile', '34');
+$separatorDisplay = $normalizeToggle($getConfig('style.separator_display', 'yes'), 'yes') === 'yes';
+$separatorChar = trim((string) $getConfig('style.separator_char', '·'));
+if ($separatorChar === '') {
+    $separatorChar = '·';
+}
+$separatorColor = (string) $getConfig('style.separator_color', '#587490');
+$maxWidth = (int) $getConfig('layout.max_width', '1240');
+$paddingHorizontal = $genResponsiveCSS($parseResponsive($getConfig('layout.padding_horizontal', '16/20') . 'px'));
+$paddingVerticalConfig = trim((string) $getConfig('layout.padding_vertical', ''));
+$paddingVertical = $paddingVerticalConfig !== ''
+    ? $genResponsiveCSS($parseResponsive($paddingVerticalConfig . 'px'))
+    : $genResponsiveCSS($parseResponsive($sectionPaddingMobile . '/' . $sectionPadding . 'px'));
+$fontSize = $genResponsiveCSS($parseResponsive($getConfig('typography.font_size', '12/14') . 'px'));
+$lineHeight = (float) $getConfig('typography.line_height', '1.65');
+$disclaimerBgColor = (string) $getConfig('disclaimer.bg_color', '#0e1d33');
+$disclaimerBorderRadius = (int) $getConfig('disclaimer.border_radius', '20');
+$disclaimerPadding = (int) $getConfig('disclaimer.padding', '16');
+$disclaimerFontSize = (int) $getConfig('disclaimer.font_size', '14');
+$disclaimerTextColor = (string) $getConfig('disclaimer.text_color', '#d5e4f7');
+$copyrightFontSize = (int) $getConfig('copyright.font_size', '14');
+$copyrightTextColor = (string) $getConfig('copyright.text_color', '#89a6c2');
+$copyrightMarginTop = (int) $getConfig('copyright.margin_top', '8');
+
+$logoText = trim((string) $getConfigAny(['footer.logo_text', 'footer.logo.text', 'logo.text', 'app_info.app_name', 'texts.app_name'], 'Twenty Nine Tempest'));
+if ($logoText === '' && $page) {
+    $logoText = trim((string) ($page->getData('title') ?: ''));
+}
+if ($logoText === '') {
+    $logoText = 'Twenty Nine Tempest';
+}
+$defaultLogoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/twenty-nine-tempest/asset/img/tempest-logo-icon.svg');
+$logoUrl = trim((string) $getConfigAny(['footer.logo_url', 'footer.logo.url', 'logo.url'], ''));
+$logoUrl = $logoUrl !== '' ? $logoUrl : ($page && $page->getData('logo') ? (string) $page->getData('logo') : $defaultLogoUrl);
+$copyright = (string) $getConfigAny(['content.copyright_text', 'footer.copyright'], '© 2026 Twenty Nine Tempest. All rights reserved.');
+$disclaimerText = (string) $getConfigAny(['content.disclaimer_text', 'footer.disclaimer_text'], '18+ Only. Real-money gameplay involves risk. Please play responsibly and stay within your limits.');
+
+$downloadDisplay = $normalizeToggle($getConfigAny(['download_button.display', 'header.download_button.display'], 'yes')) !== 'no';
+$downloadText = trim((string) $getConfigAny(['download_button.text', 'header.download_button.text', 'navigation.cta_text'], 'Play Now'));
+$downloadUrl = trim((string) $getConfigAny(['download_button.url', 'header.download_button.url', 'navigation.cta_url'], '#download'));
+$downloadHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string) $downloadUrl);
+$downloadRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($downloadHref, 'url');
+$downloadIcon = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/twenty-nine-tempest/asset/img/floating-download-badge.svg');
+
+$links = [];
+$useCustomLinksRaw = trim((string) $getConfig('content.use_custom_links', ''));
+$legacyUseSubpagesRaw = trim((string) $getConfig('content.use_subpages', ''));
+if ($useCustomLinksRaw !== '') {
+    $useCustomLinks = $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes';
+} elseif ($legacyUseSubpagesRaw !== '') {
+    $useCustomLinks = $normalizeToggle($legacyUseSubpagesRaw, 'no') !== 'yes';
+} else {
+    $useCustomLinks = true;
+}
+
+if (!$useCustomLinks && $page) {
+    $footerPages = [];
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $footerPages = $page->getHeaderNavigationPages(30);
+    } elseif (method_exists($page, 'getNavigationPages')) {
+        $footerPages = $page->getNavigationPages([], 30);
+    }
+
+    foreach ($footerPages as $footerPage) {
+        $text = trim((string) ($footerPage['title'] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        $type = trim((string) ($footerPage['type'] ?? ''));
+        $configuredLabel = $type !== '' ? trim((string) $getConfig('content.footer_label_' . $type, '')) : '';
+        $links[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : $text,
+            'href' => (string) ($footerPage['url'] ?? '#'),
+        ];
+    }
+}
+
+if (empty($links)) {
+    $linksConfig = (string) $getConfigAny(['content.footer_links', 'footer.links'], "Home=>/\nAbout=>/about\nBlog=>/blog\nFAQs=>/faqs");
+    if (strpos($linksConfig, '\\n') !== false && strpos($linksConfig, "\n") === false) {
+        $linksConfig = str_replace('\\n', "\n", $linksConfig);
+    }
+    $items = preg_split('/\r?\n/', $linksConfig);
+    if (!is_array($items) || count(array_filter(array_map('trim', $items))) === 0) {
+        $items = explode(',', $linksConfig);
+    }
+    foreach ($items as $item) {
+        $item = trim((string) $item);
+        if ($item === '') {
+            continue;
+        }
+        if (strpos($item, '=>') !== false) {
+            $parts = array_map('trim', explode('=>', $item, 2));
+        } elseif (strpos($item, '|') !== false) {
+            $parts = array_map('trim', explode('|', $item, 2));
+        } else {
+            $parts = [$item, '#'];
+        }
+        if (($parts[0] ?? '') === '') {
+            continue;
+        }
+        $links[] = [
+            'text' => $parts[0],
+            'href' => ($parts[1] ?? '') !== '' ? $parts[1] : '#',
+        ];
+    }
+}
+
+if (empty($links)) {
+    $links = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQs', 'href' => '/faqs'],
+    ];
+}
+?>
+<?php if ($standaloneShell): ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($logoText) ?></title>
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+</head>
+<body class="tnt-footer-shell-body">
+<?php endif; ?>
+
+<footer
+    id="<?= $componentId ?>"
+    class="tnt-footer"
+    aria-labelledby="<?= $componentId ?>-brand"
+    style="
+        --tnt-footer-bg: <?= htmlspecialchars($bgColor) ?>;
+        --tnt-footer-text: <?= htmlspecialchars($textColor) ?>;
+        --tnt-footer-link: <?= htmlspecialchars($linkColor) ?>;
+        --tnt-footer-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+        --tnt-footer-link-size: <?= (int) $linkFontSize ?>px;
+        --tnt-footer-link-weight: <?= (int) $linkFontWeight ?>;
+        --tnt-footer-link-gap: <?= (int) $linkGap ?>px;
+        --tnt-footer-separator: <?= htmlspecialchars($separatorColor) ?>;
+        --tnt-footer-font-size: <?= htmlspecialchars($fontSize) ?>;
+        --tnt-footer-line-height: <?= htmlspecialchars((string) $lineHeight) ?>;
+        --tnt-footer-max: <?= (int) $maxWidth ?>px;
+        --tnt-footer-pad-x: <?= htmlspecialchars($paddingHorizontal) ?>;
+        --tnt-footer-pad-y: <?= htmlspecialchars($paddingVertical) ?>;
+        --tnt-footer-border-color: <?= htmlspecialchars($borderColor) ?>;
+        --tnt-footer-border-width: <?= (int) $borderWidth ?>px;
+        --tnt-footer-disclaimer-bg: <?= htmlspecialchars($disclaimerBgColor) ?>;
+        --tnt-footer-disclaimer-radius: <?= (int) $disclaimerBorderRadius ?>px;
+        --tnt-footer-disclaimer-pad: <?= (int) $disclaimerPadding ?>px;
+        --tnt-footer-disclaimer-size: <?= (int) $disclaimerFontSize ?>px;
+        --tnt-footer-disclaimer-color: <?= htmlspecialchars($disclaimerTextColor) ?>;
+        --tnt-footer-copyright-size: <?= (int) $copyrightFontSize ?>px;
+        --tnt-footer-copyright-color: <?= htmlspecialchars($copyrightTextColor) ?>;
+        --tnt-footer-copyright-gap: <?= (int) $copyrightMarginTop ?>px;
+    "
+>
+    <div class="footer-wave" aria-hidden="true">
+        <svg viewBox="0 0 1600 220" preserveAspectRatio="none">
+            <path fill="rgba(24,240,255,0.12)" d="M0 160 C 180 120 360 118 560 154 C 780 194 1018 212 1228 188 C 1388 170 1518 144 1600 132 L1600 0 L0 0 Z"></path>
+            <path fill="rgba(255,191,99,0.1)" d="M0 210 C 220 196 420 214 646 228 C 868 240 1088 234 1322 220 C 1480 212 1564 202 1600 196 L1600 0 L0 0 Z"></path>
+        </svg>
+    </div>
+
+    <div class="footer-shell">
+        <div class="footer-top">
+            <a href="/" class="footer-brand" id="<?= $componentId ?>-brand" aria-label="<?= htmlspecialchars($logoText) ?> home">
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+                <span><?= htmlspecialchars($logoText) ?></span>
+            </a>
+
+            <?php if ($showLinks && !empty($links)): ?>
+                <nav class="footer-nav" aria-label="Footer navigation">
+                    <?php foreach ($links as $index => $link): ?>
+                        <a href="<?= htmlspecialchars($link['href']) ?>"><?= htmlspecialchars($link['text']) ?></a>
+                        <?php if ($separatorDisplay && $index < count($links) - 1): ?>
+                            <span class="footer-separator" aria-hidden="true"><?= htmlspecialchars($separatorChar) ?></span>
+                        <?php endif; ?>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($showDisclaimer && $disclaimerText !== ''): ?>
+            <div class="footer-disclaimer">
+                <p><?= htmlspecialchars($disclaimerText) ?></p>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($showCopyright && $copyright !== ''): ?>
+            <p class="footer-copyright"><?= htmlspecialchars($copyright) ?></p>
+        <?php endif; ?>
+    </div>
+</footer>
+
+<?php if ($downloadDisplay && $downloadText !== ''): ?>
+    <a id="<?= $componentId ?>-float" class="tnt-floating-download" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($downloadRef)) ?>" data-glr-ref="<?= htmlspecialchars($downloadRef) ?>" aria-label="<?= htmlspecialchars($downloadText) ?>">
+        <span class="float-icon-shell" aria-hidden="true">
+            <img src="<?= htmlspecialchars($downloadIcon) ?>" alt="">
+        </span>
+        <span class="float-copy"><?= htmlspecialchars($downloadText) ?></span>
+    </a>
+<?php endif; ?>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Space+Grotesk:wght@600;700;800&display=swap');
+
+<?php if ($standaloneShell): ?>
+html, body {
+    margin: 0;
+    padding: 0;
+}
+body.tnt-footer-shell-body {
+    min-height: 100vh;
+    background: #07111f;
+    color: #eaf4ff;
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+<?php endif; ?>
+
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: var(--tnt-footer-pad-y) var(--tnt-footer-pad-x);
+    background:
+        radial-gradient(820px 320px at 8% 10%, rgba(24,240,255,0.14), transparent 72%),
+        radial-gradient(780px 320px at 92% 18%, rgba(255,191,99,0.12), transparent 68%),
+        linear-gradient(180deg, #0e1d33 0%, var(--tnt-footer-bg) 56%, #07111f 100%);
+    color: var(--tnt-footer-text);
+    font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: var(--tnt-footer-font-size);
+    line-height: var(--tnt-footer-line-height);
+    <?php if ($borderTop): ?>border-top: var(--tnt-footer-border-width) solid var(--tnt-footer-border-color);<?php endif; ?>
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 24%),
+        repeating-linear-gradient(124deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 28px);
+    opacity: 0.24;
+}
+
+#<?= $componentId ?> .footer-wave {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 220px;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .footer-wave svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#<?= $componentId ?> .footer-shell {
+    width: min(var(--tnt-footer-max), 100%);
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .footer-top {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1rem 1.25rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .footer-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.72rem;
+    min-width: 0;
+    text-decoration: none;
+    color: #f3f8ff;
+}
+
+#<?= $componentId ?> .footer-brand img {
+    width: 50px;
+    height: 50px;
+    border-radius: 18px;
+    box-shadow: 0 14px 30px rgba(0,220,255,0.16);
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .footer-brand span {
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.02;
+}
+
+#<?= $componentId ?> .footer-nav {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--tnt-footer-link-gap);
+}
+
+#<?= $componentId ?> .footer-nav a {
+    color: var(--tnt-footer-link);
+    text-decoration: none;
+    font-size: var(--tnt-footer-link-size);
+    font-weight: var(--tnt-footer-link-weight);
+    letter-spacing: 0.05em;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+#<?= $componentId ?> .footer-nav a:hover {
+    color: var(--tnt-footer-link-hover);
+    transform: translateY(-1px);
+}
+
+#<?= $componentId ?> .footer-separator {
+    color: var(--tnt-footer-separator);
+}
+
+#<?= $componentId ?> .footer-disclaimer {
+    margin-top: 1rem;
+    padding: var(--tnt-footer-disclaimer-pad);
+    border-radius: var(--tnt-footer-disclaimer-radius);
+    background: var(--tnt-footer-disclaimer-bg);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .footer-disclaimer p {
+    margin: 0;
+    color: var(--tnt-footer-disclaimer-color);
+    font-size: var(--tnt-footer-disclaimer-size);
+}
+
+#<?= $componentId ?> .footer-copyright {
+    margin: var(--tnt-footer-copyright-gap) 0 0;
+    color: var(--tnt-footer-copyright-color);
+    font-size: var(--tnt-footer-copyright-size);
+}
+
+#<?= $componentId ?>-float {
+    position: fixed;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    z-index: 60;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.68rem;
+    min-height: 66px;
+    padding: 0.5rem 0.84rem 0.5rem 0.5rem;
+    border-radius: 24px;
+    border: 1px solid rgba(255,191,99,0.34);
+    text-decoration: none;
+    color: #132235;
+    background: linear-gradient(135deg, rgba(255,247,229,0.98) 0%, rgba(227,252,255,0.96) 100%);
+    box-shadow: 0 20px 44px rgba(3,10,20,0.34);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+#<?= $componentId ?>-float:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 24px 50px rgba(3,10,20,0.38);
+}
+
+#<?= $componentId ?>-float .float-icon-shell {
+    width: 54px;
+    height: 54px;
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, rgba(9,22,36,0.96), rgba(19,52,85,0.92));
+}
+
+#<?= $componentId ?>-float .float-icon-shell img {
+    width: 44px;
+    height: 44px;
+    display: block;
+}
+
+#<?= $componentId ?>-float .float-copy {
+    font-size: 0.8rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+@media (max-width: 840px) {
+    #<?= $componentId ?> .footer-top {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .footer-nav {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding-top: calc(var(--tnt-footer-pad-y) + 1.4rem);
+    }
+
+    #<?= $componentId ?> .footer-brand img {
+        width: 44px;
+        height: 44px;
+        border-radius: 16px;
+    }
+
+    #<?= $componentId ?>-float {
+        right: max(10px, env(safe-area-inset-right));
+        bottom: max(10px, env(safe-area-inset-bottom));
+        min-height: 60px;
+        padding: 0.42rem 0.72rem 0.42rem 0.42rem;
+        gap: 0.56rem;
+    }
+
+    #<?= $componentId ?>-float .float-icon-shell {
+        width: 48px;
+        height: 48px;
+        border-radius: 16px;
+    }
+
+    #<?= $componentId ?>-float .float-icon-shell img {
+        width: 40px;
+        height: 40px;
+    }
+}
+</style>
+
+<?php if ($standaloneShell): ?>
+</body>
+</html>
+<?php endif; ?>

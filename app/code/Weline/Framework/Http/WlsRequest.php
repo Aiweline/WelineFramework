@@ -212,7 +212,7 @@ class WlsRequest extends Request
             'WELINE_IS_STATIC_FILE' => $isStaticResource,
 
             // ===== 服务器信息（FPM 标准）=====
-            'SERVER_SOFTWARE' => WlsResponse::SERVER_SIGNATURE,
+            'SERVER_SOFTWARE' => Response::SERVER_SIGNATURE,
             'SERVER_PROTOCOL' => $protocol,
             'GATEWAY_INTERFACE' => 'CGI/1.1',
             'DOCUMENT_ROOT' => $documentRoot,

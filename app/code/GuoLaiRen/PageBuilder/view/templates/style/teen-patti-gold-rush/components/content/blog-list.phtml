@@ -1,0 +1,522 @@
+<?php
+/**
+ * Teen Patti Gold Rush - Blog List Component
+ *
+ * @fields_start
+ * blog.title|Blog list title|text|Latest Teen Patti Gold Rush Updates
+ * blog.subtitle|Subtitle|text|Tips, patch notes, and strategy breakdowns from the Gold Rush desk
+ * blog.posts_per_page|Posts per page|number|9
+ * blog.show_sidebar|Show sidebar|select:yes=Yes,no=No|yes
+ * blog.show_category|Show category|select:yes=Yes,no=No|yes
+ * blog.show_date|Show date|select:yes=Yes,no=No|yes
+ * blog.show_author|Show author|select:yes=Yes,no=No|yes
+ * blog.card_style|Card style|select:default=Default,minimal=Minimal,featured=Featured|default
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', __('Latest Teen Patti Gold Rush Updates'));
+$subtitle = $getConfig('blog.subtitle', __('Tips, patch notes, and strategy breakdowns from the Gold Rush desk'));
+$postsPerPage = max(1, (int)$getConfig('blog.posts_per_page', 9));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$cardStyle = $getConfig('blog.card_style', 'default');
+
+$primaryColor = $getConfig('color_scheme.primary', '#ff5ab6');
+$secondaryColor = $getConfig('color_scheme.secondary', '#59d7ff');
+$bgColor = $getConfig('color_scheme.background', '#12081a');
+$textColor = $getConfig('color_scheme.text', '#fff0f8');
+
+$posts = array_slice($blogPosts, 0, $postsPerPage);
+$featuredPost = $posts[0] ?? null;
+$listPosts = array_slice($posts, 1);
+$recent = !empty($recentPosts) ? array_slice($recentPosts, 0, 5) : array_slice($posts, 0, 5);
+
+$formatDate = static function ($value) {
+    if (!$value) {
+        return '';
+    }
+    $timestamp = strtotime((string)$value);
+    return $timestamp ? date('M d, Y', $timestamp) : (string)$value;
+};
+
+$excerptText = static function ($text, $limit = 160) {
+    $text = trim((string)$text);
+    if ($text === '') {
+        return '';
+    }
+    return mb_strlen($text) > $limit ? mb_substr($text, 0, $limit) . '...' : $text;
+};
+?>
+
+<section class="tpmst-section gdr-blog-list" id="blog">
+    <div class="gdr-inner">
+        <header class="gdr-blog-head">
+            <p class="gdr-kicker">Gold Rush Journal</p>
+            <h2><?= htmlspecialchars((string)$title) ?></h2>
+            <?php if ($subtitle): ?>
+                <p class="gdr-subtitle"><?= htmlspecialchars((string)$subtitle) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <div class="gdr-layout<?= $showSidebar ? ' with-sidebar' : ' full' ?> style-<?= htmlspecialchars((string)$cardStyle) ?>">
+            <main class="gdr-main" aria-label="Blog posts">
+                <?php if (empty($posts)): ?>
+                    <article class="gdr-empty">
+                        <h3><?= __('No posts yet') ?></h3>
+                        <p><?= __('Fresh Teen Patti Gold Rush updates will appear here soon.') ?></p>
+                    </article>
+                <?php else: ?>
+                    <?php if ($featuredPost): ?>
+                        <?php
+                        $featuredUrl = $featuredPost['url'] ?? '#';
+                        $featuredTitle = $featuredPost['title'] ?? __('Untitled Post');
+                        $featuredSummary = $featuredPost['summary'] ?? '';
+                        $featuredCategory = $featuredPost['category_name'] ?? '';
+                        $featuredDate = $formatDate($featuredPost['published_at'] ?? '');
+                        $featuredAuthor = $featuredPost['author'] ?? '';
+                        $featuredImage = $featuredPost['cover_image'] ?? '';
+                        ?>
+                        <article class="gdr-featured-card">
+                            <?php if ($featuredImage): ?>
+                                <a href="<?= htmlspecialchars((string)$featuredUrl) ?>" class="gdr-featured-media">
+                                    <img src="<?= htmlspecialchars((string)$featuredImage) ?>" alt="<?= htmlspecialchars((string)$featuredTitle) ?>" loading="lazy" decoding="async">
+                                </a>
+                            <?php endif; ?>
+
+                            <div class="gdr-featured-body">
+                                <div class="gdr-meta">
+                                    <?php if ($showCategory && $featuredCategory): ?>
+                                        <span class="gdr-chip"><?= htmlspecialchars((string)$featuredCategory) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($showDate && $featuredDate): ?>
+                                        <time><?= htmlspecialchars((string)$featuredDate) ?></time>
+                                    <?php endif; ?>
+                                </div>
+
+                                <h3><a href="<?= htmlspecialchars((string)$featuredUrl) ?>"><?= htmlspecialchars((string)$featuredTitle) ?></a></h3>
+
+                                <?php if ($cardStyle !== 'minimal'): ?>
+                                    <?php $summary = $excerptText($featuredSummary, 220); ?>
+                                    <?php if ($summary !== ''): ?>
+                                        <p class="gdr-summary"><?= htmlspecialchars((string)$summary) ?></p>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+
+                                <div class="gdr-footer-row">
+                                    <?php if ($showAuthor && $featuredAuthor): ?>
+                                        <span class="gdr-author"><?= htmlspecialchars((string)$featuredAuthor) ?></span>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars((string)$featuredUrl) ?>" class="gdr-read-link"><?= __('Read Story') ?></a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endif; ?>
+
+                    <?php if (!empty($listPosts)): ?>
+                        <div class="gdr-grid-cards">
+                            <?php foreach ($listPosts as $index => $post): ?>
+                                <?php
+                                $postUrl = $post['url'] ?? '#';
+                                $postTitle = $post['title'] ?? __('Untitled Post');
+                                $postSummary = $post['summary'] ?? '';
+                                $postCategory = $post['category_name'] ?? '';
+                                $postDate = $formatDate($post['published_at'] ?? '');
+                                $postAuthor = $post['author'] ?? '';
+                                $postImage = $post['cover_image'] ?? '';
+                                $lane = 'lane-' . (($index % 3) + 1);
+                                ?>
+                                <article class="gdr-card <?= htmlspecialchars((string)$lane) ?><?= $cardStyle === 'featured' && $index < 2 ? ' boost' : '' ?>">
+                                    <?php if ($cardStyle !== 'minimal' && $postImage): ?>
+                                        <a href="<?= htmlspecialchars((string)$postUrl) ?>" class="gdr-card-media">
+                                            <img src="<?= htmlspecialchars((string)$postImage) ?>" alt="<?= htmlspecialchars((string)$postTitle) ?>" loading="lazy" decoding="async">
+                                        </a>
+                                    <?php endif; ?>
+
+                                    <div class="gdr-card-body">
+                                        <div class="gdr-meta">
+                                            <?php if ($showCategory && $postCategory): ?>
+                                                <span class="gdr-chip"><?= htmlspecialchars((string)$postCategory) ?></span>
+                                            <?php endif; ?>
+                                            <?php if ($showDate && $postDate): ?>
+                                                <time><?= htmlspecialchars((string)$postDate) ?></time>
+                                            <?php endif; ?>
+                                        </div>
+
+                                        <h3><a href="<?= htmlspecialchars((string)$postUrl) ?>"><?= htmlspecialchars((string)$postTitle) ?></a></h3>
+
+                                        <?php if ($cardStyle !== 'minimal'): ?>
+                                            <?php $summary = $excerptText($postSummary, 145); ?>
+                                            <?php if ($summary !== ''): ?>
+                                                <p class="gdr-summary"><?= htmlspecialchars((string)$summary) ?></p>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
+
+                                        <div class="gdr-footer-row">
+                                            <?php if ($showAuthor && $postAuthor): ?>
+                                                <span class="gdr-author"><?= htmlspecialchars((string)$postAuthor) ?></span>
+                                            <?php endif; ?>
+                                            <a href="<?= htmlspecialchars((string)$postUrl) ?>" class="gdr-read-link"><?= __('Read More') ?></a>
+                                        </div>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </main>
+
+            <?php if ($showSidebar): ?>
+                <aside class="gdr-sidebar">
+                    <?php if (!empty($blogCategories)): ?>
+                        <section class="gdr-side-card">
+                            <h4><?= __('Categories') ?></h4>
+                            <ul>
+                                <?php foreach ($blogCategories as $category): ?>
+                                    <?php
+                                    $name = $category['name'] ?? '';
+                                    $url = $category['url'] ?? '#';
+                                    if ($name === '') {
+                                        continue;
+                                    }
+                                    ?>
+                                    <li><a href="<?= htmlspecialchars((string)$url) ?>"><?= htmlspecialchars((string)$name) ?></a></li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </section>
+                    <?php endif; ?>
+
+                    <?php if (!empty($recent)): ?>
+                        <section class="gdr-side-card">
+                            <h4><?= __('Recent Posts') ?></h4>
+                            <ul class="gdr-recent-list">
+                                <?php foreach ($recent as $post): ?>
+                                    <?php
+                                    $postUrl = $post['url'] ?? '#';
+                                    $postTitle = $post['title'] ?? __('Untitled Post');
+                                    $postDate = $formatDate($post['published_at'] ?? '');
+                                    ?>
+                                    <li>
+                                        <a href="<?= htmlspecialchars((string)$postUrl) ?>">
+                                            <span><?= htmlspecialchars((string)$postTitle) ?></span>
+                                            <?php if ($postDate): ?>
+                                                <em><?= htmlspecialchars((string)$postDate) ?></em>
+                                            <?php endif; ?>
+                                        </a>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </section>
+                    <?php endif; ?>
+                </aside>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+.gdr-blog-list {
+    padding: 56px 0;
+    background:
+        linear-gradient(180deg, rgba(255, 90, 182, 0.1) 0%, rgba(255, 90, 182, 0) 25%),
+        linear-gradient(180deg, rgba(89, 215, 255, 0) 72%, rgba(89, 215, 255, 0.1) 100%),
+        <?= htmlspecialchars((string)$bgColor) ?>;
+    color: <?= htmlspecialchars((string)$textColor) ?>;
+}
+
+.gdr-blog-list .gdr-inner {
+    width: min(1180px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+.gdr-blog-list .gdr-blog-head {
+    margin-bottom: 20px;
+    display: grid;
+    gap: 0.65rem;
+}
+
+.gdr-blog-list .gdr-kicker {
+    margin: 0;
+    width: fit-content;
+    border-radius: 999px;
+    border: 1px solid rgba(169, 255, 94, 0.38);
+    background: rgba(169, 255, 94, 0.14);
+    color: #d8ffb8;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.28rem 0.66rem;
+}
+
+.gdr-blog-list .gdr-blog-head h2 {
+    margin: 0;
+    font-size: clamp(1.85rem, 4vw, 2.9rem);
+    line-height: 1.05;
+    color: <?= htmlspecialchars((string)$primaryColor) ?>;
+}
+
+.gdr-blog-list .gdr-subtitle {
+    margin: 0;
+    max-width: 760px;
+    color: rgba(255, 240, 248, 0.82);
+    line-height: 1.75;
+}
+
+.gdr-blog-list .gdr-layout {
+    display: grid;
+    gap: 14px;
+}
+
+.gdr-blog-list .gdr-layout.with-sidebar {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 310px);
+}
+
+.gdr-blog-list .gdr-main {
+    display: grid;
+    gap: 14px;
+}
+
+.gdr-blog-list .gdr-featured-card,
+.gdr-blog-list .gdr-card,
+.gdr-blog-list .gdr-side-card,
+.gdr-blog-list .gdr-empty {
+    border-radius: 16px;
+    background: rgba(255, 244, 250, 0.1);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
+.gdr-blog-list .gdr-featured-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+    overflow: hidden;
+}
+
+.gdr-blog-list .gdr-layout.style-minimal .gdr-featured-card {
+    grid-template-columns: 1fr;
+}
+
+.gdr-blog-list .gdr-featured-media,
+.gdr-blog-list .gdr-card-media {
+    display: block;
+    overflow: hidden;
+}
+
+.gdr-blog-list .gdr-featured-media img,
+.gdr-blog-list .gdr-card-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.gdr-blog-list .gdr-featured-media {
+    min-height: 100%;
+}
+
+.gdr-blog-list .gdr-card-media {
+    aspect-ratio: 16 / 9;
+}
+
+.gdr-blog-list .gdr-featured-card:hover img,
+.gdr-blog-list .gdr-card:hover img {
+    transform: scale(1.04);
+}
+
+.gdr-blog-list .gdr-featured-body,
+.gdr-blog-list .gdr-card-body {
+    padding: 14px;
+    display: grid;
+    gap: 0.62rem;
+}
+
+.gdr-blog-list .gdr-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+.gdr-blog-list .gdr-chip {
+    border: 1px solid rgba(169, 255, 94, 0.36);
+    border-radius: 999px;
+    padding: 0.16rem 0.5rem;
+    color: #d8ffb8;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+.gdr-blog-list .gdr-meta time {
+    color: rgba(255, 240, 248, 0.62);
+    font-size: 0.74rem;
+}
+
+.gdr-blog-list h3 {
+    margin: 0;
+    font-size: 1.08rem;
+    line-height: 1.45;
+}
+
+.gdr-blog-list h3 a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.gdr-blog-list .gdr-summary {
+    margin: 0;
+    color: rgba(255, 240, 248, 0.84);
+    line-height: 1.75;
+    font-size: 0.9rem;
+}
+
+.gdr-blog-list .gdr-footer-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.gdr-blog-list .gdr-author {
+    color: rgba(255, 240, 248, 0.65);
+    font-size: 0.78rem;
+}
+
+.gdr-blog-list .gdr-read-link {
+    color: <?= htmlspecialchars((string)$secondaryColor) ?>;
+    text-decoration: none;
+    font-size: 0.8rem;
+    font-weight: 700;
+}
+
+.gdr-blog-list .gdr-grid-cards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.gdr-blog-list .gdr-layout.style-minimal .gdr-card-media,
+.gdr-blog-list .gdr-layout.style-minimal .gdr-featured-media,
+.gdr-blog-list .gdr-layout.style-minimal .gdr-summary {
+    display: none;
+}
+
+.gdr-blog-list .gdr-card.boost {
+    background: rgba(89, 215, 255, 0.14);
+}
+
+.gdr-blog-list .gdr-card.lane-1 {
+    box-shadow: inset 0 3px 0 rgba(255, 90, 182, 0.5), 0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
+.gdr-blog-list .gdr-card.lane-2 {
+    box-shadow: inset 0 3px 0 rgba(89, 215, 255, 0.5), 0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
+.gdr-blog-list .gdr-card.lane-3 {
+    box-shadow: inset 0 3px 0 rgba(169, 255, 94, 0.46), 0 12px 24px rgba(0, 0, 0, 0.18);
+}
+
+.gdr-blog-list .gdr-sidebar {
+    display: grid;
+    gap: 12px;
+    align-content: start;
+    position: sticky;
+    top: 96px;
+    height: fit-content;
+}
+
+.gdr-blog-list .gdr-side-card {
+    padding: 12px;
+}
+
+.gdr-blog-list .gdr-side-card h4 {
+    margin: 0;
+    color: <?= htmlspecialchars((string)$primaryColor) ?>;
+    font-size: 0.98rem;
+}
+
+.gdr-blog-list .gdr-side-card ul {
+    margin: 0.72rem 0 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.48rem;
+}
+
+.gdr-blog-list .gdr-side-card a {
+    color: rgba(255, 240, 248, 0.88);
+    text-decoration: none;
+    line-height: 1.55;
+}
+
+.gdr-blog-list .gdr-recent-list em {
+    display: block;
+    margin-top: 0.2rem;
+    color: rgba(255, 240, 248, 0.6);
+    font-style: normal;
+    font-size: 0.72rem;
+}
+
+.gdr-blog-list .gdr-empty {
+    padding: 26px;
+    text-align: center;
+}
+
+.gdr-blog-list .gdr-empty h3 {
+    margin: 0;
+    color: <?= htmlspecialchars((string)$primaryColor) ?>;
+}
+
+.gdr-blog-list .gdr-empty p {
+    margin: 0.68rem 0 0;
+    color: rgba(255, 240, 248, 0.8);
+}
+
+@media (max-width: 1024px) {
+    .gdr-blog-list .gdr-layout.with-sidebar {
+        grid-template-columns: 1fr;
+    }
+
+    .gdr-blog-list .gdr-sidebar {
+        position: static;
+    }
+
+    .gdr-blog-list .gdr-featured-card,
+    .gdr-blog-list .gdr-grid-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    .gdr-blog-list {
+        padding: 42px 0;
+    }
+
+    .gdr-blog-list .gdr-inner {
+        width: calc(100% - 1rem);
+    }
+
+    .gdr-blog-list .gdr-featured-card,
+    .gdr-blog-list .gdr-card,
+    .gdr-blog-list .gdr-side-card,
+    .gdr-blog-list .gdr-empty {
+        border-radius: 12px;
+    }
+}
+</style>

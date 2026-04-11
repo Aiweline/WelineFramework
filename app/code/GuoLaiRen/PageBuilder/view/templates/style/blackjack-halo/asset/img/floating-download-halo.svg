@@ -1,0 +1,104 @@
+<svg width="320" height="520" viewBox="0 0 320 520" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bkhHair" x1="91" y1="54" x2="239" y2="245" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F3D17A"/>
+      <stop offset="0.38" stop-color="#7D4E3F"/>
+      <stop offset="1" stop-color="#2C1B18"/>
+    </linearGradient>
+    <linearGradient id="bkhHairSoft" x1="139" y1="89" x2="229" y2="210" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C4876F"/>
+      <stop offset="1" stop-color="#4D3029"/>
+    </linearGradient>
+    <linearGradient id="bkhSkin" x1="136" y1="97" x2="198" y2="216" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F7D9C9"/>
+      <stop offset="1" stop-color="#E8B59F"/>
+    </linearGradient>
+    <linearGradient id="bkhDress" x1="101" y1="212" x2="235" y2="336" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8F4E8"/>
+      <stop offset="0.52" stop-color="#D2A23B"/>
+      <stop offset="1" stop-color="#1E7A5A"/>
+    </linearGradient>
+    <linearGradient id="bkhCard" x1="31" y1="11" x2="102" y2="126" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#EFF5EF"/>
+    </linearGradient>
+    <linearGradient id="bkhDownload" x1="159" y1="309" x2="274" y2="436" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4FD06D"/>
+      <stop offset="1" stop-color="#22A655"/>
+    </linearGradient>
+    <radialGradient id="bkhAura" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(177 128) rotate(90) scale(104 96)">
+      <stop stop-color="#F4D68D" stop-opacity="0.82"/>
+      <stop offset="0.52" stop-color="#E7BE67" stop-opacity="0.28"/>
+      <stop offset="1" stop-color="#E7BE67" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="bkhShadow" x="12" y="12" width="290" height="494" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="22" stdDeviation="18" flood-color="#0C1714" flood-opacity="0.18"/>
+    </filter>
+    <filter id="bkhSoftShadow" x="22" y="164" width="264" height="324" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="10" stdDeviation="10" flood-color="#163028" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#bkhShadow)">
+    <ellipse cx="166" cy="483" rx="84" ry="14" fill="#17322C" fill-opacity="0.12"/>
+    <ellipse cx="176" cy="129" rx="98" ry="102" fill="url(#bkhAura)"/>
+
+    <path d="M113 103C124 66 164 47 196 61C232 77 249 118 240 156C234 181 219 199 215 221C211 245 223 274 211 287C200 300 175 285 160 285C145 285 125 299 111 287C97 274 110 251 105 228C101 210 85 192 82 166C77 138 87 115 113 103Z" fill="url(#bkhHair)"/>
+    <path d="M121 128C125 106 143 87 166 82C192 77 219 90 230 112C242 137 236 168 218 186C206 198 199 211 197 225H133C131 211 122 199 110 186C95 169 91 141 103 119C107 111 113 104 121 99L121 128Z" fill="url(#bkhHairSoft)"/>
+    <ellipse cx="167" cy="131" rx="34" ry="42" fill="url(#bkhSkin)"/>
+    <path d="M151 161C155 176 156 184 156 190C156 204 149 217 140 226H195C186 216 179 203 179 189C179 183 180 175 184 161H151Z" fill="#F1C7B4"/>
+    <path d="M120 231C134 200 153 186 170 186C193 186 214 201 229 237L220 326H95L120 231Z" fill="url(#bkhDress)"/>
+    <path d="M154 187L135 230H203L183 186C179 194 174 201 169 207C164 201 158 194 154 187Z" fill="#FFF7E3" fill-opacity="0.92"/>
+    <path d="M129 137C130 134 133 132 136 132C140 132 142 134 143 137" stroke="#7A4B42" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M188 137C189 134 192 132 195 132C199 132 201 134 202 137" stroke="#7A4B42" stroke-width="2.2" stroke-linecap="round"/>
+    <circle cx="139" cy="145" r="3.4" fill="#51302C"/>
+    <circle cx="194" cy="145" r="3.4" fill="#51302C"/>
+    <path d="M163 156C165 160 168 160 170 156" stroke="#C58A78" stroke-width="2" stroke-linecap="round"/>
+    <path d="M149 168C156 176 176 176 184 168" stroke="#B95B5E" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M116 156C102 181 92 198 76 208C67 214 60 225 62 236C64 246 74 251 84 247C93 244 100 233 108 222C116 210 124 197 138 187L116 156Z" fill="url(#bkhSkin)"/>
+    <path d="M107 172C92 191 81 204 70 209C61 213 56 221 57 230C57 239 64 245 73 245C83 245 92 238 102 227C112 216 120 204 132 194L107 172Z" fill="url(#bkhHair)" fill-opacity="0.24"/>
+
+    <g filter="url(#bkhSoftShadow)">
+      <g transform="translate(63 238) rotate(-21 50 72)">
+        <rect width="101" height="144" rx="18" fill="url(#bkhCard)"/>
+        <rect x="2" y="2" width="97" height="140" rx="16" stroke="#D8E4DA"/>
+        <text x="20" y="30" fill="#263731" font-family="Arial, sans-serif" font-size="30" font-weight="700">A</text>
+        <path d="M22 40L30 51L22 62L14 51L22 40Z" fill="#263731"/>
+        <path d="M51 55L63 71L51 88L39 71L51 55Z" fill="#263731" fill-opacity="0.16"/>
+      </g>
+
+      <g transform="translate(113 222)">
+        <rect width="108" height="150" rx="19" fill="url(#bkhCard)"/>
+        <rect x="2" y="2" width="104" height="146" rx="17" stroke="#D8E4DA"/>
+        <text x="19" y="33" fill="#263731" font-family="Arial, sans-serif" font-size="31" font-weight="700">A</text>
+        <path d="M21 43L29 54L21 65L13 54L21 43Z" fill="#263731"/>
+        <circle cx="54" cy="84" r="24" fill="#1E7A5A" fill-opacity="0.12"/>
+        <path d="M54 67L60 78L72 80L63 88L65 100L54 94L43 100L45 88L36 80L48 78L54 67Z" fill="#1E7A5A" fill-opacity="0.72"/>
+      </g>
+
+      <g transform="translate(178 245) rotate(17 48 68)">
+        <rect width="97" height="138" rx="18" fill="url(#bkhCard)"/>
+        <rect x="2" y="2" width="93" height="134" rx="16" stroke="#E7D4D1"/>
+        <text x="18" y="30" fill="#C33B39" font-family="Arial, sans-serif" font-size="30" font-weight="700">A</text>
+        <path d="M22 40C17 48 12 52 12 58C12 66 18 72 25 72C31 72 36 67 36 61C36 53 28 46 22 40Z" fill="#C33B39"/>
+        <path d="M22 76L10 61H34L22 76Z" fill="#C33B39"/>
+        <path d="M49 60C62 71 67 85 66 100C66 115 56 130 48 139C42 129 32 115 32 100C31 85 36 71 49 60Z" fill="#C33B39" fill-opacity="0.14"/>
+      </g>
+    </g>
+
+    <g>
+      <circle cx="223" cy="375" r="78" fill="#F4EDD8" fill-opacity="0.42"/>
+      <circle cx="223" cy="375" r="72" fill="url(#bkhDownload)"/>
+      <circle cx="223" cy="375" r="71" stroke="#F8F4E8" stroke-opacity="0.55" stroke-width="2"/>
+      <circle cx="223" cy="375" r="58" stroke="#F3D17A" stroke-opacity="0.44" stroke-width="2"/>
+      <path d="M223 336V383" stroke="white" stroke-width="14" stroke-linecap="round"/>
+      <path d="M195 366L223 394L251 366" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M184 409V427C184 435.837 191.163 443 200 443H246C254.837 443 262 435.837 262 427V409" stroke="white" stroke-width="14" stroke-linecap="round"/>
+    </g>
+
+    <circle cx="94" cy="77" r="5" fill="#F3D17A" fill-opacity="0.82"/>
+    <circle cx="235" cy="89" r="4" fill="#F6F2E8" fill-opacity="0.92"/>
+    <circle cx="253" cy="121" r="3" fill="#1E7A5A" fill-opacity="0.8"/>
+    <path d="M242 49L246 57L254 61L246 65L242 73L238 65L230 61L238 57L242 49Z" fill="#F3D17A" fill-opacity="0.78"/>
+  </g>
+</svg>

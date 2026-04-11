@@ -1,0 +1,541 @@
+<?php
+/**
+ * Court Piece Electric Mahal - Hero Slider Component
+ *
+ * @component_start
+ * code: hero-slider
+ * name: Electric Mahal Hero
+ * name_en: Electric Mahal Hero
+ * description: Poster-led hero with split title slabs, floating suit ornaments, and a strong mobile-first download path.
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:banner => Banner设置（兼容旧字段）
+ * banner.display => 显示Banner:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用本地mahal-stage.svg
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用本地mahal-stage.svg
+ * banner.alt => Banner图片描述:text:Court Piece Electric Mahal hero
+ * banner.bg_color => Banner背景颜色:color:#2b0f54
+ *
+ * group:hero => Hero设置
+ * hero.display => 显示Hero:select:yes|yes,no
+ * hero.title => 主标题:text:|留空使用页面标题
+ * hero.subtitle => 副标题:textarea:|留空使用页面描述
+ * hero.cta_text => 主按钮文字:text:Download App
+ * hero.cta_url => 主按钮链接:text:#download
+ * hero.image => 桌面端Hero图片:textarea:|默认使用本地mahal-stage.svg
+ * hero.image_mobile => 移动端Hero图片:textarea:|默认使用本地mahal-stage.svg
+ * hero.alt => Hero图片描述:text:Court Piece Electric Mahal hero
+ * hero.bg_color => Hero背景色:color:#2b0f54
+ *
+ * group:download_btn => 下载按钮
+ * download_btn.display => 显示下载按钮:select:yes|yes,no
+ * download_btn.image => 下载按钮图片:textarea:|默认使用主题按钮样式
+ * download_btn.alt => 下载按钮描述:text:Download App
+ * download_btn.url => 下载链接:text:#download
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 区域附加类名:textarea:cpe-hero-stage|Hero区域的附加类名
+ * layout.margin_top => 移动端顶部重叠:number:-72|px
+ * layout.img_margin_top => 桌面端图片偏移:number:0|px
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page') ?? $page ?? null;
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$normalizeDisplay = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$heroDisplay = $normalizeDisplay($getConfig('hero.display', $getConfig('banner.display', 'yes')));
+if ($heroDisplay !== 'yes') {
+    return;
+}
+
+$pageTitle = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'Court Piece Electric Mahal';
+$pageTitle = $sanitizeTitle($pageTitle);
+if ($pageTitle === '') {
+    $pageTitle = 'Court Piece Electric Mahal';
+}
+
+$heroTitle = $sanitizeTitle((string) $getConfig('hero.title', ''));
+if ($heroTitle === '') {
+    $heroTitle = $pageTitle;
+}
+
+$heroSubtitle = trim((string) $getConfig('hero.subtitle', ''));
+if ($heroSubtitle === '') {
+    $heroSubtitle = $page ? trim((string) ($page->getData('meta_description') ?: '')) : '';
+}
+if ($heroSubtitle === '') {
+    $heroSubtitle = 'Partner-led trick-taking rooms, dramatic trump calls, and a high-energy mobile experience built for Court Piece fans.';
+}
+
+$splitHeadline = static function ($value) {
+    $words = preg_split('/\s+/', trim((string) $value)) ?: [];
+    $words = array_values(array_filter($words, static function ($item) {
+        return $item !== '';
+    }));
+    if (count($words) <= 2) {
+        return [implode(' ', $words), 'Electric Mahal'];
+    }
+    $pivot = min(2, max(1, (int) ceil(count($words) / 2)));
+    $first = implode(' ', array_slice($words, 0, $pivot));
+    $second = implode(' ', array_slice($words, $pivot));
+    return [$first !== '' ? $first : 'Court Piece', $second !== '' ? $second : 'Electric Mahal'];
+};
+[$headlineA, $headlineB] = $splitHeadline($heroTitle);
+
+$defaultHeroImage = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/court-piece-electric-mahal/asset/img/mahal-stage.svg');
+$heroImage = trim((string) $getConfig('hero.image', $getConfig('banner.image_desktop', '')));
+$heroImageMobile = trim((string) $getConfig('hero.image_mobile', $getConfig('banner.image_mobile', '')));
+$heroImage = $heroImage !== '' ? $heroImage : $defaultHeroImage;
+$heroImageMobile = $heroImageMobile !== '' ? $heroImageMobile : $heroImage;
+
+$heroAlt = trim((string) $getConfig('hero.alt', $getConfig('banner.alt', 'Court Piece Electric Mahal hero')));
+if ($heroAlt === '') {
+    $heroAlt = 'Court Piece Electric Mahal hero';
+}
+
+$heroBgColor = (string) $getConfig('hero.bg_color', $getConfig('banner.bg_color', $colors['hero_bg'] ?? '#2b0f54'));
+$heroGradientEnd = (string) ($colors['hero_bg_gradient_end'] ?? '#0b6a72');
+$ctaDisplay = $normalizeDisplay($getConfig('download_btn.display', 'yes')) === 'yes';
+$ctaText = trim((string) $getConfig('hero.cta_text', $getConfig('download_btn.alt', 'Download App')));
+if ($ctaText === '') {
+    $ctaText = 'Download App';
+}
+$ctaUrl = trim((string) $getConfig('hero.cta_url', $getConfig('download_btn.url', '#download')));
+if ($ctaUrl === '') {
+    $ctaUrl = '#download';
+}
+$ctaHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string) $ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaHref, 'url');
+$downloadBtnImage = trim((string) $getConfig('download_btn.image', ''));
+$sliderClasses = trim((string) $getConfig('layout.slider_classes', 'cpe-hero-stage'));
+$marginTop = (int) $getConfig('layout.margin_top', '-72');
+$imgMarginTop = (int) $getConfig('layout.img_margin_top', '0');
+
+$featurePills = ['Trump call', 'Partner play', 'Fast rounds'];
+$marqueeWords = array_fill(0, 4, $heroTitle);
+$instanceId = 'court-piece-electric-mahal-hero-slider-' . uniqid();
+?>
+<section id="<?= $instanceId ?>" class="cpe-hero <?= htmlspecialchars($sliderClasses, ENT_QUOTES, 'UTF-8') ?>" aria-labelledby="<?= $instanceId ?>-title" style="margin-top: <?= $marginTop ?>px;">
+    <div class="cpe-suits" aria-hidden="true">
+        <span class="cpe-suit cpe-suit--spade">♠</span>
+        <span class="cpe-suit cpe-suit--heart">♥</span>
+        <span class="cpe-suit cpe-suit--club">♣</span>
+        <span class="cpe-suit cpe-suit--diamond">♦</span>
+    </div>
+
+    <div class="mx-auto w-full max-w-[1240px] px-4 md:px-6">
+        <div class="cpe-marquee" aria-hidden="true">
+            <div class="cpe-marquee-track">
+                <?php foreach ($marqueeWords as $word): ?>
+                <span><?= htmlspecialchars($word, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+                <?php foreach ($marqueeWords as $word): ?>
+                <span><?= htmlspecialchars($word, ENT_QUOTES, 'UTF-8') ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="grid items-center gap-10 lg:grid-cols-[minmax(0,0.98fr)_minmax(0,1.02fr)]">
+            <div class="relative order-2 lg:order-1" data-cpe-reveal>
+                <div class="cpe-poster-stack">
+                    <span class="cpe-layer cpe-layer--back" aria-hidden="true"></span>
+                    <span class="cpe-layer cpe-layer--mid" aria-hidden="true"></span>
+                    <span class="cpe-stamp cpe-stamp--top" aria-hidden="true">Trump call</span>
+                    <span class="cpe-stamp cpe-stamp--bottom" aria-hidden="true">Partner play</span>
+
+                    <figure class="cpe-poster" style="margin-top: <?= $imgMarginTop ?>px;">
+                        <picture>
+                            <source media="(max-width: 767px)" srcset="<?= htmlspecialchars((string) $heroImageMobile, ENT_QUOTES, 'UTF-8') ?>">
+                            <source media="(min-width: 768px)" srcset="<?= htmlspecialchars((string) $heroImage, ENT_QUOTES, 'UTF-8') ?>">
+                            <img src="<?= htmlspecialchars((string) $heroImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($heroAlt, ENT_QUOTES, 'UTF-8') ?>" fetchpriority="high">
+                        </picture>
+                    </figure>
+
+                    <?php if ($ctaDisplay): ?>
+                    <div class="w-full max-w-[360px]">
+                        <?php if ($downloadBtnImage !== ''): ?>
+                        <a href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef), ENT_QUOTES, 'UTF-8') ?>" data-glr-ref="<?= htmlspecialchars($ctaRef, ENT_QUOTES, 'UTF-8') ?>" class="block w-full">
+                            <img class="cpe-download-image" src="<?= htmlspecialchars($downloadBtnImage, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($ctaText, ENT_QUOTES, 'UTF-8') ?>">
+                        </a>
+                        <?php else: ?>
+                        <a href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef), ENT_QUOTES, 'UTF-8') ?>" data-glr-ref="<?= htmlspecialchars($ctaRef, ENT_QUOTES, 'UTF-8') ?>" class="cpe-cta">
+                            <span class="cpe-cta-icon" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" role="presentation" focusable="false">
+                                    <path d="M12 3a1 1 0 0 1 1 1v8.17l2.59-2.58a1 1 0 1 1 1.41 1.41l-4.3 4.3a1 1 0 0 1-1.4 0L7 11a1 1 0 0 1 1.41-1.41L11 12.17V4a1 1 0 0 1 1-1Zm-6 14a1 1 0 0 1 1 1v1h10v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"></path>
+                                </svg>
+                            </span>
+                            <span><?= htmlspecialchars($ctaText, ENT_QUOTES, 'UTF-8') ?></span>
+                        </a>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <div class="hidden md:flex md:flex-row md:flex-nowrap md:items-center cpe-chips" aria-label="Hero highlights">
+                    <?php foreach ($featurePills as $pill): ?>
+                    <span class="cpe-chip"><?= htmlspecialchars((string) $pill, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div class="order-1 grid gap-5 lg:order-2" data-cpe-reveal>
+                <span class="cpe-kicker">Court Piece live tables</span>
+
+                <header class="grid gap-3">
+                    <span class="cpe-title-slab cpe-title-slab--a" id="<?= htmlspecialchars($instanceId, ENT_QUOTES, 'UTF-8') ?>-title"><?= htmlspecialchars($headlineA, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="cpe-title-slab cpe-title-slab--b"><?= htmlspecialchars($headlineB, ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="cpe-title-slab cpe-title-slab--c">Trump Call</span>
+                </header>
+
+                <p class="cpe-summary"><?= htmlspecialchars($heroSubtitle, ENT_QUOTES, 'UTF-8') ?></p>
+            </div>
+        </div>
+    </div>
+</section>
+<style>
+#<?= $instanceId ?> {
+    position: relative;
+    overflow: clip;
+    background:
+        radial-gradient(circle at 12% 8%, rgba(255,111,60,0.22), transparent 24%),
+        radial-gradient(circle at 88% 10%, rgba(110,243,255,0.18), transparent 22%),
+        radial-gradient(circle at 50% 100%, rgba(255,71,126,0.14), transparent 24%),
+        linear-gradient(135deg, <?= htmlspecialchars($heroBgColor, ENT_QUOTES, 'UTF-8') ?> 0%, <?= htmlspecialchars($heroGradientEnd, ENT_QUOTES, 'UTF-8') ?> 100%);
+    padding: clamp(6rem, 11vw, 7.5rem) 0 clamp(4rem, 8vw, 6.5rem);
+}
+
+#<?= $instanceId ?>::before,
+#<?= $instanceId ?>::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $instanceId ?>::before {
+    inset: 22px;
+    border-radius: 34px;
+    border: 1px solid rgba(255,255,255,0.02);
+}
+
+#<?= $instanceId ?>::after {
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 24%),
+        repeating-linear-gradient(136deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 28px);
+    opacity: 0.2;
+}
+
+#<?= $instanceId ?> .cpe-suits {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: clip;
+}
+
+#<?= $instanceId ?> .cpe-suit {
+    position: absolute;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: clamp(1.6rem, 4vw, 3.4rem);
+    font-weight: 700;
+    opacity: 0.16;
+    filter: drop-shadow(0 12px 30px rgba(0, 0, 0, 0.22));
+    animation: cpeSuitFloat 8s ease-in-out infinite;
+}
+
+#<?= $instanceId ?> .cpe-suit--spade { left: 5%; top: 18%; color: #fff0af; }
+#<?= $instanceId ?> .cpe-suit--heart { right: 8%; top: 16%; color: #ff9a9a; animation-delay: -2s; }
+#<?= $instanceId ?> .cpe-suit--club { left: 12%; bottom: 18%; color: #8ef3ff; animation-delay: -4s; }
+#<?= $instanceId ?> .cpe-suit--diamond { right: 12%; bottom: 14%; color: #ffd166; animation-delay: -1s; }
+
+#<?= $instanceId ?> .cpe-marquee {
+    overflow: hidden;
+    margin-bottom: 1.4rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: rgba(7, 6, 18, 0.34);
+}
+
+#<?= $instanceId ?> .cpe-marquee-track {
+    display: inline-flex;
+    gap: 1.9rem;
+    min-width: max-content;
+    padding: 0.8rem 1.2rem;
+    animation: cpeHeroMarquee 20s linear infinite;
+}
+
+#<?= $instanceId ?> .cpe-marquee-track span {
+    color: #fff0af;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+#<?= $instanceId ?> .cpe-kicker {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.95rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.08);
+    color: #6ef3ff;
+    font-size: 0.74rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+#<?= $instanceId ?> .cpe-title-slab {
+    display: inline-flex;
+    width: fit-content;
+    max-width: min(100%, 14ch);
+    align-items: center;
+    padding: 0.85rem 1.1rem 1rem;
+    border-radius: 1.7rem;
+    font: 800 clamp(2.5rem, 7vw, 4.9rem) / 0.9 "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    letter-spacing: -0.06em;
+    box-shadow: 0 24px 44px rgba(0,0,0,0.2);
+}
+
+#<?= $instanceId ?> .cpe-title-slab--a {
+    color: #1c0d08;
+    background: linear-gradient(100deg, #ffd166 0%, #fff0af 58%, #ffffff 100%);
+    transform: rotate(-2deg);
+}
+
+#<?= $instanceId ?> .cpe-title-slab--b {
+    margin-left: auto;
+    color: #fff9f1;
+    background: linear-gradient(135deg, rgba(15,27,48,0.96) 0%, rgba(49,13,67,0.94) 100%);
+    transform: rotate(2.2deg);
+}
+
+#<?= $instanceId ?> .cpe-title-slab--c {
+    color: #fff9f1;
+    background: linear-gradient(135deg, rgba(91,44,30,0.68) 0%, rgba(121,63,28,0.62) 100%);
+    border: 1px solid rgba(255, 209, 102, 0.12);
+    transform: rotate(-1deg);
+    font-size: clamp(1.3rem, 3vw, 2.2rem);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    max-width: min(100%, 18ch);
+}
+
+#<?= $instanceId ?> .cpe-summary {
+    max-width: 58ch;
+    margin: 0;
+    color: #efe6ff;
+    font-size: clamp(1rem, 2vw, 1.18rem);
+    line-height: 1.85;
+}
+
+#<?= $instanceId ?> .cpe-poster-stack {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 1rem;
+    padding: 2rem 0 0;
+}
+
+#<?= $instanceId ?> .cpe-layer {
+    position: absolute;
+    width: min(72%, 320px);
+    aspect-ratio: 5 / 6;
+    border-radius: 34px;
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: 0 26px 48px rgba(0,0,0,0.2);
+}
+
+#<?= $instanceId ?> .cpe-layer--back {
+    left: 6%;
+    top: 8%;
+    background: linear-gradient(180deg, rgba(255,255,255,0.16), rgba(255,255,255,0.06));
+    transform: rotate(-10deg);
+}
+
+#<?= $instanceId ?> .cpe-layer--mid {
+    right: 8%;
+    top: 0;
+    background: linear-gradient(180deg, rgba(255,111,60,0.2), rgba(255,71,126,0.1));
+    transform: rotate(8deg);
+}
+
+#<?= $instanceId ?> .cpe-poster {
+    position: relative;
+    z-index: 1;
+    width: min(82vw, 360px);
+    margin: 1rem auto 0;
+    border-radius: 2.2rem;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: linear-gradient(160deg, rgba(255,255,255,0.14), rgba(255,255,255,0.04));
+    box-shadow: 0 34px 64px rgba(0,0,0,0.24);
+}
+
+#<?= $instanceId ?> .cpe-poster picture,
+#<?= $instanceId ?> .cpe-poster img {
+    display: block;
+    width: 100%;
+}
+
+#<?= $instanceId ?> .cpe-stamp {
+    position: absolute;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.2rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(7, 6, 18, 0.8);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fff0af;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+#<?= $instanceId ?> .cpe-stamp--top { left: 10%; top: 0; }
+#<?= $instanceId ?> .cpe-stamp--bottom { right: 10%; bottom: 8rem; }
+
+#<?= $instanceId ?> .cpe-cta {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    min-height: 3.7rem;
+    padding: 0.95rem 1.2rem;
+    border-radius: 999px;
+    background: linear-gradient(120deg, #ffd166 0%, #ff7a3c 52%, #ff477e 100%);
+    color: #351500;
+    font-size: 0.88rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    box-shadow: 0 18px 38px rgba(255,111,60,0.28);
+    transition: transform 0.24s ease, box-shadow 0.24s ease;
+}
+
+#<?= $instanceId ?> .cpe-cta:hover,
+#<?= $instanceId ?> .cpe-cta:focus-visible {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 42px rgba(255,209,102,0.34);
+}
+
+#<?= $instanceId ?> .cpe-cta-icon {
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(53, 21, 0, 0.14);
+}
+
+#<?= $instanceId ?> .cpe-cta-icon svg {
+    width: 1rem;
+    height: 1rem;
+    fill: currentColor;
+}
+
+#<?= $instanceId ?> .cpe-download-image {
+    display: block;
+    width: 100%;
+    animation: cpePulse 2.8s infinite;
+}
+
+#<?= $instanceId ?> .cpe-chips {
+    position: relative;
+    z-index: 3;
+    width: max-content;
+    max-width: 100%;
+    margin: 0.95rem auto 0;
+    align-items: center;
+    justify-content: center;
+    gap: 0.65rem;
+}
+
+#<?= $instanceId ?> .cpe-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.4rem;
+    padding: 0 0.9rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #fff0af;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+@keyframes cpePulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(0.98); }
+}
+
+@keyframes cpeHeroMarquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+}
+
+@keyframes cpeSuitFloat {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(4deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $instanceId ?> .cpe-suit,
+    #<?= $instanceId ?> .cpe-download-image,
+    #<?= $instanceId ?> .cpe-marquee-track {
+        animation: none;
+    }
+}
+</style>

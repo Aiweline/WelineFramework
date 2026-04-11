@@ -35,7 +35,7 @@ class Router implements RouterInterface
             return;
         }
 
-        $themeId = (int)($_GET['preview_theme'] ?? 0);
+        $themeId = (int)($request?->getParam('preview_theme', 0) ?? 0);
         if ($themeId <= 0) {
             return;
         }
@@ -49,13 +49,13 @@ class Router implements RouterInterface
             return;
         }
 
-        $layoutType = trim((string)($_GET['page_type'] ?? $_GET['layout_type'] ?? ''));
+        $layoutType = trim((string)($request?->getParam('page_type', $request?->getParam('layout_type', '')) ?? ''));
         if ($layoutType === '') {
             try {
                 /** @var ThemePageTypeResolver $resolver */
                 $resolver = ObjectManager::getInstance(ThemePageTypeResolver::class);
                 $layoutType = $resolver->resolveLayoutTypeFromUri(
-                    (string)($_SERVER['REQUEST_URI'] ?? '/'),
+                    (string)($request?->getUri() ?? '/'),
                     ''
                 );
             } catch (\Throwable) {
@@ -70,7 +70,7 @@ class Router implements RouterInterface
             }
         }
 
-        $editorArea = strtolower(trim((string)($_GET['editor_area'] ?? ($_GET['preview_area'] ?? 'frontend'))));
+        $editorArea = strtolower(trim((string)($request?->getParam('editor_area', $request?->getParam('preview_area', 'frontend')) ?? 'frontend')));
         if ($editorArea !== PreviewContextService::AREA_BACKEND) {
             $editorArea = PreviewContextService::AREA_FRONTEND;
         }
@@ -88,25 +88,25 @@ class Router implements RouterInterface
             $queryOverrides['frontend_theme_id'] = $themeId;
         }
 
-        if ((string)($_GET['layout_type'] ?? '') === '') {
+        if ((string)($request?->getParam('layout_type', '') ?? '') === '') {
             $queryOverrides['layout_type'] = $layoutType;
         }
-        if ((string)($_GET['layout_option'] ?? '') === '') {
+        if ((string)($request?->getParam('layout_option', '') ?? '') === '') {
             $queryOverrides['layout_option'] = 'default';
         }
-        if ((string)($_GET['preview_mode'] ?? '') === '') {
+        if ((string)($request?->getParam('preview_mode', '') ?? '') === '') {
             $queryOverrides['preview_mode'] = PreviewContextService::DEFAULT_PREVIEW_MODE;
         }
-        if ((string)($_GET['status'] ?? '') === '') {
+        if ((string)($request?->getParam('status', '') ?? '') === '') {
             $queryOverrides['status'] = PreviewContextService::DEFAULT_STATUS;
         }
-        if ((string)($_GET['shell'] ?? '') === '') {
+        if ((string)($request?->getParam('shell', '') ?? '') === '') {
             $queryOverrides['shell'] = PreviewContextService::SHELL_PREVIEW;
         }
-        if ((string)($_GET['target_type'] ?? '') === '') {
+        if ((string)($request?->getParam('target_type', '') ?? '') === '') {
             $queryOverrides['target_type'] = PreviewContextService::TARGET_TYPE_LAYOUT;
         }
-        if ((string)($_GET['target_value'] ?? '') === '') {
+        if ((string)($request?->getParam('target_value', '') ?? '') === '') {
             $queryOverrides['target_value'] = $layoutType;
         }
 
@@ -118,8 +118,6 @@ class Router implements RouterInterface
     private static function applyQueryOverrides(?Request $request, array $queryOverrides): void
     {
         foreach ($queryOverrides as $key => $value) {
-            $_GET[$key] = $value;
-
             if ($request) {
                 $request->setGet($key, $value);
             }

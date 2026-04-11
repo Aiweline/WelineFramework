@@ -1,0 +1,495 @@
+<?php
+/**
+ * Teen Patti Gold Rush Footer Links Component
+ *
+ * @component_start
+ * code: footer-links
+ * name: 链接底部（Gold Rush）
+ * name_en: Gold Rush Footer Links
+ * description: 轻量导航、免责声明与版权信息
+ * category: footer
+ * region: footer
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_links => 显示链接:select:yes|yes,no
+ * display.show_disclaimer => 显示免责声明:select:yes|yes,no
+ * display.show_copyright => 显示版权信息:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.background_color => 背景基础色:color:#0e0815
+ * style.text_color => 文字颜色:color:#c39ecb
+ * style.link_color => 链接颜色:color:#f7dff4
+ * style.link_hover_color => 链接悬停颜色:color:#a9ff5e
+ * style.link_font_size => 链接字号:number:14|px
+ * style.link_font_weight => 链接字重:number:500
+ * style.link_gap => 链接间距:number:15|px
+ * style.border_top => 显示顶部边框:select:yes|yes,no
+ * style.border_color => 边框颜色:color:#333333
+ * style.border_width => 边框宽度:number:1|px
+ * style.section_padding => 区域内边距(PC端):number:30|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:20|px
+ * style.separator_display => 显示分隔符:select:yes|yes,no
+ * style.separator_char => 分隔符字符:text:/
+ * style.separator_color => 分隔符颜色:color:#8b8b8b
+ *
+ * group:disclaimer => 免责声明样式
+ * disclaimer.bg_color => 免责声明背景:color:rgba(255,255,255,0.05)
+ * disclaimer.border_radius => 免责声明圆角:number:8|px
+ * disclaimer.padding => 免责声明内边距:number:15|px
+ * disclaimer.font_size => 免责声明字号:number:12|px
+ * disclaimer.text_color => 免责声明颜色:color:#8b8b8b
+ *
+ * group:copyright => 版权信息样式
+ * copyright.font_size => 版权字号:number:12|px
+ * copyright.text_color => 版权颜色:color:#8b8b8b
+ * copyright.margin_top => 版权上边距:number:15|px
+ *
+ * group:content => 内容配置
+ * content.use_custom_links => 使用自定义链接组:select:yes|yes,no
+ * content.use_subpages => 使用子页面生成链接:select:no|yes,no
+ * content.footer_links => 页脚链接:textarea:Home=>/\r\nAbout=>/about\r\nBlog=>/blog\r\nFAQs=>/faqs|配置格式：名字=>url，一行一个
+ * content.copyright_text => 版权信息:text:© 2026 Teen Patti Gold Rush. All rights reserved.
+ * content.disclaimer_text => 免责声明:textarea:18+ Only. Teen Patti Gold Rush is intended for adult players. Play responsibly and follow local gaming regulations.
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
+ *
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1180
+ * layout.padding_horizontal => 左右内边距:responsive:16/16|px
+ * layout.padding_vertical => 上下内边距:responsive:20/30|px
+ *
+ * group:typography => 字体排版
+ * typography.font_size => 字号:responsive:12/14|px
+ * typography.line_height => 行高:number:1.7
+ *
+ * @fields_end
+ */
+
+$componentId = 'gr-footer-links-' . uniqid();
+
+$page = $this->getData('page');
+$standaloneShell = !$this->getData('__oct_shell_managed');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$parseResponsive = static function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string) $value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string) ($parts[0] ?? '')),
+        'desktop' => trim((string) ($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = static function ($parsed) {
+    $mobile = (float) $parsed['mobile'];
+    $desktop = (float) $parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$showLinks = $normalizeToggle($getConfigAny(['display.show_links'], 'yes')) !== 'no';
+$showDisclaimer = $normalizeToggle($getConfigAny(['display.show_disclaimer'], 'yes')) !== 'no';
+$showCopyright = $normalizeToggle($getConfigAny(['display.show_copyright'], 'yes')) !== 'no';
+
+$bgColor = (string)$getConfigAny(['style.background_color'], '#0e0815');
+$textColor = (string)$getConfigAny(['style.text_color'], '#c39ecb');
+$linkColor = (string)$getConfigAny(['style.link_color'], '#f7dff4');
+$linkHoverColor = (string)$getConfigAny(['style.link_hover_color'], '#a9ff5e');
+$linkFontSize = (int)$getConfigAny(['style.link_font_size'], '14');
+$linkFontWeight = (int)$getConfigAny(['style.link_font_weight'], '600');
+$linkGap = (int)$getConfigAny(['style.link_gap'], '16');
+$borderTop = $normalizeToggle($getConfigAny(['style.border_top'], 'yes')) !== 'no';
+$borderColor = (string)$getConfigAny(['style.border_color'], 'rgba(255,255,255,0.14)');
+$borderWidth = (int)$getConfigAny(['style.border_width'], '1');
+$sectionPadding = (int)$getConfigAny(['style.section_padding'], '30');
+$sectionPaddingMobile = (int)$getConfigAny(['style.section_padding_mobile'], '20');
+$separatorDisplay = $normalizeToggle($getConfigAny(['style.separator_display'], 'yes')) !== 'no';
+$separatorChar = trim((string)$getConfigAny(['style.separator_char'], '/'));
+if ($separatorChar === '') {
+    $separatorChar = '/';
+}
+$separatorColor = (string)$getConfigAny(['style.separator_color'], '#c39ecb');
+$maxWidth = (int)$getConfigAny(['layout.max_width'], '1180');
+$paddingHorizontal = $genResponsiveCSS($parseResponsive($getConfigAny(['layout.padding_horizontal'], '16/16') . 'px'));
+$paddingVertical = $genResponsiveCSS($parseResponsive($getConfigAny(['layout.padding_vertical'], $sectionPaddingMobile . '/' . $sectionPadding) . 'px'));
+$fontSize = $genResponsiveCSS($parseResponsive($getConfigAny(['typography.font_size'], '12/14') . 'px'));
+$lineHeight = (float)$getConfigAny(['typography.line_height'], '1.7');
+
+$disclaimerBgColor = (string)$getConfigAny(['disclaimer.bg_color'], 'rgba(255,255,255,0.06)');
+$disclaimerBorderRadius = (int)$getConfigAny(['disclaimer.border_radius'], '10');
+$disclaimerPadding = (int)$getConfigAny(['disclaimer.padding'], '14');
+$disclaimerFontSize = (int)$getConfigAny(['disclaimer.font_size'], '12');
+$disclaimerTextColor = (string)$getConfigAny(['disclaimer.text_color'], '#c39ecb');
+
+$copyrightFontSize = (int)$getConfigAny(['copyright.font_size'], '12');
+$copyrightTextColor = (string)$getConfigAny(['copyright.text_color'], '#c39ecb');
+$copyrightMarginTop = (int)$getConfigAny(['copyright.margin_top'], '14');
+
+$useCustomLinksRaw = (string)$getConfigAny(['content.use_custom_links'], '');
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($getConfigAny(['content.use_subpages'], 'no'), 'no') !== 'yes';
+$copyrightText = (string)$getConfigAny(['content.copyright_text', 'footer.copyright'], '© 2026 Teen Patti Gold Rush. All rights reserved.');
+$disclaimerText = (string)$getConfigAny(['content.disclaimer_text', 'footer.disclaimer_text'], '18+ Only. Teen Patti Gold Rush is intended for adult players. Play responsibly and follow local gaming regulations.');
+$floatingText = trim((string)$getConfigAny(['download_button.text', 'header.download_button.text', 'floating.text'], 'Download App'));
+$floatingSubtext = trim((string)$getConfigAny(['floating.subtext'], 'Quick Install'));
+$floatingUrl = (string)$getConfigAny(['download_button.url', 'header.download_button.url', 'floating.url'], '#download');
+$floatingImageUrl = trim((string)$getConfigAny(['floating.image_url'], ''));
+$defaultFloatingIcon = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/floating-download-orbit.svg');
+if ($floatingImageUrl === '') {
+    $floatingImageUrl = $defaultFloatingIcon;
+}
+$showFloating = $floatingText !== '' && $floatingUrl !== '';
+
+$footerLinks = [];
+if (!$useCustomLinks && $page) {
+    $footerPages = method_exists($page, 'getHeaderNavigationPages')
+        ? $page->getHeaderNavigationPages(30)
+        : $page->getNavigationPages([], 30);
+    foreach ($footerPages as $subpage) {
+        $type = (string)($subpage['type'] ?? '');
+        $configuredLabel = trim((string)$getConfigAny(['content.footer_label_' . $type], ''));
+        $footerLinks[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : ($subpage['title'] ?? ''),
+            'url' => $subpage['url'] ?? '#',
+        ];
+    }
+}
+if (empty($footerLinks)) {
+    $footerLinksText = (string)$getConfigAny(['content.footer_links', 'footer.links'], "Home=>/\nAbout=>/about\nBlog=>/blog\nFAQs=>/faqs");
+    if (strpos($footerLinksText, '\\n') !== false && strpos($footerLinksText, "\n") === false) {
+        $footerLinksText = str_replace('\\n', "\n", $footerLinksText);
+    }
+    $items = preg_split('/\r?\n/', $footerLinksText);
+    if (!is_array($items) || count(array_filter(array_map('trim', $items))) === 0) {
+        $items = explode(',', $footerLinksText);
+    }
+    foreach ($items as $link) {
+        $link = trim((string)$link);
+        if ($link === '') {
+            continue;
+        }
+        if (strpos($link, '=>') !== false) {
+            $parts = array_map('trim', explode('=>', $link, 2));
+        } elseif (strpos($link, '|') !== false) {
+            $parts = array_map('trim', explode('|', $link, 2));
+        } else {
+            $parts = [$link, '#'];
+        }
+        $footerLinks[] = [
+            'text' => trim((string)$parts[0]),
+            'url' => trim((string)($parts[1] ?? '#')) !== '' ? trim((string)($parts[1] ?? '#')) : '#',
+        ];
+    }
+}
+?>
+
+<footer id="<?= $componentId ?>" class="gr-footer">
+    <div class="gr-footer-inner">
+        <?php if ($showLinks && !empty($footerLinks)): ?>
+            <nav class="gr-links" aria-label="Footer Navigation">
+                <?php foreach ($footerLinks as $index => $link): ?>
+                    <a href="<?= htmlspecialchars($link['url']) ?>"><?= htmlspecialchars($link['text']) ?></a>
+                    <?php if ($separatorDisplay && $index < count($footerLinks) - 1): ?>
+                        <span class="gr-sep"><?= htmlspecialchars($separatorChar) ?></span>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </nav>
+        <?php endif; ?>
+
+        <?php if ($showDisclaimer && $disclaimerText !== ''): ?>
+            <p class="gr-disclaimer"><?= nl2br(htmlspecialchars($disclaimerText)) ?></p>
+        <?php endif; ?>
+
+        <?php if ($showCopyright): ?>
+            <p class="gr-copy"><?= htmlspecialchars($copyrightText) ?></p>
+        <?php endif; ?>
+    </div>
+</footer>
+<?php if ($showFloating): ?>
+    <a class="gr-floating-download" href="<?= htmlspecialchars($floatingUrl) ?>" aria-label="<?= htmlspecialchars($floatingText) ?>">
+        <?php if ($floatingImageUrl !== ''): ?>
+            <img src="<?= htmlspecialchars($floatingImageUrl) ?>" alt="<?= htmlspecialchars($floatingText) ?>" loading="lazy" decoding="async">
+        <?php endif; ?>
+        <span class="gr-floating-copy">
+            <small><?= htmlspecialchars($floatingSubtext) ?></small>
+            <strong><?= htmlspecialchars($floatingText) ?></strong>
+        </span>
+    </a>
+<?php endif; ?>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    background-color: <?= htmlspecialchars($bgColor) ?>;
+    background-image:
+        radial-gradient(rgba(255, 202, 241, 0.2) 1px, transparent 1px),
+        radial-gradient(rgba(167, 255, 94, 0.16) 1px, transparent 1px);
+    background-size: 18px 18px, 26px 26px;
+    background-position: 0 0, 10px 10px;
+    border-top: <?= $borderTop ? (int)$borderWidth : 0 ?>px solid <?= htmlspecialchars($borderColor) ?>;
+    padding: <?= htmlspecialchars($paddingVertical) ?> 0;
+    width: 100%;
+    margin-top: 0;
+    color: <?= htmlspecialchars($textColor) ?>;
+    font-size: <?= htmlspecialchars($fontSize) ?>;
+    line-height: <?= htmlspecialchars((string)$lineHeight) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -22px;
+    height: 28px;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(circle at 14px 100%, transparent 14px, rgba(255, 179, 112, 0.26) 14px 15px, transparent 15px) repeat-x;
+    background-size: 28px 28px;
+    opacity: 0.56;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+        radial-gradient(560px 180px at 50% 0%, rgba(255, 180, 113, 0.18), transparent 72%),
+        linear-gradient(180deg, rgba(18, 12, 20, 0.12) 0%, rgba(12, 8, 18, 0.74) 42%, rgba(10, 7, 18, 0.9) 100%);
+}
+
+#<?= $componentId ?> .gr-footer-inner {
+    width: min(<?= (int)$maxWidth ?>px, calc(100% - (<?= htmlspecialchars($paddingHorizontal) ?> * 2)));
+    margin: 0 auto;
+    display: grid;
+    gap: 0.9rem;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .gr-links {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: <?= (int)$linkGap ?>px;
+    color: <?= htmlspecialchars($linkColor) ?>;
+}
+
+#<?= $componentId ?> .gr-links a {
+    color: inherit;
+    text-decoration: none;
+    font-size: <?= (int)$linkFontSize ?>px;
+    font-weight: <?= (int)$linkFontWeight ?>;
+    letter-spacing: 0.01em;
+    opacity: 0.88;
+    transition: color 0.25s ease, opacity 0.25s ease;
+}
+
+#<?= $componentId ?> .gr-links a:hover {
+    color: <?= htmlspecialchars($linkHoverColor) ?>;
+    opacity: 1;
+}
+
+#<?= $componentId ?> .gr-sep {
+    color: <?= htmlspecialchars($separatorColor) ?>;
+    opacity: 0.45;
+    user-select: none;
+}
+
+#<?= $componentId ?> .gr-disclaimer {
+    margin: 0;
+    padding: <?= (int)$disclaimerPadding ?>px;
+    border-radius: <?= (int)$disclaimerBorderRadius ?>px;
+    border: 0;
+    background: <?= htmlspecialchars($disclaimerBgColor) ?>;
+    color: <?= htmlspecialchars($disclaimerTextColor) ?>;
+    font-size: <?= (int)$disclaimerFontSize ?>px;
+    line-height: 1.72;
+}
+
+#<?= $componentId ?> .gr-copy {
+    margin: <?= (int)$copyrightMarginTop ?>px 0 0;
+    color: <?= htmlspecialchars($copyrightTextColor) ?>;
+    font-size: <?= (int)$copyrightFontSize ?>px;
+    opacity: 0.9;
+}
+
+#<?= $componentId ?> + .gr-floating-download {
+    position: fixed;
+    right: 18px;
+    bottom: 18px;
+    z-index: 45;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    text-decoration: none;
+    border-radius: 999px;
+    padding: 0.34rem 0.78rem 0.34rem 0.34rem;
+    background: linear-gradient(122deg, #ff5ab6 0%, #a9ff5e 52%, #59d7ff 100%);
+    border: 0;
+    box-shadow: 0 18px 36px rgba(255, 90, 182, 0.52), 0 8px 18px rgba(0, 0, 0, 0.26);
+    backdrop-filter: blur(4px);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, filter 0.22s ease;
+}
+
+#<?= $componentId ?> + .gr-floating-download::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 999px;
+    box-shadow: 0 0 0 1px rgba(255, 167, 226, 0.68);
+    opacity: 0;
+    transform: scale(0.86);
+    animation: gr-float-ping 2.8s ease-out infinite;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> + .gr-floating-download:hover {
+    transform: translateY(-2px);
+    filter: saturate(1.12);
+    box-shadow: 0 22px 40px rgba(255, 90, 182, 0.56), 0 10px 20px rgba(0, 0, 0, 0.3);
+}
+
+#<?= $componentId ?> + .gr-floating-download img {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    object-fit: cover;
+    border: 0;
+    background: rgba(30, 11, 36, 0.9);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+}
+
+#<?= $componentId ?> + .gr-floating-download .gr-floating-copy {
+    display: grid;
+    gap: 0.06rem;
+    line-height: 1.1;
+}
+
+#<?= $componentId ?> + .gr-floating-download small {
+    color: rgba(30, 10, 29, 0.88);
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> + .gr-floating-download strong {
+    color: #2b0d27;
+    font-size: 0.82rem;
+    letter-spacing: 0.01em;
+    text-shadow: 0 1px 0 rgba(255, 237, 247, 0.62);
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .gr-footer-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .gr-links {
+        gap: 0.55rem 0.72rem;
+    }
+
+    #<?= $componentId ?> .gr-sep {
+        display: none;
+    }
+
+    #<?= $componentId ?> + .gr-floating-download {
+        right: 12px;
+        bottom: 12px;
+        gap: 0.45rem;
+        padding: 0.3rem 0.66rem 0.3rem 0.3rem;
+    }
+
+    #<?= $componentId ?> + .gr-floating-download img {
+        width: 38px;
+        height: 38px;
+    }
+
+    #<?= $componentId ?> + .gr-floating-download strong {
+        font-size: 0.76rem;
+    }
+}
+
+@keyframes gr-float-ping {
+    0% {
+        opacity: 0.48;
+        transform: scale(0.86);
+    }
+
+    75% {
+        opacity: 0;
+        transform: scale(1.12);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(1.12);
+    }
+}
+</style>
+<?php if ($standaloneShell): ?>
+</body>
+</html>
+<?php endif; ?>

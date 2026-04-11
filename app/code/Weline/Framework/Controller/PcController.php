@@ -15,10 +15,12 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\ResultManager;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Security\Token;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
@@ -248,10 +250,13 @@ class PcController extends Core
         ]);
 
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
+        SchedulerSystem::yield();
         $fileName = $eventData->getData('fileName');
         $content = $this->getTemplate()->fetch($fileName);
+        SchedulerSystem::yield();
         $eventData->setData('content', $content);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
+        SchedulerSystem::yield();
         return $eventData->getData('content');
     }
 
@@ -350,12 +355,15 @@ class PcController extends Core
             'layoutType' => $this?->layoutType
         ]);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
+        SchedulerSystem::yield();
         /**@var DataObject $eventData */
         $fileName = $eventData->getData('fileName');
         $content = $this->getTemplate()->fetch($fileName);
+        SchedulerSystem::yield();
         // 触发Weline_Framework_Controller::fetch_file_after事件
         $eventData->setData('content', $content);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
+        SchedulerSystem::yield();
         return $eventData->getData('content');
     }
 
@@ -388,7 +396,7 @@ class PcController extends Core
      */
     protected function fetchJson(array $data): string
     {
-        return $this->request->getResponse()->renderJson($data);
+        return Response::json($data)->getBody();
     }
 
     /**
@@ -516,6 +524,8 @@ class PcController extends Core
 {$msg_title}:{$displayMsg},
 {$data_title}:{$return_data_json},
 HTML;
-        throw new \Weline\Framework\Http\ResponseTerminateException($statusCode, $html, ['Content-Type' => 'text/html; charset=UTF-8']);
+        throw new \Weline\Framework\Http\ResponseTerminateException(
+            Response::html($html, $statusCode)
+        );
     }
 }

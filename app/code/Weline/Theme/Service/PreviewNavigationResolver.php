@@ -388,7 +388,7 @@ final class PreviewNavigationResolver
         } catch (\Throwable) {
         }
 
-        return (int)($_SERVER['WELINE_WEBSITE_ID'] ?? 0);
+        return (int) (\w_env('website_id', 0) ?? 0);
     }
 
     private function resolveThemePageType(string $path): string
@@ -450,7 +450,7 @@ final class PreviewNavigationResolver
             return $baseHost . $href;
         }
 
-        $basePath = (string)\parse_url((string)($_SERVER['REQUEST_URI'] ?? '/'), \PHP_URL_PATH);
+        $basePath = (string)\parse_url((string) (\w_env('request.uri', '/') ?? '/'), \PHP_URL_PATH);
         $basePath = \preg_replace('#/[^/]*$#', '/', $basePath ?: '/');
         $basePath = $basePath ?: '/';
 

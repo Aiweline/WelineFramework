@@ -51,7 +51,7 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
         }
 
         $previewToken = (string)$request->getParam(PreviewTokenService::TOKEN_KEY, '');
-        $hasPreviewContext = (int)($_GET['preview_theme'] ?? 0) > 0
+        $hasPreviewContext = (int)$request->getParam('preview_theme', 0) > 0
             || (int)$request->getParam('frontend_theme_id', 0) > 0
             || (int)$request->getParam('backend_theme_id', 0) > 0
             || $previewToken !== '';

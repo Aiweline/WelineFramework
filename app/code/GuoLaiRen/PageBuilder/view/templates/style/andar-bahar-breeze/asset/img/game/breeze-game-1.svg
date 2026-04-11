@@ -1,0 +1,45 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg1" x1="120" y1="80" x2="1040" y2="680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C4E57"/>
+      <stop offset="0.55" stop-color="#205E68"/>
+      <stop offset="1" stop-color="#14383F"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(936 176) rotate(130.236) scale(280 228)">
+      <stop stop-color="#FFE7A9" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#FFE7A9" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="table1" x1="240" y1="196" x2="962" y2="592" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#3EC6BC"/>
+      <stop offset="1" stop-color="#1F948C"/>
+    </linearGradient>
+    <linearGradient id="cardFace1" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#FFFDF7"/>
+      <stop offset="1" stop-color="#F3FFF9"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="760" rx="40" fill="url(#bg1)"/>
+  <rect x="28" y="28" width="1144" height="704" rx="30" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+  <circle cx="936" cy="176" r="280" fill="url(#glow1)"/>
+  <ellipse cx="610" cy="432" rx="388" ry="172" fill="url(#table1)"/>
+  <ellipse cx="610" cy="432" rx="328" ry="138" fill="#10635C" fill-opacity="0.38"/>
+  <ellipse cx="610" cy="432" rx="408" ry="192" stroke="rgba(255,255,255,0.16)" stroke-width="2"/>
+  <rect x="684" y="244" width="164" height="224" rx="22" transform="rotate(12 684 244)" fill="url(#cardFace1)"/>
+  <rect x="690" y="250" width="152" height="212" rx="18" stroke="#D0EEE8" stroke-width="2" transform="rotate(12 690 250)"/>
+  <rect x="558" y="228" width="164" height="224" rx="22" transform="rotate(-7 558 228)" fill="url(#cardFace1)"/>
+  <rect x="564" y="234" width="152" height="212" rx="18" stroke="#D0EEE8" stroke-width="2" transform="rotate(-7 564 234)"/>
+  <circle cx="628" cy="342" r="38" fill="#F4C15D"/>
+  <circle cx="761" cy="344" r="38" fill="#43BFB6"/>
+  <path d="M628 318L636 334H654L640 345L646 362L628 352L610 362L616 345L602 334H620L628 318Z" fill="#114047"/>
+  <path d="M760 317L770 339H794L774 352L782 374L760 360L738 374L746 352L726 339H750L760 317Z" fill="#114047"/>
+  <circle cx="440" cy="526" r="54" fill="#FFE7A9" fill-opacity="0.94"/>
+  <circle cx="440" cy="526" r="40" fill="#1B5560"/>
+  <circle cx="440" cy="526" r="26" fill="#FFE7A9" fill-opacity="0.96"/>
+  <circle cx="812" cy="542" r="54" fill="#A8F0EA" fill-opacity="0.94"/>
+  <circle cx="812" cy="542" r="40" fill="#1B5560"/>
+  <circle cx="812" cy="542" r="26" fill="#A8F0EA" fill-opacity="0.96"/>
+  <path d="M118 146H398" stroke="rgba(255,255,255,0.34)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M118 176H334" stroke="rgba(255,255,255,0.2)" stroke-width="3" stroke-linecap="round"/>
+  <text x="120" y="122" fill="#F7FFF8" font-size="64" font-family="Arial, Helvetica, sans-serif" font-weight="700">Andar Bahar Classic</text>
+  <text x="120" y="560" fill="#E8FFF8" font-size="30" font-family="Arial, Helvetica, sans-serif">Fast deck reveal  ·  Clean table focus  ·  Breeze lobby hero</text>
+</svg>

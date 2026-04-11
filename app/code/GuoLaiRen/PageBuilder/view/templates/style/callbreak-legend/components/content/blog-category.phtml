@@ -1,0 +1,574 @@
+<?php
+/**
+ * Call Break Legend Blog Category Component
+ *
+ * @fields_start
+ * blog.title|分类标题|text|Category Posts
+ * blog.subtitle|副标题|text|Browse articles by category
+ * blog.posts_per_page|每页显示数量|number|9
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_category|显示分类|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.card_style|卡片样式|select:default=默认,minimal=简约,featured=特色|default
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$currentCategory = $this->getData('current_category') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', $currentCategory['name'] ?? __('Category Posts'));
+$subtitle = $getConfig('blog.subtitle', __('Browse articles by category'));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+
+$primaryColor = $getConfig('color_scheme.primary', '#1eb980');
+$secondaryColor = $getConfig('color_scheme.secondary', '#f2a93b');
+$bgColor = $getConfig('color_scheme.background', '#0b1525');
+$textColor = $getConfig('color_scheme.text', '#f8fafc');
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-legend/asset/img/poker-header-bg.svg');
+
+$spotlightPost = $blogPosts[0] ?? null;
+$streamPosts = array_slice($blogPosts, 1);
+?>
+
+<section class="cbl-blog-category" id="blog-category">
+    <div class="category-shell">
+        <header class="category-masthead">
+            <?php if (!empty($currentCategory['name'])): ?>
+                <span class="category-chip"><?= htmlspecialchars($currentCategory['name']) ?></span>
+            <?php endif; ?>
+            <h2><?= htmlspecialchars($title) ?></h2>
+            <?php if ($subtitle): ?>
+                <p class="category-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($currentCategory['description'])): ?>
+                <p class="category-description"><?= htmlspecialchars($currentCategory['description']) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <?php if (empty($blogPosts)): ?>
+            <div class="category-empty">
+                <div class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                    </svg>
+                </div>
+                <p><?= __('No posts are available in this category yet. Please check back soon.') ?></p>
+                <a href="/blog" class="back-link"><?= __('Back to blog list') ?></a>
+            </div>
+        <?php else: ?>
+            <?php if ($spotlightPost): ?>
+                <article class="spotlight-story">
+                    <div class="spotlight-copy">
+                        <span class="spotlight-kicker">Category Lead</span>
+                        <h3>
+                            <a href="<?= htmlspecialchars($spotlightPost['url']) ?>"><?= htmlspecialchars($spotlightPost['title']) ?></a>
+                        </h3>
+                        <div class="spotlight-meta">
+                            <?php if ($showCategory && !empty($spotlightPost['category_name'])): ?>
+                                <span><?= htmlspecialchars($spotlightPost['category_name']) ?></span>
+                            <?php endif; ?>
+                            <?php if ($showDate && !empty($spotlightPost['published_at'])): ?>
+                                <span><?= date('M d, Y', strtotime($spotlightPost['published_at'])) ?></span>
+                            <?php endif; ?>
+                            <?php if ($showAuthor && !empty($spotlightPost['author'])): ?>
+                                <span><?= htmlspecialchars($spotlightPost['author']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if (!empty($spotlightPost['summary'])): ?>
+                            <p><?= htmlspecialchars(mb_substr($spotlightPost['summary'], 0, 220)) ?><?= mb_strlen($spotlightPost['summary']) > 220 ? '...' : '' ?></p>
+                        <?php endif; ?>
+                        <a href="<?= htmlspecialchars($spotlightPost['url']) ?>" class="story-action">
+                            <?= __('Read Article') ?>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                            </svg>
+                        </a>
+                    </div>
+
+                    <?php if (!empty($spotlightPost['cover_image'])): ?>
+                        <a href="<?= htmlspecialchars($spotlightPost['url']) ?>" class="spotlight-media">
+                            <img src="<?= htmlspecialchars($spotlightPost['cover_image']) ?>" alt="<?= htmlspecialchars($spotlightPost['title']) ?>" loading="lazy">
+                        </a>
+                    <?php endif; ?>
+                </article>
+            <?php endif; ?>
+
+            <div class="category-stream<?= $showSidebar ? ' has-rail' : '' ?>">
+                <div class="stream-list">
+                    <?php foreach ($streamPosts as $post): ?>
+                        <article class="stream-card">
+                            <?php if (!empty($post['cover_image'])): ?>
+                                <a href="<?= htmlspecialchars($post['url']) ?>" class="stream-media">
+                                    <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                </a>
+                            <?php endif; ?>
+
+                            <div class="stream-copy">
+                                <div class="stream-meta">
+                                    <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                        <span class="stream-chip"><?= htmlspecialchars($post['category_name']) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($showDate && !empty($post['published_at'])): ?>
+                                        <span class="stream-date"><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+
+                                <h3><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h3>
+
+                                <?php if (!empty($post['summary'])): ?>
+                                    <p><?= htmlspecialchars(mb_substr($post['summary'], 0, 170)) ?><?= mb_strlen($post['summary']) > 170 ? '...' : '' ?></p>
+                                <?php endif; ?>
+
+                                <div class="stream-foot">
+                                    <?php if ($showAuthor && !empty($post['author'])): ?>
+                                        <span class="stream-author"><?= htmlspecialchars($post['author']) ?></span>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($post['url']) ?>" class="story-action">
+                                        <?= __('Read More') ?>
+                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                                        </svg>
+                                    </a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="stream-rail">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card">
+                                <h4><?= __('Categories') ?></h4>
+                                <div class="category-list">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <?php $active = !empty($currentCategory['id']) && isset($category['id']) && $category['id'] == $currentCategory['id']; ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="category-entry<?= $active ? ' is-active' : '' ?>">
+                                            <span><?= htmlspecialchars($category['name']) ?></span>
+                                            <?php if (isset($category['post_count'])): ?>
+                                                <small><?= (int)$category['post_count'] ?></small>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recentPosts)): ?>
+                            <section class="rail-card">
+                                <h4><?= __('Recent Posts') ?></h4>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+.cbl-blog-category {
+    position: relative;
+    padding: 84px 0;
+    background:
+        radial-gradient(1200px 600px at 15% 10%, rgba(30, 185, 128, 0.22), transparent 60%),
+        radial-gradient(800px 500px at 85% 20%, rgba(242, 169, 59, 0.16), transparent 55%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+    overflow: hidden;
+}
+
+.cbl-blog-category::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.1;
+    pointer-events: none;
+}
+
+.cbl-blog-category::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(7, 10, 19, 0.25) 0%, rgba(7, 10, 19, 0.65) 100%);
+    pointer-events: none;
+}
+
+.cbl-blog-category .category-shell {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 0 20px;
+    position: relative;
+    z-index: 1;
+}
+
+.cbl-blog-category .category-masthead {
+    max-width: 820px;
+    margin-bottom: 1rem;
+}
+
+.cbl-blog-category .category-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.38rem 0.84rem;
+    border-radius: 999px;
+    background: linear-gradient(120deg, <?= htmlspecialchars($primaryColor) ?> 0%, <?= htmlspecialchars($secondaryColor) ?> 100%);
+    color: #0b1525;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cbl-blog-category .category-masthead h2 {
+    margin-top: 1rem;
+    color: #f8fafc;
+    font-size: clamp(2.1rem, 4.2vw, 3.4rem);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+}
+
+.cbl-blog-category .category-subtitle,
+.cbl-blog-category .category-description {
+    margin-top: 0.8rem;
+    color: rgba(233, 245, 242, 0.8);
+    line-height: 1.75;
+}
+
+.cbl-blog-category .spotlight-story,
+.cbl-blog-category .stream-card,
+.cbl-blog-category .rail-card,
+.cbl-blog-category .category-empty {
+    border-radius: 24px;
+    border: 1px solid rgba(122, 161, 192, 0.2);
+    background: linear-gradient(160deg, rgba(11, 21, 37, 0.9) 0%, rgba(15, 43, 62, 0.62) 100%);
+    box-shadow: 0 22px 52px rgba(2, 6, 12, 0.4);
+}
+
+.cbl-blog-category .spotlight-story {
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) minmax(320px, 1.08fr);
+    gap: 1rem;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.cbl-blog-category .spotlight-copy {
+    padding: clamp(1.3rem, 3vw, 2rem);
+    display: grid;
+    align-content: center;
+}
+
+.cbl-blog-category .spotlight-kicker {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.34rem 0.76rem;
+    border-radius: 999px;
+    border: 1px solid rgba(242, 169, 59, 0.26);
+    background: rgba(242, 169, 59, 0.12);
+    color: #f2a93b;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cbl-blog-category .spotlight-copy h3 {
+    margin-top: 1rem;
+    font-size: clamp(1.8rem, 3vw, 2.7rem);
+    line-height: 1.08;
+}
+
+.cbl-blog-category .spotlight-copy h3 a,
+.cbl-blog-category .stream-copy h3 a {
+    color: #f8fafc;
+    text-decoration: none;
+    transition: color 0.25s ease;
+}
+
+.cbl-blog-category .spotlight-copy h3 a:hover,
+.cbl-blog-category .stream-copy h3 a:hover {
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+}
+
+.cbl-blog-category .spotlight-meta,
+.cbl-blog-category .stream-meta {
+    margin-top: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    color: rgba(203, 213, 225, 0.74);
+    font-size: 0.82rem;
+}
+
+.cbl-blog-category .spotlight-copy p,
+.cbl-blog-category .stream-copy p {
+    margin-top: 0.9rem;
+    color: rgba(233, 245, 242, 0.78);
+    line-height: 1.76;
+}
+
+.cbl-blog-category .story-action {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    color: <?= htmlspecialchars($primaryColor) ?>;
+    text-decoration: none;
+    font-weight: 700;
+    transition: gap 0.25s ease, color 0.25s ease;
+}
+
+.cbl-blog-category .story-action:hover {
+    gap: 0.7rem;
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+}
+
+.cbl-blog-category .spotlight-media {
+    display: block;
+    min-height: 100%;
+}
+
+.cbl-blog-category .spotlight-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.cbl-blog-category .category-stream {
+    display: grid;
+    gap: 1rem;
+}
+
+.cbl-blog-category .category-stream.has-rail {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.3fr);
+}
+
+.cbl-blog-category .stream-list {
+    display: grid;
+    gap: 1rem;
+}
+
+.cbl-blog-category .stream-card {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 1rem;
+    overflow: hidden;
+}
+
+.cbl-blog-category .stream-media {
+    position: relative;
+    display: block;
+    min-height: 100%;
+}
+
+.cbl-blog-category .stream-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.cbl-blog-category .stream-copy {
+    padding: 1.1rem 1.15rem 1.1rem 0;
+}
+
+.cbl-blog-category .stream-chip,
+.cbl-blog-category .stream-date {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.68rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.cbl-blog-category .stream-chip {
+    background: linear-gradient(120deg, <?= htmlspecialchars($primaryColor) ?> 0%, <?= htmlspecialchars($secondaryColor) ?> 100%);
+    color: #0b1525;
+}
+
+.cbl-blog-category .stream-date {
+    color: rgba(233, 245, 242, 0.78);
+    border: 1px solid rgba(122, 161, 192, 0.18);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.cbl-blog-category .stream-copy h3 {
+    margin-top: 0.8rem;
+    font-size: 1.2rem;
+    line-height: 1.34;
+}
+
+.cbl-blog-category .stream-foot {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.8rem;
+    flex-wrap: wrap;
+}
+
+.cbl-blog-category .stream-author {
+    color: rgba(203, 213, 225, 0.74);
+    font-size: 0.88rem;
+}
+
+.cbl-blog-category .stream-rail {
+    display: grid;
+    gap: 1rem;
+    position: sticky;
+    top: 110px;
+}
+
+.cbl-blog-category .rail-card {
+    padding: 1.1rem;
+}
+
+.cbl-blog-category .rail-card h4 {
+    color: #f8fafc;
+    font-size: 0.9rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.cbl-blog-category .category-list,
+.cbl-blog-category .recent-stack {
+    margin-top: 0.85rem;
+    display: grid;
+    gap: 0.7rem;
+}
+
+.cbl-blog-category .category-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.72rem 0.82rem;
+    border-radius: 14px;
+    border: 1px solid rgba(122, 161, 192, 0.16);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(233, 245, 242, 0.8);
+    text-decoration: none;
+    transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+.cbl-blog-category .category-entry.is-active,
+.cbl-blog-category .category-entry:hover {
+    background: rgba(30, 185, 128, 0.12);
+    color: #f8fafc;
+    transform: translateX(3px);
+}
+
+.cbl-blog-category .category-entry small {
+    color: rgba(203, 213, 225, 0.68);
+}
+
+.cbl-blog-category .recent-link {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    gap: 0.75rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+.cbl-blog-category .recent-link img {
+    width: 64px;
+    height: 64px;
+    border-radius: 12px;
+    object-fit: cover;
+}
+
+.cbl-blog-category .recent-link span {
+    display: grid;
+    gap: 0.28rem;
+}
+
+.cbl-blog-category .recent-link strong {
+    color: #f8fafc;
+    font-size: 0.92rem;
+    line-height: 1.45;
+}
+
+.cbl-blog-category .recent-link small {
+    color: rgba(203, 213, 225, 0.68);
+    font-size: 0.76rem;
+}
+
+.cbl-blog-category .category-empty {
+    text-align: center;
+    padding: 4rem 1.5rem;
+}
+
+.cbl-blog-category .back-link {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 0.8rem 1.2rem;
+    border-radius: 999px;
+    background: linear-gradient(120deg, <?= htmlspecialchars($primaryColor) ?> 0%, <?= htmlspecialchars($secondaryColor) ?> 100%);
+    color: #0b1525;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+@media (max-width: 1080px) {
+    .cbl-blog-category .spotlight-story,
+    .cbl-blog-category .category-stream.has-rail,
+    .cbl-blog-category .stream-card {
+        grid-template-columns: 1fr;
+    }
+
+    .cbl-blog-category .stream-copy {
+        padding: 1.1rem;
+    }
+
+    .cbl-blog-category .stream-rail {
+        position: static;
+    }
+}
+
+@media (max-width: 768px) {
+    .cbl-blog-category {
+        padding: 64px 0;
+    }
+
+    .cbl-blog-category .category-shell {
+        padding: 0 15px;
+    }
+}
+</style>

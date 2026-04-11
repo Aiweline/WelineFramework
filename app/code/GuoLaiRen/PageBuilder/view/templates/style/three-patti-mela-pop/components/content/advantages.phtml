@@ -1,0 +1,592 @@
+<?php
+/**
+ * Three Patti Mela Pop - Advantages Component
+ *
+ * @component_start
+ * code: advantages
+ * name: 优势展示
+ * name_en: Advantages Section
+ * description: 展示产品/应用的核心优势，票券式差异化布局
+ * category: content
+ * region: content
+ * thumbnail: asset/img/our-advantages/icon01.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示描述:select:yes|yes,no
+ * display.show_button => 显示按钮:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景基础色:color:#fff0c9
+ * style.title_color => 标题颜色:color:#2d170b
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.card_title_color => 卡片标题颜色:color:#2d170b
+ * style.card_title_font_size => 卡片标题字号:number:18|px
+ * style.card_desc_color => 卡片描述颜色:color:#6b4b34
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.icon_size => 图标尺寸:number:85|px
+ * style.icon_border_radius => 图标圆角:number:50|%
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:30|px
+ *
+ * group:button => 按钮配置
+ * button.text => 按钮文本:text:Download
+ * button.url => 按钮链接:text:#download
+ * button.bg_gradient_start => 按钮渐变起始色:color:#ff5a36
+ * button.bg_gradient_end => 按钮渐变结束色:color:#ffa500
+ * button.text_color => 按钮文字颜色:color:#fffdf8
+ * button.border_radius => 按钮圆角:number:999|px
+ * button.padding_x => 按钮水平内边距:number:40|px
+ * button.padding_y => 按钮垂直内边距:number:12|px
+ *
+ * group:icons => 图标配置
+ * icons.icon_1 => 优势1图标:textarea:|默认使用本地icon01.webp
+ * icons.icon_2 => 优势2图标:textarea:|默认使用本地icon02.webp
+ * icons.icon_3 => 优势3图标:textarea:|默认使用本地icon03.webp
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Our Advantages
+ * texts.summary => 区域辅助文案:text:Three bright lanes covering Teen Patti Speed, Rummy Master, and Slots Meta.
+ * texts.advantage_1_title => 优势1标题:text:Teen Patti Speed
+ * texts.advantage_1_desc => 优势1描述:textarea:Fast-paced variant where players bet quickly, aiming for the best three-card hand.
+ * texts.advantage_2_title => 优势2标题:text:Rummy Master
+ * texts.advantage_2_desc => 优势2描述:textarea:Skillfully meld cards into sets and sequences in a race to declare victory.
+ * texts.advantage_3_title => 优势3标题:text:Slots Meta
+ * texts.advantage_3_desc => 优势3描述:textarea:A dazzling array of themed slots with bonuses in a quest for jackpot wins.
+ *
+ * @fields_end
+ */
+
+$componentId = 'mela-advantages-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$joinLabels = static function (array $items) {
+    $items = array_values(array_filter(array_map('trim', $items), static function ($item) {
+        return $item !== '';
+    }));
+    $count = count($items);
+    if ($count === 0) {
+        return '';
+    }
+    if ($count === 1) {
+        return $items[0];
+    }
+    if ($count === 2) {
+        return $items[0] . ' and ' . $items[1];
+    }
+
+    $last = array_pop($items);
+    return implode(', ', $items) . ', and ' . $last;
+};
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+$showButton = $getConfig('display.show_button', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('advantages.bg_color', $colors['advantages_bg'] ?? '#fff0c9'));
+$titleColor = $getConfig('style.title_color', $colors['heading_color'] ?? '#2d170b');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$cardTitleColor = $getConfig('style.card_title_color', $colors['heading_color'] ?? '#2d170b');
+$cardTitleFontSize = $getConfig('style.card_title_font_size', '18');
+$cardDescColor = $getConfig('style.card_desc_color', $colors['text_secondary'] ?? '#6b4b34');
+$cardDescFontSize = $getConfig('style.card_desc_font_size', '14');
+$iconSize = $getConfig('style.icon_size', '85');
+$iconBorderRadius = $getConfig('style.icon_border_radius', '50');
+$sectionPadding = $getConfig('style.section_padding', '60');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '40');
+$cardGap = $getConfig('style.card_gap', '30');
+
+$btnText = trim((string)$getConfig('button.text', 'Download'));
+if ($btnText === '' || strtolower($btnText) === 'download app') {
+    $btnText = 'Download';
+}
+$btnUrl = $getConfig('button.url', '#download');
+$btnGradientStart = $getConfig('button.bg_gradient_start', $colors['accent_primary'] ?? '#ff5a36');
+$btnGradientEnd = $getConfig('button.bg_gradient_end', '#ffa500');
+$btnTextColor = $getConfig('button.text_color', $colors['button_primary_text'] ?? '#fffdf8');
+$btnBorderRadius = $getConfig('button.border_radius', '999');
+$btnPaddingX = $getConfig('button.padding_x', '40');
+$btnPaddingY = $getConfig('button.padding_y', '12');
+
+$defaultIcon1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/our-advantages/icon01.webp');
+$defaultIcon2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/our-advantages/icon02.webp');
+$defaultIcon3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/our-advantages/icon03.webp');
+
+$defaultSectionTitle = 'Our Advantages';
+$defaultCards = [
+    [
+        'title' => 'Teen Patti Speed',
+        'desc' => 'Fast-paced variant where players bet quickly, aiming for the best three-card hand.',
+    ],
+    [
+        'title' => 'Rummy Master',
+        'desc' => 'Skillfully meld cards into sets and sequences in a race to declare victory.',
+    ],
+    [
+        'title' => 'Slots Meta',
+        'desc' => 'A dazzling array of themed slots with bonuses in a quest for jackpot wins.',
+    ],
+];
+
+$title = $getConfig('texts.title', $getConfig('advantages.title', $getConfig('texts.advantages_title', $defaultSectionTitle)));
+$cards = [
+    [
+        'icon' => $getConfig('icons.icon_1', $getConfig('advantages.icon_1', '')) ?: $defaultIcon1,
+        'title' => $getConfig('texts.advantage_1_title', $getConfig('texts.game_teen_patti_speed', $defaultCards[0]['title'])),
+        'desc' => $getConfig('texts.advantage_1_desc', $getConfig('texts.game_teen_patti_speed_desc', $defaultCards[0]['desc'])),
+    ],
+    [
+        'icon' => $getConfig('icons.icon_2', $getConfig('advantages.icon_2', '')) ?: $defaultIcon2,
+        'title' => $getConfig('texts.advantage_2_title', $getConfig('texts.game_rummy_master', $defaultCards[1]['title'])),
+        'desc' => $getConfig('texts.advantage_2_desc', $getConfig('texts.game_rummy_master_desc', $defaultCards[1]['desc'])),
+    ],
+    [
+        'icon' => $getConfig('icons.icon_3', $getConfig('advantages.icon_3', '')) ?: $defaultIcon3,
+        'title' => $getConfig('texts.advantage_3_title', $getConfig('texts.game_slots_meta', $defaultCards[2]['title'])),
+        'desc' => $getConfig('texts.advantage_3_desc', $getConfig('texts.game_slots_meta_desc', $defaultCards[2]['desc'])),
+    ],
+];
+$advantageTitles = array_values(array_filter(array_map(static function ($card) {
+    return trim((string)($card['title'] ?? ''));
+}, $cards), static function ($item) {
+    return $item !== '';
+}));
+$advantagesSummary = '';
+if ($showDescription && !empty($advantageTitles)) {
+    $defaultSummary = 'Three bright lanes covering ' . $joinLabels(array_slice($advantageTitles, 0, 3)) . '.';
+    $advantagesSummary = trim((string)$getConfig('texts.summary', $getConfig('texts.advantages_summary', $defaultSummary)));
+}
+?>
+<section id="<?= $componentId ?>" class="mela-advantages" aria-labelledby="<?= $componentId ?>-title">
+    <span class="advantages-burst burst-a" aria-hidden="true" data-mela-parallax data-mela-speed="0.04"></span>
+    <span class="advantages-burst burst-b" aria-hidden="true" data-mela-parallax data-mela-speed="0.06"></span>
+
+    <div class="advantages-shell">
+        <header class="advantages-header">
+            <div class="advantages-headcopy">
+                <?php if ($showTitle): ?>
+                    <h2 id="<?= $componentId ?>-title" class="advantages-title wow animate__fadeInUp"><span><?= htmlspecialchars($title) ?></span></h2>
+                <?php endif; ?>
+                <?php if ($advantagesSummary !== ''): ?>
+                    <p class="advantages-summary wow animate__fadeInUp" data-wow-delay="0.04s"><?= htmlspecialchars($advantagesSummary) ?></p>
+                <?php endif; ?>
+                <?php if (!empty($advantageTitles)): ?>
+                    <div class="advantages-tags" aria-label="Advantage highlights">
+                        <?php foreach (array_slice($advantageTitles, 0, 3) as $index => $advantageTitle): ?>
+                            <span class="wow animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.05 * ($index + 1), 2)) ?>s"><?= htmlspecialchars($advantageTitle) ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <?php if ($showButton): ?>
+                <a class="advantages-cta wow animate__fadeInUp" data-wow-delay="0.08s" href="<?= htmlspecialchars($btnUrl) ?>">
+                    <span><?= htmlspecialchars($btnText) ?></span>
+                </a>
+            <?php endif; ?>
+        </header>
+
+        <ol class="advantages-lane" role="list">
+            <?php foreach ($cards as $index => $card): ?>
+                <li class="advantage-slot">
+                    <article class="advantage-ticket wow animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.08 * ($index + 1), 2)) ?>s">
+                        <span class="ticket-punch" aria-hidden="true"></span>
+                        <span class="ticket-punch ticket-punch-bottom" aria-hidden="true"></span>
+                        <div class="ticket-topline" aria-hidden="true">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                        <div class="ticket-icon-wrap">
+                            <img class="ticket-icon" src="<?= htmlspecialchars($card['icon']) ?>" alt="<?= htmlspecialchars($card['title']) ?>" loading="lazy" decoding="async">
+                        </div>
+                        <div class="ticket-copy">
+                            <h3><?= htmlspecialchars($card['title']) ?></h3>
+                            <?php if ($showDescription): ?>
+                                <p><?= nl2br(htmlspecialchars($card['desc'])) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                </li>
+            <?php endforeach; ?>
+        </ol>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    background:
+        radial-gradient(540px 220px at 8% 8%, rgba(255,255,255,0.52), transparent 68%),
+        radial-gradient(380px 220px at 94% 18%, rgba(255, 90, 54, 0.14), transparent 70%),
+        <?= htmlspecialchars($bgColor) ?>;
+    overflow: clip;
+}
+
+#<?= $componentId ?> .advantages-shell {
+    width: var(--mela-shell, min(1280px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .advantages-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 1rem;
+    margin-bottom: clamp(1.5rem, 4vw, 2.2rem);
+}
+
+#<?= $componentId ?> .advantages-headcopy {
+    display: grid;
+    gap: 0.72rem;
+    max-width: 50rem;
+}
+
+#<?= $componentId ?> .advantages-title {
+    margin: 0;
+    font-size: clamp(<?= htmlspecialchars($titleFontSizeMobile) ?>px, 4.8vw, <?= htmlspecialchars($titleFontSize) ?>px);
+    line-height: 0.95;
+    color: <?= htmlspecialchars($titleColor) ?>;
+}
+
+#<?= $componentId ?> .advantages-title span {
+    position: relative;
+    display: inline-block;
+    padding: 0.54rem 1.05rem 0.72rem 0.95rem;
+    border-radius: 1.5rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.56), rgba(255,255,255,0.22));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.34);
+}
+
+#<?= $componentId ?> .advantages-title span::before {
+    content: '';
+    position: absolute;
+    left: 1rem;
+    top: -0.42rem;
+    width: min(5rem, 44%);
+    height: 0.66rem;
+    border-radius: 999px;
+    background:
+        repeating-linear-gradient(90deg,
+            rgba(255, 90, 54, 0.96) 0 18px,
+            rgba(255, 183, 3, 0.94) 18px 36px,
+            rgba(0, 194, 168, 0.9) 36px 54px);
+    box-shadow: 0 10px 18px rgba(255, 183, 3, 0.14);
+}
+
+#<?= $componentId ?> .advantages-title span::after {
+    content: '';
+    position: absolute;
+    left: 1.05rem;
+    right: 1.05rem;
+    bottom: 0.34rem;
+    height: 2px;
+    border-radius: 999px;
+    background:
+        repeating-linear-gradient(90deg,
+            rgba(45,23,11,0.16) 0 8px,
+            transparent 8px 16px);
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .advantages-summary {
+    margin: 0;
+    max-width: 44rem;
+    font-size: 0.98rem;
+    line-height: 1.72;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+}
+
+#<?= $componentId ?> .advantages-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .advantages-tags span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.34rem 0.82rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(45,23,11,0.08);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: rgba(45,23,11,0.68);
+}
+
+#<?= $componentId ?> .advantages-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 3.25rem;
+    padding: <?= htmlspecialchars($btnPaddingY) ?>px <?= htmlspecialchars($btnPaddingX) ?>px;
+    border-radius: <?= htmlspecialchars($btnBorderRadius) ?>px;
+    background: linear-gradient(135deg, <?= htmlspecialchars($btnGradientStart) ?> 0%, <?= htmlspecialchars($btnGradientEnd) ?> 100%);
+    color: <?= htmlspecialchars($btnTextColor) ?>;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    box-shadow: 0 18px 30px rgba(255, 90, 54, 0.18);
+    transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+
+#<?= $componentId ?> .advantages-cta:hover {
+    transform: translateY(-3px) rotate(-1deg);
+    box-shadow: 0 24px 36px rgba(255, 90, 54, 0.24);
+}
+
+#<?= $componentId ?> .advantages-lane {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: <?= htmlspecialchars($cardGap) ?>px;
+    margin: 0;
+    padding: 0;
+}
+
+#<?= $componentId ?> .advantage-slot:nth-child(2) {
+    padding-top: 2.2rem;
+}
+
+#<?= $componentId ?> .advantage-slot:nth-child(3) {
+    padding-top: 0.9rem;
+}
+
+#<?= $componentId ?> .advantage-ticket {
+    position: relative;
+    height: 100%;
+    min-height: 100%;
+    padding: clamp(1.2rem, 3vw, 1.6rem);
+    border-radius: 1.8rem;
+    border: 1px solid rgba(45,23,11,0.1);
+    background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,248,234,0.88) 100%);
+    box-shadow: 0 20px 38px rgba(255, 124, 62, 0.12);
+    overflow: visible;
+    isolation: isolate;
+}
+
+#<?= $componentId ?> .advantage-ticket::after {
+    content: "\2660 \2665 \2666 \2663";
+    position: absolute;
+    right: 0.25rem;
+    bottom: 0.15rem;
+    font-size: clamp(3.8rem, 6vw, 5.8rem);
+    line-height: 1;
+    letter-spacing: 0.42rem;
+    color: rgba(45, 23, 11, 0.045);
+    pointer-events: none;
+    z-index: 0;
+}
+
+#<?= $componentId ?> .advantage-slot:nth-child(2) .advantage-ticket {
+    background: linear-gradient(180deg, rgba(224,255,249,0.96) 0%, rgba(214,255,239,0.9) 100%);
+}
+
+#<?= $componentId ?> .advantage-slot:nth-child(3) .advantage-ticket {
+    background: linear-gradient(180deg, rgba(255,235,245,0.96) 0%, rgba(255,241,228,0.9) 100%);
+}
+
+#<?= $componentId ?> .ticket-topline {
+    display: inline-flex;
+    gap: 0.45rem;
+    margin-bottom: 1rem;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .ticket-topline span {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 999px;
+    background: rgba(45,23,11,0.18);
+}
+
+#<?= $componentId ?> .ticket-icon-wrap {
+    width: calc(<?= htmlspecialchars($iconSize) ?>px + 1rem);
+    height: calc(<?= htmlspecialchars($iconSize) ?>px + 1rem);
+    margin-bottom: 1.15rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1.5rem;
+    background: rgba(255,255,255,0.72);
+    box-shadow: inset 0 0 0 1px rgba(45,23,11,0.07);
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .ticket-icon {
+    width: <?= htmlspecialchars($iconSize) ?>px;
+    height: <?= htmlspecialchars($iconSize) ?>px;
+    border-radius: <?= htmlspecialchars($iconBorderRadius) ?>%;
+    object-fit: cover;
+}
+
+#<?= $componentId ?> .ticket-copy {
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .ticket-copy h3 {
+    margin: 0 0 0.65rem;
+    font-size: <?= htmlspecialchars($cardTitleFontSize) ?>px;
+    line-height: 1.05;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+}
+
+#<?= $componentId ?> .ticket-copy p {
+    margin: 0;
+    font-size: <?= htmlspecialchars($cardDescFontSize) ?>px;
+    line-height: 1.8;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .ticket-punch {
+    position: absolute;
+    right: -1rem;
+    top: 1.8rem;
+    width: 1.9rem;
+    height: 1.9rem;
+    border-radius: 999px;
+    background: radial-gradient(circle at 32% 32%, rgba(255,255,255,0.46), <?= htmlspecialchars($bgColor) ?> 74%);
+    box-shadow:
+        0 0 0 0.48rem <?= htmlspecialchars($bgColor) ?>,
+        inset 0 0 0 1px rgba(45,23,11,0.08);
+    z-index: 2;
+}
+
+#<?= $componentId ?> .ticket-punch-bottom {
+    top: auto;
+    bottom: 1.8rem;
+}
+
+#<?= $componentId ?> .advantages-burst {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .burst-a {
+    left: -4rem;
+    top: 3rem;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, rgba(255,255,255,0.48), rgba(255,255,255,0) 72%);
+}
+
+#<?= $componentId ?> .burst-b {
+    right: 6%;
+    bottom: -2rem;
+    width: 11rem;
+    height: 11rem;
+    background: radial-gradient(circle, rgba(0,194,168,0.18), rgba(0,194,168,0) 72%);
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .advantages-lane {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .advantage-slot:nth-child(2),
+    #<?= $componentId ?> .advantage-slot:nth-child(3) {
+        padding-top: 0;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+
+    #<?= $componentId ?> .advantages-shell {
+        width: min(100%, calc(100% - 0.85rem));
+    }
+
+    #<?= $componentId ?> .advantages-header {
+        flex-direction: column;
+        align-items: start;
+    }
+
+    #<?= $componentId ?> .advantages-title {
+        max-width: 100%;
+    }
+
+    #<?= $componentId ?> .advantages-title span {
+        padding: 0.46rem 0.8rem 0.64rem 0.78rem;
+    }
+
+    #<?= $componentId ?> .advantages-title span::before {
+        left: 0.82rem;
+        top: -0.34rem;
+        width: min(3.8rem, 46%);
+        height: 0.56rem;
+    }
+
+    #<?= $componentId ?> .advantages-title span::after {
+        left: 0.82rem;
+        right: 0.82rem;
+        bottom: 0.28rem;
+    }
+
+    #<?= $componentId ?> .advantages-cta {
+        width: 100%;
+    }
+
+    #<?= $componentId ?> .advantages-lane {
+        gap: 0.85rem;
+    }
+
+    #<?= $componentId ?> .advantage-slot:nth-child(odd) {
+        padding-right: 1rem;
+    }
+
+    #<?= $componentId ?> .advantage-slot:nth-child(even) {
+        padding-left: 1rem;
+    }
+
+    #<?= $componentId ?> .advantage-ticket {
+        padding: 1rem 1rem 1.05rem;
+        border-radius: 1.45rem;
+    }
+
+    #<?= $componentId ?> .advantage-slot:nth-child(odd) .ticket-punch,
+    #<?= $componentId ?> .advantage-slot:nth-child(odd) .ticket-punch-bottom {
+        left: auto;
+        right: -1rem;
+    }
+
+    #<?= $componentId ?> .advantage-slot:nth-child(even) .ticket-punch,
+    #<?= $componentId ?> .advantage-slot:nth-child(even) .ticket-punch-bottom {
+        right: auto;
+        left: -1rem;
+    }
+}
+</style>

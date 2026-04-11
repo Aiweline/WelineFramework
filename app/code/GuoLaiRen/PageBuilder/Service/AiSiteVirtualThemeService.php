@@ -25,6 +25,86 @@ class AiSiteVirtualThemeService
     /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
+     * @return array{virtual_theme_id:int,theme:VirtualTheme}
+     */
+    public function ensureThemeShell(array $scope, array $websiteProfile, int $sessionId = 0): array
+    {
+        $theme = $this->loadOrCreateTheme((int)($scope['virtual_theme_id'] ?? 0), $websiteProfile, $sessionId);
+        if (!$theme->getId()) {
+            $theme->save();
+        }
+
+        return [
+            'virtual_theme_id' => (int)$theme->getId(),
+            'theme' => $theme,
+        ];
+    }
+
+    /**
+     * @return array{
+     *   header?:array<string, mixed>,
+     *   footer?:array<string, mixed>
+     * }
+     */
+    public function loadSharedComponents(int $themeId): array
+    {
+        if ($themeId <= 0) {
+            return [];
+        }
+
+        $shared = [];
+        foreach ([
+            'header' => VirtualThemeComponent::CATEGORY_HEADER,
+            'footer' => VirtualThemeComponent::CATEGORY_FOOTER,
+        ] as $region => $category) {
+            $component = $this->loadThemeComponentByCategory($themeId, $category);
+            if (!$component instanceof VirtualThemeComponent || !$component->getId()) {
+                continue;
+            }
+
+            $shared[$region] = [
+                'code' => (string)$component->getComponentCode(),
+                'name' => (string)$component->getName(),
+                'region' => $region,
+                'phtml' => (string)$component->getTemplateContent(),
+                'html' => '',
+                'default_config' => $component->getDefaultConfig(),
+                'ai_data' => [],
+            ];
+        }
+
+        return $shared;
+    }
+
+    /**
+     * @param array<string, mixed> $component
+     */
+    public function saveGeneratedSharedComponent(int $themeId, array $component): void
+    {
+        $region = \trim((string)($component['region'] ?? ''));
+        if (!\in_array($region, ['header', 'footer'], true)) {
+            throw new \InvalidArgumentException((string)__('Unsupported shared component region: %{1}', [$region]));
+        }
+
+        $category = $region === 'header'
+            ? VirtualThemeComponent::CATEGORY_HEADER
+            : VirtualThemeComponent::CATEGORY_FOOTER;
+
+        $this->saveThemeComponent(
+            $themeId,
+            (string)($component['code'] ?? ''),
+            VirtualThemeComponent::AREA_FRONTEND,
+            $category,
+            (string)($component['name'] ?? ''),
+            (string)($component['phtml'] ?? ''),
+            \is_array($component['default_config'] ?? null) ? $component['default_config'] : [],
+            ['position' => [$region], 'page_layouts' => ['*'], 'sort_order' => $region === 'header' ? 10 : 20]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
      * @param list<string> $pageTypes
      * @param array<string, array<string, mixed>> $pageTypeLayouts
      * @return array{virtual_theme_id:int,page_type_layouts:array<string, array<string, mixed>>,theme:VirtualTheme}
@@ -186,9 +266,20 @@ class AiSiteVirtualThemeService
         }
 
         $themeId = (int)$theme->getId();
-        $sharedComponents = $prebuiltSharedComponents !== []
-            ? $prebuiltSharedComponents
-            : $pageComponentGenerationService->generateSharedComponents($websiteProfile, $scope);
+        if ($prebuiltSharedComponents !== []) {
+            $sharedComponents = $prebuiltSharedComponents;
+        } elseif (!$regenerateSharedComponents) {
+            $sharedComponents = $this->loadSharedComponents($themeId);
+            if (
+                !\is_array($sharedComponents['header'] ?? null)
+                || !\is_array($sharedComponents['footer'] ?? null)
+            ) {
+                $sharedComponents = $pageComponentGenerationService->generateSharedComponents($websiteProfile, $scope);
+                $regenerateSharedComponents = true;
+            }
+        } else {
+            $sharedComponents = $pageComponentGenerationService->generateSharedComponents($websiteProfile, $scope);
+        }
         $headerCode = (string)($sharedComponents['header']['code'] ?? 'header/ai-site-header');
         $footerCode = (string)($sharedComponents['footer']['code'] ?? 'footer/ai-site-footer');
         $headerConfig = \is_array($sharedComponents['header']['default_config'] ?? null) ? $sharedComponents['header']['default_config'] : [];
@@ -348,6 +439,20 @@ class AiSiteVirtualThemeService
             ->find();
 
         return (int)$component->getId() > 0;
+    }
+
+    private function loadThemeComponentByCategory(int $themeId, string $category): ?VirtualThemeComponent
+    {
+        /** @var VirtualThemeComponent $component */
+        $component = clone ObjectManager::getInstance(VirtualThemeComponent::class);
+        $component->clearData()->clearQuery();
+        $component->where(VirtualThemeComponent::schema_fields_VIRTUAL_THEME_ID, $themeId)
+            ->where(VirtualThemeComponent::schema_fields_AREA, VirtualThemeComponent::AREA_FRONTEND)
+            ->where(VirtualThemeComponent::schema_fields_CATEGORY, $category)
+            ->order(VirtualThemeComponent::schema_fields_ID, 'ASC')
+            ->find();
+
+        return $component->getId() ? $component : null;
     }
 
     private function saveThemeComponent(

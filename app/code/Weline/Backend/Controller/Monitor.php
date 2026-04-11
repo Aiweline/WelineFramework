@@ -54,7 +54,7 @@ class Monitor extends BackendController
         // TODO: 实现系统信息获取
         return [
             'php_version' => PHP_VERSION,
-            'server_software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+            'server_software' => (string) (\w_env('server.server_software', 'Unknown') ?? 'Unknown'),
             'memory_limit' => ini_get('memory_limit'),
             'max_execution_time' => ini_get('max_execution_time'),
         ];

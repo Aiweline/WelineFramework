@@ -18,6 +18,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\SchedulerSystem;
@@ -136,8 +137,9 @@ class Core
         // 导致未带后台区域 key 的 URL 仍走后台 processUrl / 路由逻辑。
         $this->request_area = $this->request->getRequestArea();
         $this->area_router = (string) $this->request->getAreaRouter();
-        if (isset($_SERVER['WELINE_IS_BACKEND'])) {
-            $this->is_backend = (bool) $_SERVER['WELINE_IS_BACKEND'];
+        $backendFlag = \w_env('is_backend', null);
+        if ($backendFlag !== null) {
+            $this->is_backend = (bool) $backendFlag;
         } else {
             $this->is_backend = is_int(strpos(strtolower($this->request_area), \Weline\Framework\Router\DataInterface::area_BACKEND));
         }
@@ -145,7 +147,7 @@ class Core
         $this->routerGeneratedGetParams = [];
         
         // 读取url
-        $uri = $_SERVER['REQUEST_URI'] ?? $this->request->getUri();
+        $uri = (string) (\w_env('request.uri', $this->request->getUri()) ?? $this->request->getUri());
         $method = $this->request->getMethod() ?: 'GET';
         
         // 规范化 URI（去除查询参数），确保缓存键的一致性
@@ -182,9 +184,9 @@ class Core
         }
         
         // 回退：使用请求 URI 生成标识
-        $uri = $_SERVER['REQUEST_URI'] ?? '/';
-        $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
-        $time = $_SERVER['REQUEST_TIME_FLOAT'] ?? \microtime(true);
+        $uri = (string) (\w_env('request.uri', '/') ?? '/');
+        $method = (string) (\w_env('request.method', 'GET') ?? 'GET');
+        $time = (float) (\w_env('request.time_float', \microtime(true)) ?? \microtime(true));
         
         return \md5($uri . $method . $time);
     }
@@ -305,13 +307,13 @@ class Core
         SchedulerSystem::yield();
 
         // 诊断日志：记录路由开始时的关键状态
-        $originalUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '';
+        $originalUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
         if (Env::get('wls.debug.hot_path_logs', false) && str_contains($originalUri, 'ai-site-agent')) {
             if (\class_exists(\Weline\Server\Log\WlsLogger::class)) {
                 \Weline\Server\Log\WlsLogger::info_('[Router::start] ai-site-agent request', [
-                    'request_uri' => $_SERVER['REQUEST_URI'] ?? '(empty)',
-                    'weline_area' => $_SERVER['WELINE_AREA'] ?? '(empty)',
-                    'weline_is_backend' => (($_SERVER['WELINE_IS_BACKEND'] ?? false) ? 'true' : 'false'),
+                    'request_uri' => \w_env('request.uri', '(empty)'),
+                    'weline_area' => \w_env('area', '(empty)'),
+                    'weline_is_backend' => ((\w_env('is_backend', false) ? 'true' : 'false')),
                     'is_backend' => ($this->is_backend ? 'true' : 'false'),
                     'request_area' => $this->request_area ?? '(empty)',
                     'area_router' => $this->area_router ?? '(empty)',
@@ -390,8 +392,8 @@ class Core
         if (PROD) {
             // 诊断日志：记录 PROD 模式路由 404
             w_log_warning('[Router 404] No route matched in PROD mode | URL: ' . ($this->url ?? '(empty)')
-                . ' | REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? '(empty)')
-                . ' | WELINE_AREA: ' . ($_SERVER['WELINE_AREA'] ?? '(empty)')
+                . ' | REQUEST_URI: ' . (\w_env('request.uri', '(empty)'))
+                . ' | WELINE_AREA: ' . (\w_env('area', '(empty)'))
                 . ' | request_area: ' . ($this->request_area ?? '(empty)')
                 . ' | is_backend: ' . ($this->is_backend ? 'true' : 'false')
             );
@@ -538,7 +540,7 @@ class Core
             if ($isStaticFile) {
                 // 确保 $url 不为 null，缓存未命中时从请求中获取
                 if ($url === null || $url === false || $url === '') {
-                    $url = $_SERVER['WELINE_PARSER_URL'] ?? '';
+                    $url = (string) (\w_env('parser_url', '') ?? '');
                 }
                 if ($url !== '') {
                     try {
@@ -743,8 +745,8 @@ class Core
             // 诊断日志：记录后台路由 404 的关键信息，便于排查间歇性 404 问题
             w_log_warning('[Router 404] Backend route not found | URL: ' . $url 
                 . ' | Method: ' . ($requestMethod ?? 'GET')
-                . ' | REQUEST_URI: ' . ($_SERVER['REQUEST_URI'] ?? '(empty)')
-                . ' | WELINE_AREA: ' . ($_SERVER['WELINE_AREA'] ?? '(empty)')
+                . ' | REQUEST_URI: ' . (\w_env('request.uri', '(empty)'))
+                . ' | WELINE_AREA: ' . (\w_env('area', '(empty)'))
                 . ' | is_backend: ' . ($this->is_backend ? 'true' : 'false')
                 . ' | area_router: ' . ($this->area_router ?? '(empty)')
                 . ' | router_file: ' . ($router_filepath ?? '(empty)')
@@ -968,7 +970,7 @@ class Core
             }
             
             // 回退到旧的缓存方式（兼容性）
-            $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? ($_SERVER['REQUEST_URI'] ?? '/');
+            $fullUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '/')) ?? '/');
             $cache_key = KeyBuilder::build('router', 'fpc:' . $fullUri . ':' . Cookie::getLangLocal());
             if (PROD && $html = $this->cache->get($cache_key)) {
                 // 添加缓存命中标志 header（使用框架独有的标识）
@@ -992,7 +994,7 @@ class Core
         $this->request->setRouter($this->router);
         
         list($dispatch, $method) = $this->getController($this->router);
-        $originalUri = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? $_SERVER['REQUEST_URI'] ?? '');
+        $originalUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '')) ?? '');
         if (
             Env::get('wls.debug.hot_path_logs', false)
             && \str_contains($originalUri, 'ai-site-agent')
@@ -1020,7 +1022,7 @@ class Core
             if (method_exists($dispatchAttribute, 'execute')) {
                 $result = $dispatchAttribute->execute();
                 if ($result) {
-                    return $result;
+                    return Response::normalize($result, $this->request->getResponse());
                 }
             }
         }
@@ -1073,7 +1075,7 @@ class Core
                 return;
             }
             $currentHeaders = headers_list();
-            $acceptHeader = strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? ''));
+            $acceptHeader = strtolower((string)($this->request->getHeader('Accept') ?? ''));
             $isSseAcceptRequest = str_contains($acceptHeader, 'text/event-stream');
             foreach ($currentHeaders as $header) {
                 if ($isSseAcceptRequest && stripos($header, 'Content-Type: text/event-stream') !== false) {
@@ -1106,6 +1108,30 @@ class Core
             
             // 捕获响应头（在控制器执行后）
             $responseHeaders = headers_list();
+            $fallbackResponse = $this->request->getResponse();
+            if ($result instanceof Response) {
+                $response = $result;
+                if ($output !== '' && $response->getBody() === '') {
+                    $response->setBody($output);
+                }
+            } else {
+                $normalizedPayload = $result;
+                if ($normalizedPayload === null || $normalizedPayload === '') {
+                    $normalizedPayload = $output !== '' ? $output : null;
+                }
+                $response = Response::normalize($normalizedPayload, $fallbackResponse);
+            }
+            $fpcHtml = $response->getBody();
+            $responseHeaders = [];
+            foreach ($response->getHeaders() as $name => $value) {
+                if (\is_array($value)) {
+                    foreach ($value as $headerValue) {
+                        $responseHeaders[] = $name . ': ' . $headerValue;
+                    }
+                } else {
+                    $responseHeaders[] = $name . ': ' . $value;
+                }
+            }
         } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
             // 重定向异常：直接重新抛出，让 WlsRuntime 处理
             // 异常情况下清理输出缓冲区
@@ -1153,7 +1179,7 @@ class Core
         $isEditorMode = \w_env_get('editor_mode') !== null && (\w_env_get('editor_mode') === '1' || \w_env_get('editor_mode') === 'true');
         if (!$this->is_backend && !$isEditorMode && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
             // 写前校验：fullUri 无效时跳过 FPC 写入，避免以错误 key 污染缓存
-            $fullUri = $_SERVER['WELINE_FULL_REQUEST_URI'] ?? '';
+            $fullUri = (string) (\w_env('full_request_uri', '') ?? '');
             if (KeyBuilder::isValidFullPageCacheKey($fullUri)) {
                 // 构建统一缓存结构，包含所有请求相关数据
                 $unifiedCacheData = [
@@ -1180,7 +1206,7 @@ class Core
             $this->cache->set($this->url_cache_key, $this->url);
         }
         // 返回结果（如果控制器返回了值）或输出缓冲区内容
-        return !empty($result) ? $result : $fpcHtml;
+        return $response ?? Response::normalize(!empty($result) ? $result : $fpcHtml, $this->request->getResponse());
     }
 
     /**
@@ -1227,10 +1253,10 @@ class Core
     /** 只读请求入口写入的 WELINE_IS_STATIC_FILE，不再在此处判断 */
     private function isStaticFile(): bool
     {
-        if (!($_SERVER['WELINE_PARSER_URL'] ?? false)) {
+        if (!(bool) \w_env('parser_url', false)) {
             return false;
         }
-        return (bool)($_SERVER['WELINE_IS_STATIC_FILE'] ?? false);
+        return (bool) \w_env('is_static_file', false);
     }
 
     private function collectRouterGeneratedGetParams(array $originalGet): array

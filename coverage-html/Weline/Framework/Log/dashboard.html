@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Framework\Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Framework</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Log</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Context/TraceContext.php.html#13">Weline\Framework\Log\Context\TraceContext</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#17">Weline\Framework\Log\Formatter\JsonLineFormatter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#16">Weline\Framework\Log\FpmLogger</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#18">Weline\Framework\Log\Handler\FileHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#18">Weline\Framework\Log\Handler\RotatingFileHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#18">Weline\Framework\Log\LogFilter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#16">Weline\Framework\Log\LogFormatter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#18">Weline\Framework\Log\LoggerFactory</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ResolveRuntimeDefaultObserver.php.html#14">Weline\Framework\Log\Observer\ResolveRuntimeDefaultObserver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#13">Weline\Framework\Log\Rotator\DailyRotator</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#13">Weline\Framework\Log\LogLevel</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="LogFormatter.php.html#16">Weline\Framework\Log\LogFormatter</a></td><td class="text-right">3540</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#18">Weline\Framework\Log\LoggerFactory</a></td><td class="text-right">2550</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#17">Weline\Framework\Log\Formatter\JsonLineFormatter</a></td><td class="text-right">1722</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#13">Weline\Framework\Log\Context\TraceContext</a></td><td class="text-right">1190</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#18">Weline\Framework\Log\Handler\FileHandler</a></td><td class="text-right">1190</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#18">Weline\Framework\Log\Handler\RotatingFileHandler</a></td><td class="text-right">1056</td></tr>
+       <tr><td><a href="LogFilter.php.html#18">Weline\Framework\Log\LogFilter</a></td><td class="text-right">870</td></tr>
+       <tr><td><a href="FpmLogger.php.html#16">Weline\Framework\Log\FpmLogger</a></td><td class="text-right">462</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#13">Weline\Framework\Log\Rotator\DailyRotator</a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="LogLevel.php.html#13">Weline\Framework\Log\LogLevel</a></td><td class="text-right">42</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Context/TraceContext.php.html#55"><abbr title="Weline\Framework\Log\Context\TraceContext::init">init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#82"><abbr title="Weline\Framework\Log\Context\TraceContext::registerStateManager">registerStateManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#100"><abbr title="Weline\Framework\Log\Context\TraceContext::getTraceId">getTraceId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#111"><abbr title="Weline\Framework\Log\Context\TraceContext::getSpanId">getSpanId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#122"><abbr title="Weline\Framework\Log\Context\TraceContext::getParentSpanId">getParentSpanId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#132"><abbr title="Weline\Framework\Log\Context\TraceContext::createChildSpan">createChildSpan</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#147"><abbr title="Weline\Framework\Log\Context\TraceContext::getRequestDuration">getRequestDuration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#158"><abbr title="Weline\Framework\Log\Context\TraceContext::getContext">getContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#180"><abbr title="Weline\Framework\Log\Context\TraceContext::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#193"><abbr title="Weline\Framework\Log\Context\TraceContext::generateTraceId">generateTraceId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#203"><abbr title="Weline\Framework\Log\Context\TraceContext::generateSpanId">generateSpanId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#211"><abbr title="Weline\Framework\Log\Context\TraceContext::getTraceIdFromHeader">getTraceIdFromHeader</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#233"><abbr title="Weline\Framework\Log\Context\TraceContext::getSpanIdFromHeader">getSpanIdFromHeader</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#251"><abbr title="Weline\Framework\Log\Context\TraceContext::parseTraceparent">parseTraceparent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#263"><abbr title="Weline\Framework\Log\Context\TraceContext::sanitizeId">sanitizeId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#271"><abbr title="Weline\Framework\Log\Context\TraceContext::getResponseHeaders">getResponseHeaders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#282"><abbr title="Weline\Framework\Log\Context\TraceContext::setResponseHeaders">setResponseHeaders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#34"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#49"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::format">format</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#123"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::getTimestamp">getTimestamp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#135"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::normalizeValue">normalizeValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#172"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::getCaller">getCaller</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#210"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::getTrace">getTrace</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#256"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::addExtraField">addExtraField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#265"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::setService">setService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#274"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::setEnvironment">setEnvironment</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#43"><abbr title="Weline\Framework\Log\FpmLogger::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#58"><abbr title="Weline\Framework\Log\FpmLogger::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#72"><abbr title="Weline\Framework\Log\FpmLogger::logWithLevel">logWithLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#92"><abbr title="Weline\Framework\Log\FpmLogger::emergency">emergency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#97"><abbr title="Weline\Framework\Log\FpmLogger::alert">alert</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#102"><abbr title="Weline\Framework\Log\FpmLogger::critical">critical</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#107"><abbr title="Weline\Framework\Log\FpmLogger::error">error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#112"><abbr title="Weline\Framework\Log\FpmLogger::warning">warning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#117"><abbr title="Weline\Framework\Log\FpmLogger::notice">notice</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#122"><abbr title="Weline\Framework\Log\FpmLogger::info">info</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#127"><abbr title="Weline\Framework\Log\FpmLogger::debug">debug</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#135"><abbr title="Weline\Framework\Log\FpmLogger::getChannel">getChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#143"><abbr title="Weline\Framework\Log\FpmLogger::withChannel">withChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#153"><abbr title="Weline\Framework\Log\FpmLogger::setCompact">setCompact</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#162"><abbr title="Weline\Framework\Log\FpmLogger::getHandler">getHandler</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#170"><abbr title="Weline\Framework\Log\FpmLogger::setHandler">setHandler</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#179"><abbr title="Weline\Framework\Log\FpmLogger::getFormatter">getFormatter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#187"><abbr title="Weline\Framework\Log\FpmLogger::setFormatter">setFormatter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FpmLogger.php.html#196"><abbr title="Weline\Framework\Log\FpmLogger::flush">flush</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#61"><abbr title="Weline\Framework\Log\Handler\FileHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#82"><abbr title="Weline\Framework\Log\Handler\FileHandler::getDefaultLogPath">getDefaultLogPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#93"><abbr title="Weline\Framework\Log\Handler\FileHandler::write">write</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#130"><abbr title="Weline\Framework\Log\Handler\FileHandler::getFilePath">getFilePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#157"><abbr title="Weline\Framework\Log\Handler\FileHandler::sanitizeChannelAsPath">sanitizeChannelAsPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#178"><abbr title="Weline\Framework\Log\Handler\FileHandler::getHandle">getHandle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#193"><abbr title="Weline\Framework\Log\Handler\FileHandler::flush">flush</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#205"><abbr title="Weline\Framework\Log\Handler\FileHandler::close">close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#218"><abbr title="Weline\Framework\Log\Handler\FileHandler::__destruct">__destruct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#226"><abbr title="Weline\Framework\Log\Handler\FileHandler::getLogPath">getLogPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#234"><abbr title="Weline\Framework\Log\Handler\FileHandler::setLogPath">setLogPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#56"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#77"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::getDefaultLogPath">getDefaultLogPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#88"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::write">write</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#99"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::checkRotation">checkRotation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#122"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::rotateDailyIfNeeded">rotateDailyIfNeeded</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#145"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::rotateBySizeIfNeeded">rotateBySizeIfNeeded</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#174"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::getFilePath">getFilePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#185"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::sanitizeChannelAsPath">sanitizeChannelAsPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#204"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::rotateFile">rotateFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#222"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::cleanOldFiles">cleanOldFiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#251"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::flush">flush</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#259"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::close">close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#267"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::resetRotationCheck">resetRotationCheck</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#48"><abbr title="Weline\Framework\Log\LogFilter::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#56"><abbr title="Weline\Framework\Log\LogFilter::getInstance">getInstance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#67"><abbr title="Weline\Framework\Log\LogFilter::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#75"><abbr title="Weline\Framework\Log\LogFilter::loadConfig">loadConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#111"><abbr title="Weline\Framework\Log\LogFilter::getLogConfig">getLogConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#130"><abbr title="Weline\Framework\Log\LogFilter::shouldLog">shouldLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#146"><abbr title="Weline\Framework\Log\LogFilter::getMinLevelForChannel">getMinLevelForChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#168"><abbr title="Weline\Framework\Log\LogFilter::extractModuleFromChannel">extractModuleFromChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#180"><abbr title="Weline\Framework\Log\LogFilter::getGlobalMinLevel">getGlobalMinLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#188"><abbr title="Weline\Framework\Log\LogFilter::setGlobalMinLevel">setGlobalMinLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#197"><abbr title="Weline\Framework\Log\LogFilter::setChannelLevel">setChannelLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#206"><abbr title="Weline\Framework\Log\LogFilter::disableChannel">disableChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#215"><abbr title="Weline\Framework\Log\LogFilter::enableChannel">enableChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFilter.php.html#224"><abbr title="Weline\Framework\Log\LogFilter::isDevMode">isDevMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#43"><abbr title="Weline\Framework\Log\LogFormatter::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#72"><abbr title="Weline\Framework\Log\LogFormatter::format">format</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#171"><abbr title="Weline\Framework\Log\LogFormatter::getTimestamp">getTimestamp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#189"><abbr title="Weline\Framework\Log\LogFormatter::interpolate">interpolate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#218"><abbr title="Weline\Framework\Log\LogFormatter::getCaller">getCaller</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#271"><abbr title="Weline\Framework\Log\LogFormatter::getExtraContext">getExtraContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#285"><abbr title="Weline\Framework\Log\LogFormatter::formatBytes">formatBytes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#297"><abbr title="Weline\Framework\Log\LogFormatter::getShortTraceId">getShortTraceId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#310"><abbr title="Weline\Framework\Log\LogFormatter::getTraceInfo">getTraceInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#337"><abbr title="Weline\Framework\Log\LogFormatter::setDateFormat">setDateFormat</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#346"><abbr title="Weline\Framework\Log\LogFormatter::withProcessId">withProcessId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#356"><abbr title="Weline\Framework\Log\LogFormatter::withMemory">withMemory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogFormatter.php.html#366"><abbr title="Weline\Framework\Log\LogFormatter::withTrace">withTrace</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#48"><abbr title="Weline\Framework\Log\LoggerFactory::create">create</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#75"><abbr title="Weline\Framework\Log\LoggerFactory::registerStateManager">registerStateManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#93"><abbr title="Weline\Framework\Log\LoggerFactory::getDefault">getDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#105"><abbr title="Weline\Framework\Log\LoggerFactory::createLogger">createLogger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#121"><abbr title="Weline\Framework\Log\LoggerFactory::resolveRuntime">resolveRuntime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#162"><abbr title="Weline\Framework\Log\LoggerFactory::createFpmLogger">createFpmLogger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#185"><abbr title="Weline\Framework\Log\LoggerFactory::createWlsLogger">createWlsLogger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#202"><abbr title="Weline\Framework\Log\LoggerFactory::createWlsLoggerAdapter">createWlsLoggerAdapter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#214"><abbr title="Weline\Framework\Log\LoggerFactory::createHandler">createHandler</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#239"><abbr title="Weline\Framework\Log\LoggerFactory::getLogPath">getLogPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#301"><abbr title="Weline\Framework\Log\LoggerFactory::getConfig">getConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#325"><abbr title="Weline\Framework\Log\LoggerFactory::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#346"><abbr title="Weline\Framework\Log\LoggerFactory::flushAll">flushAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#361"><abbr title="Weline\Framework\Log\LoggerFactory::setConfig">setConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ResolveRuntimeDefaultObserver.php.html#16"><abbr title="Weline\Framework\Log\Observer\ResolveRuntimeDefaultObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#25"><abbr title="Weline\Framework\Log\Rotator\DailyRotator::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#37"><abbr title="Weline\Framework\Log\Rotator\DailyRotator::rotate">rotate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#56"><abbr title="Weline\Framework\Log\Rotator\DailyRotator::getRotatedFilename">getRotatedFilename</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#70"><abbr title="Weline\Framework\Log\Rotator\DailyRotator::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#95"><abbr title="Weline\Framework\Log\Rotator\DailyRotator::getRotatedFiles">getRotatedFiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#30"><abbr title="Weline\Framework\Log\LogLevel::shouldLog">shouldLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#42"><abbr title="Weline\Framework\Log\LogLevel::fromString">fromString</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#66"><abbr title="Weline\Framework\Log\LogLevel::tryFromString">tryFromString</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#78"><abbr title="Weline\Framework\Log\LogLevel::toLowerCase">toLowerCase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#88"><abbr title="Weline\Framework\Log\LogLevel::names">names</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="LogFormatter.php.html#72"><abbr title="Weline\Framework\Log\LogFormatter::format">format</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#49"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::format">format</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="LogFormatter.php.html#189"><abbr title="Weline\Framework\Log\LogFormatter::interpolate">interpolate</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="LogFormatter.php.html#218"><abbr title="Weline\Framework\Log\LogFormatter::getCaller">getCaller</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#210"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::getTrace">getTrace</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#121"><abbr title="Weline\Framework\Log\LoggerFactory::resolveRuntime">resolveRuntime</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#239"><abbr title="Weline\Framework\Log\LoggerFactory::getLogPath">getLogPath</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#135"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::normalizeValue">normalizeValue</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#172"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::getCaller">getCaller</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="LogFilter.php.html#75"><abbr title="Weline\Framework\Log\LogFilter::loadConfig">loadConfig</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#93"><abbr title="Weline\Framework\Log\Handler\FileHandler::write">write</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="LogFormatter.php.html#43"><abbr title="Weline\Framework\Log\LogFormatter::__construct">__construct</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#61"><abbr title="Weline\Framework\Log\Handler\FileHandler::__construct">__construct</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#130"><abbr title="Weline\Framework\Log\Handler\FileHandler::getFilePath">getFilePath</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#157"><abbr title="Weline\Framework\Log\Handler\FileHandler::sanitizeChannelAsPath">sanitizeChannelAsPath</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#56"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::__construct">__construct</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#99"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::checkRotation">checkRotation</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#145"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::rotateBySizeIfNeeded">rotateBySizeIfNeeded</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#185"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::sanitizeChannelAsPath">sanitizeChannelAsPath</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#222"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::cleanOldFiles">cleanOldFiles</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="LogFilter.php.html#146"><abbr title="Weline\Framework\Log\LogFilter::getMinLevelForChannel">getMinLevelForChannel</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="LogFormatter.php.html#310"><abbr title="Weline\Framework\Log\LogFormatter::getTraceInfo">getTraceInfo</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#48"><abbr title="Weline\Framework\Log\LoggerFactory::create">create</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#301"><abbr title="Weline\Framework\Log\LoggerFactory::getConfig">getConfig</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#325"><abbr title="Weline\Framework\Log\LoggerFactory::reset">reset</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#346"><abbr title="Weline\Framework\Log\LoggerFactory::flushAll">flushAll</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#70"><abbr title="Weline\Framework\Log\Rotator\DailyRotator::cleanup">cleanup</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#55"><abbr title="Weline\Framework\Log\Context\TraceContext::init">init</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#82"><abbr title="Weline\Framework\Log\Context\TraceContext::registerStateManager">registerStateManager</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#158"><abbr title="Weline\Framework\Log\Context\TraceContext::getContext">getContext</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#211"><abbr title="Weline\Framework\Log\Context\TraceContext::getTraceIdFromHeader">getTraceIdFromHeader</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#251"><abbr title="Weline\Framework\Log\Context\TraceContext::parseTraceparent">parseTraceparent</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#282"><abbr title="Weline\Framework\Log\Context\TraceContext::setResponseHeaders">setResponseHeaders</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#178"><abbr title="Weline\Framework\Log\Handler\FileHandler::getHandle">getHandle</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#193"><abbr title="Weline\Framework\Log\Handler\FileHandler::flush">flush</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#205"><abbr title="Weline\Framework\Log\Handler\FileHandler::close">close</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="LogFormatter.php.html#171"><abbr title="Weline\Framework\Log\LogFormatter::getTimestamp">getTimestamp</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="LogFormatter.php.html#271"><abbr title="Weline\Framework\Log\LogFormatter::getExtraContext">getExtraContext</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#75"><abbr title="Weline\Framework\Log\LoggerFactory::registerStateManager">registerStateManager</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#214"><abbr title="Weline\Framework\Log\LoggerFactory::createHandler">createHandler</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#100"><abbr title="Weline\Framework\Log\Context\TraceContext::getTraceId">getTraceId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#111"><abbr title="Weline\Framework\Log\Context\TraceContext::getSpanId">getSpanId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#147"><abbr title="Weline\Framework\Log\Context\TraceContext::getRequestDuration">getRequestDuration</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#233"><abbr title="Weline\Framework\Log\Context\TraceContext::getSpanIdFromHeader">getSpanIdFromHeader</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Context/TraceContext.php.html#263"><abbr title="Weline\Framework\Log\Context\TraceContext::sanitizeId">sanitizeId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Formatter/JsonLineFormatter.php.html#123"><abbr title="Weline\Framework\Log\Formatter\JsonLineFormatter::getTimestamp">getTimestamp</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FpmLogger.php.html#58"><abbr title="Weline\Framework\Log\FpmLogger::log">log</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FpmLogger.php.html#72"><abbr title="Weline\Framework\Log\FpmLogger::logWithLevel">logWithLevel</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Handler/FileHandler.php.html#82"><abbr title="Weline\Framework\Log\Handler\FileHandler::getDefaultLogPath">getDefaultLogPath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#77"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::getDefaultLogPath">getDefaultLogPath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#122"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::rotateDailyIfNeeded">rotateDailyIfNeeded</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#174"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::getFilePath">getFilePath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Handler/RotatingFileHandler.php.html#204"><abbr title="Weline\Framework\Log\Handler\RotatingFileHandler::rotateFile">rotateFile</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LogFilter.php.html#56"><abbr title="Weline\Framework\Log\LogFilter::getInstance">getInstance</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LogFilter.php.html#111"><abbr title="Weline\Framework\Log\LogFilter::getLogConfig">getLogConfig</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LogFilter.php.html#130"><abbr title="Weline\Framework\Log\LogFilter::shouldLog">shouldLog</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LogFilter.php.html#168"><abbr title="Weline\Framework\Log\LogFilter::extractModuleFromChannel">extractModuleFromChannel</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LogFilter.php.html#224"><abbr title="Weline\Framework\Log\LogFilter::isDevMode">isDevMode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LogFormatter.php.html#297"><abbr title="Weline\Framework\Log\LogFormatter::getShortTraceId">getShortTraceId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#93"><abbr title="Weline\Framework\Log\LoggerFactory::getDefault">getDefault</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#105"><abbr title="Weline\Framework\Log\LoggerFactory::createLogger">createLogger</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#185"><abbr title="Weline\Framework\Log\LoggerFactory::createWlsLogger">createWlsLogger</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LoggerFactory.php.html#202"><abbr title="Weline\Framework\Log\LoggerFactory::createWlsLoggerAdapter">createWlsLoggerAdapter</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Rotator/DailyRotator.php.html#95"><abbr title="Weline\Framework\Log\Rotator\DailyRotator::getRotatedFiles">getRotatedFiles</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="LogLevel.php.html#66"><abbr title="Weline\Framework\Log\LogLevel::tryFromString">tryFromString</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([11,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([121,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,34,"<a href=\"Context\/TraceContext.php.html#13\">Weline\\Framework\\Log\\Context\\TraceContext<\/a>"],[0,41,"<a href=\"Formatter\/JsonLineFormatter.php.html#17\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter<\/a>"],[0,21,"<a href=\"FpmLogger.php.html#16\">Weline\\Framework\\Log\\FpmLogger<\/a>"],[0,34,"<a href=\"Handler\/FileHandler.php.html#18\">Weline\\Framework\\Log\\Handler\\FileHandler<\/a>"],[0,32,"<a href=\"Handler\/RotatingFileHandler.php.html#18\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler<\/a>"],[0,29,"<a href=\"LogFilter.php.html#18\">Weline\\Framework\\Log\\LogFilter<\/a>"],[0,59,"<a href=\"LogFormatter.php.html#16\">Weline\\Framework\\Log\\LogFormatter<\/a>"],[0,50,"<a href=\"LoggerFactory.php.html#18\">Weline\\Framework\\Log\\LoggerFactory<\/a>"],[0,1,"<a href=\"Observer\/ResolveRuntimeDefaultObserver.php.html#14\">Weline\\Framework\\Log\\Observer\\ResolveRuntimeDefaultObserver<\/a>"],[0,9,"<a href=\"Rotator\/DailyRotator.php.html#13\">Weline\\Framework\\Log\\Rotator\\DailyRotator<\/a>"],[0,6,"<a href=\"LogLevel.php.html#13\">Weline\\Framework\\Log\\LogLevel<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,3,"<a href=\"Context\/TraceContext.php.html#55\">Weline\\Framework\\Log\\Context\\TraceContext::init<\/a>"],[0,3,"<a href=\"Context\/TraceContext.php.html#82\">Weline\\Framework\\Log\\Context\\TraceContext::registerStateManager<\/a>"],[0,2,"<a href=\"Context\/TraceContext.php.html#100\">Weline\\Framework\\Log\\Context\\TraceContext::getTraceId<\/a>"],[0,2,"<a href=\"Context\/TraceContext.php.html#111\">Weline\\Framework\\Log\\Context\\TraceContext::getSpanId<\/a>"],[0,1,"<a href=\"Context\/TraceContext.php.html#122\">Weline\\Framework\\Log\\Context\\TraceContext::getParentSpanId<\/a>"],[0,1,"<a href=\"Context\/TraceContext.php.html#132\">Weline\\Framework\\Log\\Context\\TraceContext::createChildSpan<\/a>"],[0,2,"<a href=\"Context\/TraceContext.php.html#147\">Weline\\Framework\\Log\\Context\\TraceContext::getRequestDuration<\/a>"],[0,3,"<a href=\"Context\/TraceContext.php.html#158\">Weline\\Framework\\Log\\Context\\TraceContext::getContext<\/a>"],[0,1,"<a href=\"Context\/TraceContext.php.html#180\">Weline\\Framework\\Log\\Context\\TraceContext::reset<\/a>"],[0,1,"<a href=\"Context\/TraceContext.php.html#193\">Weline\\Framework\\Log\\Context\\TraceContext::generateTraceId<\/a>"],[0,1,"<a href=\"Context\/TraceContext.php.html#203\">Weline\\Framework\\Log\\Context\\TraceContext::generateSpanId<\/a>"],[0,3,"<a href=\"Context\/TraceContext.php.html#211\">Weline\\Framework\\Log\\Context\\TraceContext::getTraceIdFromHeader<\/a>"],[0,2,"<a href=\"Context\/TraceContext.php.html#233\">Weline\\Framework\\Log\\Context\\TraceContext::getSpanIdFromHeader<\/a>"],[0,3,"<a href=\"Context\/TraceContext.php.html#251\">Weline\\Framework\\Log\\Context\\TraceContext::parseTraceparent<\/a>"],[0,2,"<a href=\"Context\/TraceContext.php.html#263\">Weline\\Framework\\Log\\Context\\TraceContext::sanitizeId<\/a>"],[0,1,"<a href=\"Context\/TraceContext.php.html#271\">Weline\\Framework\\Log\\Context\\TraceContext::getResponseHeaders<\/a>"],[0,3,"<a href=\"Context\/TraceContext.php.html#282\">Weline\\Framework\\Log\\Context\\TraceContext::setResponseHeaders<\/a>"],[0,1,"<a href=\"Formatter\/JsonLineFormatter.php.html#34\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::__construct<\/a>"],[0,10,"<a href=\"Formatter\/JsonLineFormatter.php.html#49\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::format<\/a>"],[0,2,"<a href=\"Formatter\/JsonLineFormatter.php.html#123\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::getTimestamp<\/a>"],[0,8,"<a href=\"Formatter\/JsonLineFormatter.php.html#135\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::normalizeValue<\/a>"],[0,8,"<a href=\"Formatter\/JsonLineFormatter.php.html#172\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::getCaller<\/a>"],[0,9,"<a href=\"Formatter\/JsonLineFormatter.php.html#210\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::getTrace<\/a>"],[0,1,"<a href=\"Formatter\/JsonLineFormatter.php.html#256\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::addExtraField<\/a>"],[0,1,"<a href=\"Formatter\/JsonLineFormatter.php.html#265\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::setService<\/a>"],[0,1,"<a href=\"Formatter\/JsonLineFormatter.php.html#274\">Weline\\Framework\\Log\\Formatter\\JsonLineFormatter::setEnvironment<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#43\">Weline\\Framework\\Log\\FpmLogger::__construct<\/a>"],[0,2,"<a href=\"FpmLogger.php.html#58\">Weline\\Framework\\Log\\FpmLogger::log<\/a>"],[0,2,"<a href=\"FpmLogger.php.html#72\">Weline\\Framework\\Log\\FpmLogger::logWithLevel<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#92\">Weline\\Framework\\Log\\FpmLogger::emergency<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#97\">Weline\\Framework\\Log\\FpmLogger::alert<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#102\">Weline\\Framework\\Log\\FpmLogger::critical<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#107\">Weline\\Framework\\Log\\FpmLogger::error<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#112\">Weline\\Framework\\Log\\FpmLogger::warning<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#117\">Weline\\Framework\\Log\\FpmLogger::notice<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#122\">Weline\\Framework\\Log\\FpmLogger::info<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#127\">Weline\\Framework\\Log\\FpmLogger::debug<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#135\">Weline\\Framework\\Log\\FpmLogger::getChannel<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#143\">Weline\\Framework\\Log\\FpmLogger::withChannel<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#153\">Weline\\Framework\\Log\\FpmLogger::setCompact<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#162\">Weline\\Framework\\Log\\FpmLogger::getHandler<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#170\">Weline\\Framework\\Log\\FpmLogger::setHandler<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#179\">Weline\\Framework\\Log\\FpmLogger::getFormatter<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#187\">Weline\\Framework\\Log\\FpmLogger::setFormatter<\/a>"],[0,1,"<a href=\"FpmLogger.php.html#196\">Weline\\Framework\\Log\\FpmLogger::flush<\/a>"],[0,5,"<a href=\"Handler\/FileHandler.php.html#61\">Weline\\Framework\\Log\\Handler\\FileHandler::__construct<\/a>"],[0,2,"<a href=\"Handler\/FileHandler.php.html#82\">Weline\\Framework\\Log\\Handler\\FileHandler::getDefaultLogPath<\/a>"],[0,7,"<a href=\"Handler\/FileHandler.php.html#93\">Weline\\Framework\\Log\\Handler\\FileHandler::write<\/a>"],[0,4,"<a href=\"Handler\/FileHandler.php.html#130\">Weline\\Framework\\Log\\Handler\\FileHandler::getFilePath<\/a>"],[0,4,"<a href=\"Handler\/FileHandler.php.html#157\">Weline\\Framework\\Log\\Handler\\FileHandler::sanitizeChannelAsPath<\/a>"],[0,3,"<a href=\"Handler\/FileHandler.php.html#178\">Weline\\Framework\\Log\\Handler\\FileHandler::getHandle<\/a>"],[0,3,"<a href=\"Handler\/FileHandler.php.html#193\">Weline\\Framework\\Log\\Handler\\FileHandler::flush<\/a>"],[0,3,"<a href=\"Handler\/FileHandler.php.html#205\">Weline\\Framework\\Log\\Handler\\FileHandler::close<\/a>"],[0,1,"<a href=\"Handler\/FileHandler.php.html#218\">Weline\\Framework\\Log\\Handler\\FileHandler::__destruct<\/a>"],[0,1,"<a href=\"Handler\/FileHandler.php.html#226\">Weline\\Framework\\Log\\Handler\\FileHandler::getLogPath<\/a>"],[0,1,"<a href=\"Handler\/FileHandler.php.html#234\">Weline\\Framework\\Log\\Handler\\FileHandler::setLogPath<\/a>"],[0,4,"<a href=\"Handler\/RotatingFileHandler.php.html#56\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::__construct<\/a>"],[0,2,"<a href=\"Handler\/RotatingFileHandler.php.html#77\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::getDefaultLogPath<\/a>"],[0,1,"<a href=\"Handler\/RotatingFileHandler.php.html#88\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::write<\/a>"],[0,4,"<a href=\"Handler\/RotatingFileHandler.php.html#99\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::checkRotation<\/a>"],[0,2,"<a href=\"Handler\/RotatingFileHandler.php.html#122\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::rotateDailyIfNeeded<\/a>"],[0,4,"<a href=\"Handler\/RotatingFileHandler.php.html#145\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::rotateBySizeIfNeeded<\/a>"],[0,2,"<a href=\"Handler\/RotatingFileHandler.php.html#174\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::getFilePath<\/a>"],[0,4,"<a href=\"Handler\/RotatingFileHandler.php.html#185\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::sanitizeChannelAsPath<\/a>"],[0,2,"<a href=\"Handler\/RotatingFileHandler.php.html#204\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::rotateFile<\/a>"],[0,4,"<a href=\"Handler\/RotatingFileHandler.php.html#222\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::cleanOldFiles<\/a>"],[0,1,"<a href=\"Handler\/RotatingFileHandler.php.html#251\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::flush<\/a>"],[0,1,"<a href=\"Handler\/RotatingFileHandler.php.html#259\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::close<\/a>"],[0,1,"<a href=\"Handler\/RotatingFileHandler.php.html#267\">Weline\\Framework\\Log\\Handler\\RotatingFileHandler::resetRotationCheck<\/a>"],[0,1,"<a href=\"LogFilter.php.html#48\">Weline\\Framework\\Log\\LogFilter::__construct<\/a>"],[0,2,"<a href=\"LogFilter.php.html#56\">Weline\\Framework\\Log\\LogFilter::getInstance<\/a>"],[0,1,"<a href=\"LogFilter.php.html#67\">Weline\\Framework\\Log\\LogFilter::reset<\/a>"],[0,8,"<a href=\"LogFilter.php.html#75\">Weline\\Framework\\Log\\LogFilter::loadConfig<\/a>"],[0,2,"<a href=\"LogFilter.php.html#111\">Weline\\Framework\\Log\\LogFilter::getLogConfig<\/a>"],[0,2,"<a href=\"LogFilter.php.html#130\">Weline\\Framework\\Log\\LogFilter::shouldLog<\/a>"],[0,4,"<a href=\"LogFilter.php.html#146\">Weline\\Framework\\Log\\LogFilter::getMinLevelForChannel<\/a>"],[0,2,"<a href=\"LogFilter.php.html#168\">Weline\\Framework\\Log\\LogFilter::extractModuleFromChannel<\/a>"],[0,1,"<a href=\"LogFilter.php.html#180\">Weline\\Framework\\Log\\LogFilter::getGlobalMinLevel<\/a>"],[0,1,"<a href=\"LogFilter.php.html#188\">Weline\\Framework\\Log\\LogFilter::setGlobalMinLevel<\/a>"],[0,1,"<a href=\"LogFilter.php.html#197\">Weline\\Framework\\Log\\LogFilter::setChannelLevel<\/a>"],[0,1,"<a href=\"LogFilter.php.html#206\">Weline\\Framework\\Log\\LogFilter::disableChannel<\/a>"],[0,1,"<a href=\"LogFilter.php.html#215\">Weline\\Framework\\Log\\LogFilter::enableChannel<\/a>"],[0,2,"<a href=\"LogFilter.php.html#224\">Weline\\Framework\\Log\\LogFilter::isDevMode<\/a>"],[0,6,"<a href=\"LogFormatter.php.html#43\">Weline\\Framework\\Log\\LogFormatter::__construct<\/a>"],[0,16,"<a href=\"LogFormatter.php.html#72\">Weline\\Framework\\Log\\LogFormatter::format<\/a>"],[0,3,"<a href=\"LogFormatter.php.html#171\">Weline\\Framework\\Log\\LogFormatter::getTimestamp<\/a>"],[0,10,"<a href=\"LogFormatter.php.html#189\">Weline\\Framework\\Log\\LogFormatter::interpolate<\/a>"],[0,10,"<a href=\"LogFormatter.php.html#218\">Weline\\Framework\\Log\\LogFormatter::getCaller<\/a>"],[0,3,"<a href=\"LogFormatter.php.html#271\">Weline\\Framework\\Log\\LogFormatter::getExtraContext<\/a>"],[0,1,"<a href=\"LogFormatter.php.html#285\">Weline\\Framework\\Log\\LogFormatter::formatBytes<\/a>"],[0,2,"<a href=\"LogFormatter.php.html#297\">Weline\\Framework\\Log\\LogFormatter::getShortTraceId<\/a>"],[0,4,"<a href=\"LogFormatter.php.html#310\">Weline\\Framework\\Log\\LogFormatter::getTraceInfo<\/a>"],[0,1,"<a href=\"LogFormatter.php.html#337\">Weline\\Framework\\Log\\LogFormatter::setDateFormat<\/a>"],[0,1,"<a href=\"LogFormatter.php.html#346\">Weline\\Framework\\Log\\LogFormatter::withProcessId<\/a>"],[0,1,"<a href=\"LogFormatter.php.html#356\">Weline\\Framework\\Log\\LogFormatter::withMemory<\/a>"],[0,1,"<a href=\"LogFormatter.php.html#366\">Weline\\Framework\\Log\\LogFormatter::withTrace<\/a>"],[0,4,"<a href=\"LoggerFactory.php.html#48\">Weline\\Framework\\Log\\LoggerFactory::create<\/a>"],[0,3,"<a href=\"LoggerFactory.php.html#75\">Weline\\Framework\\Log\\LoggerFactory::registerStateManager<\/a>"],[0,2,"<a href=\"LoggerFactory.php.html#93\">Weline\\Framework\\Log\\LoggerFactory::getDefault<\/a>"],[0,2,"<a href=\"LoggerFactory.php.html#105\">Weline\\Framework\\Log\\LoggerFactory::createLogger<\/a>"],[0,9,"<a href=\"LoggerFactory.php.html#121\">Weline\\Framework\\Log\\LoggerFactory::resolveRuntime<\/a>"],[0,1,"<a href=\"LoggerFactory.php.html#162\">Weline\\Framework\\Log\\LoggerFactory::createFpmLogger<\/a>"],[0,2,"<a href=\"LoggerFactory.php.html#185\">Weline\\Framework\\Log\\LoggerFactory::createWlsLogger<\/a>"],[0,2,"<a href=\"LoggerFactory.php.html#202\">Weline\\Framework\\Log\\LoggerFactory::createWlsLoggerAdapter<\/a>"],[0,3,"<a href=\"LoggerFactory.php.html#214\">Weline\\Framework\\Log\\LoggerFactory::createHandler<\/a>"],[0,9,"<a href=\"LoggerFactory.php.html#239\">Weline\\Framework\\Log\\LoggerFactory::getLogPath<\/a>"],[0,4,"<a href=\"LoggerFactory.php.html#301\">Weline\\Framework\\Log\\LoggerFactory::getConfig<\/a>"],[0,4,"<a href=\"LoggerFactory.php.html#325\">Weline\\Framework\\Log\\LoggerFactory::reset<\/a>"],[0,4,"<a href=\"LoggerFactory.php.html#346\">Weline\\Framework\\Log\\LoggerFactory::flushAll<\/a>"],[0,1,"<a href=\"LoggerFactory.php.html#361\">Weline\\Framework\\Log\\LoggerFactory::setConfig<\/a>"],[0,1,"<a href=\"Observer\/ResolveRuntimeDefaultObserver.php.html#16\">Weline\\Framework\\Log\\Observer\\ResolveRuntimeDefaultObserver::execute<\/a>"],[0,1,"<a href=\"Rotator\/DailyRotator.php.html#25\">Weline\\Framework\\Log\\Rotator\\DailyRotator::__construct<\/a>"],[0,1,"<a href=\"Rotator\/DailyRotator.php.html#37\">Weline\\Framework\\Log\\Rotator\\DailyRotator::rotate<\/a>"],[0,1,"<a href=\"Rotator\/DailyRotator.php.html#56\">Weline\\Framework\\Log\\Rotator\\DailyRotator::getRotatedFilename<\/a>"],[0,4,"<a href=\"Rotator\/DailyRotator.php.html#70\">Weline\\Framework\\Log\\Rotator\\DailyRotator::cleanup<\/a>"],[0,2,"<a href=\"Rotator\/DailyRotator.php.html#95\">Weline\\Framework\\Log\\Rotator\\DailyRotator::getRotatedFiles<\/a>"],[0,1,"<a href=\"LogLevel.php.html#30\">Weline\\Framework\\Log\\LogLevel::shouldLog<\/a>"],[0,1,"<a href=\"LogLevel.php.html#42\">Weline\\Framework\\Log\\LogLevel::fromString<\/a>"],[0,2,"<a href=\"LogLevel.php.html#66\">Weline\\Framework\\Log\\LogLevel::tryFromString<\/a>"],[0,1,"<a href=\"LogLevel.php.html#78\">Weline\\Framework\\Log\\LogLevel::toLowerCase<\/a>"],[0,1,"<a href=\"LogLevel.php.html#88\">Weline\\Framework\\Log\\LogLevel::names<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

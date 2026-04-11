@@ -1,0 +1,178 @@
+<?php
+/**
+ * TPMST 轮播组件 - Slider Component
+ * 
+ * @component_start
+ * code: slider
+ * name: 轮播横幅
+ * name_en: Banner Slider
+ * description: 首屏轮播Banner，支持多图轮播和自动播放
+ * category: content
+ * region: content
+ * thumbnail: asset/img/banner-03.webp
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:slider => 轮播设置
+ * slider.display => 显示轮播:select:yes|yes,no
+ * slider.autoplay => 自动播放:select:yes|yes,no
+ * slider.autoplay_interval => 播放间隔:number:5000|毫秒
+ * slider.bg_color => 背景颜色:color:#0c0060
+ * slider.banner_image_mobile => 移动端图片:textarea:|默认使用本地banner-2.jpg
+ * slider.banner_image_desktop => PC端图片:textarea:|默认使用本地banner-03.webp
+ * slider.download_btn_image => 下载按钮图片:textarea:|默认使用download-btn-m.webp
+ * slider.alt => 图片描述:text:100000 earn on teenpatti master
+ * 
+ * @fields_end
+ */
+
+$componentId = 'tpmst-slider-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+// 轮播配置
+$sliderDisplay = $getConfig('slider.display', 'yes') !== 'no';
+$sliderAutoplay = $getConfig('slider.autoplay', 'yes') !== 'no';
+$sliderInterval = intval($getConfig('slider.autoplay_interval', '5000'));
+$sliderBgColor = $getConfig('slider.bg_color', '#0c0060');
+$sliderBgGradientEnd = '#1d1850';
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-master/asset/img/poker-header-bg.svg');
+$autoplayClass = $sliderAutoplay ? 'is-autoplay' : '';
+
+// 图片配置
+$defaultBannerMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-master/asset/img/banner-2.jpg');
+$defaultBannerDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-master/asset/img/banner-03.webp');
+$defaultDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-master/asset/img/download-btn-m.webp');
+
+$bannerMobile = $getConfig('slider.banner_image_mobile', '') ?: $defaultBannerMobile;
+$bannerDesktop = $getConfig('slider.banner_image_desktop', '') ?: $defaultBannerDesktop;
+$downloadBtnImg = $getConfig('slider.download_btn_image', '') ?: $defaultDownloadBtn;
+$bannerAlt = $getConfig('slider.alt', '100000 earn on teenpatti master');
+
+if (!$sliderDisplay) return;
+?>
+<!-- TPMST Slider Component Start: <?= $componentId ?> -->
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(180deg, <?= htmlspecialchars($sliderBgColor) ?> 0%, <?= htmlspecialchars($sliderBgGradientEnd) ?> 100%);
+    padding: clamp(50px, 9vw, 110px) 0;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.18;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(380px 180px at 20% 20%, rgba(255, 215, 0, 0.16), transparent 70%),
+        radial-gradient(420px 220px at 80% 30%, rgba(154, 36, 193, 0.25), transparent 70%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .tpmst-slider-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    position: relative;
+    z-index: 1;
+    display: flex;
+    justify-content: center;
+}
+
+#<?= $componentId ?> .tpmst-slider-slide {
+    text-align: center;
+    width: 100%;
+    max-width: 980px;
+    position: relative;
+}
+
+#<?= $componentId ?> .tpmst-slider-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+    border-radius: 26px;
+    border: 1px solid rgba(255, 215, 0, 0.2);
+    box-shadow: 0 30px 70px rgba(5, 3, 12, 0.65);
+}
+
+#<?= $componentId ?>.is-autoplay .tpmst-slider-img {
+    animation: <?= $componentId ?>-float 6s ease-in-out infinite;
+}
+
+@keyframes <?= $componentId ?>-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+#<?= $componentId ?> .tpmst-slider-download {
+    position: absolute;
+    bottom: clamp(18px, 4vw, 36px);
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: pointer;
+    margin: 0;
+    z-index: 2;
+}
+
+#<?= $componentId ?> .tpmst-slider-download img {
+    animation: <?= $componentId ?>-zoom 2s infinite;
+    filter: drop-shadow(0 12px 25px rgba(10, 6, 30, 0.5));
+}
+
+@keyframes <?= $componentId ?>-zoom {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.92); }
+    100% { transform: scale(1); }
+}
+
+@media (max-width: 991px) {
+    #<?= $componentId ?> {
+        padding: 42px 0 65px;
+    }
+
+    #<?= $componentId ?> .tpmst-slider-img {
+        border-radius: 20px;
+    }
+}
+</style>
+
+<section id="<?= $componentId ?>" class="tpmst-slider-component <?= $autoplayClass ?>">
+    <div class="tpmst-slider-inner">
+        <div class="tpmst-slider-slide">
+            <picture>
+                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($bannerMobile) ?>">
+                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($bannerDesktop) ?>">
+                <img class="tpmst-slider-img" 
+                     src="<?= htmlspecialchars($bannerMobile) ?>" 
+                     alt="<?= htmlspecialchars($bannerAlt) ?>" 
+                     fetchpriority="high" 
+                     decoding="async">
+            </picture>
+        </div>
+        <p class="tpmst-slider-download">
+            <img src="<?= htmlspecialchars($downloadBtnImg) ?>" 
+                 alt="DOWNLOAD APP" 
+                 width="210" 
+                 height="54">
+        </p>
+    </div>
+</section>
+<!-- TPMST Slider Component End: <?= $componentId ?> -->

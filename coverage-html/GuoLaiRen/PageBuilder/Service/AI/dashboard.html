@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\GuoLaiRen\PageBuilder\Service\AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../../index.html">GuoLaiRen</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">PageBuilder</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Service</a></li>
+         <li class="breadcrumb-item"><a href="index.html">AI</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="AIComponentGenerator.php.html#21">GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#19">GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#13">GuoLaiRen\PageBuilder\Service\AI\AIComponentResult</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#14">GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#12">GuoLaiRen\PageBuilder\Service\AI\CodeFixer</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#12">GuoLaiRen\PageBuilder\Service\AI\CodeValidator</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#17">GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#18">GuoLaiRen\PageBuilder\Service\AI\EntityFileManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#12">GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#15">GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#21">GuoLaiRen\PageBuilder\Service\AI\MockPage</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#121">GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#15">GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#17">GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#15">GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#8">GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#15">GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#8">GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#16">GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#13">GuoLaiRen\PageBuilder\Service\AI\ValidationResult</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="AIComponentGenerator.php.html#21">GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator</a></td><td class="text-right">20306</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#15">GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder</a></td><td class="text-right">9702</td></tr>
+       <tr><td><a href="CodeFixer.php.html#12">GuoLaiRen\PageBuilder\Service\AI\CodeFixer</a></td><td class="text-right">8556</td></tr>
+       <tr><td><a href="CodeValidator.php.html#12">GuoLaiRen\PageBuilder\Service\AI\CodeValidator</a></td><td class="text-right">8556</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#14">GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser</a></td><td class="text-right">6320</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#17">GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder</a></td><td class="text-right">1722</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#18">GuoLaiRen\PageBuilder\Service\AI\EntityFileManager</a></td><td class="text-right">1722</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#12">GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer</a></td><td class="text-right">1640</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#19">GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry</a></td><td class="text-right">756</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#121">GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer</a></td><td class="text-right">756</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#16">GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool</a></td><td class="text-right">462</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#8">GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool</a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#8">GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool</a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#17">GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#21">GuoLaiRen\PageBuilder\Service\AI\MockPage</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#15">GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool</a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#15">GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool</a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#15">GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool</a></td><td class="text-right">56</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="AIComponentGenerator.php.html#31"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#47"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generate">generate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#93"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generateFromSpec">generateFromSpec</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#136"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::save">save</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#225"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::preview">preview</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#253"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::prepareTemplateForPreview">prepareTemplateForPreview</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#267"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::fixOrphanedLoopVariables">fixOrphanedLoopVariables</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#329"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::fixNullParameterCalls">fixNullParameterCalls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#346"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::previewTemplateContent">previewTemplateContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#438"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::checkPHPSyntax">checkPHPSyntax</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#469"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::fixCommonAiTyposInTemplate">fixCommonAiTyposInTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#508"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::stripInvalidContinueBreakInTemplate">stripInvalidContinueBreakInTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#542"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::replaceContinueBreakLineByNumber">replaceContinueBreakLineByNumber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#566"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::fixUnexpectedTokenIf">fixUnexpectedTokenIf</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#582"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::ensureSemicolonBeforeLine">ensureSemicolonBeforeLine</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#610"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generatePreviewPlaceholder">generatePreviewPlaceholder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#667"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#712"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::update">update</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#767"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::getComponentReferences">getComponentReferences</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#843"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::delete">delete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#902"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::refine">refine</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#967"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::buildRefinePrompt">buildRefinePrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1017"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::extractMetadata">extractMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1056"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::parseComponentResponse">parseComponentResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1082"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::parseDescription">parseDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1107"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::extractName">extractName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1124"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generateDefaultFields">generateDefaultFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1154"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generateDefaultHtml">generateDefaultHtml</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1188"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generateDefaultCss">generateDefaultCss</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#26"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#37"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::register">register</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#61"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::ensureEntityFile">ensureEntityFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#78"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::resolveRenderPath">resolveRenderPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#98"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::isAIComponent">isAIComponent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#110"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getComponent">getComponent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#140"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getAllComponents">getAllComponents</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#165"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getComponentsByCategory">getComponentsByCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#190"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getComponentFilePath">getComponentFilePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#206"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::syncAll">syncAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#216"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#224"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::clearCache">clearCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#234"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getStatistics">getStatistics</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#283"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::validateEntityFiles">validateEntityFiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#26"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::isSuccess">isSuccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#31"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setSuccess">setSuccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#37"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#42"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setCode">setCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#48"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#53"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#59"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#64"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setDescription">setDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#70"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getCategory">getCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#75"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setCategory">setCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#81"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getTemplateContent">getTemplateContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#86"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setTemplateContent">setTemplateContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#92"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getFields">getFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#97"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setFields">setFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#103"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getPrompt">getPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#108"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setPrompt">setPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#114"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getError">getError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#119"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setError">setError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#125"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::getAgentInfo">getAgentInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#130"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::setAgentInfo">setAgentInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AIComponentResult.php.html#139"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentResult::toArray">toArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#19"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::extractAndDecode">extractAndDecode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#29"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::extractJson">extractJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#117"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::decodeWithRepair">decodeWithRepair</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#168"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::extractBalancedBraces">extractBalancedBraces</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#220"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::fixControlCharsInJsonStrings">fixControlCharsInJsonStrings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#270"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::repairTruncatedJson">repairTruncatedJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#22"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::getFixes">getFixes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#27"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::normalizePhpEchoTags">normalizePhpEchoTags</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#41"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::clearFixes">clearFixes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#49"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fix">fix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#88"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixJavaScriptSection">fixJavaScriptSection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#124"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixAiData">fixAiData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#169"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::stripCodeFences">stripCodeFences</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#185"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixHtmlContent">fixHtmlContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#200"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixPhpVariables">fixPhpVariables</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#310"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixCss">fixCss</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#342"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixJsContent">fixJsContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#449"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixBackticks">fixBackticks</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#463"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixPhpTags">fixPhpTags</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#492"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::balanceBrackets">balanceBrackets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#517"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::addMissingSemicolons">addMissingSemicolons</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#544"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixVariableNaming">fixVariableNaming</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#556"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::cleanupWhitespace">cleanupWhitespace</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#572"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixPhpSyntax">fixPhpSyntax</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#587"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixAndValidate">fixAndValidate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#613"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::aggressiveFix">aggressiveFix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#635"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::addFix">addFix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeFixer.php.html#646"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::getFixSummary">getFixSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#117"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#168"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkJavaScriptSection">checkJavaScriptSection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#195"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateAiData">validateAiData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#260"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateField">validateField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#286"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkSyntax">checkSyntax</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#327"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkStructure">checkStructure</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#367"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkProhibitedPatterns">checkProhibitedPatterns</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#390"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkBalancedTokens">checkBalancedTokens</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#431"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkVariableScope">checkVariableScope</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#467"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validatePhpCode">validatePhpCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#514"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateCss">validateCss</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#559"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateJsContent">validateJsContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="CodeValidator.php.html#595"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::getValidationSummary">getValidationSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#25"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildTemplate">buildTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#59"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildMetadata">buildMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#97"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildFieldsDefinition">buildFieldsDefinition</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#149"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildPhpCode">buildPhpCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#216"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildHtmlStructure">buildHtmlStructure</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#232"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildStyles">buildStyles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#278"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::createFromAIOutput">createFromAIOutput</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#335"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::getDefaultFields">getDefaultFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#349"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::getDefaultHtmlStructure">getDefaultHtmlStructure</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#369"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::getDefaultStyles">getDefaultStyles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#418"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::getGroupLabel">getGroupLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#436"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::fieldToVarName">fieldToVarName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#450"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::renderStructure">renderStructure</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#486"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::transliterate">transliterate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#498"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::indentHtml">indentHtml</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#29"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::getEntityBasePath">getEntityBasePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#40"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::getEntityRelativePath">getEntityRelativePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#57"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::getEntityFullPath">getEntityFullPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#68"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::getTemplatePath">getTemplatePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#80"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::needsUpdate">needsUpdate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#113"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::syncEntityFile">syncEntityFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#159"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::ensureEntityFile">ensureEntityFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#174"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::deleteEntityFile">deleteEntityFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#191"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#244"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::updateComponentJson">updateComponentJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#322"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::calculateContentHash">calculateContentHash</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#336"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::codeToFileName">codeToFileName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#355"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::syncAll">syncAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#131"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::analyze">analyze</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#158"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::extractLineNumber">extractLineNumber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#180"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::extractContext">extractContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#223"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::analyzeError">analyzeError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#243"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::generateSuggestions">generateSuggestions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#298"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::getFixHint">getFixHint</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#324"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::formatAnalysis">formatAnalysis</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#370"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::quickAnalyze">quickAnalyze</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#60"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getInstance">getInstance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#75"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::loadFramework">loadFramework</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#99"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getFrameworkPhpBlock">getFrameworkPhpBlock</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#123"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getFrameworkProvidedVariables">getFrameworkProvidedVariables</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#163"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::buildComponent">buildComponent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#207"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::safeReplace">safeReplace</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#230"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::sanitizeAiData">sanitizeAiData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#318"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::validateField">validateField</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#358"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::balanceControlStructures">balanceControlStructures</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#426"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::prepareReplacements">prepareReplacements</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#479"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::formatExtraFields">formatExtraFields</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#512"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::generateEnglishName">generateEnglishName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#524"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::cleanupPlaceholders">cleanupPlaceholders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#544"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::validateAiData">validateAiData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#586"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::checkPhpSyntax">checkPhpSyntax</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#612"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::validateCss">validateCss</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#627"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getFrameworkPromptGuide">getFrameworkPromptGuide</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#647"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::frameworkExists">frameworkExists</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#663"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getAvailableFrameworks">getAvailableFrameworks</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#25"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#37"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::getNavigationPages">getNavigationPages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#51"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::getData">getData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#62"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::setData">setData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#71"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::getTitle">getTitle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#79"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#87"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::getUrl">getUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#95"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::getChildren">getChildren</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#103"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::hasChildren">hasChildren</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#111"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::__call">__call</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#128"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#136"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::initMockData">initMockData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#158"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::getMockComponentConfig">getMockComponentConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#217"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::getMockStyleSettings">getMockStyleSettings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#246"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::getData">getData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#257"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::setData">setData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#275"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::render">render</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#365"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::renderFromFile">renderFromFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#429"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::generateErrorHtml">generateErrorHtml</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#17"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#22"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#27"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#42"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#72"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#19"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#24"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#29"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#47"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#98"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::simplifyLayout">simplifyLayout</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#120"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#17"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#22"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#27"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#50"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#101"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#10"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#15"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#20"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#39"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#96"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#101"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::mapToSourceTemplate">mapToSourceTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#133"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::readContext">readContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#17"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#22"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#27"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#41"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#103"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#10"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#15"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#20"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#46"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#125"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#18"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#23"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#28"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#59"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#157"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#19"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::isValid">isValid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#24"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::setValid">setValid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#30"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::getErrors">getErrors</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#35"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::setErrors">setErrors</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#41"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::addError">addError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#47"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::getWarnings">getWarnings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#52"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::setWarnings">setWarnings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#58"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::addWarning">addWarning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#64"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::hasErrors">hasErrors</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#69"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::hasWarnings">hasWarnings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#77"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::getAllMessages">getAllMessages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ValidationResult.php.html#88"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ValidationResult::toArray">toArray</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="AiResponseJsonParser.php.html#29"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::extractJson">extractJson</abbr></a></td><td class="text-right">930</td></tr>
+       <tr><td><a href="CodeFixer.php.html#200"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixPhpVariables">fixPhpVariables</abbr></a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#346"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::previewTemplateContent">previewTemplateContent</abbr></a></td><td class="text-right">552</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#230"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::sanitizeAiData">sanitizeAiData</abbr></a></td><td class="text-right">462</td></tr>
+       <tr><td><a href="Tool/ValidateCodeTool.php.html#59"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ValidateCodeTool::execute">execute</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="CodeValidator.php.html#195"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateAiData">validateAiData</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#243"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::generateSuggestions">generateSuggestions</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Tool/ReplaceTemplateSnippetTool.php.html#46"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ReplaceTemplateSnippetTool::execute">execute</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#117"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::decodeWithRepair">decodeWithRepair</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#267"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::fixOrphanedLoopVariables">fixOrphanedLoopVariables</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#270"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::repairTruncatedJson">repairTruncatedJson</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="CodeFixer.php.html#342"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixJsContent">fixJsContent</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#168"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::extractBalancedBraces">extractBalancedBraces</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#767"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::getComponentReferences">getComponentReferences</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="CodeValidator.php.html#327"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkStructure">checkStructure</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#358"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::balanceControlStructures">balanceControlStructures</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#426"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::prepareReplacements">prepareReplacements</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#365"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::renderFromFile">renderFromFile</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Tool/ListComponentsTool.php.html#50"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\ListComponentsTool::execute">execute</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#469"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::fixCommonAiTyposInTemplate">fixCommonAiTyposInTemplate</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#582"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::ensureSemicolonBeforeLine">ensureSemicolonBeforeLine</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#220"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::fixControlCharsInJsonStrings">fixControlCharsInJsonStrings</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="CodeFixer.php.html#124"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixAiData">fixAiData</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="CodeValidator.php.html#467"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validatePhpCode">validatePhpCode</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="CodeValidator.php.html#514"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateCss">validateCss</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#544"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::validateAiData">validateAiData</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#275"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::render">render</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#191"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::cleanup">cleanup</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#39"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::execute">execute</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Tool/PreviewReferenceTool.php.html#41"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\PreviewReferenceTool::execute">execute</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#136"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::save">save</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#667"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::validate">validate</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#712"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::update">update</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="CodeValidator.php.html#117"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validate">validate</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#97"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildFieldsDefinition">buildFieldsDefinition</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#232"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildStyles">buildStyles</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#324"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::formatAnalysis">formatAnalysis</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#163"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::buildComponent">buildComponent</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#318"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::validateField">validateField</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#47"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::execute">execute</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#542"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::replaceContinueBreakLineByNumber">replaceContinueBreakLineByNumber</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="CodeValidator.php.html#367"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkProhibitedPatterns">checkProhibitedPatterns</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="CodeValidator.php.html#559"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateJsContent">validateJsContent</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="CodeValidator.php.html#595"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::getValidationSummary">getValidationSummary</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#113"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::syncEntityFile">syncEntityFile</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#180"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::extractContext">extractContext</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#479"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::formatExtraFields">formatExtraFields</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#843"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::delete">delete</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1017"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::extractMetadata">extractMetadata</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1124"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generateDefaultFields">generateDefaultFields</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="CodeFixer.php.html#463"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixPhpTags">fixPhpTags</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="CodeValidator.php.html#260"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::validateField">validateField</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="CodeValidator.php.html#286"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkSyntax">checkSyntax</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="CodeValidator.php.html#390"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkBalancedTokens">checkBalancedTokens</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="CodeValidator.php.html#431"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkVariableScope">checkVariableScope</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#450"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::renderStructure">renderStructure</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#244"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::updateComponentJson">updateComponentJson</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#111"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::__call">__call</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Tool/GetPageLayoutTool.php.html#98"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetPageLayoutTool::simplifyLayout">simplifyLayout</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#902"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::refine">refine</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1154"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generateDefaultHtml">generateDefaultHtml</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#283"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::validateEntityFiles">validateEntityFiles</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CodeFixer.php.html#310"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixCss">fixCss</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CodeFixer.php.html#517"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::addMissingSemicolons">addMissingSemicolons</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="CodeValidator.php.html#168"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeValidator::checkJavaScriptSection">checkJavaScriptSection</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#59"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildMetadata">buildMetadata</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#149"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildPhpCode">buildPhpCode</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#80"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::needsUpdate">needsUpdate</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#355"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::syncAll">syncAll</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#298"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::getFixHint">getFixHint</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#627"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getFrameworkPromptGuide">getFrameworkPromptGuide</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#101"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::mapToSourceTemplate">mapToSourceTemplate</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Tool/LocateTemplateErrorTool.php.html#133"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\LocateTemplateErrorTool::readContext">readContext</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#610"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generatePreviewPlaceholder">generatePreviewPlaceholder</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1056"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::parseComponentResponse">parseComponentResponse</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1107"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::extractName">extractName</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#110"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getComponent">getComponent</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="CodeFixer.php.html#88"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixJavaScriptSection">fixJavaScriptSection</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="CodeFixer.php.html#492"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::balanceBrackets">balanceBrackets</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="CodeFixer.php.html#613"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::aggressiveFix">aggressiveFix</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="CodeFixer.php.html#646"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::getFixSummary">getFixSummary</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#336"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::codeToFileName">codeToFileName</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#158"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::extractLineNumber">extractLineNumber</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ErrorAnalyzer.php.html#223"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ErrorAnalyzer::analyzeError">analyzeError</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#75"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::loadFramework">loadFramework</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#99"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getFrameworkPhpBlock">getFrameworkPhpBlock</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#207"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::safeReplace">safeReplace</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#663"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getAvailableFrameworks">getAvailableFrameworks</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Tool/GetComponentFrameworkTool.php.html#42"><abbr title="GuoLaiRen\PageBuilder\Service\AI\Tool\GetComponentFrameworkTool::execute">execute</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#47"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generate">generate</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#93"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::generateFromSpec">generateFromSpec</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#225"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::preview">preview</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#329"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::fixNullParameterCalls">fixNullParameterCalls</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#438"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::checkPHPSyntax">checkPHPSyntax</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#967"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::buildRefinePrompt">buildRefinePrompt</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentGenerator.php.html#1082"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentGenerator::parseDescription">parseDescription</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#37"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::register">register</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#61"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::ensureEntityFile">ensureEntityFile</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#78"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::resolveRenderPath">resolveRenderPath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#98"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::isAIComponent">isAIComponent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#140"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getAllComponents">getAllComponents</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#165"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getComponentsByCategory">getComponentsByCategory</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#190"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getComponentFilePath">getComponentFilePath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AIComponentRegistry.php.html#234"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AIComponentRegistry::getStatistics">getStatistics</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="AiResponseJsonParser.php.html#19"><abbr title="GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser::extractAndDecode">extractAndDecode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#27"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::normalizePhpEchoTags">normalizePhpEchoTags</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#169"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::stripCodeFences">stripCodeFences</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#185"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixHtmlContent">fixHtmlContent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#449"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixBackticks">fixBackticks</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#544"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixVariableNaming">fixVariableNaming</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#556"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::cleanupWhitespace">cleanupWhitespace</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#572"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixPhpSyntax">fixPhpSyntax</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="CodeFixer.php.html#587"><abbr title="GuoLaiRen\PageBuilder\Service\AI\CodeFixer::fixAndValidate">fixAndValidate</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#216"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::buildHtmlStructure">buildHtmlStructure</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#278"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::createFromAIOutput">createFromAIOutput</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#436"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::fieldToVarName">fieldToVarName</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ComponentTemplateBuilder.php.html#486"><abbr title="GuoLaiRen\PageBuilder\Service\AI\ComponentTemplateBuilder::transliterate">transliterate</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#40"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::getEntityRelativePath">getEntityRelativePath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#159"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::ensureEntityFile">ensureEntityFile</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#174"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::deleteEntityFile">deleteEntityFile</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="EntityFileManager.php.html#322"><abbr title="GuoLaiRen\PageBuilder\Service\AI\EntityFileManager::calculateContentHash">calculateContentHash</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#60"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::getInstance">getInstance</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#512"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::generateEnglishName">generateEnglishName</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#524"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::cleanupPlaceholders">cleanupPlaceholders</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#586"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::checkPhpSyntax">checkPhpSyntax</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FrameworkBuilder.php.html#647"><abbr title="GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder::frameworkExists">frameworkExists</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#51"><abbr title="GuoLaiRen\PageBuilder\Service\AI\MockPage::getData">getData</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="PreviewRenderer.php.html#246"><abbr title="GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer::getData">getData</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([20,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([229,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,142,"<a href=\"AIComponentGenerator.php.html#21\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator<\/a>"],[0,27,"<a href=\"AIComponentRegistry.php.html#19\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry<\/a>"],[0,21,"<a href=\"AIComponentResult.php.html#13\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult<\/a>"],[0,79,"<a href=\"AiResponseJsonParser.php.html#14\">GuoLaiRen\\PageBuilder\\Service\\AI\\AiResponseJsonParser<\/a>"],[0,92,"<a href=\"CodeFixer.php.html#12\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer<\/a>"],[0,92,"<a href=\"CodeValidator.php.html#12\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator<\/a>"],[0,41,"<a href=\"ComponentTemplateBuilder.php.html#17\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder<\/a>"],[0,41,"<a href=\"EntityFileManager.php.html#18\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager<\/a>"],[0,40,"<a href=\"ErrorAnalyzer.php.html#12\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer<\/a>"],[0,98,"<a href=\"FrameworkBuilder.php.html#15\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder<\/a>"],[0,15,"<a href=\"PreviewRenderer.php.html#21\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage<\/a>"],[0,27,"<a href=\"PreviewRenderer.php.html#121\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer<\/a>"],[0,7,"<a href=\"Tool\/GetComponentFrameworkTool.php.html#15\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetComponentFrameworkTool<\/a>"],[0,16,"<a href=\"Tool\/GetPageLayoutTool.php.html#17\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetPageLayoutTool<\/a>"],[0,14,"<a href=\"Tool\/ListComponentsTool.php.html#15\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ListComponentsTool<\/a>"],[0,20,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#8\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool<\/a>"],[0,12,"<a href=\"Tool\/PreviewReferenceTool.php.html#15\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\PreviewReferenceTool<\/a>"],[0,19,"<a href=\"Tool\/ReplaceTemplateSnippetTool.php.html#8\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ReplaceTemplateSnippetTool<\/a>"],[0,21,"<a href=\"Tool\/ValidateCodeTool.php.html#16\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ValidateCodeTool<\/a>"],[0,12,"<a href=\"ValidationResult.php.html#13\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"AIComponentGenerator.php.html#31\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::__construct<\/a>"],[0,2,"<a href=\"AIComponentGenerator.php.html#47\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::generate<\/a>"],[0,2,"<a href=\"AIComponentGenerator.php.html#93\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::generateFromSpec<\/a>"],[0,7,"<a href=\"AIComponentGenerator.php.html#136\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::save<\/a>"],[0,2,"<a href=\"AIComponentGenerator.php.html#225\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::preview<\/a>"],[0,1,"<a href=\"AIComponentGenerator.php.html#253\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::prepareTemplateForPreview<\/a>"],[0,13,"<a href=\"AIComponentGenerator.php.html#267\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::fixOrphanedLoopVariables<\/a>"],[0,2,"<a href=\"AIComponentGenerator.php.html#329\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::fixNullParameterCalls<\/a>"],[0,23,"<a href=\"AIComponentGenerator.php.html#346\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::previewTemplateContent<\/a>"],[0,2,"<a href=\"AIComponentGenerator.php.html#438\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::checkPHPSyntax<\/a>"],[0,9,"<a href=\"AIComponentGenerator.php.html#469\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::fixCommonAiTyposInTemplate<\/a>"],[0,1,"<a href=\"AIComponentGenerator.php.html#508\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::stripInvalidContinueBreakInTemplate<\/a>"],[0,6,"<a href=\"AIComponentGenerator.php.html#542\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::replaceContinueBreakLineByNumber<\/a>"],[0,1,"<a href=\"AIComponentGenerator.php.html#566\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::fixUnexpectedTokenIf<\/a>"],[0,9,"<a href=\"AIComponentGenerator.php.html#582\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::ensureSemicolonBeforeLine<\/a>"],[0,3,"<a href=\"AIComponentGenerator.php.html#610\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::generatePreviewPlaceholder<\/a>"],[0,7,"<a href=\"AIComponentGenerator.php.html#667\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::validate<\/a>"],[0,7,"<a href=\"AIComponentGenerator.php.html#712\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::update<\/a>"],[0,10,"<a href=\"AIComponentGenerator.php.html#767\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::getComponentReferences<\/a>"],[0,5,"<a href=\"AIComponentGenerator.php.html#843\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::delete<\/a>"],[0,4,"<a href=\"AIComponentGenerator.php.html#902\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::refine<\/a>"],[0,2,"<a href=\"AIComponentGenerator.php.html#967\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::buildRefinePrompt<\/a>"],[0,5,"<a href=\"AIComponentGenerator.php.html#1017\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::extractMetadata<\/a>"],[0,3,"<a href=\"AIComponentGenerator.php.html#1056\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::parseComponentResponse<\/a>"],[0,2,"<a href=\"AIComponentGenerator.php.html#1082\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::parseDescription<\/a>"],[0,3,"<a href=\"AIComponentGenerator.php.html#1107\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::extractName<\/a>"],[0,5,"<a href=\"AIComponentGenerator.php.html#1124\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::generateDefaultFields<\/a>"],[0,4,"<a href=\"AIComponentGenerator.php.html#1154\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::generateDefaultHtml<\/a>"],[0,1,"<a href=\"AIComponentGenerator.php.html#1188\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentGenerator::generateDefaultCss<\/a>"],[0,1,"<a href=\"AIComponentRegistry.php.html#26\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::__construct<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#37\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::register<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#61\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::ensureEntityFile<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#78\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::resolveRenderPath<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#98\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::isAIComponent<\/a>"],[0,3,"<a href=\"AIComponentRegistry.php.html#110\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::getComponent<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#140\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::getAllComponents<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#165\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::getComponentsByCategory<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#190\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::getComponentFilePath<\/a>"],[0,1,"<a href=\"AIComponentRegistry.php.html#206\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::syncAll<\/a>"],[0,1,"<a href=\"AIComponentRegistry.php.html#216\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::cleanup<\/a>"],[0,1,"<a href=\"AIComponentRegistry.php.html#224\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::clearCache<\/a>"],[0,2,"<a href=\"AIComponentRegistry.php.html#234\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::getStatistics<\/a>"],[0,4,"<a href=\"AIComponentRegistry.php.html#283\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentRegistry::validateEntityFiles<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#26\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::isSuccess<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#31\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setSuccess<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#37\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getCode<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#42\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setCode<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#48\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getName<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#53\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setName<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#59\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getDescription<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#64\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setDescription<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#70\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getCategory<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#75\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setCategory<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#81\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getTemplateContent<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#86\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setTemplateContent<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#92\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getFields<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#97\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setFields<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#103\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getPrompt<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#108\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setPrompt<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#114\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getError<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#119\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setError<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#125\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::getAgentInfo<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#130\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::setAgentInfo<\/a>"],[0,1,"<a href=\"AIComponentResult.php.html#139\">GuoLaiRen\\PageBuilder\\Service\\AI\\AIComponentResult::toArray<\/a>"],[0,2,"<a href=\"AiResponseJsonParser.php.html#19\">GuoLaiRen\\PageBuilder\\Service\\AI\\AiResponseJsonParser::extractAndDecode<\/a>"],[0,30,"<a href=\"AiResponseJsonParser.php.html#29\">GuoLaiRen\\PageBuilder\\Service\\AI\\AiResponseJsonParser::extractJson<\/a>"],[0,14,"<a href=\"AiResponseJsonParser.php.html#117\">GuoLaiRen\\PageBuilder\\Service\\AI\\AiResponseJsonParser::decodeWithRepair<\/a>"],[0,11,"<a href=\"AiResponseJsonParser.php.html#168\">GuoLaiRen\\PageBuilder\\Service\\AI\\AiResponseJsonParser::extractBalancedBraces<\/a>"],[0,9,"<a href=\"AiResponseJsonParser.php.html#220\">GuoLaiRen\\PageBuilder\\Service\\AI\\AiResponseJsonParser::fixControlCharsInJsonStrings<\/a>"],[0,13,"<a href=\"AiResponseJsonParser.php.html#270\">GuoLaiRen\\PageBuilder\\Service\\AI\\AiResponseJsonParser::repairTruncatedJson<\/a>"],[0,1,"<a href=\"CodeFixer.php.html#22\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::getFixes<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#27\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::normalizePhpEchoTags<\/a>"],[0,1,"<a href=\"CodeFixer.php.html#41\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::clearFixes<\/a>"],[0,1,"<a href=\"CodeFixer.php.html#49\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fix<\/a>"],[0,3,"<a href=\"CodeFixer.php.html#88\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixJavaScriptSection<\/a>"],[0,9,"<a href=\"CodeFixer.php.html#124\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixAiData<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#169\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::stripCodeFences<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#185\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixHtmlContent<\/a>"],[0,26,"<a href=\"CodeFixer.php.html#200\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixPhpVariables<\/a>"],[0,4,"<a href=\"CodeFixer.php.html#310\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixCss<\/a>"],[0,12,"<a href=\"CodeFixer.php.html#342\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixJsContent<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#449\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixBackticks<\/a>"],[0,5,"<a href=\"CodeFixer.php.html#463\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixPhpTags<\/a>"],[0,3,"<a href=\"CodeFixer.php.html#492\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::balanceBrackets<\/a>"],[0,4,"<a href=\"CodeFixer.php.html#517\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::addMissingSemicolons<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#544\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixVariableNaming<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#556\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::cleanupWhitespace<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#572\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixPhpSyntax<\/a>"],[0,2,"<a href=\"CodeFixer.php.html#587\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::fixAndValidate<\/a>"],[0,3,"<a href=\"CodeFixer.php.html#613\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::aggressiveFix<\/a>"],[0,1,"<a href=\"CodeFixer.php.html#635\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::addFix<\/a>"],[0,3,"<a href=\"CodeFixer.php.html#646\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeFixer::getFixSummary<\/a>"],[0,7,"<a href=\"CodeValidator.php.html#117\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::validate<\/a>"],[0,4,"<a href=\"CodeValidator.php.html#168\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::checkJavaScriptSection<\/a>"],[0,15,"<a href=\"CodeValidator.php.html#195\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::validateAiData<\/a>"],[0,5,"<a href=\"CodeValidator.php.html#260\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::validateField<\/a>"],[0,5,"<a href=\"CodeValidator.php.html#286\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::checkSyntax<\/a>"],[0,10,"<a href=\"CodeValidator.php.html#327\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::checkStructure<\/a>"],[0,6,"<a href=\"CodeValidator.php.html#367\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::checkProhibitedPatterns<\/a>"],[0,5,"<a href=\"CodeValidator.php.html#390\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::checkBalancedTokens<\/a>"],[0,5,"<a href=\"CodeValidator.php.html#431\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::checkVariableScope<\/a>"],[0,9,"<a href=\"CodeValidator.php.html#467\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::validatePhpCode<\/a>"],[0,9,"<a href=\"CodeValidator.php.html#514\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::validateCss<\/a>"],[0,6,"<a href=\"CodeValidator.php.html#559\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::validateJsContent<\/a>"],[0,6,"<a href=\"CodeValidator.php.html#595\">GuoLaiRen\\PageBuilder\\Service\\AI\\CodeValidator::getValidationSummary<\/a>"],[0,1,"<a href=\"ComponentTemplateBuilder.php.html#25\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::buildTemplate<\/a>"],[0,4,"<a href=\"ComponentTemplateBuilder.php.html#59\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::buildMetadata<\/a>"],[0,7,"<a href=\"ComponentTemplateBuilder.php.html#97\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::buildFieldsDefinition<\/a>"],[0,4,"<a href=\"ComponentTemplateBuilder.php.html#149\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::buildPhpCode<\/a>"],[0,2,"<a href=\"ComponentTemplateBuilder.php.html#216\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::buildHtmlStructure<\/a>"],[0,7,"<a href=\"ComponentTemplateBuilder.php.html#232\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::buildStyles<\/a>"],[0,2,"<a href=\"ComponentTemplateBuilder.php.html#278\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::createFromAIOutput<\/a>"],[0,1,"<a href=\"ComponentTemplateBuilder.php.html#335\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::getDefaultFields<\/a>"],[0,1,"<a href=\"ComponentTemplateBuilder.php.html#349\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::getDefaultHtmlStructure<\/a>"],[0,1,"<a href=\"ComponentTemplateBuilder.php.html#369\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::getDefaultStyles<\/a>"],[0,1,"<a href=\"ComponentTemplateBuilder.php.html#418\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::getGroupLabel<\/a>"],[0,2,"<a href=\"ComponentTemplateBuilder.php.html#436\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::fieldToVarName<\/a>"],[0,5,"<a href=\"ComponentTemplateBuilder.php.html#450\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::renderStructure<\/a>"],[0,2,"<a href=\"ComponentTemplateBuilder.php.html#486\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::transliterate<\/a>"],[0,1,"<a href=\"ComponentTemplateBuilder.php.html#498\">GuoLaiRen\\PageBuilder\\Service\\AI\\ComponentTemplateBuilder::indentHtml<\/a>"],[0,1,"<a href=\"EntityFileManager.php.html#29\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::getEntityBasePath<\/a>"],[0,2,"<a href=\"EntityFileManager.php.html#40\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::getEntityRelativePath<\/a>"],[0,1,"<a href=\"EntityFileManager.php.html#57\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::getEntityFullPath<\/a>"],[0,1,"<a href=\"EntityFileManager.php.html#68\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::getTemplatePath<\/a>"],[0,4,"<a href=\"EntityFileManager.php.html#80\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::needsUpdate<\/a>"],[0,6,"<a href=\"EntityFileManager.php.html#113\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::syncEntityFile<\/a>"],[0,2,"<a href=\"EntityFileManager.php.html#159\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::ensureEntityFile<\/a>"],[0,2,"<a href=\"EntityFileManager.php.html#174\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::deleteEntityFile<\/a>"],[0,8,"<a href=\"EntityFileManager.php.html#191\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::cleanup<\/a>"],[0,5,"<a href=\"EntityFileManager.php.html#244\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::updateComponentJson<\/a>"],[0,2,"<a href=\"EntityFileManager.php.html#322\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::calculateContentHash<\/a>"],[0,3,"<a href=\"EntityFileManager.php.html#336\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::codeToFileName<\/a>"],[0,4,"<a href=\"EntityFileManager.php.html#355\">GuoLaiRen\\PageBuilder\\Service\\AI\\EntityFileManager::syncAll<\/a>"],[0,1,"<a href=\"ErrorAnalyzer.php.html#131\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::analyze<\/a>"],[0,3,"<a href=\"ErrorAnalyzer.php.html#158\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::extractLineNumber<\/a>"],[0,6,"<a href=\"ErrorAnalyzer.php.html#180\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::extractContext<\/a>"],[0,3,"<a href=\"ErrorAnalyzer.php.html#223\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::analyzeError<\/a>"],[0,15,"<a href=\"ErrorAnalyzer.php.html#243\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::generateSuggestions<\/a>"],[0,4,"<a href=\"ErrorAnalyzer.php.html#298\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::getFixHint<\/a>"],[0,7,"<a href=\"ErrorAnalyzer.php.html#324\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::formatAnalysis<\/a>"],[0,1,"<a href=\"ErrorAnalyzer.php.html#370\">GuoLaiRen\\PageBuilder\\Service\\AI\\ErrorAnalyzer::quickAnalyze<\/a>"],[0,2,"<a href=\"FrameworkBuilder.php.html#60\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::getInstance<\/a>"],[0,3,"<a href=\"FrameworkBuilder.php.html#75\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::loadFramework<\/a>"],[0,3,"<a href=\"FrameworkBuilder.php.html#99\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::getFrameworkPhpBlock<\/a>"],[0,1,"<a href=\"FrameworkBuilder.php.html#123\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::getFrameworkProvidedVariables<\/a>"],[0,7,"<a href=\"FrameworkBuilder.php.html#163\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::buildComponent<\/a>"],[0,3,"<a href=\"FrameworkBuilder.php.html#207\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::safeReplace<\/a>"],[0,21,"<a href=\"FrameworkBuilder.php.html#230\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::sanitizeAiData<\/a>"],[0,7,"<a href=\"FrameworkBuilder.php.html#318\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::validateField<\/a>"],[0,10,"<a href=\"FrameworkBuilder.php.html#358\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::balanceControlStructures<\/a>"],[0,10,"<a href=\"FrameworkBuilder.php.html#426\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::prepareReplacements<\/a>"],[0,6,"<a href=\"FrameworkBuilder.php.html#479\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::formatExtraFields<\/a>"],[0,2,"<a href=\"FrameworkBuilder.php.html#512\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::generateEnglishName<\/a>"],[0,2,"<a href=\"FrameworkBuilder.php.html#524\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::cleanupPlaceholders<\/a>"],[0,9,"<a href=\"FrameworkBuilder.php.html#544\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::validateAiData<\/a>"],[0,2,"<a href=\"FrameworkBuilder.php.html#586\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::checkPhpSyntax<\/a>"],[0,1,"<a href=\"FrameworkBuilder.php.html#612\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::validateCss<\/a>"],[0,4,"<a href=\"FrameworkBuilder.php.html#627\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::getFrameworkPromptGuide<\/a>"],[0,2,"<a href=\"FrameworkBuilder.php.html#647\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::frameworkExists<\/a>"],[0,3,"<a href=\"FrameworkBuilder.php.html#663\">GuoLaiRen\\PageBuilder\\Service\\AI\\FrameworkBuilder::getAvailableFrameworks<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#25\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::__construct<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#37\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::getNavigationPages<\/a>"],[0,2,"<a href=\"PreviewRenderer.php.html#51\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::getData<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#62\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::setData<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#71\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::getTitle<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#79\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::getDescription<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#87\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::getUrl<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#95\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::getChildren<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#103\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::hasChildren<\/a>"],[0,5,"<a href=\"PreviewRenderer.php.html#111\">GuoLaiRen\\PageBuilder\\Service\\AI\\MockPage::__call<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#128\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::__construct<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#136\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::initMockData<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#158\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::getMockComponentConfig<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#217\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::getMockStyleSettings<\/a>"],[0,2,"<a href=\"PreviewRenderer.php.html#246\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::getData<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#257\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::setData<\/a>"],[0,9,"<a href=\"PreviewRenderer.php.html#275\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::render<\/a>"],[0,10,"<a href=\"PreviewRenderer.php.html#365\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::renderFromFile<\/a>"],[0,1,"<a href=\"PreviewRenderer.php.html#429\">GuoLaiRen\\PageBuilder\\Service\\AI\\PreviewRenderer::generateErrorHtml<\/a>"],[0,1,"<a href=\"Tool\/GetComponentFrameworkTool.php.html#17\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetComponentFrameworkTool::getName<\/a>"],[0,1,"<a href=\"Tool\/GetComponentFrameworkTool.php.html#22\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetComponentFrameworkTool::getDescription<\/a>"],[0,1,"<a href=\"Tool\/GetComponentFrameworkTool.php.html#27\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetComponentFrameworkTool::getParameters<\/a>"],[0,3,"<a href=\"Tool\/GetComponentFrameworkTool.php.html#42\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetComponentFrameworkTool::execute<\/a>"],[0,1,"<a href=\"Tool\/GetComponentFrameworkTool.php.html#72\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetComponentFrameworkTool::isEnabled<\/a>"],[0,1,"<a href=\"Tool\/GetPageLayoutTool.php.html#19\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetPageLayoutTool::getName<\/a>"],[0,1,"<a href=\"Tool\/GetPageLayoutTool.php.html#24\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetPageLayoutTool::getDescription<\/a>"],[0,1,"<a href=\"Tool\/GetPageLayoutTool.php.html#29\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetPageLayoutTool::getParameters<\/a>"],[0,7,"<a href=\"Tool\/GetPageLayoutTool.php.html#47\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetPageLayoutTool::execute<\/a>"],[0,5,"<a href=\"Tool\/GetPageLayoutTool.php.html#98\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetPageLayoutTool::simplifyLayout<\/a>"],[0,1,"<a href=\"Tool\/GetPageLayoutTool.php.html#120\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\GetPageLayoutTool::isEnabled<\/a>"],[0,1,"<a href=\"Tool\/ListComponentsTool.php.html#17\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ListComponentsTool::getName<\/a>"],[0,1,"<a href=\"Tool\/ListComponentsTool.php.html#22\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ListComponentsTool::getDescription<\/a>"],[0,1,"<a href=\"Tool\/ListComponentsTool.php.html#27\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ListComponentsTool::getParameters<\/a>"],[0,10,"<a href=\"Tool\/ListComponentsTool.php.html#50\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ListComponentsTool::execute<\/a>"],[0,1,"<a href=\"Tool\/ListComponentsTool.php.html#101\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ListComponentsTool::isEnabled<\/a>"],[0,1,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#10\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool::getName<\/a>"],[0,1,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#15\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool::getDescription<\/a>"],[0,1,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#20\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool::getParameters<\/a>"],[0,8,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#39\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool::execute<\/a>"],[0,1,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#96\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool::isEnabled<\/a>"],[0,4,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#101\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool::mapToSourceTemplate<\/a>"],[0,4,"<a href=\"Tool\/LocateTemplateErrorTool.php.html#133\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\LocateTemplateErrorTool::readContext<\/a>"],[0,1,"<a href=\"Tool\/PreviewReferenceTool.php.html#17\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\PreviewReferenceTool::getName<\/a>"],[0,1,"<a href=\"Tool\/PreviewReferenceTool.php.html#22\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\PreviewReferenceTool::getDescription<\/a>"],[0,1,"<a href=\"Tool\/PreviewReferenceTool.php.html#27\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\PreviewReferenceTool::getParameters<\/a>"],[0,8,"<a href=\"Tool\/PreviewReferenceTool.php.html#41\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\PreviewReferenceTool::execute<\/a>"],[0,1,"<a href=\"Tool\/PreviewReferenceTool.php.html#103\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\PreviewReferenceTool::isEnabled<\/a>"],[0,1,"<a href=\"Tool\/ReplaceTemplateSnippetTool.php.html#10\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ReplaceTemplateSnippetTool::getName<\/a>"],[0,1,"<a href=\"Tool\/ReplaceTemplateSnippetTool.php.html#15\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ReplaceTemplateSnippetTool::getDescription<\/a>"],[0,1,"<a href=\"Tool\/ReplaceTemplateSnippetTool.php.html#20\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ReplaceTemplateSnippetTool::getParameters<\/a>"],[0,15,"<a href=\"Tool\/ReplaceTemplateSnippetTool.php.html#46\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ReplaceTemplateSnippetTool::execute<\/a>"],[0,1,"<a href=\"Tool\/ReplaceTemplateSnippetTool.php.html#125\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ReplaceTemplateSnippetTool::isEnabled<\/a>"],[0,1,"<a href=\"Tool\/ValidateCodeTool.php.html#18\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ValidateCodeTool::getName<\/a>"],[0,1,"<a href=\"Tool\/ValidateCodeTool.php.html#23\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ValidateCodeTool::getDescription<\/a>"],[0,1,"<a href=\"Tool\/ValidateCodeTool.php.html#28\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ValidateCodeTool::getParameters<\/a>"],[0,17,"<a href=\"Tool\/ValidateCodeTool.php.html#59\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ValidateCodeTool::execute<\/a>"],[0,1,"<a href=\"Tool\/ValidateCodeTool.php.html#157\">GuoLaiRen\\PageBuilder\\Service\\AI\\Tool\\ValidateCodeTool::isEnabled<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#19\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::isValid<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#24\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::setValid<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#30\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::getErrors<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#35\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::setErrors<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#41\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::addError<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#47\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::getWarnings<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#52\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::setWarnings<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#58\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::addWarning<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#64\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::hasErrors<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#69\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::hasWarnings<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#77\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::getAllMessages<\/a>"],[0,1,"<a href=\"ValidationResult.php.html#88\">GuoLaiRen\\PageBuilder\\Service\\AI\\ValidationResult::toArray<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

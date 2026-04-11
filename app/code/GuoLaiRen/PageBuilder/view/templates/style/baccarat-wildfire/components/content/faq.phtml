@@ -1,0 +1,611 @@
+<?php
+/**
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: FAQ折叠面板
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_intro => 显示简介:select:yes|yes,no
+ * display.first_open => 首个问题默认展开:select:no|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景主色:color:#fff7ef
+ * style.accent_color => 强调色:color:#08e7d8
+ * style.title_color => 标题颜色:color:#171117
+ * style.text_color => 正文颜色:color:#584850
+ * style.panel_bg_color => 卡片背景色:color:rgba(255,255,255,0.88)
+ * style.card_border_color => 卡片边框色:color:rgba(255,95,58,0.14)
+ * style.card_radius => 卡片圆角:number:24|px
+ * style.section_padding => 区域内边距(PC端):number:88|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:52|px
+ *
+ * group:texts => 文本内容
+ * texts.badge => 徽标文字:text:Baccarat Help
+ * texts.title => 区域标题:text:Frequently Asked Questions
+ * texts.intro => 简介:textarea:Find quick answers on room access, banker or player choices, deposits, bonuses, and account help before you join a table.
+ * texts.tag_1 => 标签1:text:Live Tables
+ * texts.tag_2 => 标签2:text:Banker / Player
+ * texts.tag_3 => 标签3:text:Deposits
+ * texts.faq_1_question => 问题1:text:How do I choose the right baccarat table?
+ * texts.faq_1_answer => 答案1:textarea:Compare the room pace, entry level, and table notes first. Fast rooms suit short sessions, while classic or live rooms are better for steadier play.
+ * texts.faq_2_question => 问题2:text:Can I play baccarat on mobile?
+ * texts.faq_2_answer => 答案2:textarea:Yes. The layout is responsive so you can browse tables, read room details, and use the main actions comfortably on smaller screens.
+ * texts.faq_3_question => 问题3:text:What should I check before joining a live baccarat room?
+ * texts.faq_3_answer => 答案3:textarea:Review the table limit, room speed, and any special rules such as no-commission or side-bet availability before entering.
+ * texts.faq_4_question => 问题4:text:How are deposits or withdrawals reviewed?
+ * texts.faq_4_answer => 答案4:textarea:Payment reviews usually depend on your chosen method, account status, and verification details. Contact support if a request stays pending longer than expected.
+ * texts.faq_5_question => 问题5:text:What if a bonus or cashback does not appear?
+ * texts.faq_5_answer => 答案5:textarea:Check the promotion terms first, then contact support with your UID and transaction details so the team can review the credit status.
+ * texts.faq_6_question => 问题6:text:Where can I read the platform rules and policies?
+ * texts.faq_6_answer => 答案6:textarea:Open the legal and support pages for the latest terms, privacy details, refund guidance, and other policy information tied to your account.
+ *
+ * @fields_end
+ */
+
+$componentId = 'bwf-faq-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showIntro = $getConfig('display.show_intro', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
+
+$bgColor = $getConfig('style.bg_color', '#fff7ef');
+$accentColor = $getConfig('style.accent_color', '#08e7d8');
+$titleColor = $getConfig('style.title_color', '#171117');
+$textColor = $getConfig('style.text_color', '#584850');
+$panelBgColor = $getConfig('style.panel_bg_color', 'rgba(255,255,255,0.88)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(255,95,58,0.14)');
+$cardRadius = (int)$getConfig('style.card_radius', '24');
+$sectionPadding = (int)$getConfig('style.section_padding', '88');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '52');
+
+$badgeText = $getConfig('texts.badge', 'Baccarat Help');
+$title = $getConfig('texts.title', 'Frequently Asked Questions');
+$intro = $getConfig('texts.intro', 'Find quick answers on room access, banker or player choices, deposits, bonuses, and account help before you join a table.');
+$tags = array_filter([
+    trim((string)$getConfig('texts.tag_1', 'Live Tables')),
+    trim((string)$getConfig('texts.tag_2', 'Banker / Player')),
+    trim((string)$getConfig('texts.tag_3', 'Deposits')),
+]);
+
+$defaults = [
+    ['question' => 'How do I choose the right baccarat table?', 'answer' => 'Compare the room pace, entry level, and table notes first. Fast rooms suit short sessions, while classic or live rooms are better for steadier play.'],
+    ['question' => 'Can I play baccarat on mobile?', 'answer' => 'Yes. The layout is responsive so you can browse tables, read room details, and use the main actions comfortably on smaller screens.'],
+    ['question' => 'What should I check before joining a live baccarat room?', 'answer' => 'Review the table limit, room speed, and any special rules such as no-commission or side-bet availability before entering.'],
+    ['question' => 'How are deposits or withdrawals reviewed?', 'answer' => 'Payment reviews usually depend on your chosen method, account status, and verification details. Contact support if a request stays pending longer than expected.'],
+    ['question' => 'What if a bonus or cashback does not appear?', 'answer' => 'Check the promotion terms first, then contact support with your UID and transaction details so the team can review the credit status.'],
+    ['question' => 'Where can I read the platform rules and policies?', 'answer' => 'Open the legal and support pages for the latest terms, privacy details, refund guidance, and other policy information tied to your account.'],
+];
+
+$faqs = [];
+for ($i = 1; $i <= 6; $i++) {
+    $default = $defaults[$i - 1] ?? ['question' => '', 'answer' => ''];
+    $question = trim((string)$getConfig("texts.faq_{$i}_question", $default['question']));
+    $answer = trim((string)$getConfig("texts.faq_{$i}_answer", $default['answer']));
+    if ($question !== '' && $answer !== '') {
+        $faqs[] = ['question' => $question, 'answer' => $answer, 'source_index' => $i - 1];
+    }
+}
+
+if (empty($faqs)) {
+    foreach (array_slice($defaults, 0, 4) as $index => $fallback) {
+        $faqs[] = ['question' => $fallback['question'], 'answer' => $fallback['answer'], 'source_index' => $index];
+    }
+}
+
+$columns = [[], []];
+foreach ($faqs as $index => $faq) {
+    $faq['index'] = $index;
+    $faq['open'] = $firstOpen && $index === 0;
+    $columns[$index % 2][] = $faq;
+}
+?>
+
+<section id="<?= $componentId ?>" class="bwf-faq" aria-labelledby="<?= $componentId ?>-title">
+    <div class="faq-shell">
+        <header class="faq-head" id="faq">
+            <?php if ($showIntro && $badgeText !== ''): ?>
+                <span class="faq-badge"><?= htmlspecialchars($badgeText) ?></span>
+            <?php endif; ?>
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($showIntro && $intro !== ''): ?>
+                <p class="faq-intro"><?= htmlspecialchars($intro) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($tags)): ?>
+                <div class="faq-tags">
+                    <?php foreach ($tags as $tag): ?>
+                        <span><?= htmlspecialchars($tag) ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </header>
+
+        <div class="faq-columns">
+            <?php foreach ($columns as $column): ?>
+                <div class="faq-column">
+                    <?php foreach ($column as $faq): ?>
+                        <article class="faq-card<?= $faq['open'] ? ' is-open' : '' ?>">
+                            <button
+                                type="button"
+                                class="faq-trigger<?= $faq['open'] ? ' is-active' : '' ?>"
+                                id="<?= $componentId ?>-trigger-<?= (int)$faq['index'] ?>"
+                                data-faq-trigger="<?= (int)$faq['index'] ?>"
+                                aria-controls="<?= $componentId ?>-panel-<?= (int)$faq['index'] ?>"
+                                aria-expanded="<?= $faq['open'] ? 'true' : 'false' ?>"
+                            >
+                                <span class="faq-index"><?= sprintf('%02d', $faq['index'] + 1) ?></span>
+                                <span class="faq-question"><?= htmlspecialchars($faq['question']) ?></span>
+                                <span class="faq-toggle" aria-hidden="true"></span>
+                            </button>
+
+                            <div class="faq-panel-wrap<?= $faq['open'] ? ' is-open' : '' ?>" data-faq-panel-wrap="<?= (int)$faq['index'] ?>" aria-hidden="<?= $faq['open'] ? 'false' : 'true' ?>">
+                                <div class="faq-panel-inner">
+                                    <div class="faq-panel" id="<?= $componentId ?>-panel-<?= (int)$faq['index'] ?>" data-faq-panel="<?= (int)$faq['index'] ?>" role="region" tabindex="<?= $faq['open'] ? '0' : '-1' ?>" aria-labelledby="<?= $componentId ?>-trigger-<?= (int)$faq['index'] ?>">
+                                        <p><?= nl2br(htmlspecialchars($faq['answer'])) ?></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+
+    <div class="footer-seam" aria-hidden="true">
+        <span class="seam-line seam-line-one"></span>
+        <span class="seam-line seam-line-two"></span>
+        <span class="seam-glow seam-glow-left"></span>
+        <span class="seam-glow seam-glow-right"></span>
+        <span class="seam-spark spark-one"></span>
+        <span class="seam-spark spark-two"></span>
+        <span class="seam-spark spark-three"></span>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --faq-bg: <?= htmlspecialchars($bgColor) ?>;
+    --faq-accent: <?= htmlspecialchars($accentColor) ?>;
+    --faq-title: <?= htmlspecialchars($titleColor) ?>;
+    --faq-text: <?= htmlspecialchars($textColor) ?>;
+    --faq-panel-bg: <?= htmlspecialchars($panelBgColor) ?>;
+    --faq-panel-border: <?= htmlspecialchars($cardBorderColor) ?>;
+    --faq-radius: <?= $cardRadius ?>px;
+    position: relative;
+    padding: <?= $sectionPadding ?>px 0 calc(<?= $sectionPadding ?>px + 96px);
+    overflow: hidden;
+    background:
+        radial-gradient(760px 320px at 12% 0%, rgba(255,95,58,0.14), transparent 66%),
+        radial-gradient(620px 320px at 88% 14%, rgba(8,231,216,0.14), transparent 62%),
+        radial-gradient(560px 280px at 50% 100%, rgba(199,255,65,0.14), transparent 58%),
+        linear-gradient(180deg, var(--faq-bg) 0%, #f5ffef 100%);
+    color: var(--faq-text);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(135deg, rgba(23,17,23,0.03) 0 14px, rgba(255,255,255,0) 14px 40px);
+    opacity: 0.18;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .faq-shell {
+    width: min(1260px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .faq-head {
+    max-width: 54rem;
+    margin: 0 auto 2rem;
+    text-align: center;
+}
+
+#<?= $componentId ?> .faq-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0.42rem 0.82rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(255,95,58,0.12);
+    color: #b72b2f;
+    font-size: 0.74rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .faq-head h2 {
+    margin-top: 1rem;
+    color: var(--faq-title);
+    font-family: 'Outfit', 'Manrope', sans-serif;
+    font-size: clamp(2.2rem, 4.8vw, 4.2rem);
+    line-height: 0.96;
+    letter-spacing: -0.06em;
+}
+
+#<?= $componentId ?> .faq-intro {
+    margin: 1rem auto 0;
+    max-width: 44rem;
+    font-size: 0.98rem;
+    line-height: 1.86;
+}
+
+#<?= $componentId ?> .faq-tags {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.56rem;
+}
+
+#<?= $componentId ?> .faq-tags span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0.36rem 0.74rem;
+    border-radius: 999px;
+    background: rgba(8,231,216,0.08);
+    border: 1px solid rgba(8,231,216,0.14);
+    color: #1f6a62;
+    font-size: 0.76rem;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .faq-columns {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: start;
+}
+
+#<?= $componentId ?> .faq-column {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+#<?= $componentId ?> .footer-seam {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 220px;
+    transform: translateY(66px);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .footer-seam::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 108px;
+    width: min(840px, 84%);
+    height: 1px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.78), rgba(255,255,255,0));
+    opacity: 0.7;
+}
+
+#<?= $componentId ?> .seam-line,
+#<?= $componentId ?> .seam-glow,
+#<?= $componentId ?> .seam-spark {
+    position: absolute;
+}
+
+#<?= $componentId ?> .seam-line {
+    left: 50%;
+    transform: translateX(-50%);
+    filter: drop-shadow(0 18px 36px rgba(0, 0, 0, 0.12));
+}
+
+#<?= $componentId ?> .seam-line-one {
+    top: 58px;
+    width: min(1180px, 110%);
+    height: 110px;
+    border-radius: 48% 52% 0 0 / 100% 100% 0 0;
+    background: linear-gradient(92deg, rgba(255,95,58,0.92) 0%, rgba(255,179,71,0.84) 28%, rgba(199,255,65,0.84) 58%, rgba(8,231,216,0.86) 100%);
+    clip-path: polygon(0 76%, 10% 60%, 21% 73%, 34% 54%, 47% 70%, 61% 48%, 74% 67%, 87% 52%, 100% 65%, 100% 100%, 0 100%);
+    opacity: 0.94;
+}
+
+#<?= $componentId ?> .seam-line-two {
+    top: 86px;
+    width: min(1040px, 96%);
+    height: 70px;
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    background: linear-gradient(90deg, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0.06) 30%, rgba(255,255,255,0.26) 52%, rgba(255,255,255,0.06) 72%, rgba(255,255,255,0.28) 100%);
+    clip-path: polygon(0 82%, 14% 66%, 27% 80%, 41% 58%, 55% 78%, 68% 62%, 82% 76%, 100% 64%, 100% 100%, 0 100%);
+    opacity: 0.5;
+}
+
+#<?= $componentId ?> .seam-glow {
+    top: 18px;
+    width: 280px;
+    height: 150px;
+    border-radius: 50%;
+    filter: blur(16px);
+}
+
+#<?= $componentId ?> .seam-glow-left {
+    left: 8%;
+    background: radial-gradient(circle, rgba(255,95,58,0.18) 0%, rgba(255,95,58,0.02) 68%, transparent 78%);
+}
+
+#<?= $componentId ?> .seam-glow-right {
+    right: 8%;
+    background: radial-gradient(circle, rgba(8,231,216,0.14) 0%, rgba(8,231,216,0.02) 68%, transparent 78%);
+}
+
+#<?= $componentId ?> .seam-spark {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.9);
+    box-shadow: 0 0 0 9px rgba(255,255,255,0.06);
+    animation: <?= $componentId ?>-spark 6.8s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .spark-one {
+    left: 22%;
+    top: 52px;
+}
+
+#<?= $componentId ?> .spark-two {
+    left: 52%;
+    top: 24px;
+    animation-delay: -2s;
+}
+
+#<?= $componentId ?> .spark-three {
+    right: 22%;
+    top: 68px;
+    animation-delay: -3.6s;
+}
+
+#<?= $componentId ?> .faq-card {
+    position: relative;
+}
+
+#<?= $componentId ?> .faq-trigger {
+    width: 100%;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.82rem;
+    align-items: center;
+    text-align: left;
+    padding: 1rem 1.06rem;
+    border: 1px solid var(--faq-panel-border);
+    border-radius: var(--faq-radius);
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, var(--faq-panel-bg) 100%);
+    box-shadow: 0 18px 34px rgba(68, 28, 40, 0.08);
+    cursor: pointer;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+#<?= $componentId ?> .faq-trigger:hover,
+#<?= $componentId ?> .faq-trigger.is-active {
+    transform: translateY(-2px);
+    border-color: rgba(255,95,58,0.22);
+    box-shadow: 0 22px 38px rgba(68, 28, 40, 0.12);
+}
+
+#<?= $componentId ?> .faq-index {
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(255,95,58,0.16) 0%, rgba(199,255,65,0.16) 52%, rgba(8,231,216,0.16) 100%);
+    color: #171117;
+    font-size: 0.82rem;
+    font-weight: 900;
+}
+
+#<?= $componentId ?> .faq-question {
+    color: #171117;
+    font-size: 0.98rem;
+    font-weight: 800;
+    line-height: 1.54;
+}
+
+#<?= $componentId ?> .faq-toggle {
+    position: relative;
+    width: 18px;
+    height: 18px;
+}
+
+#<?= $componentId ?> .faq-toggle::before,
+#<?= $componentId ?> .faq-toggle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 14px;
+    height: 2px;
+    border-radius: 999px;
+    background: #53474f;
+    transform: translate(-50%, -50%);
+    transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+#<?= $componentId ?> .faq-toggle::after {
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+#<?= $componentId ?> .faq-trigger.is-active .faq-toggle::after {
+    opacity: 0;
+}
+
+#<?= $componentId ?> .faq-panel-wrap {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 0.28s ease, opacity 0.22s ease;
+}
+
+#<?= $componentId ?> .faq-panel-wrap.is-open {
+    grid-template-rows: 1fr;
+    opacity: 1;
+}
+
+#<?= $componentId ?> .faq-panel-inner {
+    min-height: 0;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .faq-panel {
+    margin-top: 0.7rem;
+    padding: 1rem 1.06rem 1.08rem 4.68rem;
+    border-radius: 0 0 calc(var(--faq-radius) - 2px) calc(var(--faq-radius) - 2px);
+    color: var(--faq-text);
+    font-size: 0.94rem;
+    line-height: 1.84;
+}
+
+#<?= $componentId ?> .faq-panel p {
+    margin: 0;
+}
+
+@keyframes <?= $componentId ?>-spark {
+    0%, 100% {
+        opacity: 0.34;
+        transform: translateY(0) scale(0.92);
+    }
+    50% {
+        opacity: 1;
+        transform: translateY(-6px) scale(1);
+    }
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .faq-columns {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding: <?= $sectionPaddingMobile ?>px 0 calc(<?= $sectionPaddingMobile ?>px + 84px);
+    }
+
+    #<?= $componentId ?> .faq-shell {
+        width: min(100% - 1rem, 100%);
+    }
+
+    #<?= $componentId ?> .faq-trigger {
+        padding: 0.92rem 0.94rem;
+        gap: 0.7rem;
+    }
+
+    #<?= $componentId ?> .faq-index {
+        width: 2.56rem;
+        height: 2.56rem;
+        border-radius: 16px;
+    }
+
+    #<?= $componentId ?> .faq-panel {
+        padding: 0.9rem 0.94rem 0.98rem 0.94rem;
+    }
+
+    #<?= $componentId ?> .footer-seam {
+        height: 188px;
+        transform: translateY(58px);
+    }
+
+    #<?= $componentId ?> .seam-line-one {
+        width: min(980px, 138%);
+        height: 94px;
+    }
+
+    #<?= $componentId ?> .seam-line-two {
+        width: min(860px, 122%);
+        height: 58px;
+        top: 92px;
+    }
+
+    #<?= $componentId ?> .seam-glow {
+        width: 168px;
+        height: 92px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    const section = document.getElementById('<?= $componentId ?>');
+    if (!section) {
+        return;
+    }
+
+    const triggers = Array.from(section.querySelectorAll('[data-faq-trigger]'));
+    const wraps = Array.from(section.querySelectorAll('[data-faq-panel-wrap]'));
+    const panels = Array.from(section.querySelectorAll('[data-faq-panel]'));
+
+    const closeAll = () => {
+        triggers.forEach((trigger) => {
+            trigger.classList.remove('is-active');
+            trigger.setAttribute('aria-expanded', 'false');
+        });
+        wraps.forEach((wrap) => {
+            wrap.classList.remove('is-open');
+            wrap.setAttribute('aria-hidden', 'true');
+        });
+        panels.forEach((panel) => {
+            panel.setAttribute('tabindex', '-1');
+        });
+        section.querySelectorAll('.faq-card').forEach((card) => card.classList.remove('is-open'));
+    };
+
+    triggers.forEach((trigger) => {
+        trigger.addEventListener('click', () => {
+            const index = trigger.getAttribute('data-faq-trigger');
+            const card = trigger.closest('.faq-card');
+            const wrap = section.querySelector('[data-faq-panel-wrap="' + index + '"]');
+            const panel = section.querySelector('[data-faq-panel="' + index + '"]');
+            const shouldOpen = !trigger.classList.contains('is-active');
+
+            closeAll();
+
+            if (!shouldOpen || !wrap || !panel || !card) {
+                return;
+            }
+
+            trigger.classList.add('is-active');
+            trigger.setAttribute('aria-expanded', 'true');
+            wrap.classList.add('is-open');
+            wrap.setAttribute('aria-hidden', 'false');
+            panel.setAttribute('tabindex', '0');
+            card.classList.add('is-open');
+        });
+    });
+})();
+</script>

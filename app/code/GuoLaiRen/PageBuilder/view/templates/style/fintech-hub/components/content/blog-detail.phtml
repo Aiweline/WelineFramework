@@ -1,0 +1,259 @@
+<?php
+/**
+ * FinTech Hub — 博客详情（current_post），兼容 poker-arena 布局项 layout.content_width / layout.show_sidebar
+ *
+ * @fields_start
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_cover|显示封面图|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_tags|显示标签|select:yes=是,no=否|yes
+ * blog.show_share|显示分享|select:yes=是,no=否|yes
+ * blog.show_related|显示相关文章|select:yes=是,no=否|yes
+ * blog.related_count|相关文章数量|number|3
+ * layout.content_width|内容宽度|select:medium|narrow,medium,wide
+ * layout.show_sidebar|显示侧边栏(布局)|select:yes=是,no=否|yes
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$colors = $this->getData('colors') ?: [];
+if (!is_array($colors)) {
+    $colors = [];
+}
+$currentPost = $this->getData('current_post') ?: [];
+$relatedPosts = $this->getData('related_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = static function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$layoutSidebar = $getConfig('layout.show_sidebar', '');
+if ($layoutSidebar === '') {
+    $showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+} else {
+    $showSidebar = $layoutSidebar === 'yes';
+}
+
+$showCover = $getConfig('blog.show_cover', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showTags = $getConfig('blog.show_tags', 'yes') === 'yes';
+$showShare = $getConfig('blog.show_share', 'yes') === 'yes';
+$showRelated = $getConfig('blog.show_related', 'yes') === 'yes';
+$relatedCount = max(1, (int) $getConfig('blog.related_count', 3));
+
+$contentWidth = $getConfig('layout.content_width', 'medium');
+$shellMaxCss = match ($contentWidth) {
+    'narrow' => '720px',
+    'wide' => '1100px',
+    default => '900px',
+};
+
+$accent = $colors['accent_primary'] ?? '#3b82f6';
+$textPrimary = $colors['text_primary'] ?? '#f8fafc';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.04)';
+$cardBorder = $colors['card_border'] ?? 'rgba(255,255,255,0.1)';
+
+$tags = [];
+if (!empty($currentPost['tags'])) {
+    $raw = is_array($currentPost['tags']) ? $currentPost['tags'] : explode(',', (string) $currentPost['tags']);
+    $tags = array_values(array_filter(array_map('trim', $raw), static fn ($t) => $t !== ''));
+}
+
+$requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+$shareSourceUrl = $requestUri;
+if (!empty($_SERVER['HTTP_HOST'])) {
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $shareSourceUrl = $scheme . '://' . $_SERVER['HTTP_HOST'] . $requestUri;
+}
+$shareUrl = rawurlencode($shareSourceUrl);
+$shareTitle = rawurlencode((string) ($currentPost['title'] ?? ''));
+
+$relatedSlice = $showRelated && !empty($relatedPosts) ? array_slice($relatedPosts, 0, $relatedCount) : [];
+$hasRail = $showSidebar && (!empty($blogCategories) || !empty($recentPosts));
+$componentId = 'pb-blog-detail-' . uniqid('', true);
+?>
+<style>
+.ss-blog-detail { --ss-accent: <?= htmlspecialchars($accent) ?>; --ss-text: <?= htmlspecialchars($textPrimary) ?>; --ss-muted: <?= htmlspecialchars($textSecondary) ?>; }
+.ss-blog-detail .ss-bd-shell { max-width: <?= htmlspecialchars($shellMaxCss) ?>; margin: 0 auto; padding: 0 20px 80px; }
+.ss-blog-detail .ss-bd-crumb { font-size: 0.85rem; color: var(--ss-muted); margin-bottom: 1.5rem; }
+.ss-blog-detail .ss-bd-crumb a { color: var(--ss-accent); text-decoration: none; }
+.ss-blog-detail .ss-bd-crumb strong { color: var(--ss-text); font-weight: 600; }
+.ss-blog-detail .ss-bd-hero { display: grid; gap: 2rem; margin-bottom: 2.5rem; align-items: start; }
+@media (min-width: 900px) { .ss-blog-detail .ss-bd-hero { grid-template-columns: 1fr 1fr; } }
+.ss-blog-detail .ss-bd-chip { display: inline-block; padding: 4px 12px; border-radius: 999px; background: rgba(59,130,246,0.15); color: var(--ss-accent); font-size: 0.8rem; font-weight: 600; margin-bottom: 0.75rem; }
+.ss-blog-detail .ss-bd-hero h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); color: var(--ss-text); line-height: 1.2; margin-bottom: 1rem; }
+.ss-blog-detail .ss-bd-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.9rem; color: var(--ss-muted); margin-bottom: 1rem; }
+.ss-blog-detail .ss-bd-summary { color: var(--ss-muted); line-height: 1.7; }
+.ss-blog-detail .ss-bd-cover img { width: 100%; border-radius: 16px; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; }
+.ss-blog-detail .ss-bd-layout { display: grid; gap: 2.5rem; }
+@media (min-width: 992px) { .ss-blog-detail .ss-bd-layout.has-rail { grid-template-columns: 1fr 300px; } }
+.ss-blog-detail .ss-bd-body { font-size: 1.05rem; line-height: 1.85; color: var(--ss-text); }
+.ss-blog-detail .ss-bd-body h2, .ss-blog-detail .ss-bd-body h3 { margin: 1.5em 0 0.5em; color: var(--ss-text); }
+.ss-blog-detail .ss-bd-body p { margin: 0 0 1em; }
+.ss-blog-detail .ss-bd-body a { color: var(--ss-accent); }
+.ss-blog-detail .ss-bd-body img { max-width: 100%; height: auto; border-radius: 8px; }
+.ss-blog-detail .ss-bd-tools { margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid <?= htmlspecialchars($cardBorder) ?>; display: flex; flex-direction: column; gap: 1.25rem; }
+.ss-blog-detail .ss-bd-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ss-muted); margin-bottom: 0.5rem; }
+.ss-blog-detail .ss-bd-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+.ss-blog-detail .ss-bd-tags a { padding: 6px 12px; border-radius: 8px; background: <?= htmlspecialchars($cardBg) ?>; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; color: var(--ss-muted); font-size: 0.85rem; text-decoration: none; }
+.ss-blog-detail .ss-bd-tags a:hover { color: var(--ss-accent); border-color: var(--ss-accent); }
+.ss-blog-detail .ss-bd-share { display: flex; flex-wrap: wrap; gap: 8px; }
+.ss-blog-detail .ss-bd-share a { padding: 8px 14px; border-radius: 8px; background: <?= htmlspecialchars($cardBg) ?>; color: var(--ss-text); font-size: 0.85rem; text-decoration: none; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; }
+.ss-blog-detail .ss-bd-back { display: inline-block; margin-top: 2rem; color: var(--ss-accent); font-weight: 600; text-decoration: none; }
+.ss-blog-detail .ss-bd-rail { display: flex; flex-direction: column; gap: 1.5rem; }
+.ss-blog-detail .ss-bd-card { padding: 1.25rem; border-radius: 14px; background: <?= htmlspecialchars($cardBg) ?>; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; }
+.ss-blog-detail .ss-bd-card h4 { font-size: 0.9rem; color: var(--ss-text); margin-bottom: 1rem; }
+.ss-blog-detail .ss-bd-card a { display: block; color: var(--ss-muted); text-decoration: none; padding: 0.35rem 0; font-size: 0.9rem; }
+.ss-blog-detail .ss-bd-card a:hover { color: var(--ss-accent); }
+.ss-blog-detail .ss-bd-recent { display: flex; flex-direction: column; gap: 12px; }
+.ss-blog-detail .ss-bd-recent a { display: flex; gap: 12px; align-items: flex-start; }
+.ss-blog-detail .ss-bd-recent img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.ss-blog-detail .ss-bd-related { margin-top: 3rem; padding-top: 2rem; border-top: 1px solid <?= htmlspecialchars($cardBorder) ?>; }
+.ss-blog-detail .ss-bd-related h3 { color: var(--ss-text); margin-bottom: 1.25rem; }
+.ss-blog-detail .ss-bd-grid { display: grid; gap: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.ss-blog-detail .ss-bd-rel-card { border-radius: 14px; overflow: hidden; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; background: <?= htmlspecialchars($cardBg) ?>; }
+.ss-blog-detail .ss-bd-rel-card img { width: 100%; height: 140px; object-fit: cover; }
+.ss-blog-detail .ss-bd-rel-card .ss-bd-rel-body { padding: 1rem; }
+.ss-blog-detail .ss-bd-rel-card a { color: var(--ss-text); text-decoration: none; font-weight: 600; }
+.ss-blog-detail .ss-bd-empty { text-align: center; padding: 4rem 1rem; color: var(--ss-muted); }
+.ss-blog-detail .ss-bd-empty h2 { color: var(--ss-text); margin-bottom: 0.75rem; }
+.ss-blog-detail .ss-bd-empty a { color: var(--ss-accent); font-weight: 600; }
+</style>
+
+<?php if (empty($currentPost)): ?>
+<section class="ss-blog-detail" id="<?= htmlspecialchars($componentId) ?>">
+    <div class="ss-bd-shell">
+        <div class="ss-bd-empty">
+            <h2><?= __('Article Not Found') ?></h2>
+            <p><?= __('The article you are looking for does not exist or has been removed.') ?></p>
+            <a href="/blog"><?= __('Back to Blog') ?></a>
+        </div>
+    </div>
+</section>
+<?php else: ?>
+<section class="ss-blog-detail" id="<?= htmlspecialchars($componentId) ?>">
+    <div class="ss-bd-shell">
+        <nav class="ss-bd-crumb" aria-label="breadcrumb">
+            <a href="/"><?= __('Home') ?></a>
+            <span> / </span>
+            <a href="/blog"><?= __('Blog') ?></a>
+            <span> / </span>
+            <strong><?= htmlspecialchars(mb_substr((string) $currentPost['title'], 0, 48)) ?><?= mb_strlen((string) $currentPost['title']) > 48 ? '…' : '' ?></strong>
+        </nav>
+
+        <header class="ss-bd-hero">
+            <div>
+                <?php if (!empty($currentPost['category_name'])): ?>
+                    <span class="ss-bd-chip"><?= htmlspecialchars((string) $currentPost['category_name']) ?></span>
+                <?php endif; ?>
+                <h1><?= htmlspecialchars((string) $currentPost['title']) ?></h1>
+                <div class="ss-bd-meta">
+                    <?php if ($showDate && !empty($currentPost['published_at'])): ?>
+                        <span><?= htmlspecialchars(date('Y-m-d', strtotime((string) $currentPost['published_at']))) ?></span>
+                    <?php endif; ?>
+                    <?php if ($showAuthor && !empty($currentPost['author'])): ?>
+                        <span><?= htmlspecialchars((string) $currentPost['author']) ?></span>
+                    <?php endif; ?>
+                </div>
+                <?php if (!empty($currentPost['summary'])): ?>
+                    <p class="ss-bd-summary"><?= htmlspecialchars((string) $currentPost['summary']) ?></p>
+                <?php endif; ?>
+            </div>
+            <?php if ($showCover && !empty($currentPost['cover_image'])): ?>
+                <div class="ss-bd-cover">
+                    <img src="<?= htmlspecialchars((string) $currentPost['cover_image']) ?>" alt="<?= htmlspecialchars((string) $currentPost['title']) ?>" loading="lazy">
+                </div>
+            <?php endif; ?>
+        </header>
+
+        <div class="ss-bd-layout<?= $hasRail ? ' has-rail' : '' ?>">
+            <div>
+                <article class="ss-bd-body">
+                    <?= $currentPost['content'] ?? '' ?>
+                </article>
+
+                <?php if (($showTags && $tags !== []) || $showShare): ?>
+                    <div class="ss-bd-tools">
+                        <?php if ($showTags && $tags !== []): ?>
+                            <div>
+                                <div class="ss-bd-label"><?= __('Tags') ?></div>
+                                <div class="ss-bd-tags">
+                                    <?php foreach ($tags as $tag): ?>
+                                        <a href="/blog/tag/<?= rawurlencode($tag) ?>">#<?= htmlspecialchars($tag) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($showShare): ?>
+                            <div>
+                                <div class="ss-bd-label"><?= __('Share') ?></div>
+                                <div class="ss-bd-share">
+                                    <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $shareUrl ?>" target="_blank" rel="noopener noreferrer">Facebook</a>
+                                    <a href="https://twitter.com/intent/tweet?url=<?= $shareUrl ?>&text=<?= $shareTitle ?>" target="_blank" rel="noopener noreferrer">X</a>
+                                </div>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <a href="/blog" class="ss-bd-back"><?= __('Back to Blog') ?></a>
+            </div>
+
+            <?php if ($hasRail): ?>
+                <aside class="ss-bd-rail">
+                    <?php if (!empty($blogCategories)): ?>
+                        <div class="ss-bd-card">
+                            <h4><?= __('Categories') ?></h4>
+                            <?php foreach ($blogCategories as $cat): ?>
+                                <a href="<?= htmlspecialchars((string) ($cat['url'] ?? '#')) ?>"><?= htmlspecialchars((string) ($cat['name'] ?? '')) ?></a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if (!empty($recentPosts)): ?>
+                        <div class="ss-bd-card">
+                            <h4><?= __('Recent Posts') ?></h4>
+                            <div class="ss-bd-recent">
+                                <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                                    <a href="<?= htmlspecialchars((string) ($post['url'] ?? '#')) ?>">
+                                        <?php if (!empty($post['cover_image'])): ?>
+                                            <img src="<?= htmlspecialchars((string) $post['cover_image']) ?>" alt="" loading="lazy">
+                                        <?php endif; ?>
+                                        <span><?= htmlspecialchars((string) ($post['title'] ?? '')) ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </aside>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($relatedSlice !== []): ?>
+            <section class="ss-bd-related" aria-label="related">
+                <h3><?= __('Related Articles') ?></h3>
+                <div class="ss-bd-grid">
+                    <?php foreach ($relatedSlice as $rel): ?>
+                        <div class="ss-bd-rel-card">
+                            <?php if (!empty($rel['cover_image'])): ?>
+                                <a href="<?= htmlspecialchars((string) ($rel['url'] ?? '#')) ?>"><img src="<?= htmlspecialchars((string) $rel['cover_image']) ?>" alt="" loading="lazy"></a>
+                            <?php endif; ?>
+                            <div class="ss-bd-rel-body">
+                                <a href="<?= htmlspecialchars((string) ($rel['url'] ?? '#')) ?>"><?= htmlspecialchars((string) ($rel['title'] ?? '')) ?></a>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+    </div>
+</section>
+<?php endif; ?>

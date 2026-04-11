@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Cron</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Cron</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Attribute/CronTestHelp.php.html#12">Weline\Cron\Attribute\CronTestHelp</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#30">Weline\Cron\Controller\Backend\Cron</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#17">Weline\Cron\Helper\Process</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#19">Weline\Cron\Schedule\Linux\Crontab</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#19">Weline\Cron\Schedule\Schedule</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#21">Weline\Cron\Schedule\Windows\Schtasks</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#12">Weline\Cron\Service\CronManualRunStreamer</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#17">Weline\Cron\Service\CronRunLogService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#15">Weline\Cron\Service\CronTestDiscovery</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/CronStatus.php.html#15">Weline\Cron\Helper\CronStatus</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Cron.php.html#30">Weline\Cron\Controller\Backend\Cron</a></td><td class="text-right">3192</td></tr>
+       <tr><td><a href="Helper/Process.php.html#17">Weline\Cron\Helper\Process</a></td><td class="text-right">2970</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#17">Weline\Cron\Service\CronRunLogService</a></td><td class="text-right">2450</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#21">Weline\Cron\Schedule\Windows\Schtasks</a></td><td class="text-right">1892</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#19">Weline\Cron\Schedule\Linux\Crontab</a></td><td class="text-right">1406</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#12">Weline\Cron\Service\CronManualRunStreamer</a></td><td class="text-right">1332</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#19">Weline\Cron\Schedule\Schedule</a></td><td class="text-right">1056</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#15">Weline\Cron\Service\CronTestDiscovery</a></td><td class="text-right">930</td></tr>
+       <tr><td><a href="Helper/CronStatus.php.html#15">Weline\Cron\Helper\CronStatus</a></td><td class="text-right">20</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Attribute/CronTestHelp.php.html#19"><abbr title="Weline\Cron\Attribute\CronTestHelp::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#41"><abbr title="Weline\Cron\Controller\Backend\Cron::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#47"><abbr title="Weline\Cron\Controller\Backend\Cron::listing">listing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#103"><abbr title="Weline\Cron\Controller\Backend\Cron::getDistinctModules">getDistinctModules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#124"><abbr title="Weline\Cron\Controller\Backend\Cron::humanizeDuration">humanizeDuration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#150"><abbr title="Weline\Cron\Controller\Backend\Cron::getCronStats">getCronStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#173"><abbr title="Weline\Cron\Controller\Backend\Cron::lock">lock</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#193"><abbr title="Weline\Cron\Controller\Backend\Cron::unlock">unlock</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#213"><abbr title="Weline\Cron\Controller\Backend\Cron::getRunHelp">getRunHelp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#310"><abbr title="Weline\Cron\Controller\Backend\Cron::postRunStream">postRunStream</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#354"><abbr title="Weline\Cron\Controller\Backend\Cron::runLogList">runLogList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#381"><abbr title="Weline\Cron\Controller\Backend\Cron::runLogContent">runLogContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#408"><abbr title="Weline\Cron\Controller\Backend\Cron::postRunLogStream">postRunLogStream</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#19"><abbr title="Weline\Cron\Helper\Process::initTaskName">initTaskName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#31"><abbr title="Weline\Cron\Helper\Process::create">create</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#79"><abbr title="Weline\Cron\Helper\Process::getPPid">getPPid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#91"><abbr title="Weline\Cron\Helper\Process::getLogProcessFilePath">getLogProcessFilePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#121"><abbr title="Weline\Cron\Helper\Process::unsetLogProcessFilePath">unsetLogProcessFilePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#130"><abbr title="Weline\Cron\Helper\Process::moveCurrentLogToHistory">moveCurrentLogToHistory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#169"><abbr title="Weline\Cron\Helper\Process::pruneHistoryDir">pruneHistoryDir</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#184"><abbr title="Weline\Cron\Helper\Process::logBasenameForExecuteName">logBasenameForExecuteName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#189"><abbr title="Weline\Cron\Helper\Process::killPid">killPid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#203"><abbr title="Weline\Cron\Helper\Process::isProcessRunning">isProcessRunning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#221"><abbr title="Weline\Cron\Helper\Process::getProcessOutput">getProcessOutput</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#227"><abbr title="Weline\Cron\Helper\Process::setProcessOutput">setProcessOutput</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Process.php.html#243"><abbr title="Weline\Cron\Helper\Process::getPidByName">getPidByName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#29"><abbr title="Weline\Cron\Schedule\Linux\Crontab::isDevMode">isDevMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#41"><abbr title="Weline\Cron\Schedule\Linux\Crontab::isCli">isCli</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#49"><abbr title="Weline\Cron\Schedule\Linux\Crontab::formatMessage">formatMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#63"><abbr title="Weline\Cron\Schedule\Linux\Crontab::consoleOutput">consoleOutput</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#97"><abbr title="Weline\Cron\Schedule\Linux\Crontab::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#113"><abbr title="Weline\Cron\Schedule\Linux\Crontab::logCommand">logCommand</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#125"><abbr title="Weline\Cron\Schedule\Linux\Crontab::logDev">logDev</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#133"><abbr title="Weline\Cron\Schedule\Linux\Crontab::create">create</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#216"><abbr title="Weline\Cron\Schedule\Linux\Crontab::run">run</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#242"><abbr title="Weline\Cron\Schedule\Linux\Crontab::remove">remove</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#279"><abbr title="Weline\Cron\Schedule\Linux\Crontab::exist">exist</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#297"><abbr title="Weline\Cron\Schedule\Linux\Crontab::getJobs">getJobs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#328"><abbr title="Weline\Cron\Schedule\Linux\Crontab::getAllJobs">getAllJobs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#32"><abbr title="Weline\Cron\Schedule\Schedule::isDevMode">isDevMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#44"><abbr title="Weline\Cron\Schedule\Schedule::isCli">isCli</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#52"><abbr title="Weline\Cron\Schedule\Schedule::formatMessage">formatMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#66"><abbr title="Weline\Cron\Schedule\Schedule::consoleOutput">consoleOutput</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#101"><abbr title="Weline\Cron\Schedule\Schedule::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#119"><abbr title="Weline\Cron\Schedule\Schedule::logDev">logDev</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#127"><abbr title="Weline\Cron\Schedule\Schedule::create">create</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#151"><abbr title="Weline\Cron\Schedule\Schedule::run">run</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#177"><abbr title="Weline\Cron\Schedule\Schedule::remove">remove</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#199"><abbr title="Weline\Cron\Schedule\Schedule::getScheduler">getScheduler</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#212"><abbr title="Weline\Cron\Schedule\Schedule::exist">exist</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#234"><abbr title="Weline\Cron\Schedule\Schedule::getJobs">getJobs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#33"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#43"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::isDevMode">isDevMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#55"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::isCli">isCli</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#63"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::formatMessage">formatMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#77"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::consoleOutput">consoleOutput</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#111"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#127"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::logDev">logDev</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#138"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::logCommand">logCommand</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#150"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::getTaskDetail">getTaskDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#166"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::isWelineCronTask">isWelineCronTask</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#185"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::create">create</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#278"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::run">run</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#302"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::remove">remove</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#332"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::exist">exist</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#358"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::getJobs">getJobs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#29"><abbr title="Weline\Cron\Service\CronManualRunStreamer::stream">stream</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#209"><abbr title="Weline\Cron\Service\CronManualRunStreamer::sanitizeSuffix">sanitizeSuffix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#219"><abbr title="Weline\Cron\Service\CronManualRunStreamer::restoreManualEnv">restoreManualEnv</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#228"><abbr title="Weline\Cron\Service\CronManualRunStreamer::restoreSseMirrorEnv">restoreSseMirrorEnv</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#23"><abbr title="Weline\Cron\Service\CronRunLogService::isValidExecuteName">isValidExecuteName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#28"><abbr title="Weline\Cron\Service\CronRunLogService::liveLogPath">liveLogPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#35"><abbr title="Weline\Cron\Service\CronRunLogService::historyDir">historyDir</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#45"><abbr title="Weline\Cron\Service\CronRunLogService::listForExecuteName">listForExecuteName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#97"><abbr title="Weline\Cron\Service\CronRunLogService::readHistoryFile">readHistoryFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#125"><abbr title="Weline\Cron\Service\CronRunLogService::resolveLiveLogForStream">resolveLiveLogForStream</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#146"><abbr title="Weline\Cron\Service\CronRunLogService::isTaskProcessRunning">isTaskProcessRunning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#162"><abbr title="Weline\Cron\Service\CronRunLogService::formatBytes">formatBytes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#177"><abbr title="Weline\Cron\Service\CronRunLogService::streamLiveLogTail">streamLiveLogTail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#227"><abbr title="Weline\Cron\Service\CronRunLogService::emitLogChunks">emitLogChunks</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#20"><abbr title="Weline\Cron\Service\CronTestDiscovery::discover">discover</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#113"><abbr title="Weline\Cron\Service\CronTestDiscovery::findById">findById</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#128"><abbr title="Weline\Cron\Service\CronTestDiscovery::fqcnFromFile">fqcnFromFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#144"><abbr title="Weline\Cron\Service\CronTestDiscovery::camelToSnake">camelToSnake</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/CronStatus.php.html#24"><abbr title="Weline\Cron\Helper\CronStatus::displayProgressBar">displayProgressBar</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#29"><abbr title="Weline\Cron\Service\CronManualRunStreamer::stream">stream</abbr></a></td><td class="text-right">930</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#20"><abbr title="Weline\Cron\Service\CronTestDiscovery::discover">discover</abbr></a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#213"><abbr title="Weline\Cron\Controller\Backend\Cron::getRunHelp">getRunHelp</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Helper/Process.php.html#243"><abbr title="Weline\Cron\Helper\Process::getPidByName">getPidByName</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#45"><abbr title="Weline\Cron\Service\CronRunLogService::listForExecuteName">listForExecuteName</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#97"><abbr title="Weline\Cron\Service\CronRunLogService::readHistoryFile">readHistoryFile</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Helper/Process.php.html#130"><abbr title="Weline\Cron\Helper\Process::moveCurrentLogToHistory">moveCurrentLogToHistory</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#47"><abbr title="Weline\Cron\Controller\Backend\Cron::listing">listing</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#124"><abbr title="Weline\Cron\Controller\Backend\Cron::humanizeDuration">humanizeDuration</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#133"><abbr title="Weline\Cron\Schedule\Linux\Crontab::create">create</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#177"><abbr title="Weline\Cron\Service\CronRunLogService::streamLiveLogTail">streamLiveLogTail</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#310"><abbr title="Weline\Cron\Controller\Backend\Cron::postRunStream">postRunStream</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Helper/Process.php.html#31"><abbr title="Weline\Cron\Helper\Process::create">create</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#185"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::create">create</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#408"><abbr title="Weline\Cron\Controller\Backend\Cron::postRunLogStream">postRunLogStream</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Helper/Process.php.html#91"><abbr title="Weline\Cron\Helper\Process::getLogProcessFilePath">getLogProcessFilePath</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#358"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::getJobs">getJobs</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#113"><abbr title="Weline\Cron\Service\CronTestDiscovery::findById">findById</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#103"><abbr title="Weline\Cron\Controller\Backend\Cron::getDistinctModules">getDistinctModules</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Helper/Process.php.html#169"><abbr title="Weline\Cron\Helper\Process::pruneHistoryDir">pruneHistoryDir</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Helper/Process.php.html#203"><abbr title="Weline\Cron\Helper\Process::isProcessRunning">isProcessRunning</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Helper/Process.php.html#227"><abbr title="Weline\Cron\Helper\Process::setProcessOutput">setProcessOutput</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#49"><abbr title="Weline\Cron\Schedule\Linux\Crontab::formatMessage">formatMessage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#97"><abbr title="Weline\Cron\Schedule\Linux\Crontab::log">log</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#242"><abbr title="Weline\Cron\Schedule\Linux\Crontab::remove">remove</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#52"><abbr title="Weline\Cron\Schedule\Schedule::formatMessage">formatMessage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#101"><abbr title="Weline\Cron\Schedule\Schedule::log">log</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#63"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::formatMessage">formatMessage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#111"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::log">log</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#302"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::remove">remove</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#125"><abbr title="Weline\Cron\Service\CronRunLogService::resolveLiveLogForStream">resolveLiveLogForStream</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#146"><abbr title="Weline\Cron\Service\CronRunLogService::isTaskProcessRunning">isTaskProcessRunning</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#227"><abbr title="Weline\Cron\Service\CronRunLogService::emitLogChunks">emitLogChunks</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CronTestDiscovery.php.html#128"><abbr title="Weline\Cron\Service\CronTestDiscovery::fqcnFromFile">fqcnFromFile</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Helper/CronStatus.php.html#24"><abbr title="Weline\Cron\Helper\CronStatus::displayProgressBar">displayProgressBar</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#381"><abbr title="Weline\Cron\Controller\Backend\Cron::runLogContent">runLogContent</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#279"><abbr title="Weline\Cron\Schedule\Linux\Crontab::exist">exist</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#127"><abbr title="Weline\Cron\Schedule\Schedule::create">create</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#151"><abbr title="Weline\Cron\Schedule\Schedule::run">run</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#177"><abbr title="Weline\Cron\Schedule\Schedule::remove">remove</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#199"><abbr title="Weline\Cron\Schedule\Schedule::getScheduler">getScheduler</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#212"><abbr title="Weline\Cron\Schedule\Schedule::exist">exist</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#166"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::isWelineCronTask">isWelineCronTask</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#278"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::run">run</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#332"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::exist">exist</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#162"><abbr title="Weline\Cron\Service\CronRunLogService::formatBytes">formatBytes</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#173"><abbr title="Weline\Cron\Controller\Backend\Cron::lock">lock</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#193"><abbr title="Weline\Cron\Controller\Backend\Cron::unlock">unlock</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Cron.php.html#354"><abbr title="Weline\Cron\Controller\Backend\Cron::runLogList">runLogList</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/Process.php.html#19"><abbr title="Weline\Cron\Helper\Process::initTaskName">initTaskName</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/Process.php.html#79"><abbr title="Weline\Cron\Helper\Process::getPPid">getPPid</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/Process.php.html#189"><abbr title="Weline\Cron\Helper\Process::killPid">killPid</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#29"><abbr title="Weline\Cron\Schedule\Linux\Crontab::isDevMode">isDevMode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#63"><abbr title="Weline\Cron\Schedule\Linux\Crontab::consoleOutput">consoleOutput</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#125"><abbr title="Weline\Cron\Schedule\Linux\Crontab::logDev">logDev</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#216"><abbr title="Weline\Cron\Schedule\Linux\Crontab::run">run</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#297"><abbr title="Weline\Cron\Schedule\Linux\Crontab::getJobs">getJobs</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Linux/Crontab.php.html#328"><abbr title="Weline\Cron\Schedule\Linux\Crontab::getAllJobs">getAllJobs</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#32"><abbr title="Weline\Cron\Schedule\Schedule::isDevMode">isDevMode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#66"><abbr title="Weline\Cron\Schedule\Schedule::consoleOutput">consoleOutput</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#119"><abbr title="Weline\Cron\Schedule\Schedule::logDev">logDev</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Schedule.php.html#234"><abbr title="Weline\Cron\Schedule\Schedule::getJobs">getJobs</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#43"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::isDevMode">isDevMode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#77"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::consoleOutput">consoleOutput</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#127"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::logDev">logDev</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Schedule/Windows/Schtasks.php.html#150"><abbr title="Weline\Cron\Schedule\Windows\Schtasks::getTaskDetail">getTaskDetail</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#209"><abbr title="Weline\Cron\Service\CronManualRunStreamer::sanitizeSuffix">sanitizeSuffix</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#219"><abbr title="Weline\Cron\Service\CronManualRunStreamer::restoreManualEnv">restoreManualEnv</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CronManualRunStreamer.php.html#228"><abbr title="Weline\Cron\Service\CronManualRunStreamer::restoreSseMirrorEnv">restoreSseMirrorEnv</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CronRunLogService.php.html#23"><abbr title="Weline\Cron\Service\CronRunLogService::isValidExecuteName">isValidExecuteName</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([10,0,0,0,0,0,0,0,0,0,0,1], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([85,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Attribute\/CronTestHelp.php.html#12\">Weline\\Cron\\Attribute\\CronTestHelp<\/a>"],[0,56,"<a href=\"Controller\/Backend\/Cron.php.html#30\">Weline\\Cron\\Controller\\Backend\\Cron<\/a>"],[0,54,"<a href=\"Helper\/Process.php.html#17\">Weline\\Cron\\Helper\\Process<\/a>"],[100,0,"<a href=\"Model\/CronTask.php.html#17\">Weline\\Cron\\Model\\CronTask<\/a>"],[0,37,"<a href=\"Schedule\/Linux\/Crontab.php.html#19\">Weline\\Cron\\Schedule\\Linux\\Crontab<\/a>"],[0,32,"<a href=\"Schedule\/Schedule.php.html#19\">Weline\\Cron\\Schedule\\Schedule<\/a>"],[0,43,"<a href=\"Schedule\/Windows\/Schtasks.php.html#21\">Weline\\Cron\\Schedule\\Windows\\Schtasks<\/a>"],[0,36,"<a href=\"Service\/CronManualRunStreamer.php.html#12\">Weline\\Cron\\Service\\CronManualRunStreamer<\/a>"],[0,49,"<a href=\"Service\/CronRunLogService.php.html#17\">Weline\\Cron\\Service\\CronRunLogService<\/a>"],[0,30,"<a href=\"Service\/CronTestDiscovery.php.html#15\">Weline\\Cron\\Service\\CronTestDiscovery<\/a>"],[0,4,"<a href=\"Helper\/CronStatus.php.html#15\">Weline\\Cron\\Helper\\CronStatus<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Attribute\/CronTestHelp.php.html#19\">Weline\\Cron\\Attribute\\CronTestHelp::__construct<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Cron.php.html#41\">Weline\\Cron\\Controller\\Backend\\Cron::__construct<\/a>"],[0,9,"<a href=\"Controller\/Backend\/Cron.php.html#47\">Weline\\Cron\\Controller\\Backend\\Cron::listing<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Cron.php.html#103\">Weline\\Cron\\Controller\\Backend\\Cron::getDistinctModules<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Cron.php.html#124\">Weline\\Cron\\Controller\\Backend\\Cron::humanizeDuration<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Cron.php.html#150\">Weline\\Cron\\Controller\\Backend\\Cron::getCronStats<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Cron.php.html#173\">Weline\\Cron\\Controller\\Backend\\Cron::lock<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Cron.php.html#193\">Weline\\Cron\\Controller\\Backend\\Cron::unlock<\/a>"],[0,13,"<a href=\"Controller\/Backend\/Cron.php.html#213\">Weline\\Cron\\Controller\\Backend\\Cron::getRunHelp<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Cron.php.html#310\">Weline\\Cron\\Controller\\Backend\\Cron::postRunStream<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Cron.php.html#354\">Weline\\Cron\\Controller\\Backend\\Cron::runLogList<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Cron.php.html#381\">Weline\\Cron\\Controller\\Backend\\Cron::runLogContent<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Cron.php.html#408\">Weline\\Cron\\Controller\\Backend\\Cron::postRunLogStream<\/a>"],[0,2,"<a href=\"Helper\/Process.php.html#19\">Weline\\Cron\\Helper\\Process::initTaskName<\/a>"],[0,6,"<a href=\"Helper\/Process.php.html#31\">Weline\\Cron\\Helper\\Process::create<\/a>"],[0,2,"<a href=\"Helper\/Process.php.html#79\">Weline\\Cron\\Helper\\Process::getPPid<\/a>"],[0,5,"<a href=\"Helper\/Process.php.html#91\">Weline\\Cron\\Helper\\Process::getLogProcessFilePath<\/a>"],[0,1,"<a href=\"Helper\/Process.php.html#121\">Weline\\Cron\\Helper\\Process::unsetLogProcessFilePath<\/a>"],[0,10,"<a href=\"Helper\/Process.php.html#130\">Weline\\Cron\\Helper\\Process::moveCurrentLogToHistory<\/a>"],[0,4,"<a href=\"Helper\/Process.php.html#169\">Weline\\Cron\\Helper\\Process::pruneHistoryDir<\/a>"],[0,1,"<a href=\"Helper\/Process.php.html#184\">Weline\\Cron\\Helper\\Process::logBasenameForExecuteName<\/a>"],[0,2,"<a href=\"Helper\/Process.php.html#189\">Weline\\Cron\\Helper\\Process::killPid<\/a>"],[0,4,"<a href=\"Helper\/Process.php.html#203\">Weline\\Cron\\Helper\\Process::isProcessRunning<\/a>"],[0,1,"<a href=\"Helper\/Process.php.html#221\">Weline\\Cron\\Helper\\Process::getProcessOutput<\/a>"],[0,4,"<a href=\"Helper\/Process.php.html#227\">Weline\\Cron\\Helper\\Process::setProcessOutput<\/a>"],[0,12,"<a href=\"Helper\/Process.php.html#243\">Weline\\Cron\\Helper\\Process::getPidByName<\/a>"],[0,2,"<a href=\"Schedule\/Linux\/Crontab.php.html#29\">Weline\\Cron\\Schedule\\Linux\\Crontab::isDevMode<\/a>"],[0,1,"<a href=\"Schedule\/Linux\/Crontab.php.html#41\">Weline\\Cron\\Schedule\\Linux\\Crontab::isCli<\/a>"],[0,4,"<a href=\"Schedule\/Linux\/Crontab.php.html#49\">Weline\\Cron\\Schedule\\Linux\\Crontab::formatMessage<\/a>"],[0,2,"<a href=\"Schedule\/Linux\/Crontab.php.html#63\">Weline\\Cron\\Schedule\\Linux\\Crontab::consoleOutput<\/a>"],[0,4,"<a href=\"Schedule\/Linux\/Crontab.php.html#97\">Weline\\Cron\\Schedule\\Linux\\Crontab::log<\/a>"],[0,1,"<a href=\"Schedule\/Linux\/Crontab.php.html#113\">Weline\\Cron\\Schedule\\Linux\\Crontab::logCommand<\/a>"],[0,2,"<a href=\"Schedule\/Linux\/Crontab.php.html#125\">Weline\\Cron\\Schedule\\Linux\\Crontab::logDev<\/a>"],[0,8,"<a href=\"Schedule\/Linux\/Crontab.php.html#133\">Weline\\Cron\\Schedule\\Linux\\Crontab::create<\/a>"],[0,2,"<a href=\"Schedule\/Linux\/Crontab.php.html#216\">Weline\\Cron\\Schedule\\Linux\\Crontab::run<\/a>"],[0,4,"<a href=\"Schedule\/Linux\/Crontab.php.html#242\">Weline\\Cron\\Schedule\\Linux\\Crontab::remove<\/a>"],[0,3,"<a href=\"Schedule\/Linux\/Crontab.php.html#279\">Weline\\Cron\\Schedule\\Linux\\Crontab::exist<\/a>"],[0,2,"<a href=\"Schedule\/Linux\/Crontab.php.html#297\">Weline\\Cron\\Schedule\\Linux\\Crontab::getJobs<\/a>"],[0,2,"<a href=\"Schedule\/Linux\/Crontab.php.html#328\">Weline\\Cron\\Schedule\\Linux\\Crontab::getAllJobs<\/a>"],[0,2,"<a href=\"Schedule\/Schedule.php.html#32\">Weline\\Cron\\Schedule\\Schedule::isDevMode<\/a>"],[0,1,"<a href=\"Schedule\/Schedule.php.html#44\">Weline\\Cron\\Schedule\\Schedule::isCli<\/a>"],[0,4,"<a href=\"Schedule\/Schedule.php.html#52\">Weline\\Cron\\Schedule\\Schedule::formatMessage<\/a>"],[0,2,"<a href=\"Schedule\/Schedule.php.html#66\">Weline\\Cron\\Schedule\\Schedule::consoleOutput<\/a>"],[0,4,"<a href=\"Schedule\/Schedule.php.html#101\">Weline\\Cron\\Schedule\\Schedule::log<\/a>"],[0,2,"<a href=\"Schedule\/Schedule.php.html#119\">Weline\\Cron\\Schedule\\Schedule::logDev<\/a>"],[0,3,"<a href=\"Schedule\/Schedule.php.html#127\">Weline\\Cron\\Schedule\\Schedule::create<\/a>"],[0,3,"<a href=\"Schedule\/Schedule.php.html#151\">Weline\\Cron\\Schedule\\Schedule::run<\/a>"],[0,3,"<a href=\"Schedule\/Schedule.php.html#177\">Weline\\Cron\\Schedule\\Schedule::remove<\/a>"],[0,3,"<a href=\"Schedule\/Schedule.php.html#199\">Weline\\Cron\\Schedule\\Schedule::getScheduler<\/a>"],[0,3,"<a href=\"Schedule\/Schedule.php.html#212\">Weline\\Cron\\Schedule\\Schedule::exist<\/a>"],[0,2,"<a href=\"Schedule\/Schedule.php.html#234\">Weline\\Cron\\Schedule\\Schedule::getJobs<\/a>"],[0,1,"<a href=\"Schedule\/Windows\/Schtasks.php.html#33\">Weline\\Cron\\Schedule\\Windows\\Schtasks::__construct<\/a>"],[0,2,"<a href=\"Schedule\/Windows\/Schtasks.php.html#43\">Weline\\Cron\\Schedule\\Windows\\Schtasks::isDevMode<\/a>"],[0,1,"<a href=\"Schedule\/Windows\/Schtasks.php.html#55\">Weline\\Cron\\Schedule\\Windows\\Schtasks::isCli<\/a>"],[0,4,"<a href=\"Schedule\/Windows\/Schtasks.php.html#63\">Weline\\Cron\\Schedule\\Windows\\Schtasks::formatMessage<\/a>"],[0,2,"<a href=\"Schedule\/Windows\/Schtasks.php.html#77\">Weline\\Cron\\Schedule\\Windows\\Schtasks::consoleOutput<\/a>"],[0,4,"<a href=\"Schedule\/Windows\/Schtasks.php.html#111\">Weline\\Cron\\Schedule\\Windows\\Schtasks::log<\/a>"],[0,2,"<a href=\"Schedule\/Windows\/Schtasks.php.html#127\">Weline\\Cron\\Schedule\\Windows\\Schtasks::logDev<\/a>"],[0,1,"<a href=\"Schedule\/Windows\/Schtasks.php.html#138\">Weline\\Cron\\Schedule\\Windows\\Schtasks::logCommand<\/a>"],[0,2,"<a href=\"Schedule\/Windows\/Schtasks.php.html#150\">Weline\\Cron\\Schedule\\Windows\\Schtasks::getTaskDetail<\/a>"],[0,3,"<a href=\"Schedule\/Windows\/Schtasks.php.html#166\">Weline\\Cron\\Schedule\\Windows\\Schtasks::isWelineCronTask<\/a>"],[0,6,"<a href=\"Schedule\/Windows\/Schtasks.php.html#185\">Weline\\Cron\\Schedule\\Windows\\Schtasks::create<\/a>"],[0,3,"<a href=\"Schedule\/Windows\/Schtasks.php.html#278\">Weline\\Cron\\Schedule\\Windows\\Schtasks::run<\/a>"],[0,4,"<a href=\"Schedule\/Windows\/Schtasks.php.html#302\">Weline\\Cron\\Schedule\\Windows\\Schtasks::remove<\/a>"],[0,3,"<a href=\"Schedule\/Windows\/Schtasks.php.html#332\">Weline\\Cron\\Schedule\\Windows\\Schtasks::exist<\/a>"],[0,5,"<a href=\"Schedule\/Windows\/Schtasks.php.html#358\">Weline\\Cron\\Schedule\\Windows\\Schtasks::getJobs<\/a>"],[0,30,"<a href=\"Service\/CronManualRunStreamer.php.html#29\">Weline\\Cron\\Service\\CronManualRunStreamer::stream<\/a>"],[0,2,"<a href=\"Service\/CronManualRunStreamer.php.html#209\">Weline\\Cron\\Service\\CronManualRunStreamer::sanitizeSuffix<\/a>"],[0,2,"<a href=\"Service\/CronManualRunStreamer.php.html#219\">Weline\\Cron\\Service\\CronManualRunStreamer::restoreManualEnv<\/a>"],[0,2,"<a href=\"Service\/CronManualRunStreamer.php.html#228\">Weline\\Cron\\Service\\CronManualRunStreamer::restoreSseMirrorEnv<\/a>"],[0,2,"<a href=\"Service\/CronRunLogService.php.html#23\">Weline\\Cron\\Service\\CronRunLogService::isValidExecuteName<\/a>"],[0,1,"<a href=\"Service\/CronRunLogService.php.html#28\">Weline\\Cron\\Service\\CronRunLogService::liveLogPath<\/a>"],[0,1,"<a href=\"Service\/CronRunLogService.php.html#35\">Weline\\Cron\\Service\\CronRunLogService::historyDir<\/a>"],[0,11,"<a href=\"Service\/CronRunLogService.php.html#45\">Weline\\Cron\\Service\\CronRunLogService::listForExecuteName<\/a>"],[0,11,"<a href=\"Service\/CronRunLogService.php.html#97\">Weline\\Cron\\Service\\CronRunLogService::readHistoryFile<\/a>"],[0,4,"<a href=\"Service\/CronRunLogService.php.html#125\">Weline\\Cron\\Service\\CronRunLogService::resolveLiveLogForStream<\/a>"],[0,4,"<a href=\"Service\/CronRunLogService.php.html#146\">Weline\\Cron\\Service\\CronRunLogService::isTaskProcessRunning<\/a>"],[0,3,"<a href=\"Service\/CronRunLogService.php.html#162\">Weline\\Cron\\Service\\CronRunLogService::formatBytes<\/a>"],[0,8,"<a href=\"Service\/CronRunLogService.php.html#177\">Weline\\Cron\\Service\\CronRunLogService::streamLiveLogTail<\/a>"],[0,4,"<a href=\"Service\/CronRunLogService.php.html#227\">Weline\\Cron\\Service\\CronRunLogService::emitLogChunks<\/a>"],[0,20,"<a href=\"Service\/CronTestDiscovery.php.html#20\">Weline\\Cron\\Service\\CronTestDiscovery::discover<\/a>"],[0,5,"<a href=\"Service\/CronTestDiscovery.php.html#113\">Weline\\Cron\\Service\\CronTestDiscovery::findById<\/a>"],[0,4,"<a href=\"Service\/CronTestDiscovery.php.html#128\">Weline\\Cron\\Service\\CronTestDiscovery::fqcnFromFile<\/a>"],[0,1,"<a href=\"Service\/CronTestDiscovery.php.html#144\">Weline\\Cron\\Service\\CronTestDiscovery::camelToSnake<\/a>"],[0,4,"<a href=\"Helper\/CronStatus.php.html#24\">Weline\\Cron\\Helper\\CronStatus::displayProgressBar<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

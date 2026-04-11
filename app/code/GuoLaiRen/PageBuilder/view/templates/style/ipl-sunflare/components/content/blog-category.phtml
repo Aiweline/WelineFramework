@@ -1,0 +1,649 @@
+<?php
+/**
+ * IPL Sunflare Blog Category Component
+ *
+ * @fields_start
+ * blog.title|分类标题|text|Category Posts
+ * blog.subtitle|副标题|text|Browse articles by category
+ * blog.posts_per_page|每页显示数量|number|9
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_category|显示分类|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.card_style|卡片样式|select:default=默认,minimal=简约,featured=特色|default
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$currentCategory = $this->getData('current_category') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', $currentCategory['name'] ?? __('Category Posts'));
+$subtitle = $getConfig('blog.subtitle', __('Browse articles by category'));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+
+$primaryColor = $getConfig('color_scheme.primary', '#ff6a3d');
+$secondaryColor = $getConfig('color_scheme.secondary', '#ff4d8d');
+$bgColor = $getConfig('color_scheme.background', '#120a14');
+$textColor = $getConfig('color_scheme.text', '#ffe6d1');
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/ipl-sunflare/asset/img/poker-header-bg.svg');
+
+$spotlightPost = $blogPosts[0] ?? null;
+$streamPosts = array_slice($blogPosts, 1);
+?>
+
+<section class="dts-blog-category" id="blog-category">
+    <div class="category-shell">
+        <header class="category-masthead">
+            <?php if (!empty($currentCategory['name'])): ?>
+                <span class="category-chip"><?= htmlspecialchars($currentCategory['name']) ?></span>
+            <?php endif; ?>
+            <h2><?= htmlspecialchars($title) ?></h2>
+            <?php if ($subtitle): ?>
+                <p class="category-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($currentCategory['description'])): ?>
+                <p class="category-description"><?= htmlspecialchars($currentCategory['description']) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <?php if (empty($blogPosts)): ?>
+            <div class="category-empty">
+                <div class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
+                    </svg>
+                </div>
+                <p><?= __('该分类下暂时还没有文章，稍后再来看看吧～') ?></p>
+                <a href="/blog" class="back-link"><?= __('返回博客列表') ?></a>
+            </div>
+        <?php else: ?>
+            <?php if ($spotlightPost): ?>
+                <article class="spotlight-story">
+                    <div class="spotlight-copy">
+                        <span class="spotlight-kicker">Category Spotlight</span>
+                        <h3><a href="<?= htmlspecialchars($spotlightPost['url']) ?>"><?= htmlspecialchars($spotlightPost['title']) ?></a></h3>
+                        <div class="spotlight-meta">
+                            <?php if ($showCategory && !empty($spotlightPost['category_name'])): ?>
+                                <span><?= htmlspecialchars($spotlightPost['category_name']) ?></span>
+                            <?php endif; ?>
+                            <?php if ($showDate && !empty($spotlightPost['published_at'])): ?>
+                                <span><?= date('M d, Y', strtotime($spotlightPost['published_at'])) ?></span>
+                            <?php endif; ?>
+                            <?php if ($showAuthor && !empty($spotlightPost['author'])): ?>
+                                <span><?= htmlspecialchars($spotlightPost['author']) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <?php if (!empty($spotlightPost['summary'])): ?>
+                            <p><?= htmlspecialchars(mb_substr($spotlightPost['summary'], 0, 210)) ?><?= mb_strlen($spotlightPost['summary']) > 210 ? '...' : '' ?></p>
+                        <?php endif; ?>
+                        <a href="<?= htmlspecialchars($spotlightPost['url']) ?>" class="story-action">
+                            <?= __('Read Article') ?>
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                            </svg>
+                        </a>
+                    </div>
+
+                    <?php if (!empty($spotlightPost['cover_image'])): ?>
+                        <a href="<?= htmlspecialchars($spotlightPost['url']) ?>" class="spotlight-media">
+                            <img src="<?= htmlspecialchars($spotlightPost['cover_image']) ?>" alt="<?= htmlspecialchars($spotlightPost['title']) ?>" loading="lazy">
+                        </a>
+                    <?php endif; ?>
+                </article>
+            <?php endif; ?>
+
+            <div class="category-layout<?= $showSidebar ? ' has-rail' : '' ?>">
+                <div class="timeline-stream">
+                    <?php foreach ($streamPosts as $index => $post): ?>
+                        <article class="timeline-card<?= $index % 2 === 1 ? ' is-right' : '' ?>">
+                            <span class="timeline-dot"></span>
+                            <div class="timeline-panel">
+                                <?php if (!empty($post['cover_image'])): ?>
+                                    <a href="<?= htmlspecialchars($post['url']) ?>" class="timeline-media">
+                                        <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                    </a>
+                                <?php endif; ?>
+
+                                <div class="timeline-copy">
+                                    <div class="timeline-meta">
+                                        <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                            <span class="timeline-chip"><?= htmlspecialchars($post['category_name']) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($showDate && !empty($post['published_at'])): ?>
+                                            <span class="timeline-date"><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <h3><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h3>
+
+                                    <?php if (!empty($post['summary'])): ?>
+                                        <p><?= htmlspecialchars(mb_substr($post['summary'], 0, 170)) ?><?= mb_strlen($post['summary']) > 170 ? '...' : '' ?></p>
+                                    <?php endif; ?>
+
+                                    <div class="timeline-foot">
+                                        <?php if ($showAuthor && !empty($post['author'])): ?>
+                                            <span class="timeline-author"><?= htmlspecialchars($post['author']) ?></span>
+                                        <?php endif; ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="story-action">
+                                            <?= __('Read More') ?>
+                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                                <path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/>
+                                            </svg>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+
+                    <?php if (empty($streamPosts)): ?>
+                        <article class="timeline-card">
+                            <span class="timeline-dot"></span>
+                            <div class="timeline-panel timeline-placeholder">
+                                <h3><?= __('More category updates are coming soon') ?></h3>
+                                <p><?= __('New IPL Sunflare notes and guides for this category will be published shortly.') ?></p>
+                            </div>
+                        </article>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="stream-rail">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card">
+                                <h4><?= __('Categories') ?></h4>
+                                <div class="category-list">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <?php $active = !empty($currentCategory['id']) && isset($category['id']) && $category['id'] == $currentCategory['id']; ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="category-entry<?= $active ? ' is-active' : '' ?>">
+                                            <span><?= htmlspecialchars($category['name']) ?></span>
+                                            <?php if (isset($category['post_count'])): ?>
+                                                <small><?= (int)$category['post_count'] ?></small>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recentPosts)): ?>
+                            <section class="rail-card">
+                                <h4><?= __('Recent Posts') ?></h4>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 5) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+.dts-blog-category {
+    position: relative;
+    padding: 84px 0;
+    background:
+        radial-gradient(1200px 620px at 12% 8%, rgba(255, 111, 51, 0.16), transparent 58%),
+        radial-gradient(920px 580px at 88% 18%, rgba(255, 77, 141, 0.17), transparent 62%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+    overflow: hidden;
+}
+
+.dts-blog-category::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.08;
+    pointer-events: none;
+}
+
+.dts-blog-category::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255, 182, 120, 0.05) 0%, rgba(24, 10, 24, 0.63) 100%);
+    pointer-events: none;
+}
+
+.dts-blog-category .category-shell {
+    max-width: 1220px;
+    margin: 0 auto;
+    padding: 0 20px;
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 1rem;
+}
+
+.dts-blog-category .category-masthead {
+    max-width: 860px;
+}
+
+.dts-blog-category .category-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.36rem 0.82rem;
+    border-radius: 999px;
+    background: linear-gradient(120deg, <?= htmlspecialchars($primaryColor) ?> 0%, <?= htmlspecialchars($secondaryColor) ?> 100%);
+    color: #ffe8d1;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.dts-blog-category .category-masthead h2 {
+    margin-top: 0.95rem;
+    color: #ffe8d1;
+    font-size: clamp(2.1rem, 4.1vw, 3.4rem);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+}
+
+.dts-blog-category .category-subtitle,
+.dts-blog-category .category-description {
+    margin-top: 0.78rem;
+    color: rgba(255, 213, 184, 0.78);
+    line-height: 1.74;
+}
+
+.dts-blog-category .spotlight-story,
+.dts-blog-category .timeline-panel,
+.dts-blog-category .rail-card,
+.dts-blog-category .category-empty {
+    border-radius: 24px;
+    border: 1px solid rgba(255, 190, 127, 0.2);
+    background: linear-gradient(160deg, rgba(54, 28, 45, 0.92) 0%, rgba(74, 37, 58, 0.88) 100%);
+    box-shadow: 0 22px 56px rgba(0, 0, 0, 0.34);
+}
+
+.dts-blog-category .spotlight-story {
+    display: grid;
+    grid-template-columns: minmax(0, 0.9fr) minmax(300px, 1.1fr);
+    overflow: hidden;
+}
+
+.dts-blog-category .spotlight-copy {
+    padding: clamp(1.2rem, 2.8vw, 1.9rem);
+    display: grid;
+    align-content: center;
+}
+
+.dts-blog-category .spotlight-kicker {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.34rem 0.78rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 196, 136, 0.32);
+    background: rgba(255, 143, 54, 0.13);
+    color: #ffd79a;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.dts-blog-category .spotlight-copy h3 {
+    margin-top: 0.95rem;
+    font-size: clamp(1.72rem, 2.9vw, 2.55rem);
+    line-height: 1.08;
+}
+
+.dts-blog-category .spotlight-copy h3 a,
+.dts-blog-category .timeline-copy h3 a {
+    color: #ffe8d1;
+    text-decoration: none;
+    transition: color 0.25s ease;
+}
+
+.dts-blog-category .spotlight-copy h3 a:hover,
+.dts-blog-category .timeline-copy h3 a:hover {
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+}
+
+.dts-blog-category .spotlight-meta,
+.dts-blog-category .timeline-meta {
+    margin-top: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    color: rgba(255, 213, 184, 0.7);
+    font-size: 0.82rem;
+}
+
+.dts-blog-category .spotlight-copy p,
+.dts-blog-category .timeline-copy p {
+    margin-top: 0.88rem;
+    color: rgba(255, 213, 184, 0.76);
+    line-height: 1.75;
+}
+
+.dts-blog-category .story-action {
+    margin-top: 1rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.42rem;
+    color: <?= htmlspecialchars($primaryColor) ?>;
+    text-decoration: none;
+    font-weight: 700;
+    transition: gap 0.25s ease, color 0.25s ease;
+}
+
+.dts-blog-category .story-action:hover {
+    gap: 0.72rem;
+    color: <?= htmlspecialchars($secondaryColor) ?>;
+}
+
+.dts-blog-category .spotlight-media {
+    display: block;
+    min-height: 100%;
+}
+
+.dts-blog-category .spotlight-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.dts-blog-category .category-layout {
+    display: grid;
+    gap: 1rem;
+}
+
+.dts-blog-category .category-layout.has-rail {
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.3fr);
+    align-items: start;
+}
+
+.dts-blog-category .timeline-stream {
+    position: relative;
+    display: grid;
+    gap: 1rem;
+}
+
+.dts-blog-category .timeline-stream::before {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg, rgba(255, 190, 128, 0.42), rgba(255, 77, 141, 0.38));
+}
+
+.dts-blog-category .timeline-card {
+    position: relative;
+    padding-left: 52px;
+}
+
+.dts-blog-category .timeline-card.is-right {
+    padding-left: 64px;
+}
+
+.dts-blog-category .timeline-dot {
+    position: absolute;
+    left: 12px;
+    top: 1.4rem;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    border: 2px solid rgba(255, 196, 136, 0.66);
+    background: rgba(255, 115, 53, 0.58);
+    box-shadow: 0 0 0 4px rgba(255, 111, 51, 0.15);
+}
+
+.dts-blog-category .timeline-card.is-right .timeline-dot {
+    background: rgba(255, 77, 141, 0.56);
+    box-shadow: 0 0 0 4px rgba(255, 77, 141, 0.13);
+}
+
+.dts-blog-category .timeline-panel {
+    overflow: hidden;
+}
+
+.dts-blog-category .timeline-card.is-right .timeline-panel {
+    border-color: rgba(255, 130, 185, 0.24);
+    background: linear-gradient(160deg, rgba(58, 30, 49, 0.92) 0%, rgba(79, 39, 63, 0.88) 100%);
+}
+
+.dts-blog-category .timeline-media {
+    display: block;
+    position: relative;
+    padding-top: 44%;
+    overflow: hidden;
+}
+
+.dts-blog-category .timeline-media img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dts-blog-category .timeline-copy {
+    padding: 1.05rem;
+}
+
+.dts-blog-category .timeline-chip,
+.dts-blog-category .timeline-date {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.3rem 0.66rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+.dts-blog-category .timeline-chip {
+    background: linear-gradient(120deg, <?= htmlspecialchars($primaryColor) ?> 0%, <?= htmlspecialchars($secondaryColor) ?> 100%);
+    color: #ffe8d1;
+}
+
+.dts-blog-category .timeline-date {
+    color: rgba(255, 213, 184, 0.72);
+    border: 1px solid rgba(255, 194, 134, 0.22);
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.dts-blog-category .timeline-copy h3 {
+    margin-top: 0.82rem;
+    font-size: 1.16rem;
+    line-height: 1.38;
+}
+
+.dts-blog-category .timeline-foot {
+    margin-top: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.78rem;
+    flex-wrap: wrap;
+}
+
+.dts-blog-category .timeline-author {
+    color: rgba(255, 203, 170, 0.66);
+    font-size: 0.86rem;
+}
+
+.dts-blog-category .timeline-placeholder {
+    padding: 1.2rem;
+}
+
+.dts-blog-category .stream-rail {
+    display: grid;
+    gap: 1rem;
+    position: sticky;
+    top: 110px;
+}
+
+.dts-blog-category .rail-card {
+    padding: 1.05rem;
+}
+
+.dts-blog-category .rail-card h4 {
+    color: #ffe8d1;
+    font-size: 0.9rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.dts-blog-category .category-list,
+.dts-blog-category .recent-stack {
+    margin-top: 0.85rem;
+    display: grid;
+    gap: 0.7rem;
+}
+
+.dts-blog-category .category-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.8rem;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 194, 134, 0.2);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 213, 184, 0.8);
+    text-decoration: none;
+    transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+.dts-blog-category .category-entry.is-active,
+.dts-blog-category .category-entry:hover {
+    background: rgba(255, 77, 141, 0.13);
+    color: #ffe8d1;
+    transform: translateX(3px);
+}
+
+.dts-blog-category .category-entry small {
+    color: rgba(255, 203, 170, 0.66);
+}
+
+.dts-blog-category .recent-link {
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 0.7rem;
+    text-decoration: none;
+    color: inherit;
+}
+
+.dts-blog-category .recent-link img {
+    width: 62px;
+    height: 62px;
+    border-radius: 11px;
+    object-fit: cover;
+}
+
+.dts-blog-category .recent-link span {
+    display: grid;
+    gap: 0.28rem;
+}
+
+.dts-blog-category .recent-link strong {
+    color: #ffe8d1;
+    font-size: 0.9rem;
+    line-height: 1.42;
+}
+
+.dts-blog-category .recent-link small {
+    color: rgba(255, 203, 170, 0.64);
+    font-size: 0.75rem;
+}
+
+.dts-blog-category .category-empty {
+    text-align: center;
+    padding: 4rem 1.5rem;
+}
+
+.dts-blog-category .back-link {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 0.56rem 0.9rem;
+    border-radius: 999px;
+    background: linear-gradient(120deg, <?= htmlspecialchars($primaryColor) ?> 0%, <?= htmlspecialchars($secondaryColor) ?> 100%);
+    color: #ffe8d1;
+    font-size: 0.88rem;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+@media (max-width: 1080px) {
+    .dts-blog-category .spotlight-story,
+    .dts-blog-category .category-layout.has-rail {
+        grid-template-columns: 1fr;
+    }
+
+    .dts-blog-category .stream-rail {
+        position: static;
+    }
+}
+
+@media (max-width: 768px) {
+    .dts-blog-category {
+        padding: 64px 0;
+    }
+
+    .dts-blog-category .category-shell {
+        padding: 0 15px;
+    }
+
+    .dts-blog-category .spotlight-story,
+    .dts-blog-category .timeline-panel,
+    .dts-blog-category .rail-card,
+    .dts-blog-category .category-empty {
+        border-radius: 20px;
+    }
+
+    .dts-blog-category .timeline-card {
+        padding-left: 42px;
+    }
+
+    .dts-blog-category .timeline-card.is-right {
+        padding-left: 42px;
+    }
+
+    .dts-blog-category .timeline-stream::before {
+        left: 16px;
+    }
+
+    .dts-blog-category .timeline-dot {
+        left: 8px;
+    }
+}
+</style>

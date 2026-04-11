@@ -1,0 +1,632 @@
+<?php
+/**
+ * Indian Rummy Voltage - Games Component
+ *
+ * @component_start
+ * code: games
+ * name: 游戏介绍
+ * name_en: Games Showcase
+ * description: 游戏/产品介绍卡片，主卡+辅助卡布局
+ * category: content
+ * region: content
+ * thumbnail: asset/img/game/game-i1.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示设置
+ * display.show_section => 显示区块:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示卡片描述:select:yes|yes,no
+ *
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#f1e0bf
+ * style.title_color => 标题颜色:color:#fff2cf
+ * style.title_font_size => 标题字号桌面端:number:36|px
+ * style.title_font_size_mobile => 标题字号移动端:number:24|px
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.86)
+ * style.card_border_radius => 卡片圆角:number:16|px
+ * style.card_border_color => 卡片边框颜色:color:rgba(20,58,67,0.18)
+ * style.card_title_color => 卡片标题颜色:color:#143641
+ * style.card_title_font_size => 卡片标题字号:number:20|px
+ * style.card_desc_color => 卡片描述颜色:color:#2f434c
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.section_padding => 区块上下间距桌面端:number:68|px
+ * style.section_padding_mobile => 区块上下间距移动端:number:42|px
+ * style.card_gap => 卡片间距:number:24|px
+ * style.card_content_padding => 卡片内容内边距:number:22|px
+ * style.hover_transform => 悬停偏移:number:4|px
+ *
+ * group:images => 图片设置
+ * images.image_1_desktop => 游戏1桌面端图片:textarea:|默认使用本地图片
+ * images.image_1_mobile => 游戏1移动端图片:textarea:|默认使用本地图片
+ * images.image_2 => 游戏2图片:textarea:|默认使用本地图片
+ * images.image_3 => 游戏3图片:textarea:|默认使用本地图片
+ *
+ * group:texts => 文本设置
+ * texts.title => 区块标题:text:Choose Your Voltage Table
+ * texts.summary => 区块描述:textarea:
+ * texts.game_1_title => 游戏1标题:text:Indian Rummy Classic
+ * texts.game_1_desc => 游戏1描述:textarea:Core Rummy table flow with rapid room entry and stable rounds.
+ * texts.game_2_title => 游戏2标题:text:Rummy Turbo
+ * texts.game_2_desc => 游戏2描述:textarea:Sequence-focused matches with cleaner score rhythm and fast rematch entry.
+ * texts.game_3_title => 游戏3标题:text:Slot Sprint
+ * texts.game_3_desc => 游戏3描述:textarea:Short spin sessions designed for fast breaks between card tables.
+ *
+ * @fields_end
+ */
+
+$componentId = 'rv-games-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('games.bg_color', '#f1e0bf'));
+$titleColorRaw = $getConfig('style.title_color', '#fff2cf');
+$titleColor = $titleColorRaw;
+if (preg_match('/^#([0-9a-fA-F]{6})$/', $titleColorRaw, $matches)) {
+    $hex = $matches[1];
+    $r = hexdec(substr($hex, 0, 2));
+    $g = hexdec(substr($hex, 2, 2));
+    $b = hexdec(substr($hex, 4, 2));
+    $luma = 0.299 * $r + 0.587 * $g + 0.114 * $b;
+    if ($luma < 130) {
+        $titleColor = '#fff2cf';
+    }
+} elseif (preg_match('/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})/i', $titleColorRaw, $matches)) {
+    $r = min(255, (int)$matches[1]);
+    $g = min(255, (int)$matches[2]);
+    $b = min(255, (int)$matches[3]);
+    $luma = 0.299 * $r + 0.587 * $g + 0.114 * $b;
+    if ($luma < 130) {
+        $titleColor = '#fff2cf';
+    }
+}
+$titleFontSize = (int)$getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = (int)$getConfig('style.title_font_size_mobile', '24');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.86)');
+$cardBorderRadius = (int)$getConfig('style.card_border_radius', '16');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(20,58,67,0.18)');
+$cardTitleColor = $getConfig('style.card_title_color', '#143641');
+$cardTitleFontSize = (int)$getConfig('style.card_title_font_size', '20');
+$cardDescColor = $getConfig('style.card_desc_color', '#2f434c');
+$cardDescFontSize = (int)$getConfig('style.card_desc_font_size', '14');
+$sectionPadding = (int)$getConfig('style.section_padding', '68');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '42');
+$cardGap = (int)$getConfig('style.card_gap', '24');
+$cardContentPadding = (int)$getConfig('style.card_content_padding', '22');
+$hoverTransform = (int)$getConfig('style.hover_transform', '4');
+
+$defaultImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/game/game-i1.webp');
+$defaultImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/game/game-i1-m.webp');
+$defaultImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/game/game-i2.webp');
+$defaultImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/game/game-i3.webp');
+
+$image1Desktop = $getConfig('images.image_1_desktop', $getConfig('games.image_1_desktop', '')) ?: $defaultImage1Desktop;
+$image1Mobile = $getConfig('images.image_1_mobile', $getConfig('games.image_1_mobile', '')) ?: $defaultImage1Mobile;
+$image2 = $getConfig('images.image_2', $getConfig('games.image_2', '')) ?: $defaultImage2;
+$image3 = $getConfig('images.image_3', $getConfig('games.image_3', '')) ?: $defaultImage3;
+
+$title = $getConfig('texts.title', $getConfig('games.title', 'Choose Your Voltage Table'));
+$brandName = $getConfig('logo.text', $getConfig('header.logo.text', $getConfig('texts.app_name', $getConfig('app_info.app_name', 'Indian Rummy Voltage'))));
+if (strtolower(trim($title)) === 'multiples game') {
+    $title = 'Choose Your Voltage Table';
+}
+$title1 = $getConfig('texts.game_1_title', 'Indian Rummy Classic');
+$desc1 = $getConfig('texts.game_1_desc', 'Core Rummy table flow with rapid room entry and stable rounds.');
+$title2 = $getConfig('texts.game_2_title', 'Rummy Turbo');
+$desc2 = $getConfig('texts.game_2_desc', 'Sequence-focused matches with cleaner score rhythm and fast rematch entry.');
+$title3 = $getConfig('texts.game_3_title', 'Slot Sprint');
+$desc3 = $getConfig('texts.game_3_desc', 'Short spin sessions designed for fast breaks between card tables.');
+
+$games = [
+    [
+        'title' => $title1,
+        'desc' => $desc1,
+        'desktop' => $image1Desktop,
+        'mobile' => $image1Mobile,
+        'label' => '01',
+    ],
+    [
+        'title' => $title2,
+        'desc' => $desc2,
+        'desktop' => $image2,
+        'mobile' => $image2,
+        'label' => '02',
+    ],
+    [
+        'title' => $title3,
+        'desc' => $desc3,
+        'desktop' => $image3,
+        'mobile' => $image3,
+        'label' => '03',
+    ],
+];
+?>
+
+<section id="<?= $componentId ?>" class="rvgames" aria-labelledby="<?= $componentId ?>-title">
+    <div class="rvgames-inner">
+        <?php if ($showTitle): ?>
+            <header class="rvgames-head">
+                <span class="rvgames-kicker"><?= htmlspecialchars($brandName) ?></span>
+                <div class="rvgames-title-wrap">
+                    <span class="rvgames-title-mark" aria-hidden="true">
+                        <span class="mark-node mark-node-a"></span>
+                        <span class="mark-node mark-node-b"></span>
+                        <span class="mark-track"></span>
+                    </span>
+                    <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                </div>
+            </header>
+        <?php endif; ?>
+
+        <div class="rvgames-table" style="--rvgames-gap: <?= (int)$cardGap ?>px; --rvgames-radius: <?= (int)$cardBorderRadius ?>px; --rvgames-hover: <?= (int)$hoverTransform ?>px;">
+            <span class="rvgames-chip rvgames-chip-a" aria-hidden="true"></span>
+            <span class="rvgames-chip rvgames-chip-b" aria-hidden="true"></span>
+            <span class="rvgames-chip rvgames-chip-c" aria-hidden="true"></span>
+
+            <div class="rvgames-board">
+                <?php foreach ($games as $index => $game): ?>
+                    <article class="rvgames-card rvgames-card-<?= (int)($index + 1) ?>">
+                        <span class="rvgames-label">Route <?= htmlspecialchars($game['label']) ?></span>
+                        <div class="rvgames-media">
+                            <picture>
+                                <?php if (!empty($game['mobile'])): ?>
+                                    <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($game['mobile']) ?>">
+                                <?php endif; ?>
+                                <?php if (!empty($game['desktop'])): ?>
+                                    <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($game['desktop']) ?>">
+                                <?php endif; ?>
+                                <img src="<?= htmlspecialchars($game['desktop'] ?: $game['mobile']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" loading="lazy" decoding="async">
+                            </picture>
+                        </div>
+                        <div class="rvgames-content">
+                            <h3><?= htmlspecialchars($game['title']) ?></h3>
+                            <?php if ($showDescription): ?>
+                                <p><?= htmlspecialchars($game['desc']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+        <div class="rvgames-mobile-track">
+            <?php foreach ($games as $game): ?>
+                <article class="rvgames-mobile-card">
+                    <span class="rvgames-label">Route <?= htmlspecialchars($game['label']) ?></span>
+                    <div class="rvgames-media">
+                        <picture>
+                            <?php if (!empty($game['mobile'])): ?>
+                                <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($game['mobile']) ?>">
+                            <?php endif; ?>
+                            <?php if (!empty($game['desktop'])): ?>
+                                <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($game['desktop']) ?>">
+                            <?php endif; ?>
+                            <img src="<?= htmlspecialchars($game['desktop'] ?: $game['mobile']) ?>" alt="<?= htmlspecialchars($game['title']) ?>" loading="lazy" decoding="async">
+                        </picture>
+                    </div>
+                    <div class="rvgames-content">
+                        <h3><?= htmlspecialchars($game['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($game['desc']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background:
+        radial-gradient(980px 360px at 50% -6%, rgba(255, 208, 103, 0.2), transparent 64%),
+        radial-gradient(760px 320px at 90% 10%, rgba(76, 165, 255, 0.12), transparent 68%),
+        linear-gradient(180deg, rgba(8, 18, 28, 0.97) 0%, rgba(7, 24, 36, 0.98) 100%),
+        <?= htmlspecialchars($bgColor) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, transparent 0%, rgba(255, 208, 103, 0.08) 16%, transparent 32%),
+        linear-gradient(-90deg, transparent 0%, rgba(76, 165, 255, 0.08) 18%, transparent 34%);
+    background-size: 100% 26px, 100% 100%, 100% 100%;
+    opacity: .16;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 10% 82%, rgba(255, 208, 103, 0.12) 0 14%, transparent 14.5%),
+        radial-gradient(circle at 92% 78%, rgba(76, 165, 255, 0.1) 0 16%, transparent 16.5%);
+    opacity: .32;
+}
+
+#<?= $componentId ?> .rvgames-inner {
+    width: min(1220px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .rvgames-head {
+    margin: 0 0 1.1rem;
+    display: grid;
+    gap: .7rem;
+    justify-items: start;
+}
+
+#<?= $componentId ?> .rvgames-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: .34rem .72rem;
+    border-radius: 999px;
+    background: rgba(255, 208, 103, 0.14);
+    border: 1px solid rgba(255, 208, 103, 0.34);
+    color: #ffe8bc;
+    font-size: .72rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .rvgames-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: .66rem;
+    width: fit-content;
+    max-width: 100%;
+}
+
+#<?= $componentId ?> .rvgames-title-mark {
+    display: inline-flex;
+    align-items: center;
+    gap: .28rem;
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .rvgames-title-mark .mark-node,
+#<?= $componentId ?> .rvgames-title-mark .mark-track {
+    display: inline-flex;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .rvgames-title-mark .mark-node {
+    width: 9px;
+    height: 9px;
+    background: radial-gradient(circle at 32% 32%, #fff2cf 0%, #ffd067 58%, #ff8f42 100%);
+    box-shadow: 0 0 0 2px rgba(255, 208, 103, 0.16);
+}
+
+#<?= $componentId ?> .rvgames-title-mark .mark-node-b {
+    width: 7px;
+    height: 7px;
+    opacity: .86;
+}
+
+#<?= $componentId ?> .rvgames-title-mark .mark-track {
+    width: 62px;
+    height: 8px;
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(90deg, rgba(255, 208, 103, 0.2) 0%, rgba(255, 208, 103, 0.76) 42%, rgba(76, 165, 255, 0.68) 100%);
+}
+
+#<?= $componentId ?> .rvgames-title-mark .mark-track::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, rgba(255, 255, 255, 0) 12%, rgba(255, 255, 255, 0.86) 50%, rgba(255, 255, 255, 0) 88%);
+    transform: translateX(-130%);
+    animation: rvgames-mark-scan 5.6s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .rvgames-head h2 {
+    margin: 0;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 4.8vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.06;
+    display: inline-flex;
+    align-items: center;
+    gap: .72rem;
+    max-width: 100%;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.28);
+}
+
+#<?= $componentId ?> .rvgames-head h2::after {
+    content: '';
+    width: clamp(48px, 9vw, 96px);
+    flex: none;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(255, 208, 103, 0.74), rgba(0, 224, 178, 0.2), rgba(0, 224, 178, 0));
+}
+
+#<?= $componentId ?> .rvgames-table {
+    position: relative;
+    padding: 1rem;
+    border-radius: 32px;
+    background:
+        repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 14px),
+        repeating-linear-gradient(-135deg, rgba(255, 255, 255, 0.03) 0 2px, transparent 2px 14px),
+        #1a1e2f;
+    border: 1px solid rgba(143, 255, 218, 0.32);
+    box-shadow:
+        inset 0 0 0 2px rgba(143, 255, 218, 0.16),
+        0 28px 44px rgba(0, 0, 0, 0.34);
+}
+
+#<?= $componentId ?> .rvgames-table::before {
+    content: '';
+    position: absolute;
+    inset: 8%;
+    border-radius: 26px;
+    border: 1px dashed rgba(143, 255, 218, 0.34);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .rvgames-chip {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 30% 30%, #fff4ce 0%, #ffd067 58%, #ff8a43 100%);
+    box-shadow: 0 0 0 4px rgba(255, 208, 103, 0.18), 0 4px 8px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    animation: rvgames-chip-blink 2.6s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .rvgames-chip-a { left: 8%; top: 14%; }
+#<?= $componentId ?> .rvgames-chip-b { right: 12%; top: 18%; animation-delay: -1.1s; }
+#<?= $componentId ?> .rvgames-chip-c { right: 24%; bottom: 14%; animation-delay: -.6s; }
+
+#<?= $componentId ?> .rvgames-board {
+    position: relative;
+    min-height: 440px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: .8rem;
+}
+
+#<?= $componentId ?> .rvgames-card,
+#<?= $componentId ?> .rvgames-mobile-card {
+    position: absolute;
+    width: min(34%, 320px);
+    border-radius: var(--rvgames-radius);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background: <?= htmlspecialchars($cardBgColor) ?>;
+    box-shadow: 0 20px 30px rgba(0, 0, 0, 0.26);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .rvgames-card {
+    transition: transform .25s ease, box-shadow .25s ease;
+    transform-origin: center bottom;
+}
+
+#<?= $componentId ?> .rvgames-card:hover {
+    box-shadow: 0 24px 36px rgba(0, 0, 0, 0.32);
+}
+
+#<?= $componentId ?> .rvgames-card-1 {
+    left: 6%;
+    top: 20%;
+    transform: rotate(-9deg);
+    background: linear-gradient(145deg, rgba(240, 252, 255, 0.96), rgba(219, 255, 244, 0.92));
+}
+
+#<?= $componentId ?> .rvgames-card-1:hover {
+    transform: rotate(-9deg) translateY(calc(var(--rvgames-hover) * -1px)) scale(1.03);
+}
+
+#<?= $componentId ?> .rvgames-card-2 {
+    left: 50%;
+    top: 11%;
+    z-index: 2;
+    transform: translateX(-50%) rotate(0deg);
+    background: linear-gradient(140deg, rgba(238, 244, 255, 0.95), rgba(212, 228, 255, 0.9));
+}
+
+#<?= $componentId ?> .rvgames-card-2:hover {
+    transform: translateX(-50%) translateY(-5%)  scale(1.03);
+}
+
+#<?= $componentId ?> .rvgames-card-3 {
+    right: 6%;
+    top: 20%;
+    transform: rotate(9deg);
+    background: linear-gradient(140deg, rgba(255, 208, 103, 0.95), rgba(255, 90, 93, 0.9));
+}
+
+#<?= $componentId ?> .rvgames-card-3:hover {
+    transform: rotate(9deg) translateY(calc(var(--rvgames-hover) * -1px)) scale(1.03);
+}
+
+#<?= $componentId ?> .rvgames-card-3 h3,
+#<?= $componentId ?> .rvgames-card-3 p,
+#<?= $componentId ?> .rvgames-card-3 .rvgames-label {
+    color: #fffaf2;
+}
+
+#<?= $componentId ?> .rvgames-label {
+    position: absolute;
+    z-index: 3;
+    right: .74rem;
+    top: .74rem;
+    min-width: 2.06rem;
+    height: 2.06rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .66rem;
+    letter-spacing: .08em;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #24424b;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(20, 58, 67, 0.18);
+}
+
+#<?= $componentId ?> .rvgames-media {
+    padding: .72rem .72rem 0;
+}
+
+#<?= $componentId ?> .rvgames-media picture {
+    display: block;
+    border-radius: calc(var(--rvgames-radius) - 6px);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .rvgames-media img {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1.54 / 1;
+    object-fit: cover;
+}
+
+#<?= $componentId ?> .rvgames-content {
+    padding: .82rem <?= (int)$cardContentPadding ?>px <?= (int)$cardContentPadding ?>px;
+}
+
+#<?= $componentId ?> .rvgames-content h3 {
+    margin: 0;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.24;
+}
+
+#<?= $componentId ?> .rvgames-content p {
+    margin: .6rem 0 0;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.66;
+}
+
+#<?= $componentId ?> .rvgames-mobile-track {
+    display: none;
+}
+
+@keyframes rvgames-chip-blink {
+    0%, 100% { transform: scale(1); opacity: .84; }
+    50% { transform: scale(1.2); opacity: 1; }
+}
+
+@keyframes rvgames-mark-scan {
+    0%, 32% { transform: translateX(-130%); }
+    58% { transform: translateX(128%); }
+    100% { transform: translateX(128%); }
+}
+
+@media (max-width: 900px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .rvgames-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .rvgames-head {
+        margin-bottom: .92rem;
+    }
+
+    #<?= $componentId ?> .rvgames-title-mark .mark-track {
+        width: 42px;
+        height: 7px;
+    }
+
+    #<?= $componentId ?> .rvgames-head h2::after {
+        display: none;
+    }
+
+    #<?= $componentId ?> .rvgames-table {
+        display: none;
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-track {
+        display: flex;
+        gap: .72rem;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding-bottom: .4rem;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-track::-webkit-scrollbar {
+        height: 4px;
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-track::-webkit-scrollbar-thumb {
+        background: rgba(255, 208, 103, 0.42);
+        border-radius: 999px;
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-card {
+        position: relative;
+        width: auto;
+        flex: 0 0 86%;
+        scroll-snap-align: start;
+        border-radius: 13px;
+        transform: rotate(-.8deg);
+        box-shadow: 0 14px 22px rgba(0, 0, 0, 0.24);
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-card:nth-child(even) {
+        transform: rotate(.9deg);
+    }
+
+    /* Keep mobile card palette consistent with desktop cards */
+    #<?= $componentId ?> .rvgames-mobile-card:nth-child(1) {
+        background: linear-gradient(145deg, rgba(240, 252, 255, 0.96), rgba(219, 255, 244, 0.92));
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-card:nth-child(2) {
+        background: linear-gradient(140deg, rgba(238, 244, 255, 0.95), rgba(212, 228, 255, 0.9));
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-card:nth-child(3) {
+        background: linear-gradient(140deg, rgba(255, 208, 103, 0.95), rgba(255, 90, 93, 0.9));
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-card:nth-child(3) h3,
+    #<?= $componentId ?> .rvgames-mobile-card:nth-child(3) p,
+    #<?= $componentId ?> .rvgames-mobile-card:nth-child(3) .rvgames-label {
+        color: #fffaf2;
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-card:active {
+        transform: scale(.98);
+    }
+
+    #<?= $componentId ?> .rvgames-mobile-card .rvgames-content {
+        padding: .76rem .84rem .88rem;
+    }
+}
+</style>

@@ -30,6 +30,8 @@ class ObjectManager implements ManagerInterface
     private static array $instances = [];
     private static array $reflections = [];
     private static array $origin_instances = [];
+    private static ?\WeakMap $fiberInstances = null;
+    private static ?\WeakMap $fiberOriginInstances = null;
     /**
      * 方法参数元数据缓存
      * 格式：['ClassName::methodName' => ['params' => [...], 'dependencies' => [...]]]
@@ -123,6 +125,101 @@ class ObjectManager implements ManagerInterface
             self::$classExistsCache[$class] = class_exists($class, true);
         }
         return self::$classExistsCache[$class];
+    }
+
+    private static function currentRequestFiber(): ?\Fiber
+    {
+        if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
+            return null;
+        }
+
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            return null;
+        }
+
+        return \Fiber::getCurrent();
+    }
+
+    private static function getScopedInstance(string $class, bool $origin = false): ?object
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            return $origin
+                ? (self::$origin_instances[$class] ?? null)
+                : (self::$instances[$class] ?? null);
+        }
+
+        $storage = $origin ? self::$fiberOriginInstances : self::$fiberInstances;
+        if ($storage === null || !isset($storage[$fiber])) {
+            return null;
+        }
+
+        $instances = $storage[$fiber];
+
+        return $instances[$class] ?? null;
+    }
+
+    private static function setScopedInstance(string $class, object $object, bool $origin = false): void
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            if ($origin) {
+                self::$origin_instances[$class] = $object;
+            } else {
+                self::$instances[$class] = $object;
+            }
+            return;
+        }
+
+        if ($origin) {
+            self::$fiberOriginInstances ??= new \WeakMap();
+            $instances = self::$fiberOriginInstances[$fiber] ?? [];
+            $instances[$class] = $object;
+            self::$fiberOriginInstances[$fiber] = $instances;
+            return;
+        }
+
+        self::$fiberInstances ??= new \WeakMap();
+        $instances = self::$fiberInstances[$fiber] ?? [];
+        $instances[$class] = $object;
+        self::$fiberInstances[$fiber] = $instances;
+    }
+
+    private static function getScopedInstances(bool $origin = false): array
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            return $origin ? self::$origin_instances : self::$instances;
+        }
+
+        $storage = $origin ? self::$fiberOriginInstances : self::$fiberInstances;
+        if ($storage === null || !isset($storage[$fiber])) {
+            return [];
+        }
+
+        return $storage[$fiber];
+    }
+
+    private static function setScopedInstances(array $instances, bool $origin = false): void
+    {
+        $fiber = self::currentRequestFiber();
+        if ($fiber === null) {
+            if ($origin) {
+                self::$origin_instances = $instances;
+            } else {
+                self::$instances = $instances;
+            }
+            return;
+        }
+
+        if ($origin) {
+            self::$fiberOriginInstances ??= new \WeakMap();
+            self::$fiberOriginInstances[$fiber] = $instances;
+            return;
+        }
+
+        self::$fiberInstances ??= new \WeakMap();
+        self::$fiberInstances[$fiber] = $instances;
     }
 
     /**
@@ -303,15 +400,20 @@ class ObjectManager implements ManagerInterface
         self::$instance ??= new self();
         
         // PHP 8 性能优化：提前返回，避免后续处理
-        if ($shared && isset(self::$instances[$class])) {
-            return self::$instances[$class];
+        if ($shared) {
+            $sharedInstance = self::getScopedInstance($class);
+            if ($sharedInstance !== null) {
+                return $sharedInstance;
+            }
         }
         
         // PHP 8 性能优化：合并条件判断，减少函数调用
         if ($cache && !CLI && $shared) {
             $cachedObject = self::getCache()->get($class);
             if ($cachedObject) {
-                return self::$instances[$class] = self::initClassInstance($class, $cachedObject);
+                $cachedObject = self::initClassInstance($class, $cachedObject);
+                self::setScopedInstance($class, $cachedObject);
+                return $cachedObject;
             }
         }
         
@@ -358,7 +460,7 @@ class ObjectManager implements ManagerInterface
                     $instance = $factory->create();
                     // 缓存接口实例（实际缓存的是实现类实例）
                     if ($shared) {
-                        self::$instances[$class] = $instance;
+                        self::setScopedInstance($class, $instance);
                     }
                     return $instance;
                 } else {
@@ -379,7 +481,7 @@ class ObjectManager implements ManagerInterface
             if (self::$compiledFactories !== null && isset(self::$compiledFactories[$new_class])) {
                 $new_object = (self::$compiledFactories[$new_class])();
                 $new_object = self::initClassInstance($class, $new_object);
-                self::$instances[$class] = $new_object;
+                self::setScopedInstance($class, $new_object);
                 if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
                     self::getCache()->set($class, $new_object);
                 }
@@ -402,8 +504,8 @@ class ObjectManager implements ManagerInterface
                 if ($factory instanceof FactoryObjectInterface) {
                     $instance = $factory->create();
                     if ($shared) {
-                        self::$instances[$class] = $instance;
-                        self::$instances[$new_class] = $instance;
+                        self::setScopedInstance($class, $instance);
+                        self::setScopedInstance($new_class, $instance);
                     }
                     return $instance;
                 } else {
@@ -438,7 +540,7 @@ class ObjectManager implements ManagerInterface
         $new_object = self::initClassInstance($class, $new_object);
         
         // 存储到共享实例缓存
-        self::$instances[$class] = $new_object;
+        self::setScopedInstance($class, $new_object);
         
         // 缓存到文件（如果需要）
         if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
@@ -589,15 +691,19 @@ class ObjectManager implements ManagerInterface
         self::$instance ??= new self();
         
         // PHP 8 性能优化：提前返回
-        if (isset(self::$origin_instances[$class])) {
-            return self::$origin_instances[$class];
+        $originInstance = self::getScopedInstance($class, true);
+        if ($originInstance !== null) {
+            return $originInstance;
         }
         
         // PHP 8 性能优化：合并条件判断
         if ($cache && !CLI && $shared) {
             $cachedObject = self::getCache()->get($class);
             if ($cachedObject) {
-                return self::$origin_instances[$class] = self::initClassInstance($class, $cachedObject, false);
+                $cachedObject = self::initClassInstance($class, $cachedObject, false);
+                self::setScopedInstance($class, $cachedObject, true);
+
+                return $cachedObject;
             }
         }
         
@@ -614,7 +720,7 @@ class ObjectManager implements ManagerInterface
         $new_object = $refClass->newInstanceArgs($arguments);
         $new_object = self::initClassInstance($class, $new_object, false);
 
-        self::$origin_instances[$class] = $new_object;
+        self::setScopedInstance($class, $new_object, true);
         
         // PHP 8 性能优化：使用 in_array 的严格模式
         if ($cache && !CLI && !in_array($class, self::unserializable_class, true)) {
@@ -639,23 +745,23 @@ class ObjectManager implements ManagerInterface
      */
     public static function setInstance(string $class, object &$object): mixed
     {
-        self::$instances[$class] = $object;
+        self::setScopedInstance($class, $object);
         return true;
     }
 
     public static function addInstance($class, &$object)
     {
-        self::$instances[$class] = $object;
+        self::setScopedInstance($class, $object);
     }
 
     public static function _getInstance($class)
     {
-        return self::$instances[$class] ?? null;
+        return self::getScopedInstance($class);
     }
 
     public static function getInstances(): array
     {
-        return self::$instances;
+        return self::getScopedInstances();
     }
 
     /**
@@ -663,9 +769,13 @@ class ObjectManager implements ManagerInterface
      */
     public static function clearInstances(): void
     {
-        self::$instances = [];
+        self::setScopedInstances([]);
         self::$reflections = [];
-        self::$origin_instances = [];
+        self::setScopedInstances([], true);
+        if (self::currentRequestFiber() === null) {
+            self::$fiberInstances = null;
+            self::$fiberOriginInstances = null;
+        }
     }
     
     /**
@@ -679,16 +789,20 @@ class ObjectManager implements ManagerInterface
     public static function removeInstance(string $className): void
     {
         // 移除实例缓存
-        unset(self::$instances[$className]);
+        $instances = self::getScopedInstances();
+        unset($instances[$className]);
         
         // 也尝试移除解析后的类名对应的实例
         if (isset(self::$parsedClasses[$className])) {
             $resolvedClass = self::$parsedClasses[$className];
-            unset(self::$instances[$resolvedClass]);
+            unset($instances[$resolvedClass]);
         }
+        self::setScopedInstances($instances);
         
         // 移除原始实例
-        unset(self::$origin_instances[$className]);
+        $originInstances = self::getScopedInstances(true);
+        unset($originInstances[$className]);
+        self::setScopedInstances($originInstances, true);
     }
 
     /**
@@ -1243,8 +1357,9 @@ class ObjectManager implements ManagerInterface
                 }
                 
                 // PHP 8 性能优化：使用 ?? 操作符，减少 isset 检查
-                if (isset(self::$instances[$paramTypeName])) {
-                    $paramArr[] = self::$instances[$paramTypeName];
+                $existingDependency = self::getScopedInstance($paramTypeName);
+                if ($existingDependency !== null) {
+                    $paramArr[] = $existingDependency;
                 } elseif (($paramMeta['hasDefault'] ?? false) === true) {
                     // 如果参数有默认值且实例不存在，使用默认值（避免不必要的实例化）
                     $paramArr[] = $paramMeta['defaultValue'] ?? null;
@@ -1295,11 +1410,11 @@ class ObjectManager implements ManagerInterface
                         // 处理 Factory 类
                         if ($newObj instanceof FactoryObjectInterface) {
                             $instance = $newObj->create();
-                            self::$instances[$paramTypeName] = $instance;
-                            self::$instances[$actualClass] = $newObj;
+                            self::setScopedInstance($paramTypeName, $instance);
+                            self::setScopedInstance($actualClass, $newObj);
                             $paramArr[] = $instance;
                         } else {
-                            self::$instances[$paramTypeName] = $newObj;
+                            self::setScopedInstance($paramTypeName, $newObj);
                             $paramArr[] = $newObj;
                         }
                     } catch (\Exception $e) {
