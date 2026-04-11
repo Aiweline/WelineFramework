@@ -81,43 +81,16 @@ $logoSm = $logoSm ? ImageHelper::pathToMediaUrl($logoSm, 50, 50) : '@static(Weli
                 </div>
             </div>
 
-            <div class="dropdown d-none d-sm-inline-block">
-                <button type="button" class="btn header-item waves-effect"
-                        data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                    <img class="" src="@static(Weline_Admin::assets/images/flags/zh_CN.jfif)" alt="<?= __('头部语言') ?>"
-                         height="16">
-                </button>
-                <div class="dropdown-menu dropdown-menu-end">
-                    <!-- item-->
-                    <a href='javascript:void(0);' class='dropdown-item notify-item'>
-                        <img src='@static(Weline_Admin::assets/images/flags/zh_CN.jfif)' alt='user-image' class='me-1'
-                             height='12'> <span class='align-middle'><?= __('中国') ?></span>
-                    </a>
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item">
-                        <img src="@static(Weline_Admin::assets/images/flags/spain.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">Spanish</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item">
-                        <img src="@static(Weline_Admin::assets/images/flags/germany.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">German</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item">
-                        <img src="@static(Weline_Admin::assets/images/flags/italy.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">Italian</span>
-                    </a>
-
-                    <!-- item-->
-                    <a href="javascript:void(0);" class="dropdown-item notify-item">
-                        <img src="@static(Weline_Admin::assets/images/flags/russia.jpg)" alt="user-image" class="me-1"
-                             height="12"> <span class="align-middle">Russian</span>
-                    </a>
-                </div>
-            </div>
+            <!-- 语言切换 -->
+            <w:i18n:language:switcher />
+            <!-- 主题色系切换 -->
+            <button type="button"
+                    class="btn header-item noti-icon waves-effect ms-1"
+                    id="theme-mode-toggle"
+                    title="<?= __('主题色系切换') ?>"
+                    aria-label="<?= __('主题色系切换') ?>">
+                <i class="ri-sun-line"></i>
+            </button>
 
             <div class="dropdown d-none d-lg-inline-block ms-1">
                 <button type="button" class="btn header-item noti-icon waves-effect"

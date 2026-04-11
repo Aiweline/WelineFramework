@@ -1,99 +1,77 @@
 <?php
 declare(strict_types=1);
 
-/**
- * Weline Framework - Header 收集器
- * 
- * 统一管理 HTTP 响应头，替代直接调用 header() 函数。
- * 这是请求级单例，每个请求一个实例。
- * 
- * @author Aiweline
- * @email aiweline@qq.com
- */
-
 namespace Weline\Framework\Http;
 
 use Weline\Framework\Runtime\StateManager;
 
-/**
- * Header 收集器
- * 
- * 特点：
- * - 收集响应头，不立即发送
- * - 支持 Cookie 管理
- * - 请求级单例，WLS 模式下每个请求重置
- */
 class HeaderCollector implements HeaderCollectorInterface
 {
-    /**
-     * 当前实例
-     */
     private static ?HeaderCollector $instance = null;
-    
-    /**
-     * 收集的响应头
-     */
+
+    /** @var \WeakMap<\Fiber, HeaderCollector>|null */
+    private static ?\WeakMap $fiberInstances = null;
+
     private array $headers = [];
-    
-    /**
-     * 收集的 Cookie
-     */
+
     private array $cookies = [];
-    
-    /**
-     * HTTP 状态码
-     */
+
     private int $statusCode = 200;
 
-    /**
-     * Whether the HTTP status code was explicitly overridden during this request.
-     */
     private bool $statusCodeExplicitlySet = false;
-    
-    /**
-     * 私有构造函数，强制使用 getInstance()
-     */
-    private function __construct()
+
+    private function __construct(bool $registerReset = true)
     {
-        // 注册自动重置
-        StateManager::registerResetCallback('header_collector', function () {
-            self::reset();
-        });
+        if ($registerReset) {
+            StateManager::registerResetCallback('header_collector', function (): void {
+                self::reset();
+            });
+        }
     }
-    
-    /**
-     * 获取单例实例
-     * 
-     * @return HeaderCollector
-     */
+
     public static function getInstance(): HeaderCollector
     {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber !== null) {
+            self::$fiberInstances ??= new \WeakMap();
+            if (!isset(self::$fiberInstances[$fiber])) {
+                self::$fiberInstances[$fiber] = new self();
+            }
+
+            return self::$fiberInstances[$fiber];
+        }
+
         if (self::$instance === null) {
             self::$instance = new self();
         }
+
         return self::$instance;
     }
-    
-    /**
-     * 重置实例（用于 WLS 模式下每个请求后）
-     */
+
+    public static function createDetached(): HeaderCollector
+    {
+        return new self(false);
+    }
+
     public static function reset(): void
     {
+        $fiber = \Fiber::getCurrent();
+        if ($fiber !== null) {
+            if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
+                self::clearCollector(self::$fiberInstances[$fiber]);
+            }
+            return;
+        }
+
         if (self::$instance !== null) {
-            self::$instance->headers = [];
-            self::$instance->cookies = [];
-            self::$instance->statusCode = 200;
-            self::$instance->statusCodeExplicitlySet = false;
+            self::clearCollector(self::$instance);
         }
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function setHeader(string $name, string $value, bool $replace = true): static
     {
         $normalizedName = $this->normalizeHeaderName($name);
-        
+
         if ($replace || !isset($this->headers[$normalizedName])) {
             $this->headers[$normalizedName] = $value;
         } elseif (\is_array($this->headers[$normalizedName])) {
@@ -101,95 +79,72 @@ class HeaderCollector implements HeaderCollectorInterface
         } else {
             $this->headers[$normalizedName] = [$this->headers[$normalizedName], $value];
         }
-        
+
         return $this;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function setHeaders(array $headers, bool $replace = true): static
     {
         foreach ($headers as $name => $value) {
-            $this->setHeader($name, $value, $replace);
+            if (\is_array($value)) {
+                foreach ($value as $headerValue) {
+                    $this->setHeader((string)$name, (string)$headerValue, false);
+                }
+                continue;
+            }
+            $this->setHeader((string)$name, (string)$value, $replace);
         }
+
         return $this;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function getHeaders(): array
     {
         return $this->headers;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function getHeader(string $name): string|array|null
     {
         $normalizedName = $this->normalizeHeaderName($name);
         return $this->headers[$normalizedName] ?? null;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function hasHeader(string $name): bool
     {
         $normalizedName = $this->normalizeHeaderName($name);
         return isset($this->headers[$normalizedName]);
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function removeHeader(string $name): static
     {
         $normalizedName = $this->normalizeHeaderName($name);
         unset($this->headers[$normalizedName]);
         return $this;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function clearHeaders(): static
     {
         $this->headers = [];
         return $this;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function setStatusCode(int $code): static
     {
         $this->statusCode = $code;
         $this->statusCodeExplicitlySet = true;
         return $this;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function getStatusCode(): int
     {
         return $this->statusCode;
     }
 
-    /**
-     * Whether the current request explicitly set an HTTP status override.
-     */
     public function hasExplicitStatusCode(): bool
     {
         return $this->statusCodeExplicitlySet;
     }
-    
-    /**
-     * @inheritDoc
-     */
+
     public function setCookie(
         string $name,
         string $value,
@@ -213,36 +168,17 @@ class HeaderCollector implements HeaderCollectorInterface
         return $this;
     }
 
-    /**
-     * 移除已收集的 Cookie（按名称），响应中不再发送该 Set-Cookie。
-     *
-     * @param string $name Cookie 名称
-     * @return static
-     */
     public function removeCookie(string $name): static
     {
         unset($this->cookies[$name]);
         return $this;
     }
-    
-    /**
-     * 获取所有 Cookie
-     * 
-     * @return array
-     */
+
     public function getCookies(): array
     {
         return $this->cookies;
     }
 
-    /**
-     * @return array{
-     *     headers: array<string, string|array>,
-     *     cookies: array<string, array<string, mixed>>,
-     *     status_code: int,
-     *     status_code_explicit: bool
-     * }
-     */
     public function captureState(): array
     {
         return [
@@ -253,52 +189,36 @@ class HeaderCollector implements HeaderCollectorInterface
         ];
     }
 
-    /**
-     * @param array{
-     *     headers?: array<string, string|array>,
-     *     cookies?: array<string, array<string, mixed>>,
-     *     status_code?: int,
-     *     status_code_explicit?: bool
-     * } $state
-     */
     public function restoreState(array $state): static
     {
         $this->headers = \is_array($state['headers'] ?? null) ? $state['headers'] : [];
         $this->cookies = \is_array($state['cookies'] ?? null) ? $state['cookies'] : [];
-        $this->statusCode = (int) ($state['status_code'] ?? 200);
-        $this->statusCodeExplicitlySet = (bool) ($state['status_code_explicit'] ?? false);
+        $this->statusCode = (int)($state['status_code'] ?? 200);
+        $this->statusCodeExplicitlySet = (bool)($state['status_code_explicit'] ?? false);
 
         return $this;
     }
-    
-    /**
-     * 发送所有响应头（FPM 模式使用）
-     * 
-     * @param bool $sendStatusCode 是否发送状态码
-     */
+
     public function emit(bool $sendStatusCode = true): void
     {
         if (\headers_sent()) {
             return;
         }
-        
-        // 发送状态码
+
         if ($sendStatusCode && $this->statusCode !== 200) {
             \http_response_code($this->statusCode);
         }
-        
-        // 发送响应头
+
         foreach ($this->headers as $name => $value) {
             if (\is_array($value)) {
-                foreach ($value as $v) {
-                    \header("{$name}: {$v}", false);
+                foreach ($value as $headerValue) {
+                    \header("{$name}: {$headerValue}", false);
                 }
             } else {
                 \header("{$name}: {$value}");
             }
         }
-        
-        // 发送 Cookie
+
         foreach ($this->cookies as $cookie) {
             \setcookie(
                 $cookie['name'],
@@ -314,81 +234,68 @@ class HeaderCollector implements HeaderCollectorInterface
             );
         }
     }
-    
-    /**
-     * 生成 HTTP 响应头字符串（WLS 模式使用）
-     * 
-     * @return string HTTP 头字符串
-     */
+
     public function toHttpHeaderString(): string
     {
         $statusText = $this->getStatusText($this->statusCode);
         $headerString = "HTTP/1.1 {$this->statusCode} {$statusText}\r\n";
-        
-        // 响应头
+
         foreach ($this->headers as $name => $value) {
             if (\is_array($value)) {
-                foreach ($value as $v) {
-                    $headerString .= "{$name}: {$v}\r\n";
+                foreach ($value as $headerValue) {
+                    $headerString .= "{$name}: {$headerValue}\r\n";
                 }
             } else {
                 $headerString .= "{$name}: {$value}\r\n";
             }
         }
-        
-        // Cookie 头
+
         foreach ($this->cookies as $cookie) {
-            $headerString .= "Set-Cookie: " . $this->buildCookieString($cookie) . "\r\n";
+            $headerString .= 'Set-Cookie: ' . $this->buildCookieString($cookie) . "\r\n";
         }
-        
+
         return $headerString;
     }
-    
-    /**
-     * 构建 Cookie 字符串
-     */
+
     private function buildCookieString(array $cookie): string
     {
         $parts = [\urlencode($cookie['name']) . '=' . \urlencode($cookie['value'])];
-        
-        if ($cookie['expire'] !== 0) {
-            $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', $cookie['expire']);
+
+        if (($cookie['expire'] ?? 0) !== 0) {
+            $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', (int)$cookie['expire']);
         }
-        
-        if ($cookie['path'] !== '') {
+        if (($cookie['path'] ?? '') !== '') {
             $parts[] = 'Path=' . $cookie['path'];
         }
-        
-        if ($cookie['domain'] !== '') {
+        if (($cookie['domain'] ?? '') !== '') {
             $parts[] = 'Domain=' . $cookie['domain'];
         }
-        
-        if ($cookie['secure']) {
+        if (!empty($cookie['secure'])) {
             $parts[] = 'Secure';
         }
-        
-        if ($cookie['httpOnly']) {
+        if (!empty($cookie['httpOnly'])) {
             $parts[] = 'HttpOnly';
         }
-        
-        if ($cookie['sameSite'] !== '') {
+        if (($cookie['sameSite'] ?? '') !== '') {
             $parts[] = 'SameSite=' . $cookie['sameSite'];
         }
-        
+
         return \implode('; ', $parts);
     }
-    
-    /**
-     * 规范化 header 名称（首字母大写）
-     */
+
     private function normalizeHeaderName(string $name): string
     {
         return \str_replace(' ', '-', \ucwords(\str_replace('-', ' ', \strtolower($name))));
     }
-    
-    /**
-     * 获取状态码对应的文本
-     */
+
+    private static function clearCollector(HeaderCollector $collector): void
+    {
+        $collector->headers = [];
+        $collector->cookies = [];
+        $collector->statusCode = 200;
+        $collector->statusCodeExplicitlySet = false;
+    }
+
     private function getStatusText(int $code): string
     {
         static $statusTexts = [
@@ -416,7 +323,7 @@ class HeaderCollector implements HeaderCollectorInterface
             503 => 'Service Unavailable',
             504 => 'Gateway Timeout',
         ];
-        
+
         return $statusTexts[$code] ?? 'Unknown';
     }
 }

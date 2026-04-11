@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\CustomerService</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="index.html">CustomerService</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Agent.php.html#24">Weline\CustomerService\Controller\Backend\Agent</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Config.php.html#22">Weline\CustomerService\Controller\Backend\Config</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#27">Weline\CustomerService\Controller\Backend\Console</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#24">Weline\CustomerService\Controller\Backend\Session</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Bind.php.html#20">Weline\CustomerService\Controller\Frontend\Bind</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#25">Weline\CustomerService\Controller\Frontend\Chat</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#18">Weline\CustomerService\Model\ChatMessage</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#18">Weline\CustomerService\Model\ChatSession</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#19">Weline\CustomerService\Model\CustomerLanguage</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#18">Weline\CustomerService\Model\CustomerServiceConfig</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#18">Weline\CustomerService\Model\ServiceAgent</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#23">Weline\CustomerService\Observer\TranslationObserver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#25">Weline\CustomerService\Service\ChatService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#25">Weline\CustomerService\Service\EmailBindingService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#22">Weline\CustomerService\Service\StatisticsService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/TranslationService.php.html#21">Weline\CustomerService\Service\TranslationService</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Console.php.html#27">Weline\CustomerService\Controller\Backend\Console</a></td><td class="text-right">3080</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#22">Weline\CustomerService\Service\StatisticsService</a></td><td class="text-right">2256</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#24">Weline\CustomerService\Controller\Backend\Agent</a></td><td class="text-right">756</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#25">Weline\CustomerService\Controller\Frontend\Chat</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#25">Weline\CustomerService\Service\ChatService</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#25">Weline\CustomerService\Service\EmailBindingService</a></td><td class="text-right">650</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#18">Weline\CustomerService\Model\ServiceAgent</a></td><td class="text-right">552</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#23">Weline\CustomerService\Observer\TranslationObserver</a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#18">Weline\CustomerService\Model\ChatMessage</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#24">Weline\CustomerService\Controller\Backend\Session</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#18">Weline\CustomerService\Model\ChatSession</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Service/TranslationService.php.html#21">Weline\CustomerService\Service\TranslationService</a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Controller/Frontend/Bind.php.html#20">Weline\CustomerService\Controller\Frontend\Bind</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#19">Weline\CustomerService\Model\CustomerLanguage</a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#18">Weline\CustomerService\Model\CustomerServiceConfig</a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Controller/Backend/Config.php.html#22">Weline\CustomerService\Controller\Backend\Config</a></td><td class="text-right">72</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Agent.php.html#29"><abbr title="Weline\CustomerService\Controller\Backend\Agent::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#37"><abbr title="Weline\CustomerService\Controller\Backend\Agent::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#87"><abbr title="Weline\CustomerService\Controller\Backend\Agent::postSave">postSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#156"><abbr title="Weline\CustomerService\Controller\Backend\Agent::postRemove">postRemove</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#186"><abbr title="Weline\CustomerService\Controller\Backend\Agent::getAgentStatistics">getAgentStatistics</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#213"><abbr title="Weline\CustomerService\Controller\Backend\Agent::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Config.php.html#28"><abbr title="Weline\CustomerService\Controller\Backend\Config::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Config.php.html#60"><abbr title="Weline\CustomerService\Controller\Backend\Config::postSave">postSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Config.php.html#96"><abbr title="Weline\CustomerService\Controller\Backend\Config::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#33"><abbr title="Weline\CustomerService\Controller\Backend\Console::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#44"><abbr title="Weline\CustomerService\Controller\Backend\Console::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#145"><abbr title="Weline\CustomerService\Controller\Backend\Console::getSessions">getSessions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#216"><abbr title="Weline\CustomerService\Controller\Backend\Console::getMessages">getMessages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#265"><abbr title="Weline\CustomerService\Controller\Backend\Console::postSendMessage">postSendMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#333"><abbr title="Weline\CustomerService\Controller\Backend\Console::postAssignSession">postAssignSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#392"><abbr title="Weline\CustomerService\Controller\Backend\Console::postCloseSession">postCloseSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#439"><abbr title="Weline\CustomerService\Controller\Backend\Console::getStatistics">getStatistics</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#468"><abbr title="Weline\CustomerService\Controller\Backend\Console::postHeartbeat">postHeartbeat</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#496"><abbr title="Weline\CustomerService\Controller\Backend\Console::getAgentStatus">getAgentStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#527"><abbr title="Weline\CustomerService\Controller\Backend\Console::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#30"><abbr title="Weline\CustomerService\Controller\Backend\Session::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#88"><abbr title="Weline\CustomerService\Controller\Backend\Session::view">view</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#136"><abbr title="Weline\CustomerService\Controller\Backend\Session::postClose">postClose</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#164"><abbr title="Weline\CustomerService\Controller\Backend\Session::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Bind.php.html#24"><abbr title="Weline\CustomerService\Controller\Frontend\Bind::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Bind.php.html#34"><abbr title="Weline\CustomerService\Controller\Frontend\Bind::postSendVerification">postSendVerification</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Bind.php.html#86"><abbr title="Weline\CustomerService\Controller\Frontend\Bind::verify">verify</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#29"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#38"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#48"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::getSession">getSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#84"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::postSendMessage">postSendMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#135"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::getMessages">getMessages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#167"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::postSetLanguage">postSetLanguage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#206"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::getServiceStatus">getServiceStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#51"><abbr title="Weline\CustomerService\Model\ChatMessage::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#56"><abbr title="Weline\CustomerService\Model\ChatMessage::getSessionId">getSessionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#61"><abbr title="Weline\CustomerService\Model\ChatMessage::setSessionId">setSessionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#66"><abbr title="Weline\CustomerService\Model\ChatMessage::getSenderType">getSenderType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#71"><abbr title="Weline\CustomerService\Model\ChatMessage::setSenderType">setSenderType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#76"><abbr title="Weline\CustomerService\Model\ChatMessage::getSenderId">getSenderId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#81"><abbr title="Weline\CustomerService\Model\ChatMessage::setSenderId">setSenderId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#86"><abbr title="Weline\CustomerService\Model\ChatMessage::getContent">getContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#91"><abbr title="Weline\CustomerService\Model\ChatMessage::setContent">setContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#96"><abbr title="Weline\CustomerService\Model\ChatMessage::getTranslatedContent">getTranslatedContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#101"><abbr title="Weline\CustomerService\Model\ChatMessage::setTranslatedContent">setTranslatedContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#106"><abbr title="Weline\CustomerService\Model\ChatMessage::getSourceLocale">getSourceLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#111"><abbr title="Weline\CustomerService\Model\ChatMessage::setSourceLocale">setSourceLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#116"><abbr title="Weline\CustomerService\Model\ChatMessage::getTargetLocale">getTargetLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#121"><abbr title="Weline\CustomerService\Model\ChatMessage::setTargetLocale">setTargetLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#126"><abbr title="Weline\CustomerService\Model\ChatMessage::getIsTranslated">getIsTranslated</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#131"><abbr title="Weline\CustomerService\Model\ChatMessage::setIsTranslated">setIsTranslated</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#51"><abbr title="Weline\CustomerService\Model\ChatSession::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#55"><abbr title="Weline\CustomerService\Model\ChatSession::getCustomerId">getCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#61"><abbr title="Weline\CustomerService\Model\ChatSession::setCustomerId">setCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#66"><abbr title="Weline\CustomerService\Model\ChatSession::getAgentId">getAgentId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#72"><abbr title="Weline\CustomerService\Model\ChatSession::setAgentId">setAgentId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#77"><abbr title="Weline\CustomerService\Model\ChatSession::getSessionToken">getSessionToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#82"><abbr title="Weline\CustomerService\Model\ChatSession::setSessionToken">setSessionToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#87"><abbr title="Weline\CustomerService\Model\ChatSession::getCustomerLocale">getCustomerLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#92"><abbr title="Weline\CustomerService\Model\ChatSession::setCustomerLocale">setCustomerLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#97"><abbr title="Weline\CustomerService\Model\ChatSession::getAgentLocale">getAgentLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#102"><abbr title="Weline\CustomerService\Model\ChatSession::setAgentLocale">setAgentLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#107"><abbr title="Weline\CustomerService\Model\ChatSession::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#112"><abbr title="Weline\CustomerService\Model\ChatSession::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#44"><abbr title="Weline\CustomerService\Model\CustomerLanguage::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#50"><abbr title="Weline\CustomerService\Model\CustomerLanguage::getCustomerId">getCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#56"><abbr title="Weline\CustomerService\Model\CustomerLanguage::setCustomerId">setCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#61"><abbr title="Weline\CustomerService\Model\CustomerLanguage::getSessionId">getSessionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#66"><abbr title="Weline\CustomerService\Model\CustomerLanguage::setSessionId">setSessionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#71"><abbr title="Weline\CustomerService\Model\CustomerLanguage::getEmail">getEmail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#76"><abbr title="Weline\CustomerService\Model\CustomerLanguage::setEmail">setEmail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#81"><abbr title="Weline\CustomerService\Model\CustomerLanguage::getTargetLocale">getTargetLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#86"><abbr title="Weline\CustomerService\Model\CustomerLanguage::setTargetLocale">setTargetLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#38"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#42"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::getKey">getKey</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#47"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::setKey">setKey</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#52"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::getValue">getValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#57"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::setValue">setValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#68"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::getConfigValue">getConfigValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#83"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::setConfigValue">setConfigValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#52"><abbr title="Weline\CustomerService\Model\ServiceAgent::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#58"><abbr title="Weline\CustomerService\Model\ServiceAgent::getUserId">getUserId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#63"><abbr title="Weline\CustomerService\Model\ServiceAgent::setUserId">setUserId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#68"><abbr title="Weline\CustomerService\Model\ServiceAgent::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#73"><abbr title="Weline\CustomerService\Model\ServiceAgent::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#78"><abbr title="Weline\CustomerService\Model\ServiceAgent::getEmail">getEmail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#83"><abbr title="Weline\CustomerService\Model\ServiceAgent::setEmail">setEmail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#88"><abbr title="Weline\CustomerService\Model\ServiceAgent::getLocale">getLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#93"><abbr title="Weline\CustomerService\Model\ServiceAgent::setLocale">setLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#98"><abbr title="Weline\CustomerService\Model\ServiceAgent::getIsActive">getIsActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#103"><abbr title="Weline\CustomerService\Model\ServiceAgent::setIsActive">setIsActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#108"><abbr title="Weline\CustomerService\Model\ServiceAgent::getMaxSessions">getMaxSessions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#113"><abbr title="Weline\CustomerService\Model\ServiceAgent::setMaxSessions">setMaxSessions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#118"><abbr title="Weline\CustomerService\Model\ServiceAgent::updateHeartbeat">updateHeartbeat</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#123"><abbr title="Weline\CustomerService\Model\ServiceAgent::isOnline">isOnline</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#132"><abbr title="Weline\CustomerService\Model\ServiceAgent::getSupportedLocales">getSupportedLocales</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#142"><abbr title="Weline\CustomerService\Model\ServiceAgent::setSupportedLocales">setSupportedLocales</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#147"><abbr title="Weline\CustomerService\Model\ServiceAgent::supportsLocale">supportsLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#152"><abbr title="Weline\CustomerService\Model\ServiceAgent::getAvailableLocales">getAvailableLocales</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#27"><abbr title="Weline\CustomerService\Observer\TranslationObserver::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#38"><abbr title="Weline\CustomerService\Observer\TranslationObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#96"><abbr title="Weline\CustomerService\Observer\TranslationObserver::translateText">translateText</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#140"><abbr title="Weline\CustomerService\Observer\TranslationObserver::buildTranslationPrompt">buildTranslationPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#165"><abbr title="Weline\CustomerService\Observer\TranslationObserver::cleanTranslationResult">cleanTranslationResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#184"><abbr title="Weline\CustomerService\Observer\TranslationObserver::getLanguageName">getLanguageName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#29"><abbr title="Weline\CustomerService\Service\ChatService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#43"><abbr title="Weline\CustomerService\Service\ChatService::getOrCreateSession">getOrCreateSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#98"><abbr title="Weline\CustomerService\Service\ChatService::assignAgent">assignAgent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#137"><abbr title="Weline\CustomerService\Service\ChatService::getAgentActiveSessionCount">getAgentActiveSessionCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#159"><abbr title="Weline\CustomerService\Service\ChatService::sendMessage">sendMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#219"><abbr title="Weline\CustomerService\Service\ChatService::getMessages">getMessages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#244"><abbr title="Weline\CustomerService\Service\ChatService::getCustomerLocale">getCustomerLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#284"><abbr title="Weline\CustomerService\Service\ChatService::setCustomerLocale">setCustomerLocale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#331"><abbr title="Weline\CustomerService\Service\ChatService::generateSessionToken">generateSessionToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#29"><abbr title="Weline\CustomerService\Service\EmailBindingService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#42"><abbr title="Weline\CustomerService\Service\EmailBindingService::sendVerificationEmail">sendVerificationEmail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#82"><abbr title="Weline\CustomerService\Service\EmailBindingService::verifyToken">verifyToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#110"><abbr title="Weline\CustomerService\Service\EmailBindingService::bindCustomerToSession">bindCustomerToSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#200"><abbr title="Weline\CustomerService\Service\EmailBindingService::updateCustomerLanguageFromSession">updateCustomerLanguageFromSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#235"><abbr title="Weline\CustomerService\Service\EmailBindingService::generateVerificationToken">generateVerificationToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#253"><abbr title="Weline\CustomerService\Service\EmailBindingService::decodeVerificationToken">decodeVerificationToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#269"><abbr title="Weline\CustomerService\Service\EmailBindingService::buildVerificationUrl">buildVerificationUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#282"><abbr title="Weline\CustomerService\Service\EmailBindingService::buildVerificationEmailContent">buildVerificationEmailContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#31"><abbr title="Weline\CustomerService\Service\StatisticsService::getAgentStatistics">getAgentStatistics</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#80"><abbr title="Weline\CustomerService\Service\StatisticsService::getAllAgentsStatistics">getAllAgentsStatistics</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#122"><abbr title="Weline\CustomerService\Service\StatisticsService::getSessionCount">getSessionCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#147"><abbr title="Weline\CustomerService\Service\StatisticsService::getMessageCount">getMessageCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#168"><abbr title="Weline\CustomerService\Service\StatisticsService::getCustomerMessageCount">getCustomerMessageCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#207"><abbr title="Weline\CustomerService\Service\StatisticsService::getRespondedSessionCount">getRespondedSessionCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#253"><abbr title="Weline\CustomerService\Service\StatisticsService::getAverageResponseTime">getAverageResponseTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#322"><abbr title="Weline\CustomerService\Service\StatisticsService::getMinResponseTime">getMinResponseTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#338"><abbr title="Weline\CustomerService\Service\StatisticsService::getMaxResponseTime">getMaxResponseTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#354"><abbr title="Weline\CustomerService\Service\StatisticsService::getAverageSessionDuration">getAverageSessionDuration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#392"><abbr title="Weline\CustomerService\Service\StatisticsService::getMinSessionDuration">getMinSessionDuration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#431"><abbr title="Weline\CustomerService\Service\StatisticsService::getMaxSessionDuration">getMaxSessionDuration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#468"><abbr title="Weline\CustomerService\Service\StatisticsService::getDateRange">getDateRange</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/TranslationService.php.html#25"><abbr title="Weline\CustomerService\Service\TranslationService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/TranslationService.php.html#40"><abbr title="Weline\CustomerService\Service\TranslationService::translate">translate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/TranslationService.php.html#88"><abbr title="Weline\CustomerService\Service\TranslationService::batchTranslate">batchTranslate</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Agent.php.html#87"><abbr title="Weline\CustomerService\Controller\Backend\Agent::postSave">postSave</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#38"><abbr title="Weline\CustomerService\Observer\TranslationObserver::execute">execute</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#44"><abbr title="Weline\CustomerService\Controller\Backend\Console::index">index</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#265"><abbr title="Weline\CustomerService\Controller\Backend\Console::postSendMessage">postSendMessage</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#206"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::getServiceStatus">getServiceStatus</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#216"><abbr title="Weline\CustomerService\Controller\Backend\Console::getMessages">getMessages</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#333"><abbr title="Weline\CustomerService\Controller\Backend\Console::postAssignSession">postAssignSession</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#30"><abbr title="Weline\CustomerService\Controller\Backend\Session::index">index</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#110"><abbr title="Weline\CustomerService\Service\EmailBindingService::bindCustomerToSession">bindCustomerToSession</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#253"><abbr title="Weline\CustomerService\Service\StatisticsService::getAverageResponseTime">getAverageResponseTime</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/TranslationService.php.html#88"><abbr title="Weline\CustomerService\Service\TranslationService::batchTranslate">batchTranslate</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#37"><abbr title="Weline\CustomerService\Controller\Backend\Agent::index">index</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#145"><abbr title="Weline\CustomerService\Controller\Backend\Console::getSessions">getSessions</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#392"><abbr title="Weline\CustomerService\Controller\Backend\Console::postCloseSession">postCloseSession</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Frontend/Bind.php.html#34"><abbr title="Weline\CustomerService\Controller\Frontend\Bind::postSendVerification">postSendVerification</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Frontend/Bind.php.html#86"><abbr title="Weline\CustomerService\Controller\Frontend\Bind::verify">verify</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#84"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::postSendMessage">postSendMessage</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#82"><abbr title="Weline\CustomerService\Service\EmailBindingService::verifyToken">verifyToken</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#468"><abbr title="Weline\CustomerService\Service\StatisticsService::getDateRange">getDateRange</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/TranslationService.php.html#40"><abbr title="Weline\CustomerService\Service\TranslationService::translate">translate</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#43"><abbr title="Weline\CustomerService\Service\ChatService::getOrCreateSession">getOrCreateSession</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#244"><abbr title="Weline\CustomerService\Service\ChatService::getCustomerLocale">getCustomerLocale</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#284"><abbr title="Weline\CustomerService\Service\ChatService::setCustomerLocale">setCustomerLocale</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#80"><abbr title="Weline\CustomerService\Service\StatisticsService::getAllAgentsStatistics">getAllAgentsStatistics</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#392"><abbr title="Weline\CustomerService\Service\StatisticsService::getMinSessionDuration">getMinSessionDuration</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#156"><abbr title="Weline\CustomerService\Controller\Backend\Agent::postRemove">postRemove</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Agent.php.html#186"><abbr title="Weline\CustomerService\Controller\Backend\Agent::getAgentStatistics">getAgentStatistics</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Config.php.html#60"><abbr title="Weline\CustomerService\Controller\Backend\Config::postSave">postSave</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#496"><abbr title="Weline\CustomerService\Controller\Backend\Console::getAgentStatus">getAgentStatus</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#88"><abbr title="Weline\CustomerService\Controller\Backend\Session::view">view</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#136"><abbr title="Weline\CustomerService\Controller\Backend\Session::postClose">postClose</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#167"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::postSetLanguage">postSetLanguage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#96"><abbr title="Weline\CustomerService\Observer\TranslationObserver::translateText">translateText</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#159"><abbr title="Weline\CustomerService\Service\ChatService::sendMessage">sendMessage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#31"><abbr title="Weline\CustomerService\Service\StatisticsService::getAgentStatistics">getAgentStatistics</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#207"><abbr title="Weline\CustomerService\Service\StatisticsService::getRespondedSessionCount">getRespondedSessionCount</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#431"><abbr title="Weline\CustomerService\Service\StatisticsService::getMaxSessionDuration">getMaxSessionDuration</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Config.php.html#28"><abbr title="Weline\CustomerService\Controller\Backend\Config::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#439"><abbr title="Weline\CustomerService\Controller\Backend\Console::getStatistics">getStatistics</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Console.php.html#468"><abbr title="Weline\CustomerService\Controller\Backend\Console::postHeartbeat">postHeartbeat</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#48"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::getSession">getSession</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Frontend/Chat.php.html#135"><abbr title="Weline\CustomerService\Controller\Frontend\Chat::getMessages">getMessages</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#132"><abbr title="Weline\CustomerService\Model\ServiceAgent::getSupportedLocales">getSupportedLocales</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Observer/TranslationObserver.php.html#165"><abbr title="Weline\CustomerService\Observer\TranslationObserver::cleanTranslationResult">cleanTranslationResult</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/ChatService.php.html#98"><abbr title="Weline\CustomerService\Service\ChatService::assignAgent">assignAgent</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#200"><abbr title="Weline\CustomerService\Service\EmailBindingService::updateCustomerLanguageFromSession">updateCustomerLanguageFromSession</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#253"><abbr title="Weline\CustomerService\Service\EmailBindingService::decodeVerificationToken">decodeVerificationToken</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#354"><abbr title="Weline\CustomerService\Service\StatisticsService::getAverageSessionDuration">getAverageSessionDuration</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/ChatMessage.php.html#131"><abbr title="Weline\CustomerService\Model\ChatMessage::setIsTranslated">setIsTranslated</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#55"><abbr title="Weline\CustomerService\Model\ChatSession::getCustomerId">getCustomerId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/ChatSession.php.html#66"><abbr title="Weline\CustomerService\Model\ChatSession::getAgentId">getAgentId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/CustomerLanguage.php.html#50"><abbr title="Weline\CustomerService\Model\CustomerLanguage::getCustomerId">getCustomerId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#68"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::getConfigValue">getConfigValue</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/CustomerServiceConfig.php.html#83"><abbr title="Weline\CustomerService\Model\CustomerServiceConfig::setConfigValue">setConfigValue</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#103"><abbr title="Weline\CustomerService\Model\ServiceAgent::setIsActive">setIsActive</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/ServiceAgent.php.html#123"><abbr title="Weline\CustomerService\Model\ServiceAgent::isOnline">isOnline</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/EmailBindingService.php.html#42"><abbr title="Weline\CustomerService\Service\EmailBindingService::sendVerificationEmail">sendVerificationEmail</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#122"><abbr title="Weline\CustomerService\Service\StatisticsService::getSessionCount">getSessionCount</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#168"><abbr title="Weline\CustomerService\Service\StatisticsService::getCustomerMessageCount">getCustomerMessageCount</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#322"><abbr title="Weline\CustomerService\Service\StatisticsService::getMinResponseTime">getMinResponseTime</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/StatisticsService.php.html#338"><abbr title="Weline\CustomerService\Service\StatisticsService::getMaxResponseTime">getMaxResponseTime</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([16,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([139,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,27,"<a href=\"Controller\/Backend\/Agent.php.html#24\">Weline\\CustomerService\\Controller\\Backend\\Agent<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Config.php.html#22\">Weline\\CustomerService\\Controller\\Backend\\Config<\/a>"],[0,55,"<a href=\"Controller\/Backend\/Console.php.html#27\">Weline\\CustomerService\\Controller\\Backend\\Console<\/a>"],[0,16,"<a href=\"Controller\/Backend\/Session.php.html#24\">Weline\\CustomerService\\Controller\\Backend\\Session<\/a>"],[0,13,"<a href=\"Controller\/Frontend\/Bind.php.html#20\">Weline\\CustomerService\\Controller\\Frontend\\Bind<\/a>"],[0,26,"<a href=\"Controller\/Frontend\/Chat.php.html#25\">Weline\\CustomerService\\Controller\\Frontend\\Chat<\/a>"],[0,18,"<a href=\"Model\/ChatMessage.php.html#18\">Weline\\CustomerService\\Model\\ChatMessage<\/a>"],[0,15,"<a href=\"Model\/ChatSession.php.html#18\">Weline\\CustomerService\\Model\\ChatSession<\/a>"],[0,10,"<a href=\"Model\/CustomerLanguage.php.html#19\">Weline\\CustomerService\\Model\\CustomerLanguage<\/a>"],[0,9,"<a href=\"Model\/CustomerServiceConfig.php.html#18\">Weline\\CustomerService\\Model\\CustomerServiceConfig<\/a>"],[0,23,"<a href=\"Model\/ServiceAgent.php.html#18\">Weline\\CustomerService\\Model\\ServiceAgent<\/a>"],[0,20,"<a href=\"Observer\/TranslationObserver.php.html#23\">Weline\\CustomerService\\Observer\\TranslationObserver<\/a>"],[0,26,"<a href=\"Service\/ChatService.php.html#25\">Weline\\CustomerService\\Service\\ChatService<\/a>"],[0,25,"<a href=\"Service\/EmailBindingService.php.html#25\">Weline\\CustomerService\\Service\\EmailBindingService<\/a>"],[0,47,"<a href=\"Service\/StatisticsService.php.html#22\">Weline\\CustomerService\\Service\\StatisticsService<\/a>"],[0,14,"<a href=\"Service\/TranslationService.php.html#21\">Weline\\CustomerService\\Service\\TranslationService<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Controller\/Backend\/Agent.php.html#29\">Weline\\CustomerService\\Controller\\Backend\\Agent::__construct<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Agent.php.html#37\">Weline\\CustomerService\\Controller\\Backend\\Agent::index<\/a>"],[0,11,"<a href=\"Controller\/Backend\/Agent.php.html#87\">Weline\\CustomerService\\Controller\\Backend\\Agent::postSave<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Agent.php.html#156\">Weline\\CustomerService\\Controller\\Backend\\Agent::postRemove<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Agent.php.html#186\">Weline\\CustomerService\\Controller\\Backend\\Agent::getAgentStatistics<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Agent.php.html#213\">Weline\\CustomerService\\Controller\\Backend\\Agent::jsonResponse<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Config.php.html#28\">Weline\\CustomerService\\Controller\\Backend\\Config::index<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Config.php.html#60\">Weline\\CustomerService\\Controller\\Backend\\Config::postSave<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Config.php.html#96\">Weline\\CustomerService\\Controller\\Backend\\Config::jsonResponse<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Console.php.html#33\">Weline\\CustomerService\\Controller\\Backend\\Console::__construct<\/a>"],[0,9,"<a href=\"Controller\/Backend\/Console.php.html#44\">Weline\\CustomerService\\Controller\\Backend\\Console::index<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Console.php.html#145\">Weline\\CustomerService\\Controller\\Backend\\Console::getSessions<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Console.php.html#216\">Weline\\CustomerService\\Controller\\Backend\\Console::getMessages<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Console.php.html#265\">Weline\\CustomerService\\Controller\\Backend\\Console::postSendMessage<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Console.php.html#333\">Weline\\CustomerService\\Controller\\Backend\\Console::postAssignSession<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Console.php.html#392\">Weline\\CustomerService\\Controller\\Backend\\Console::postCloseSession<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Console.php.html#439\">Weline\\CustomerService\\Controller\\Backend\\Console::getStatistics<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Console.php.html#468\">Weline\\CustomerService\\Controller\\Backend\\Console::postHeartbeat<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Console.php.html#496\">Weline\\CustomerService\\Controller\\Backend\\Console::getAgentStatus<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Console.php.html#527\">Weline\\CustomerService\\Controller\\Backend\\Console::jsonResponse<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Session.php.html#30\">Weline\\CustomerService\\Controller\\Backend\\Session::index<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Session.php.html#88\">Weline\\CustomerService\\Controller\\Backend\\Session::view<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Session.php.html#136\">Weline\\CustomerService\\Controller\\Backend\\Session::postClose<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Session.php.html#164\">Weline\\CustomerService\\Controller\\Backend\\Session::jsonResponse<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Bind.php.html#24\">Weline\\CustomerService\\Controller\\Frontend\\Bind::__construct<\/a>"],[0,6,"<a href=\"Controller\/Frontend\/Bind.php.html#34\">Weline\\CustomerService\\Controller\\Frontend\\Bind::postSendVerification<\/a>"],[0,6,"<a href=\"Controller\/Frontend\/Bind.php.html#86\">Weline\\CustomerService\\Controller\\Frontend\\Bind::verify<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Chat.php.html#29\">Weline\\CustomerService\\Controller\\Frontend\\Chat::__construct<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Chat.php.html#38\">Weline\\CustomerService\\Controller\\Frontend\\Chat::index<\/a>"],[0,3,"<a href=\"Controller\/Frontend\/Chat.php.html#48\">Weline\\CustomerService\\Controller\\Frontend\\Chat::getSession<\/a>"],[0,6,"<a href=\"Controller\/Frontend\/Chat.php.html#84\">Weline\\CustomerService\\Controller\\Frontend\\Chat::postSendMessage<\/a>"],[0,3,"<a href=\"Controller\/Frontend\/Chat.php.html#135\">Weline\\CustomerService\\Controller\\Frontend\\Chat::getMessages<\/a>"],[0,4,"<a href=\"Controller\/Frontend\/Chat.php.html#167\">Weline\\CustomerService\\Controller\\Frontend\\Chat::postSetLanguage<\/a>"],[0,8,"<a href=\"Controller\/Frontend\/Chat.php.html#206\">Weline\\CustomerService\\Controller\\Frontend\\Chat::getServiceStatus<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#51\">Weline\\CustomerService\\Model\\ChatMessage::_init<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#56\">Weline\\CustomerService\\Model\\ChatMessage::getSessionId<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#61\">Weline\\CustomerService\\Model\\ChatMessage::setSessionId<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#66\">Weline\\CustomerService\\Model\\ChatMessage::getSenderType<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#71\">Weline\\CustomerService\\Model\\ChatMessage::setSenderType<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#76\">Weline\\CustomerService\\Model\\ChatMessage::getSenderId<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#81\">Weline\\CustomerService\\Model\\ChatMessage::setSenderId<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#86\">Weline\\CustomerService\\Model\\ChatMessage::getContent<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#91\">Weline\\CustomerService\\Model\\ChatMessage::setContent<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#96\">Weline\\CustomerService\\Model\\ChatMessage::getTranslatedContent<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#101\">Weline\\CustomerService\\Model\\ChatMessage::setTranslatedContent<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#106\">Weline\\CustomerService\\Model\\ChatMessage::getSourceLocale<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#111\">Weline\\CustomerService\\Model\\ChatMessage::setSourceLocale<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#116\">Weline\\CustomerService\\Model\\ChatMessage::getTargetLocale<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#121\">Weline\\CustomerService\\Model\\ChatMessage::setTargetLocale<\/a>"],[0,1,"<a href=\"Model\/ChatMessage.php.html#126\">Weline\\CustomerService\\Model\\ChatMessage::getIsTranslated<\/a>"],[0,2,"<a href=\"Model\/ChatMessage.php.html#131\">Weline\\CustomerService\\Model\\ChatMessage::setIsTranslated<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#51\">Weline\\CustomerService\\Model\\ChatSession::_init<\/a>"],[0,2,"<a href=\"Model\/ChatSession.php.html#55\">Weline\\CustomerService\\Model\\ChatSession::getCustomerId<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#61\">Weline\\CustomerService\\Model\\ChatSession::setCustomerId<\/a>"],[0,2,"<a href=\"Model\/ChatSession.php.html#66\">Weline\\CustomerService\\Model\\ChatSession::getAgentId<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#72\">Weline\\CustomerService\\Model\\ChatSession::setAgentId<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#77\">Weline\\CustomerService\\Model\\ChatSession::getSessionToken<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#82\">Weline\\CustomerService\\Model\\ChatSession::setSessionToken<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#87\">Weline\\CustomerService\\Model\\ChatSession::getCustomerLocale<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#92\">Weline\\CustomerService\\Model\\ChatSession::setCustomerLocale<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#97\">Weline\\CustomerService\\Model\\ChatSession::getAgentLocale<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#102\">Weline\\CustomerService\\Model\\ChatSession::setAgentLocale<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#107\">Weline\\CustomerService\\Model\\ChatSession::getStatus<\/a>"],[0,1,"<a href=\"Model\/ChatSession.php.html#112\">Weline\\CustomerService\\Model\\ChatSession::setStatus<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#44\">Weline\\CustomerService\\Model\\CustomerLanguage::_init<\/a>"],[0,2,"<a href=\"Model\/CustomerLanguage.php.html#50\">Weline\\CustomerService\\Model\\CustomerLanguage::getCustomerId<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#56\">Weline\\CustomerService\\Model\\CustomerLanguage::setCustomerId<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#61\">Weline\\CustomerService\\Model\\CustomerLanguage::getSessionId<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#66\">Weline\\CustomerService\\Model\\CustomerLanguage::setSessionId<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#71\">Weline\\CustomerService\\Model\\CustomerLanguage::getEmail<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#76\">Weline\\CustomerService\\Model\\CustomerLanguage::setEmail<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#81\">Weline\\CustomerService\\Model\\CustomerLanguage::getTargetLocale<\/a>"],[0,1,"<a href=\"Model\/CustomerLanguage.php.html#86\">Weline\\CustomerService\\Model\\CustomerLanguage::setTargetLocale<\/a>"],[0,1,"<a href=\"Model\/CustomerServiceConfig.php.html#38\">Weline\\CustomerService\\Model\\CustomerServiceConfig::_init<\/a>"],[0,1,"<a href=\"Model\/CustomerServiceConfig.php.html#42\">Weline\\CustomerService\\Model\\CustomerServiceConfig::getKey<\/a>"],[0,1,"<a href=\"Model\/CustomerServiceConfig.php.html#47\">Weline\\CustomerService\\Model\\CustomerServiceConfig::setKey<\/a>"],[0,1,"<a href=\"Model\/CustomerServiceConfig.php.html#52\">Weline\\CustomerService\\Model\\CustomerServiceConfig::getValue<\/a>"],[0,1,"<a href=\"Model\/CustomerServiceConfig.php.html#57\">Weline\\CustomerService\\Model\\CustomerServiceConfig::setValue<\/a>"],[0,2,"<a href=\"Model\/CustomerServiceConfig.php.html#68\">Weline\\CustomerService\\Model\\CustomerServiceConfig::getConfigValue<\/a>"],[0,2,"<a href=\"Model\/CustomerServiceConfig.php.html#83\">Weline\\CustomerService\\Model\\CustomerServiceConfig::setConfigValue<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#52\">Weline\\CustomerService\\Model\\ServiceAgent::_init<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#58\">Weline\\CustomerService\\Model\\ServiceAgent::getUserId<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#63\">Weline\\CustomerService\\Model\\ServiceAgent::setUserId<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#68\">Weline\\CustomerService\\Model\\ServiceAgent::getName<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#73\">Weline\\CustomerService\\Model\\ServiceAgent::setName<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#78\">Weline\\CustomerService\\Model\\ServiceAgent::getEmail<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#83\">Weline\\CustomerService\\Model\\ServiceAgent::setEmail<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#88\">Weline\\CustomerService\\Model\\ServiceAgent::getLocale<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#93\">Weline\\CustomerService\\Model\\ServiceAgent::setLocale<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#98\">Weline\\CustomerService\\Model\\ServiceAgent::getIsActive<\/a>"],[0,2,"<a href=\"Model\/ServiceAgent.php.html#103\">Weline\\CustomerService\\Model\\ServiceAgent::setIsActive<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#108\">Weline\\CustomerService\\Model\\ServiceAgent::getMaxSessions<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#113\">Weline\\CustomerService\\Model\\ServiceAgent::setMaxSessions<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#118\">Weline\\CustomerService\\Model\\ServiceAgent::updateHeartbeat<\/a>"],[0,2,"<a href=\"Model\/ServiceAgent.php.html#123\">Weline\\CustomerService\\Model\\ServiceAgent::isOnline<\/a>"],[0,3,"<a href=\"Model\/ServiceAgent.php.html#132\">Weline\\CustomerService\\Model\\ServiceAgent::getSupportedLocales<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#142\">Weline\\CustomerService\\Model\\ServiceAgent::setSupportedLocales<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#147\">Weline\\CustomerService\\Model\\ServiceAgent::supportsLocale<\/a>"],[0,1,"<a href=\"Model\/ServiceAgent.php.html#152\">Weline\\CustomerService\\Model\\ServiceAgent::getAvailableLocales<\/a>"],[0,1,"<a href=\"Observer\/TranslationObserver.php.html#27\">Weline\\CustomerService\\Observer\\TranslationObserver::__construct<\/a>"],[0,10,"<a href=\"Observer\/TranslationObserver.php.html#38\">Weline\\CustomerService\\Observer\\TranslationObserver::execute<\/a>"],[0,4,"<a href=\"Observer\/TranslationObserver.php.html#96\">Weline\\CustomerService\\Observer\\TranslationObserver::translateText<\/a>"],[0,1,"<a href=\"Observer\/TranslationObserver.php.html#140\">Weline\\CustomerService\\Observer\\TranslationObserver::buildTranslationPrompt<\/a>"],[0,3,"<a href=\"Observer\/TranslationObserver.php.html#165\">Weline\\CustomerService\\Observer\\TranslationObserver::cleanTranslationResult<\/a>"],[0,1,"<a href=\"Observer\/TranslationObserver.php.html#184\">Weline\\CustomerService\\Observer\\TranslationObserver::getLanguageName<\/a>"],[0,1,"<a href=\"Service\/ChatService.php.html#29\">Weline\\CustomerService\\Service\\ChatService::__construct<\/a>"],[0,5,"<a href=\"Service\/ChatService.php.html#43\">Weline\\CustomerService\\Service\\ChatService::getOrCreateSession<\/a>"],[0,3,"<a href=\"Service\/ChatService.php.html#98\">Weline\\CustomerService\\Service\\ChatService::assignAgent<\/a>"],[0,1,"<a href=\"Service\/ChatService.php.html#137\">Weline\\CustomerService\\Service\\ChatService::getAgentActiveSessionCount<\/a>"],[0,4,"<a href=\"Service\/ChatService.php.html#159\">Weline\\CustomerService\\Service\\ChatService::sendMessage<\/a>"],[0,1,"<a href=\"Service\/ChatService.php.html#219\">Weline\\CustomerService\\Service\\ChatService::getMessages<\/a>"],[0,5,"<a href=\"Service\/ChatService.php.html#244\">Weline\\CustomerService\\Service\\ChatService::getCustomerLocale<\/a>"],[0,5,"<a href=\"Service\/ChatService.php.html#284\">Weline\\CustomerService\\Service\\ChatService::setCustomerLocale<\/a>"],[0,1,"<a href=\"Service\/ChatService.php.html#331\">Weline\\CustomerService\\Service\\ChatService::generateSessionToken<\/a>"],[0,1,"<a href=\"Service\/EmailBindingService.php.html#29\">Weline\\CustomerService\\Service\\EmailBindingService::__construct<\/a>"],[0,2,"<a href=\"Service\/EmailBindingService.php.html#42\">Weline\\CustomerService\\Service\\EmailBindingService::sendVerificationEmail<\/a>"],[0,6,"<a href=\"Service\/EmailBindingService.php.html#82\">Weline\\CustomerService\\Service\\EmailBindingService::verifyToken<\/a>"],[0,7,"<a href=\"Service\/EmailBindingService.php.html#110\">Weline\\CustomerService\\Service\\EmailBindingService::bindCustomerToSession<\/a>"],[0,3,"<a href=\"Service\/EmailBindingService.php.html#200\">Weline\\CustomerService\\Service\\EmailBindingService::updateCustomerLanguageFromSession<\/a>"],[0,1,"<a href=\"Service\/EmailBindingService.php.html#235\">Weline\\CustomerService\\Service\\EmailBindingService::generateVerificationToken<\/a>"],[0,3,"<a href=\"Service\/EmailBindingService.php.html#253\">Weline\\CustomerService\\Service\\EmailBindingService::decodeVerificationToken<\/a>"],[0,1,"<a href=\"Service\/EmailBindingService.php.html#269\">Weline\\CustomerService\\Service\\EmailBindingService::buildVerificationUrl<\/a>"],[0,1,"<a href=\"Service\/EmailBindingService.php.html#282\">Weline\\CustomerService\\Service\\EmailBindingService::buildVerificationEmailContent<\/a>"],[0,4,"<a href=\"Service\/StatisticsService.php.html#31\">Weline\\CustomerService\\Service\\StatisticsService::getAgentStatistics<\/a>"],[0,5,"<a href=\"Service\/StatisticsService.php.html#80\">Weline\\CustomerService\\Service\\StatisticsService::getAllAgentsStatistics<\/a>"],[0,2,"<a href=\"Service\/StatisticsService.php.html#122\">Weline\\CustomerService\\Service\\StatisticsService::getSessionCount<\/a>"],[0,1,"<a href=\"Service\/StatisticsService.php.html#147\">Weline\\CustomerService\\Service\\StatisticsService::getMessageCount<\/a>"],[0,2,"<a href=\"Service\/StatisticsService.php.html#168\">Weline\\CustomerService\\Service\\StatisticsService::getCustomerMessageCount<\/a>"],[0,4,"<a href=\"Service\/StatisticsService.php.html#207\">Weline\\CustomerService\\Service\\StatisticsService::getRespondedSessionCount<\/a>"],[0,7,"<a href=\"Service\/StatisticsService.php.html#253\">Weline\\CustomerService\\Service\\StatisticsService::getAverageResponseTime<\/a>"],[0,2,"<a href=\"Service\/StatisticsService.php.html#322\">Weline\\CustomerService\\Service\\StatisticsService::getMinResponseTime<\/a>"],[0,2,"<a href=\"Service\/StatisticsService.php.html#338\">Weline\\CustomerService\\Service\\StatisticsService::getMaxResponseTime<\/a>"],[0,3,"<a href=\"Service\/StatisticsService.php.html#354\">Weline\\CustomerService\\Service\\StatisticsService::getAverageSessionDuration<\/a>"],[0,5,"<a href=\"Service\/StatisticsService.php.html#392\">Weline\\CustomerService\\Service\\StatisticsService::getMinSessionDuration<\/a>"],[0,4,"<a href=\"Service\/StatisticsService.php.html#431\">Weline\\CustomerService\\Service\\StatisticsService::getMaxSessionDuration<\/a>"],[0,6,"<a href=\"Service\/StatisticsService.php.html#468\">Weline\\CustomerService\\Service\\StatisticsService::getDateRange<\/a>"],[0,1,"<a href=\"Service\/TranslationService.php.html#25\">Weline\\CustomerService\\Service\\TranslationService::__construct<\/a>"],[0,6,"<a href=\"Service\/TranslationService.php.html#40\">Weline\\CustomerService\\Service\\TranslationService::translate<\/a>"],[0,7,"<a href=\"Service\/TranslationService.php.html#88\">Weline\\CustomerService\\Service\\TranslationService::batchTranslate<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

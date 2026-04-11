@@ -1,0 +1,568 @@
+<?php
+/**
+ * Call Break Legend - Navigation (Agenda Style)
+ *
+ * @component_start
+ * code: header-nav
+ * name: 导航栏
+ * name_en: Navigation Bar
+ * description: Agenda风格透明导航
+ * category: header
+ * region: header
+ * @component_end
+ *
+ * @fields_start
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文字:text:Call Break Legend
+ * logo.url => Logo图片URL:textarea:|留空使用默认图标
+ * group:navigation => 导航设置
+ * navigation.use_custom_links => 使用自定义导航链接:select:yes|yes,no
+ * navigation.items => 导航项:textarea:Home=>/\r\nGames=>#games\r\nHow to Play=>#howto\r\nWinners=>#winners\r\nFAQ=>#faq|格式：文本=>链接
+ * group:navigation_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * navigation.label_home_page => 首页菜单名:text:
+ * navigation.label_about_page => 关于我们菜单名:text:
+ * navigation.label_blog_list => 博客菜单名:text:
+ * navigation.label_contact_page => 联系我们菜单名:text:
+ * navigation.label_terms_of_service => 条款菜单名:text:
+ * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * navigation.cta_text => 按钮文字:text:Play Now
+ * navigation.cta_url => 按钮链接:text:#download
+ * @fields_end
+ */
+
+$componentId = 'tpm-nav-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+    return $default;
+};
+
+$getConfig = function ($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$normalizeToggle = static function($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$sanitizeTitle = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') return $value;
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$logoDisplay = $normalizeToggle($getConfigAny(['logo.display', 'header.logo.display'], 'yes')) !== 'no';
+$logoText = $sanitizeTitle($getConfigAny(['logo.text', 'header.logo.text'], 'Call Break Legend'));
+if ($logoText === '') {
+    $logoText = 'Call Break Legend';
+}
+$logoIconUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-legend/asset/img/tpm-logo-icon.svg');
+$logoUrl = $getConfigAny(['logo.url', 'header.logo.url'], '') ?: ($page && $page->getData('logo') ? $page->getData('logo') : $logoIconUrl);
+$navItemsConfig = (string) $getConfigAny([
+    'navigation.items',
+    'header.navigation.items',
+    'navigation.navigation.items',
+    'navigation_labels.navigation.items',
+], "Home=>\nGames=>#games\nHow to Play=>#howto\nWinners=>#winners\nFAQ=>#faq");
+$useCustomLinks = $normalizeToggle($getConfigAny([
+    'navigation.use_custom_links',
+    'header.navigation.use_custom_links',
+    'navigation.navigation.use_custom_links',
+    'navigation_labels.navigation.use_custom_links',
+], 'yes')) === 'yes';
+$ctaText = trim((string) $getConfigAny([
+    'download_button.text',
+    'header.download_button.text',
+    'navigation.cta_text',
+    'header.navigation.cta_text',
+    'navigation.navigation.cta_text',
+    'navigation_labels.navigation.cta_text',
+], 'Play Now'));
+if ($ctaText === '') {
+    $ctaText = 'Play Now';
+}
+$ctaUrl = (string) $getConfigAny([
+    'download_button.url',
+    'header.download_button.url',
+    'navigation.cta_url',
+    'header.navigation.cta_url',
+    'navigation.navigation.cta_url',
+    'navigation_labels.navigation.cta_url',
+], '#download');
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($ctaUrl);
+$navBgUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-legend/asset/img/nav-bg.svg');
+$bodyBgUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-legend/asset/img/poker-header-bg.svg');
+$navItems = [];
+
+$pageTitleRaw = $page ? ($page->getData('title') ?: '') : '';
+$pageTitle = $sanitizeTitle($pageTitleRaw);
+if ($pageTitle === '') {
+    $pageTitle = 'Call Break Legend';
+}
+
+if (!$useCustomLinks && $page) {
+    $navigationPages = [];
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $navigationPages = $page->getHeaderNavigationPages(10);
+    } elseif (method_exists($page, 'getNavigationPages')) {
+        $navigationPages = $page->getNavigationPages([], 10);
+    }
+    foreach ($navigationPages as $navPage) {
+        $pageType = trim((string)($navPage['type'] ?? ''));
+        $label = $pageType !== '' ? trim((string)$getConfigAny([
+            'navigation_labels.navigation.label_' . $pageType,
+            'navigation.label_' . $pageType,
+            'header.navigation.label_' . $pageType,
+        ], '')) : '';
+        $navItems[] = [
+            'text' => $label !== '' ? $label : ($navPage['title'] ?? ''),
+            'href' => $navPage['url'] ?? '#',
+            'type' => $navPage['type'] ?? '',
+        ];
+    }
+}
+
+if (empty($navItems)) {
+    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+    }
+    $lines = preg_split('/\r?\n/', $navItemsConfig);
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if (empty($line)) continue;
+        if (strpos($line, '=>') !== false) {
+            $parts = explode('=>', $line, 2);
+            $text = trim($parts[0]);
+            $href = trim($parts[1] ?? '');
+            if (!empty($text)) {
+                if (empty($href)) {
+                    $href = '/' . strtolower(preg_replace('/[^a-zA-Z0-9]+/', '-', trim($text)));
+                }
+                $navItems[] = ['text' => $text, 'href' => $href];
+            }
+        }
+    }
+}
+
+if (empty($navItems)) {
+    if ($page) {
+        $defaultPages = $page->getNavigationPages([], 5);
+        foreach ($defaultPages as $navPage) {
+            $navItems[] = [
+                'text' => $navPage['title'] ?? '',
+                'href' => $navPage['url'] ?? '#',
+            ];
+        }
+    }
+    if (empty($navItems)) {
+        $navItems = [
+            ['text' => 'Home', 'href' => '/'],
+            ['text' => 'About', 'href' => '/about'],
+            ['text' => 'Blog', 'href' => '/blog'],
+            ['text' => 'FAQs', 'href' => '/faqs'],
+        ];
+    }
+}
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'cb-emerald': '#1eb980',
+                    'cb-amber': '#f2a93b',
+                    'cb-ink': '#0b1525',
+                    'cb-deep': '#0f2538',
+                }
+            }
+        }
+    }
+</script>
+<style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(1200px 600px at 15% 10%, rgba(30, 185, 128, 0.18), transparent 60%),
+                radial-gradient(800px 500px at 85% 20%, rgba(242, 169, 59, 0.12), transparent 55%),
+                #0b1525 url('<?= $bodyBgUrl ?>') center/cover no-repeat fixed;
+            color: #ffffff;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+        html { scroll-behavior: smooth; }
+    </style>
+<style>
+#<?= $componentId ?> {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 99;
+    width: 100%;
+    padding: 12px 0;
+    background: rgba(11, 28, 42, 0.72);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid rgba(30, 185, 128, 0.22);
+    box-shadow: 0 12px 32px rgba(2, 6, 12, 0.45);
+    overflow: hidden;
+}
+
+#<?= $componentId ?>::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: url('<?= $navBgUrl ?>') center/cover no-repeat;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(500px 120px at 15% 0%, rgba(30, 185, 128, 0.25), transparent 70%),
+        radial-gradient(420px 120px at 85% 20%, rgba(242, 169, 59, 0.22), transparent 70%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .mobile-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 18px 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+#<?= $componentId ?> .logo-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#<?= $componentId ?> .logo-icon {
+    width: 42px;
+    height: 42px;
+    display: block;
+}
+
+#<?= $componentId ?> .logo-text {
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0.6px;
+    color: #e9f5f2;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .nav-links {
+    display: none;
+    flex: 1;
+    justify-content: center;
+    gap: 14px;
+    position: relative;
+}
+
+#<?= $componentId ?> .nav-links::after {
+    content: "";
+    position: absolute;
+    top: -65%;
+    left: -30%;
+    width: 24%;
+    height: 230%;
+    background: linear-gradient(118deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(242, 169, 59, 0.05) 38%,
+        rgba(255, 255, 255, 0.36) 50%,
+        rgba(30, 185, 128, 0.16) 62%,
+        rgba(255, 255, 255, 0) 100%);
+    transform: translateX(-250%) skewX(-18deg);
+    animation: cbl-nav-sweep 7.2s ease-in-out infinite;
+    pointer-events: none;
+    filter: blur(0.3px);
+    opacity: 0.9;
+}
+
+#<?= $componentId ?> .nav-link {
+    position: relative;
+    overflow: hidden;
+    color: rgba(233, 245, 242, 0.8);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    transition: all 0.25s ease;
+}
+
+#<?= $componentId ?> .nav-link::before {
+    content: "";
+    position: absolute;
+    top: -34%;
+    left: -42%;
+    width: 34%;
+    height: 168%;
+    background: linear-gradient(115deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.34) 50%,
+        rgba(255, 255, 255, 0) 100%);
+    transform: translateX(-220%) skewX(-20deg);
+    transition: transform 0.55s ease;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .nav-link:hover {
+    color: #f2a93b;
+    background: rgba(30, 185, 128, 0.12);
+    border-color: rgba(30, 185, 128, 0.35);
+}
+
+#<?= $componentId ?> .nav-link:hover::before {
+    transform: translateX(380%) skewX(-20deg);
+}
+
+#<?= $componentId ?> .cta-btn {
+    position: relative;
+    overflow: hidden;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem 1.6rem;
+    border-radius: 14px;
+    background: linear-gradient(120deg, #1eb980 0%, #0f7f61 100%);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 800;
+    text-decoration: none;
+    letter-spacing: 0.4px;
+    box-shadow: 0 14px 30px rgba(30, 185, 128, 0.35);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+#<?= $componentId ?> .cta-btn::after {
+    content: "";
+    position: absolute;
+    top: -34%;
+    left: -36%;
+    width: 30%;
+    height: 170%;
+    background: linear-gradient(115deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.45) 50%,
+        rgba(255, 255, 255, 0) 100%);
+    transform: translateX(-220%) skewX(-20deg);
+    animation: cbl-cta-sweep 4.2s ease-in-out infinite;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .cta-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 18px 36px rgba(30, 185, 128, 0.5);
+}
+
+#<?= $componentId ?> .hamburger {
+    display: inline-flex;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .hamburger span {
+    position: absolute;
+    width: 22px;
+    height: 2px;
+    background: #e9f5f2;
+    border-radius: 999px;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+}
+
+#<?= $componentId ?> .hamburger span:nth-child(1) { transform: translateY(-6px); }
+#<?= $componentId ?> .hamburger span:nth-child(2) { transform: translateY(0); }
+#<?= $componentId ?> .hamburger span:nth-child(3) { transform: translateY(6px); }
+
+#<?= $componentId ?> .hamburger.is-open span:nth-child(1) { transform: translateY(0) rotate(45deg); }
+#<?= $componentId ?> .hamburger.is-open span:nth-child(2) { opacity: 0; }
+#<?= $componentId ?> .hamburger.is-open span:nth-child(3) { transform: translateY(0) rotate(-45deg); }
+
+#<?= $componentId ?> .mobile-panel {
+    display: block;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease, opacity 0.3s ease;
+    background: rgba(11, 21, 37, 0.95);
+    border-top: 1px solid rgba(30, 185, 128, 0.2);
+}
+
+#<?= $componentId ?> .mobile-panel.open {
+    max-height: 420px;
+    opacity: 1;
+}
+
+#<?= $componentId ?> .mobile-link {
+    color: rgba(233, 245, 242, 0.85);
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    text-decoration: none;
+    padding: 12px 0;
+    display: block;
+}
+
+#<?= $componentId ?> .mobile-link:hover {
+    color: #f2a93b;
+}
+
+@keyframes cbl-nav-sweep {
+    0%, 58% { transform: translateX(-260%) skewX(-18deg); opacity: 0; }
+    68% { opacity: 0.95; }
+    86%, 100% { transform: translateX(520%) skewX(-18deg); opacity: 0; }
+}
+
+@keyframes cbl-cta-sweep {
+    0%, 45% { transform: translateX(-230%) skewX(-20deg); opacity: 0; }
+    56% { opacity: 1; }
+    80%, 100% { transform: translateX(430%) skewX(-20deg); opacity: 0; }
+}
+
+@media (min-width: 992px) {
+    #<?= $componentId ?> .nav-links {
+        display: flex;
+    }
+
+    #<?= $componentId ?> .hamburger {
+        display: none;
+    }
+
+    #<?= $componentId ?> .mobile-panel {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .nav-links::after,
+    #<?= $componentId ?> .cta-btn::after {
+        animation: none;
+    }
+
+    #<?= $componentId ?> .nav-link::before {
+        transition: none;
+        transform: translateX(-220%) skewX(-20deg);
+    }
+}
+</style>
+</head>
+<body>
+<nav id="<?= $componentId ?>">
+    <div class="nav-container">
+        <?php if ($logoDisplay): ?>
+        <div class="logo-wrap">
+            <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>" class="logo-icon">
+            <span class="logo-text hidden sm:inline"><?= htmlspecialchars($logoText) ?></span>
+        </div>
+        <?php endif; ?>
+
+        <div class="nav-links">
+            <?php foreach ($navItems as $item): ?>
+                <a href="<?= htmlspecialchars($item['href']) ?>" class="nav-link">
+                    <?= htmlspecialchars($item['text']) ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="flex items-center gap-3 ml-auto">
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="cta-btn hidden lg:inline-flex">
+                <?= htmlspecialchars($ctaText) ?>
+            </a>
+            <button class="hamburger lg:hidden" id="mobile-menu-btn-<?= $componentId ?>" aria-expanded="false" aria-controls="mobile-menu-<?= $componentId ?>">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </div>
+
+    <div class="mobile-panel lg:hidden relative" id="mobile-menu-<?= $componentId ?>">
+        <div class="mobile-container !py-4">
+            <?php foreach ($navItems as $item): ?>
+                <a href="<?= htmlspecialchars($item['href']) ?>" class="mobile-link">
+                    <?= htmlspecialchars($item['text']) ?>
+                </a>
+            <?php endforeach; ?>
+            <a href="<?= htmlspecialchars($ctaUrl) ?>" class="cta-btn mt-4 w-fit">
+                <?= htmlspecialchars($ctaText) ?>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<script>
+(function() {
+    const componentId = '<?= $componentId ?>';
+    const toggleBtn = document.getElementById('mobile-menu-btn-' + componentId);
+    const mobileMenu = document.getElementById('mobile-menu-' + componentId);
+
+    if (!toggleBtn || !mobileMenu) return;
+
+    toggleBtn.addEventListener('click', () => {
+        const isOpen = mobileMenu.classList.toggle('open');
+        toggleBtn.classList.toggle('is-open', isOpen);
+        toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
+
+    document.addEventListener('click', (event) => {
+        if (!mobileMenu.contains(event.target) && !toggleBtn.contains(event.target)) {
+            mobileMenu.classList.remove('open');
+            toggleBtn.classList.remove('is-open');
+            toggleBtn.setAttribute('aria-expanded', 'false');
+        }
+    });
+})();
+</script>

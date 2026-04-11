@@ -1,0 +1,723 @@
+<?php
+/**
+ * Teen Patti Royal Prism - Blog Category Component
+ *
+ * @fields_start
+ * blog.title|分类页标题（留空使用分类名）|text|
+ * blog.subtitle|副标题|text|Browse articles by category
+ * blog.posts_per_page|每页文章数|number|9
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_category|显示分类|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.card_style|卡片样式|select:default=默认,minimal=简约,featured=重点|default
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$currentCategory = $this->getData('current_category') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', $currentCategory['name'] ?? 'Category Posts');
+$subtitle = $getConfig('blog.subtitle', 'Browse articles by category');
+$postsPerPage = max(1, (int)$getConfig('blog.posts_per_page', 9));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$cardStyle = (string)$getConfig('blog.card_style', 'default');
+
+$primaryColor = $getConfig('color_scheme.primary', '#ff7a45');
+$secondaryColor = $getConfig('color_scheme.secondary', '#00cdb6');
+$bgColor = $getConfig('color_scheme.background', '#fffaf0');
+$textColor = $getConfig('color_scheme.text', '#332016');
+
+$posts = array_slice($blogPosts, 0, $postsPerPage);
+$featuredPost = $posts[0] ?? null;
+$listPosts = array_slice($posts, 1);
+$recent = !empty($recentPosts) ? array_slice($recentPosts, 0, 5) : array_slice($posts, 0, 5);
+
+$formatDate = static function ($value) {
+    if (!$value) {
+        return '';
+    }
+    $timestamp = strtotime((string)$value);
+    return $timestamp ? date('M d, Y', $timestamp) : (string)$value;
+};
+
+$componentId = $component_instance_id ?? 'blog-category-' . uniqid();
+?>
+
+<section id="<?= $componentId ?>" class="prism-blog-category style-<?= htmlspecialchars($cardStyle) ?>">
+    <div class="section-inner">
+        <header class="category-head">
+            <div class="head-copy" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                <?php if (!empty($currentCategory['name'])): ?>
+                    <p class="section-tag"><?= htmlspecialchars((string)$currentCategory['name']) ?></p>
+                <?php else: ?>
+                    <p class="section-tag"><?= __('Category') ?></p>
+                <?php endif; ?>
+
+                <div class="head-row">
+                    <h1><?= htmlspecialchars((string)$title) ?></h1>
+                    <?php if (!empty($posts)): ?>
+                        <span class="post-count"><?= count($posts) ?> <?= __('Posts') ?></span>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($subtitle): ?>
+                    <p class="head-summary"><?= htmlspecialchars((string)$subtitle) ?></p>
+                <?php endif; ?>
+
+                <?php if (!empty($currentCategory['description'])): ?>
+                    <p class="head-description"><?= htmlspecialchars((string)$currentCategory['description']) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <?php if (!empty($blogCategories)): ?>
+                <nav class="category-switchboard" aria-label="Category switchboard" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="90ms">
+                    <?php foreach ($blogCategories as $category): ?>
+                        <?php
+                        $name = (string)($category['name'] ?? '');
+                        $url = (string)($category['url'] ?? '#');
+                        $isActive = !empty($currentCategory['id']) && !empty($category['id']) && (string)$currentCategory['id'] === (string)$category['id'];
+                        if ($name === '') continue;
+                        ?>
+                        <a href="<?= htmlspecialchars($url) ?>" class="<?= $isActive ? 'is-active' : '' ?>">
+                            <span><?= htmlspecialchars($name) ?></span>
+                            <?php if (isset($category['post_count'])): ?>
+                                <em><?= (int)$category['post_count'] ?></em>
+                            <?php endif; ?>
+                        </a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
+        </header>
+
+        <?php if (empty($posts)): ?>
+            <article class="empty-state" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                <h2><?= __('No posts in this category yet') ?></h2>
+                <p><?= __('Try another category or return to the blog index.') ?></p>
+                <a href="/blog"><?= __('Back to Blog') ?></a>
+            </article>
+        <?php else: ?>
+            <div class="category-layout<?= $showSidebar ? ' with-sidebar' : '' ?>">
+                <main class="category-main">
+                    <?php if ($featuredPost): ?>
+                        <?php
+                        $featuredUrl = (string)($featuredPost['url'] ?? '#');
+                        $featuredTitle = (string)($featuredPost['title'] ?? __('Untitled Post'));
+                        $featuredSummary = (string)($featuredPost['summary'] ?? '');
+                        $featuredImage = (string)($featuredPost['cover_image'] ?? '');
+                        $featuredCategory = (string)($featuredPost['category_name'] ?? '');
+                        $featuredDate = $formatDate($featuredPost['published_at'] ?? '');
+                        $featuredAuthor = (string)($featuredPost['author'] ?? '');
+                        ?>
+                        <article class="focus-card<?= $featuredImage === '' ? ' no-image' : '' ?>" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                            <div class="focus-copy">
+                                <div class="focus-meta">
+                                    <?php if ($showCategory && $featuredCategory !== ''): ?>
+                                        <span class="story-chip"><?= htmlspecialchars($featuredCategory) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($showDate && $featuredDate !== ''): ?>
+                                        <span class="story-date"><?= htmlspecialchars($featuredDate) ?></span>
+                                    <?php endif; ?>
+                                </div>
+
+                                <h2><a href="<?= htmlspecialchars($featuredUrl) ?>"><?= htmlspecialchars($featuredTitle) ?></a></h2>
+
+                                <?php if ($featuredSummary !== ''): ?>
+                                    <p><?= htmlspecialchars(mb_substr($featuredSummary, 0, 220)) ?><?= mb_strlen($featuredSummary) > 220 ? '...' : '' ?></p>
+                                <?php endif; ?>
+
+                                <div class="focus-foot">
+                                    <?php if ($showAuthor && $featuredAuthor !== ''): ?>
+                                        <span class="story-author"><?= htmlspecialchars($featuredAuthor) ?></span>
+                                    <?php endif; ?>
+                                    <a class="story-link" href="<?= htmlspecialchars($featuredUrl) ?>"><?= __('Read Story') ?></a>
+                                </div>
+                            </div>
+
+                            <?php if ($featuredImage !== ''): ?>
+                                <a class="focus-media" href="<?= htmlspecialchars($featuredUrl) ?>">
+                                    <img src="<?= htmlspecialchars($featuredImage) ?>" alt="<?= htmlspecialchars($featuredTitle) ?>" loading="lazy" decoding="async">
+                                </a>
+                            <?php endif; ?>
+                        </article>
+                    <?php endif; ?>
+
+                    <?php if (!empty($listPosts)): ?>
+                        <div class="ledger-list">
+                            <?php foreach ($listPosts as $index => $post): ?>
+                                <?php
+                                $postUrl = (string)($post['url'] ?? '#');
+                                $postTitle = (string)($post['title'] ?? __('Untitled Post'));
+                                $postSummary = (string)($post['summary'] ?? '');
+                                $postImage = (string)($post['cover_image'] ?? '');
+                                $postCategory = (string)($post['category_name'] ?? '');
+                                $postDate = $formatDate($post['published_at'] ?? '');
+                                $postAuthor = (string)($post['author'] ?? '');
+                                $toneClass = 'tone-' . (($index % 3) + 1);
+                                ?>
+                                <article class="ledger-entry <?= htmlspecialchars($toneClass) ?><?= $postImage === '' ? ' no-image' : '' ?>" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="<?= min($index * 70, 280) ?>ms">
+                                    <div class="entry-stamp">
+                                        <?php if ($showCategory && $postCategory !== ''): ?>
+                                            <span class="stamp-chip"><?= htmlspecialchars($postCategory) ?></span>
+                                        <?php endif; ?>
+                                        <?php if ($showDate && $postDate !== ''): ?>
+                                            <strong><?= htmlspecialchars($postDate) ?></strong>
+                                        <?php endif; ?>
+                                        <?php if ($showAuthor && $postAuthor !== ''): ?>
+                                            <small><?= htmlspecialchars($postAuthor) ?></small>
+                                        <?php endif; ?>
+                                    </div>
+
+                                    <div class="entry-body">
+                                        <h3><a href="<?= htmlspecialchars($postUrl) ?>"><?= htmlspecialchars($postTitle) ?></a></h3>
+                                        <?php if ($postSummary !== ''): ?>
+                                            <p><?= htmlspecialchars(mb_substr($postSummary, 0, 180)) ?><?= mb_strlen($postSummary) > 180 ? '...' : '' ?></p>
+                                        <?php endif; ?>
+                                        <a class="story-link" href="<?= htmlspecialchars($postUrl) ?>"><?= __('Read More') ?></a>
+                                    </div>
+
+                                    <?php if ($postImage !== ''): ?>
+                                        <a class="entry-media" href="<?= htmlspecialchars($postUrl) ?>">
+                                            <img src="<?= htmlspecialchars($postImage) ?>" alt="<?= htmlspecialchars($postTitle) ?>" loading="lazy" decoding="async">
+                                        </a>
+                                    <?php endif; ?>
+                                </article>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </main>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="category-rail">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                                <h2><?= __('Category Guide') ?></h2>
+                                <div class="rail-category-list">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <?php
+                                        $name = (string)($category['name'] ?? '');
+                                        $url = (string)($category['url'] ?? '#');
+                                        $isActive = !empty($currentCategory['id']) && !empty($category['id']) && (string)$currentCategory['id'] === (string)$category['id'];
+                                        if ($name === '') continue;
+                                        ?>
+                                        <a href="<?= htmlspecialchars($url) ?>" class="<?= $isActive ? 'is-active' : '' ?>">
+                                            <span><?= htmlspecialchars($name) ?></span>
+                                            <?php if (isset($category['post_count'])): ?>
+                                                <em><?= (int)$category['post_count'] ?></em>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recent)): ?>
+                            <section class="rail-card" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="100ms">
+                                <h2><?= __('Recent Posts') ?></h2>
+                                <div class="recent-stack">
+                                    <?php foreach ($recent as $post): ?>
+                                        <?php
+                                        $recentUrl = (string)($post['url'] ?? '#');
+                                        $recentTitle = (string)($post['title'] ?? __('Untitled Post'));
+                                        $recentDate = $formatDate($post['published_at'] ?? '');
+                                        ?>
+                                        <a href="<?= htmlspecialchars($recentUrl) ?>">
+                                            <strong><?= htmlspecialchars($recentTitle) ?></strong>
+                                            <?php if ($recentDate !== ''): ?>
+                                                <span><?= htmlspecialchars($recentDate) ?></span>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --primary: <?= htmlspecialchars($primaryColor) ?>;
+    --secondary: <?= htmlspecialchars($secondaryColor) ?>;
+    --bg: <?= htmlspecialchars($bgColor) ?>;
+    --text: <?= htmlspecialchars($textColor) ?>;
+    position: relative;
+    overflow: hidden;
+    padding: clamp(3.4rem, 7vw, 5rem) 0;
+    background:
+        radial-gradient(920px 260px at 100% 0%, rgba(255, 179, 92, 0.18), rgba(255, 179, 92, 0) 72%),
+        radial-gradient(760px 240px at 0% 100%, rgba(0, 205, 182, 0.14), rgba(0, 205, 182, 0) 72%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: var(--text);
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1180px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .section-tag {
+    margin: 0;
+    display: inline-flex;
+    width: fit-content;
+    padding: 0.34rem 0.72rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 205, 182, 0.26);
+    background: rgba(0, 205, 182, 0.1);
+    color: #0e9f8d;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> h1,
+#<?= $componentId ?> h2,
+#<?= $componentId ?> h3 {
+    margin: 0;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .category-head {
+    display: grid;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+#<?= $componentId ?> .head-copy {
+    display: grid;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .head-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: end;
+}
+
+#<?= $componentId ?> .head-row h1 {
+    font-size: clamp(2.1rem, 5vw, 3.5rem);
+    line-height: 0.96;
+}
+
+#<?= $componentId ?> .post-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.4rem;
+    padding: 0.38rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.76);
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    color: rgba(51, 32, 22, 0.8);
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .head-summary,
+#<?= $componentId ?> .head-description {
+    margin: 0;
+    color: rgba(51, 32, 22, 0.74);
+    line-height: 1.82;
+    max-width: 52rem;
+}
+
+#<?= $componentId ?> .category-switchboard {
+    display: flex;
+    gap: 0.6rem;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+    scrollbar-width: none;
+}
+
+#<?= $componentId ?> .category-switchboard::-webkit-scrollbar {
+    display: none;
+}
+
+#<?= $componentId ?> .category-switchboard a {
+    flex: 0 0 auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.72rem 0.9rem;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,247,240,0.82));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    text-decoration: none;
+    color: var(--text);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .category-switchboard a.is-active {
+    background: linear-gradient(135deg, rgba(255, 122, 69, 0.94), rgba(255, 179, 92, 0.94));
+    color: #2b140d;
+}
+
+#<?= $componentId ?> .category-switchboard em {
+    font-style: normal;
+    color: rgba(51, 32, 22, 0.58);
+    font-size: 0.78rem;
+}
+
+#<?= $componentId ?> .category-layout {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .category-layout.with-sidebar {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+}
+
+#<?= $componentId ?> .category-main {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .focus-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 0.9fr);
+    gap: 1rem;
+    padding: clamp(1rem, 3vw, 1.35rem);
+    border-radius: 34px;
+    background:
+        radial-gradient(320px 140px at 0% 0%, rgba(255,255,255,0.24), rgba(255,255,255,0) 72%),
+        linear-gradient(135deg, rgba(0, 205, 182, 0.94), rgba(148, 242, 213, 0.9));
+    box-shadow: 0 24px 42px rgba(0, 205, 182, 0.18);
+    overflow: hidden;
+}
+
+#<?= $componentId ?>.style-minimal .focus-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(239,255,251,0.9));
+    box-shadow: 0 18px 32px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $componentId ?> .focus-card.no-image {
+    grid-template-columns: 1fr;
+}
+
+#<?= $componentId ?> .focus-copy {
+    display: grid;
+    gap: 0.85rem;
+    align-content: space-between;
+}
+
+#<?= $componentId ?> .focus-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .story-chip,
+#<?= $componentId ?> .story-date,
+#<?= $componentId ?> .stamp-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.95rem;
+    padding: 0.22rem 0.68rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .story-chip,
+#<?= $componentId ?> .stamp-chip {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.26);
+}
+
+#<?= $componentId ?> .story-date {
+    color: rgba(255,255,255,0.92);
+}
+
+#<?= $componentId ?>.style-minimal .story-chip,
+#<?= $componentId ?>.style-minimal .story-date,
+#<?= $componentId ?>.style-minimal .stamp-chip {
+    color: rgba(51, 32, 22, 0.74);
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(126, 91, 67, 0.12);
+}
+
+#<?= $componentId ?> .focus-card h2,
+#<?= $componentId ?> .ledger-entry h3 {
+    font-size: clamp(1.75rem, 4vw, 2.7rem);
+    line-height: 0.98;
+}
+
+#<?= $componentId ?> .ledger-entry h3 {
+    font-size: clamp(1.35rem, 3vw, 2rem);
+}
+
+#<?= $componentId ?> .focus-card h2 a,
+#<?= $componentId ?> .ledger-entry h3 a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .focus-card p,
+#<?= $componentId ?> .ledger-entry p {
+    margin: 0;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .focus-foot {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.6rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .story-author {
+    font-size: 0.9rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .story-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.6rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.88);
+    color: #2b140d;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .focus-media,
+#<?= $componentId ?> .entry-media {
+    display: block;
+    border-radius: 28px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.18);
+}
+
+#<?= $componentId ?> .focus-media img,
+#<?= $componentId ?> .entry-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .ledger-list {
+    display: grid;
+    gap: 0.9rem;
+}
+
+#<?= $componentId ?> .ledger-entry {
+    display: grid;
+    grid-template-columns: minmax(130px, 160px) minmax(0, 1fr) minmax(150px, 190px);
+    gap: 0.95rem;
+    align-items: stretch;
+    padding: 1rem;
+    border-radius: 30px;
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 18px 32px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $componentId ?> .ledger-entry.tone-1 {
+    background: linear-gradient(180deg, rgba(255,249,236,0.96), rgba(255,236,213,0.9));
+}
+
+#<?= $componentId ?> .ledger-entry.tone-2 {
+    background: linear-gradient(180deg, rgba(239,255,251,0.96), rgba(224,251,246,0.9));
+}
+
+#<?= $componentId ?> .ledger-entry.tone-3 {
+    background: linear-gradient(180deg, rgba(246,249,255,0.96), rgba(233,241,255,0.9));
+}
+
+#<?= $componentId ?>.style-minimal .ledger-entry {
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,251,246,0.92));
+}
+
+#<?= $componentId ?> .ledger-entry.no-image {
+    grid-template-columns: minmax(130px, 160px) minmax(0, 1fr);
+}
+
+#<?= $componentId ?> .entry-stamp {
+    display: grid;
+    align-content: start;
+    gap: 0.5rem;
+}
+
+#<?= $componentId ?> .entry-stamp strong {
+    color: var(--text);
+    font-size: 1rem;
+    line-height: 1.45;
+}
+
+#<?= $componentId ?> .entry-stamp small {
+    color: rgba(51, 32, 22, 0.62);
+    font-size: 0.8rem;
+}
+
+#<?= $componentId ?> .entry-body {
+    display: grid;
+    gap: 0.7rem;
+    align-content: start;
+}
+
+#<?= $componentId ?> .entry-body p {
+    color: rgba(51, 32, 22, 0.74);
+}
+
+#<?= $componentId ?> .entry-media {
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .category-rail {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+#<?= $componentId ?> .rail-card {
+    position: sticky;
+    top: 102px;
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,248,240,0.9));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 18px 30px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $componentId ?> .rail-card + .rail-card {
+    top: 132px;
+}
+
+#<?= $componentId ?> .rail-card h2 {
+    font-size: 1.35rem;
+}
+
+#<?= $componentId ?> .rail-category-list,
+#<?= $componentId ?> .recent-stack {
+    display: grid;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .rail-category-list a,
+#<?= $componentId ?> .recent-stack a {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: center;
+    padding: 0.78rem 0.85rem;
+    border-radius: 18px;
+    text-decoration: none;
+    color: rgba(51, 32, 22, 0.82);
+    background: rgba(255,255,255,0.74);
+    border: 1px solid rgba(126, 91, 67, 0.08);
+}
+
+#<?= $componentId ?> .rail-category-list a.is-active {
+    background: linear-gradient(135deg, rgba(255, 122, 69, 0.94), rgba(255, 179, 92, 0.94));
+    color: #2b140d;
+}
+
+#<?= $componentId ?> .rail-category-list em,
+#<?= $componentId ?> .recent-stack span {
+    font-style: normal;
+    color: rgba(51, 32, 22, 0.58);
+    font-size: 0.78rem;
+}
+
+#<?= $componentId ?> .recent-stack a {
+    display: grid;
+    justify-content: start;
+}
+
+#<?= $componentId ?> .recent-stack strong {
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+#<?= $componentId ?> .empty-state {
+    padding: clamp(1.4rem, 4vw, 2rem);
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,248,240,0.9));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 18px 30px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $componentId ?> .empty-state h2 {
+    font-size: clamp(1.7rem, 4vw, 2.4rem);
+}
+
+#<?= $componentId ?> .empty-state p {
+    margin: 0.75rem 0 1rem;
+    color: rgba(51, 32, 22, 0.72);
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .empty-state a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.7rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(255, 122, 69, 0.94), rgba(255, 179, 92, 0.94));
+    color: #2b140d;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .category-layout.with-sidebar,
+    #<?= $componentId ?> .focus-card {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .rail-card + .rail-card {
+        position: static;
+    }
+}
+
+@media (max-width: 900px) {
+    #<?= $componentId ?> .ledger-entry,
+    #<?= $componentId ?> .ledger-entry.no-image {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .focus-card,
+    #<?= $componentId ?> .ledger-entry,
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .empty-state {
+        border-radius: 28px;
+    }
+}
+</style>

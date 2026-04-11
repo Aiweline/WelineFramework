@@ -1,0 +1,32 @@
+{
+  "page_type": "contact_page",
+  "name": "Contact Page",
+  "description": "Contact page layout with form",
+  "version": "1.0.0",
+  "layout_config": {
+    "header": [
+      {
+        "code": "header-nav",
+        "enabled": true,
+        "instance_id": "header-nav-1",
+        "config": {}
+      }
+    ],
+    "content": [
+      {
+        "code": "contact-content",
+        "enabled": true,
+        "instance_id": "contact-content-1",
+        "config": {}
+      }
+    ],
+    "footer": [
+      {
+        "code": "footer-links",
+        "enabled": true,
+        "instance_id": "footer-links-1",
+        "config": {}
+      }
+    ]
+  }
+}

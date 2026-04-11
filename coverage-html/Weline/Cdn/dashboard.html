@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Cdn</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Cdn</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Adapter/Cloudflare.php.html#22">Weline\Cdn\Adapter\Cloudflare</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Clear.php.html#23">Weline\Cdn\Controller\Api\Clear</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#27">Weline\Cdn\Controller\Backend\Account</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#28">Weline\Cdn\Controller\Backend\ApiRules</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Accounts.php.html#22">Weline\Cdn\Controller\Backend\Api\Cdn\Accounts</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Providers.php.html#21">Weline\Cdn\Controller\Backend\Api\Cdn\Providers</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#21">Weline\Cdn\Controller\Backend\AttackLog</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#29">Weline\Cdn\Controller\Backend\Domain</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#27">Weline\Cdn\Controller\Backend\Rules</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#27">Weline\Cdn\Controller\Backend\Warmup</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#30">Weline\Cdn\Cron\PushRules</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Warmup.php.html#27">Weline\Cdn\Cron\Warmup</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#22">Weline\Cdn\Model\Account</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#22">Weline\Cdn\Model\ApiRule</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#19">Weline\Cdn\Model\AttackLog</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#22">Weline\Cdn\Model\Domain</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/WarmupUrl.php.html#18">Weline\Cdn\Model\WarmupUrl</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#25">Weline\Cdn\Observer\AttackRecoveryHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#31">Weline\Cdn\Observer\AttackSignalHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#25">Weline\Cdn\Observer\CdnRequest</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/Clear.php.html#26">Weline\Cdn\Observer\Clear</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ClientIpKeysObserver.php.html#27">Weline\Cdn\Observer\ClientIpKeysObserver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CollectRules.php.html#26">Weline\Cdn\Observer\CollectRules</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/PushRules.php.html#27">Weline\Cdn\Observer\PushRules</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/RegisterQuickBuildServices.php.html#12">Weline\Cdn\Observer\RegisterQuickBuildServices</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/SyncSecurityRulesToCdn.php.html#11">Weline\Cdn\Observer\SyncSecurityRulesToCdn</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/WarmupSend.php.html#27">Weline\Cdn\Observer\WarmupSend</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#23">Weline\Cdn\Service\AccountManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#28">Weline\Cdn\Service\AdapterResolver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#25">Weline\Cdn\Service\CachePurger</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#30">Weline\Cdn\Service\CdnRuleCollector</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ProviderManager.php.html#24">Weline\Cdn\Service\ProviderManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#27">Weline\Cdn\Service\RuleManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/UrlSiteResolver.php.html#24">Weline\Cdn\Service\UrlSiteResolver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#28">Weline\Cdn\Service\WarmupProviderScanner</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupRunner.php.html#25">Weline\Cdn\Service\WarmupRunner</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#22">Weline\Cdn\Taglib\AccountSelect</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#22">Weline\Cdn\Taglib\ProviderSelect</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#14">Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Adapter/Cloudflare.php.html#22">Weline\Cdn\Adapter\Cloudflare</a></td><td class="text-right">10506</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#30">Weline\Cdn\Service\CdnRuleCollector</a></td><td class="text-right">6480</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#29">Weline\Cdn\Controller\Backend\Domain</a></td><td class="text-right">6162</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#14">Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider</a></td><td class="text-right">3192</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#27">Weline\Cdn\Controller\Backend\Rules</a></td><td class="text-right">3080</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#27">Weline\Cdn\Controller\Backend\Account</a></td><td class="text-right">2550</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#28">Weline\Cdn\Service\AdapterResolver</a></td><td class="text-right">1640</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#21">Weline\Cdn\Controller\Backend\AttackLog</a></td><td class="text-right">1056</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#31">Weline\Cdn\Observer\AttackSignalHandler</a></td><td class="text-right">992</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#27">Weline\Cdn\Service\RuleManager</a></td><td class="text-right">992</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#25">Weline\Cdn\Service\CachePurger</a></td><td class="text-right">870</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#27">Weline\Cdn\Controller\Backend\Warmup</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#25">Weline\Cdn\Observer\CdnRequest</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#28">Weline\Cdn\Service\WarmupProviderScanner</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#28">Weline\Cdn\Controller\Backend\ApiRules</a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#25">Weline\Cdn\Observer\AttackRecoveryHandler</a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="Observer/PushRules.php.html#27">Weline\Cdn\Observer\PushRules</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Controller/Api/Clear.php.html#23">Weline\Cdn\Controller\Api\Clear</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Model/Domain.php.html#22">Weline\Cdn\Model\Domain</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Service/WarmupRunner.php.html#25">Weline\Cdn\Service\WarmupRunner</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Observer/WarmupSend.php.html#27">Weline\Cdn\Observer\WarmupSend</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#22">Weline\Cdn\Taglib\AccountSelect</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#22">Weline\Cdn\Taglib\ProviderSelect</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#23">Weline\Cdn\Service\AccountManager</a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#19">Weline\Cdn\Model\AttackLog</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Observer/ClientIpKeysObserver.php.html#27">Weline\Cdn\Observer\ClientIpKeysObserver</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#30">Weline\Cdn\Cron\PushRules</a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Model/Account.php.html#22">Weline\Cdn\Model\Account</a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Observer/CollectRules.php.html#26">Weline\Cdn\Observer\CollectRules</a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Service/UrlSiteResolver.php.html#24">Weline\Cdn\Service\UrlSiteResolver</a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/ProviderManager.php.html#24">Weline\Cdn\Service\ProviderManager</a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#22">Weline\Cdn\Model\ApiRule</a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Accounts.php.html#22">Weline\Cdn\Controller\Backend\Api\Cdn\Accounts</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Model/WarmupUrl.php.html#18">Weline\Cdn\Model\WarmupUrl</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Observer/Clear.php.html#26">Weline\Cdn\Observer\Clear</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Observer/SyncSecurityRulesToCdn.php.html#11">Weline\Cdn\Observer\SyncSecurityRulesToCdn</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Providers.php.html#21">Weline\Cdn\Controller\Backend\Api\Cdn\Providers</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Cron/Warmup.php.html#27">Weline\Cdn\Cron\Warmup</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Observer/RegisterQuickBuildServices.php.html#12">Weline\Cdn\Observer\RegisterQuickBuildServices</a></td><td class="text-right">20</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Adapter/Cloudflare.php.html#37"><abbr title="Weline\Cdn\Adapter\Cloudflare::getAdapterCode">getAdapterCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#45"><abbr title="Weline\Cdn\Adapter\Cloudflare::getAdapterName">getAdapterName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#53"><abbr title="Weline\Cdn\Adapter\Cloudflare::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#61"><abbr title="Weline\Cdn\Adapter\Cloudflare::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#71"><abbr title="Weline\Cdn\Adapter\Cloudflare::setCredentials">setCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#81"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeEverything">purgeEverything</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#105"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeUrls">purgeUrls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#136"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeHosts">purgeHosts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#167"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeTags">purgeTags</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#198"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeCacheKeys">purgeCacheKeys</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#229"><abbr title="Weline\Cdn\Adapter\Cloudflare::getRules">getRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#247"><abbr title="Weline\Cdn\Adapter\Cloudflare::putRules">putRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#331"><abbr title="Weline\Cdn\Adapter\Cloudflare::formatRulesForApi">formatRulesForApi</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#416"><abbr title="Weline\Cdn\Adapter\Cloudflare::normalizeAction">normalizeAction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#492"><abbr title="Weline\Cdn\Adapter\Cloudflare::ensureZone">ensureZone</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#514"><abbr title="Weline\Cdn\Adapter\Cloudflare::enableAttackMode">enableAttackMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#556"><abbr title="Weline\Cdn\Adapter\Cloudflare::disableAttackMode">disableAttackMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#591"><abbr title="Weline\Cdn\Adapter\Cloudflare::supportsAttackMode">supportsAttackMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#601"><abbr title="Weline\Cdn\Adapter\Cloudflare::getRealIpHeaderKeys">getRealIpHeaderKeys</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#614"><abbr title="Weline\Cdn\Adapter\Cloudflare::blockAttackerIps">blockAttackerIps</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#670"><abbr title="Weline\Cdn\Adapter\Cloudflare::makeRequest">makeRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Clear.php.html#28"><abbr title="Weline\Cdn\Controller\Api\Clear::getCachePurger">getCachePurger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Clear.php.html#49"><abbr title="Weline\Cdn\Controller\Api\Clear::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#33"><abbr title="Weline\Cdn\Controller\Backend\Account::getAccountModel">getAccountModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#41"><abbr title="Weline\Cdn\Controller\Backend\Account::getAccountManager">getAccountManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#49"><abbr title="Weline\Cdn\Controller\Backend\Account::getAdapterResolver">getAdapterResolver</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#59"><abbr title="Weline\Cdn\Controller\Backend\Account::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#125"><abbr title="Weline\Cdn\Controller\Backend\Account::form">form</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#156"><abbr title="Weline\Cdn\Controller\Backend\Account::save">save</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#306"><abbr title="Weline\Cdn\Controller\Backend\Account::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#360"><abbr title="Weline\Cdn\Controller\Backend\Account::setDefault">setDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#403"><abbr title="Weline\Cdn\Controller\Backend\Account::domains">domains</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#440"><abbr title="Weline\Cdn\Controller\Backend\Account::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#446"><abbr title="Weline\Cdn\Controller\Backend\Account::getOriginToken">getOriginToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#34"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::getApiRuleModel">getApiRuleModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#42"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::getRuleCollector">getRuleCollector</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#52"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#105"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::collect">collect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#132"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::view">view</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#163"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::toggle">toggle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#206"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::delete">delete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Accounts.php.html#27"><abbr title="Weline\Cdn\Controller\Backend\Api\Cdn\Accounts::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Accounts.php.html#36"><abbr title="Weline\Cdn\Controller\Backend\Api\Cdn\Accounts::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Providers.php.html#26"><abbr title="Weline\Cdn\Controller\Backend\Api\Cdn\Providers::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Providers.php.html#35"><abbr title="Weline\Cdn\Controller\Backend\Api\Cdn\Providers::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#27"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::getLogModel">getLogModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#35"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#124"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::getDetail">getDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#156"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#195"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::postBatchDelete">postBatchDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#232"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::postCleanup">postCleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#263"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::getExport">getExport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#341"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::getStats">getStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#35"><abbr title="Weline\Cdn\Controller\Backend\Domain::getDomainModel">getDomainModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#43"><abbr title="Weline\Cdn\Controller\Backend\Domain::getAdapterResolver">getAdapterResolver</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#51"><abbr title="Weline\Cdn\Controller\Backend\Domain::getRuleManager">getRuleManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#59"><abbr title="Weline\Cdn\Controller\Backend\Domain::getCachePurger">getCachePurger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#67"><abbr title="Weline\Cdn\Controller\Backend\Domain::getAccountManager">getAccountManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#77"><abbr title="Weline\Cdn\Controller\Backend\Domain::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#166"><abbr title="Weline\Cdn\Controller\Backend\Domain::form">form</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#232"><abbr title="Weline\Cdn\Controller\Backend\Domain::save">save</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#406"><abbr title="Weline\Cdn\Controller\Backend\Domain::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#451"><abbr title="Weline\Cdn\Controller\Backend\Domain::toggleEnable">toggleEnable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#496"><abbr title="Weline\Cdn\Controller\Backend\Domain::importRules">importRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#549"><abbr title="Weline\Cdn\Controller\Backend\Domain::pushRules">pushRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#598"><abbr title="Weline\Cdn\Controller\Backend\Domain::clearCache">clearCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#657"><abbr title="Weline\Cdn\Controller\Backend\Domain::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#33"><abbr title="Weline\Cdn\Controller\Backend\Rules::getDomainModel">getDomainModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#41"><abbr title="Weline\Cdn\Controller\Backend\Rules::getRuleManager">getRuleManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#51"><abbr title="Weline\Cdn\Controller\Backend\Rules::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#85"><abbr title="Weline\Cdn\Controller\Backend\Rules::getGlobalRules">getGlobalRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#107"><abbr title="Weline\Cdn\Controller\Backend\Rules::saveGlobalRules">saveGlobalRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#155"><abbr title="Weline\Cdn\Controller\Backend\Rules::getDomainRules">getDomainRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#202"><abbr title="Weline\Cdn\Controller\Backend\Rules::saveDomainRules">saveDomainRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#265"><abbr title="Weline\Cdn\Controller\Backend\Rules::import">import</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#296"><abbr title="Weline\Cdn\Controller\Backend\Rules::doImport">doImport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#351"><abbr title="Weline\Cdn\Controller\Backend\Rules::getDomains">getDomains</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#387"><abbr title="Weline\Cdn\Controller\Backend\Rules::push">push</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#462"><abbr title="Weline\Cdn\Controller\Backend\Rules::pushAll">pushAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#593"><abbr title="Weline\Cdn\Controller\Backend\Rules::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#33"><abbr title="Weline\Cdn\Controller\Backend\Warmup::getWarmupUrlModel">getWarmupUrlModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#41"><abbr title="Weline\Cdn\Controller\Backend\Warmup::getWarmupRunner">getWarmupRunner</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#49"><abbr title="Weline\Cdn\Controller\Backend\Warmup::getProviderScanner">getProviderScanner</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#59"><abbr title="Weline\Cdn\Controller\Backend\Warmup::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#142"><abbr title="Weline\Cdn\Controller\Backend\Warmup::statistics">statistics</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#185"><abbr title="Weline\Cdn\Controller\Backend\Warmup::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#211"><abbr title="Weline\Cdn\Controller\Backend\Warmup::toggleEnable">toggleEnable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#256"><abbr title="Weline\Cdn\Controller\Backend\Warmup::delete">delete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#36"><abbr title="Weline\Cdn\Cron\PushRules::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#49"><abbr title="Weline\Cdn\Cron\PushRules::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#57"><abbr title="Weline\Cdn\Cron\PushRules::execute_name">execute_name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#65"><abbr title="Weline\Cdn\Cron\PushRules::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#73"><abbr title="Weline\Cdn\Cron\PushRules::cron_time">cron_time</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#81"><abbr title="Weline\Cdn\Cron\PushRules::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#132"><abbr title="Weline\Cdn\Cron\PushRules::unlock_timeout">unlock_timeout</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Warmup.php.html#33"><abbr title="Weline\Cdn\Cron\Warmup::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/Warmup.php.html#48"><abbr title="Weline\Cdn\Cron\Warmup::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#55"><abbr title="Weline\Cdn\Model\Account::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#60"><abbr title="Weline\Cdn\Model\Account::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#65"><abbr title="Weline\Cdn\Model\Account::getCredentialsArray">getCredentialsArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#75"><abbr title="Weline\Cdn\Model\Account::setCredentialsArray">setCredentialsArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#81"><abbr title="Weline\Cdn\Model\Account::isDefault">isDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#86"><abbr title="Weline\Cdn\Model\Account::isActive">isActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Account.php.html#91"><abbr title="Weline\Cdn\Model\Account::save_before">save_before</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#68"><abbr title="Weline\Cdn\Model\ApiRule::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#78"><abbr title="Weline\Cdn\Model\ApiRule::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#88"><abbr title="Weline\Cdn\Model\ApiRule::getActionArray">getActionArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#105"><abbr title="Weline\Cdn\Model\ApiRule::setActionArray">setActionArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#116"><abbr title="Weline\Cdn\Model\ApiRule::toCloudflareRule">toCloudflareRule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#97"><abbr title="Weline\Cdn\Model\AttackLog::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#105"><abbr title="Weline\Cdn\Model\AttackLog::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#121"><abbr title="Weline\Cdn\Model\AttackLog::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#151"><abbr title="Weline\Cdn\Model\AttackLog::markRecovered">markRecovered</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#183"><abbr title="Weline\Cdn\Model\AttackLog::getAttackTypeLabel">getAttackTypeLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#202"><abbr title="Weline\Cdn\Model\AttackLog::getStatusLabel">getStatusLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#217"><abbr title="Weline\Cdn\Model\AttackLog::getActionLabel">getActionLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#232"><abbr title="Weline\Cdn\Model\AttackLog::getDurationFormatted">getDurationFormatted</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#76"><abbr title="Weline\Cdn\Model\Domain::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#86"><abbr title="Weline\Cdn\Model\Domain::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#95"><abbr title="Weline\Cdn\Model\Domain::getCredentialsArray">getCredentialsArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#111"><abbr title="Weline\Cdn\Model\Domain::setCredentialsArray">setCredentialsArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#122"><abbr title="Weline\Cdn\Model\Domain::getRulesOverrideArray">getRulesOverrideArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#138"><abbr title="Weline\Cdn\Model\Domain::setRulesOverrideArray">setRulesOverrideArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#149"><abbr title="Weline\Cdn\Model\Domain::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#159"><abbr title="Weline\Cdn\Model\Domain::isInheritDefault">isInheritDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Domain.php.html#169"><abbr title="Weline\Cdn\Model\Domain::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/WarmupUrl.php.html#76"><abbr title="Weline\Cdn\Model\WarmupUrl::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/WarmupUrl.php.html#85"><abbr title="Weline\Cdn\Model\WarmupUrl::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/WarmupUrl.php.html#94"><abbr title="Weline\Cdn\Model\WarmupUrl::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/WarmupUrl.php.html#103"><abbr title="Weline\Cdn\Model\WarmupUrl::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#32"><abbr title="Weline\Cdn\Observer\AttackRecoveryHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#44"><abbr title="Weline\Cdn\Observer\AttackRecoveryHandler::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#82"><abbr title="Weline\Cdn\Observer\AttackRecoveryHandler::disableAttackModeForDomain">disableAttackModeForDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#152"><abbr title="Weline\Cdn\Observer\AttackRecoveryHandler::findWildcardDomain">findWildcardDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#38"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#53"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#107"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::enableAttackModeForDomain">enableAttackModeForDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#145"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::findWildcardDomain">findWildcardDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#173"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::enableAttackMode">enableAttackMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#32"><abbr title="Weline\Cdn\Observer\CdnRequest::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#44"><abbr title="Weline\Cdn\Observer\CdnRequest::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#103"><abbr title="Weline\Cdn\Observer\CdnRequest::resolveDomain">resolveDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#150"><abbr title="Weline\Cdn\Observer\CdnRequest::handlePurgeAll">handlePurgeAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#167"><abbr title="Weline\Cdn\Observer\CdnRequest::handlePurgeUrls">handlePurgeUrls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#194"><abbr title="Weline\Cdn\Observer\CdnRequest::handlePushRule">handlePushRule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#235"><abbr title="Weline\Cdn\Observer\CdnRequest::handleCheckCapability">handleCheckCapability</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/Clear.php.html#30"><abbr title="Weline\Cdn\Observer\Clear::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/Clear.php.html#38"><abbr title="Weline\Cdn\Observer\Clear::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ClientIpKeysObserver.php.html#29"><abbr title="Weline\Cdn\Observer\ClientIpKeysObserver::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ClientIpKeysObserver.php.html#34"><abbr title="Weline\Cdn\Observer\ClientIpKeysObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CollectRules.php.html#30"><abbr title="Weline\Cdn\Observer\CollectRules::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/CollectRules.php.html#38"><abbr title="Weline\Cdn\Observer\CollectRules::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/PushRules.php.html#31"><abbr title="Weline\Cdn\Observer\PushRules::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/PushRules.php.html#39"><abbr title="Weline\Cdn\Observer\PushRules::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/PushRules.php.html#100"><abbr title="Weline\Cdn\Observer\PushRules::getCredentials">getCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/RegisterQuickBuildServices.php.html#14"><abbr title="Weline\Cdn\Observer\RegisterQuickBuildServices::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/SyncSecurityRulesToCdn.php.html#13"><abbr title="Weline\Cdn\Observer\SyncSecurityRulesToCdn::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/SyncSecurityRulesToCdn.php.html#19"><abbr title="Weline\Cdn\Observer\SyncSecurityRulesToCdn::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/WarmupSend.php.html#32"><abbr title="Weline\Cdn\Observer\WarmupSend::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/WarmupSend.php.html#43"><abbr title="Weline\Cdn\Observer\WarmupSend::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#27"><abbr title="Weline\Cdn\Service\AccountManager::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#37"><abbr title="Weline\Cdn\Service\AccountManager::getAccountModel">getAccountModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#47"><abbr title="Weline\Cdn\Service\AccountManager::getDomainModel">getDomainModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#58"><abbr title="Weline\Cdn\Service\AccountManager::setDefaultAccount">setDefaultAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#85"><abbr title="Weline\Cdn\Service\AccountManager::getDefaultAccount">getDefaultAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#97"><abbr title="Weline\Cdn\Service\AccountManager::getAccount">getAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#107"><abbr title="Weline\Cdn\Service\AccountManager::deleteAccount">deleteAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#123"><abbr title="Weline\Cdn\Service\AccountManager::getAccountDomains">getAccountDomains</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#47"><abbr title="Weline\Cdn\Service\AdapterResolver::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#61"><abbr title="Weline\Cdn\Service\AdapterResolver::getAllAdapters">getAllAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#92"><abbr title="Weline\Cdn\Service\AdapterResolver::getAdapter">getAdapter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#103"><abbr title="Weline\Cdn\Service\AdapterResolver::scanAdapters">scanAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#135"><abbr title="Weline\Cdn\Service\AdapterResolver::scanExtendsAdapters">scanExtendsAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#197"><abbr title="Weline\Cdn\Service\AdapterResolver::loadAdapterFromFile">loadAdapterFromFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#234"><abbr title="Weline\Cdn\Service\AdapterResolver::getClassNameFromFile">getClassNameFromFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#31"><abbr title="Weline\Cdn\Service\CachePurger::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#50"><abbr title="Weline\Cdn\Service\CachePurger::purge">purge</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#117"><abbr title="Weline\Cdn\Service\CachePurger::getDomain">getDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#138"><abbr title="Weline\Cdn\Service\CachePurger::getCredentials">getCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#37"><abbr title="Weline\Cdn\Service\CdnRuleCollector::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#54"><abbr title="Weline\Cdn\Service\CdnRuleCollector::collectAll">collectAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#78"><abbr title="Weline\Cdn\Service\CdnRuleCollector::collectModule">collectModule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#110"><abbr title="Weline\Cdn\Service\CdnRuleCollector::scanDirectory">scanDirectory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#148"><abbr title="Weline\Cdn\Service\CdnRuleCollector::collectClass">collectClass</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#198"><abbr title="Weline\Cdn\Service\CdnRuleCollector::parseCdnTag">parseCdnTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#223"><abbr title="Weline\Cdn\Service\CdnRuleCollector::parseCdnConfig">parseCdnConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#274"><abbr title="Weline\Cdn\Service\CdnRuleCollector::generateRoute">generateRoute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#386"><abbr title="Weline\Cdn\Service\CdnRuleCollector::convertToCloudflareFormat">convertToCloudflareFormat</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#421"><abbr title="Weline\Cdn\Service\CdnRuleCollector::buildCloudflareAction">buildCloudflareAction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#456"><abbr title="Weline\Cdn\Service\CdnRuleCollector::parseCacheTime">parseCacheTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#484"><abbr title="Weline\Cdn\Service\CdnRuleCollector::saveRule">saveRule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#528"><abbr title="Weline\Cdn\Service\CdnRuleCollector::extractRouteFromExpression">extractRouteFromExpression</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#543"><abbr title="Weline\Cdn\Service\CdnRuleCollector::pushRealtimeRule">pushRealtimeRule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#578"><abbr title="Weline\Cdn\Service\CdnRuleCollector::getPhpFiles">getPhpFiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#601"><abbr title="Weline\Cdn\Service\CdnRuleCollector::getClassNameFromFile">getClassNameFromFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ProviderManager.php.html#30"><abbr title="Weline\Cdn\Service\ProviderManager::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ProviderManager.php.html#45"><abbr title="Weline\Cdn\Service\ProviderManager::getProviders">getProviders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ProviderManager.php.html#76"><abbr title="Weline\Cdn\Service\ProviderManager::getAccounts">getAccounts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#33"><abbr title="Weline\Cdn\Service\RuleManager::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#48"><abbr title="Weline\Cdn\Service\RuleManager::getDefaultRules">getDefaultRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#68"><abbr title="Weline\Cdn\Service\RuleManager::saveDefaultRules">saveDefaultRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#84"><abbr title="Weline\Cdn\Service\RuleManager::getMergedRules">getMergedRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#112"><abbr title="Weline\Cdn\Service\RuleManager::getApiRules">getApiRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#160"><abbr title="Weline\Cdn\Service\RuleManager::importRules">importRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#191"><abbr title="Weline\Cdn\Service\RuleManager::pushRules">pushRules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#220"><abbr title="Weline\Cdn\Service\RuleManager::getCredentials">getCredentials</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/UrlSiteResolver.php.html#28"><abbr title="Weline\Cdn\Service\UrlSiteResolver::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/UrlSiteResolver.php.html#41"><abbr title="Weline\Cdn\Service\UrlSiteResolver::resolveDomainByUrl">resolveDomainByUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/UrlSiteResolver.php.html#92"><abbr title="Weline\Cdn\Service\UrlSiteResolver::resolveDomainBySiteId">resolveDomainBySiteId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#35"><abbr title="Weline\Cdn\Service\WarmupProviderScanner::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#50"><abbr title="Weline\Cdn\Service\WarmupProviderScanner::scanProviders">scanProviders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#127"><abbr title="Weline\Cdn\Service\WarmupProviderScanner::collectUrls">collectUrls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#159"><abbr title="Weline\Cdn\Service\WarmupProviderScanner::getClassNameFromFile">getClassNameFromFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupRunner.php.html#29"><abbr title="Weline\Cdn\Service\WarmupRunner::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupRunner.php.html#40"><abbr title="Weline\Cdn\Service\WarmupRunner::run">run</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/WarmupRunner.php.html#93"><abbr title="Weline\Cdn\Service\WarmupRunner::warmupUrl">warmupUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#24"><abbr title="Weline\Cdn\Taglib\AccountSelect::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#29"><abbr title="Weline\Cdn\Taglib\AccountSelect::tag">tag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#34"><abbr title="Weline\Cdn\Taglib\AccountSelect::tag_start">tag_start</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#39"><abbr title="Weline\Cdn\Taglib\AccountSelect::tag_end">tag_end</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#44"><abbr title="Weline\Cdn\Taglib\AccountSelect::attr">attr</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#59"><abbr title="Weline\Cdn\Taglib\AccountSelect::callback">callback</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#232"><abbr title="Weline\Cdn\Taglib\AccountSelect::tag_self_close">tag_self_close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#237"><abbr title="Weline\Cdn\Taglib\AccountSelect::tag_self_close_with_attrs">tag_self_close_with_attrs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#242"><abbr title="Weline\Cdn\Taglib\AccountSelect::parent">parent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#247"><abbr title="Weline\Cdn\Taglib\AccountSelect::document">document</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#24"><abbr title="Weline\Cdn\Taglib\ProviderSelect::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#29"><abbr title="Weline\Cdn\Taglib\ProviderSelect::tag">tag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#34"><abbr title="Weline\Cdn\Taglib\ProviderSelect::tag_start">tag_start</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#39"><abbr title="Weline\Cdn\Taglib\ProviderSelect::tag_end">tag_end</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#44"><abbr title="Weline\Cdn\Taglib\ProviderSelect::attr">attr</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#58"><abbr title="Weline\Cdn\Taglib\ProviderSelect::callback">callback</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#205"><abbr title="Weline\Cdn\Taglib\ProviderSelect::tag_self_close">tag_self_close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#210"><abbr title="Weline\Cdn\Taglib\ProviderSelect::tag_self_close_with_attrs">tag_self_close_with_attrs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#215"><abbr title="Weline\Cdn\Taglib\ProviderSelect::parent">parent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#220"><abbr title="Weline\Cdn\Taglib\ProviderSelect::document">document</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#16"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#24"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getProviderName">getProviderName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#29"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#49"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getDescriptor">getDescriptor</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#143"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAdapters">getAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#156"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAccounts">getAccounts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#186"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAccount">getAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#212"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::saveAccount">saveAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#269"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::deleteAccount">deleteAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#292"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::setDefaultAccount">setDefaultAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#307"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getDefaultAccount">getDefaultAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#328"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getDomains">getDomains</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#338"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::ensureZone">ensureZone</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#377"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#412"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAdapterInfo">getAdapterInfo</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Domain.php.html#232"><abbr title="Weline\Cdn\Controller\Backend\Domain::save">save</abbr></a></td><td class="text-right">870</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#156"><abbr title="Weline\Cdn\Controller\Backend\Account::save">save</abbr></a></td><td class="text-right">552</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#670"><abbr title="Weline\Cdn\Adapter\Cloudflare::makeRequest">makeRequest</abbr></a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#274"><abbr title="Weline\Cdn\Service\CdnRuleCollector::generateRoute">generateRoute</abbr></a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#50"><abbr title="Weline\Cdn\Service\CachePurger::purge">purge</abbr></a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#50"><abbr title="Weline\Cdn\Service\WarmupProviderScanner::scanProviders">scanProviders</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#331"><abbr title="Weline\Cdn\Adapter\Cloudflare::formatRulesForApi">formatRulesForApi</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#416"><abbr title="Weline\Cdn\Adapter\Cloudflare::normalizeAction">normalizeAction</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Controller/Api/Clear.php.html#49"><abbr title="Weline\Cdn\Controller\Api\Clear::index">index</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Observer/WarmupSend.php.html#43"><abbr title="Weline\Cdn\Observer\WarmupSend::execute">execute</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#212"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::saveAccount">saveAccount</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#82"><abbr title="Weline\Cdn\Observer\AttackRecoveryHandler::disableAttackModeForDomain">disableAttackModeForDomain</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#173"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::enableAttackMode">enableAttackMode</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Observer/ClientIpKeysObserver.php.html#34"><abbr title="Weline\Cdn\Observer\ClientIpKeysObserver::execute">execute</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#247"><abbr title="Weline\Cdn\Adapter\Cloudflare::putRules">putRules</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#112"><abbr title="Weline\Cdn\Service\RuleManager::getApiRules">getApiRules</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#387"><abbr title="Weline\Cdn\Controller\Backend\Rules::push">push</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#234"><abbr title="Weline\Cdn\Service\AdapterResolver::getClassNameFromFile">getClassNameFromFile</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#44"><abbr title="Weline\Cdn\Observer\CdnRequest::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Observer/CollectRules.php.html#38"><abbr title="Weline\Cdn\Observer\CollectRules::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Observer/PushRules.php.html#39"><abbr title="Weline\Cdn\Observer\PushRules::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#61"><abbr title="Weline\Cdn\Service\AdapterResolver::getAllAdapters">getAllAdapters</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#135"><abbr title="Weline\Cdn\Service\AdapterResolver::scanExtendsAdapters">scanExtendsAdapters</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/WarmupRunner.php.html#93"><abbr title="Weline\Cdn\Service\WarmupRunner::warmupUrl">warmupUrl</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#77"><abbr title="Weline\Cdn\Controller\Backend\Domain::index">index</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#166"><abbr title="Weline\Cdn\Controller\Backend\Domain::form">form</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#462"><abbr title="Weline\Cdn\Controller\Backend\Rules::pushAll">pushAll</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#53"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::execute">execute</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Observer/PushRules.php.html#100"><abbr title="Weline\Cdn\Observer\PushRules::getCredentials">getCredentials</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#223"><abbr title="Weline\Cdn\Service\CdnRuleCollector::parseCdnConfig">parseCdnConfig</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#220"><abbr title="Weline\Cdn\Service\RuleManager::getCredentials">getCredentials</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#451"><abbr title="Weline\Cdn\Controller\Backend\Domain::toggleEnable">toggleEnable</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#211"><abbr title="Weline\Cdn\Controller\Backend\Warmup::toggleEnable">toggleEnable</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#138"><abbr title="Weline\Cdn\Service\CachePurger::getCredentials">getCredentials</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#110"><abbr title="Weline\Cdn\Service\CdnRuleCollector::scanDirectory">scanDirectory</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#148"><abbr title="Weline\Cdn\Service\CdnRuleCollector::collectClass">collectClass</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#52"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::index">index</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#163"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::toggle">toggle</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#35"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::index">index</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#195"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::postBatchDelete">postBatchDelete</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#263"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::getExport">getExport</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#598"><abbr title="Weline\Cdn\Controller\Backend\Domain::clearCache">clearCache</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#202"><abbr title="Weline\Cdn\Controller\Backend\Rules::saveDomainRules">saveDomainRules</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#59"><abbr title="Weline\Cdn\Controller\Backend\Warmup::index">index</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#107"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::enableAttackModeForDomain">enableAttackModeForDomain</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#103"><abbr title="Weline\Cdn\Observer\CdnRequest::resolveDomain">resolveDomain</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#197"><abbr title="Weline\Cdn\Service\AdapterResolver::loadAdapterFromFile">loadAdapterFromFile</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/UrlSiteResolver.php.html#41"><abbr title="Weline\Cdn\Service\UrlSiteResolver::resolveDomainByUrl">resolveDomainByUrl</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#127"><abbr title="Weline\Cdn\Service\WarmupProviderScanner::collectUrls">collectUrls</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/WarmupRunner.php.html#40"><abbr title="Weline\Cdn\Service\WarmupRunner::run">run</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Taglib/AccountSelect.php.html#59"><abbr title="Weline\Cdn\Taglib\AccountSelect::callback">callback</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Taglib/ProviderSelect.php.html#58"><abbr title="Weline\Cdn\Taglib\ProviderSelect::callback">callback</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#156"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAccounts">getAccounts</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#338"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::ensureZone">ensureZone</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#377"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::testConnection">testConnection</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#614"><abbr title="Weline\Cdn\Adapter\Cloudflare::blockAttackerIps">blockAttackerIps</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#306"><abbr title="Weline\Cdn\Controller\Backend\Account::postDelete">postDelete</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Accounts.php.html#36"><abbr title="Weline\Cdn\Controller\Backend\Api\Cdn\Accounts::index">index</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#124"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::getDetail">getDetail</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#496"><abbr title="Weline\Cdn\Controller\Backend\Domain::importRules">importRules</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#549"><abbr title="Weline\Cdn\Controller\Backend\Domain::pushRules">pushRules</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#107"><abbr title="Weline\Cdn\Controller\Backend\Rules::saveGlobalRules">saveGlobalRules</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#155"><abbr title="Weline\Cdn\Controller\Backend\Rules::getDomainRules">getDomainRules</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#296"><abbr title="Weline\Cdn\Controller\Backend\Rules::doImport">doImport</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Cron/PushRules.php.html#81"><abbr title="Weline\Cdn\Cron\PushRules::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#232"><abbr title="Weline\Cdn\Model\AttackLog::getDurationFormatted">getDurationFormatted</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#44"><abbr title="Weline\Cdn\Observer\AttackRecoveryHandler::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Observer/Clear.php.html#38"><abbr title="Weline\Cdn\Observer\Clear::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Observer/SyncSecurityRulesToCdn.php.html#19"><abbr title="Weline\Cdn\Observer\SyncSecurityRulesToCdn::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#456"><abbr title="Weline\Cdn\Service\CdnRuleCollector::parseCacheTime">parseCacheTime</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#492"><abbr title="Weline\Cdn\Adapter\Cloudflare::ensureZone">ensureZone</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#59"><abbr title="Weline\Cdn\Controller\Backend\Account::index">index</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#360"><abbr title="Weline\Cdn\Controller\Backend\Account::setDefault">setDefault</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#403"><abbr title="Weline\Cdn\Controller\Backend\Account::domains">domains</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#132"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::view">view</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#206"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::delete">delete</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Api/Cdn/Providers.php.html#35"><abbr title="Weline\Cdn\Controller\Backend\Api\Cdn\Providers::index">index</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#156"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::postDelete">postDelete</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Domain.php.html#406"><abbr title="Weline\Cdn\Controller\Backend\Domain::postDelete">postDelete</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#265"><abbr title="Weline\Cdn\Controller\Backend\Rules::import">import</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#351"><abbr title="Weline\Cdn\Controller\Backend\Rules::getDomains">getDomains</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#142"><abbr title="Weline\Cdn\Controller\Backend\Warmup::statistics">statistics</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#256"><abbr title="Weline\Cdn\Controller\Backend\Warmup::delete">delete</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Cron/Warmup.php.html#48"><abbr title="Weline\Cdn\Cron\Warmup::execute">execute</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/Account.php.html#65"><abbr title="Weline\Cdn\Model\Account::getCredentialsArray">getCredentialsArray</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/Domain.php.html#95"><abbr title="Weline\Cdn\Model\Domain::getCredentialsArray">getCredentialsArray</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/Domain.php.html#122"><abbr title="Weline\Cdn\Model\Domain::getRulesOverrideArray">getRulesOverrideArray</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#194"><abbr title="Weline\Cdn\Observer\CdnRequest::handlePushRule">handlePushRule</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Observer/RegisterQuickBuildServices.php.html#14"><abbr title="Weline\Cdn\Observer\RegisterQuickBuildServices::execute">execute</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/AdapterResolver.php.html#103"><abbr title="Weline\Cdn\Service\AdapterResolver::scanAdapters">scanAdapters</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#78"><abbr title="Weline\Cdn\Service\CdnRuleCollector::collectModule">collectModule</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#421"><abbr title="Weline\Cdn\Service\CdnRuleCollector::buildCloudflareAction">buildCloudflareAction</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#484"><abbr title="Weline\Cdn\Service\CdnRuleCollector::saveRule">saveRule</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#578"><abbr title="Weline\Cdn\Service\CdnRuleCollector::getPhpFiles">getPhpFiles</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/ProviderManager.php.html#45"><abbr title="Weline\Cdn\Service\ProviderManager::getProviders">getProviders</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#269"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::deleteAccount">deleteAccount</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#105"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeUrls">purgeUrls</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#136"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeHosts">purgeHosts</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#167"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeTags">purgeTags</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#198"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeCacheKeys">purgeCacheKeys</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#229"><abbr title="Weline\Cdn\Adapter\Cloudflare::getRules">getRules</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#514"><abbr title="Weline\Cdn\Adapter\Cloudflare::enableAttackMode">enableAttackMode</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#556"><abbr title="Weline\Cdn\Adapter\Cloudflare::disableAttackMode">disableAttackMode</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#125"><abbr title="Weline\Cdn\Controller\Backend\Account::form">form</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Account.php.html#446"><abbr title="Weline\Cdn\Controller\Backend\Account::getOriginToken">getOriginToken</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/AttackLog.php.html#232"><abbr title="Weline\Cdn\Controller\Backend\AttackLog::postCleanup">postCleanup</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#51"><abbr title="Weline\Cdn\Controller\Backend\Rules::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/ApiRule.php.html#88"><abbr title="Weline\Cdn\Model\ApiRule::getActionArray">getActionArray</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/WarmupUrl.php.html#103"><abbr title="Weline\Cdn\Model\WarmupUrl::beforeSave">beforeSave</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Observer/AttackRecoveryHandler.php.html#152"><abbr title="Weline\Cdn\Observer\AttackRecoveryHandler::findWildcardDomain">findWildcardDomain</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Observer/AttackSignalHandler.php.html#145"><abbr title="Weline\Cdn\Observer\AttackSignalHandler::findWildcardDomain">findWildcardDomain</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#235"><abbr title="Weline\Cdn\Observer\CdnRequest::handleCheckCapability">handleCheckCapability</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#58"><abbr title="Weline\Cdn\Service\AccountManager::setDefaultAccount">setDefaultAccount</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#97"><abbr title="Weline\Cdn\Service\AccountManager::getAccount">getAccount</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CachePurger.php.html#117"><abbr title="Weline\Cdn\Service\CachePurger::getDomain">getDomain</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#54"><abbr title="Weline\Cdn\Service\CdnRuleCollector::collectAll">collectAll</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#386"><abbr title="Weline\Cdn\Service\CdnRuleCollector::convertToCloudflareFormat">convertToCloudflareFormat</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#543"><abbr title="Weline\Cdn\Service\CdnRuleCollector::pushRealtimeRule">pushRealtimeRule</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#601"><abbr title="Weline\Cdn\Service\CdnRuleCollector::getClassNameFromFile">getClassNameFromFile</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/ProviderManager.php.html#76"><abbr title="Weline\Cdn\Service\ProviderManager::getAccounts">getAccounts</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#48"><abbr title="Weline\Cdn\Service\RuleManager::getDefaultRules">getDefaultRules</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#160"><abbr title="Weline\Cdn\Service\RuleManager::importRules">importRules</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/RuleManager.php.html#191"><abbr title="Weline\Cdn\Service\RuleManager::pushRules">pushRules</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#186"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAccount">getAccount</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#292"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::setDefaultAccount">setDefaultAccount</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#307"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getDefaultAccount">getDefaultAccount</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#412"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAdapterInfo">getAdapterInfo</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/Cloudflare.php.html#81"><abbr title="Weline\Cdn\Adapter\Cloudflare::purgeEverything">purgeEverything</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/ApiRules.php.html#105"><abbr title="Weline\Cdn\Controller\Backend\ApiRules::collect">collect</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Rules.php.html#85"><abbr title="Weline\Cdn\Controller\Backend\Rules::getGlobalRules">getGlobalRules</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Warmup.php.html#185"><abbr title="Weline\Cdn\Controller\Backend\Warmup::execute">execute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Account.php.html#91"><abbr title="Weline\Cdn\Model\Account::save_before">save_before</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/AttackLog.php.html#151"><abbr title="Weline\Cdn\Model\AttackLog::markRecovered">markRecovered</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Domain.php.html#169"><abbr title="Weline\Cdn\Model\Domain::beforeSave">beforeSave</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Observer/CdnRequest.php.html#167"><abbr title="Weline\Cdn\Observer\CdnRequest::handlePurgeUrls">handlePurgeUrls</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#85"><abbr title="Weline\Cdn\Service\AccountManager::getDefaultAccount">getDefaultAccount</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/AccountManager.php.html#107"><abbr title="Weline\Cdn\Service\AccountManager::deleteAccount">deleteAccount</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#198"><abbr title="Weline\Cdn\Service\CdnRuleCollector::parseCdnTag">parseCdnTag</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CdnRuleCollector.php.html#528"><abbr title="Weline\Cdn\Service\CdnRuleCollector::extractRouteFromExpression">extractRouteFromExpression</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/UrlSiteResolver.php.html#92"><abbr title="Weline\Cdn\Service\UrlSiteResolver::resolveDomainBySiteId">resolveDomainBySiteId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/WarmupProviderScanner.php.html#159"><abbr title="Weline\Cdn\Service\WarmupProviderScanner::getClassNameFromFile">getClassNameFromFile</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#143"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getAdapters">getAdapters</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="extends/module/Weline_Framework/Query/CdnQueryProvider.php.html#328"><abbr title="Weline\Cdn\Extends\Module\Weline_Framework\Query\CdnQueryProvider::getDomains">getDomains</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([39,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([251,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,102,"<a href=\"Adapter\/Cloudflare.php.html#22\">Weline\\Cdn\\Adapter\\Cloudflare<\/a>"],[0,16,"<a href=\"Controller\/Api\/Clear.php.html#23\">Weline\\Cdn\\Controller\\Api\\Clear<\/a>"],[0,50,"<a href=\"Controller\/Backend\/Account.php.html#27\">Weline\\Cdn\\Controller\\Backend\\Account<\/a>"],[0,24,"<a href=\"Controller\/Backend\/ApiRules.php.html#28\">Weline\\Cdn\\Controller\\Backend\\ApiRules<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Api\/Cdn\/Accounts.php.html#22\">Weline\\Cdn\\Controller\\Backend\\Api\\Cdn\\Accounts<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Api\/Cdn\/Providers.php.html#21\">Weline\\Cdn\\Controller\\Backend\\Api\\Cdn\\Providers<\/a>"],[0,32,"<a href=\"Controller\/Backend\/AttackLog.php.html#21\">Weline\\Cdn\\Controller\\Backend\\AttackLog<\/a>"],[0,78,"<a href=\"Controller\/Backend\/Domain.php.html#29\">Weline\\Cdn\\Controller\\Backend\\Domain<\/a>"],[0,55,"<a href=\"Controller\/Backend\/Rules.php.html#27\">Weline\\Cdn\\Controller\\Backend\\Rules<\/a>"],[0,26,"<a href=\"Controller\/Backend\/Warmup.php.html#27\">Weline\\Cdn\\Controller\\Backend\\Warmup<\/a>"],[0,11,"<a href=\"Cron\/PushRules.php.html#30\">Weline\\Cdn\\Cron\\PushRules<\/a>"],[0,5,"<a href=\"Cron\/Warmup.php.html#27\">Weline\\Cdn\\Cron\\Warmup<\/a>"],[0,11,"<a href=\"Model\/Account.php.html#22\">Weline\\Cdn\\Model\\Account<\/a>"],[0,7,"<a href=\"Model\/ApiRule.php.html#22\">Weline\\Cdn\\Model\\ApiRule<\/a>"],[0,13,"<a href=\"Model\/AttackLog.php.html#19\">Weline\\Cdn\\Model\\AttackLog<\/a>"],[0,16,"<a href=\"Model\/Domain.php.html#22\">Weline\\Cdn\\Model\\Domain<\/a>"],[0,6,"<a href=\"Model\/WarmupUrl.php.html#18\">Weline\\Cdn\\Model\\WarmupUrl<\/a>"],[0,22,"<a href=\"Observer\/AttackRecoveryHandler.php.html#25\">Weline\\Cdn\\Observer\\AttackRecoveryHandler<\/a>"],[0,31,"<a href=\"Observer\/AttackSignalHandler.php.html#31\">Weline\\Cdn\\Observer\\AttackSignalHandler<\/a>"],[0,26,"<a href=\"Observer\/CdnRequest.php.html#25\">Weline\\Cdn\\Observer\\CdnRequest<\/a>"],[0,6,"<a href=\"Observer\/Clear.php.html#26\">Weline\\Cdn\\Observer\\Clear<\/a>"],[0,13,"<a href=\"Observer\/ClientIpKeysObserver.php.html#27\">Weline\\Cdn\\Observer\\ClientIpKeysObserver<\/a>"],[0,10,"<a href=\"Observer\/CollectRules.php.html#26\">Weline\\Cdn\\Observer\\CollectRules<\/a>"],[0,18,"<a href=\"Observer\/PushRules.php.html#27\">Weline\\Cdn\\Observer\\PushRules<\/a>"],[0,4,"<a href=\"Observer\/RegisterQuickBuildServices.php.html#12\">Weline\\Cdn\\Observer\\RegisterQuickBuildServices<\/a>"],[0,6,"<a href=\"Observer\/SyncSecurityRulesToCdn.php.html#11\">Weline\\Cdn\\Observer\\SyncSecurityRulesToCdn<\/a>"],[0,15,"<a href=\"Observer\/WarmupSend.php.html#27\">Weline\\Cdn\\Observer\\WarmupSend<\/a>"],[0,14,"<a href=\"Service\/AccountManager.php.html#23\">Weline\\Cdn\\Service\\AccountManager<\/a>"],[0,40,"<a href=\"Service\/AdapterResolver.php.html#28\">Weline\\Cdn\\Service\\AdapterResolver<\/a>"],[0,29,"<a href=\"Service\/CachePurger.php.html#25\">Weline\\Cdn\\Service\\CachePurger<\/a>"],[0,80,"<a href=\"Service\/CdnRuleCollector.php.html#30\">Weline\\Cdn\\Service\\CdnRuleCollector<\/a>"],[0,8,"<a href=\"Service\/ProviderManager.php.html#24\">Weline\\Cdn\\Service\\ProviderManager<\/a>"],[0,31,"<a href=\"Service\/RuleManager.php.html#27\">Weline\\Cdn\\Service\\RuleManager<\/a>"],[0,9,"<a href=\"Service\/UrlSiteResolver.php.html#24\">Weline\\Cdn\\Service\\UrlSiteResolver<\/a>"],[0,26,"<a href=\"Service\/WarmupProviderScanner.php.html#28\">Weline\\Cdn\\Service\\WarmupProviderScanner<\/a>"],[0,16,"<a href=\"Service\/WarmupRunner.php.html#25\">Weline\\Cdn\\Service\\WarmupRunner<\/a>"],[0,15,"<a href=\"Taglib\/AccountSelect.php.html#22\">Weline\\Cdn\\Taglib\\AccountSelect<\/a>"],[0,15,"<a href=\"Taglib\/ProviderSelect.php.html#22\">Weline\\Cdn\\Taglib\\ProviderSelect<\/a>"],[0,56,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#14\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Adapter\/Cloudflare.php.html#37\">Weline\\Cdn\\Adapter\\Cloudflare::getAdapterCode<\/a>"],[0,1,"<a href=\"Adapter\/Cloudflare.php.html#45\">Weline\\Cdn\\Adapter\\Cloudflare::getAdapterName<\/a>"],[0,1,"<a href=\"Adapter\/Cloudflare.php.html#53\">Weline\\Cdn\\Adapter\\Cloudflare::getDescription<\/a>"],[0,1,"<a href=\"Adapter\/Cloudflare.php.html#61\">Weline\\Cdn\\Adapter\\Cloudflare::getVersion<\/a>"],[0,1,"<a href=\"Adapter\/Cloudflare.php.html#71\">Weline\\Cdn\\Adapter\\Cloudflare::setCredentials<\/a>"],[0,2,"<a href=\"Adapter\/Cloudflare.php.html#81\">Weline\\Cdn\\Adapter\\Cloudflare::purgeEverything<\/a>"],[0,3,"<a href=\"Adapter\/Cloudflare.php.html#105\">Weline\\Cdn\\Adapter\\Cloudflare::purgeUrls<\/a>"],[0,3,"<a href=\"Adapter\/Cloudflare.php.html#136\">Weline\\Cdn\\Adapter\\Cloudflare::purgeHosts<\/a>"],[0,3,"<a href=\"Adapter\/Cloudflare.php.html#167\">Weline\\Cdn\\Adapter\\Cloudflare::purgeTags<\/a>"],[0,3,"<a href=\"Adapter\/Cloudflare.php.html#198\">Weline\\Cdn\\Adapter\\Cloudflare::purgeCacheKeys<\/a>"],[0,3,"<a href=\"Adapter\/Cloudflare.php.html#229\">Weline\\Cdn\\Adapter\\Cloudflare::getRules<\/a>"],[0,11,"<a href=\"Adapter\/Cloudflare.php.html#247\">Weline\\Cdn\\Adapter\\Cloudflare::putRules<\/a>"],[0,15,"<a href=\"Adapter\/Cloudflare.php.html#331\">Weline\\Cdn\\Adapter\\Cloudflare::formatRulesForApi<\/a>"],[0,15,"<a href=\"Adapter\/Cloudflare.php.html#416\">Weline\\Cdn\\Adapter\\Cloudflare::normalizeAction<\/a>"],[0,4,"<a href=\"Adapter\/Cloudflare.php.html#492\">Weline\\Cdn\\Adapter\\Cloudflare::ensureZone<\/a>"],[0,3,"<a href=\"Adapter\/Cloudflare.php.html#514\">Weline\\Cdn\\Adapter\\Cloudflare::enableAttackMode<\/a>"],[0,3,"<a href=\"Adapter\/Cloudflare.php.html#556\">Weline\\Cdn\\Adapter\\Cloudflare::disableAttackMode<\/a>"],[0,1,"<a href=\"Adapter\/Cloudflare.php.html#591\">Weline\\Cdn\\Adapter\\Cloudflare::supportsAttackMode<\/a>"],[0,1,"<a href=\"Adapter\/Cloudflare.php.html#601\">Weline\\Cdn\\Adapter\\Cloudflare::getRealIpHeaderKeys<\/a>"],[0,5,"<a href=\"Adapter\/Cloudflare.php.html#614\">Weline\\Cdn\\Adapter\\Cloudflare::blockAttackerIps<\/a>"],[0,22,"<a href=\"Adapter\/Cloudflare.php.html#670\">Weline\\Cdn\\Adapter\\Cloudflare::makeRequest<\/a>"],[0,1,"<a href=\"Controller\/Api\/Clear.php.html#28\">Weline\\Cdn\\Controller\\Api\\Clear::getCachePurger<\/a>"],[0,15,"<a href=\"Controller\/Api\/Clear.php.html#49\">Weline\\Cdn\\Controller\\Api\\Clear::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Account.php.html#33\">Weline\\Cdn\\Controller\\Backend\\Account::getAccountModel<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Account.php.html#41\">Weline\\Cdn\\Controller\\Backend\\Account::getAccountManager<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Account.php.html#49\">Weline\\Cdn\\Controller\\Backend\\Account::getAdapterResolver<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Account.php.html#59\">Weline\\Cdn\\Controller\\Backend\\Account::index<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Account.php.html#125\">Weline\\Cdn\\Controller\\Backend\\Account::form<\/a>"],[0,23,"<a href=\"Controller\/Backend\/Account.php.html#156\">Weline\\Cdn\\Controller\\Backend\\Account::save<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Account.php.html#306\">Weline\\Cdn\\Controller\\Backend\\Account::postDelete<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Account.php.html#360\">Weline\\Cdn\\Controller\\Backend\\Account::setDefault<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Account.php.html#403\">Weline\\Cdn\\Controller\\Backend\\Account::domains<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Account.php.html#440\">Weline\\Cdn\\Controller\\Backend\\Account::jsonResponse<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Account.php.html#446\">Weline\\Cdn\\Controller\\Backend\\Account::getOriginToken<\/a>"],[0,1,"<a href=\"Controller\/Backend\/ApiRules.php.html#34\">Weline\\Cdn\\Controller\\Backend\\ApiRules::getApiRuleModel<\/a>"],[0,1,"<a href=\"Controller\/Backend\/ApiRules.php.html#42\">Weline\\Cdn\\Controller\\Backend\\ApiRules::getRuleCollector<\/a>"],[0,6,"<a href=\"Controller\/Backend\/ApiRules.php.html#52\">Weline\\Cdn\\Controller\\Backend\\ApiRules::index<\/a>"],[0,2,"<a href=\"Controller\/Backend\/ApiRules.php.html#105\">Weline\\Cdn\\Controller\\Backend\\ApiRules::collect<\/a>"],[0,4,"<a href=\"Controller\/Backend\/ApiRules.php.html#132\">Weline\\Cdn\\Controller\\Backend\\ApiRules::view<\/a>"],[0,6,"<a href=\"Controller\/Backend\/ApiRules.php.html#163\">Weline\\Cdn\\Controller\\Backend\\ApiRules::toggle<\/a>"],[0,4,"<a href=\"Controller\/Backend\/ApiRules.php.html#206\">Weline\\Cdn\\Controller\\Backend\\ApiRules::delete<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Api\/Cdn\/Accounts.php.html#27\">Weline\\Cdn\\Controller\\Backend\\Api\\Cdn\\Accounts::__construct<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Api\/Cdn\/Accounts.php.html#36\">Weline\\Cdn\\Controller\\Backend\\Api\\Cdn\\Accounts::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Api\/Cdn\/Providers.php.html#26\">Weline\\Cdn\\Controller\\Backend\\Api\\Cdn\\Providers::__construct<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Api\/Cdn\/Providers.php.html#35\">Weline\\Cdn\\Controller\\Backend\\Api\\Cdn\\Providers::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/AttackLog.php.html#27\">Weline\\Cdn\\Controller\\Backend\\AttackLog::getLogModel<\/a>"],[0,6,"<a href=\"Controller\/Backend\/AttackLog.php.html#35\">Weline\\Cdn\\Controller\\Backend\\AttackLog::index<\/a>"],[0,5,"<a href=\"Controller\/Backend\/AttackLog.php.html#124\">Weline\\Cdn\\Controller\\Backend\\AttackLog::getDetail<\/a>"],[0,4,"<a href=\"Controller\/Backend\/AttackLog.php.html#156\">Weline\\Cdn\\Controller\\Backend\\AttackLog::postDelete<\/a>"],[0,6,"<a href=\"Controller\/Backend\/AttackLog.php.html#195\">Weline\\Cdn\\Controller\\Backend\\AttackLog::postBatchDelete<\/a>"],[0,3,"<a href=\"Controller\/Backend\/AttackLog.php.html#232\">Weline\\Cdn\\Controller\\Backend\\AttackLog::postCleanup<\/a>"],[0,6,"<a href=\"Controller\/Backend\/AttackLog.php.html#263\">Weline\\Cdn\\Controller\\Backend\\AttackLog::getExport<\/a>"],[0,1,"<a href=\"Controller\/Backend\/AttackLog.php.html#341\">Weline\\Cdn\\Controller\\Backend\\AttackLog::getStats<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Domain.php.html#35\">Weline\\Cdn\\Controller\\Backend\\Domain::getDomainModel<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Domain.php.html#43\">Weline\\Cdn\\Controller\\Backend\\Domain::getAdapterResolver<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Domain.php.html#51\">Weline\\Cdn\\Controller\\Backend\\Domain::getRuleManager<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Domain.php.html#59\">Weline\\Cdn\\Controller\\Backend\\Domain::getCachePurger<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Domain.php.html#67\">Weline\\Cdn\\Controller\\Backend\\Domain::getAccountManager<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Domain.php.html#77\">Weline\\Cdn\\Controller\\Backend\\Domain::index<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Domain.php.html#166\">Weline\\Cdn\\Controller\\Backend\\Domain::form<\/a>"],[0,29,"<a href=\"Controller\/Backend\/Domain.php.html#232\">Weline\\Cdn\\Controller\\Backend\\Domain::save<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Domain.php.html#406\">Weline\\Cdn\\Controller\\Backend\\Domain::postDelete<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Domain.php.html#451\">Weline\\Cdn\\Controller\\Backend\\Domain::toggleEnable<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Domain.php.html#496\">Weline\\Cdn\\Controller\\Backend\\Domain::importRules<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Domain.php.html#549\">Weline\\Cdn\\Controller\\Backend\\Domain::pushRules<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Domain.php.html#598\">Weline\\Cdn\\Controller\\Backend\\Domain::clearCache<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Domain.php.html#657\">Weline\\Cdn\\Controller\\Backend\\Domain::jsonResponse<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Rules.php.html#33\">Weline\\Cdn\\Controller\\Backend\\Rules::getDomainModel<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Rules.php.html#41\">Weline\\Cdn\\Controller\\Backend\\Rules::getRuleManager<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Rules.php.html#51\">Weline\\Cdn\\Controller\\Backend\\Rules::index<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Rules.php.html#85\">Weline\\Cdn\\Controller\\Backend\\Rules::getGlobalRules<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Rules.php.html#107\">Weline\\Cdn\\Controller\\Backend\\Rules::saveGlobalRules<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Rules.php.html#155\">Weline\\Cdn\\Controller\\Backend\\Rules::getDomainRules<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Rules.php.html#202\">Weline\\Cdn\\Controller\\Backend\\Rules::saveDomainRules<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Rules.php.html#265\">Weline\\Cdn\\Controller\\Backend\\Rules::import<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Rules.php.html#296\">Weline\\Cdn\\Controller\\Backend\\Rules::doImport<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Rules.php.html#351\">Weline\\Cdn\\Controller\\Backend\\Rules::getDomains<\/a>"],[0,10,"<a href=\"Controller\/Backend\/Rules.php.html#387\">Weline\\Cdn\\Controller\\Backend\\Rules::push<\/a>"],[0,8,"<a href=\"Controller\/Backend\/Rules.php.html#462\">Weline\\Cdn\\Controller\\Backend\\Rules::pushAll<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Rules.php.html#593\">Weline\\Cdn\\Controller\\Backend\\Rules::jsonResponse<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Warmup.php.html#33\">Weline\\Cdn\\Controller\\Backend\\Warmup::getWarmupUrlModel<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Warmup.php.html#41\">Weline\\Cdn\\Controller\\Backend\\Warmup::getWarmupRunner<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Warmup.php.html#49\">Weline\\Cdn\\Controller\\Backend\\Warmup::getProviderScanner<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Warmup.php.html#59\">Weline\\Cdn\\Controller\\Backend\\Warmup::index<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Warmup.php.html#142\">Weline\\Cdn\\Controller\\Backend\\Warmup::statistics<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Warmup.php.html#185\">Weline\\Cdn\\Controller\\Backend\\Warmup::execute<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Warmup.php.html#211\">Weline\\Cdn\\Controller\\Backend\\Warmup::toggleEnable<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Warmup.php.html#256\">Weline\\Cdn\\Controller\\Backend\\Warmup::delete<\/a>"],[0,1,"<a href=\"Cron\/PushRules.php.html#36\">Weline\\Cdn\\Cron\\PushRules::__construct<\/a>"],[0,1,"<a href=\"Cron\/PushRules.php.html#49\">Weline\\Cdn\\Cron\\PushRules::name<\/a>"],[0,1,"<a href=\"Cron\/PushRules.php.html#57\">Weline\\Cdn\\Cron\\PushRules::execute_name<\/a>"],[0,1,"<a href=\"Cron\/PushRules.php.html#65\">Weline\\Cdn\\Cron\\PushRules::tip<\/a>"],[0,1,"<a href=\"Cron\/PushRules.php.html#73\">Weline\\Cdn\\Cron\\PushRules::cron_time<\/a>"],[0,5,"<a href=\"Cron\/PushRules.php.html#81\">Weline\\Cdn\\Cron\\PushRules::execute<\/a>"],[0,1,"<a href=\"Cron\/PushRules.php.html#132\">Weline\\Cdn\\Cron\\PushRules::unlock_timeout<\/a>"],[0,1,"<a href=\"Cron\/Warmup.php.html#33\">Weline\\Cdn\\Cron\\Warmup::__construct<\/a>"],[0,4,"<a href=\"Cron\/Warmup.php.html#48\">Weline\\Cdn\\Cron\\Warmup::execute<\/a>"],[0,1,"<a href=\"Model\/Account.php.html#55\">Weline\\Cdn\\Model\\Account::_init<\/a>"],[0,1,"<a href=\"Model\/Account.php.html#60\">Weline\\Cdn\\Model\\Account::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/Account.php.html#65\">Weline\\Cdn\\Model\\Account::getCredentialsArray<\/a>"],[0,1,"<a href=\"Model\/Account.php.html#75\">Weline\\Cdn\\Model\\Account::setCredentialsArray<\/a>"],[0,1,"<a href=\"Model\/Account.php.html#81\">Weline\\Cdn\\Model\\Account::isDefault<\/a>"],[0,1,"<a href=\"Model\/Account.php.html#86\">Weline\\Cdn\\Model\\Account::isActive<\/a>"],[0,2,"<a href=\"Model\/Account.php.html#91\">Weline\\Cdn\\Model\\Account::save_before<\/a>"],[0,1,"<a href=\"Model\/ApiRule.php.html#68\">Weline\\Cdn\\Model\\ApiRule::_init<\/a>"],[0,1,"<a href=\"Model\/ApiRule.php.html#78\">Weline\\Cdn\\Model\\ApiRule::getIdFieldName<\/a>"],[0,3,"<a href=\"Model\/ApiRule.php.html#88\">Weline\\Cdn\\Model\\ApiRule::getActionArray<\/a>"],[0,1,"<a href=\"Model\/ApiRule.php.html#105\">Weline\\Cdn\\Model\\ApiRule::setActionArray<\/a>"],[0,1,"<a href=\"Model\/ApiRule.php.html#116\">Weline\\Cdn\\Model\\ApiRule::toCloudflareRule<\/a>"],[0,1,"<a href=\"Model\/AttackLog.php.html#97\">Weline\\Cdn\\Model\\AttackLog::_init<\/a>"],[0,1,"<a href=\"Model\/AttackLog.php.html#105\">Weline\\Cdn\\Model\\AttackLog::getIdFieldName<\/a>"],[0,1,"<a href=\"Model\/AttackLog.php.html#121\">Weline\\Cdn\\Model\\AttackLog::log<\/a>"],[0,2,"<a href=\"Model\/AttackLog.php.html#151\">Weline\\Cdn\\Model\\AttackLog::markRecovered<\/a>"],[0,1,"<a href=\"Model\/AttackLog.php.html#183\">Weline\\Cdn\\Model\\AttackLog::getAttackTypeLabel<\/a>"],[0,1,"<a href=\"Model\/AttackLog.php.html#202\">Weline\\Cdn\\Model\\AttackLog::getStatusLabel<\/a>"],[0,1,"<a href=\"Model\/AttackLog.php.html#217\">Weline\\Cdn\\Model\\AttackLog::getActionLabel<\/a>"],[0,5,"<a href=\"Model\/AttackLog.php.html#232\">Weline\\Cdn\\Model\\AttackLog::getDurationFormatted<\/a>"],[0,1,"<a href=\"Model\/Domain.php.html#76\">Weline\\Cdn\\Model\\Domain::_init<\/a>"],[0,1,"<a href=\"Model\/Domain.php.html#86\">Weline\\Cdn\\Model\\Domain::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/Domain.php.html#95\">Weline\\Cdn\\Model\\Domain::getCredentialsArray<\/a>"],[0,1,"<a href=\"Model\/Domain.php.html#111\">Weline\\Cdn\\Model\\Domain::setCredentialsArray<\/a>"],[0,4,"<a href=\"Model\/Domain.php.html#122\">Weline\\Cdn\\Model\\Domain::getRulesOverrideArray<\/a>"],[0,1,"<a href=\"Model\/Domain.php.html#138\">Weline\\Cdn\\Model\\Domain::setRulesOverrideArray<\/a>"],[0,1,"<a href=\"Model\/Domain.php.html#149\">Weline\\Cdn\\Model\\Domain::isEnabled<\/a>"],[0,1,"<a href=\"Model\/Domain.php.html#159\">Weline\\Cdn\\Model\\Domain::isInheritDefault<\/a>"],[0,2,"<a href=\"Model\/Domain.php.html#169\">Weline\\Cdn\\Model\\Domain::beforeSave<\/a>"],[0,1,"<a href=\"Model\/WarmupUrl.php.html#76\">Weline\\Cdn\\Model\\WarmupUrl::_init<\/a>"],[0,1,"<a href=\"Model\/WarmupUrl.php.html#85\">Weline\\Cdn\\Model\\WarmupUrl::getIdFieldName<\/a>"],[0,1,"<a href=\"Model\/WarmupUrl.php.html#94\">Weline\\Cdn\\Model\\WarmupUrl::isEnabled<\/a>"],[0,3,"<a href=\"Model\/WarmupUrl.php.html#103\">Weline\\Cdn\\Model\\WarmupUrl::beforeSave<\/a>"],[0,1,"<a href=\"Observer\/AttackRecoveryHandler.php.html#32\">Weline\\Cdn\\Observer\\AttackRecoveryHandler::__construct<\/a>"],[0,5,"<a href=\"Observer\/AttackRecoveryHandler.php.html#44\">Weline\\Cdn\\Observer\\AttackRecoveryHandler::execute<\/a>"],[0,13,"<a href=\"Observer\/AttackRecoveryHandler.php.html#82\">Weline\\Cdn\\Observer\\AttackRecoveryHandler::disableAttackModeForDomain<\/a>"],[0,3,"<a href=\"Observer\/AttackRecoveryHandler.php.html#152\">Weline\\Cdn\\Observer\\AttackRecoveryHandler::findWildcardDomain<\/a>"],[0,1,"<a href=\"Observer\/AttackSignalHandler.php.html#38\">Weline\\Cdn\\Observer\\AttackSignalHandler::__construct<\/a>"],[0,8,"<a href=\"Observer\/AttackSignalHandler.php.html#53\">Weline\\Cdn\\Observer\\AttackSignalHandler::execute<\/a>"],[0,6,"<a href=\"Observer\/AttackSignalHandler.php.html#107\">Weline\\Cdn\\Observer\\AttackSignalHandler::enableAttackModeForDomain<\/a>"],[0,3,"<a href=\"Observer\/AttackSignalHandler.php.html#145\">Weline\\Cdn\\Observer\\AttackSignalHandler::findWildcardDomain<\/a>"],[0,13,"<a href=\"Observer\/AttackSignalHandler.php.html#173\">Weline\\Cdn\\Observer\\AttackSignalHandler::enableAttackMode<\/a>"],[0,1,"<a href=\"Observer\/CdnRequest.php.html#32\">Weline\\Cdn\\Observer\\CdnRequest::__construct<\/a>"],[0,9,"<a href=\"Observer\/CdnRequest.php.html#44\">Weline\\Cdn\\Observer\\CdnRequest::execute<\/a>"],[0,6,"<a href=\"Observer\/CdnRequest.php.html#103\">Weline\\Cdn\\Observer\\CdnRequest::resolveDomain<\/a>"],[0,1,"<a href=\"Observer\/CdnRequest.php.html#150\">Weline\\Cdn\\Observer\\CdnRequest::handlePurgeAll<\/a>"],[0,2,"<a href=\"Observer\/CdnRequest.php.html#167\">Weline\\Cdn\\Observer\\CdnRequest::handlePurgeUrls<\/a>"],[0,4,"<a href=\"Observer\/CdnRequest.php.html#194\">Weline\\Cdn\\Observer\\CdnRequest::handlePushRule<\/a>"],[0,3,"<a href=\"Observer\/CdnRequest.php.html#235\">Weline\\Cdn\\Observer\\CdnRequest::handleCheckCapability<\/a>"],[0,1,"<a href=\"Observer\/Clear.php.html#30\">Weline\\Cdn\\Observer\\Clear::__construct<\/a>"],[0,5,"<a href=\"Observer\/Clear.php.html#38\">Weline\\Cdn\\Observer\\Clear::execute<\/a>"],[0,1,"<a href=\"Observer\/ClientIpKeysObserver.php.html#29\">Weline\\Cdn\\Observer\\ClientIpKeysObserver::__construct<\/a>"],[0,12,"<a href=\"Observer\/ClientIpKeysObserver.php.html#34\">Weline\\Cdn\\Observer\\ClientIpKeysObserver::execute<\/a>"],[0,1,"<a href=\"Observer\/CollectRules.php.html#30\">Weline\\Cdn\\Observer\\CollectRules::__construct<\/a>"],[0,9,"<a href=\"Observer\/CollectRules.php.html#38\">Weline\\Cdn\\Observer\\CollectRules::execute<\/a>"],[0,1,"<a href=\"Observer\/PushRules.php.html#31\">Weline\\Cdn\\Observer\\PushRules::__construct<\/a>"],[0,9,"<a href=\"Observer\/PushRules.php.html#39\">Weline\\Cdn\\Observer\\PushRules::execute<\/a>"],[0,8,"<a href=\"Observer\/PushRules.php.html#100\">Weline\\Cdn\\Observer\\PushRules::getCredentials<\/a>"],[0,4,"<a href=\"Observer\/RegisterQuickBuildServices.php.html#14\">Weline\\Cdn\\Observer\\RegisterQuickBuildServices::execute<\/a>"],[0,1,"<a href=\"Observer\/SyncSecurityRulesToCdn.php.html#13\">Weline\\Cdn\\Observer\\SyncSecurityRulesToCdn::__construct<\/a>"],[0,5,"<a href=\"Observer\/SyncSecurityRulesToCdn.php.html#19\">Weline\\Cdn\\Observer\\SyncSecurityRulesToCdn::execute<\/a>"],[0,1,"<a href=\"Observer\/WarmupSend.php.html#32\">Weline\\Cdn\\Observer\\WarmupSend::__construct<\/a>"],[0,14,"<a href=\"Observer\/WarmupSend.php.html#43\">Weline\\Cdn\\Observer\\WarmupSend::execute<\/a>"],[0,1,"<a href=\"Service\/AccountManager.php.html#27\">Weline\\Cdn\\Service\\AccountManager::__construct<\/a>"],[0,1,"<a href=\"Service\/AccountManager.php.html#37\">Weline\\Cdn\\Service\\AccountManager::getAccountModel<\/a>"],[0,1,"<a href=\"Service\/AccountManager.php.html#47\">Weline\\Cdn\\Service\\AccountManager::getDomainModel<\/a>"],[0,3,"<a href=\"Service\/AccountManager.php.html#58\">Weline\\Cdn\\Service\\AccountManager::setDefaultAccount<\/a>"],[0,2,"<a href=\"Service\/AccountManager.php.html#85\">Weline\\Cdn\\Service\\AccountManager::getDefaultAccount<\/a>"],[0,3,"<a href=\"Service\/AccountManager.php.html#97\">Weline\\Cdn\\Service\\AccountManager::getAccount<\/a>"],[0,2,"<a href=\"Service\/AccountManager.php.html#107\">Weline\\Cdn\\Service\\AccountManager::deleteAccount<\/a>"],[0,1,"<a href=\"Service\/AccountManager.php.html#123\">Weline\\Cdn\\Service\\AccountManager::getAccountDomains<\/a>"],[0,1,"<a href=\"Service\/AdapterResolver.php.html#47\">Weline\\Cdn\\Service\\AdapterResolver::__construct<\/a>"],[0,9,"<a href=\"Service\/AdapterResolver.php.html#61\">Weline\\Cdn\\Service\\AdapterResolver::getAllAdapters<\/a>"],[0,1,"<a href=\"Service\/AdapterResolver.php.html#92\">Weline\\Cdn\\Service\\AdapterResolver::getAdapter<\/a>"],[0,4,"<a href=\"Service\/AdapterResolver.php.html#103\">Weline\\Cdn\\Service\\AdapterResolver::scanAdapters<\/a>"],[0,9,"<a href=\"Service\/AdapterResolver.php.html#135\">Weline\\Cdn\\Service\\AdapterResolver::scanExtendsAdapters<\/a>"],[0,6,"<a href=\"Service\/AdapterResolver.php.html#197\">Weline\\Cdn\\Service\\AdapterResolver::loadAdapterFromFile<\/a>"],[0,10,"<a href=\"Service\/AdapterResolver.php.html#234\">Weline\\Cdn\\Service\\AdapterResolver::getClassNameFromFile<\/a>"],[0,1,"<a href=\"Service\/CachePurger.php.html#31\">Weline\\Cdn\\Service\\CachePurger::__construct<\/a>"],[0,18,"<a href=\"Service\/CachePurger.php.html#50\">Weline\\Cdn\\Service\\CachePurger::purge<\/a>"],[0,3,"<a href=\"Service\/CachePurger.php.html#117\">Weline\\Cdn\\Service\\CachePurger::getDomain<\/a>"],[0,7,"<a href=\"Service\/CachePurger.php.html#138\">Weline\\Cdn\\Service\\CachePurger::getCredentials<\/a>"],[0,1,"<a href=\"Service\/CdnRuleCollector.php.html#37\">Weline\\Cdn\\Service\\CdnRuleCollector::__construct<\/a>"],[0,3,"<a href=\"Service\/CdnRuleCollector.php.html#54\">Weline\\Cdn\\Service\\CdnRuleCollector::collectAll<\/a>"],[0,4,"<a href=\"Service\/CdnRuleCollector.php.html#78\">Weline\\Cdn\\Service\\CdnRuleCollector::collectModule<\/a>"],[0,7,"<a href=\"Service\/CdnRuleCollector.php.html#110\">Weline\\Cdn\\Service\\CdnRuleCollector::scanDirectory<\/a>"],[0,7,"<a href=\"Service\/CdnRuleCollector.php.html#148\">Weline\\Cdn\\Service\\CdnRuleCollector::collectClass<\/a>"],[0,2,"<a href=\"Service\/CdnRuleCollector.php.html#198\">Weline\\Cdn\\Service\\CdnRuleCollector::parseCdnTag<\/a>"],[0,8,"<a href=\"Service\/CdnRuleCollector.php.html#223\">Weline\\Cdn\\Service\\CdnRuleCollector::parseCdnConfig<\/a>"],[0,20,"<a href=\"Service\/CdnRuleCollector.php.html#274\">Weline\\Cdn\\Service\\CdnRuleCollector::generateRoute<\/a>"],[0,3,"<a href=\"Service\/CdnRuleCollector.php.html#386\">Weline\\Cdn\\Service\\CdnRuleCollector::convertToCloudflareFormat<\/a>"],[0,4,"<a href=\"Service\/CdnRuleCollector.php.html#421\">Weline\\Cdn\\Service\\CdnRuleCollector::buildCloudflareAction<\/a>"],[0,5,"<a href=\"Service\/CdnRuleCollector.php.html#456\">Weline\\Cdn\\Service\\CdnRuleCollector::parseCacheTime<\/a>"],[0,4,"<a href=\"Service\/CdnRuleCollector.php.html#484\">Weline\\Cdn\\Service\\CdnRuleCollector::saveRule<\/a>"],[0,2,"<a href=\"Service\/CdnRuleCollector.php.html#528\">Weline\\Cdn\\Service\\CdnRuleCollector::extractRouteFromExpression<\/a>"],[0,3,"<a href=\"Service\/CdnRuleCollector.php.html#543\">Weline\\Cdn\\Service\\CdnRuleCollector::pushRealtimeRule<\/a>"],[0,4,"<a href=\"Service\/CdnRuleCollector.php.html#578\">Weline\\Cdn\\Service\\CdnRuleCollector::getPhpFiles<\/a>"],[0,3,"<a href=\"Service\/CdnRuleCollector.php.html#601\">Weline\\Cdn\\Service\\CdnRuleCollector::getClassNameFromFile<\/a>"],[0,1,"<a href=\"Service\/ProviderManager.php.html#30\">Weline\\Cdn\\Service\\ProviderManager::__construct<\/a>"],[0,4,"<a href=\"Service\/ProviderManager.php.html#45\">Weline\\Cdn\\Service\\ProviderManager::getProviders<\/a>"],[0,3,"<a href=\"Service\/ProviderManager.php.html#76\">Weline\\Cdn\\Service\\ProviderManager::getAccounts<\/a>"],[0,1,"<a href=\"Service\/RuleManager.php.html#33\">Weline\\Cdn\\Service\\RuleManager::__construct<\/a>"],[0,3,"<a href=\"Service\/RuleManager.php.html#48\">Weline\\Cdn\\Service\\RuleManager::getDefaultRules<\/a>"],[0,1,"<a href=\"Service\/RuleManager.php.html#68\">Weline\\Cdn\\Service\\RuleManager::saveDefaultRules<\/a>"],[0,1,"<a href=\"Service\/RuleManager.php.html#84\">Weline\\Cdn\\Service\\RuleManager::getMergedRules<\/a>"],[0,11,"<a href=\"Service\/RuleManager.php.html#112\">Weline\\Cdn\\Service\\RuleManager::getApiRules<\/a>"],[0,3,"<a href=\"Service\/RuleManager.php.html#160\">Weline\\Cdn\\Service\\RuleManager::importRules<\/a>"],[0,3,"<a href=\"Service\/RuleManager.php.html#191\">Weline\\Cdn\\Service\\RuleManager::pushRules<\/a>"],[0,8,"<a href=\"Service\/RuleManager.php.html#220\">Weline\\Cdn\\Service\\RuleManager::getCredentials<\/a>"],[0,1,"<a href=\"Service\/UrlSiteResolver.php.html#28\">Weline\\Cdn\\Service\\UrlSiteResolver::__construct<\/a>"],[0,6,"<a href=\"Service\/UrlSiteResolver.php.html#41\">Weline\\Cdn\\Service\\UrlSiteResolver::resolveDomainByUrl<\/a>"],[0,2,"<a href=\"Service\/UrlSiteResolver.php.html#92\">Weline\\Cdn\\Service\\UrlSiteResolver::resolveDomainBySiteId<\/a>"],[0,1,"<a href=\"Service\/WarmupProviderScanner.php.html#35\">Weline\\Cdn\\Service\\WarmupProviderScanner::__construct<\/a>"],[0,17,"<a href=\"Service\/WarmupProviderScanner.php.html#50\">Weline\\Cdn\\Service\\WarmupProviderScanner::scanProviders<\/a>"],[0,6,"<a href=\"Service\/WarmupProviderScanner.php.html#127\">Weline\\Cdn\\Service\\WarmupProviderScanner::collectUrls<\/a>"],[0,2,"<a href=\"Service\/WarmupProviderScanner.php.html#159\">Weline\\Cdn\\Service\\WarmupProviderScanner::getClassNameFromFile<\/a>"],[0,1,"<a href=\"Service\/WarmupRunner.php.html#29\">Weline\\Cdn\\Service\\WarmupRunner::__construct<\/a>"],[0,6,"<a href=\"Service\/WarmupRunner.php.html#40\">Weline\\Cdn\\Service\\WarmupRunner::run<\/a>"],[0,9,"<a href=\"Service\/WarmupRunner.php.html#93\">Weline\\Cdn\\Service\\WarmupRunner::warmupUrl<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#24\">Weline\\Cdn\\Taglib\\AccountSelect::name<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#29\">Weline\\Cdn\\Taglib\\AccountSelect::tag<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#34\">Weline\\Cdn\\Taglib\\AccountSelect::tag_start<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#39\">Weline\\Cdn\\Taglib\\AccountSelect::tag_end<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#44\">Weline\\Cdn\\Taglib\\AccountSelect::attr<\/a>"],[0,6,"<a href=\"Taglib\/AccountSelect.php.html#59\">Weline\\Cdn\\Taglib\\AccountSelect::callback<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#232\">Weline\\Cdn\\Taglib\\AccountSelect::tag_self_close<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#237\">Weline\\Cdn\\Taglib\\AccountSelect::tag_self_close_with_attrs<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#242\">Weline\\Cdn\\Taglib\\AccountSelect::parent<\/a>"],[0,1,"<a href=\"Taglib\/AccountSelect.php.html#247\">Weline\\Cdn\\Taglib\\AccountSelect::document<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#24\">Weline\\Cdn\\Taglib\\ProviderSelect::name<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#29\">Weline\\Cdn\\Taglib\\ProviderSelect::tag<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#34\">Weline\\Cdn\\Taglib\\ProviderSelect::tag_start<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#39\">Weline\\Cdn\\Taglib\\ProviderSelect::tag_end<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#44\">Weline\\Cdn\\Taglib\\ProviderSelect::attr<\/a>"],[0,6,"<a href=\"Taglib\/ProviderSelect.php.html#58\">Weline\\Cdn\\Taglib\\ProviderSelect::callback<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#205\">Weline\\Cdn\\Taglib\\ProviderSelect::tag_self_close<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#210\">Weline\\Cdn\\Taglib\\ProviderSelect::tag_self_close_with_attrs<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#215\">Weline\\Cdn\\Taglib\\ProviderSelect::parent<\/a>"],[0,1,"<a href=\"Taglib\/ProviderSelect.php.html#220\">Weline\\Cdn\\Taglib\\ProviderSelect::document<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#16\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::__construct<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#24\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getProviderName<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#29\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::execute<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#49\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getDescriptor<\/a>"],[0,2,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#143\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getAdapters<\/a>"],[0,6,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#156\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getAccounts<\/a>"],[0,3,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#186\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getAccount<\/a>"],[0,14,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#212\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::saveAccount<\/a>"],[0,4,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#269\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::deleteAccount<\/a>"],[0,3,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#292\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::setDefaultAccount<\/a>"],[0,3,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#307\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getDefaultAccount<\/a>"],[0,2,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#328\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getDomains<\/a>"],[0,6,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#338\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::ensureZone<\/a>"],[0,6,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#377\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::testConnection<\/a>"],[0,3,"<a href=\"extends\/module\/Weline_Framework\/Query\/CdnQueryProvider.php.html#412\">Weline\\Cdn\\Extends\\Module\\Weline_Framework\\Query\\CdnQueryProvider::getAdapterInfo<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

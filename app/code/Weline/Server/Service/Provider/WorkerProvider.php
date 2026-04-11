@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace Weline\Server\Service\Provider;
 
 use Weline\Server\Service\MasterProcess;
-use Weline\Server\Service\SharedStateRuntimeResolver;
+use Weline\Server\Service\SharedStateRuntimeOptions;
 use Weline\Server\Service\Contract\AbstractServiceProvider;
 use Weline\Server\Service\Contract\HealthCheckResult;
 use Weline\Server\Service\Contract\ServiceCommand;
@@ -177,60 +177,43 @@ class WorkerProvider extends AbstractServiceProvider
      */
     private function buildSharedStateArguments(ServiceContext $context): array
     {
-        $session = $this->resolveSessionRuntime($context);
-        $memory = $this->resolveMemoryRuntime($context);
+        $runtime = SharedStateRuntimeOptions::fromCliArgs([], $context->instanceName, $context->envConfig);
+        $session = $runtime->getSession();
+        $memory = $runtime->getMemory();
 
-        return [
-            '--session-host=' . $session['host'],
-            '--session-port=' . $session['port'],
-            '--session-token-file-name=' . $session['token_file_name'],
-            '--memory-host=' . $memory['host'],
-            '--memory-port=' . $memory['port'],
-            '--memory-token-file-name=' . $memory['token_file_name'],
-        ];
-    }
-
-    /**
-     * @return array{host: string, port: int, token_file_name: string}
-     */
-    private function resolveSessionRuntime(ServiceContext $context): array
-    {
-        $runtime = (new SharedStateRuntimeResolver())->resolve($context->envConfig, $context->envConfig, $context->instanceName);
-        $session = \is_array($runtime['session'] ?? null) ? $runtime['session'] : [];
-        $host = \trim((string) ($session['host'] ?? '127.0.0.1'));
-        if ($host === '') {
-            $host = '127.0.0.1';
+        $sessionHost = \trim((string) ($session['host'] ?? '127.0.0.1'));
+        if ($sessionHost === '') {
+            $sessionHost = '127.0.0.1';
         }
-        $defaultPort = 19970 + MasterProcess::getProjectPortOffset();
-        $port = (int) ($session['port'] ?? $defaultPort);
-        $tokenFileName = \trim((string) ($session['token_file_name'] ?? 'session_server.token'));
-
-        return [
-            'host' => $host,
-            'port' => $port > 0 ? $port : $defaultPort,
-            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'session_server.token',
-        ];
-    }
-
-    /**
-     * @return array{host: string, port: int, token_file_name: string}
-     */
-    private function resolveMemoryRuntime(ServiceContext $context): array
-    {
-        $runtime = (new SharedStateRuntimeResolver())->resolve($context->envConfig, $context->envConfig, $context->instanceName);
-        $memory = \is_array($runtime['memory'] ?? null) ? $runtime['memory'] : [];
-        $host = \trim((string) ($memory['host'] ?? '127.0.0.1'));
-        if ($host === '') {
-            $host = '127.0.0.1';
+        $sessionPort = (int) ($session['port'] ?? (19970 + MasterProcess::getProjectPortOffset()));
+        if ($sessionPort <= 0) {
+            $sessionPort = 19970 + MasterProcess::getProjectPortOffset();
         }
-        $defaultPort = 19971 + MasterProcess::getProjectPortOffset();
-        $port = (int) ($memory['port'] ?? $defaultPort);
-        $tokenFileName = \trim((string) ($memory['token_file_name'] ?? 'memory_server.token'));
+        $sessionTokenFileName = \trim((string) ($session['token_file_name'] ?? 'session_server.token'));
+        if ($sessionTokenFileName === '') {
+            $sessionTokenFileName = 'session_server.token';
+        }
+
+        $memoryHost = \trim((string) ($memory['host'] ?? '127.0.0.1'));
+        if ($memoryHost === '') {
+            $memoryHost = '127.0.0.1';
+        }
+        $memoryPort = (int) ($memory['port'] ?? (19971 + MasterProcess::getProjectPortOffset()));
+        if ($memoryPort <= 0) {
+            $memoryPort = 19971 + MasterProcess::getProjectPortOffset();
+        }
+        $memoryTokenFileName = \trim((string) ($memory['token_file_name'] ?? 'memory_server.token'));
+        if ($memoryTokenFileName === '') {
+            $memoryTokenFileName = 'memory_server.token';
+        }
 
         return [
-            'host' => $host,
-            'port' => $port > 0 ? $port : $defaultPort,
-            'token_file_name' => $tokenFileName !== '' ? $tokenFileName : 'memory_server.token',
+            '--session-host=' . $sessionHost,
+            '--session-port=' . $sessionPort,
+            '--session-token-file-name=' . $sessionTokenFileName,
+            '--memory-host=' . $memoryHost,
+            '--memory-port=' . $memoryPort,
+            '--memory-token-file-name=' . $memoryTokenFileName,
         ];
     }
 }

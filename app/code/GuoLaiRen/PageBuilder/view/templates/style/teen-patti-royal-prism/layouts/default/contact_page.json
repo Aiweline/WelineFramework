@@ -1,0 +1,28 @@
+{
+    "page_type": "contact_page",
+    "name": "联系我们默认布局",
+    "description": "联系我们页面标准布局，包含联系表单、地图、联系方式等",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "contact-content",
+                "enabled": true,
+                "instance_id": "contact-content-default",
+                "config": {
+                    "layout": "split",
+                    "show_map": true,
+                    "show_form": true,
+                    "show_social": true
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "header 和 footer 为空数组表示从首页继承"
+}

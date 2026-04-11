@@ -1,0 +1,37 @@
+<?php
+/**
+ * Rummy Overdrive - Simple Header
+ *
+ * @component_start
+ * code: header-simple
+ * name: 简洁头部
+ * name_en: Simple Header
+ * description: 简洁头部封装，复用主题导航组件
+ * category: header
+ * region: header
+ * @component_end
+ *
+ * @fields_start
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.position => Logo位置:select:left|left,center,right
+ * logo.url => Logo地址:textarea:|留空使用主题Logo
+ * logo.width => Logo宽度:responsive:52/52|px
+ * style.bg_color => 背景颜色:color:rgba(7,10,20,0.82)
+ * style.padding => 区域内边距:responsive:12/16|px
+ * @fields_end
+ */
+
+$componentConfig = $this->getData('component_config') ?: [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+if (!isset($componentConfig['navigation.bg_color']) && isset($componentConfig['style.bg_color']) && $componentConfig['style.bg_color'] !== '') {
+    $componentConfig['navigation.bg_color'] = $componentConfig['style.bg_color'];
+}
+if (!isset($componentConfig['navigation.display']) && isset($componentConfig['logo.display']) && $componentConfig['logo.display'] !== '') {
+    $componentConfig['navigation.display'] = 'yes';
+}
+
+$this->assign('component_config', $componentConfig);
+$this->assign('__rov_shell_managed', true);
+$this->assign('__pagebuilder_shell_managed', true);
+?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/rummy-overdrive/components/header/nav.phtml') ?>

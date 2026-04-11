@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\WeShop\Promotion</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">WeShop</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Promotion</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Campaign/Delete.php.html#13">WeShop\Promotion\Controller\Backend\Campaign\Delete</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Edit.php.html#13">WeShop\Promotion\Controller\Backend\Campaign\Edit</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Index.php.html#13">WeShop\Promotion\Controller\Backend\Campaign\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#14">WeShop\Promotion\Controller\Backend\Campaign\Save</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Index.php.html#13">WeShop\Promotion\Controller\Backend\Coupon\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Save.php.html#13">WeShop\Promotion\Controller\Backend\Coupon\Save</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Coupon/Apply.php.html#11">WeShop\Promotion\Controller\Frontend\Coupon\Apply</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#10">WeShop\Promotion\Controller\Frontend\Promotion\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#14">WeShop\Promotion\Model\Campaign</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#10">WeShop\Promotion\Repository\CampaignRepository</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#10">WeShop\Promotion\Repository\PromotionCouponRepository</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#13">WeShop\Promotion\Service\CouponService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#11">WeShop\Promotion\Service\PromotionCouponManagementService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#10">WeShop\Promotion\Service\PromotionPageDataService</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Model/Campaign.php.html#14">WeShop\Promotion\Model\Campaign</a></td><td class="text-right">2256</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#10">WeShop\Promotion\Repository\CampaignRepository</a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#14">WeShop\Promotion\Controller\Backend\Campaign\Save</a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#11">WeShop\Promotion\Service\PromotionCouponManagementService</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Index.php.html#13">WeShop\Promotion\Controller\Backend\Campaign\Index</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#13">WeShop\Promotion\Service\CouponService</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#10">WeShop\Promotion\Repository\PromotionCouponRepository</a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#10">WeShop\Promotion\Service\PromotionPageDataService</a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Save.php.html#13">WeShop\Promotion\Controller\Backend\Coupon\Save</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Frontend/Coupon/Apply.php.html#11">WeShop\Promotion\Controller\Frontend\Coupon\Apply</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#10">WeShop\Promotion\Controller\Frontend\Promotion\Index</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Delete.php.html#13">WeShop\Promotion\Controller\Backend\Campaign\Delete</a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Edit.php.html#13">WeShop\Promotion\Controller\Backend\Campaign\Edit</a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Index.php.html#13">WeShop\Promotion\Controller\Backend\Coupon\Index</a></td><td class="text-right">12</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Campaign/Delete.php.html#18"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Delete::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Edit.php.html#18"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Edit::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Index.php.html#15"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Index.php.html#44"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Index::getRepository">getRepository</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Index.php.html#49"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Index::buildPagination">buildPagination</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#19"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#48"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::getCampaignData">getCampaignData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#93"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::normalizeDate">normalizeDate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#110"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::parseCommaSeparatedIds">parseCommaSeparatedIds</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#123"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::saveCampaign">saveCampaign</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Index.php.html#15"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Index.php.html#42"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Index::getCouponService">getCouponService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Save.php.html#15"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Save::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Save.php.html#35"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Save::getCouponPayload">getCouponPayload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Save.php.html#53"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Save::getCouponService">getCouponService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Coupon/Apply.php.html#13"><abbr title="WeShop\Promotion\Controller\Frontend\Coupon\Apply::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Coupon/Apply.php.html#19"><abbr title="WeShop\Promotion\Controller\Frontend\Coupon\Apply::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Coupon/Apply.php.html#24"><abbr title="WeShop\Promotion\Controller\Frontend\Coupon\Apply::post">post</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#14"><abbr title="WeShop\Promotion\Controller\Frontend\Promotion\Index::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#19"><abbr title="WeShop\Promotion\Controller\Frontend\Promotion\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#24"><abbr title="WeShop\Promotion\Controller\Frontend\Promotion\Index::deals">deals</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#29"><abbr title="WeShop\Promotion\Controller\Frontend\Promotion\Index::sale">sale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#34"><abbr title="WeShop\Promotion\Controller\Frontend\Promotion\Index::renderPage">renderPage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#66"><abbr title="WeShop\Promotion\Model\Campaign::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#74"><abbr title="WeShop\Promotion\Model\Campaign::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#82"><abbr title="WeShop\Promotion\Model\Campaign::getType">getType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#90"><abbr title="WeShop\Promotion\Model\Campaign::setType">setType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#98"><abbr title="WeShop\Promotion\Model\Campaign::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#106"><abbr title="WeShop\Promotion\Model\Campaign::setDescription">setDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#114"><abbr title="WeShop\Promotion\Model\Campaign::getDiscountType">getDiscountType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#122"><abbr title="WeShop\Promotion\Model\Campaign::setDiscountType">setDiscountType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#130"><abbr title="WeShop\Promotion\Model\Campaign::getDiscountValue">getDiscountValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#138"><abbr title="WeShop\Promotion\Model\Campaign::setDiscountValue">setDiscountValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#146"><abbr title="WeShop\Promotion\Model\Campaign::getMinPurchase">getMinPurchase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#154"><abbr title="WeShop\Promotion\Model\Campaign::setMinPurchase">setMinPurchase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#162"><abbr title="WeShop\Promotion\Model\Campaign::getMaxDiscount">getMaxDiscount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#170"><abbr title="WeShop\Promotion\Model\Campaign::setMaxDiscount">setMaxDiscount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#178"><abbr title="WeShop\Promotion\Model\Campaign::getStartDate">getStartDate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#186"><abbr title="WeShop\Promotion\Model\Campaign::setStartDate">setStartDate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#194"><abbr title="WeShop\Promotion\Model\Campaign::getEndDate">getEndDate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#202"><abbr title="WeShop\Promotion\Model\Campaign::setEndDate">setEndDate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#210"><abbr title="WeShop\Promotion\Model\Campaign::getProductIds">getProductIds</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#222"><abbr title="WeShop\Promotion\Model\Campaign::setProductIds">setProductIds</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#230"><abbr title="WeShop\Promotion\Model\Campaign::getCategoryIds">getCategoryIds</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#242"><abbr title="WeShop\Promotion\Model\Campaign::setCategoryIds">setCategoryIds</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#250"><abbr title="WeShop\Promotion\Model\Campaign::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#258"><abbr title="WeShop\Promotion\Model\Campaign::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#266"><abbr title="WeShop\Promotion\Model\Campaign::isFeatured">isFeatured</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#274"><abbr title="WeShop\Promotion\Model\Campaign::setIsFeatured">setIsFeatured</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#282"><abbr title="WeShop\Promotion\Model\Campaign::getPriority">getPriority</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#290"><abbr title="WeShop\Promotion\Model\Campaign::setPriority">setPriority</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#298"><abbr title="WeShop\Promotion\Model\Campaign::getStatusLabel">getStatusLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#316"><abbr title="WeShop\Promotion\Model\Campaign::isValid">isValid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#12"><abbr title="WeShop\Promotion\Repository\CampaignRepository::createCampaign">createCampaign</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#17"><abbr title="WeShop\Promotion\Repository\CampaignRepository::findCampaignById">findCampaignById</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#32"><abbr title="WeShop\Promotion\Repository\CampaignRepository::getCampaignSummary">getCampaignSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#71"><abbr title="WeShop\Promotion\Repository\CampaignRepository::listRecentCampaigns">listRecentCampaigns</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#86"><abbr title="WeShop\Promotion\Repository\CampaignRepository::listCampaigns">listCampaigns</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#123"><abbr title="WeShop\Promotion\Repository\CampaignRepository::countCampaigns">countCampaigns</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#147"><abbr title="WeShop\Promotion\Repository\CampaignRepository::deleteCampaign">deleteCampaign</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#161"><abbr title="WeShop\Promotion\Repository\CampaignRepository::createBaseCampaign">createBaseCampaign</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#12"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::createCoupon">createCoupon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#17"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::findCouponById">findCouponById</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#32"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::getCouponSummary">getCouponSummary</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#69"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::listRecentCoupons">listRecentCoupons</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#81"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::createBaseCoupon">createBaseCoupon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#23"><abbr title="WeShop\Promotion\Service\CouponService::applyCoupon">applyCoupon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#55"><abbr title="WeShop\Promotion\Service\CouponService::validateCoupon">validateCoupon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#83"><abbr title="WeShop\Promotion\Service\CouponService::calculateDiscount">calculateDiscount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#15"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#20"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::getDashboardData">getDashboardData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#49"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::saveCoupon">saveCoupon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#70"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::prepareData">prepareData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#96"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::normalizeDate">normalizeDate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#12"><abbr title="WeShop\Promotion\Service\PromotionPageDataService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#21"><abbr title="WeShop\Promotion\Service\PromotionPageDataService::build">build</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#49"><abbr title="WeShop\Promotion\Service\PromotionPageDataService::normalizeProduct">normalizeProduct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#73"><abbr title="WeShop\Promotion\Service\PromotionPageDataService::buildPromotionCards">buildPromotionCards</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Backend/Campaign/Index.php.html#49"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Index::buildPagination">buildPagination</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#86"><abbr title="WeShop\Promotion\Repository\CampaignRepository::listCampaigns">listCampaigns</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#48"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::getCampaignData">getCampaignData</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#123"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::saveCampaign">saveCampaign</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#298"><abbr title="WeShop\Promotion\Model\Campaign::getStatusLabel">getStatusLabel</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#316"><abbr title="WeShop\Promotion\Model\Campaign::isValid">isValid</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#123"><abbr title="WeShop\Promotion\Repository\CampaignRepository::countCampaigns">countCampaigns</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#55"><abbr title="WeShop\Promotion\Service\CouponService::validateCoupon">validateCoupon</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#83"><abbr title="WeShop\Promotion\Service\CouponService::calculateDiscount">calculateDiscount</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#70"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::prepareData">prepareData</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Delete.php.html#18"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Delete::index">index</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Edit.php.html#18"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Edit::index">index</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Frontend/Coupon/Apply.php.html#24"><abbr title="WeShop\Promotion\Controller\Frontend\Coupon\Apply::post">post</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#19"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#93"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::normalizeDate">normalizeDate</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Save.php.html#15"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Save::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#17"><abbr title="WeShop\Promotion\Repository\CampaignRepository::findCampaignById">findCampaignById</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#147"><abbr title="WeShop\Promotion\Repository\CampaignRepository::deleteCampaign">deleteCampaign</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#17"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::findCouponById">findCouponById</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CouponService.php.html#23"><abbr title="WeShop\Promotion\Service\CouponService::applyCoupon">applyCoupon</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#20"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::getDashboardData">getDashboardData</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#49"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::saveCoupon">saveCoupon</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PromotionCouponManagementService.php.html#96"><abbr title="WeShop\Promotion\Service\PromotionCouponManagementService::normalizeDate">normalizeDate</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#21"><abbr title="WeShop\Promotion\Service\PromotionPageDataService::build">build</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PromotionPageDataService.php.html#49"><abbr title="WeShop\Promotion\Service\PromotionPageDataService::normalizeProduct">normalizeProduct</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Index.php.html#15"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Index::index">index</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Campaign/Save.php.html#110"><abbr title="WeShop\Promotion\Controller\Backend\Campaign\Save::parseCommaSeparatedIds">parseCommaSeparatedIds</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Index.php.html#15"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Index::index">index</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Coupon/Save.php.html#35"><abbr title="WeShop\Promotion\Controller\Backend\Coupon\Save::getCouponPayload">getCouponPayload</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Frontend/Promotion/Index.php.html#34"><abbr title="WeShop\Promotion\Controller\Frontend\Promotion\Index::renderPage">renderPage</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#82"><abbr title="WeShop\Promotion\Model\Campaign::getType">getType</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#114"><abbr title="WeShop\Promotion\Model\Campaign::getDiscountType">getDiscountType</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#130"><abbr title="WeShop\Promotion\Model\Campaign::getDiscountValue">getDiscountValue</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#146"><abbr title="WeShop\Promotion\Model\Campaign::getMinPurchase">getMinPurchase</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#162"><abbr title="WeShop\Promotion\Model\Campaign::getMaxDiscount">getMaxDiscount</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#210"><abbr title="WeShop\Promotion\Model\Campaign::getProductIds">getProductIds</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#230"><abbr title="WeShop\Promotion\Model\Campaign::getCategoryIds">getCategoryIds</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#250"><abbr title="WeShop\Promotion\Model\Campaign::getStatus">getStatus</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/Campaign.php.html#274"><abbr title="WeShop\Promotion\Model\Campaign::setIsFeatured">setIsFeatured</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Repository/CampaignRepository.php.html#71"><abbr title="WeShop\Promotion\Repository\CampaignRepository::listRecentCampaigns">listRecentCampaigns</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#32"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::getCouponSummary">getCouponSummary</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Repository/PromotionCouponRepository.php.html#69"><abbr title="WeShop\Promotion\Repository\PromotionCouponRepository::listRecentCoupons">listRecentCoupons</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([14,0,0,0,0,0,0,0,0,0,0,1], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([78,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,4,"<a href=\"Controller\/Backend\/Campaign\/Delete.php.html#13\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Delete<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Campaign\/Edit.php.html#13\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Edit<\/a>"],[0,13,"<a href=\"Controller\/Backend\/Campaign\/Index.php.html#13\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Index<\/a>"],[0,19,"<a href=\"Controller\/Backend\/Campaign\/Save.php.html#14\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Save<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Coupon\/Index.php.html#13\">WeShop\\Promotion\\Controller\\Backend\\Coupon\\Index<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Coupon\/Save.php.html#13\">WeShop\\Promotion\\Controller\\Backend\\Coupon\\Save<\/a>"],[0,6,"<a href=\"Controller\/Frontend\/Coupon\/Apply.php.html#11\">WeShop\\Promotion\\Controller\\Frontend\\Coupon\\Apply<\/a>"],[0,6,"<a href=\"Controller\/Frontend\/Promotion\/Index.php.html#10\">WeShop\\Promotion\\Controller\\Frontend\\Promotion\\Index<\/a>"],[0,47,"<a href=\"Model\/Campaign.php.html#14\">WeShop\\Promotion\\Model\\Campaign<\/a>"],[100,0,"<a href=\"Model\/Coupon.php.html#11\">WeShop\\Promotion\\Model\\Coupon<\/a>"],[0,24,"<a href=\"Repository\/CampaignRepository.php.html#10\">WeShop\\Promotion\\Repository\\CampaignRepository<\/a>"],[0,9,"<a href=\"Repository\/PromotionCouponRepository.php.html#10\">WeShop\\Promotion\\Repository\\PromotionCouponRepository<\/a>"],[0,13,"<a href=\"Service\/CouponService.php.html#13\">WeShop\\Promotion\\Service\\CouponService<\/a>"],[0,15,"<a href=\"Service\/PromotionCouponManagementService.php.html#11\">WeShop\\Promotion\\Service\\PromotionCouponManagementService<\/a>"],[0,8,"<a href=\"Service\/PromotionPageDataService.php.html#10\">WeShop\\Promotion\\Service\\PromotionPageDataService<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,4,"<a href=\"Controller\/Backend\/Campaign\/Delete.php.html#18\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Delete::index<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Campaign\/Edit.php.html#18\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Edit::index<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Campaign\/Index.php.html#15\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Campaign\/Index.php.html#44\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Index::getRepository<\/a>"],[0,10,"<a href=\"Controller\/Backend\/Campaign\/Index.php.html#49\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Index::buildPagination<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Campaign\/Save.php.html#19\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Save::index<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Campaign\/Save.php.html#48\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Save::getCampaignData<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Campaign\/Save.php.html#93\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Save::normalizeDate<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Campaign\/Save.php.html#110\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Save::parseCommaSeparatedIds<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Campaign\/Save.php.html#123\">WeShop\\Promotion\\Controller\\Backend\\Campaign\\Save::saveCampaign<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Coupon\/Index.php.html#15\">WeShop\\Promotion\\Controller\\Backend\\Coupon\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Coupon\/Index.php.html#42\">WeShop\\Promotion\\Controller\\Backend\\Coupon\\Index::getCouponService<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Coupon\/Save.php.html#15\">WeShop\\Promotion\\Controller\\Backend\\Coupon\\Save::index<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Coupon\/Save.php.html#35\">WeShop\\Promotion\\Controller\\Backend\\Coupon\\Save::getCouponPayload<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Coupon\/Save.php.html#53\">WeShop\\Promotion\\Controller\\Backend\\Coupon\\Save::getCouponService<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Coupon\/Apply.php.html#13\">WeShop\\Promotion\\Controller\\Frontend\\Coupon\\Apply::__construct<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Coupon\/Apply.php.html#19\">WeShop\\Promotion\\Controller\\Frontend\\Coupon\\Apply::index<\/a>"],[0,4,"<a href=\"Controller\/Frontend\/Coupon\/Apply.php.html#24\">WeShop\\Promotion\\Controller\\Frontend\\Coupon\\Apply::post<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Promotion\/Index.php.html#14\">WeShop\\Promotion\\Controller\\Frontend\\Promotion\\Index::__construct<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Promotion\/Index.php.html#19\">WeShop\\Promotion\\Controller\\Frontend\\Promotion\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Promotion\/Index.php.html#24\">WeShop\\Promotion\\Controller\\Frontend\\Promotion\\Index::deals<\/a>"],[0,1,"<a href=\"Controller\/Frontend\/Promotion\/Index.php.html#29\">WeShop\\Promotion\\Controller\\Frontend\\Promotion\\Index::sale<\/a>"],[0,2,"<a href=\"Controller\/Frontend\/Promotion\/Index.php.html#34\">WeShop\\Promotion\\Controller\\Frontend\\Promotion\\Index::renderPage<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#66\">WeShop\\Promotion\\Model\\Campaign::getName<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#74\">WeShop\\Promotion\\Model\\Campaign::setName<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#82\">WeShop\\Promotion\\Model\\Campaign::getType<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#90\">WeShop\\Promotion\\Model\\Campaign::setType<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#98\">WeShop\\Promotion\\Model\\Campaign::getDescription<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#106\">WeShop\\Promotion\\Model\\Campaign::setDescription<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#114\">WeShop\\Promotion\\Model\\Campaign::getDiscountType<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#122\">WeShop\\Promotion\\Model\\Campaign::setDiscountType<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#130\">WeShop\\Promotion\\Model\\Campaign::getDiscountValue<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#138\">WeShop\\Promotion\\Model\\Campaign::setDiscountValue<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#146\">WeShop\\Promotion\\Model\\Campaign::getMinPurchase<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#154\">WeShop\\Promotion\\Model\\Campaign::setMinPurchase<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#162\">WeShop\\Promotion\\Model\\Campaign::getMaxDiscount<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#170\">WeShop\\Promotion\\Model\\Campaign::setMaxDiscount<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#178\">WeShop\\Promotion\\Model\\Campaign::getStartDate<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#186\">WeShop\\Promotion\\Model\\Campaign::setStartDate<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#194\">WeShop\\Promotion\\Model\\Campaign::getEndDate<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#202\">WeShop\\Promotion\\Model\\Campaign::setEndDate<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#210\">WeShop\\Promotion\\Model\\Campaign::getProductIds<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#222\">WeShop\\Promotion\\Model\\Campaign::setProductIds<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#230\">WeShop\\Promotion\\Model\\Campaign::getCategoryIds<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#242\">WeShop\\Promotion\\Model\\Campaign::setCategoryIds<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#250\">WeShop\\Promotion\\Model\\Campaign::getStatus<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#258\">WeShop\\Promotion\\Model\\Campaign::setStatus<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#266\">WeShop\\Promotion\\Model\\Campaign::isFeatured<\/a>"],[0,2,"<a href=\"Model\/Campaign.php.html#274\">WeShop\\Promotion\\Model\\Campaign::setIsFeatured<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#282\">WeShop\\Promotion\\Model\\Campaign::getPriority<\/a>"],[0,1,"<a href=\"Model\/Campaign.php.html#290\">WeShop\\Promotion\\Model\\Campaign::setPriority<\/a>"],[0,5,"<a href=\"Model\/Campaign.php.html#298\">WeShop\\Promotion\\Model\\Campaign::getStatusLabel<\/a>"],[0,5,"<a href=\"Model\/Campaign.php.html#316\">WeShop\\Promotion\\Model\\Campaign::isValid<\/a>"],[0,1,"<a href=\"Repository\/CampaignRepository.php.html#12\">WeShop\\Promotion\\Repository\\CampaignRepository::createCampaign<\/a>"],[0,3,"<a href=\"Repository\/CampaignRepository.php.html#17\">WeShop\\Promotion\\Repository\\CampaignRepository::findCampaignById<\/a>"],[0,1,"<a href=\"Repository\/CampaignRepository.php.html#32\">WeShop\\Promotion\\Repository\\CampaignRepository::getCampaignSummary<\/a>"],[0,2,"<a href=\"Repository\/CampaignRepository.php.html#71\">WeShop\\Promotion\\Repository\\CampaignRepository::listRecentCampaigns<\/a>"],[0,8,"<a href=\"Repository\/CampaignRepository.php.html#86\">WeShop\\Promotion\\Repository\\CampaignRepository::listCampaigns<\/a>"],[0,5,"<a href=\"Repository\/CampaignRepository.php.html#123\">WeShop\\Promotion\\Repository\\CampaignRepository::countCampaigns<\/a>"],[0,3,"<a href=\"Repository\/CampaignRepository.php.html#147\">WeShop\\Promotion\\Repository\\CampaignRepository::deleteCampaign<\/a>"],[0,1,"<a href=\"Repository\/CampaignRepository.php.html#161\">WeShop\\Promotion\\Repository\\CampaignRepository::createBaseCampaign<\/a>"],[0,1,"<a href=\"Repository\/PromotionCouponRepository.php.html#12\">WeShop\\Promotion\\Repository\\PromotionCouponRepository::createCoupon<\/a>"],[0,3,"<a href=\"Repository\/PromotionCouponRepository.php.html#17\">WeShop\\Promotion\\Repository\\PromotionCouponRepository::findCouponById<\/a>"],[0,2,"<a href=\"Repository\/PromotionCouponRepository.php.html#32\">WeShop\\Promotion\\Repository\\PromotionCouponRepository::getCouponSummary<\/a>"],[0,2,"<a href=\"Repository\/PromotionCouponRepository.php.html#69\">WeShop\\Promotion\\Repository\\PromotionCouponRepository::listRecentCoupons<\/a>"],[0,1,"<a href=\"Repository\/PromotionCouponRepository.php.html#81\">WeShop\\Promotion\\Repository\\PromotionCouponRepository::createBaseCoupon<\/a>"],[0,3,"<a href=\"Service\/CouponService.php.html#23\">WeShop\\Promotion\\Service\\CouponService::applyCoupon<\/a>"],[0,5,"<a href=\"Service\/CouponService.php.html#55\">WeShop\\Promotion\\Service\\CouponService::validateCoupon<\/a>"],[0,5,"<a href=\"Service\/CouponService.php.html#83\">WeShop\\Promotion\\Service\\CouponService::calculateDiscount<\/a>"],[0,1,"<a href=\"Service\/PromotionCouponManagementService.php.html#15\">WeShop\\Promotion\\Service\\PromotionCouponManagementService::__construct<\/a>"],[0,3,"<a href=\"Service\/PromotionCouponManagementService.php.html#20\">WeShop\\Promotion\\Service\\PromotionCouponManagementService::getDashboardData<\/a>"],[0,3,"<a href=\"Service\/PromotionCouponManagementService.php.html#49\">WeShop\\Promotion\\Service\\PromotionCouponManagementService::saveCoupon<\/a>"],[0,5,"<a href=\"Service\/PromotionCouponManagementService.php.html#70\">WeShop\\Promotion\\Service\\PromotionCouponManagementService::prepareData<\/a>"],[0,3,"<a href=\"Service\/PromotionCouponManagementService.php.html#96\">WeShop\\Promotion\\Service\\PromotionCouponManagementService::normalizeDate<\/a>"],[0,1,"<a href=\"Service\/PromotionPageDataService.php.html#12\">WeShop\\Promotion\\Service\\PromotionPageDataService::__construct<\/a>"],[0,3,"<a href=\"Service\/PromotionPageDataService.php.html#21\">WeShop\\Promotion\\Service\\PromotionPageDataService::build<\/a>"],[0,3,"<a href=\"Service\/PromotionPageDataService.php.html#49\">WeShop\\Promotion\\Service\\PromotionPageDataService::normalizeProduct<\/a>"],[0,1,"<a href=\"Service\/PromotionPageDataService.php.html#73\">WeShop\\Promotion\\Service\\PromotionPageDataService::buildPromotionCards<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

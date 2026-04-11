@@ -1,0 +1,687 @@
+<?php
+/**
+ * Teen Patti Gold Rush - Advantages Component
+ *
+ * @component_start
+ * code: advantages
+ * name: 优势展示
+ * name_en: Advantages Section
+ * description: 展示产品/应用核心优势，三卡主舞台布局
+ * category: content
+ * region: content
+ * thumbnail: asset/img/our-advantages/icon01.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示描述:select:yes|yes,no
+ * display.show_button => 显示按钮:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景基础色:color:#0f1d35
+ * style.title_color => 标题颜色:color:#eafffb
+ * style.title_font_size => 标题字号(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:24|px
+ * style.card_title_color => 卡片标题颜色:color:#e8fffa
+ * style.card_title_font_size => 卡片标题字号:number:20|px
+ * style.card_desc_color => 卡片描述颜色:color:#d8f0ff
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.icon_size => 图标尺寸:number:82|px
+ * style.icon_border_radius => 图标圆角:number:24|%
+ * style.section_padding => 区域内边距(PC端):number:70|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:42|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:button => 按钮设置
+ * button.text => 按钮文字:text:Join Table
+ * button.url => 按钮链接:text:#download
+ * button.bg_gradient_start => 按钮渐变起始色:color:#56ffd4
+ * button.bg_gradient_end => 按钮渐变结束色:color:#4a8dff
+ * button.text_color => 按钮文字颜色:color:#071524
+ * button.border_radius => 按钮圆角:number:999|px
+ * button.padding_x => 按钮左右内边距:number:30|px
+ * button.padding_y => 按钮上下内边距:number:10|px
+ *
+ * group:icons => 图标配置
+ * icons.icon_1 => 优势1图标:textarea:|默认使用本地图标
+ * icons.icon_2 => 优势2图标:textarea:|默认使用本地图标
+ * icons.icon_3 => 优势3图标:textarea:|默认使用本地图标
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Our Advantages
+ * texts.summary => 区域辅助文案:textarea:Why players pick Gold Rush for faster table entry, stable round sync, and cleaner action focus.
+ * texts.advantage_1_title => 优势1标题:text:Fast Teen Patti Entry
+ * texts.advantage_1_desc => 优势1描述:textarea:Open active Teen Patti rooms quickly with fewer taps and clearer mode grouping.
+ * texts.advantage_2_title => 优势2标题:text:Stable Round Sync
+ * texts.advantage_2_desc => 优势2描述:textarea:Card state and wallet values update in a clean rhythm across repeat rounds.
+ * texts.advantage_3_title => 优势3标题:text:Pace-Friendly UI
+ * texts.advantage_3_desc => 优势3描述:textarea:Readable hierarchy and stronger focus zones help players scan decisions faster.
+ *
+ * @fields_end
+ */
+
+$componentId = 'gr-advantages-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+$showButton = $getConfig('display.show_button', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('advantages.bg_color', '#0f1d35'));
+$titleColor = $getConfig('style.title_color', '#eafffb');
+$titleFontSize = (int)$getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = (int)$getConfig('style.title_font_size_mobile', '24');
+$cardTitleColor = $getConfig('style.card_title_color', '#e8fffa');
+$cardTitleFontSize = (int)$getConfig('style.card_title_font_size', '20');
+$cardDescColor = $getConfig('style.card_desc_color', '#d8f0ff');
+$cardDescFontSize = (int)$getConfig('style.card_desc_font_size', '14');
+$iconSize = (int)$getConfig('style.icon_size', '82');
+$iconBorderRadius = (int)$getConfig('style.icon_border_radius', '24');
+$sectionPadding = (int)$getConfig('style.section_padding', '70');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '42');
+$cardGap = (int)$getConfig('style.card_gap', '24');
+
+$btnText = $getConfig('button.text', 'Join Table');
+$btnUrl = $getConfig('button.url', '#download');
+$btnGradientStart = $getConfig('button.bg_gradient_start', '#56ffd4');
+$btnGradientEnd = $getConfig('button.bg_gradient_end', '#4a8dff');
+$btnTextColor = $getConfig('button.text_color', '#071524');
+$btnBorderRadius = (int)$getConfig('button.border_radius', '999');
+$btnPaddingX = (int)$getConfig('button.padding_x', '30');
+$btnPaddingY = (int)$getConfig('button.padding_y', '10');
+
+$defaultIcon1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/our-advantages/icon01.webp');
+$defaultIcon2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/our-advantages/icon02.webp');
+$defaultIcon3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-gold-rush/asset/img/our-advantages/icon03.webp');
+
+$icon1 = $getConfig('icons.icon_1', $getConfig('advantages.icon_1', '')) ?: $defaultIcon1;
+$icon2 = $getConfig('icons.icon_2', $getConfig('advantages.icon_2', '')) ?: $defaultIcon2;
+$icon3 = $getConfig('icons.icon_3', $getConfig('advantages.icon_3', '')) ?: $defaultIcon3;
+
+$title = $getConfig('texts.title', $getConfig('advantages.title', 'Our Advantages'));
+$sectionDesc = $getConfig('texts.summary', $getConfig('texts.section_desc', $getConfig('advantages.description', 'Why players pick Gold Rush for faster table entry, stable round sync, and cleaner action focus.')));
+$title1 = $getConfig('texts.advantage_1_title', 'Fast Teen Patti Entry');
+$desc1 = $getConfig('texts.advantage_1_desc', 'Open active Teen Patti rooms quickly with fewer taps and clearer mode grouping.');
+$title2 = $getConfig('texts.advantage_2_title', 'Stable Round Sync');
+$desc2 = $getConfig('texts.advantage_2_desc', 'Card state and wallet values update in a clean rhythm across repeat rounds.');
+$title3 = $getConfig('texts.advantage_3_title', 'Pace-Friendly UI');
+$desc3 = $getConfig('texts.advantage_3_desc', 'Readable hierarchy and stronger focus zones help players scan decisions faster.');
+
+$cards = [
+    ['icon' => $icon1, 'title' => $title1, 'desc' => $desc1],
+    ['icon' => $icon2, 'title' => $title2, 'desc' => $desc2],
+    ['icon' => $icon3, 'title' => $title3, 'desc' => $desc3],
+];
+?>
+
+<section id="<?= $componentId ?>" class="gr-advantages" aria-labelledby="<?= $componentId ?>-title">
+    <div class="section-inner">
+        <?php if ($showTitle || $showButton || ($showDescription && $sectionDesc !== '')): ?>
+            <header class="adv-head-mobile">
+                <?php if ($showTitle): ?>
+                    <span class="adv-kicker">Teen Patti Gold Rush</span>
+                <?php endif; ?>
+                <div class="adv-head-mobile-main<?= !$showTitle ? ' adv-head-mobile-main-only' : '' ?>">
+                    <?php if ($showTitle): ?>
+                        <h2><?= htmlspecialchars($title) ?></h2>
+                    <?php endif; ?>
+                    <?php if ($showDescription && $sectionDesc !== ''): ?>
+                        <p class="adv-section-desc"><?= htmlspecialchars($sectionDesc) ?></p>
+                    <?php endif; ?>
+                    <?php if ($showButton): ?>
+                        <a href="<?= htmlspecialchars($btnUrl) ?>" class="adv-cta adv-cta-mobile"><?= htmlspecialchars($btnText) ?></a>
+                    <?php endif; ?>
+                </div>
+            </header>
+        <?php endif; ?>
+
+        <div class="adv-board-desktop" style="--adv-gap: <?= (int)$cardGap ?>px;">
+            <div class="adv-lead-col">
+                <div class="adv-lead-meta">
+                    <?php if ($showTitle): ?>
+                        <span class="adv-kicker">Teen Patti Gold Rush</span>
+                        <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                    <?php endif; ?>
+                    <?php if ($showDescription && $sectionDesc !== ''): ?>
+                        <p class="adv-section-desc"><?= htmlspecialchars($sectionDesc) ?></p>
+                    <?php endif; ?>
+                    <?php if ($showButton): ?>
+                        <a href="<?= htmlspecialchars($btnUrl) ?>" class="adv-cta adv-cta-desktop"><?= htmlspecialchars($btnText) ?></a>
+                    <?php endif; ?>
+                </div>
+
+                <article class="adv-lead-feature">
+                    <div class="lead-icon-wrap">
+                        <img src="<?= htmlspecialchars($cards[0]['icon']) ?>" alt="<?= htmlspecialchars($cards[0]['title']) ?>" loading="lazy" decoding="async">
+                        <span>01</span>
+                    </div>
+                    <h3><?= htmlspecialchars($cards[0]['title']) ?></h3>
+                    <?php if ($showDescription): ?>
+                        <p><?= htmlspecialchars($cards[0]['desc']) ?></p>
+                    <?php endif; ?>
+                </article>
+            </div>
+
+            <div class="adv-side-stack">
+                <?php for ($i = 1; $i < count($cards); $i++): ?>
+                    <article class="adv-side-card adv-side-card-<?= (int)($i + 1) ?>">
+                        <div class="side-head">
+                            <img src="<?= htmlspecialchars($cards[$i]['icon']) ?>" alt="<?= htmlspecialchars($cards[$i]['title']) ?>" loading="lazy" decoding="async">
+                            <span><?= sprintf('%02d', $i + 1) ?></span>
+                        </div>
+                        <h3><?= htmlspecialchars($cards[$i]['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($cards[$i]['desc']) ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endfor; ?>
+            </div>
+        </div>
+
+        <div class="adv-mobile-lab" aria-label="Advantages mobile stage">
+            <div class="mobile-halo" aria-hidden="true"></div>
+            <div class="mobile-reel" data-adv-reel>
+                <?php foreach ($cards as $index => $card): ?>
+                    <article class="mobile-adv-card<?= $index === 0 ? ' is-focus' : '' ?>" data-adv-card data-adv-index="<?= (int)$index ?>">
+                        <div class="mobile-card-head">
+                            <img src="<?= htmlspecialchars($card['icon']) ?>" alt="<?= htmlspecialchars($card['title']) ?>" loading="lazy" decoding="async">
+                            <span><?= sprintf('%02d', $index + 1) ?></span>
+                        </div>
+                        <h3><?= htmlspecialchars($card['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($card['desc']) ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+            <div class="mobile-dots" data-adv-dots>
+                <?php foreach ($cards as $index => $card): ?>
+                    <button type="button" class="mobile-dot<?= $index === 0 ? ' is-active' : '' ?>" data-adv-dot="<?= (int)$index ?>" aria-label="Show advantage <?= (int)($index + 1) ?>"<?= $index === 0 ? ' aria-current="true"' : '' ?>></button>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background-color: <?= htmlspecialchars($bgColor) ?>;
+    background-image:
+        radial-gradient(720px 260px at 10% 8%, rgba(255, 132, 210, 0.14), transparent 64%),
+        radial-gradient(760px 320px at 92% 96%, rgba(170, 255, 122, 0.12), transparent 68%),
+        linear-gradient(180deg, rgba(30, 14, 43, 0.96) 0%, rgba(24, 12, 37, 0.98) 54%, rgba(16, 10, 27, 0.98) 100%);
+    box-shadow: inset 0 -120px 120px -96px rgba(15, 10, 22, 0.32);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    left: -12%;
+    top: -28%;
+    width: min(560px, 50vw);
+    height: min(560px, 50vw);
+    border-radius: 28% 72% 48% 52% / 56% 42% 58% 44%;
+    background: rgba(255, 90, 182, 0.03);
+    border: 1px solid rgba(255, 182, 234, 0.04);
+    transform: rotate(-14deg);
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    right: -10%;
+    bottom: -28%;
+    width: min(640px, 54vw);
+    height: min(640px, 54vw);
+    border-radius: 50%;
+    border: 1px dashed rgba(169, 255, 94, 0.24);
+    box-shadow:
+        0 0 0 22px rgba(169, 255, 94, 0.04),
+        0 0 0 44px rgba(169, 255, 94, 0.025);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1220px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-head-mobile {
+    display: none;
+    margin: 0 0 1.24rem;
+}
+
+#<?= $componentId ?> .adv-kicker {
+    display: inline-flex;
+    margin-bottom: 0.72rem;
+    padding: 0.34rem 0.74rem;
+    border-radius: 999px;
+    background: rgba(255, 90, 182, 0.1);
+    color: #ffb9e1;
+    font-size: 0.72rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .adv-head-mobile-main {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .adv-head-mobile-main-only {
+    justify-content: flex-end;
+}
+
+#<?= $componentId ?> .adv-head-mobile h2 {
+    margin: 0;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 4.8vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.06;
+    max-width: 760px;
+}
+
+#<?= $componentId ?> .adv-lead-meta h2 {
+    margin: 0;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 3.4vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.08;
+    max-width: 560px;
+}
+
+#<?= $componentId ?> .adv-section-desc {
+    margin: 0.7rem 0 0;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.68;
+    opacity: 0.92;
+    max-width: 58ch;
+}
+
+#<?= $componentId ?> .adv-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    border-radius: <?= (int)$btnBorderRadius ?>px;
+    padding: <?= (int)$btnPaddingY ?>px <?= (int)$btnPaddingX ?>px;
+    color: <?= htmlspecialchars($btnTextColor) ?>;
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+    background: linear-gradient(116deg, <?= htmlspecialchars($btnGradientStart) ?>, <?= htmlspecialchars($btnGradientEnd) ?>);
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.28);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+#<?= $componentId ?> .adv-cta:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 20px 32px rgba(0, 0, 0, 0.32);
+}
+
+#<?= $componentId ?> .adv-board-desktop {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1.06fr) minmax(0, 0.94fr);
+    gap: var(--adv-gap);
+    align-items: stretch;
+    padding: 0.5rem 0;
+}
+
+#<?= $componentId ?> .adv-lead-col {
+    position: relative;
+    z-index: 1;
+    min-height: 100%;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 0.86rem;
+}
+
+#<?= $componentId ?> .adv-lead-feature,
+#<?= $componentId ?> .adv-side-card {
+    border-radius: 18px;
+    border: 1px solid rgba(255, 220, 243, 0.22);
+    background:
+        radial-gradient(220px 130px at 8% 0%, rgba(255, 126, 207, 0.12), transparent 74%),
+        linear-gradient(160deg, rgba(33, 18, 45, 0.92), rgba(23, 14, 36, 0.9));
+    box-shadow: 0 14px 28px rgba(12, 6, 22, 0.38);
+    backdrop-filter: blur(6px);
+}
+
+#<?= $componentId ?> .adv-lead-meta {
+    padding: 0.08rem 0.12rem 0;
+    max-width: 620px;
+}
+
+#<?= $componentId ?> .adv-lead-feature {
+    padding: 0.94rem 0.9rem;
+    min-height: 100%;
+    transform: translateY(10px) rotate(-2deg);
+    transform-origin: right top;
+}
+
+#<?= $componentId ?> .lead-icon-wrap,
+#<?= $componentId ?> .side-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.66rem;
+}
+
+#<?= $componentId ?> .lead-icon-wrap img,
+#<?= $componentId ?> .side-head img {
+    width: <?= (int)$iconSize ?>px;
+    height: <?= (int)$iconSize ?>px;
+    border-radius: <?= (int)$iconBorderRadius ?>%;
+    object-fit: cover;
+    background: rgba(31, 13, 38, 0.42);
+}
+
+#<?= $componentId ?> .lead-icon-wrap span,
+#<?= $componentId ?> .side-head span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    background: rgba(169, 255, 94, 0.1);
+    color: #d9ffba;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 900;
+}
+
+#<?= $componentId ?> .adv-lead-feature h3,
+#<?= $componentId ?> .adv-side-card h3,
+#<?= $componentId ?> .mobile-adv-card h3 {
+    margin: 0.78rem 0 0;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.22;
+}
+
+#<?= $componentId ?> .adv-lead-feature p,
+#<?= $componentId ?> .adv-side-card p,
+#<?= $componentId ?> .mobile-adv-card p {
+    margin: 0.6rem 0 0;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.7;
+    opacity: 0.94;
+}
+
+#<?= $componentId ?> .adv-side-stack {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    gap: calc(var(--adv-gap) * 0.78);
+    min-height: 100%;
+}
+
+#<?= $componentId ?> .adv-side-card {
+    padding: 0.92rem;
+    display: flex;
+    flex-direction: column;
+}
+
+#<?= $componentId ?> .adv-side-card-2 {
+    transform: rotate(2.2deg) translateX(-8px) translateY(-10px);
+    border-color: rgba(255, 198, 152, 0.22);
+}
+
+#<?= $componentId ?> .adv-side-card-3 {
+    transform: rotate(-1.8deg) translateX(10px) translateY(10px);
+    border-color: rgba(171, 255, 214, 0.3);
+    background:
+        radial-gradient(220px 130px at 92% 0%, rgba(169, 255, 94, 0.16), transparent 74%),
+        linear-gradient(200deg, rgba(24, 38, 39, 0.9), rgba(25, 16, 43, 0.9));
+    box-shadow: 0 14px 28px rgba(8, 20, 24, 0.34);
+}
+
+#<?= $componentId ?> .adv-mobile-lab {
+    display: none;
+}
+
+@media (max-width: 900px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .section-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .adv-head-mobile {
+        display: block;
+    }
+
+    #<?= $componentId ?> .adv-head-mobile-main {
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    #<?= $componentId ?> .adv-cta-desktop {
+        display: none;
+    }
+
+    #<?= $componentId ?> .adv-board-desktop {
+        display: none;
+    }
+
+    #<?= $componentId ?> .adv-mobile-lab {
+        display: block;
+        position: relative;
+    }
+
+    #<?= $componentId ?> .mobile-halo {
+        position: absolute;
+        left: 50%;
+        top: 36%;
+        width: min(94vw, 420px);
+        height: min(94vw, 420px);
+        transform: translate(-50%, -50%);
+        border-radius: 50%;
+        background: radial-gradient(circle at center, rgba(255, 120, 205, 0.18) 0%, rgba(169, 255, 94, 0.12) 40%, rgba(0, 0, 0, 0) 72%);
+        filter: blur(1px);
+        pointer-events: none;
+    }
+
+    #<?= $componentId ?> .mobile-reel {
+        position: relative;
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(84%, 1fr);
+        gap: 0.68rem;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding: 0.28rem 0.16rem 0.22rem;
+        scrollbar-width: none;
+        z-index: 1;
+    }
+
+    #<?= $componentId ?> .mobile-reel::-webkit-scrollbar {
+        display: none;
+    }
+
+    #<?= $componentId ?> .mobile-adv-card {
+        scroll-snap-align: center;
+        border-radius: 16px;
+        padding: 0.9rem 0.82rem;
+        background: linear-gradient(165deg, rgba(255, 232, 247, 0.16), rgba(22, 12, 35, 0.74));
+        box-shadow: 0 14px 24px rgba(0, 0, 0, 0.32);
+        transform: scale(0.93) rotate(-1.4deg);
+        opacity: 0.72;
+        transition: transform 0.26s ease, opacity 0.26s ease, box-shadow 0.26s ease;
+    }
+
+    #<?= $componentId ?> .mobile-adv-card:nth-child(even) {
+        transform: scale(0.93) rotate(1.4deg);
+    }
+
+    #<?= $componentId ?> .mobile-adv-card.is-focus {
+        transform: scale(1) rotate(0deg);
+        opacity: 1;
+        box-shadow: 0 20px 30px rgba(0, 0, 0, 0.4);
+    }
+
+    #<?= $componentId ?> .mobile-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.62rem;
+    }
+
+    #<?= $componentId ?> .mobile-card-head img {
+        width: <?= (int)$iconSize ?>px;
+        height: <?= (int)$iconSize ?>px;
+        border-radius: <?= (int)$iconBorderRadius ?>%;
+        object-fit: cover;
+        background: rgba(31, 13, 38, 0.56);
+    }
+
+    #<?= $componentId ?> .mobile-card-head span {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 2rem;
+        height: 2rem;
+        border-radius: 999px;
+        background: rgba(169, 255, 94, 0.2);
+        color: #e4ffc8;
+        font-size: 0.74rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        font-weight: 900;
+    }
+
+    #<?= $componentId ?> .mobile-dots {
+        margin-top: 0.64rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.42rem;
+    }
+
+    #<?= $componentId ?> .mobile-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        border: 0;
+        padding: 0;
+        background: rgba(255, 184, 227, 0.42);
+        cursor: pointer;
+        transition: width 0.22s ease, background-color 0.22s ease;
+    }
+
+    #<?= $componentId ?> .mobile-dot.is-active,
+    #<?= $componentId ?> .mobile-dot[aria-current='true'] {
+        width: 20px;
+        background: linear-gradient(90deg, rgba(255, 120, 205, 0.96), rgba(169, 255, 94, 0.96));
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> .adv-cta {
+        width: 100%;
+    }
+
+    #<?= $componentId ?> .mobile-reel {
+        grid-auto-columns: minmax(88%, 1fr);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .mobile-adv-card {
+        transition: none;
+    }
+}
+</style>
+
+<script>
+(function() {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var reel = root.querySelector('[data-adv-reel]');
+    var cards = Array.prototype.slice.call(root.querySelectorAll('[data-adv-card]'));
+    var dots = Array.prototype.slice.call(root.querySelectorAll('[data-adv-dot]'));
+
+    if (!reel || cards.length === 0 || dots.length === 0) {
+        return;
+    }
+
+    var setActive = function(index) {
+        cards.forEach(function(card, idx) {
+            card.classList.toggle('is-focus', idx === index);
+        });
+        dots.forEach(function(dot, idx) {
+            var isCurrent = idx === index;
+            dot.classList.toggle('is-active', isCurrent);
+            if (isCurrent) {
+                dot.setAttribute('aria-current', 'true');
+            } else {
+                dot.removeAttribute('aria-current');
+            }
+        });
+    };
+
+    dots.forEach(function(dot, idx) {
+        dot.addEventListener('click', function() {
+            if (cards[idx]) {
+                cards[idx].scrollIntoView({behavior: 'smooth', inline: 'center', block: 'nearest'});
+                setActive(idx);
+            }
+        });
+    });
+
+    if (!('IntersectionObserver' in window)) {
+        return;
+    }
+
+    var observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting && entry.intersectionRatio >= 0.62) {
+                var idx = parseInt(entry.target.getAttribute('data-adv-index') || '0', 10);
+                setActive(idx);
+            }
+        });
+    }, {
+        root: reel,
+        threshold: [0.62]
+    });
+
+    cards.forEach(function(card) {
+        observer.observe(card);
+    });
+})();
+</script>

@@ -1,0 +1,229 @@
+<?php
+/**
+ * Aviator Afterburn - Main Layout
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = 'aviator-afterburn';
+
+$layoutConfig = $this->getData('layout_config') ?: [];
+$headerComponents = $layoutConfig['header'] ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+$footerComponents = $layoutConfig['footer'] ?? [];
+
+if (empty($headerComponents)) {
+    $headerComponents = [['code' => 'header-nav', 'enabled' => true, 'config' => []]];
+}
+
+if (empty($contentComponents)) {
+    $contentComponents = [
+        ['code' => 'hero-slider', 'enabled' => true, 'config' => []],
+        ['code' => 'advantages', 'enabled' => true, 'config' => []],
+        ['code' => 'games-showcase', 'enabled' => true, 'config' => []],
+        ['code' => 'testimonials', 'enabled' => true, 'config' => []],
+        ['code' => 'faq', 'enabled' => true, 'config' => []],
+    ];
+}
+
+if (empty($footerComponents)) {
+    $footerComponents = [['code' => 'footer-links', 'enabled' => true, 'config' => []]];
+}
+
+$componentFiles = [
+    'header-nav' => 'header/nav.phtml',
+    'header-simple' => 'header/simple.phtml',
+    'header-dark' => 'header/dark.phtml',
+    'hero-slider' => 'content/hero-slider.phtml',
+    'advantages' => 'content/advantages.phtml',
+    'games-showcase' => 'content/games.phtml',
+    'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
+    'testimonials' => 'content/testimonials.phtml',
+    'faq' => 'content/faq.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-category' => 'content/blog-category.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
+    'footer-links' => 'footer/links.phtml',
+    'footer-simple' => 'footer/simple.phtml',
+];
+
+$renderComponent = function($component) use ($componentFiles, $page, $styleSettings) {
+    $code = $component['code'] ?? '';
+    $enabled = $component['enabled'] ?? true;
+    $componentConfig = $component['config'] ?? [];
+
+    if (!$enabled || $code === '') {
+        return '';
+    }
+
+    $file = $componentFiles[$code] ?? null;
+    if (!$file) {
+        return "<!-- Component not found: {$code} -->";
+    }
+
+    ob_start();
+    $this->assign('page', $page);
+    $this->assign('style', $styleSettings);
+    $this->assign('style_settings', $styleSettings);
+    $this->assign('component_config', $componentConfig);
+    $this->assign('__pagebuilder_shell_managed', true);
+    $this->assign('__aab_shell_managed', true);
+    echo $this->fetchTemplate("GuoLaiRen_PageBuilder::style/aviator-afterburn/components/{$file}");
+    return ob_get_clean();
+};
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$sanitizeTitle = function($value) {
+    $value = trim((string)$value);
+    if ($value === '') return $value;
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$pageTitleRaw = $page ? $page->getData('title') : 'Aviator Afterburn';
+$pageTitle = $sanitizeTitle($pageTitleRaw);
+if ($pageTitle === '') {
+    $pageTitle = 'Aviator Afterburn';
+}
+$pageDescription = $page ? $page->getData('meta_description') : '';
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <?php if ($pageDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($pageDescription) ?>">
+    <?php endif; ?>
+
+    <w:template>GuoLaiRen_PageBuilder::base/tracking.phtml</w:template>
+
+    <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'aab-flare': '<?= htmlspecialchars($colors['accent_primary'] ?? '#ff6b2c') ?>',
+                    'aab-sky': '<?= htmlspecialchars($colors['accent_secondary'] ?? '#29d0ff') ?>',
+                    'aab-ice': '<?= htmlspecialchars($colors['body_bg'] ?? '#edf4ff') ?>',
+                    'aab-soft': '<?= htmlspecialchars($colors['section_bg_2'] ?? '#f4f8ff') ?>',
+                    'aab-ink': '<?= htmlspecialchars($colors['text_primary'] ?? '#08111f') ?>',
+                    'aab-muted': '<?= htmlspecialchars($colors['text_muted'] ?? '#70839d') ?>'
+                }
+            }
+        }
+    }
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        :root {
+            --aab-body-bg: <?= htmlspecialchars($colors['body_bg'] ?? '#edf4ff') ?>;
+            --aab-body-alt: <?= htmlspecialchars($colors['section_bg_2'] ?? '#f4f8ff') ?>;
+            --aab-body-strong: <?= htmlspecialchars($colors['section_bg_3'] ?? '#fff4e6') ?>;
+            --aab-surface: <?= htmlspecialchars($colors['card_bg'] ?? 'rgba(255, 255, 255, 0.9)') ?>;
+            --aab-ink: <?= htmlspecialchars($colors['text_primary'] ?? '#08111f') ?>;
+            --aab-muted: <?= htmlspecialchars($colors['text_muted'] ?? '#70839d') ?>;
+            --aab-flare: <?= htmlspecialchars($colors['accent_primary'] ?? '#ff6b2c') ?>;
+            --aab-flare-strong: <?= htmlspecialchars($colors['accent_primary_dark'] ?? '#cf4a14') ?>;
+            --aab-sky: <?= htmlspecialchars($colors['accent_secondary'] ?? '#29d0ff') ?>;
+            --aab-shell-width: min(1240px, calc(100% - clamp(1rem, 4vw, 2rem)));
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        [hidden] { display: none !important; }
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(920px 440px at 8% 0%, rgba(41, 208, 255, 0.16), transparent 58%),
+                radial-gradient(760px 360px at 92% 6%, rgba(255, 107, 44, 0.18), transparent 54%),
+                linear-gradient(180deg, #f9fbff 0%, var(--aab-body-bg) 40%, var(--aab-body-alt) 100%);
+            color: var(--aab-ink);
+            overflow-x: hidden;
+            min-height: 100vh;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                linear-gradient(120deg, rgba(255,255,255,0.64) 0%, rgba(255,255,255,0) 34%),
+                repeating-linear-gradient(128deg, rgba(8,17,31,0.035) 0 1px, transparent 1px 24px);
+            opacity: 0.56;
+            z-index: -1;
+        }
+        h1, h2, h3, h4, h5 {
+            font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+            letter-spacing: -0.03em;
+        }
+        img { max-width: 100%; display: block; }
+        .aab-region-header,
+        .aab-region-content,
+        .aab-region-footer,
+        .aab-component-wrapper {
+            width: 100%;
+            min-width: 0;
+        }
+        @media (max-width: 768px) {
+            body {
+                background:
+                    radial-gradient(420px 220px at 8% 0%, rgba(41, 208, 255, 0.14), transparent 58%),
+                    radial-gradient(360px 220px at 92% 4%, rgba(255, 107, 44, 0.16), transparent 54%),
+                    linear-gradient(180deg, #f9fbff 0%, var(--aab-body-bg) 52%, var(--aab-body-alt) 100%);
+            }
+        }
+    </style>
+</head>
+<body class="min-h-screen overflow-x-hidden bg-aab-ice text-aab-ink antialiased">
+    <header class="aab-region-header relative w-full" data-region="header">
+        <?php foreach ($headerComponents as $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="aab-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </header>
+
+    <main class="aab-region-content relative flex min-w-0 flex-col" data-region="content">
+        <?php foreach ($contentComponents as $index => $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="aab-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>" data-index="<?= (int)$index ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </main>
+
+    <footer class="aab-region-footer relative w-full" data-region="footer">
+        <?php foreach ($footerComponents as $component): ?>
+            <?php if ($component['enabled'] ?? true): ?>
+                <div class="aab-component-wrapper" data-component="<?= htmlspecialchars($component['code']) ?>">
+                    <?= $renderComponent($component) ?>
+                </div>
+            <?php endif; ?>
+        <?php endforeach; ?>
+    </footer>
+</body>
+</html>

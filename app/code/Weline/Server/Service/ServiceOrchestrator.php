@@ -1315,7 +1315,10 @@ class ServiceOrchestrator
         $this->sweeperInterval = (float)$context->getConfig('wls.orchestrator.sweeper_interval_sec', 15.0);
         $this->periodicOrphanSweepEnabled = (bool)$context->getConfig('wls.orchestrator.periodic_orphan_sweep', false);
         $this->singleRestartFirst = (bool)$context->getConfig('wls.orchestrator.single_restart_first', true);
-        $configuredCooperativeSequentialStartup = (bool)($context->getConfig('wls.orchestrator.use_cooperative_sequential_startup', false) ?? false);
+        $configuredCooperativeSequentialStartup = (bool)($context->getConfig(
+            'wls.orchestrator.use_cooperative_sequential_startup',
+            false
+        ) ?? false);
         $allowWindowsCooperativeSequentialStartup = (bool)($context->getConfig(
             'wls.orchestrator.allow_windows_cooperative_sequential_startup',
             false
@@ -1468,28 +1471,9 @@ class ServiceOrchestrator
             return true;
         }
 
-        // 即使 sticky=true，只要所有业务 Worker 就绪也强制退出维护模式
-        // 避免启动时 sticky=true 导致维护模式无法退出的问题
         if ($this->maintenanceSticky) {
-            // 检查是否有足够的业务 Worker 就绪
-            $readyCount = 0;
-            foreach ($this->registry->getInstancesByRole('worker') as $worker) {
-                if ($worker->state === Contract\ServiceInstance::STATE_READY) {
-                    $readyCount++;
-                }
-            }
-            $desired = (int)($this->desiredState[ControlMessage::ROLE_WORKER] ?? 0);
-            if ($desired <= 0) {
-                $desired = 1;
-            }
-            
-            // 如果有业务 Worker 就绪，强制退出维护模式
-            if ($readyCount >= $desired) {
-                WlsLogger::info_('[Orchestrator] 业务 Worker 已就绪(' . $readyCount . '/' . $desired . ')，强制退出 sticky 维护模式');
-                $this->maintenanceSticky = false;
-            } else {
-                return false;
-            }
+            // 显式 sticky 维护模式只允许人工关闭，业务 Worker READY 仅用于待命，不自动切回业务池。
+            return false;
         }
 
         $workers = $this->registry->getInstancesByRole('worker');
@@ -2228,22 +2212,12 @@ class ServiceOrchestrator
      */
     private function shouldUseCooperativeSequentialProvidersStartupBatch(int $plannedCount, array $plannedRoles = []): bool
     {
-        if (!$this->useCooperativeSequentialStartup) {
-            return false;
-        }
+        unset($plannedCount, $plannedRoles);
 
-        if (!(\defined('IS_WIN') && IS_WIN)
-            || $plannedCount <= 1
-            || !$this->childServicesBootstrapInProgress
-            || $this->controlServer === null) {
-            return false;
-        }
-
-        if ($this->canConcurrentLaunchPhaseOneRoles($plannedRoles)) {
-            return false;
-        }
-
-        return true;
+        // Startup now always prefers the concurrent launch path. Keeping a
+        // Windows-only sequential fallback here was the source of the WLS
+        // regression the user reported.
+        return false;
     }
 
     /**
@@ -3030,20 +3004,12 @@ class ServiceOrchestrator
      */
     private function shouldUseCooperativeSequentialStartupBatch(array $instanceIds): bool
     {
-        $isWindows = \defined('IS_WIN') && IS_WIN;
-        if (!$isWindows) {
-            return false;
-        }
-        $forceSingleSpawnPath = (bool) ($this->context?->getConfig(
-            'wls.orchestrator.windows_use_single_spawn_path',
-            false
-        ) ?? false);
+        unset($instanceIds);
 
-        return ($this->useCooperativeSequentialStartup || $forceSingleSpawnPath)
-            && $isWindows
-            && \count($instanceIds) > 1
-            && $this->childServicesBootstrapInProgress
-            && $this->controlServer !== null;
+        // Startup now always prefers the concurrent launch path. The old
+        // cooperative sequential fallback made multi-worker bootstrap appear
+        // one-by-one on Windows.
+        return false;
     }
 
     private function shouldUseWindowsDetachedFastStartupBatch(int $plannedCount): bool
@@ -5079,8 +5045,9 @@ class ServiceOrchestrator
     private function releaseMasterLoopEphemeralState(): void
     {
         try {
-            $em = ObjectManager::getInstance(EventsManager::class);
-            if (\method_exists($em, 'resetRequestState')) {
+            $instances = ObjectManager::getInstances();
+            $em = $instances[EventsManager::class] ?? null;
+            if ($em && \method_exists($em, 'resetRequestState')) {
                 $em->resetRequestState();
             }
         } catch (\Throwable) {
@@ -7089,9 +7056,13 @@ class ServiceOrchestrator
 
         // 如果是 Worker 就绪，通知 Dispatcher 添加该端口
         if ($instance->role === 'worker' && $instance->port !== null) {
+            $maintenanceModeBeforeReady = $this->maintenanceMode;
             // 检查是否应该退出维护模式（业务 Worker 已就绪）
             $this->checkAndDisableMaintenanceIfReady();
-            $this->notifyDispatcherWorkerReady($instance);
+            // 维护模式仍在生效时，业务 Worker 只做待命，不应提前被 Dispatcher 纳入流量池。
+            if (!$maintenanceModeBeforeReady) {
+                $this->notifyDispatcherWorkerReady($instance);
+            }
         }
 
         // 维护 Worker 就绪：必须在维护模式下推送 SET_WORKER_POOL。否则 Dispatcher 若早于维护进程 READY，

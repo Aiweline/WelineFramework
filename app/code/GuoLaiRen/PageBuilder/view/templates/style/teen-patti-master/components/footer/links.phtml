@@ -1,0 +1,460 @@
+<?php
+/**
+ * Teen Patti Master - Footer Links
+ *
+ * @component_start
+ * code: footer-links
+ * name: 页脚链接
+ * name_en: Footer Links
+ * description: 多列链接布局，社交媒体图标
+ * category: footer
+ * region: footer
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_links => 显示链接:select:yes|yes,no
+ * display.show_disclaimer => 显示免责声明:select:yes|yes,no
+ * display.show_copyright => 显示版权信息:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.background_color => 背景基础色:color:#0a061a
+ * style.text_color => 文字颜色:color:#9ca3af
+ * style.link_color => 链接颜色:color:#d1d5db
+ * style.link_hover_color => 链接悬停颜色:color:#fbd26b
+ * style.link_font_size => 链接字号:number:15|px
+ * style.link_font_weight => 链接字重:number:700
+ * style.link_gap => 链接间距:number:18|px
+ * style.border_top => 显示顶部边框:select:yes|yes,no
+ * style.border_color => 边框颜色:color:#2c3250
+ * style.border_width => 边框宽度:number:1|px
+ * style.section_padding => 区域内边距(PC端):number:48|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:35|px
+ * style.separator_display => 显示分隔符:select:no|yes,no
+ * style.separator_char => 分隔符字符:text:/
+ * style.separator_color => 分隔符颜色:color:#5d6278
+ *
+ * group:layout => 布局设置
+ * layout.max_width => 最大宽度:number:1200
+ * layout.padding_horizontal => 左右内边距:responsive:20/28|px
+ * layout.padding_vertical => 上下内边距:responsive:35/48|px
+ *
+ * group:footer => 页脚品牌设置
+ * footer.logo_text => 品牌名称:text:Teen Patti Master
+ * footer.logo_url => 品牌图标:textarea:|留空使用默认图标
+ * footer.tagline => 品牌副文案:text:Play smart. Play bold.
+ *
+ * group:content => 内容配置
+ * content.footer_links => 页脚链接:textarea:Home=>/\r\nGames=>#games\r\nHow to Play=>#howto\r\nFAQ=>#faq\r\nSupport=>/contact|配置格式：名字=>url，一行一个
+ * content.copyright_text => 版权信息:text:© 2026 Teen Patti Master. All rights reserved.
+ * content.disclaimer_text => 免责声明:textarea:18+ Only. Play responsibly and review your local gaming regulations before participating.
+ * content.use_custom_links => 使用自定义链接组:select:yes|yes,no
+ * content.use_subpages => 兼容旧版-使用子页面生成链接:select:no|yes,no
+ * group:content_footer_labels => 页脚菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * content.footer_label_home_page => 首页:text:
+ * content.footer_label_about_page => 关于我们:text:
+ * content.footer_label_blog_list => 博客:text:
+ * content.footer_label_contact_page => 联系我们:text:
+ * content.footer_label_terms_of_service => 条款:text:
+ * content.footer_label_privacy_policy => 隐私政策:text:
+ *
+ * group:typography => 字体排版
+ * typography.font_size => 字号:responsive:12/14|px
+ * typography.line_height => 行高:number:1.65
+ *
+ * @fields_end
+ */
+
+$componentId = 'tpm-footer-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$config = array_merge($styleSettings, $componentConfig);
+$standaloneShell = !($this->getData('__pagebuilder_shell_managed'));
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$parseResponsive = static function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string) $value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string) ($parts[0] ?? '')),
+        'desktop' => trim((string) ($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = static function ($parsed) {
+    $mobile = (float) $parsed['mobile'];
+    $desktop = (float) $parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$showLinks = $normalizeToggle($getConfig('display.show_links', 'yes')) !== 'no';
+$showDisclaimer = $normalizeToggle($getConfig('display.show_disclaimer', 'yes')) !== 'no';
+$showCopyright = $normalizeToggle($getConfig('display.show_copyright', 'yes')) !== 'no';
+$borderTop = $normalizeToggle($getConfig('style.border_top', 'yes')) !== 'no';
+$separatorDisplay = $normalizeToggle($getConfig('style.separator_display', 'no'), 'no') === 'yes';
+
+$backgroundColor = (string) $getConfig('style.background_color', '#0a061a');
+$textColor = (string) $getConfig('style.text_color', '#9ca3af');
+$linkColor = (string) $getConfig('style.link_color', '#d1d5db');
+$linkHoverColor = (string) $getConfig('style.link_hover_color', '#fbd26b');
+$linkFontSize = (int) $getConfig('style.link_font_size', '15');
+$linkFontWeight = (int) $getConfig('style.link_font_weight', '700');
+$linkGap = (int) $getConfig('style.link_gap', '18');
+$borderColor = (string) $getConfig('style.border_color', '#2c3250');
+$borderWidth = (int) $getConfig('style.border_width', '1');
+$sectionPadding = (int) $getConfig('style.section_padding', '48');
+$sectionPaddingMobile = (int) $getConfig('style.section_padding_mobile', '35');
+$separatorChar = trim((string) $getConfig('style.separator_char', '/'));
+if ($separatorChar === '') {
+    $separatorChar = '/';
+}
+$separatorColor = (string) $getConfig('style.separator_color', '#5d6278');
+$maxWidth = (int) $getConfig('layout.max_width', '1200');
+$paddingHorizontal = $genResponsiveCSS($parseResponsive($getConfig('layout.padding_horizontal', '20/28') . 'px'));
+$paddingVertical = $genResponsiveCSS($parseResponsive($getConfig('layout.padding_vertical', $sectionPaddingMobile . '/' . $sectionPadding) . 'px'));
+$fontSize = $genResponsiveCSS($parseResponsive($getConfig('typography.font_size', '12/14') . 'px'));
+$lineHeight = (float) $getConfig('typography.line_height', '1.65');
+
+$logoText = (string) $getConfigAny(['footer.logo_text', 'logo.text'], 'Teen Patti Master');
+$logoIconUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-master/asset/img/tpm-logo-icon.svg');
+$logoUrl = trim((string) $getConfigAny(['footer.logo_url', 'logo.url'], ''));
+$logoUrl = $logoUrl !== '' ? $logoUrl : ($page && $page->getData('logo') ? (string) $page->getData('logo') : $logoIconUrl);
+$tagline = (string) $getConfigAny(['footer.tagline', 'footer.description'], 'Play smart. Play bold.');
+$copyright = (string) $getConfigAny(['content.copyright_text', 'footer.copyright'], '© 2026 Teen Patti Master. All rights reserved.');
+$disclaimerText = (string) $getConfigAny(['content.disclaimer_text', 'footer.disclaimer'], '18+ Only. Play responsibly and review your local gaming regulations before participating.');
+
+$links = [];
+$useCustomLinksRaw = (string) $getConfig('content.use_custom_links', '');
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($getConfig('content.use_subpages', 'no'), 'no') !== 'yes';
+
+if (!$useCustomLinks && $page) {
+    $footerPages = method_exists($page, 'getHeaderNavigationPages')
+        ? $page->getHeaderNavigationPages(30)
+        : (method_exists($page, 'getNavigationPages') ? $page->getNavigationPages([], 30) : []);
+
+    foreach ($footerPages as $footerPage) {
+        $text = trim((string) ($footerPage['title'] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        $type = (string) ($footerPage['type'] ?? '');
+        $configuredLabel = trim((string) $getConfigAny([
+            'content_footer_labels.content.footer_label_' . $type,
+            'content.footer_label_' . $type,
+        ], ''));
+        $links[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : $text,
+            'href' => (string) ($footerPage['url'] ?? '#'),
+        ];
+    }
+}
+
+if (empty($links)) {
+    $linksConfig = (string) $getConfigAny(
+        ['content.footer_links', 'footer.links'],
+        "Home=>/\nGames=>#games\nHow to Play=>#howto\nFAQ=>#faq\nSupport=>/contact"
+    );
+
+    if (strpos($linksConfig, '\\n') !== false && strpos($linksConfig, "\n") === false) {
+        $linksConfig = str_replace('\\n', "\n", $linksConfig);
+    }
+
+    $items = preg_split('/\r?\n/', $linksConfig);
+    if (!is_array($items) || count(array_filter(array_map('trim', $items))) === 0) {
+        $items = explode(',', $linksConfig);
+    }
+
+    foreach ($items as $item) {
+        $item = trim((string) $item);
+        if ($item === '') {
+            continue;
+        }
+        if (strpos($item, '=>') !== false) {
+            $parts = array_map('trim', explode('=>', $item, 2));
+        } elseif (strpos($item, '|') !== false) {
+            $parts = array_map('trim', explode('|', $item, 2));
+        } else {
+            $parts = [$item, '#'];
+        }
+        if (($parts[0] ?? '') === '') {
+            continue;
+        }
+        $links[] = [
+            'text' => $parts[0],
+            'href' => ($parts[1] ?? '') !== '' ? $parts[1] : '#',
+        ];
+    }
+}
+
+if (empty($links)) {
+    $links = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQs', 'href' => '/faqs'],
+    ];
+}
+?>
+<?php if ($standaloneShell): ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($logoText) ?></title>
+</head>
+<body>
+<?php endif; ?>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: 7rem 1rem 3rem;
+    background: linear-gradient(180deg, #0b0f2a 0%, <?= htmlspecialchars($backgroundColor) ?> 60%, #09040f 100%);
+    color: <?= htmlspecialchars($textColor) ?>;
+    overflow: hidden;
+    <?php if ($borderTop): ?>border-top: <?= $borderWidth ?>px solid <?= htmlspecialchars($borderColor) ?>;<?php endif; ?>
+    font-size: <?= $fontSize ?>;
+    line-height: <?= htmlspecialchars((string) $lineHeight) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: 0;
+    width: 100%;
+    height: 220px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='220' viewBox='0 0 1600 220'%3E%3Cpath d='M0 120 C 180 40 360 60 540 120 C 720 180 900 200 1100 120 C 1300 40 1480 10 1600 60 L1600 0 L0 0 Z' fill='%23324f8a' opacity='0.95'/%3E%3Cpath d='M0 170 C 240 120 420 150 620 180 C 820 210 1060 220 1300 170 C 1480 140 1560 120 1600 100 L1600 0 L0 0 Z' fill='%23512a88' opacity='0.8'/%3E%3Cpath d='M0 200 C 200 180 380 200 560 210 C 740 220 980 220 1200 200 C 1400 180 1520 160 1600 140 L1600 0 L0 0 Z' fill='%231f2f63' opacity='0.7'/%3E%3C/svg%3E") center top/cover no-repeat;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(400px 200px at 15% 20%, rgb(218 106 255 / 38%), transparent 70%),
+        radial-gradient(380px 220px at 85% 30%, rgb(198 188 202 / 25%), transparent 70%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .footer-container {
+    max-width: <?= $maxWidth ?>px;
+    margin: 0 auto;
+    padding: <?= $paddingVertical ?> <?= $paddingHorizontal ?>;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .footer-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 1.5rem;
+}
+
+#<?= $componentId ?> .footer-logo img {
+    width: 64px;
+    height: 64px;
+}
+
+#<?= $componentId ?> .footer-logo-text {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #fbd26b;
+    letter-spacing: 0.5px;
+}
+
+#<?= $componentId ?> .footer-tagline {
+    color: <?= htmlspecialchars($textColor) ?>;
+    font-size: 0.95rem;
+    margin-top: 0.35rem;
+}
+
+#<?= $componentId ?> .footer-nav {
+    margin: 2rem 0 1.5rem;
+}
+
+#<?= $componentId ?> .footer-nav ul {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 18px <?= $linkGap ?>px;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+}
+
+#<?= $componentId ?> .footer-nav li {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+#<?= $componentId ?> .footer-nav a {
+    color: <?= htmlspecialchars($linkColor) ?>;
+    text-decoration: none;
+    font-size: <?= $linkFontSize ?>px;
+    font-weight: <?= $linkFontWeight ?>;
+    transition: color 0.25s ease;
+}
+
+#<?= $componentId ?> .footer-nav a:hover {
+    color: <?= htmlspecialchars($linkHoverColor) ?>;
+}
+
+#<?= $componentId ?> .footer-separator {
+    color: <?= htmlspecialchars($separatorColor) ?>;
+    font-size: 0.85rem;
+}
+
+#<?= $componentId ?> .footer-social {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+    margin: 1.5rem 0 2rem;
+}
+
+#<?= $componentId ?> .social-link {
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(251, 191, 36, 0.15);
+    color: #fbd26b;
+    text-decoration: none;
+    font-size: 1.1rem;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+}
+
+#<?= $componentId ?> .social-link:hover {
+    transform: translateY(-3px);
+    background: linear-gradient(135deg, #fbd26b 0%, #f59e0b 100%);
+    color: #1a0f3d;
+    box-shadow: 0 10px 20px rgba(251, 191, 36, 0.35);
+}
+
+#<?= $componentId ?> .footer-copyright {
+    color: <?= htmlspecialchars($textColor) ?>;
+    font-size: 0.875rem;
+}
+
+#<?= $componentId ?> .disclaimer {
+    color: <?= htmlspecialchars($textColor) ?>;
+    font-size: 0.75rem;
+    margin-top: 1.5rem;
+    line-height: 1.6;
+    max-width: 760px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: 5.5rem 1rem 2.5rem;
+    }
+
+    #<?= $componentId ?> .footer-logo {
+        flex-direction: column;
+    }
+
+    #<?= $componentId ?> .footer-separator {
+        display: none;
+    }
+}
+</style>
+<footer id="<?= $componentId ?>">
+    <div class="footer-container">
+        <figure class="footer-logo">
+            <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+            <div>
+                <div class="footer-logo-text"><?= htmlspecialchars($logoText) ?></div>
+                <?php if ($tagline !== ''): ?>
+                    <div class="footer-tagline"><?= htmlspecialchars($tagline) ?></div>
+                <?php endif; ?>
+            </div>
+        </figure>
+
+        <?php if ($showLinks): ?>
+        <nav class="footer-nav" aria-label="Footer links">
+            <ul>
+                <?php foreach ($links as $index => $link): ?>
+                    <li>
+                        <a href="<?= htmlspecialchars($link['href']) ?>"><?= htmlspecialchars($link['text']) ?></a>
+                        <?php if ($separatorDisplay && $index < count($links) - 1): ?>
+                            <span class="footer-separator" aria-hidden="true"><?= htmlspecialchars($separatorChar) ?></span>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </nav>
+        <?php endif; ?>
+
+        <div class="footer-social" aria-hidden="true">
+            <a href="#facebook" class="social-link" aria-label="Facebook">📘</a>
+            <a href="#twitter" class="social-link" aria-label="Twitter">🐦</a>
+            <a href="#instagram" class="social-link" aria-label="Instagram">📷</a>
+            <a href="#youtube" class="social-link" aria-label="YouTube">📺</a>
+        </div>
+
+        <?php if ($showCopyright && $copyright !== ''): ?>
+        <p class="footer-copyright"><?= htmlspecialchars($copyright) ?></p>
+        <?php endif; ?>
+
+        <?php if ($showDisclaimer && $disclaimerText !== ''): ?>
+        <p class="disclaimer"><?= nl2br(htmlspecialchars($disclaimerText)) ?></p>
+        <?php endif; ?>
+    </div>
+</footer>
+<?php if ($standaloneShell): ?>
+</body>
+</html>
+<?php endif; ?>

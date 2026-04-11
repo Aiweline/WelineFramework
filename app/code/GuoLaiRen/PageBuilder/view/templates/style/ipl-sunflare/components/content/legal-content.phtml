@@ -1,0 +1,455 @@
+<?php
+/**
+ * IPL Sunflare - Legal Content Component
+ *
+ * @component_start
+ * code: legal-content
+ * name: 法律文档内容
+ * name_en: Legal Content
+ * description: 法律文档内容展示组件，支持目录、更新时间显示，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_toc => 显示目录:select:yes|yes,no
+ * display.show_last_updated => 显示更新时间:select:yes|yes,no
+ * display.show_icon => 显示图标:select:yes|yes,no
+ *
+ * group:layout => 布局设置
+ * layout.content_width => 内容宽度:select:narrow|narrow,medium,wide
+ * layout.header_padding => 头部内边距:number:80|px
+ * layout.content_padding => 内容内边距:number:56|px
+ *
+ * group:header => 头部设置
+ * header.title => 页面标题:text:
+ * header.icon => 自定义图标:text:
+ * header.updated_label => 更新时间前缀:text:Last Updated
+ * header.bg_color => 背景色:color:#120a14
+ * header.bg_gradient_end => 渐变结束色:color:#221426
+ * header.title_color => 标题颜色:color:#ffe6d1
+ * header.text_color => 文字颜色:color:#ffd0ae
+ *
+ * group:toc => 目录设置
+ * toc.title => 目录标题:text:On This Page
+ * toc.items => 章节配置:textarea:
+ * toc.bg_color => 目录背景色:color:rgba(45,28,40,0.92)
+ * toc.border_color => 目录边框色:color:rgba(122,161,192,0.22)
+ *
+ * group:content => 内容设置
+ * content.body => 引言内容:textarea:
+ * content.empty_text => 空内容提示:text:Content will be displayed here.
+ * content.bg_color => 内容区背景色:color:#2d1c28
+ * content.text_color => 内容文字颜色:color:#ffd6b8
+ * content.heading_color => 标题颜色:color:#ffe6d1
+ * content.link_color => 链接颜色:color:#ff4d8d
+ *
+ * @fields_end
+ */
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$config = array_merge($styleSettings, $componentConfig);
+$page = $this->getData('page');
+$componentId = 'ipl-legal-' . uniqid();
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showToc = $getConfig('display.show_toc', 'yes') !== 'no';
+$showLastUpdated = $getConfig('display.show_last_updated', 'yes') !== 'no';
+$showIcon = $getConfig('display.show_icon', 'yes') !== 'no';
+
+$contentWidth = (string)$getConfig('layout.content_width', 'narrow');
+$headerPadding = max(48, (int)$getConfig('layout.header_padding', 80));
+$contentPadding = max(28, (int)$getConfig('layout.content_padding', 56));
+
+$pageType = $page ? (string)($page->getData('type') ?? '') : '';
+$pageTitle = $page ? (string)($page->getData('title') ?? '') : '';
+$pageContentRaw = $page ? ($page->getData('content') ?? '') : '';
+$lastUpdated = $page ? ($page->getData('updated_at') ?? $page->getData('created_at') ?? '') : '';
+
+$headerTitle = trim((string)$getConfig('header.title', $pageTitle));
+if ($headerTitle === '') {
+    $headerTitle = 'Legal Document';
+}
+$updatedLabelPrefix = trim((string)$getConfig('header.updated_label', 'Last Updated'));
+
+$typeIcons = [
+    'privacy_policy' => '🔒',
+    'terms_of_service' => '📜',
+    'refund_policy' => '💰',
+    'shipping_policy' => '🚚',
+    'cookie_policy' => '🍪',
+];
+$headerIcon = trim((string)$getConfig('header.icon', $typeIcons[$pageType] ?? '📄'));
+$tocTitle = trim((string)$getConfig('toc.title', 'On This Page'));
+$tocItemsConfig = trim((string)$getConfig('toc.items', ''));
+
+$heroBg = (string)$getConfig('header.bg_color', '#120a14');
+$heroBgEnd = (string)$getConfig('header.bg_gradient_end', '#221426');
+$heroTitleColor = (string)$getConfig('header.title_color', '#ffe6d1');
+$heroTextColor = (string)$getConfig('header.text_color', '#ffd0ae');
+$tocBg = (string)$getConfig('toc.bg_color', 'rgba(45,28,40,0.92)');
+$tocBorder = (string)$getConfig('toc.border_color', 'rgba(122,161,192,0.22)');
+$contentBg = (string)$getConfig('content.bg_color', '#2d1c28');
+$contentText = (string)$getConfig('content.text_color', '#ffd6b8');
+$contentHeading = (string)$getConfig('content.heading_color', '#ffe6d1');
+$contentLink = (string)$getConfig('content.link_color', '#ff4d8d');
+$introContent = trim((string)$getConfig('content.body', ''));
+$contentEmptyText = trim((string)$getConfig('content.empty_text', 'Content will be displayed here.'));
+
+$maxWidth = match ($contentWidth) {
+    'wide' => '1180px',
+    'medium' => '980px',
+    default => '820px',
+};
+
+$tocItems = [];
+$pageContent = $pageContentRaw;
+if ($showToc && $pageContentRaw) {
+    $headingIndex = 0;
+    $pageContent = preg_replace_callback('/<h([23])([^>]*)>(.*?)<\/h\1>/is', static function($matches) use (&$tocItems, &$headingIndex) {
+        $level = (int)$matches[1];
+        $text = trim(strip_tags($matches[3]));
+        if ($text === '') {
+            return $matches[0];
+        }
+
+        $slug = strtolower(preg_replace('/[^a-z0-9]+/i', '-', $text));
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'section';
+        }
+        $id = $slug . '-' . (++$headingIndex);
+
+        $tocItems[] = [
+            'id' => $id,
+            'text' => $text,
+            'level' => $level,
+        ];
+
+        return '<h' . $matches[1] . $matches[2] . ' id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">' . $matches[3] . '</h' . $matches[1] . '>';
+    }, $pageContentRaw);
+}
+$pageContent = trim((string)$pageContent);
+if ($pageContent === '' && $tocItemsConfig !== '') {
+    $rebuiltSections = [];
+    foreach (preg_split('/[\r\n]+/', $tocItemsConfig) as $line) {
+        $line = trim((string)$line);
+        if ($line === '') {
+            continue;
+        }
+        $parts = explode('|', $line, 2);
+        $heading = trim((string)($parts[0] ?? ''));
+        $body = trim((string)($parts[1] ?? ''));
+        if ($heading === '') {
+            continue;
+        }
+        $slug = strtolower((string)preg_replace('/[^a-z0-9]+/i', '-', $heading));
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'section';
+        }
+        $id = $slug . '-' . (count($tocItems) + 1);
+        $tocItems[] = [
+            'id' => $id,
+            'text' => $heading,
+            'level' => 2,
+        ];
+        $rebuiltSections[] = '<h2 id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">' . htmlspecialchars($heading) . '</h2>';
+        if ($body !== '') {
+            $rebuiltSections[] = '<p>' . nl2br(htmlspecialchars($body)) . '</p>';
+        }
+    }
+    $pageContent = implode('', $rebuiltSections);
+}
+
+$hasToc = $showToc && !empty($tocItems);
+?>
+
+<section
+    id="<?= $componentId ?>"
+    class="dts-legal"
+    style="--ipl-legal-hero-bg: <?= htmlspecialchars($heroBg, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-hero-end: <?= htmlspecialchars($heroBgEnd, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-hero-title: <?= htmlspecialchars($heroTitleColor, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-hero-text: <?= htmlspecialchars($heroTextColor, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-toc-bg: <?= htmlspecialchars($tocBg, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-toc-border: <?= htmlspecialchars($tocBorder, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-content-bg: <?= htmlspecialchars($contentBg, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-content-text: <?= htmlspecialchars($contentText, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-heading: <?= htmlspecialchars($contentHeading, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-link: <?= htmlspecialchars($contentLink, ENT_QUOTES, 'UTF-8') ?>; --ipl-legal-header-padding: <?= (int)$headerPadding ?>px; --ipl-legal-content-padding: <?= (int)$contentPadding ?>px; --ipl-legal-max-width: <?= htmlspecialchars($maxWidth, ENT_QUOTES, 'UTF-8') ?>;"
+>
+    <div class="legal-shell">
+        <header class="legal-hero">
+            <?php if ($showIcon && $headerIcon !== ''): ?>
+                <span class="hero-kicker"><?= htmlspecialchars($headerIcon) ?></span>
+            <?php endif; ?>
+            <h1><?= htmlspecialchars($headerTitle) ?></h1>
+            <?php if ($showLastUpdated && $lastUpdated): ?>
+                <p class="last-updated"><?= htmlspecialchars($updatedLabelPrefix) ?>: <?= date('F j, Y', strtotime($lastUpdated)) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <div class="legal-layout<?= $hasToc ? ' has-toc' : '' ?>">
+            <?php if ($hasToc): ?>
+                <aside class="legal-toc" aria-label="Table of contents">
+                    <div class="toc-card">
+                        <span class="toc-title"><?= htmlspecialchars($tocTitle) ?></span>
+                        <nav class="toc-links">
+                            <?php foreach ($tocItems as $item): ?>
+                                <a href="#<?= htmlspecialchars($item['id']) ?>" class="toc-link level-<?= (int)$item['level'] ?>">
+                                    <?= htmlspecialchars($item['text']) ?>
+                                </a>
+                            <?php endforeach; ?>
+                        </nav>
+                    </div>
+                </aside>
+            <?php endif; ?>
+
+            <article class="legal-article<?= !$hasToc ? ' no-toc' : '' ?>">
+                <div class="legal-content">
+                    <?php if ($introContent !== ''): ?>
+                        <div class="legal-intro">
+                            <p><?= nl2br(htmlspecialchars($introContent)) ?></p>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($pageContent): ?>
+                        <?= $pageContent ?>
+                    <?php else: ?>
+                        <p><?= htmlspecialchars($contentEmptyText) ?></p>
+                    <?php endif; ?>
+                </div>
+            </article>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: 84px 0;
+    min-height: 100vh;
+    background:
+        radial-gradient(720px 360px at 10% 8%, rgba(242, 107, 79, 0.08), transparent 72%),
+        radial-gradient(680px 360px at 88% 16%, rgba(242, 169, 59, 0.1), transparent 70%),
+        linear-gradient(180deg, var(--ipl-legal-hero-bg) 0%, var(--ipl-legal-hero-end) 48%, var(--ipl-legal-hero-bg) 100%);
+}
+
+#<?= $componentId ?> .legal-shell {
+    width: min(1220px, calc(100% - 2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .legal-hero {
+    padding: var(--ipl-legal-header-padding) 0 1rem;
+    max-width: 760px;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .hero-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.38rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ipl-legal-heading);
+    border: 1px solid rgba(242, 169, 59, 0.26);
+    background: rgba(242, 169, 59, 0.12);
+}
+
+#<?= $componentId ?> .legal-hero h1 {
+    margin-top: 1rem;
+    color: var(--ipl-legal-hero-title);
+    font-size: clamp(2.2rem, 4.2vw, 3.8rem);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .last-updated {
+    margin-top: 0.85rem;
+    color: var(--ipl-legal-hero-text);
+    font-size: 0.96rem;
+}
+
+#<?= $componentId ?> .legal-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+
+#<?= $componentId ?> .legal-layout.has-toc {
+    grid-template-columns: minmax(240px, 0.32fr) minmax(0, 0.68fr);
+}
+
+#<?= $componentId ?> .toc-card,
+#<?= $componentId ?> .legal-article {
+    border-radius: 24px;
+    border: 1px solid var(--ipl-legal-toc-border);
+    box-shadow: 0 22px 52px rgba(194, 130, 94, 0.14);
+}
+
+#<?= $componentId ?> .legal-toc {
+    position: sticky;
+    top: 110px;
+}
+
+#<?= $componentId ?> .toc-card {
+    padding: 1.15rem;
+    background: linear-gradient(160deg, var(--ipl-legal-toc-bg) 0%, rgba(58, 36, 50, 0.88) 100%);
+}
+
+#<?= $componentId ?> .toc-title {
+    display: block;
+    color: #8f725f;
+    font-size: 0.84rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .toc-links {
+    margin-top: 0.9rem;
+    display: grid;
+    gap: 0.4rem;
+}
+
+#<?= $componentId ?> .toc-link {
+    color: rgba(111, 75, 55, 0.78);
+    text-decoration: none;
+    line-height: 1.55;
+    padding: 0.45rem 0.55rem;
+    border-radius: 12px;
+    transition: background 0.25s ease, color 0.25s ease, transform 0.25s ease;
+}
+
+#<?= $componentId ?> .toc-link.level-3 {
+    margin-left: 0.85rem;
+    font-size: 0.92rem;
+}
+
+#<?= $componentId ?> .toc-link:hover {
+    color: var(--ipl-legal-heading);
+    background: rgba(242, 107, 79, 0.08);
+    transform: translateX(3px);
+}
+
+#<?= $componentId ?> .legal-article {
+    padding: var(--ipl-legal-content-padding);
+    background: linear-gradient(160deg, var(--ipl-legal-content-bg) 0%, rgba(58, 36, 50, 0.88) 100%);
+}
+
+#<?= $componentId ?> .legal-article.no-toc {
+    max-width: var(--ipl-legal-max-width);
+    margin: 0 auto;
+    width: 100%;
+}
+
+#<?= $componentId ?> .legal-intro {
+    margin-bottom: 1.1rem;
+    padding: 1rem 1.1rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255, 196, 136, 0.2);
+    background: rgba(255, 145, 56, 0.08);
+}
+
+#<?= $componentId ?> .legal-content {
+    color: var(--ipl-legal-content-text);
+    line-height: 1.85;
+    font-size: 1rem;
+}
+
+#<?= $componentId ?> .legal-content h2,
+#<?= $componentId ?> .legal-content h3 {
+    scroll-margin-top: 120px;
+}
+
+#<?= $componentId ?> .legal-content h2 {
+    margin: 2rem 0 0.9rem;
+    color: var(--ipl-legal-heading);
+    font-size: 1.55rem;
+    line-height: 1.2;
+}
+
+#<?= $componentId ?> .legal-content h3 {
+    margin: 1.6rem 0 0.7rem;
+    color: var(--ipl-legal-heading);
+    font-size: 1.2rem;
+}
+
+#<?= $componentId ?> .legal-content p {
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .legal-content ul,
+#<?= $componentId ?> .legal-content ol {
+    margin: 0 0 1rem 1.35rem;
+}
+
+#<?= $componentId ?> .legal-content li {
+    margin-bottom: 0.55rem;
+}
+
+#<?= $componentId ?> .legal-content a {
+    color: var(--ipl-legal-link);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+}
+
+#<?= $componentId ?> .legal-content a:hover {
+    color: #1eb980;
+}
+
+#<?= $componentId ?> .legal-content blockquote {
+    margin: 1.2rem 0;
+    padding: 1rem 1.1rem;
+    border-left: 4px solid rgba(242, 169, 59, 0.65);
+    background: rgba(242, 169, 59, 0.08);
+    border-radius: 0 14px 14px 0;
+}
+
+#<?= $componentId ?> .legal-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.2rem 0;
+}
+
+#<?= $componentId ?> .legal-content th,
+#<?= $componentId ?> .legal-content td {
+    padding: 0.8rem 0.9rem;
+    border: 1px solid rgba(122, 161, 192, 0.18);
+    text-align: left;
+}
+
+#<?= $componentId ?> .legal-content th {
+    color: #ffe6d1;
+    background: rgba(242, 169, 59, 0.16);
+}
+
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .legal-layout.has-toc {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .legal-toc {
+        position: static;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: 68px 0;
+    }
+
+    #<?= $componentId ?> .legal-shell {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .toc-card,
+    #<?= $componentId ?> .legal-article {
+        border-radius: 20px;
+    }
+}
+</style>

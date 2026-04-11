@@ -1,0 +1,618 @@
+<?php
+/**
+ * @component_start
+ * code: testimonials
+ * name: 用户评价
+ * name_en: Testimonials
+ * description: 用户评价展示
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_rating => 显示评分:select:yes|yes,no
+ * display.show_avatar => 显示头像:select:yes|yes,no
+ * display.show_avg => 显示平均评分:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#eef8ff
+ * style.accent_color => 强调色:color:#8dc9ff
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.9)
+ * style.card_border_color => 卡片边框色:color:rgba(95,170,175,0.16)
+ * style.text_color => 正文颜色:color:#21444b
+ * style.section_padding => 区域内边距(PC端):number:80|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ *
+ * group:texts => 文本内容
+ * texts.kicker => 辅助标签:text:Player reactions
+ * texts.title => 区域标题:text:What Players Notice First
+ * texts.summary => 区域说明:textarea:Swipe through player notes to see what stands out first in this Andar Bahar landing page: clearer entry paths, lighter mobile rhythm, and table actions that stay easy to read.
+ * texts.avg_label => 平均评分标签:text:Average Rating
+ * texts.review_label_singular => 评论数量标签单数:text:visible review
+ * texts.review_label_plural => 评论数量标签复数:text:visible reviews
+ * texts.testimonial_1_name => 评价1姓名:text:Aarav Sinha
+ * texts.testimonial_1_tag => 评价1标签:text:Fast Lobby Entry
+ * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1内容:textarea:I can scan the Andar Bahar lobby quickly and move into a table without second-guessing the buttons.
+ * texts.testimonial_2_name => 评价2姓名:text:Meera Joshi
+ * texts.testimonial_2_tag => 评价2标签:text:Mobile Round Player
+ * texts.testimonial_2_rating => 评价2评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2内容:textarea:On mobile the card flow stays clear, so bets and round actions never feel cramped or hidden.
+ * texts.testimonial_3_name => 评价3姓名:text:Rohan Verma
+ * texts.testimonial_3_tag => 评价3标签:text:Daily Table Check-in
+ * texts.testimonial_3_rating => 评价3评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_3_content => 评价3内容:textarea:The bright look is fresh, but it still feels like a real Andar Bahar site instead of a generic promo skin.
+ * texts.testimonial_4_name => 评价4姓名:text:Ananya Pillai
+ * texts.testimonial_4_tag => 评价4标签:text:Quick Stakes View
+ * texts.testimonial_4_rating => 评价4评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_4_content => 评价4内容:textarea:Table options, entry paths, and call-to-action buttons are easier to spot here than on most game landing pages.
+ * texts.testimonial_5_name => 评价5姓名:text:Kabir Rao
+ * texts.testimonial_5_tag => 评价5标签:text:Late Session Table
+ * texts.testimonial_5_rating => 评价5评分:text:⭐⭐⭐⭐☆
+ * texts.testimonial_5_content => 评价5内容:textarea:The review section feels active, and the whole homepage keeps a clean rhythm without losing its gaming energy.
+ *
+ * group:avatars => 头像配置
+ * avatars.avatar_1 => 评价1头像:textarea:
+ * avatars.avatar_2 => 评价2头像:textarea:
+ * avatars.avatar_3 => 评价3头像:textarea:
+ * avatars.avatar_4 => 评价4头像:textarea:
+ * avatars.avatar_5 => 评价5头像:textarea:
+ *
+ * @fields_end
+ */
+
+$componentId = 'abb-testimonials-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('testimonials.display', 'yes')) !== 'no';
+if (!$display) return;
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showRating = $getConfig('display.show_rating', 'yes') !== 'no';
+$showAvatar = $getConfig('display.show_avatar', 'yes') !== 'no';
+$showAvg = $getConfig('display.show_avg', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', '#eef8ff');
+$accentColor = $getConfig('style.accent_color', '#8dc9ff');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.9)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(95,170,175,0.16)');
+$textColor = $getConfig('style.text_color', '#21444b');
+$sectionPadding = $getConfig('style.section_padding', '80');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '48');
+
+$kicker = $getConfig('texts.kicker', 'Player reactions');
+$title = $getConfig('texts.title', 'What Players Notice First');
+$summary = $getConfig('texts.summary', 'Swipe through player notes to see what stands out first in this Andar Bahar landing page: clearer entry paths, lighter mobile rhythm, and table actions that stay easy to read.');
+$avgLabel = $getConfig('texts.avg_label', 'Average Rating');
+$reviewLabelSingular = $getConfig('texts.review_label_singular', 'visible review');
+$reviewLabelPlural = $getConfig('texts.review_label_plural', 'visible reviews');
+
+$parseRating = function($raw) {
+    $raw = trim((string)$raw);
+    if ($raw === '') return 0;
+    if (is_numeric($raw)) return (int)$raw;
+    preg_match_all('/[★⭐]/u', $raw, $matches);
+    return count($matches[0] ?? []);
+};
+
+$defaultTestimonials = [
+    [
+        'name' => 'Aarav Sinha',
+        'tag' => 'Fast Lobby Entry',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'I can scan the Andar Bahar lobby quickly and move into a table without second-guessing the buttons.',
+    ],
+    [
+        'name' => 'Meera Joshi',
+        'tag' => 'Mobile Round Player',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'On mobile the card flow stays clear, so bets and round actions never feel cramped or hidden.',
+    ],
+    [
+        'name' => 'Rohan Verma',
+        'tag' => 'Daily Table Check-in',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'The bright look is fresh, but it still feels like a real Andar Bahar site instead of a generic promo skin.',
+    ],
+    [
+        'name' => 'Ananya Pillai',
+        'tag' => 'Quick Stakes View',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'Table options, entry paths, and call-to-action buttons are easier to spot here than on most game landing pages.',
+    ],
+    [
+        'name' => 'Kabir Rao',
+        'tag' => 'Late Session Table',
+        'rating' => '⭐⭐⭐⭐☆',
+        'text' => 'The review section feels active, and the whole homepage keeps a clean rhythm without losing its gaming energy.',
+    ],
+];
+
+$testimonials = [];
+for ($i = 1; $i <= 5; $i++) {
+    $defaults = $defaultTestimonials[$i - 1] ?? ['name' => '', 'tag' => '', 'rating' => '⭐⭐⭐⭐⭐', 'text' => ''];
+    $name = trim((string)$getConfig("texts.testimonial_{$i}_name", $defaults['name']));
+    $tag = trim((string)$getConfig("texts.testimonial_{$i}_tag", $defaults['tag']));
+    $ratingText = $getConfig("texts.testimonial_{$i}_rating", $defaults['rating']);
+    $content = trim((string)$getConfig("texts.testimonial_{$i}_content", $defaults['text']));
+    $avatar = trim((string)$getConfig("avatars.avatar_{$i}", ''));
+
+    if ($name !== '' && $content !== '') {
+        $ratingValue = max(0, min(5, $parseRating($ratingText)));
+        $ratingDisplay = is_numeric($ratingText) ? str_repeat('★', (int)$ratingText) : (string)$ratingText;
+        $testimonials[] = [
+            'name' => $name,
+            'tag' => $tag,
+            'rating' => $ratingValue,
+            'rating_text' => trim($ratingDisplay) !== '' ? $ratingDisplay : str_repeat('★', max(1, $ratingValue)),
+            'text' => $content,
+            'avatar' => $avatar,
+        ];
+    }
+}
+
+if (empty($testimonials)) {
+    foreach ($defaultTestimonials as $fallback) {
+        $testimonials[] = [
+            'name' => $fallback['name'],
+            'tag' => $fallback['tag'],
+            'rating' => $parseRating($fallback['rating']),
+            'rating_text' => $fallback['rating'],
+            'text' => $fallback['text'],
+            'avatar' => '',
+        ];
+    }
+}
+
+$totalRating = array_sum(array_column($testimonials, 'rating'));
+$avgRating = count($testimonials) ? $totalRating / count($testimonials) : 0;
+$avgRatingLabel = number_format($avgRating, 1);
+$avgRatingStars = str_repeat('★', max(1, (int)round($avgRating)));
+
+$buildInitials = function($name) {
+    $parts = preg_split('/\s+/', trim((string)$name));
+    $first = $parts[0] ?? '';
+    $second = $parts[1] ?? $first;
+    return strtoupper(substr($first, 0, 1) . substr($second, 0, 1));
+};
+?>
+
+<section id="<?= $componentId ?>" class="abb-testimonials" aria-labelledby="<?= $componentId ?>-title">
+    <div class="voices-shell">
+        <?php if ($showTitle): ?>
+            <header class="voices-header" id="reviews">
+                <?php if ($kicker !== ''): ?>
+                    <span class="voices-kicker"><?= htmlspecialchars($kicker) ?></span>
+                <?php endif; ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                <?php if ($summary !== ''): ?>
+                    <p><?= htmlspecialchars($summary) ?></p>
+                <?php endif; ?>
+            </header>
+        <?php endif; ?>
+
+        <div class="voices-toolbar">
+            <?php if ($showAvg): ?>
+                <div class="voices-summary">
+                    <span><?= htmlspecialchars($avgLabel) ?></span>
+                    <div class="voices-summary-score">
+                        <strong><?= htmlspecialchars($avgRatingLabel) ?></strong>
+                        <?php if ($showRating): ?>
+                            <small><?= htmlspecialchars($avgRatingStars) ?></small>
+                        <?php endif; ?>
+                    </div>
+                    <p><?= count($testimonials) ?> <?= htmlspecialchars(count($testimonials) === 1 ? $reviewLabelSingular : $reviewLabelPlural) ?></p>
+                </div>
+            <?php endif; ?>
+
+            <div class="voices-controls">
+                <button type="button" class="voices-control" data-carousel-prev aria-label="Previous review">
+                    <span aria-hidden="true">&larr;</span>
+                </button>
+                <button type="button" class="voices-control" data-carousel-next aria-label="Next review">
+                    <span aria-hidden="true">&rarr;</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="voices-carousel">
+            <div class="voices-scroller" data-carousel-scroller>
+                <div class="voices-track">
+                    <?php foreach ($testimonials as $index => $review): ?>
+                        <article class="voice-slide" data-carousel-slide>
+                            <div class="voice-slide-top">
+                                <span class="voice-slide-order"><?= sprintf('%02d', (int)$index + 1) ?></span>
+                                <?php if ($showRating): ?>
+                                    <span class="voice-slide-stars"><?= htmlspecialchars($review['rating_text']) ?></span>
+                                <?php endif; ?>
+                            </div>
+
+                            <blockquote>“<?= htmlspecialchars($review['text']) ?>”</blockquote>
+
+                            <footer class="voice-slide-footer">
+                                <?php if ($showAvatar): ?>
+                                    <div class="voice-avatar">
+                                        <?php if (!empty($review['avatar'])): ?>
+                                            <img src="<?= htmlspecialchars($review['avatar']) ?>" alt="<?= htmlspecialchars($review['name']) ?>">
+                                        <?php else: ?>
+                                            <?= htmlspecialchars($buildInitials($review['name'])) ?>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="voice-meta">
+                                    <strong><?= htmlspecialchars($review['name']) ?></strong>
+                                    <?php if ($review['tag'] !== ''): ?>
+                                        <span><?= htmlspecialchars($review['tag']) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </footer>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --voices-accent: <?= htmlspecialchars($accentColor) ?>;
+    --voices-card-bg: <?= htmlspecialchars($cardBgColor) ?>;
+    --voices-card-border: <?= htmlspecialchars($cardBorderColor) ?>;
+    --voices-gap: 1rem;
+    position: relative;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    background:
+        radial-gradient(720px 320px at 12% 10%, rgba(141,201,255,0.22), transparent 72%),
+        radial-gradient(620px 300px at 88% 18%, rgba(89,199,191,0.14), transparent 72%),
+        linear-gradient(180deg, <?= htmlspecialchars($bgColor) ?> 0%, #f7fbff 100%);
+    color: <?= htmlspecialchars($textColor) ?>;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .voices-shell {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .voices-header {
+    max-width: 820px;
+    margin: 0 auto 1.6rem;
+    text-align: center;
+}
+
+#<?= $componentId ?> .voices-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.82rem;
+    border-radius: 999px;
+    background: rgba(141,201,255,0.16);
+    border: 1px solid rgba(95,170,175,0.14);
+    color: #4577ad;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .voices-header h2 {
+    margin-top: 1rem;
+    color: #21444b;
+    font-size: clamp(2rem, 4.8vw, 3.25rem);
+    line-height: 1.04;
+}
+
+#<?= $componentId ?> .voices-header p {
+    margin-top: 0.9rem;
+    color: #587c83;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .voices-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .voices-summary {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 0.82rem 1rem;
+    border-radius: 26px;
+    border: 1px solid var(--voices-card-border);
+    background: rgba(255,255,255,0.86);
+    box-shadow: 0 16px 36px rgba(110, 160, 176, 0.14);
+}
+
+#<?= $componentId ?> .voices-summary span,
+#<?= $componentId ?> .voice-slide-order,
+#<?= $componentId ?> .voice-meta span {
+    display: block;
+}
+
+#<?= $componentId ?> .voices-summary span,
+#<?= $componentId ?> .voice-slide-order {
+    color: #68868c;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .voices-summary-score {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .voices-summary strong {
+    color: #2f9fa4;
+    font-size: 1.9rem;
+    line-height: 1;
+}
+
+#<?= $componentId ?> .voices-summary small,
+#<?= $componentId ?> .voice-slide-stars {
+    color: #4b89cb;
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .voices-summary p {
+    margin: 0;
+    color: #69858c;
+    font-size: 0.84rem;
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .voices-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.65rem;
+}
+
+#<?= $componentId ?> .voices-control {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 999px;
+    border: 1px solid rgba(95,170,175,0.18);
+    background: rgba(255,255,255,0.9);
+    color: #4577ad;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 14px 30px rgba(110, 160, 176, 0.12);
+    cursor: pointer;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, opacity 0.22s ease;
+}
+
+#<?= $componentId ?> .voices-control:hover:not(:disabled),
+#<?= $componentId ?> .voices-control:focus-visible:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: rgba(95,170,175,0.28);
+    box-shadow: 0 18px 36px rgba(110, 160, 176, 0.16);
+    outline: none;
+}
+
+#<?= $componentId ?> .voices-control:disabled {
+    opacity: 0.42;
+    cursor: default;
+}
+
+#<?= $componentId ?> .voices-carousel {
+    position: relative;
+}
+
+#<?= $componentId ?> .voices-scroller {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0.35rem;
+}
+
+#<?= $componentId ?> .voices-scroller::-webkit-scrollbar {
+    display: none;
+}
+
+#<?= $componentId ?> .voices-track {
+    display: flex;
+    gap: var(--voices-gap);
+}
+
+#<?= $componentId ?> .voice-slide {
+    position: relative;
+    flex: 0 0 calc((100% - (var(--voices-gap) * 2)) / 3);
+    min-width: 0;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding: 1.35rem;
+    border-radius: 30px;
+    border: 1px solid var(--voices-card-border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.98) 0%, var(--voices-card-bg) 100%);
+    box-shadow: 0 20px 44px rgba(111, 159, 174, 0.14);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .voice-slide::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+    height: 6px;
+    background: linear-gradient(90deg, rgba(141,201,255,0.14) 0%, rgba(141,201,255,0.88) 34%, rgba(89,199,191,0.54) 72%, rgba(89,199,191,0.08) 100%);
+}
+
+#<?= $componentId ?> .voice-slide-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.8rem;
+}
+
+#<?= $componentId ?> .voice-slide-order {
+    color: #3f83c0;
+}
+
+#<?= $componentId ?> .voice-slide blockquote {
+    margin-top: 1rem;
+    color: #21444b;
+    font-size: 1rem;
+    line-height: 1.82;
+    flex: 1 1 auto;
+}
+
+#<?= $componentId ?> .voice-slide-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.82rem;
+    margin-top: 1.2rem;
+}
+
+#<?= $componentId ?> .voice-avatar {
+    width: 3rem;
+    height: 3rem;
+    border-radius: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, rgba(89,199,191,0.18), rgba(141,201,255,0.2));
+    color: #2f9fa4;
+    font-size: 0.88rem;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .voice-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#<?= $componentId ?> .voice-meta {
+    min-width: 0;
+}
+
+#<?= $componentId ?> .voice-meta strong {
+    display: block;
+    color: #21444b;
+    line-height: 1.36;
+}
+
+#<?= $componentId ?> .voice-meta span {
+    margin-top: 0.16rem;
+    color: #6c8a90;
+    font-size: 0.84rem;
+}
+
+@media (max-width: 760px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+
+    #<?= $componentId ?> .voices-toolbar {
+        align-items: stretch;
+    }
+
+    #<?= $componentId ?> .voices-summary {
+        flex: 1 1 auto;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 0.55rem 0.9rem;
+    }
+
+    #<?= $componentId ?> .voices-summary-score {
+        order: 2;
+        flex: 0 0 auto;
+    }
+
+    #<?= $componentId ?> .voices-summary p {
+        order: 3;
+        flex: 1 0 100%;
+        white-space: normal;
+    }
+
+    #<?= $componentId ?> .voice-slide {
+        flex-basis: 100%;
+        border-radius: 24px;
+        padding: 1.2rem;
+    }
+
+    #<?= $componentId ?> .voice-slide blockquote {
+        font-size: 1.02rem;
+        line-height: 1.78;
+    }
+}
+</style>
+
+<script>
+(function() {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var scroller = root.querySelector('[data-carousel-scroller]');
+    var slides = Array.prototype.slice.call(root.querySelectorAll('[data-carousel-slide]'));
+    var prev = root.querySelector('[data-carousel-prev]');
+    var next = root.querySelector('[data-carousel-next]');
+
+    if (!scroller || !slides.length || !prev || !next) {
+        return;
+    }
+
+    var getStep = function() {
+        if (slides.length < 2) {
+            return slides[0].offsetWidth;
+        }
+        return slides[1].offsetLeft - slides[0].offsetLeft;
+    };
+
+    var updateControls = function() {
+        var maxScroll = scroller.scrollWidth - scroller.clientWidth - 2;
+        prev.disabled = scroller.scrollLeft <= 2;
+        next.disabled = scroller.scrollLeft >= maxScroll;
+    };
+
+    var move = function(direction) {
+        scroller.scrollBy({
+            left: direction * getStep(),
+            behavior: 'smooth'
+        });
+    };
+
+    prev.addEventListener('click', function() {
+        move(-1);
+    });
+
+    next.addEventListener('click', function() {
+        move(1);
+    });
+
+    scroller.addEventListener('scroll', function() {
+        window.requestAnimationFrame(updateControls);
+    });
+
+    window.addEventListener('resize', updateControls);
+    updateControls();
+})();
+</script>

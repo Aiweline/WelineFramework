@@ -1,0 +1,877 @@
+<?php
+/**
+ * Aviator Afterburn - Games Showcase Component
+ *
+ * @component_start
+ * code: games-showcase
+ * name: 游戏展示区
+ * name_en: Games Showcase
+ * description: 航线牌桌展示，支持编辑标题、描述与列表
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示描述:select:yes|yes,no
+ * display.show_tags => 显示标签:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#0b1528
+ * style.accent_color => 强调色:color:#ff6b2c
+ * style.title_color => 标题颜色:color:#f5fbff
+ * style.title_font_size => 标题字号(PC端):number:74|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:40|px
+ * style.subtitle_color => 副标题颜色:color:#b4c6dc
+ * style.panel_bg_color => 介绍面板背景:color:rgba(10,20,38,0.82)
+ * style.card_bg_color => 卡片背景色:color:rgba(18,32,58,0.88)
+ * style.card_border_color => 卡片边框色:color:rgba(41,208,255,0.18)
+ * style.card_border_radius => 卡片圆角:number:26|px
+ * style.card_title_color => 卡片标题颜色:color:#f5fbff
+ * style.card_title_font_size => 卡片标题字号:number:28|px
+ * style.card_desc_color => 卡片描述颜色:color:#b4c6dc
+ * style.card_desc_font_size => 卡片描述字号:number:15|px
+ * style.section_padding => 区域内边距(PC端):number:88|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:56|px
+ * style.card_gap => 卡片间距:number:24|px
+ * style.card_content_padding => 卡片内边距:number:22|px
+ * style.hover_transform => 悬停位移:number:2|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Choose Your Afterburn Flight
+ * texts.summary => 区域辅助文案:textarea:Each Aviator room keeps the same crash logic, but the pace, access style, and round rhythm can feel completely different.
+ *
+ * group:game_1 => 卡片1
+ * texts.game_1_badge => 卡片1徽章:text:Hot Flight
+ * texts.game_1_title => 卡片1标题:text:Quick Lift
+ * texts.game_1_desc => 卡片1描述:textarea:Short-form Aviator room for players who want instant entry and faster crash cycles.
+ * texts.game_1_tag => 卡片1标签:text:Fast Lift
+ * texts.game_1_url => 卡片1链接:text:#quick
+ * images.image_1_desktop => 卡片1桌面图:textarea:|留空则不显示图片
+ * images.image_1_mobile => 卡片1移动图:textarea:|留空则不显示图片
+ *
+ * group:game_2 => 卡片2
+ * texts.game_2_badge => 卡片2徽章:text:Quick Board
+ * texts.game_2_title => 卡片2标题:text:Prime Cabin
+ * texts.game_2_desc => 卡片2描述:textarea:Balanced multiplier rhythm with clearer cue spacing for repeat sessions.
+ * texts.game_2_tag => 卡片2标签:text:Live Multiplier
+ * texts.game_2_url => 卡片2链接:text:#prime
+ * images.image_2 => 卡片2图片:textarea:|留空则不显示图片
+ *
+ * group:game_3 => 卡片3
+ * texts.game_3_badge => 卡片3徽章:text:Pilot Favorite
+ * texts.game_3_title => 卡片3标题:text:Turbo Hangar
+ * texts.game_3_desc => 卡片3描述:textarea:Higher-tempo room built for players who prefer quick decision windows.
+ * texts.game_3_tag => 卡片3标签:text:Low Friction
+ * texts.game_3_url => 卡片3链接:text:#turbo
+ * images.image_3 => 卡片3图片:textarea:|留空则不显示图片
+ *
+ * group:game_4 => 卡片4
+ * texts.game_4_badge => 卡片4徽章:text:Late Night
+ * texts.game_4_title => 卡片4标题:text:Crew Table
+ * texts.game_4_desc => 卡片4描述:textarea:A calmer shared room for players comparing timing before cashing out.
+ * texts.game_4_tag => 卡片4标签:text:Shared Room
+ * texts.game_4_url => 卡片4链接:text:#crew
+ *
+ * group:game_5 => 卡片5
+ * texts.game_5_badge => 卡片5徽章:text:New User
+ * texts.game_5_title => 卡片5标题:text:Skyline Deck
+ * texts.game_5_desc => 卡片5描述:textarea:A brighter Aviator lobby with premium visual focus and direct access.
+ * texts.game_5_tag => 卡片5标签:text:Premium Lane
+ * texts.game_5_url => 卡片5链接:text:#skyline
+ *
+ * group:game_6 => 卡片6
+ * texts.game_6_badge => 卡片6徽章:text:High Tempo
+ * texts.game_6_title => 卡片6标题:text:Touch & Go
+ * texts.game_6_desc => 卡片6描述:textarea:Low-pressure entry point for newer players learning when to exit.
+ * texts.game_6_tag => 卡片6标签:text:Crash Room
+ * texts.game_6_url => 卡片6链接:text:#touch
+ *
+ * @fields_end
+ */
+
+$componentId = 'aab-games-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+
+    return $default;
+};
+
+$getConfig = function ($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showSubtitle = $getConfigAny(['display.show_description', 'display.show_subtitle'], 'yes') !== 'no';
+$showTags = $getConfig('display.show_tags', 'yes') !== 'no';
+
+$bgColor = (string) $getConfig('style.bg_color', '#0b1528');
+$accentColor = (string) $getConfig('style.accent_color', '#ff6b2c');
+$titleColor = (string) $getConfig('style.title_color', '#f5fbff');
+$titleFontSize = (int) $getConfig('style.title_font_size', '74');
+$titleFontSizeMobile = (int) $getConfig('style.title_font_size_mobile', '40');
+$subtitleColor = (string) $getConfig('style.subtitle_color', '#b4c6dc');
+$panelBgColor = (string) $getConfig('style.panel_bg_color', 'rgba(10,20,38,0.82)');
+$cardBgColor = (string) $getConfig('style.card_bg_color', 'rgba(18,32,58,0.88)');
+$cardBorderColor = (string) $getConfig('style.card_border_color', 'rgba(41,208,255,0.18)');
+$cardRadius = max(18, (int) $getConfigAny(['style.card_border_radius', 'style.card_radius'], '26'));
+$cardTitleColor = (string) $getConfig('style.card_title_color', '#f5fbff');
+$cardTitleFontSize = (int) $getConfig('style.card_title_font_size', '28');
+$cardDescColor = (string) $getConfig('style.card_desc_color', '#b4c6dc');
+$cardDescFontSize = (int) $getConfig('style.card_desc_font_size', '15');
+$sectionPadding = max(48, (int) $getConfig('style.section_padding', '88'));
+$sectionPaddingMobile = max(36, (int) $getConfig('style.section_padding_mobile', '56'));
+$cardGap = max(14, (int) $getConfig('style.card_gap', '24'));
+$cardContentPadding = max(16, (int) $getConfig('style.card_content_padding', '22'));
+$hoverTransform = max(0, (int) $getConfig('style.hover_transform', '2'));
+
+$title = (string) $getConfig('texts.title', 'Choose Your Afterburn Flight');
+$subtitle = (string) $getConfigAny(['texts.summary', 'texts.subtitle'], 'Each Aviator room keeps the same crash logic, but the pace, access style, and round rhythm can feel completely different.');
+
+$normalizeLines = static function (string $value): array {
+    if (strpos($value, '\\n') !== false && strpos($value, "\n") === false) {
+        $value = str_replace('\\n', "\n", $value);
+    }
+    $value = str_replace(["\r\n", "\r"], "\n", $value);
+    return array_values(array_filter(array_map('trim', preg_split('/\n+/', $value) ?: []), static function ($item) {
+        return $item !== '';
+    }));
+};
+
+$legacyGames = [];
+foreach ($normalizeLines((string) $getConfig('games.items', '')) as $line) {
+    $parts = array_map('trim', explode('|', $line));
+    $titlePart = $parts[0] ?? '';
+    if ($titlePart === '') {
+        continue;
+    }
+    $legacyGames[] = [
+        'title' => $titlePart,
+        'desc' => $parts[1] ?? '',
+        'url' => $parts[2] ?? '#',
+    ];
+}
+
+$defaultGames = [
+    ['badge' => 'Hot Flight', 'title' => 'Quick Lift', 'desc' => 'Short-form Aviator room for players who want instant entry and faster crash cycles.', 'tag' => 'Fast Lift', 'url' => '#quick'],
+    ['badge' => 'Quick Board', 'title' => 'Prime Cabin', 'desc' => 'Balanced multiplier rhythm with clearer cue spacing for repeat sessions.', 'tag' => 'Live Multiplier', 'url' => '#prime'],
+    ['badge' => 'Pilot Favorite', 'title' => 'Turbo Hangar', 'desc' => 'Higher-tempo room built for players who prefer quick decision windows.', 'tag' => 'Low Friction', 'url' => '#turbo'],
+    ['badge' => 'Late Night', 'title' => 'Crew Table', 'desc' => 'A calmer shared room for players comparing timing before cashing out.', 'tag' => 'Shared Room', 'url' => '#crew'],
+    ['badge' => 'New User', 'title' => 'Skyline Deck', 'desc' => 'A brighter Aviator lobby with premium visual focus and direct access.', 'tag' => 'Premium Lane', 'url' => '#skyline'],
+    ['badge' => 'High Tempo', 'title' => 'Touch & Go', 'desc' => 'Low-pressure entry point for newer players learning when to exit.', 'tag' => 'Crash Room', 'url' => '#touch'],
+];
+$games = [];
+for ($i = 1; $i <= 6; $i++) {
+    $index = $i - 1;
+    $default = $defaultGames[$index];
+    $legacy = $legacyGames[$index] ?? [];
+    $groupPrefix = "game_{$i}.";
+    $imageDesktop = '';
+    $imageMobile = '';
+    if ($i === 1) {
+        $imageDesktop = trim((string) $getConfigAny([$groupPrefix . 'images.image_1_desktop', 'images.image_1_desktop', 'games.image_1_desktop'], ''));
+        $imageMobile = trim((string) $getConfigAny([$groupPrefix . 'images.image_1_mobile', 'images.image_1_mobile', 'games.image_1_mobile'], ''));
+    } elseif ($i === 2) {
+        $imageDesktop = trim((string) $getConfigAny([$groupPrefix . 'images.image_2', 'images.image_2', 'games.image_2'], ''));
+        $imageMobile = $imageDesktop;
+    } elseif ($i === 3) {
+        $imageDesktop = trim((string) $getConfigAny([$groupPrefix . 'images.image_3', 'images.image_3', 'games.image_3'], ''));
+        $imageMobile = $imageDesktop;
+    }
+    $room = [
+        'name' => trim((string) $getConfigAny([$groupPrefix . "texts.game_{$i}_title", "texts.game_{$i}_title"], $legacy['title'] ?? $default['title'])),
+        'description' => trim((string) $getConfigAny([$groupPrefix . "texts.game_{$i}_desc", "texts.game_{$i}_desc"], $legacy['desc'] ?? $default['desc'])),
+        'url' => trim((string) $getConfigAny([$groupPrefix . "texts.game_{$i}_url", "texts.game_{$i}_url"], $legacy['url'] ?? $default['url'])),
+        'badge' => trim((string) $getConfigAny([$groupPrefix . "texts.game_{$i}_badge", "texts.game_{$i}_badge"], $default['badge'])),
+        'tag' => trim((string) $getConfigAny([$groupPrefix . "texts.game_{$i}_tag", "texts.game_{$i}_tag"], $default['tag'])),
+        'code' => sprintf('FLT-%02d', $i),
+        'desktop_image' => $imageDesktop,
+        'mobile_image' => $imageMobile !== '' ? $imageMobile : $imageDesktop,
+    ];
+    if ($room['name'] === '') {
+        continue;
+    }
+    if ($room['url'] === '') {
+        $room['url'] = '#';
+    }
+    $games[] = $room;
+}
+
+$tags = [];
+foreach ($games as $room) {
+    if (!empty($room['tag']) && !in_array($room['tag'], $tags, true)) {
+        $tags[] = $room['tag'];
+    }
+    if (count($tags) >= 4) {
+        break;
+    }
+}
+
+$totalFlights = count($games);
+$meterLabel = '';
+if (!empty($games)) {
+    $meterLabel = trim((string) ($games[0]['tag'] ?? ''));
+    if ($meterLabel === '') {
+        $meterLabel = trim((string) ($games[0]['badge'] ?? ''));
+    }
+}
+?>
+<section id="<?= $componentId ?>" class="aab-games" aria-labelledby="<?= $componentId ?>-title">
+    <div class="games-shell">
+        <header class="games-head" id="tables">
+            <div class="head-copy">
+                <?php if (!empty($games[0]['badge'])): ?>
+                    <span class="head-kicker"><?= htmlspecialchars($games[0]['badge']) ?></span>
+                <?php endif; ?>
+                <?php if ($showTitle): ?>
+                    <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                <?php endif; ?>
+                <?php if ($showSubtitle && $subtitle !== ''): ?>
+                    <p><?= htmlspecialchars($subtitle) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="head-side">
+                <?php if ($showTags && !empty($tags)): ?>
+                    <div class="head-tags" aria-label="Flight highlights">
+                        <?php foreach ($tags as $tag): ?>
+                            <span><?= htmlspecialchars($tag) ?></span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="head-controls">
+                    <div class="head-meter" aria-hidden="true">
+                        <?php if ($meterLabel !== ''): ?>
+                            <span class="meter-label"><?= htmlspecialchars($meterLabel) ?></span>
+                        <?php endif; ?>
+                        <strong><?= (int) $totalFlights ?></strong>
+                    </div>
+                    <div class="carousel-controls" aria-label="Flight carousel controls">
+                        <button type="button" class="carousel-btn" data-direction="prev" aria-label="Previous flights">
+                            <span>&larr;</span>
+                        </button>
+                        <button type="button" class="carousel-btn" data-direction="next" aria-label="Next flights">
+                            <span>&rarr;</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <div class="runway-wrap">
+            <div class="runway-glow runway-glow-left" aria-hidden="true"></div>
+            <div class="runway-glow runway-glow-right" aria-hidden="true"></div>
+            <div class="runway-line runway-line-one" aria-hidden="true"></div>
+            <div class="runway-line runway-line-two" aria-hidden="true"></div>
+
+            <div class="runway-track" data-runway-track role="region" aria-label="Aviator room list" tabindex="0">
+                <?php foreach ($games as $index => $game): ?>
+                    <?php $summaryTone = $index % 3; ?>
+                    <article class="flight-card tone-<?= (int) $summaryTone ?>">
+                        <span class="flight-contrail" aria-hidden="true"></span>
+                        <div class="flight-top">
+                            <span class="flight-code"><?= htmlspecialchars($game['code']) ?></span>
+                            <span class="flight-badge"><?= htmlspecialchars($game['badge']) ?></span>
+                        </div>
+
+                        <div class="flight-copy">
+                            <span class="flight-tag"><?= htmlspecialchars($game['tag']) ?></span>
+                            <?php if ($game['desktop_image'] !== ''): ?>
+                                <figure class="flight-art">
+                                    <picture>
+                                        <?php if ($game['mobile_image'] !== ''): ?>
+                                            <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($game['mobile_image']) ?>">
+                                        <?php endif; ?>
+                                        <img src="<?= htmlspecialchars($game['desktop_image']) ?>" alt="<?= htmlspecialchars($game['name']) ?>" loading="lazy" decoding="async">
+                                    </picture>
+                                </figure>
+                            <?php endif; ?>
+                            <h3><?= htmlspecialchars($game['name']) ?></h3>
+                            <?php if ($showSubtitle && $game['description'] !== ''): ?>
+                                <p><?= htmlspecialchars($game['description']) ?></p>
+                            <?php endif; ?>
+                        </div>
+
+                        <a class="flight-link" href="<?= htmlspecialchars($game['url']) ?>">
+                            <span><?= htmlspecialchars($game['tag'] !== '' ? $game['tag'] : $game['badge']) ?></span>
+                            <svg viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M4 12h13.25l-4.8-4.8L14 5.65 21.15 12 14 19.15l-1.55-1.55 4.8-4.8H4z" fill="currentColor"></path>
+                            </svg>
+                        </a>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --games-title-size: <?= $titleFontSize ?>px;
+    --games-title-size-mobile: <?= $titleFontSizeMobile ?>px;
+    --games-card-title-color: <?= htmlspecialchars($cardTitleColor) ?>;
+    --games-card-title-size: <?= $cardTitleFontSize ?>px;
+    --games-card-desc-color: <?= htmlspecialchars($cardDescColor) ?>;
+    --games-card-desc-size: <?= $cardDescFontSize ?>px;
+    --games-card-content-padding: <?= $cardContentPadding ?>px;
+    --games-hover-transform: <?= $hoverTransform ?>px;
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int) $sectionPadding ?>px 0;
+    background:
+        radial-gradient(960px 420px at 8% 6%, rgba(41,208,255,0.22), transparent 58%),
+        radial-gradient(780px 380px at 92% 10%, rgba(255,107,44,0.28), transparent 54%),
+        linear-gradient(180deg, #040a13 0%, <?= htmlspecialchars($bgColor) ?> 48%, #101c31 100%);
+    color: #edf6ff;
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 20%),
+        repeating-linear-gradient(122deg, rgba(255,255,255,0.045) 0 1px, transparent 1px 30px);
+    opacity: 0.18;
+}
+
+#<?= $componentId ?>::after {
+    left: 50%;
+    top: 1.2rem;
+    width: min(1180px, calc(100% - 1.4rem));
+    height: 1px;
+    transform: translateX(-50%);
+    background: linear-gradient(90deg, rgba(255,107,44,0), rgba(255,107,44,0.34), rgba(41,208,255,0.36), rgba(41,208,255,0));
+}
+
+#<?= $componentId ?> .games-shell {
+    width: min(1280px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .games-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1.2rem;
+    align-items: end;
+    margin-bottom: 1.6rem;
+}
+
+#<?= $componentId ?> .head-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0.42rem 0.88rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(41,208,255,0.16);
+    color: #98ecff;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .head-copy h2 {
+    margin-top: 1rem;
+    max-width: 12ch;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= max(30, $titleFontSizeMobile) ?>px, 5vw, <?= max(40, $titleFontSize) ?>px);
+    line-height: 0.96;
+    letter-spacing: -0.06em;
+}
+
+#<?= $componentId ?> .head-copy p {
+    margin-top: 0.95rem;
+    max-width: 50rem;
+    color: <?= htmlspecialchars($subtitleColor) ?>;
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .head-side {
+    display: grid;
+    gap: 0.9rem;
+    justify-items: end;
+}
+
+#<?= $componentId ?> .head-tags {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.6rem;
+}
+
+#<?= $componentId ?> .head-tags span,
+#<?= $componentId ?> .flight-badge,
+#<?= $componentId ?> .flight-tag {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0.4rem 0.82rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .head-tags span {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #d9edff;
+}
+
+#<?= $componentId ?> .head-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+#<?= $componentId ?> .head-meter,
+#<?= $componentId ?> .carousel-btn {
+    border: 1px solid rgba(41,208,255,0.16);
+    background: <?= htmlspecialchars($panelBgColor) ?>;
+    box-shadow: 0 18px 30px rgba(3, 10, 20, 0.22);
+}
+
+#<?= $componentId ?> .head-meter {
+    min-width: 110px;
+    padding: 0.75rem 0.95rem;
+    border-radius: 22px;
+    text-align: left;
+}
+
+#<?= $componentId ?> .meter-label {
+    display: block;
+    color: #93a9c7;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .head-meter strong {
+    display: block;
+    margin-top: 0.2rem;
+    color: #ffffff;
+    font-size: 1.7rem;
+    line-height: 1;
+}
+
+#<?= $componentId ?> .carousel-controls {
+    display: flex;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .carousel-btn {
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+    color: #eff8ff;
+    cursor: pointer;
+    transition: transform 0.24s ease, border-color 0.24s ease, color 0.24s ease;
+}
+
+#<?= $componentId ?> .carousel-btn:hover {
+    transform: translateY(-2px);
+    border-color: rgba(255,107,44,0.34);
+    color: #ffffff;
+}
+
+#<?= $componentId ?> .runway-wrap {
+    position: relative;
+    padding: 1.45rem 1rem 0.9rem;
+    border-radius: 34px;
+    border: 0;
+    background: none;
+    box-shadow: none;
+}
+
+#<?= $componentId ?> .runway-wrap::before,
+#<?= $componentId ?> .runway-wrap::after {
+    content: '';
+    position: absolute;
+    left: 1.1rem;
+    right: 1.1rem;
+    height: 1px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(41,208,255,0), rgba(41,208,255,0.34), rgba(255,107,44,0.38), rgba(255,107,44,0));
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .runway-wrap::before {
+    top: 0.8rem;
+}
+
+#<?= $componentId ?> .runway-wrap::after {
+    bottom: 0.72rem;
+    opacity: 0.62;
+}
+
+#<?= $componentId ?> .runway-glow,
+#<?= $componentId ?> .runway-line {
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .runway-glow {
+    top: -0.4rem;
+    width: 320px;
+    height: 180px;
+    border-radius: 999px;
+    filter: blur(10px);
+    opacity: 0.62;
+}
+
+#<?= $componentId ?> .runway-glow-left {
+    left: 2%;
+    background: radial-gradient(circle, rgba(41,208,255,0.18) 0%, rgba(41,208,255,0.02) 70%, transparent 80%);
+}
+
+#<?= $componentId ?> .runway-glow-right {
+    right: 2%;
+    background: radial-gradient(circle, rgba(255,107,44,0.22) 0%, rgba(255,107,44,0.02) 70%, transparent 80%);
+}
+
+#<?= $componentId ?> .runway-line {
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(41,208,255,0) 0%, rgba(41,208,255,0.46) 24%, rgba(255,107,44,0.56) 62%, rgba(255,107,44,0) 100%);
+    opacity: 0.46;
+}
+
+#<?= $componentId ?> .runway-line-one {
+    top: 1rem;
+}
+
+#<?= $componentId ?> .runway-line-two {
+    top: auto;
+    bottom: 0.9rem;
+    opacity: 0.28;
+}
+
+#<?= $componentId ?> .runway-track {
+    display: flex;
+    gap: <?= (int) $cardGap ?>px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-left: 0;
+    padding: 0.4rem 0.1rem 0.8rem;
+    scrollbar-width: none;
+}
+
+#<?= $componentId ?> .runway-track::-webkit-scrollbar {
+    display: none;
+}
+
+#<?= $componentId ?> .flight-card {
+    position: relative;
+    isolation: isolate;
+    flex: 0 0 min(24rem, calc(100vw - 2.1rem));
+    min-height: 360px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    scroll-snap-align: start;
+    padding: var(--games-card-content-padding);
+    border-radius: <?= (int) $cardRadius ?>px;
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 24%),
+        <?= htmlspecialchars($cardBgColor) ?>;
+    box-shadow: 0 28px 50px rgba(2, 10, 22, 0.34);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .flight-card::before,
+#<?= $componentId ?> .flight-card::after {
+    content: '';
+    position: absolute;
+    top: 1.35rem;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($bgColor) ?>;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+}
+
+#<?= $componentId ?> .flight-card::before {
+    left: -9px;
+}
+
+#<?= $componentId ?> .flight-card::after {
+    right: -9px;
+}
+
+#<?= $componentId ?> .flight-card.tone-0 {
+    transform: translateY(0.35rem) rotate(-1.2deg);
+}
+
+#<?= $componentId ?> .flight-card.tone-1 {
+    transform: translateY(-0.15rem);
+}
+
+#<?= $componentId ?> .flight-card.tone-2 {
+    transform: translateY(0.7rem) rotate(1.1deg);
+}
+
+#<?= $componentId ?> .flight-contrail {
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(220px 140px at 14% 18%, rgba(41,208,255,0.12), transparent 72%),
+        radial-gradient(180px 120px at 86% 22%, rgba(255,107,44,0.16), transparent 74%),
+        linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 24%);
+    opacity: 0.82;
+    mix-blend-mode: screen;
+    animation: aab-games-pulse 6.8s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .tone-1 .flight-contrail {
+    animation-delay: -2.2s;
+}
+
+#<?= $componentId ?> .tone-2 .flight-contrail {
+    animation-delay: -4.1s;
+}
+
+#<?= $componentId ?> .flight-top,
+#<?= $componentId ?> .flight-link {
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .flight-top {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .flight-code {
+    color: #8fa8c7;
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .flight-badge {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #f4fbff;
+}
+
+#<?= $componentId ?> .flight-copy {
+    position: relative;
+    z-index: 1;
+    margin-top: 1.55rem;
+}
+
+#<?= $componentId ?> .flight-art {
+    margin-top: 0.9rem;
+    overflow: hidden;
+    border-radius: calc(<?= (int) $cardRadius ?>px - 10px);
+    border: 1px solid rgba(255,255,255,0.06);
+}
+
+#<?= $componentId ?> .flight-art img {
+    width: 100%;
+    display: block;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+}
+
+#<?= $componentId ?> .flight-tag {
+    color: #ffe4bb;
+    background: rgba(255,107,44,0.12);
+    border: 1px solid rgba(255,107,44,0.18);
+}
+
+#<?= $componentId ?> .flight-copy h3 {
+    margin-top: 0.9rem;
+    color: var(--games-card-title-color);
+    font-size: clamp(1.6rem, 2.8vw, var(--games-card-title-size));
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .flight-copy p {
+    margin-top: 0.9rem;
+    color: var(--games-card-desc-color);
+    font-size: var(--games-card-desc-size);
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .flight-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 48px;
+    margin-top: 1.5rem;
+    padding: 0.78rem 0.96rem;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%);
+    color: #f2f8ff;
+    font-size: 0.88rem;
+    font-weight: 900;
+    text-decoration: none;
+    box-shadow: 0 14px 22px rgba(2, 10, 22, 0.18);
+    transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease, color 0.22s ease;
+}
+
+#<?= $componentId ?> .flight-link svg {
+    width: 18px;
+    height: 18px;
+}
+
+#<?= $componentId ?> .flight-link:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255,107,44,0.24);
+    background:
+        linear-gradient(120deg, rgba(255,107,44,0.18) 0%, rgba(255,191,63,0.14) 44%, rgba(41,208,255,0.14) 100%);
+    color: #ffffff;
+}
+
+#<?= $componentId ?> .flight-card:hover {
+    transform: translateY(calc(var(--games-hover-transform) * -1));
+}
+
+@keyframes aab-games-pulse {
+    0%, 100% {
+        opacity: 0.58;
+        filter: saturate(0.95) brightness(0.95);
+        background:
+            radial-gradient(220px 140px at 14% 18%, rgba(41,208,255,0.08), transparent 72%),
+            radial-gradient(180px 120px at 86% 22%, rgba(255,107,44,0.1), transparent 74%),
+            linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0) 24%);
+    }
+    50% {
+        opacity: 0.92;
+        filter: saturate(1.16) brightness(1.08);
+        background:
+            radial-gradient(240px 150px at 18% 22%, rgba(41,208,255,0.18), transparent 72%),
+            radial-gradient(210px 130px at 82% 18%, rgba(255,107,44,0.22), transparent 74%),
+            linear-gradient(180deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 24%);
+    }
+}
+
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .games-head {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .head-side {
+        justify-items: start;
+    }
+
+    #<?= $componentId ?> .head-tags {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int) $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .games-shell {
+        width: min(100%, calc(100% - 1rem));
+    }
+
+    #<?= $componentId ?> .head-copy h2 {
+        max-width: none;
+    }
+
+    #<?= $componentId ?> .head-controls {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    #<?= $componentId ?> .runway-track {
+        gap: 1rem;
+        padding-bottom: 0.5rem;
+    }
+
+    #<?= $componentId ?> .runway-wrap {
+        padding: 1.15rem 0.82rem 0.72rem;
+        border-radius: 28px;
+    }
+
+    #<?= $componentId ?> .flight-card {
+        flex-basis: min(20.6rem, calc(100vw - 1.7rem));
+        min-height: 348px;
+        padding: 1.1rem;
+        transform: none !important;
+    }
+}
+</style>
+
+<script>
+(function() {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var track = root.querySelector('[data-runway-track]');
+    if (!track) {
+        return;
+    }
+
+    var scrollByCard = function(direction) {
+        var card = track.querySelector('.flight-card');
+        var gap = 24;
+        if (card) {
+            var styles = window.getComputedStyle(track);
+            gap = parseFloat(styles.columnGap || styles.gap || gap) || gap;
+            track.scrollBy({
+                left: (card.getBoundingClientRect().width + gap) * direction,
+                behavior: 'smooth'
+            });
+        }
+    };
+
+    root.querySelectorAll('.carousel-btn').forEach(function(button) {
+        button.addEventListener('click', function() {
+            scrollByCard(button.getAttribute('data-direction') === 'prev' ? -1 : 1);
+        });
+    });
+})();
+</script>

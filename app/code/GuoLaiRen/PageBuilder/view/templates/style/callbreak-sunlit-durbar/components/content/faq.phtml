@@ -1,0 +1,502 @@
+<?php
+/**
+ * Callbreak Sunlit Durbar - FAQ Component
+ *
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: FAQ rendered as a responsive editorial help board.
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.first_open => 默认展开第一项:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#fff1cc
+ * style.title_color => 标题颜色:color:#3d2217
+ * style.title_font_size => 标题字号(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:24|px
+ * style.item_bg_color => 项目背景色:color:rgba(255,255,255,0.82)
+ * style.item_border_radius => 项目圆角:number:16|px
+ * style.item_border_color => 项目边框颜色:color:rgba(126,91,67,0.14)
+ * style.item_gap => 项目间距:number:14|px
+ * style.question_color => 问题颜色:color:#3a2015
+ * style.question_font_size => 问题字号(PC端):number:16|px
+ * style.question_font_size_mobile => 问题字号(移动端):number:14|px
+ * style.question_padding => 问题内边距:number:18|px
+ * style.question_hover_bg => 问题悬停背景色:color:rgba(255,248,240,0.94)
+ * style.icon_color => 图标颜色:color:#53e0c5
+ * style.icon_size => 图标尺寸:number:18|px
+ * style.answer_color => 答案颜色:color:#6b4e41
+ * style.answer_font_size => 答案字号:number:14|px
+ * style.answer_padding => 答案内边距:number:18|px
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Quick Answers Before You Install
+ * texts.intro => 区域说明:textarea:Short answers are stacked like quick table notes, so install, wallet, and network doubts can be scanned fast.
+ * texts.faq_1_question => 问题1:text:Is Callbreak Sunlit Durbar built for secure competitive play?
+ * texts.faq_1_answer => 答案1:textarea:Protected sessions and transaction checks support account safety. Always install from the official source.
+ * texts.faq_2_question => 问题2:text:How do I download the latest APK build?
+ * texts.faq_2_answer => 答案2:textarea:Use the official download button on this page and allow installation from trusted sources on Android.
+ * texts.faq_3_question => 问题3:text:Can I move between practice tables and live rooms quickly?
+ * texts.faq_3_answer => 答案3:textarea:Yes. The lobby is designed for fast route switching so you can jump from warm-up tables to active callbreak rooms in a few taps.
+ * texts.faq_4_question => 问题4:text:How are withdrawals handled?
+ * texts.faq_4_answer => 答案4:textarea:Wallet history tracks each payout request so status changes stay visible in one place.
+ * texts.faq_5_question => 问题5:text:Does it work smoothly on low-network conditions?
+ * texts.faq_5_answer => 答案5:textarea:Gameplay is optimized for unstable networks and active rounds recover with session continuity.
+ *
+ * @fields_end
+ */
+
+$componentId = 'durbar-faq-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'yes') === 'yes';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('faq.bg_color', '#fff1cc'));
+$titleColor = $getConfig('style.title_color', '#3d2217');
+$titleFontSize = (int)$getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = (int)$getConfig('style.title_font_size_mobile', '24');
+$itemBgColor = $getConfig('style.item_bg_color', 'rgba(255,255,255,0.82)');
+$itemBorderRadius = (int)$getConfig('style.item_border_radius', '16');
+$itemBorderColor = $getConfig('style.item_border_color', 'rgba(126,91,67,0.14)');
+$itemGap = (int)$getConfig('style.item_gap', '14');
+$questionColor = $getConfig('style.question_color', '#3a2015');
+$questionFontSize = (int)$getConfig('style.question_font_size', '16');
+$questionFontSizeMobile = (int)$getConfig('style.question_font_size_mobile', '14');
+$questionPadding = (int)$getConfig('style.question_padding', '18');
+$questionHoverBg = $getConfig('style.question_hover_bg', 'rgba(255,248,240,0.94)');
+$iconColor = $getConfig('style.icon_color', '#53e0c5');
+$iconSize = (int)$getConfig('style.icon_size', '18');
+$answerColor = $getConfig('style.answer_color', '#6b4e41');
+$answerFontSize = (int)$getConfig('style.answer_font_size', '14');
+$answerPadding = (int)$getConfig('style.answer_padding', '18');
+$sectionPadding = (int)$getConfig('style.section_padding', '60');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '40');
+
+$defaultSectionTitle = 'Quick Answers Before You Install';
+$title = $getConfig('texts.title', $getConfig('faq.title', $getConfig('texts.faq_title', $defaultSectionTitle)));
+$intro = $getConfig('texts.intro', $getConfig('texts.faq_intro', 'Short answers are stacked like quick table notes, so install, wallet, and network doubts can be scanned fast.'));
+
+$faqs = [
+    [
+        'question' => $getConfig('texts.faq_1_question', 'Is Callbreak Sunlit Durbar built for secure competitive play?'),
+        'answer' => $getConfig('texts.faq_1_answer', 'Protected sessions and transaction checks support account safety. Always install from the official source.'),
+    ],
+    [
+        'question' => $getConfig('texts.faq_2_question', 'How do I download the latest APK build?'),
+        'answer' => $getConfig('texts.faq_2_answer', 'Use the official download button on this page and allow installation from trusted sources on Android.'),
+    ],
+    [
+        'question' => $getConfig('texts.faq_3_question', 'Can I move between practice tables and live rooms quickly?'),
+        'answer' => $getConfig('texts.faq_3_answer', 'Yes. The lobby is designed for fast route switching so you can jump from warm-up tables to active callbreak rooms in a few taps.'),
+    ],
+    [
+        'question' => $getConfig('texts.faq_4_question', 'How are withdrawals handled?'),
+        'answer' => $getConfig('texts.faq_4_answer', 'Wallet history tracks each payout request so status changes stay visible in one place.'),
+    ],
+    [
+        'question' => $getConfig('texts.faq_5_question', 'Does it work smoothly on low-network conditions?'),
+        'answer' => $getConfig('texts.faq_5_answer', 'Gameplay is optimized for unstable networks and active rounds recover with session continuity.'),
+    ],
+];
+$faqEffects = ['animate__fadeInLeft', 'animate__fadeInRight', 'animate__fadeInLeft', 'animate__fadeInRight', 'animate__zoomIn'];
+?>
+<section id="<?= $componentId ?>" class="durbar-faq" aria-labelledby="<?= $componentId ?>-title">
+    <span class="faq-deco faq-deco-a" aria-hidden="true"></span>
+    <span class="faq-deco faq-deco-b" aria-hidden="true"></span>
+    <span class="faq-suit faq-suit-a" aria-hidden="true">♦</span>
+    <span class="faq-suit faq-suit-b" aria-hidden="true">♣</span>
+    <span class="faq-suit faq-suit-c" aria-hidden="true">♠</span>
+    <div class="section-inner">
+        <?php if ($showTitle): ?>
+            <header class="faq-head" data-durbar-reveal data-durbar-effect="animate__fadeInDown">
+                <span class="faq-head-mark" aria-hidden="true">
+                    <span class="faq-mark-tab faq-mark-tab-a"></span>
+                    <span class="faq-mark-tab faq-mark-tab-b"></span>
+                    <span class="faq-mark-tab faq-mark-tab-c"></span>
+                </span>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                <?php if ($intro !== ''): ?>
+                    <p class="faq-intro-copy"><?= htmlspecialchars($intro) ?></p>
+                <?php endif; ?>
+            </header>
+        <?php endif; ?>
+
+        <div class="faq-grid">
+            <?php foreach ($faqs as $index => $faq): ?>
+                <?php $faqEffect = $faqEffects[$index % count($faqEffects)]; ?>
+                <details class="faq-item faq-item-<?= (int)($index + 1) ?>" data-durbar-reveal data-durbar-effect="<?= htmlspecialchars($faqEffect) ?>" data-wow-delay="<?= htmlspecialchars((string)(110 + ($index * 70))) ?>ms"<?= ($firstOpen && $index === 0) ? ' open' : '' ?>>
+                    <summary>
+                        <span class="faq-no"><?= htmlspecialchars(sprintf('%02d', $index + 1)) ?></span>
+                        <span class="faq-question"><?= htmlspecialchars($faq['question']) ?></span>
+                        <span class="faq-toggle" aria-hidden="true"></span>
+                    </summary>
+                    <div class="faq-answer">
+                        <p><?= nl2br(htmlspecialchars($faq['answer'])) ?></p>
+                    </div>
+                </details>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: clip;
+    isolation: isolate;
+    padding: <?= $sectionPadding ?>px 0;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.18), rgba(255,255,255,0) 24%),
+        radial-gradient(1180px 360px at 0% 100%, rgba(255, 122, 69, 0.16), transparent 68%),
+        radial-gradient(1240px 420px at 100% 0%, rgba(17, 199, 184, 0.18), transparent 70%),
+        radial-gradient(920px 220px at 50% 14%, rgba(255, 209, 102, 0.12), transparent 74%),
+        <?= htmlspecialchars($bgColor) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: clamp(120px, 16vw, 190px);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0)),
+        repeating-linear-gradient(90deg, rgba(255,255,255,0.14) 0 1px, transparent 1px 32px);
+    clip-path: polygon(0 0, 100% 0, 100% 70%, 82% 100%, 18% 100%, 0 70%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .faq-deco {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.26;
+}
+
+#<?= $componentId ?> .faq-suit {
+    position: absolute;
+    z-index: 0;
+    pointer-events: none;
+    font-weight: 800;
+    line-height: 1;
+    opacity: 0.13;
+    filter: drop-shadow(0 10px 18px rgba(255, 255, 255, 0.18));
+}
+
+#<?= $componentId ?> .faq-deco-a {
+    left: clamp(1rem, 8vw, 6rem);
+    top: 90px;
+    width: 84px;
+    height: 18px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 139, 87, 0.94), rgba(255, 139, 87, 0));
+    transform: rotate(-16deg);
+}
+
+#<?= $componentId ?> .faq-deco-b {
+    right: clamp(1rem, 9vw, 7rem);
+    bottom: 80px;
+    width: 96px;
+    height: 96px;
+    border-radius: 24px;
+    border: 2px solid rgba(23, 203, 184, 0.34);
+    transform: rotate(14deg);
+}
+
+#<?= $componentId ?> .faq-suit-a {
+    left: clamp(1.2rem, 10vw, 8rem);
+    top: 120px;
+    font-size: clamp(1.3rem, 2vw, 1.8rem);
+    color: rgba(255, 139, 87, 0.82);
+    transform: rotate(-14deg);
+}
+
+#<?= $componentId ?> .faq-suit-b {
+    right: clamp(1.1rem, 12vw, 9rem);
+    top: 150px;
+    font-size: clamp(1.35rem, 2.2vw, 1.95rem);
+    color: rgba(23, 203, 184, 0.78);
+    transform: rotate(16deg);
+}
+
+#<?= $componentId ?> .faq-suit-c {
+    right: clamp(1rem, 8vw, 6rem);
+    bottom: 104px;
+    font-size: clamp(1.2rem, 2vw, 1.7rem);
+    color: rgba(123, 91, 67, 0.74);
+    transform: rotate(-10deg);
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1240px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .faq-head {
+    margin-bottom: 1.5rem;
+}
+
+#<?= $componentId ?> .faq-head-mark {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    gap: 0.32rem;
+    margin-bottom: 0.55rem;
+}
+
+#<?= $componentId ?> .faq-mark-tab {
+    display: inline-flex;
+    width: 18px;
+    height: 12px;
+    border-radius: 6px 6px 2px 2px;
+}
+
+#<?= $componentId ?> .faq-mark-tab-a {
+    background: #ff8b57;
+}
+
+#<?= $componentId ?> .faq-mark-tab-b {
+    background: #17cbb8;
+}
+
+#<?= $componentId ?> .faq-mark-tab-c {
+    background: #f1bb52;
+}
+
+#<?= $componentId ?> .faq-head h2 {
+    margin: 0;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: clamp(<?= $titleFontSizeMobile ?>px, 5vw, <?= $titleFontSize ?>px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.06em;
+    max-width: 12ch;
+    text-wrap: balance;
+}
+
+#<?= $componentId ?> .faq-intro-copy {
+    margin: 0.8rem 0 0;
+    max-width: 30rem;
+    color: <?= htmlspecialchars($answerColor) ?>;
+    font-size: clamp(0.96rem, 1.6vw, 1.04rem);
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .faq-grid {
+    display: grid;
+    grid-template-columns: repeat(20, minmax(0, 1fr));
+    gap: <?= $itemGap ?>px;
+}
+
+#<?= $componentId ?> .faq-item {
+    grid-column: span 10;
+    border: 1px solid <?= htmlspecialchars($itemBorderColor) ?>;
+    border-radius: <?= $itemBorderRadius ?>px;
+    background: <?= htmlspecialchars($itemBgColor) ?>;
+    box-shadow: 0 18px 28px rgba(191, 133, 96, 0.08);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .faq-item:nth-child(4n + 1),
+#<?= $componentId ?> .faq-item:nth-child(4n + 4) {
+    grid-column: span 11;
+}
+
+#<?= $componentId ?> .faq-item:nth-child(4n + 2),
+#<?= $componentId ?> .faq-item:nth-child(4n + 3) {
+    grid-column: span 9;
+}
+
+#<?= $componentId ?> .faq-item:nth-child(odd) {
+    transform: rotate(-1deg);
+}
+
+#<?= $componentId ?> .faq-item:nth-child(even) {
+    transform: rotate(1deg);
+}
+
+#<?= $componentId ?> .faq-item summary {
+    list-style: none;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.9rem;
+    align-items: start;
+    padding: <?= $questionPadding ?>px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+#<?= $componentId ?> .faq-item summary::-webkit-details-marker {
+    display: none;
+}
+
+#<?= $componentId ?> .faq-item summary:hover {
+    background: <?= htmlspecialchars($questionHoverBg) ?>;
+}
+
+#<?= $componentId ?> .faq-no {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3rem;
+    height: 2rem;
+    padding: 0 0.7rem;
+    border-radius: 999px;
+    background: rgba(61, 34, 23, 0.08);
+    color: #704736;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+}
+
+#<?= $componentId ?> .faq-question {
+    color: <?= htmlspecialchars($questionColor) ?>;
+    font-size: <?= $questionFontSize ?>px;
+    font-weight: 700;
+    line-height: 1.5;
+}
+
+#<?= $componentId ?> .faq-toggle {
+    width: <?= $iconSize ?>px;
+    height: <?= $iconSize ?>px;
+    position: relative;
+    margin-top: 0.3rem;
+}
+
+#<?= $componentId ?> .faq-toggle::before,
+#<?= $componentId ?> .faq-toggle::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: <?= $iconSize ?>px;
+    height: 2px;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($iconColor) ?>;
+    transform: translate(-50%, -50%);
+    transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+#<?= $componentId ?> .faq-toggle::after {
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+#<?= $componentId ?> .faq-item[open] .faq-toggle::after {
+    opacity: 0;
+}
+
+#<?= $componentId ?> .faq-answer {
+    padding: 0 <?= $answerPadding ?>px <?= $answerPadding ?>px;
+}
+
+#<?= $componentId ?> .faq-answer p {
+    margin: 0;
+    color: <?= htmlspecialchars($answerColor) ?>;
+    font-size: <?= $answerFontSize ?>px;
+    line-height: 1.78;
+}
+
+@media (max-width: 991px) {
+    #<?= $componentId ?> .faq-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    #<?= $componentId ?> .faq-item,
+    #<?= $componentId ?> .faq-item:nth-child(4n + 1),
+    #<?= $componentId ?> .faq-item:nth-child(4n + 2),
+    #<?= $componentId ?> .faq-item:nth-child(4n + 3),
+    #<?= $componentId ?> .faq-item:nth-child(4n + 4) {
+        grid-column: auto;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .faq-suit {
+        font-size: 1rem;
+        opacity: 0.1;
+    }
+
+    #<?= $componentId ?> .faq-suit-a {
+        left: 0.8rem;
+        top: 84px;
+    }
+
+    #<?= $componentId ?> .faq-suit-b {
+        right: 1rem;
+        top: 108px;
+    }
+
+    #<?= $componentId ?> .faq-suit-c {
+        right: 0.9rem;
+        bottom: 88px;
+    }
+
+    #<?= $componentId ?> .section-inner {
+        width: min(100%, calc(100% - 0.7rem));
+    }
+
+    #<?= $componentId ?> .faq-grid {
+        grid-template-columns: 1fr;
+        gap: 0.95rem;
+    }
+
+    #<?= $componentId ?> .faq-item,
+    #<?= $componentId ?> .faq-item:nth-child(4n + 1),
+    #<?= $componentId ?> .faq-item:nth-child(4n + 2),
+    #<?= $componentId ?> .faq-item:nth-child(4n + 3),
+    #<?= $componentId ?> .faq-item:nth-child(4n + 4) {
+        grid-column: auto;
+    }
+
+    #<?= $componentId ?> .faq-item:nth-child(odd) {
+        margin-right: 1rem;
+        transform: rotate(-1.2deg);
+    }
+
+    #<?= $componentId ?> .faq-item:nth-child(even) {
+        margin-left: 1rem;
+        transform: rotate(1.2deg);
+    }
+
+    #<?= $componentId ?> .faq-item summary {
+        padding: 14px;
+        gap: 0.7rem;
+    }
+
+    #<?= $componentId ?> .faq-question {
+        font-size: <?= $questionFontSizeMobile ?>px;
+    }
+
+    #<?= $componentId ?> .faq-answer {
+        padding: 0 14px 14px;
+    }
+}
+</style>

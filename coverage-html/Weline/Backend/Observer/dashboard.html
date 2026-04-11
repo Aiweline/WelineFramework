@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Backend\Observer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Backend</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Observer</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ApiControllerInitBefore.php.html#20">Weline\Backend\Observer\ApiControllerInitBefore</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Compiler.php.html#18">Weline\Backend\Observer\Compiler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Footer.php.html#16">Weline\Backend\Observer\Footer</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Header.php.html#16">Weline\Backend\Observer\Header</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ModuleDisableMenuSync.php.html#10">Weline\Backend\Observer\ModuleDisableMenuSync</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#24">Weline\Backend\Observer\ResponseRedirectBefore</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SetupUpgradeAfter.php.html#23">Weline\Backend\Observer\SetupUpgradeAfter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SystemNotificationObserver.php.html#14">Weline\Backend\Observer\SystemNotificationObserver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="UpgradeMenu.php.html#18">Weline\Backend\Observer\UpgradeMenu</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="UserRegisteredObserver.php.html#11">Weline\Backend\Observer\UserRegisteredObserver</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Compiler.php.html#18">Weline\Backend\Observer\Compiler</a></td><td class="text-right">6320</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#24">Weline\Backend\Observer\ResponseRedirectBefore</a></td><td class="text-right">2756</td></tr>
+       <tr><td><a href="SystemNotificationObserver.php.html#14">Weline\Backend\Observer\SystemNotificationObserver</a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ApiControllerInitBefore.php.html#20">Weline\Backend\Observer\ApiControllerInitBefore</a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="ModuleDisableMenuSync.php.html#10">Weline\Backend\Observer\ModuleDisableMenuSync</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="UserRegisteredObserver.php.html#11">Weline\Backend\Observer\UserRegisteredObserver</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Footer.php.html#16">Weline\Backend\Observer\Footer</a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Header.php.html#16">Weline\Backend\Observer\Header</a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ApiControllerInitBefore.php.html#24"><abbr title="Weline\Backend\Observer\ApiControllerInitBefore::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ApiControllerInitBefore.php.html#32"><abbr title="Weline\Backend\Observer\ApiControllerInitBefore::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Compiler.php.html#27"><abbr title="Weline\Backend\Observer\Compiler::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Compiler.php.html#60"><abbr title="Weline\Backend\Observer\Compiler::mergeModulesConfig">mergeModulesConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Compiler.php.html#256"><abbr title="Weline\Backend\Observer\Compiler::processModuleConfig">processModuleConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Compiler.php.html#410"><abbr title="Weline\Backend\Observer\Compiler::extractBalancedBrackets">extractBalancedBrackets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Compiler.php.html#457"><abbr title="Weline\Backend\Observer\Compiler::generateRequireConfigJsContent">generateRequireConfigJsContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Footer.php.html#21"><abbr title="Weline\Backend\Observer\Footer::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Header.php.html#21"><abbr title="Weline\Backend\Observer\Header::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ModuleDisableMenuSync.php.html#12"><abbr title="Weline\Backend\Observer\ModuleDisableMenuSync::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ModuleDisableMenuSync.php.html#17"><abbr title="Weline\Backend\Observer\ModuleDisableMenuSync::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#31"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#39"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#75"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handleLoginReferer">handleLoginReferer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#116"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handlePermissionRedirect">handlePermissionRedirect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#161"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handleSecurityRedirect">handleSecurityRedirect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#204"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handleBackendSpecialRedirect">handleBackendSpecialRedirect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#237"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::getBackendWhitelistUrls">getBackendWhitelistUrls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#259"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::isAllowedHost">isAllowedHost</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#273"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::hasPermission">hasPermission</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#288"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::validateCsrfToken">validateCsrfToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#303"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::getBackendLoginUrlSameOrigin">getBackendLoginUrlSameOrigin</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#314"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::getBackendPathWithPrefix">getBackendPathWithPrefix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SetupUpgradeAfter.php.html#25"><abbr title="Weline\Backend\Observer\SetupUpgradeAfter::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SystemNotificationObserver.php.html#18"><abbr title="Weline\Backend\Observer\SystemNotificationObserver::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SystemNotificationObserver.php.html#24"><abbr title="Weline\Backend\Observer\SystemNotificationObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SystemNotificationObserver.php.html#81"><abbr title="Weline\Backend\Observer\SystemNotificationObserver::detectSourceModule">detectSourceModule</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="UpgradeMenu.php.html#22"><abbr title="Weline\Backend\Observer\UpgradeMenu::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="UpgradeMenu.php.html#32"><abbr title="Weline\Backend\Observer\UpgradeMenu::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="UpgradeMenu.php.html#43"><abbr title="Weline\Backend\Observer\UpgradeMenu::collectMenus">collectMenus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="UserRegisteredObserver.php.html#15"><abbr title="Weline\Backend\Observer\UserRegisteredObserver::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="UserRegisteredObserver.php.html#25"><abbr title="Weline\Backend\Observer\UserRegisteredObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Compiler.php.html#60"><abbr title="Weline\Backend\Observer\Compiler::mergeModulesConfig">mergeModulesConfig</abbr></a></td><td class="text-right">992</td></tr>
+       <tr><td><a href="Compiler.php.html#256"><abbr title="Weline\Backend\Observer\Compiler::processModuleConfig">processModuleConfig</abbr></a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="Compiler.php.html#410"><abbr title="Weline\Backend\Observer\Compiler::extractBalancedBrackets">extractBalancedBrackets</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#161"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handleSecurityRedirect">handleSecurityRedirect</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="ApiControllerInitBefore.php.html#32"><abbr title="Weline\Backend\Observer\ApiControllerInitBefore::execute">execute</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#75"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handleLoginReferer">handleLoginReferer</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#314"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::getBackendPathWithPrefix">getBackendPathWithPrefix</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#116"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handlePermissionRedirect">handlePermissionRedirect</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="SystemNotificationObserver.php.html#81"><abbr title="Weline\Backend\Observer\SystemNotificationObserver::detectSourceModule">detectSourceModule</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Compiler.php.html#27"><abbr title="Weline\Backend\Observer\Compiler::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Compiler.php.html#457"><abbr title="Weline\Backend\Observer\Compiler::generateRequireConfigJsContent">generateRequireConfigJsContent</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#204"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::handleBackendSpecialRedirect">handleBackendSpecialRedirect</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="SystemNotificationObserver.php.html#24"><abbr title="Weline\Backend\Observer\SystemNotificationObserver::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ModuleDisableMenuSync.php.html#17"><abbr title="Weline\Backend\Observer\ModuleDisableMenuSync::execute">execute</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#303"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::getBackendLoginUrlSameOrigin">getBackendLoginUrlSameOrigin</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="UserRegisteredObserver.php.html#25"><abbr title="Weline\Backend\Observer\UserRegisteredObserver::execute">execute</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#39"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::execute">execute</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Footer.php.html#21"><abbr title="Weline\Backend\Observer\Footer::execute">execute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Header.php.html#21"><abbr title="Weline\Backend\Observer\Header::execute">execute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#273"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::hasPermission">hasPermission</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ResponseRedirectBefore.php.html#288"><abbr title="Weline\Backend\Observer\ResponseRedirectBefore::validateCsrfToken">validateCsrfToken</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([10,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([32,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,9,"<a href=\"ApiControllerInitBefore.php.html#20\">Weline\\Backend\\Observer\\ApiControllerInitBefore<\/a>"],[0,79,"<a href=\"Compiler.php.html#18\">Weline\\Backend\\Observer\\Compiler<\/a>"],[0,2,"<a href=\"Footer.php.html#16\">Weline\\Backend\\Observer\\Footer<\/a>"],[0,2,"<a href=\"Header.php.html#16\">Weline\\Backend\\Observer\\Header<\/a>"],[0,5,"<a href=\"ModuleDisableMenuSync.php.html#10\">Weline\\Backend\\Observer\\ModuleDisableMenuSync<\/a>"],[0,52,"<a href=\"ResponseRedirectBefore.php.html#24\">Weline\\Backend\\Observer\\ResponseRedirectBefore<\/a>"],[0,1,"<a href=\"SetupUpgradeAfter.php.html#23\">Weline\\Backend\\Observer\\SetupUpgradeAfter<\/a>"],[0,12,"<a href=\"SystemNotificationObserver.php.html#14\">Weline\\Backend\\Observer\\SystemNotificationObserver<\/a>"],[0,3,"<a href=\"UpgradeMenu.php.html#18\">Weline\\Backend\\Observer\\UpgradeMenu<\/a>"],[0,5,"<a href=\"UserRegisteredObserver.php.html#11\">Weline\\Backend\\Observer\\UserRegisteredObserver<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"ApiControllerInitBefore.php.html#24\">Weline\\Backend\\Observer\\ApiControllerInitBefore::__construct<\/a>"],[0,8,"<a href=\"ApiControllerInitBefore.php.html#32\">Weline\\Backend\\Observer\\ApiControllerInitBefore::execute<\/a>"],[0,5,"<a href=\"Compiler.php.html#27\">Weline\\Backend\\Observer\\Compiler::execute<\/a>"],[0,31,"<a href=\"Compiler.php.html#60\">Weline\\Backend\\Observer\\Compiler::mergeModulesConfig<\/a>"],[0,22,"<a href=\"Compiler.php.html#256\">Weline\\Backend\\Observer\\Compiler::processModuleConfig<\/a>"],[0,16,"<a href=\"Compiler.php.html#410\">Weline\\Backend\\Observer\\Compiler::extractBalancedBrackets<\/a>"],[0,5,"<a href=\"Compiler.php.html#457\">Weline\\Backend\\Observer\\Compiler::generateRequireConfigJsContent<\/a>"],[0,2,"<a href=\"Footer.php.html#21\">Weline\\Backend\\Observer\\Footer::execute<\/a>"],[0,2,"<a href=\"Header.php.html#21\">Weline\\Backend\\Observer\\Header::execute<\/a>"],[0,1,"<a href=\"ModuleDisableMenuSync.php.html#12\">Weline\\Backend\\Observer\\ModuleDisableMenuSync::__construct<\/a>"],[0,4,"<a href=\"ModuleDisableMenuSync.php.html#17\">Weline\\Backend\\Observer\\ModuleDisableMenuSync::execute<\/a>"],[0,1,"<a href=\"ResponseRedirectBefore.php.html#31\">Weline\\Backend\\Observer\\ResponseRedirectBefore::__construct<\/a>"],[0,3,"<a href=\"ResponseRedirectBefore.php.html#39\">Weline\\Backend\\Observer\\ResponseRedirectBefore::execute<\/a>"],[0,8,"<a href=\"ResponseRedirectBefore.php.html#75\">Weline\\Backend\\Observer\\ResponseRedirectBefore::handleLoginReferer<\/a>"],[0,6,"<a href=\"ResponseRedirectBefore.php.html#116\">Weline\\Backend\\Observer\\ResponseRedirectBefore::handlePermissionRedirect<\/a>"],[0,11,"<a href=\"ResponseRedirectBefore.php.html#161\">Weline\\Backend\\Observer\\ResponseRedirectBefore::handleSecurityRedirect<\/a>"],[0,5,"<a href=\"ResponseRedirectBefore.php.html#204\">Weline\\Backend\\Observer\\ResponseRedirectBefore::handleBackendSpecialRedirect<\/a>"],[0,1,"<a href=\"ResponseRedirectBefore.php.html#237\">Weline\\Backend\\Observer\\ResponseRedirectBefore::getBackendWhitelistUrls<\/a>"],[0,1,"<a href=\"ResponseRedirectBefore.php.html#259\">Weline\\Backend\\Observer\\ResponseRedirectBefore::isAllowedHost<\/a>"],[0,2,"<a href=\"ResponseRedirectBefore.php.html#273\">Weline\\Backend\\Observer\\ResponseRedirectBefore::hasPermission<\/a>"],[0,2,"<a href=\"ResponseRedirectBefore.php.html#288\">Weline\\Backend\\Observer\\ResponseRedirectBefore::validateCsrfToken<\/a>"],[0,4,"<a href=\"ResponseRedirectBefore.php.html#303\">Weline\\Backend\\Observer\\ResponseRedirectBefore::getBackendLoginUrlSameOrigin<\/a>"],[0,8,"<a href=\"ResponseRedirectBefore.php.html#314\">Weline\\Backend\\Observer\\ResponseRedirectBefore::getBackendPathWithPrefix<\/a>"],[0,1,"<a href=\"SetupUpgradeAfter.php.html#25\">Weline\\Backend\\Observer\\SetupUpgradeAfter::execute<\/a>"],[0,1,"<a href=\"SystemNotificationObserver.php.html#18\">Weline\\Backend\\Observer\\SystemNotificationObserver::__construct<\/a>"],[0,5,"<a href=\"SystemNotificationObserver.php.html#24\">Weline\\Backend\\Observer\\SystemNotificationObserver::execute<\/a>"],[0,6,"<a href=\"SystemNotificationObserver.php.html#81\">Weline\\Backend\\Observer\\SystemNotificationObserver::detectSourceModule<\/a>"],[0,1,"<a href=\"UpgradeMenu.php.html#22\">Weline\\Backend\\Observer\\UpgradeMenu::__construct<\/a>"],[0,1,"<a href=\"UpgradeMenu.php.html#32\">Weline\\Backend\\Observer\\UpgradeMenu::execute<\/a>"],[0,1,"<a href=\"UpgradeMenu.php.html#43\">Weline\\Backend\\Observer\\UpgradeMenu::collectMenus<\/a>"],[0,1,"<a href=\"UserRegisteredObserver.php.html#15\">Weline\\Backend\\Observer\\UserRegisteredObserver::__construct<\/a>"],[0,4,"<a href=\"UserRegisteredObserver.php.html#25\">Weline\\Backend\\Observer\\UserRegisteredObserver::execute<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

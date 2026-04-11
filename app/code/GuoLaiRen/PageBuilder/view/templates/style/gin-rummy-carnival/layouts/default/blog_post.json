@@ -1,0 +1,26 @@
+{
+    "page_type": "blog_post",
+    "name": "Blog Post Page Layout",
+    "description": "Gin Rummy Carnival blog post detail page layout",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-detail",
+                "enabled": true,
+                "instance_id": "blog-detail-default",
+                "config": {
+                    "sidebar.show_related": "yes",
+                    "sidebar.show_share": "yes"
+                }
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Blog detail page layout. Post content is rendered dynamically by the blog module."
+}

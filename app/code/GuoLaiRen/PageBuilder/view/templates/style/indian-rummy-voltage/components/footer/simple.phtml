@@ -1,0 +1,78 @@
+<?php
+/**
+ * RV 简洁底部组件 - Simple Footer Component
+ * 
+ * @component_start
+ * code: footer-simple
+ * name: 简洁底部
+ * name_en: Simple Footer
+ * description: 只包含版权信息的简洁底部
+ * category: footer
+ * region: footer
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:content => 内容配置
+ * content.copyright_text => 版权信息:text:© 2025 All rights reserved
+ * 
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#0a0a1a
+ * style.text_color => 文字颜色:color:#8b8b8b
+ * style.padding => 内边距:number:20|px
+ * style.text_align => 对齐方式:select:center|left,center,right
+ * 
+ * @fields_end
+ */
+
+$componentId = 'rv-footer-simple-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$copyrightText = $getConfig('content.copyright_text', '© 2025 All rights reserved');
+$bgColor = $getConfig('style.bg_color', '#0a0a1a');
+$textColor = $getConfig('style.text_color', '#8b8b8b');
+$padding = intval($getConfig('style.padding', '20'));
+$textAlign = $getConfig('style.text_align', 'center');
+?>
+<!-- RV Simple Footer Component Start: <?= $componentId ?> -->
+<style>
+#<?= $componentId ?> {
+    background: <?= htmlspecialchars($bgColor) ?>;
+    padding: <?= $padding ?>px 0;
+    width: 100%;
+}
+
+#<?= $componentId ?> .rv-section-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 20px;
+    text-align: <?= $textAlign ?>;
+}
+
+#<?= $componentId ?> .rv-simple-footer-text {
+    color: <?= htmlspecialchars($textColor) ?>;
+    font-size: 12px;
+    margin: 0;
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .rv-section-inner {
+        padding: 0 15px;
+    }
+}
+</style>
+
+<footer id="<?= $componentId ?>" class="rv-section rv-footer-simple-component">
+    <div class="rv-section-inner">
+        <p class="rv-simple-footer-text"><?= htmlspecialchars($copyrightText) ?></p>
+    </div>
+</footer>
+<!-- RV Simple Footer Component End: <?= $componentId ?> -->
