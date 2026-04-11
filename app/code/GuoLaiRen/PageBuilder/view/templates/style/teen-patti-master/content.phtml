@@ -1,0 +1,59 @@
+<?php
+/**
+ * Teen Patti Master - Content
+ *
+ * @fields_start
+ *
+ * group:hero => 首屏模块
+ * hero.display => 显示首屏模块:select:yes|yes,no
+ * hero.title => 首屏标题:text:Experience the Thrill of Teen Patti Master
+ * hero.subtitle => 首屏副标题:textarea:India's favorite 3-card showdown - play anytime, anywhere
+ * hero.cta_text => 首屏主按钮:text:Download Now
+ * hero.cta_url => 首屏主按钮链接:text:#download
+ * hero.secondary_cta_text => 首屏次按钮:text:Register Now
+ * hero.secondary_cta_url => 首屏次按钮链接:text:#register
+ * hero.image => 首屏插画:textarea:|默认使用本地 hero-info-graphic.svg
+ * hero.bg_image => 首屏背景图:textarea:|留空使用主题背景
+ *
+ * group:games => 游戏区域
+ * games.display => 显示游戏区域:select:yes|yes,no
+ * games.title => 游戏区域标题:text:Popular Games
+ * texts.subtitle => 游戏区域副标题:textarea:Pick a table, join the action, and win big
+ * texts.tags => 游戏区域标签:textarea:Live Tables|Quick Match|VIP Rooms
+ * texts.badges => 游戏区域徽标:textarea:Featured Table\nFace Card Rush\nReverse Rank\nWild Boost\nSide Bet\nSkill Play
+ *
+ * group:game_1 => 游戏卡片1
+ * texts.game_1_title => 游戏1标题:text:Teen Patti
+ * texts.game_1_desc => 游戏1描述:textarea:3-card showdown with fast rounds
+ * links.game_1_url => 游戏1链接:text:#teenpatti
+ *
+ * group:game_2 => 游戏卡片2
+ * texts.game_2_title => 游戏2标题:text:AK47
+ * texts.game_2_desc => 游戏2描述:textarea:Popular teen patti variation with face cards
+ * links.game_2_url => 游戏2链接:text:#ak47
+ *
+ * group:game_3 => 游戏卡片3
+ * texts.game_3_title => 游戏3标题:text:Muflis
+ * texts.game_3_desc => 游戏3描述:textarea:Reverse ranking twist for bold plays
+ * links.game_3_url => 游戏3链接:text:#muflis
+ *
+ * group:game_4 => 游戏卡片4
+ * texts.game_4_title => 游戏4标题:text:Joker
+ * texts.game_4_desc => 游戏4描述:textarea:Wild-card thrills and sudden wins
+ * links.game_4_url => 游戏4链接:text:#joker
+ *
+ * group:game_5 => 游戏卡片5
+ * texts.game_5_title => 游戏5标题:text:Andar Bahar
+ * texts.game_5_desc => 游戏5描述:textarea:Classic side-bet favorite
+ * links.game_5_url => 游戏5链接:text:#andarbahar
+ *
+ * group:game_6 => 游戏卡片6
+ * texts.game_6_title => 游戏6标题:text:Rummy
+ * texts.game_6_desc => 游戏6描述:textarea:Skill-based meld and discard play
+ * links.game_6_url => 游戏6链接:text:#rummy
+ *
+ * @fields_end
+ */
+?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/teen-patti-master/components/content/hero-slider.phtml') ?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/teen-patti-master/components/content/games.phtml') ?>

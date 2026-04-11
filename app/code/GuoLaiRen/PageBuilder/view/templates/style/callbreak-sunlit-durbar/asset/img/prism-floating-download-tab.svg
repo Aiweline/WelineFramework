@@ -1,0 +1,44 @@
+<svg width="184" height="208" viewBox="0 0 184 208" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Royal Prism floating download sticker">
+  <defs>
+    <linearGradient id="prismCardBg" x1="28" y1="20" x2="146" y2="188" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF5DB"/>
+      <stop offset="0.48" stop-color="#FFB86C"/>
+      <stop offset="1" stop-color="#FF7447"/>
+    </linearGradient>
+    <linearGradient id="prismPhone" x1="92" y1="52" x2="92" y2="154" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0FC7B3"/>
+      <stop offset="1" stop-color="#139B8F"/>
+    </linearGradient>
+    <filter id="shadow" x="10" y="10" width="164" height="188" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix"/>
+      <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+      <feOffset dy="12"/>
+      <feGaussianBlur stdDeviation="10"/>
+      <feColorMatrix type="matrix" values="0 0 0 0 0.773042 0 0 0 0 0.365307 0 0 0 0 0.15893 0 0 0 0.22 0"/>
+      <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow_0_1"/>
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow_0_1" result="shape"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <path d="M44 24C44 15.1634 51.1634 8 60 8H122C130.837 8 138 15.1634 138 24V56.5C138 62.299 142.701 67 148.5 67C158.165 67 166 74.835 166 84.5V150C166 164.359 154.359 176 140 176H44C29.6406 176 18 164.359 18 150V50C18 35.6406 29.6406 24 44 24Z" fill="url(#prismCardBg)"/>
+    <path d="M138 40H148.5C159.822 40 169 49.1782 169 60.5V128C169 139.322 159.822 148.5 148.5 148.5H138V40Z" fill="#FFF3D2" fill-opacity="0.72"/>
+    <path d="M37 28H135" stroke="#FFF8EA" stroke-width="3" stroke-linecap="round" stroke-opacity="0.72"/>
+    <circle cx="132" cy="35" r="5" fill="#10C7B3" fill-opacity="0.92"/>
+    <circle cx="148" cy="35" r="5" fill="#FF7B4C" fill-opacity="0.92"/>
+
+    <rect x="50" y="44" width="84" height="114" rx="26" fill="#FFF9EC" fill-opacity="0.42" stroke="#FFFDF7" stroke-width="3"/>
+    <rect x="63" y="58" width="58" height="88" rx="18" fill="url(#prismPhone)"/>
+    <rect x="71" y="68" width="42" height="48" rx="12" fill="#0D786F" fill-opacity="0.34"/>
+    <path d="M92 76V118" stroke="#FFF8ED" stroke-width="6" stroke-linecap="round"/>
+    <path d="M77 104L92 120L107 104" stroke="#FFF8ED" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="78" y="129" width="28" height="6" rx="3" fill="#FFF8ED" fill-opacity="0.88"/>
+
+    <path d="M41 128L52.5 116.5L64 128L52.5 139.5L41 128Z" fill="#10C7B3" fill-opacity="0.92"/>
+    <path d="M124.5 122C124.5 115.649 129.649 110.5 136 110.5C142.351 110.5 147.5 115.649 147.5 122C147.5 128.351 142.351 133.5 136 133.5C129.649 133.5 124.5 128.351 124.5 122Z" fill="#FFF5DE" fill-opacity="0.86" stroke="#FF7B4C" stroke-width="3"/>
+    <path d="M136 116.5L141 122L136 127.5L131 122L136 116.5Z" fill="#FF7B4C"/>
+
+    <path d="M57 162C57 156.477 61.4772 152 67 152H117C122.523 152 127 156.477 127 162V162C127 167.523 122.523 172 117 172H67C61.4772 172 57 167.523 57 162V162Z" fill="#FFF8EC" fill-opacity="0.88"/>
+    <path d="M72 162H112" stroke="#FF8F57" stroke-width="4" stroke-linecap="round"/>
+  </g>
+</svg>

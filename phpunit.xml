@@ -26,9 +26,11 @@
       <directory suffix=".php">app/code</directory>
     </include>
     <exclude>
-      <directory>app/code/*/Test</directory>
-      <directory>app/code/*/view</directory>
-      <directory>app/code/*/Console</directory>
+      <directory>app/code/*/*/Test</directory>
+      <directory>app/code/*/*/test</directory>
+      <directory>app/code/*/*/view</directory>
+      <directory>app/code/*/*/Console</directory>
+      <directory>app/code/*/*/env</directory>
     </exclude>
   </source>
 </phpunit>

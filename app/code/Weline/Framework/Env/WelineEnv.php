@@ -3,70 +3,40 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Env;
 
+use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Manager\ObjectManager;
 
 /**
- * WelineEnv - 统一环境变量管理器
+ * Thin facade over the active framework Context.
  *
- * 在 WLS + Fiber 并发环境下，统一管理所有全局变量的获取
- *
- * 设计原则：
- * 1. 基于 WeakMap<Fiber, self> 实现每个 Fiber 独立实例
- * 2. 内部通过 RequestContext 存储变量，与框架现有机制融合
- * 3. 提供 get(string $key)/set(string $key, mixed $value) 核心方法
- * 4. 提供快捷访问方法：getArea()/getLang()/getCurrency() 等
- * 5. 支持 $_GET/$_POST/$_COOKIE 的快捷访问
- *
- * 使用方式：
- *   WelineEnv::get('area')              // 获取 WELINE_AREA
- *   WelineEnv::get('user.lang')         // 获取 WELINE_USER_LANG
- *   WelineEnv::get('request.scheme')    // 获取 REQUEST_SCHEME
- *   WelineEnv::get('server.http_host')   // 获取 HTTP_HOST
- *
- * @author Weline Framework Team
+ * The old API surface is kept so existing code can be moved gradually without
+ * keeping request state in this class anymore.
  */
 class WelineEnv
 {
-    /**
-     * WeakMap 存储 - 每个 Fiber 的独立实例
-     *
-     * @var \WeakMap<\Fiber, self>|null
-     */
-    private static ?\WeakMap $instances = null;
-
-    /**
-     * 变量名映射表：别名 => $_SERVER 键名
-     */
-    private const MAPPINGS = [
-        // 框架 WELINE_* 变量（按重要性排序）
+    private const SERVER_MAPPINGS = [
         'area' => 'WELINE_AREA',
         'area_route' => 'WELINE_AREA_ROUTE',
         'website_id' => 'WELINE_WEBSITE_ID',
         'website_code' => 'WELINE_WEBSITE_CODE',
+        'website_url' => 'WELINE_WEBSITE_URL',
         'user.lang' => 'WELINE_USER_LANG',
         'user.currency' => 'WELINE_USER_CURRENCY',
         'user.id' => 'WELINE_USER_ID',
         'user.session_id' => 'WELINE_USER_SESSION_ID',
-
-        // URL 解析状态
         'url_parsed' => 'WELINE_URL_PARSED',
         'is_backend' => 'WELINE_IS_BACKEND',
         'is_static_file' => 'WELINE_IS_STATIC_FILE',
+        'is_media' => 'WELINE_IS_MEDIA',
         'parser_url' => 'WELINE_PARSER_URL',
-
-        // 完整请求 URI
         'origin_request_uri' => 'WELINE_ORIGIN_REQUEST_URI',
         'full_request_uri' => 'WELINE_FULL_REQUEST_URI',
-
-        // 标准 $_SERVER 变量（按使用频率排序）
         'request.method' => 'REQUEST_METHOD',
         'request.scheme' => 'REQUEST_SCHEME',
         'request.uri' => 'REQUEST_URI',
         'request.time' => 'REQUEST_TIME',
         'request.time_float' => 'REQUEST_TIME_FLOAT',
         'request.query_string' => 'QUERY_STRING',
-
         'server.http_host' => 'HTTP_HOST',
         'server.host' => 'HOST',
         'server.remote_addr' => 'REMOTE_ADDR',
@@ -79,13 +49,12 @@ class WelineEnv
         'server.content_length' => 'CONTENT_LENGTH',
         'server.server_name' => 'SERVER_NAME',
         'server.server_port' => 'SERVER_PORT',
+        'server.server_software' => 'SERVER_SOFTWARE',
         'server.https' => 'HTTPS',
         'server.php_self' => 'PHP_SELF',
         'server.script_name' => 'SCRIPT_NAME',
         'server.script_filename' => 'SCRIPT_FILENAME',
         'server.path_info' => 'PATH_INFO',
-
-        // HTTP 头变量
         'http_referer' => 'HTTP_REFERER',
         'http_origin' => 'HTTP_ORIGIN',
         'http_traceparent' => 'HTTP_TRACEPARENT',
@@ -96,8 +65,6 @@ class WelineEnv
         'http_weline_original_host' => 'HTTP_WELINE_ORIGINAL_HOST',
         'http_weline_original_port' => 'HTTP_WELINE_ORIGINAL_PORT',
         'http_x_requested_with' => 'HTTP_X_REQUESTED_WITH',
-
-        // WLS 内部变量
         'wls.redirect_count' => 'WLS_REDIRECT_COUNT',
         'redirect_count' => 'REDIRECT_COUNT',
         'wls.request_count' => 'WLS_REQUEST_COUNT',
@@ -106,583 +73,500 @@ class WelineEnv
         'wls.process_tag' => 'WLS_PROCESS_TAG',
     ];
 
-    /**
-     * $_GET 参数缓存
-     */
-    private array $getParams = [];
+    private const CONTEXT_MAPPINGS = [
+        'area' => 'route.area',
+        'area_route' => 'route.area_route',
+        'website_id' => 'route.website_id',
+        'website_code' => 'route.website_code',
+        'website_url' => 'route.website_url',
+        'user.lang' => 'route.language',
+        'user.currency' => 'route.currency',
+        'user.id' => 'session.user_id',
+        'user.session_id' => 'session.id',
+        'url_parsed' => 'route.url_parsed',
+        'is_backend' => 'route.is_backend',
+        'is_static_file' => 'route.is_static',
+        'is_media' => 'route.is_media',
+        'origin_request_uri' => 'input.origin_request_uri',
+        'full_request_uri' => 'input.full_request_uri',
+        'request.method' => 'input.method',
+        'request.body' => 'input.body',
+        'request.scheme' => 'input.scheme',
+        'request.uri' => 'input.uri',
+        'server.http_host' => 'input.host',
+        'server.remote_addr' => 'input.ip',
+        'wls.redirect_count' => 'runtime.redirect_count',
+        'redirect_count' => 'runtime.redirect_count',
+        'wls.request_count' => 'runtime.request_count',
+        'wls.instance' => 'meta.instance',
+        'wls.instance_name' => 'meta.instance',
+        'wls.process_tag' => 'meta.process_tag',
+    ];
 
-    /**
-     * $_POST 参数缓存
-     */
-    private array $postParams = [];
+    private static ?self $instance = null;
 
-    /**
-     * $_COOKIE 参数缓存
-     */
-    private array $cookieParams = [];
-
-    /**
-     * $_FILES 参数缓存
-     */
-    private array $filesParams = [];
-
-    /**
-     * 覆盖记录（用于调试和追踪）
-     *
-     * @var array<string, array{value: mixed, reason: string, fiber_id: int|string, trace: array}>
-     */
     private array $overrides = [];
 
-    /**
-     * 是否已初始化
-     */
-    private bool $initialized = false;
-
-    /**
-     * 获取当前 Fiber 的实例（Fiber 安全）
-     */
     public static function getInstance(): self
     {
-        if (self::$instances === null) {
-            self::$instances = new \WeakMap();
-        }
-
-        $fiber = \Fiber::getCurrent();
-        if ($fiber === null) {
-            // 主线程或非 Fiber 环境，使用全局实例
-            static $globalInstance = null;
-            $globalInstance ??= new self();
-            return $globalInstance;
-        }
-
-        // 直接使用 Fiber 对象作为 WeakMap key
-        if (!isset(self::$instances[$fiber])) {
-            $instance = new self();
-            self::$instances[$fiber] = $instance;
-        }
-
-        return self::$instances[$fiber];
+        self::$instance ??= new self();
+        return self::$instance;
     }
 
-    /**
-     * 获取当前 Fiber 的 ID
-     *
-     * @return string
-     */
     public static function getFiberId(): string
     {
         $fiber = \Fiber::getCurrent();
-        if ($fiber === null) {
-            return 'main';
-        }
-        return (string) \spl_object_id($fiber);
+        return $fiber === null ? 'main' : (string)\spl_object_id($fiber);
     }
 
-    /**
-     * 获取环境变量（统一入口）
-     *
-     * @param string $key 支持点号分隔：'user.lang', 'area', 'server.http_host'
-     * @param mixed $default 默认值
-     * @return mixed
-     */
     public static function get(string $key, mixed $default = null): mixed
     {
-        return self::getInstance()->getVar($key, $default);
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $contextPath = self::CONTEXT_MAPPINGS[$key] ?? null;
+            if ($contextPath !== null && $context->has($contextPath)) {
+                return $context->get($contextPath, $default);
+            }
+
+            $rawValue = $context->getRuntimeAttr($key, null);
+            if ($rawValue !== null) {
+                return $rawValue;
+            }
+        }
+
+        if (\class_exists(RequestContext::class, false)) {
+            $requestContextValue = RequestContext::get('env.' . $key);
+            if ($requestContextValue !== null) {
+                return $requestContextValue;
+            }
+        }
+
+        $serverKey = self::SERVER_MAPPINGS[$key] ?? null;
+        if ($serverKey !== null && \is_array($_SERVER ?? null) && \array_key_exists($serverKey, $_SERVER)) {
+            return $_SERVER[$serverKey];
+        }
+
+        return $default;
     }
 
-    /**
-     * 设置环境变量（仅当前请求/Fiber 生效）
-     *
-     * @param string $key 变量键
-     * @param mixed $value 变量值
-     * @param string $reason 设置原因（用于调试）
-     * @return void
-     */
     public static function set(string $key, mixed $value, string $reason = ''): void
     {
-        self::getInstance()->setVar($key, $value, $reason);
+        $context = Context::getCurrent();
+        if ($context === null) {
+            $context = new Context();
+            Context::enter($context);
+        }
+
+        $contextPath = self::CONTEXT_MAPPINGS[$key] ?? null;
+        if ($contextPath !== null) {
+            $context->set($contextPath, $value);
+        } else {
+            $context->setRuntimeAttr($key, $value);
+        }
+
+        if (\class_exists(RequestContext::class, false)) {
+            RequestContext::set('env.' . $key, $value);
+        }
+
+        $serverKey = self::SERVER_MAPPINGS[$key] ?? null;
+        if ($serverKey !== null) {
+            $_SERVER[$serverKey] = $value;
+        }
+
+        self::getInstance()->recordOverride($key, $value, $reason);
     }
 
-    /**
-     * 获取 $_GET 参数
-     *
-     * @param string|null $key 参数键，null 则返回全部
-     * @param mixed $default 默认值
-     * @return mixed
-     */
     public static function getGet(?string $key = null, mixed $default = null): mixed
     {
-        $instance = self::getInstance();
-        if (!$instance->initialized) {
-            $instance->initFromGlobals();
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            return $key === null ? $context->query() : $context->query($key, $default);
         }
 
         if ($key === null) {
-            return $instance->getParams;
+            return \is_array($_GET ?? null) ? $_GET : [];
         }
 
-        return $instance->getParams[$key] ?? $default;
+        return $_GET[$key] ?? $default;
     }
 
-    /**
-     * 获取 $_POST 参数
-     *
-     * @param string|null $key 参数键，null 则返回全部
-     * @param mixed $default 默认值
-     * @return mixed
-     */
     public static function getPost(?string $key = null, mixed $default = null): mixed
     {
-        $instance = self::getInstance();
-        if (!$instance->initialized) {
-            $instance->initFromGlobals();
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            return $key === null ? $context->post() : $context->post($key, $default);
         }
 
         if ($key === null) {
-            return $instance->postParams;
+            return \is_array($_POST ?? null) ? $_POST : [];
         }
 
-        return $instance->postParams[$key] ?? $default;
+        return $_POST[$key] ?? $default;
     }
 
-    /**
-     * 获取 $_COOKIE 参数
-     *
-     * @param string|null $key 参数键，null 则返回全部
-     * @param mixed $default 默认值
-     * @return mixed
-     */
     public static function getCookie(?string $key = null, mixed $default = null): mixed
     {
-        $instance = self::getInstance();
-        if (!$instance->initialized) {
-            $instance->initFromGlobals();
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            return $key === null ? $context->cookie() : $context->cookie($key, $default);
         }
 
         if ($key === null) {
-            return $instance->cookieParams;
+            return \is_array($_COOKIE ?? null) ? $_COOKIE : [];
         }
 
-        return $instance->cookieParams[$key] ?? $default;
+        return $_COOKIE[$key] ?? $default;
     }
 
-    /**
-     * 获取 $_FILES 参数
-     *
-     * @param string|null $key 参数键，null 则返回全部
-     * @return mixed
-     */
     public static function getFiles(?string $key = null): mixed
     {
-        $instance = self::getInstance();
-        if (!$instance->initialized) {
-            $instance->initFromGlobals();
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            return $key === null ? $context->file() : $context->file($key);
         }
 
         if ($key === null) {
-            return $instance->filesParams;
+            return \is_array($_FILES ?? null) ? $_FILES : [];
         }
 
-        return $instance->filesParams[$key] ?? null;
+        return $_FILES[$key] ?? null;
     }
 
-    /**
-     * 初始化（从全局变量）
-     */
     public function initFromGlobals(): void
     {
-        if ($this->initialized) {
-            return;
-        }
+        $current = Context::getCurrent();
+        $meta = $current?->get('meta', []) ?? [];
+        $runtime = $current?->get('runtime', []) ?? [];
 
-        // 在 WLS 模式下，GlobalsEmulator 会模拟 $_GET/$_POST 等
-        // 所以这里可以直接从全局变量读取
-        $this->getParams = $_GET ?? [];
-        $this->postParams = $_POST ?? [];
-        $this->cookieParams = $_COOKIE ?? [];
-        $this->filesParams = $_FILES ?? [];
-
-        $this->initialized = true;
+        $context = Context::fromGlobals($meta);
+        $context->merge([
+            'runtime' => $runtime,
+        ]);
+        Context::enter($context);
     }
 
-    /**
-     * 从 Request 对象初始化
-     *
-     * @param \Weline\Framework\Http\Request $request
-     * @return void
-     */
     public function initFromRequest(object $request): void
     {
-        if (\method_exists($request, 'getQueryParams')) {
-            $this->getParams = $request->getQueryParams() ?? [];
-        }
-        if (\method_exists($request, 'getPostParams')) {
-            $this->postParams = $request->getPostParams() ?? [];
-        }
-        if (\method_exists($request, 'getFiles')) {
-            $this->filesParams = $request->getFiles() ?? [];
-        }
+        $current = Context::getCurrent();
+        $meta = $current?->get('meta', []) ?? [];
+        $runtime = $current?->get('runtime', []) ?? [];
+        $route = $current?->get('route', []) ?? [];
+        $session = $current?->get('session', []) ?? [];
+        $response = $current?->get('response', []) ?? [];
 
-        // 从 Request 对象获取 $_SERVER 变量，同步到 RequestContext
-        $this->syncServerFromRequest($request);
-
-        $this->initialized = true;
+        $context = Context::fromRequest($request, $meta);
+        $context->merge([
+            'runtime' => $runtime,
+            'route' => $route,
+            'session' => $session,
+            'response' => $response,
+        ]);
+        Context::enter($context);
     }
 
-    /**
-     * 从 Request 对象同步 $_SERVER 变量到 RequestContext
-     */
-    private function syncServerFromRequest(object $request): void
-    {
-        // 获取 $_SERVER 变量并同步到 RequestContext
-        $serverVars = [];
-        if (\method_exists($request, 'getServer')) {
-            $serverVars = $request->getServer() ?? [];
-        }
+    public function initFromSnapshot(
+        array $get,
+        array $post,
+        array $cookie,
+        array $files,
+        array $server
+    ): void {
+        $current = Context::getCurrent();
+        $meta = $current?->get('meta', []) ?? [];
+        $runtime = $current?->get('runtime', []) ?? [];
+        $session = $current?->get('session', []) ?? [];
+        $response = $current?->get('response', []) ?? [];
+        $body = (string)($current?->get('input.body', '') ?? '');
 
-        foreach (self::MAPPINGS as $alias => $serverKey) {
-            if (isset($serverVars[$serverKey])) {
-                RequestContext::set('env.' . $alias, $serverVars[$serverKey]);
+        $context = new Context([
+            'meta' => $meta,
+            'input' => [
+                'query' => $get,
+                'post' => $post,
+                'cookie' => $cookie,
+                'files' => $files,
+                'headers' => self::extractHeadersFromServer($server),
+                'server' => $server,
+                'body' => $body,
+                'method' => (string)($server['REQUEST_METHOD'] ?? 'GET'),
+                'uri' => (string)($server['REQUEST_URI'] ?? '/'),
+                'origin_request_uri' => (string)($server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? '/'),
+                'full_request_uri' => (string)($server['WELINE_FULL_REQUEST_URI'] ?? ''),
+                'scheme' => (string)($server['REQUEST_SCHEME'] ?? 'http'),
+                'host' => (string)($server['HTTP_HOST'] ?? $server['SERVER_NAME'] ?? ''),
+                'ip' => (string)($server['REMOTE_ADDR'] ?? ''),
+            ],
+            'route' => [
+                'area' => (string)($server['WELINE_AREA'] ?? $current?->get('route.area', 'frontend') ?? 'frontend'),
+                'area_route' => (string)($server['WELINE_AREA_ROUTE'] ?? ''),
+                'website_id' => (int)($server['WELINE_WEBSITE_ID'] ?? 0),
+                'website_code' => (string)($server['WELINE_WEBSITE_CODE'] ?? ''),
+                'website_url' => (string)($server['WELINE_WEBSITE_URL'] ?? ''),
+                'language' => (string)($server['WELINE_USER_LANG'] ?? 'zh_Hans_CN'),
+                'currency' => (string)($server['WELINE_USER_CURRENCY'] ?? 'CNY'),
+                'is_backend' => (bool)($server['WELINE_IS_BACKEND'] ?? false),
+                'is_static' => (bool)($server['WELINE_IS_STATIC_FILE'] ?? false),
+                'url_parsed' => (bool)($server['WELINE_URL_PARSED'] ?? false),
+            ],
+            'session' => \array_merge([
+                'id' => (string)($server['WELINE_USER_SESSION_ID'] ?? $cookie['WELINE_SESSID'] ?? ''),
+                'user_id' => (int)($server['WELINE_USER_ID'] ?? 0),
+            ], $session),
+            'response' => $response,
+            'runtime' => \array_merge([
+                'redirect_count' => (int)($server['WLS_REDIRECT_COUNT'] ?? $server['REDIRECT_COUNT'] ?? 0),
+                'request_count' => (int)($server['WLS_REQUEST_COUNT'] ?? 0),
+            ], $runtime),
+        ]);
+
+        Context::enter($context);
+
+        if (\class_exists(RequestContext::class, false)) {
+            foreach (self::SERVER_MAPPINGS as $alias => $serverKey) {
+                if (\array_key_exists($serverKey, $server)) {
+                    RequestContext::set('env.' . $alias, $server[$serverKey]);
+                } else {
+                    RequestContext::remove('env.' . $alias);
+                }
             }
         }
     }
 
-    /**
-     * 重置（请求结束时调用）
-     */
     public function reset(): void
     {
-        $this->getParams = [];
-        $this->postParams = [];
-        $this->cookieParams = [];
-        $this->filesParams = [];
+        Context::leave();
+        $this->clearRequestContextEnvShadow();
         $this->overrides = [];
-        $this->initialized = false;
     }
 
-    /**
-     * 快照当前状态（用于 Fiber 上下文保存）
-     *
-     * @return array
-     */
     public function capture(): array
     {
+        $context = Context::getCurrent();
+
         return [
-            'get' => $this->getParams,
-            'post' => $this->postParams,
-            'cookie' => $this->cookieParams,
-            'files' => $this->filesParams,
+            'context' => $context?->toArray(),
+            'initialized' => $context !== null,
             'overrides' => $this->overrides,
+            'get' => $context?->query() ?? [],
+            'post' => $context?->post() ?? [],
+            'cookie' => $context?->cookie() ?? [],
+            'files' => $context?->file() ?? [],
         ];
     }
 
-    /**
-     * 恢复快照（用于 Fiber 上下文恢复）
-     *
-     * @param array $snapshot
-     * @return void
-     */
     public function restore(array $snapshot): void
     {
-        $this->getParams = $snapshot['get'] ?? [];
-        $this->postParams = $snapshot['post'] ?? [];
-        $this->cookieParams = $snapshot['cookie'] ?? [];
-        $this->filesParams = $snapshot['files'] ?? [];
-        $this->overrides = $snapshot['overrides'] ?? [];
+        $this->overrides = \is_array($snapshot['overrides'] ?? null) ? $snapshot['overrides'] : [];
+
+        if (\is_array($snapshot['context'] ?? null)) {
+            Context::enter(new Context($snapshot['context']));
+            return;
+        }
+
+        $this->initFromSnapshot(
+            (array)($snapshot['get'] ?? []),
+            (array)($snapshot['post'] ?? []),
+            (array)($snapshot['cookie'] ?? []),
+            (array)($snapshot['files'] ?? []),
+            \is_array($_SERVER ?? null) ? $_SERVER : []
+        );
     }
 
-    // ==================== 快捷访问方法 ====================
-
-    /**
-     * 获取当前区域（frontend/backend）
-     */
     public static function getArea(): string
     {
-        return (string) self::get('area', 'frontend');
+        return (string)self::get('area', 'frontend');
     }
 
-    /**
-     * 设置当前区域
-     */
     public static function setArea(string $area): void
     {
-        self::set('area', $area, 'Url::parser');
+        self::set('area', $area, 'WelineEnv::setArea');
     }
 
-    /**
-     * 获取当前语言
-     */
     public static function getLang(): string
     {
-        return (string) self::get('user.lang', 'zh_Hans_CN');
+        return (string)self::get('user.lang', 'zh_Hans_CN');
     }
 
-    /**
-     * 设置当前语言
-     */
     public static function setLang(string $lang): void
     {
-        self::set('user.lang', $lang, 'Url::parser');
+        self::set('user.lang', $lang, 'WelineEnv::setLang');
     }
 
-    /**
-     * 获取当前货币
-     */
     public static function getCurrency(): string
     {
-        return (string) self::get('user.currency', 'CNY');
+        return (string)self::get('user.currency', 'CNY');
     }
 
-    /**
-     * 设置当前货币
-     */
     public static function setCurrency(string $currency): void
     {
-        self::set('user.currency', $currency, 'Url::parser');
+        self::set('user.currency', $currency, 'WelineEnv::setCurrency');
     }
 
-    /**
-     * 获取网站 ID
-     */
     public static function getWebsiteId(): ?int
     {
-        $id = self::get('website_id');
-        return $id !== null ? (int) $id : null;
+        $value = self::get('website_id', null);
+        return $value === null ? null : (int)$value;
     }
 
-    /**
-     * 设置网站 ID
-     */
-    public static function setWebsiteId(int $id): void
-    {
-        self::set('website_id', (string) $id, 'Website resolution');
-    }
-
-    /**
-     * 获取网站 Code
-     */
     public static function getWebsiteCode(): string
     {
-        return (string) self::get('website_code', '');
+        return (string)self::get('website_code', '');
     }
 
-    /**
-     * 获取请求方案（http/https）
-     */
+    public static function getWebsiteUrl(): string
+    {
+        return (string)self::get('website_url', '');
+    }
+
     public static function getRequestScheme(): string
     {
-        return (string) self::get('request.scheme', 'http');
+        return (string)self::get('request.scheme', 'http');
     }
 
-    /**
-     * 是否 HTTPS
-     */
     public static function isHttps(): bool
     {
         return self::getRequestScheme() === 'https';
     }
 
-    /**
-     * 获取 HTTP Host
-     */
     public static function getHttpHost(): string
     {
-        return (string) self::get('server.http_host', 'localhost');
+        return (string)self::get('server.http_host', 'localhost');
     }
 
-    /**
-     * 获取客户端 IP
-     */
     public static function getClientIp(): string
     {
-        return (string) self::get('server.remote_addr', '0.0.0.0');
+        return (string)self::get('server.remote_addr', '0.0.0.0');
     }
 
-    /**
-     * 获取请求方法
-     */
     public static function getRequestMethod(): string
     {
-        return strtoupper((string) self::get('request.method', 'GET'));
+        return \strtoupper((string)self::get('request.method', 'GET'));
     }
 
-    /**
-     * 获取请求 URI
-     */
     public static function getRequestUri(): string
     {
-        return (string) self::get('request.uri', '/');
+        return (string)self::get('request.uri', '/');
     }
 
-    /**
-     * 获取用户 ID
-     */
     public static function getUserId(): ?int
     {
-        $id = self::get('user.id');
-        return $id !== null ? (int) $id : null;
+        $value = self::get('user.id', null);
+        return $value === null ? null : (int)$value;
     }
 
-    /**
-     * 获取 Session ID
-     */
     public static function getSessionId(): ?string
     {
-        return self::get('user.session_id');
+        $value = self::get('user.session_id', null);
+        return $value === null ? null : (string)$value;
     }
 
-    /**
-     * 获取 WLS 重定向次数
-     */
     public static function getRedirectCount(): int
     {
-        return (int) self::get('wls.redirect_count', 0);
+        return (int)self::get('wls.redirect_count', 0);
     }
 
-    /**
-     * 增加 WLS 重定向次数
-     */
     public static function incRedirectCount(): void
     {
-        $count = self::getRedirectCount();
-        self::set('wls.redirect_count', (string) ($count + 1), 'WlsRuntime redirect');
+        self::set('wls.redirect_count', self::getRedirectCount() + 1, 'WelineEnv::incRedirectCount');
     }
 
-    /**
-     * 是否为后台请求
-     */
     public static function isBackend(): bool
     {
         return self::getArea() === 'backend';
     }
 
-    /**
-     * 是否为前台请求
-     */
     public static function isFrontend(): bool
     {
         return self::getArea() === 'frontend';
     }
 
-    /**
-     * 是否 URL 已解析
-     */
     public static function isUrlParsed(): bool
     {
-        return (bool) self::get('url_parsed', false);
+        return (bool)self::get('url_parsed', false);
     }
 
-    /**
-     * 获取 WLS 实例名
-     */
     public static function getWlsInstanceName(): string
     {
-        return (string) self::get('wls.instance_name', '');
+        return (string)self::get('wls.instance_name', '');
     }
 
-    /**
-     * 获取 WLS 进程标签
-     */
     public static function getWlsProcessTag(): string
     {
-        return (string) self::get('wls.process_tag', '');
+        return (string)self::get('wls.process_tag', '');
     }
 
-    // ==================== 内部实现 ====================
-
-    /**
-     * 获取变量
-     */
-    private function getVar(string $key, mixed $default): mixed
+    public function isInitialized(): bool
     {
-        // 1. 先检查是否有覆盖
-        if (isset($this->overrides[$key])) {
-            return $this->overrides[$key]['value'];
-        }
-
-        // 2. 从 RequestContext 获取（WLS 模式下已同步）
-        $rcValue = RequestContext::get('env.' . $key);
-        if ($rcValue !== null) {
-            return $rcValue;
-        }
-
-        // 3. 映射键名，从 $_SERVER 读取
-        $serverKey = $this->mapToServerKey($key);
-        if ($serverKey !== null && isset($_SERVER[$serverKey])) {
-            return $_SERVER[$serverKey];
-        }
-
-        // 4. 回退到默认值
-        return $default;
+        return Context::hasCurrent();
     }
 
-    /**
-     * 设置变量
-     */
-    private function setVar(string $key, mixed $value, string $reason): void
+    public function getOverrides(): array
     {
-        $fiberId = self::getFiberId();
+        return $this->overrides;
+    }
 
+    private static function extractHeadersFromServer(array $server): array
+    {
+        $headers = [];
+        foreach ($server as $key => $value) {
+            if (!\is_string($key)) {
+                continue;
+            }
+
+            if (\str_starts_with($key, 'HTTP_')) {
+                $headers[\str_replace('_', '-', \substr($key, 5))] = $value;
+                continue;
+            }
+
+            if (\in_array($key, ['CONTENT_TYPE', 'CONTENT_LENGTH'], true)) {
+                $headers[\str_replace('_', '-', $key)] = $value;
+            }
+        }
+
+        return $headers;
+    }
+
+    private function recordOverride(string $key, mixed $value, string $reason): void
+    {
         $this->overrides[$key] = [
             'value' => $value,
             'reason' => $reason,
-            'fiber_id' => $fiberId,
+            'fiber_id' => self::getFiberId(),
             'trace' => $this->getCallerTrace(),
         ];
-
-        // 同时同步到 RequestContext
-        RequestContext::set('env.' . $key, $value);
-
-        // 如果是 $_SERVER 键名映射，也更新 $_SERVER（保持兼容性）
-        $serverKey = $this->mapToServerKey($key);
-        if ($serverKey !== null) {
-            $_SERVER[$serverKey] = $value;
-        }
     }
 
-    /**
-     * 映射别名到 $_SERVER 键名
-     */
-    private function mapToServerKey(string $key): ?string
-    {
-        return self::MAPPINGS[$key] ?? null;
-    }
-
-    /**
-     * 获取调用栈
-     */
     private function getCallerTrace(): array
     {
         $trace = \debug_backtrace(\DEBUG_BACKTRACE_IGNORE_ARGS, 8);
         $result = [];
-        foreach ($trace as $i => $t) {
-            if ($i === 0) {
-                continue; // 跳过当前方法
+        foreach ($trace as $entry) {
+            if (($entry['file'] ?? '') === __FILE__) {
+                continue;
             }
-            if (($t['file'] ?? '') === __FILE__) {
-                continue; // 跳过框架内部
+            if (!isset($entry['file'], $entry['line'])) {
+                continue;
             }
-            $result[] = ($t['file'] ?? '') . ':' . ($t['line'] ?? 0);
+            $result[] = $entry['file'] . ':' . $entry['line'];
             if (\count($result) >= 5) {
                 break;
             }
         }
+
         return $result;
     }
 
-    /**
-     * 检查是否已初始化
-     */
-    public function isInitialized(): bool
+    private function clearRequestContextEnvShadow(): void
     {
-        return $this->initialized;
-    }
+        if (!\class_exists(RequestContext::class, false)) {
+            return;
+        }
 
-    /**
-     * 获取所有覆盖记录（用于调试）
-     */
-    public function getOverrides(): array
-    {
-        return $this->overrides;
+        foreach (RequestContext::all() as $key => $_value) {
+            if (!\is_string($key) || !\str_starts_with($key, 'env.')) {
+                continue;
+            }
+            RequestContext::remove($key);
+        }
     }
 }

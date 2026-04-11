@@ -74,7 +74,6 @@ class Maintenance implements ObserverInterface
             $lang = $data->getData('language') ?? \w_env('user.lang', 'zh_Hans_CN');
             // 设置语言到 $_SERVER，以便翻译函数能够使用正确的语言
             \w_env_set('user.lang', $lang, 'Api Maintenance Observer');
-            $_SERVER['WELINE_USER_LANG'] = $lang;
 
             $retryAfter = (int)(Env::get('maintenance.retry_after', self::DEFAULT_RETRY_AFTER));
             if ($retryAfter <= 0) {

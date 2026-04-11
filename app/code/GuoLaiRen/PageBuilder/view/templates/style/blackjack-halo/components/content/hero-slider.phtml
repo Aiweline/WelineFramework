@@ -1,0 +1,886 @@
+<?php
+/**
+ * Blackjack Halo - Hero Slider Component
+ *
+ * @component_start
+ * code: hero-slider
+ * name: Hero首屏
+ * name_en: Hero Slider
+ * description: Halo 弧光首屏，遵循 tpmst banner/download 配置读取规范
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * hero.display => 显示首屏模块:select:yes|yes,no
+ *
+ * group:banner => Banner设置
+ * banner.display => 显示Banner:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用本地 hero-blackjack-halo-mobile.svg
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用本地 hero-blackjack-halo.svg
+ * banner.alt => Banner图片描述:text:Blackjack Halo table preview
+ * banner.bg_color => Banner背景颜色:color:#f6faf4
+ *
+ * group:download_btn => 下载按钮
+ * download_btn.display => 显示下载按钮:select:yes|yes,no
+ * download_btn.image => 下载按钮图片:textarea:|默认使用本地 download-btn-halo.svg
+ * download_btn.alt => 下载按钮描述:text:Download Blackjack Halo
+ * download_btn.url => 下载链接:text:#download
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 额外CSS类:textarea:bkh-hero-shell|保留兼容字段
+ * layout.margin_top => 顶部偏移(移动端):number:-28|px
+ * layout.img_margin_top => 视觉层顶部偏移(PC端):number:-18|px
+ *
+ * group:hero => 扩展文案
+ * hero.kicker => 顶部提示:text:Blackjack Halo
+ * hero.title => 主标题:text:Step Into a Cleaner Blackjack Table
+ * hero.subtitle => 副标题:textarea:Blackjack Halo keeps classic 21 play familiar while making room stakes, live tables, and mobile entry easier to scan in one pass.
+ * hero.alt => 主视觉描述:text:Blackjack Halo table preview
+ * hero.image => 主视觉图片:textarea:|留空使用默认桌面图
+ * hero.image_mobile => 移动端主视觉:textarea:|留空使用默认移动图
+ * hero.bg_color => 背景基础色:color:#f6faf4
+ * hero.cta_text => 次按钮文字:text:View Tables
+ * hero.cta_url => 次按钮链接:text:#tables
+ * hero.micro_1 => 微提示1:text:Classic blackjack rooms
+ * hero.micro_2 => 微提示2:text:Live dealer shortcuts
+ * hero.micro_3 => 微提示3:text:Mobile chip clarity
+ *
+ * group:notes => 场景提示
+ * notes.note_1_title => 提示1标题:text:Stake board first
+ * notes.note_1_desc => 提示1描述:textarea:Minimums, chips, and table focus stay readable before the player even taps in.
+ * notes.note_2_title => 提示2标题:text:Live route visible
+ * notes.note_2_desc => 提示2描述:textarea:Classic rooms, live dealer paths, and VIP jumps stay separated instead of blending together.
+ *
+ * group:lanes => 路线卡片
+ * lanes.lane_1_label => 路线1标签:text:Classic Entry
+ * lanes.lane_1_title => 路线1标题:text:Standard 21 Rooms
+ * lanes.lane_1_desc => 路线1描述:textarea:Visible stakes, clear chip prompts, and the fastest route into regular blackjack tables.
+ * lanes.lane_2_label => 路线2标签:text:Live Route
+ * lanes.lane_2_title => 路线2标题:text:Dealer-Led Tables
+ * lanes.lane_2_desc => 路线2描述:textarea:A cleaner path to live sessions with seat cues and pace notes surfaced earlier.
+ * lanes.lane_3_label => 路线3标签:text:High Limit
+ * lanes.lane_3_title => 路线3标题:text:VIP Salon Access
+ * lanes.lane_3_desc => 路线3描述:textarea:Premium blackjack rooms stay distinct instead of feeling like the same card with a new color.
+ * lanes.lane_4_label => 路线4标签:text:Quick Download
+ * lanes.lane_4_title => 路线4标题:text:APK to Table Flow
+ * lanes.lane_4_desc => 路线4描述:textarea:Download actions and room jumps stay close together, especially on mobile-first entry screens.
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page') ?? null;
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+$componentId = 'bkh-hero-' . uniqid();
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function(array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$display = $normalizeToggle($getConfigAny(['hero.display', 'banner.display'], 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$bannerBgColor = $getConfigAny(['hero.bg_color', 'banner.bg_color'], '#f6faf4');
+$bannerAlt = $getConfigAny(['hero.alt', 'banner.alt'], 'Blackjack Halo table preview');
+$bannerImageDesktop = trim((string)$getConfigAny(['hero.image', 'banner.image_desktop'], ''));
+$bannerImageMobile = trim((string)$getConfigAny(['hero.image_mobile', 'banner.image_mobile'], ''));
+$downloadDisplay = $normalizeToggle($getConfig('download_btn.display', 'yes')) !== 'no';
+$downloadImage = trim((string)$getConfig('download_btn.image', ''));
+$downloadAlt = $getConfig('download_btn.alt', 'Download Blackjack Halo');
+$downloadUrl = $getConfig('download_btn.url', '#download');
+$sliderClasses = trim((string)$getConfig('layout.slider_classes', 'bkh-hero-shell'));
+$marginTop = (int)$getConfig('layout.margin_top', '-28');
+$imgMarginTop = (int)$getConfig('layout.img_margin_top', '-0');
+
+$defaultDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/hero-blackjack-halo.svg');
+$defaultMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/hero-blackjack-halo-mobile.svg');
+$defaultDownload = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/download-btn-halo.svg');
+
+$finalDesktop = $bannerImageDesktop !== '' ? $bannerImageDesktop : $defaultDesktop;
+$finalMobile = $bannerImageMobile !== '' ? $bannerImageMobile : $defaultMobile;
+$finalDownload = $downloadImage !== '' ? $downloadImage : $defaultDownload;
+
+$rawTitle = $getConfig('hero.title', '');
+if ($rawTitle === '') {
+    $rawTitle = $page ? ($page->getData('title') ?: 'Blackjack Halo') : 'Blackjack Halo';
+}
+$rawTitle = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', trim((string)$rawTitle));
+$title = $rawTitle !== '' ? $rawTitle : 'Step Into a Cleaner Blackjack Table';
+
+$subtitle = $getConfig('hero.subtitle', '');
+if ($subtitle === '') {
+    $subtitle = $page ? ($page->getData('meta_description') ?: '') : '';
+}
+if ($subtitle !== '' && (mb_strpos($subtitle, '预览模式') !== false || stripos($subtitle, 'preview') !== false)) {
+    $subtitle = '';
+}
+if ($subtitle === '') {
+    $subtitle = 'Blackjack Halo keeps classic 21 play familiar while making room stakes, live tables, and mobile entry easier to scan in one pass.';
+}
+
+$heroKicker = $getConfig('hero.kicker', 'Blackjack Halo');
+$secondaryCtaText = $getConfig('hero.cta_text', 'View Tables');
+$secondaryCtaUrl = $getConfig('hero.cta_url', '#tables');
+$note1Title = $getConfig('notes.note_1_title', 'Stake board first');
+$note1Desc = $getConfig('notes.note_1_desc', 'Minimums, chips, and table focus stay readable before the player even taps in.');
+$note2Title = $getConfig('notes.note_2_title', 'Live route visible');
+$note2Desc = $getConfig('notes.note_2_desc', 'Classic rooms, live dealer paths, and VIP jumps stay separated instead of blending together.');
+
+$highlights = [
+    [
+        'label' => $getConfig('lanes.lane_1_label', 'Classic Entry'),
+        'title' => $getConfig('lanes.lane_1_title', 'Standard 21 Rooms'),
+        'detail' => $getConfig('lanes.lane_1_desc', 'Visible stakes, clear chip prompts, and the fastest route into regular blackjack tables.'),
+    ],
+    [
+        'label' => $getConfig('lanes.lane_2_label', 'Live Route'),
+        'title' => $getConfig('lanes.lane_2_title', 'Dealer-Led Tables'),
+        'detail' => $getConfig('lanes.lane_2_desc', 'A cleaner path to live sessions with seat cues and pace notes surfaced earlier.'),
+    ],
+    [
+        'label' => $getConfig('lanes.lane_3_label', 'High Limit'),
+        'title' => $getConfig('lanes.lane_3_title', 'VIP Salon Access'),
+        'detail' => $getConfig('lanes.lane_3_desc', 'Premium blackjack rooms stay distinct instead of feeling like the same card with a new color.'),
+    ],
+    [
+        'label' => $getConfig('lanes.lane_4_label', 'Quick Download'),
+        'title' => $getConfig('lanes.lane_4_title', 'APK to Table Flow'),
+        'detail' => $getConfig('lanes.lane_4_desc', 'Download actions and room jumps stay close together, especially on mobile-first entry screens.'),
+    ],
+];
+
+$microNotes = [
+    $getConfig('hero.micro_1', 'Classic blackjack rooms'),
+    $getConfig('hero.micro_2', 'Live dealer shortcuts'),
+    $getConfig('hero.micro_3', 'Mobile chip clarity'),
+];
+$microNotes = array_values(array_filter(array_map('trim', $microNotes), static function ($item) {
+    return $item !== '';
+}));
+?>
+
+<section id="<?= $componentId ?>" class="bkh-hero <?= htmlspecialchars($sliderClasses) ?>" aria-label="Blackjack Halo hero">
+    <div class="hero-shell">
+        <div class="hero-copy">
+            <span class="hero-kicker"><?= htmlspecialchars($heroKicker) ?></span>
+            <h1><?= htmlspecialchars($title) ?></h1>
+            <p class="hero-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+
+            <div class="hero-micro" aria-label="Hero highlights">
+                <?php foreach ($microNotes as $note): ?>
+                    <span><?= htmlspecialchars($note) ?></span>
+                <?php endforeach; ?>
+            </div>
+
+            <div class="hero-actions">
+                <?php if ($downloadDisplay && $finalDownload): ?>
+                    <a class="hero-download" href="<?= htmlspecialchars($downloadUrl) ?>">
+                        <img src="<?= htmlspecialchars($finalDownload) ?>" alt="<?= htmlspecialchars($downloadAlt) ?>" loading="eager" decoding="async">
+                    </a>
+                <?php endif; ?>
+
+                <?php if ($secondaryCtaText !== ''): ?>
+                    <a class="hero-secondary" href="<?= htmlspecialchars($secondaryCtaUrl) ?>">
+                        <span><?= htmlspecialchars($secondaryCtaText) ?></span>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <div class="hero-theatre" style="--hero-visual-offset: <?= $imgMarginTop ?>px;">
+            <div class="theatre-backdrop" aria-hidden="true"></div>
+            <div class="theatre-ellipse ellipse-one" aria-hidden="true"></div>
+            <div class="theatre-ellipse ellipse-two" aria-hidden="true"></div>
+            <div class="theatre-ellipse ellipse-three" aria-hidden="true"></div>
+            <div class="theatre-ellipse ellipse-four" aria-hidden="true"></div>
+            <div class="theatre-ellipse ellipse-five" aria-hidden="true"></div>
+            <div class="theatre-ellipse ellipse-six" aria-hidden="true"></div>
+            <div class="theatre-orbit orbit-left" aria-hidden="true"></div>
+            <div class="theatre-orbit orbit-right" aria-hidden="true"></div>
+            <div class="theatre-note note-left">
+                <strong><?= htmlspecialchars($note1Title) ?></strong>
+                <span><?= htmlspecialchars($note1Desc) ?></span>
+            </div>
+            <div class="theatre-note note-right">
+                <strong><?= htmlspecialchars($note2Title) ?></strong>
+                <span><?= htmlspecialchars($note2Desc) ?></span>
+            </div>
+            <div class="hero-visual">
+                <picture>
+                    <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($finalMobile) ?>">
+                    <img src="<?= htmlspecialchars($finalDesktop) ?>" alt="<?= htmlspecialchars($bannerAlt) ?>" fetchpriority="high" decoding="async">
+                </picture>
+            </div>
+        </div>
+
+        <div class="hero-lanes">
+            <?php foreach ($highlights as $index => $item): ?>
+                <article class="lane-card lane-card-<?= (int)$index ?>">
+                    <span class="lane-node" aria-hidden="true"></span>
+                    <span class="lane-label"><?= htmlspecialchars($item['label']) ?></span>
+                    <strong><?= htmlspecialchars($item['title']) ?></strong>
+                    <p><?= htmlspecialchars($item['detail']) ?></p>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    margin-top: <?= $marginTop ?>px;
+    padding: clamp(6.6rem, 10vw, 8.4rem) 0 clamp(4rem, 7vw, 5.8rem);
+    background:
+        radial-gradient(760px 360px at 10% 8%, rgba(211, 160, 58, 0.14), transparent 66%),
+        radial-gradient(720px 380px at 88% 12%, rgba(31, 122, 91, 0.14), transparent 68%),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 32%),
+        <?= htmlspecialchars($bannerBgColor) ?>;
+    overflow: hidden;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0) 28%),
+        repeating-linear-gradient(120deg, rgba(35, 67, 55, 0.028) 0 1px, transparent 1px 24px);
+    opacity: 0.8;
+}
+
+#<?= $componentId ?> .hero-shell {
+    width: min(1240px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+    display: grid;
+    gap: 1.25rem;
+}
+
+#<?= $componentId ?> .hero-copy {
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+}
+
+#<?= $componentId ?> .hero-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.46rem 0.88rem;
+    border-radius: 999px;
+    background: rgba(31, 122, 91, 0.08);
+    border: 1px solid rgba(31, 122, 91, 0.16);
+    color: #1a5d47;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> h1 {
+    margin-top: 1rem;
+    color: #1e322c;
+    font-size: clamp(2.9rem, 6.2vw, 5.8rem);
+    line-height: 0.94;
+    letter-spacing: -0.06em;
+}
+
+#<?= $componentId ?> .hero-subtitle {
+    max-width: 49rem;
+    margin: 1rem auto 0;
+    color: #5d7268;
+    font-size: clamp(1rem, 1.8vw, 1.14rem);
+    line-height: 1.86;
+}
+
+#<?= $componentId ?> .hero-micro {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.55rem;
+    margin-top: 1.05rem;
+}
+
+#<?= $componentId ?> .hero-micro span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.48rem 0.78rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.74);
+    border: 1px solid rgba(32, 53, 45, 0.08);
+    color: #60766d;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.9rem;
+    margin-top: 1.45rem;
+}
+
+#<?= $componentId ?> .hero-download img {
+    width: min(260px, 72vw);
+    height: auto;
+    transition: transform 0.22s ease, filter 0.22s ease;
+    filter: drop-shadow(0 16px 24px rgba(31, 82, 63, 0.14));
+}
+
+#<?= $componentId ?> .hero-download:hover img {
+    transform: translateY(-2px) scale(1.01);
+}
+
+#<?= $componentId ?> .hero-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0.72rem 1.2rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.74);
+    border: 1px solid rgba(211, 160, 58, 0.22);
+    color: #1e4f3d;
+    text-decoration: none;
+    font-weight: 800;
+    transition: transform 0.22s ease, background 0.22s ease;
+}
+
+#<?= $componentId ?> .hero-secondary:hover {
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.92);
+}
+
+#<?= $componentId ?> .hero-theatre {
+    position: relative;
+    min-height: 520px;
+    display: grid;
+    place-items: center;
+    isolation: isolate;
+    overflow: visible;
+}
+
+#<?= $componentId ?> .theatre-backdrop,
+#<?= $componentId ?> .theatre-ellipse,
+#<?= $componentId ?> .theatre-orbit {
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .theatre-backdrop {
+    --ellipse-rot-start: -4deg;
+    z-index: 1;
+    width: min(900px, 95vw);
+    height: min(430px, 58vw);
+    border-radius: 46% 54% 52% 48% / 44% 47% 53% 56%;
+    background:
+        radial-gradient(circle at 50% 46%, rgba(255,255,255,0.86) 0%, rgba(255,255,255,0.26) 16%, transparent 38%),
+        linear-gradient(135deg, rgba(31, 122, 91, 0.2) 0%, rgba(208, 160, 63, 0.2) 48%, rgba(255,255,255,0.08) 100%);
+    filter: blur(8px);
+    opacity: 0.32;
+    animation: bkh-ellipse-orbit 26s cubic-bezier(0.58, 0.08, 0.22, 0.96) infinite;
+}
+
+#<?= $componentId ?> .theatre-ellipse {
+    border: none;
+    box-shadow:
+        inset 0 0 48px rgba(255,255,255,0.14),
+        0 18px 26px rgba(19, 53, 42, 0.08);
+    opacity: 0.88;
+    filter: blur(0);
+    backdrop-filter: blur(10px) saturate(122%);
+    transform-origin: 50% 50%;
+    will-change: transform, opacity;
+    animation: bkh-ellipse-orbit var(--ellipse-duration, 24s) cubic-bezier(0.58, 0.08, 0.22, 0.96) infinite;
+}
+
+#<?= $componentId ?> .ellipse-one {
+    --ellipse-rot-start: -14deg;
+    --ellipse-duration: 29s;
+    z-index: 2;
+    width: min(320px, 34vw);
+    height: min(274px, 28vw);
+    border-radius: 34% 66% 58% 42% / 58% 34% 66% 42%;
+    background:
+        radial-gradient(circle at 28% 24%, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.08) 24%, transparent 46%),
+        linear-gradient(135deg, rgba(31, 122, 91, 0.24) 0%, rgba(208, 160, 63, 0.1) 48%, rgba(255,255,255,0.08) 100%);
+    left: 12%;
+    top: 12%;
+    animation-delay: -3.8s;
+}
+
+#<?= $componentId ?> .ellipse-two {
+    --ellipse-rot-start: 16deg;
+    --ellipse-duration: 23.5s;
+    z-index: 2;
+    width: min(296px, 31vw);
+    height: min(252px, 26vw);
+    border-radius: 61% 39% 47% 53% / 44% 57% 43% 56%;
+    background:
+        radial-gradient(circle at 66% 18%, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.06) 26%, transparent 48%),
+        linear-gradient(145deg, rgba(208, 160, 63, 0.24) 0%, rgba(255,255,255,0.1) 54%, rgba(31, 122, 91, 0.14) 100%);
+    right: 12%;
+    top: 11%;
+    animation-direction: reverse;
+    animation-delay: -5.4s;
+}
+
+#<?= $componentId ?> .ellipse-three {
+    --ellipse-rot-start: 10deg;
+    --ellipse-duration: 21s;
+    z-index: 3;
+    width: min(268px, 29vw);
+    height: min(228px, 24vw);
+    border-radius: 43% 57% 34% 66% / 58% 38% 62% 42%;
+    background:
+        radial-gradient(circle at 34% 72%, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.08) 22%, transparent 44%),
+        linear-gradient(145deg, rgba(255,255,255,0.18) 0%, rgba(31, 122, 91, 0.18) 52%, rgba(208, 160, 63, 0.12) 100%);
+    left: 5%;
+    bottom: 6%;
+    animation-delay: -2.1s;
+}
+
+#<?= $componentId ?> .ellipse-four {
+    --ellipse-rot-start: -26deg;
+    --ellipse-duration: 18s;
+    z-index: 6;
+    width: min(214px, 23vw);
+    height: min(186px, 20vw);
+    border-radius: 54% 46% 63% 37% / 39% 55% 45% 61%;
+    background:
+        radial-gradient(circle at 58% 24%, rgba(255,255,255,0.72) 0%, rgba(255,255,255,0.06) 28%, transparent 48%),
+        linear-gradient(145deg, rgba(255,255,255,0.34) 0%, rgba(208, 160, 63, 0.22) 58%, rgba(31, 122, 91, 0.1) 100%);
+    left: 10%;
+    top: 58%;
+    opacity: 0.94;
+    animation-delay: -6.2s;
+}
+
+#<?= $componentId ?> .ellipse-five {
+    --ellipse-rot-start: 24deg;
+    --ellipse-duration: 19.5s;
+    z-index: 6;
+    width: min(196px, 21vw);
+    height: min(172px, 18vw);
+    border-radius: 37% 63% 48% 52% / 61% 35% 65% 39%;
+    background:
+        radial-gradient(circle at 38% 26%, rgba(255,255,255,0.62) 0%, rgba(255,255,255,0.08) 22%, transparent 44%),
+        linear-gradient(145deg, rgba(255,255,255,0.32) 0%, rgba(31, 122, 91, 0.18) 46%, rgba(208, 160, 63, 0.14) 100%);
+    right: 9%;
+    top: -8%;
+    opacity: 0.92;
+    animation-direction: reverse;
+    animation-delay: -4.7s;
+}
+
+#<?= $componentId ?> .ellipse-six {
+    --ellipse-rot-start: -18deg;
+    --ellipse-duration: 16.5s;
+    z-index: 6;
+    width: min(178px, 19vw);
+    height: min(156px, 17vw);
+    border-radius: 59% 41% 53% 47% / 47% 64% 36% 53%;
+    background:
+        radial-gradient(circle at 64% 30%, rgba(255,255,255,0.58) 0%, rgba(255,255,255,0.06) 24%, transparent 46%),
+        linear-gradient(145deg, rgba(208, 160, 63, 0.22) 0%, rgba(255,255,255,0.24) 48%, rgba(31, 122, 91, 0.1) 100%);
+    right: 9%;
+    bottom: -9%;
+    opacity: 0.88;
+    animation-delay: -1.9s;
+}
+
+#<?= $componentId ?> .theatre-orbit {
+    z-index: 5;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.36);
+    opacity: 0.52;
+    animation: bkh-orbit-pulse 8.5s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .orbit-left {
+    --orbit-rot: -18deg;
+    width: min(170px, 20vw);
+    height: min(72px, 8vw);
+    left: 6%;
+    top: 22%;
+}
+
+#<?= $componentId ?> .orbit-right {
+    --orbit-rot: 16deg;
+    width: min(150px, 18vw);
+    height: min(64px, 7vw);
+    right: 7%;
+    bottom: 20%;
+    animation-delay: -3.2s;
+}
+
+#<?= $componentId ?> .hero-visual {
+    position: relative;
+    z-index: 7;
+    width: min(860px, 92%);
+    margin-top: var(--hero-visual-offset);
+    filter: drop-shadow(0 36px 46px rgba(19, 53, 42, 0.15));
+    animation: bkh-hero-float 6.6s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .hero-visual img {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+#<?= $componentId ?> .theatre-note {
+    position: absolute;
+    z-index: 11;
+    width: min(220px, 32vw);
+    padding: 0.95rem 1rem;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(32, 53, 45, 0.08);
+    box-shadow: 0 18px 30px rgba(31, 82, 63, 0.08);
+    backdrop-filter: blur(10px);
+}
+
+#<?= $componentId ?> .note-left {
+    left: 4%;
+    top: 30%;
+}
+
+#<?= $componentId ?> .note-right {
+    right: 4%;
+    top: 54%;
+}
+
+#<?= $componentId ?> .theatre-note strong {
+    display: block;
+    color: #1e322c;
+    font-size: 0.98rem;
+}
+
+#<?= $componentId ?> .theatre-note span {
+    display: block;
+    margin-top: 0.32rem;
+    color: #6b8178;
+    font-size: 0.86rem;
+    line-height: 1.56;
+}
+
+#<?= $componentId ?> .hero-lanes {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.95rem;
+    align-items: start;
+    padding-top: 1.2rem;
+}
+
+#<?= $componentId ?> .hero-lanes::before {
+    content: '';
+    position: absolute;
+    left: 4%;
+    right: 4%;
+    top: 2rem;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(31,122,91,0.1) 0%, rgba(208,160,63,0.42) 50%, rgba(31,122,91,0.1) 100%);
+    box-shadow: 0 0 14px rgba(208, 160, 63, 0.1);
+}
+
+#<?= $componentId ?> .lane-card {
+    position: relative;
+    padding: 2.6rem 1.05rem 1.05rem;
+    border-radius: 26px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(246, 251, 245, 0.72) 100%);
+    border: 1px solid rgba(32, 53, 45, 0.08);
+    box-shadow: 0 18px 32px rgba(31, 82, 63, 0.08);
+    text-align: left;
+}
+
+#<?= $componentId ?> .lane-card::before {
+    content: '';
+    position: absolute;
+    left: 1.3rem;
+    top: -1.05rem;
+    width: 2px;
+    height: 1.05rem;
+    background: linear-gradient(180deg, rgba(208,160,63,0.52) 0%, rgba(31,122,91,0) 100%);
+}
+
+#<?= $componentId ?> .lane-card-1,
+#<?= $componentId ?> .lane-card-3 {
+    margin-top: 2.15rem;
+}
+
+#<?= $componentId ?> .lane-card-2 {
+    margin-top: 0.35rem;
+}
+
+#<?= $componentId ?> .lane-node {
+    position: absolute;
+    left: 0.88rem;
+    top: -1.45rem;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.92) 0%, rgba(208,160,63,0.88) 42%, rgba(31,122,91,0.5) 100%);
+    box-shadow: 0 0 0 6px rgba(255,255,255,0.55), 0 0 14px rgba(208, 160, 63, 0.16);
+}
+
+#<?= $componentId ?> .lane-label {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.38rem 0.74rem;
+    border-radius: 999px;
+    background: rgba(31, 122, 91, 0.08);
+    border: 1px solid rgba(31, 122, 91, 0.12);
+    color: #1d624c;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+#<?= $componentId ?> .lane-card strong {
+    display: block;
+    margin-top: 0.72rem;
+    color: #20463a;
+    font-size: clamp(1.02rem, 1.8vw, 1.22rem);
+    line-height: 1.34;
+}
+
+#<?= $componentId ?> .lane-card p {
+    margin-top: 0.55rem;
+    color: #688078;
+    font-size: 0.9rem;
+    line-height: 1.72;
+}
+
+@keyframes bkh-ellipse-orbit {
+    0% {
+        transform: rotate(var(--ellipse-rot-start, 0deg)) translate3d(0, 0, 0) scale3d(1, 1, 1);
+    }
+    16% {
+        transform: rotate(calc(var(--ellipse-rot-start, 0deg) + 62deg)) translate3d(14px, -10px, 0) scale3d(1.05, 0.98, 1);
+    }
+    31% {
+        transform: rotate(calc(var(--ellipse-rot-start, 0deg) + 138deg)) translate3d(-9px, 13px, 0) scale3d(0.97, 1.04, 1);
+    }
+    49% {
+        transform: rotate(calc(var(--ellipse-rot-start, 0deg) + 214deg)) translate3d(15px, 7px, 0) scale3d(1.03, 1.06, 1);
+    }
+    68% {
+        transform: rotate(calc(var(--ellipse-rot-start, 0deg) + 286deg)) translate3d(-11px, -14px, 0) scale3d(0.98, 0.95, 1);
+    }
+    84% {
+        transform: rotate(calc(var(--ellipse-rot-start, 0deg) + 332deg)) translate3d(9px, 11px, 0) scale3d(1.02, 1, 1);
+    }
+    100% {
+        transform: rotate(calc(var(--ellipse-rot-start, 0deg) + 360deg)) translate3d(0, 0, 0) scale3d(1, 1, 1);
+    }
+}
+
+@keyframes bkh-orbit-pulse {
+    0%, 100% { opacity: 0.34; transform: scale(1) rotate(var(--orbit-rot, 0deg)); }
+    50% { opacity: 0.62; transform: scale(1.08) rotate(var(--orbit-rot, 0deg)); }
+}
+
+@keyframes bkh-hero-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .theatre-note {
+        width: min(200px, 40vw);
+    }
+
+    #<?= $componentId ?> .hero-lanes {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #<?= $componentId ?> .hero-lanes::before {
+        display: none;
+    }
+
+    #<?= $componentId ?> .lane-card,
+    #<?= $componentId ?> .lane-card-1,
+    #<?= $componentId ?> .lane-card-2,
+    #<?= $componentId ?> .lane-card-3 {
+        margin-top: 0;
+    }
+
+    #<?= $componentId ?> .note-left {
+        left: 1%;
+    }
+
+    #<?= $componentId ?> .note-right {
+        right: 1%;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        margin-top: <?= $marginTop ?>px;
+        padding: 5.6rem 0 4rem;
+    }
+
+    #<?= $componentId ?> .hero-shell {
+        width: min(1240px, calc(100% - 0.9rem));
+    }
+
+    #<?= $componentId ?> .hero-theatre {
+        min-height: 380px;
+    }
+
+    #<?= $componentId ?> .theatre-note {
+        display: none;
+    }
+
+    #<?= $componentId ?> .hero-lanes {
+        display: flex;
+        gap: 0.85rem;
+        padding: 0.2rem 0.25rem 0.35rem;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+    }
+
+    #<?= $componentId ?> .hero-lanes::-webkit-scrollbar {
+        display: none;
+    }
+
+    #<?= $componentId ?> .hero-lanes::before,
+    #<?= $componentId ?> .lane-card::before {
+        display: none;
+    }
+
+    #<?= $componentId ?> .lane-card {
+        flex: 0 0 min(82vw, 320px);
+        scroll-snap-align: center;
+        padding: 1.2rem 1rem 1rem;
+        border-radius: 24px;
+        box-shadow: 0 18px 30px rgba(31, 82, 63, 0.1);
+        transform: rotate(calc((var(--mobile-tilt, 0) * 1deg)));
+    }
+
+    #<?= $componentId ?> .lane-card-0 { --mobile-tilt: -1.8; }
+    #<?= $componentId ?> .lane-card-1 { --mobile-tilt: 1.2; }
+    #<?= $componentId ?> .lane-card-2 { --mobile-tilt: -1; }
+    #<?= $componentId ?> .lane-card-3 { --mobile-tilt: 1.6; }
+
+    #<?= $componentId ?> .lane-card::after {
+        content: '';
+        position: absolute;
+        inset: auto 1rem 0.75rem 1rem;
+        height: 3px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, rgba(31,122,91,0.18) 0%, rgba(208,160,63,0.76) 100%);
+        opacity: 0.92;
+    }
+
+    #<?= $componentId ?> .lane-node {
+        position: static;
+        margin-bottom: 0.7rem;
+        box-shadow: 0 0 0 4px rgba(255,255,255,0.5), 0 0 10px rgba(208, 160, 63, 0.12);
+    }
+
+    #<?= $componentId ?> .lane-label {
+        font-size: 0.68rem;
+    }
+
+    #<?= $componentId ?> .lane-card strong {
+        font-size: 1.05rem;
+    }
+
+    #<?= $componentId ?> .lane-card p {
+        font-size: 0.86rem;
+        line-height: 1.68;
+        padding-bottom: 0.8rem;
+    }
+
+    #<?= $componentId ?> .theatre-backdrop {
+        width: min(520px, 96vw);
+        height: min(290px, 56vw);
+    }
+
+    #<?= $componentId ?> .ellipse-one,
+    #<?= $componentId ?> .ellipse-two {
+        width: min(200px, 42vw);
+        height: min(170px, 34vw);
+    }
+
+    #<?= $componentId ?> .ellipse-three,
+    #<?= $componentId ?> .ellipse-four,
+    #<?= $componentId ?> .ellipse-five,
+    #<?= $componentId ?> .ellipse-six {
+        width: min(144px, 30vw);
+        height: min(124px, 26vw);
+    }
+
+    #<?= $componentId ?> .orbit-left,
+    #<?= $componentId ?> .orbit-right {
+        width: min(96px, 24vw);
+        height: min(40px, 10vw);
+    }
+
+    #<?= $componentId ?> .ellipse-four {
+        left: 5%;
+        top: 22%;
+    }
+
+    #<?= $componentId ?> .ellipse-five {
+        right: 4%;
+        top: 28%;
+    }
+
+    #<?= $componentId ?> .ellipse-six {
+        right: 10%;
+        bottom: 14%;
+    }
+
+    #<?= $componentId ?> .hero-visual {
+        width: min(92vw, 740px);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .theatre-backdrop,
+    #<?= $componentId ?> .theatre-ellipse,
+    #<?= $componentId ?> .theatre-orbit,
+    #<?= $componentId ?> .hero-visual {
+        animation: none;
+    }
+}
+</style>

@@ -1,0 +1,732 @@
+<?php
+/**
+ * Teen Patti Octane - Advantages Component
+ *
+ * @component_start
+ * code: advantages
+ * name: 优势展示
+ * name_en: Advantages Section
+ * description: 展示产品/应用核心优势，桌面扇形卡片与移动端星轨布局
+ * category: content
+ * region: content
+ * thumbnail: asset/img/our-advantages/icon01.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示设置
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示描述:select:yes|yes,no
+ * display.show_button => 显示按钮:select:yes|yes,no
+ *
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#0b1f2d
+ * style.title_color => 标题颜色:color:#ffd6a8
+ * style.title_font_size => 标题字号(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:24|px
+ * style.card_title_color => 卡片标题颜色:color:#ffd6a8
+ * style.card_title_font_size => 卡片标题字号:number:18|px
+ * style.card_desc_color => 卡片描述颜色:color:#fff5ea
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.icon_size => 图标尺寸:number:85|px
+ * style.icon_border_radius => 图标圆角:number:50|%
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:30|px
+ *
+ * group:button => 按钮设置
+ * button.text => 按钮文本:text:Join Table
+ * button.url => 按钮链接:text:#download
+ * button.bg_gradient_start => 按钮渐变起始色:color:#ff9f4d
+ * button.bg_gradient_end => 按钮渐变结束色:color:#ff4d4d
+ * button.text_color => 按钮文字颜色:color:#2b140d
+ * button.border_radius => 按钮圆角:number:999|px
+ * button.padding_x => 按钮水平内边距:number:32|px
+ * button.padding_y => 按钮垂直内边距:number:10|px
+ *
+ * group:icons => 图标设置
+ * icons.icon_1 => 优势1图标:textarea:|默认使用本地图标icon01.webp
+ * icons.icon_2 => 优势2图标:textarea:|默认使用本地图标icon02.webp
+ * icons.icon_3 => 优势3图标:textarea:|默认使用本地图标icon03.webp
+ *
+ * group:texts => 文本设置
+ * texts.kicker => 顶部提示:text:Teen Patti Octane
+ * texts.mobile_core_top => 移动核心上文字:text:Octane
+ * texts.mobile_core_bottom => 移动核心下文字:text:Edge
+ * texts.title => 区域标题:text:Our Advantages
+ * texts.summary => 区域摘要:text:Three signals shaping faster entry, steadier rounds, and cleaner decisions.
+ * texts.advantage_1_tag => 优势1标签:text:Quick Entry
+ * texts.advantage_1_title => 优势1标题:text:Fast Teen Patti Entry
+ * texts.advantage_1_desc => 优势1描述:textarea:Open active Teen Patti rooms quickly with fewer taps and clearer mode grouping.
+ * texts.advantage_2_tag => 优势2标签:text:Round Sync
+ * texts.advantage_2_title => 优势2标题:text:Stable Round Sync
+ * texts.advantage_2_desc => 优势2描述:textarea:Card state and wallet values update in a clean rhythm across repeat rounds.
+ * texts.advantage_3_tag => 优势3标签:text:Smart Pace
+ * texts.advantage_3_title => 优势3标题:text:Pace-Friendly UI
+ * texts.advantage_3_desc => 优势3描述:textarea:Readable hierarchy and stronger focus zones help players scan decisions faster.
+ *
+ * @fields_end
+ */
+
+$componentId = 'oct-advantages-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+$showButton = $getConfig('display.show_button', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('advantages.bg_color', '#0b1f2d'));
+$titleColor = $getConfig('style.title_color', '#ffd6a8');
+$titleFontSize = (int)$getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = (int)$getConfig('style.title_font_size_mobile', '24');
+$cardTitleColor = $getConfig('style.card_title_color', '#ffd6a8');
+$cardTitleFontSize = (int)$getConfig('style.card_title_font_size', '18');
+$cardDescColor = $getConfig('style.card_desc_color', '#fff5ea');
+$cardDescFontSize = (int)$getConfig('style.card_desc_font_size', '14');
+$iconSize = (int)$getConfig('style.icon_size', '85');
+$iconBorderRadius = (int)$getConfig('style.icon_border_radius', '50');
+$sectionPadding = (int)$getConfig('style.section_padding', '60');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '40');
+$cardGap = (int)$getConfig('style.card_gap', '30');
+
+$btnText = $getConfig('button.text', 'Join Table');
+$btnUrl = $getConfig('button.url', '#download');
+$btnGradientStart = $getConfig('button.bg_gradient_start', '#ff9f4d');
+$btnGradientEnd = $getConfig('button.bg_gradient_end', '#ff4d4d');
+$btnTextColor = $getConfig('button.text_color', '#2b140d');
+$btnBorderRadius = (int)$getConfig('button.border_radius', '999');
+$btnPaddingX = (int)$getConfig('button.padding_x', '32');
+$btnPaddingY = (int)$getConfig('button.padding_y', '10');
+
+$defaultIcon1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-octane/asset/img/our-advantages/icon01.webp');
+$defaultIcon2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-octane/asset/img/our-advantages/icon02.webp');
+$defaultIcon3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/teen-patti-octane/asset/img/our-advantages/icon03.webp');
+
+$icon1 = $getConfig('icons.icon_1', $getConfig('advantages.icon_1', '')) ?: $defaultIcon1;
+$icon2 = $getConfig('icons.icon_2', $getConfig('advantages.icon_2', '')) ?: $defaultIcon2;
+$icon3 = $getConfig('icons.icon_3', $getConfig('advantages.icon_3', '')) ?: $defaultIcon3;
+
+$kicker = $getConfig('texts.kicker', 'Teen Patti Octane');
+$mobileCoreTop = $getConfig('texts.mobile_core_top', 'Octane');
+$mobileCoreBottom = $getConfig('texts.mobile_core_bottom', 'Edge');
+$title = $getConfig('texts.title', $getConfig('advantages.title', 'Our Advantages'));
+$summary = $getConfig('texts.summary', $getConfig('texts.advantages_summary', 'Three signals shaping faster entry, steadier rounds, and cleaner decisions.'));
+$tag1 = $getConfig('texts.advantage_1_tag', 'Quick Entry');
+$title1 = $getConfig('texts.advantage_1_title', $getConfig('texts.game_teen_patti_speed', 'Fast Teen Patti Entry'));
+$desc1 = $getConfig('texts.advantage_1_desc', $getConfig('texts.game_teen_patti_speed_desc', 'Open active Teen Patti rooms quickly with fewer taps and clearer mode grouping.'));
+$tag2 = $getConfig('texts.advantage_2_tag', 'Round Sync');
+$title2 = $getConfig('texts.advantage_2_title', $getConfig('texts.game_rummy_master', 'Stable Round Sync'));
+$desc2 = $getConfig('texts.advantage_2_desc', $getConfig('texts.game_rummy_master_desc', 'Card state and wallet values update in a clean rhythm across repeat rounds.'));
+$tag3 = $getConfig('texts.advantage_3_tag', 'Smart Pace');
+$title3 = $getConfig('texts.advantage_3_title', $getConfig('texts.game_slots_meta', 'Pace-Friendly UI'));
+$desc3 = $getConfig('texts.advantage_3_desc', $getConfig('texts.game_slots_meta_desc', 'Readable hierarchy and stronger focus zones help players scan decisions faster.'));
+
+$cards = [
+    ['icon' => $icon1, 'title' => $title1, 'desc' => $desc1, 'tone' => 'left', 'tag' => $tag1],
+    ['icon' => $icon2, 'title' => $title2, 'desc' => $desc2, 'tone' => 'center', 'tag' => $tag2],
+    ['icon' => $icon3, 'title' => $title3, 'desc' => $desc3, 'tone' => 'right', 'tag' => $tag3],
+];
+?>
+
+<section id="<?= $componentId ?>" class="oct-advantages" aria-labelledby="<?= $componentId ?>-title">
+    <div class="section-inner">
+        <?php if ($showTitle || $showButton): ?>
+            <header class="adv-head">
+                <?php if ($showTitle): ?>
+                    <span class="adv-kicker"><?= htmlspecialchars($kicker) ?></span>
+                <?php endif; ?>
+                <div class="adv-head-main<?= !$showTitle ? ' adv-head-main-only' : '' ?>">
+                    <?php if ($showTitle): ?>
+                        <div>
+                        <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+                        <?php if ($showDescription && $summary !== ''): ?>
+                            <p class="adv-summary"><?= htmlspecialchars($summary) ?></p>
+                        <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($showButton): ?>
+                        <a href="<?= htmlspecialchars($btnUrl) ?>" class="adv-cta adv-cta-head"><?= htmlspecialchars($btnText) ?></a>
+                    <?php endif; ?>
+                </div>
+            </header>
+        <?php endif; ?>
+
+        <div class="adv-desktop-fan" style="--adv-gap: <?= (int)$cardGap ?>px;">
+            <?php foreach ($cards as $card): ?>
+                <article class="fan-card fan-<?= htmlspecialchars($card['tone']) ?>">
+                    <div class="fan-orbit" aria-hidden="true"></div>
+                    <div class="fan-headline">
+                        <div class="fan-icon-wrap">
+                            <img class="fan-icon" src="<?= htmlspecialchars($card['icon']) ?>" alt="<?= htmlspecialchars($card['title']) ?>" loading="lazy" decoding="async">
+                        </div>
+                        <div class="fan-title-wrap">
+                            <span class="fan-tag"><?= htmlspecialchars($card['tag']) ?></span>
+                            <h3><?= htmlspecialchars($card['title']) ?></h3>
+                        </div>
+                    </div>
+                    <?php if ($showDescription): ?>
+                        <p><?= htmlspecialchars($card['desc']) ?></p>
+                    <?php endif; ?>
+                </article>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="adv-mobile-constellation" aria-label="Mobile advantage constellation">
+            <div class="constellation-stage">
+                <span class="constellation-ring ring-1" aria-hidden="true"><span class="ring-dot"></span></span>
+                <span class="constellation-ring ring-2" aria-hidden="true"><span class="ring-dot"></span></span>
+                <div class="constellation-core" aria-hidden="true">
+                    <span><?= htmlspecialchars($mobileCoreTop) ?></span>
+                    <strong><?= htmlspecialchars($mobileCoreBottom) ?></strong>
+                </div>
+
+                <?php foreach ($cards as $index => $card): ?>
+                    <article class="orbit-card orbit-<?= (int)($index + 1) ?>">
+                        <span class="orbit-index"><?= sprintf('%02d', $index + 1) ?></span>
+                        <img class="orbit-icon" src="<?= htmlspecialchars($card['icon']) ?>" alt="<?= htmlspecialchars($card['title']) ?>" loading="lazy" decoding="async">
+                        <h3><?= htmlspecialchars($card['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($card['desc']) ?></p>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background:
+        radial-gradient(860px 320px at 6% -8%, rgba(52, 236, 214, 0.28), transparent 62%),
+        radial-gradient(780px 360px at 94% 110%, rgba(71, 131, 255, 0.24), transparent 66%),
+        linear-gradient(180deg, rgba(6, 26, 36, 0.9) 0%, rgba(5, 19, 30, 0.94) 52%, rgba(4, 14, 24, 0.97) 100%),
+        <?= htmlspecialchars($bgColor) ?>;
+    border-top: 1px solid rgba(88, 228, 220, 0.12);
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-head {
+    margin: 0 0 1.3rem;
+    text-align: left;
+}
+
+#<?= $componentId ?> .adv-head-main {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .adv-head-main-only {
+    justify-content: flex-end;
+}
+
+#<?= $componentId ?> .adv-kicker {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.36rem 0.78rem;
+    border-radius: 999px;
+    color: #3ad9c7;
+    background: rgba(58, 217, 199, 0.1);
+    border: 1px solid rgba(58, 217, 199, 0.24);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.76rem;
+}
+
+#<?= $componentId ?> .adv-head h2 {
+    margin: 0;
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    width: min(760px, 100%);
+    padding-right: clamp(72px, 10vw, 164px);
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 5vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.04;
+}
+
+#<?= $componentId ?> .adv-summary {
+    margin: 0.82rem 0 0;
+    max-width: 620px;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: 0.96rem;
+    line-height: 1.72;
+}
+
+#<?= $componentId ?> .adv-head h2::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    width: clamp(56px, 8vw, 128px);
+    height: 10px;
+    transform: translateY(-50%);
+    background:
+        linear-gradient(270deg, rgba(83, 224, 197, 0), rgba(83, 224, 197, 0.74) 58%, rgba(255, 186, 124, 0.92) 100%) center/100% 2px no-repeat,
+        linear-gradient(-135deg, transparent 45%, rgba(255, 186, 124, 0.92) 46% 56%, transparent 57%) left center/10px 10px no-repeat;
+}
+
+#<?= $componentId ?> .adv-desktop-fan {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--adv-gap);
+    align-items: start;
+    padding-top: 1rem;
+}
+
+#<?= $componentId ?> .fan-card {
+    position: relative;
+    min-height: 308px;
+    border-radius: 30px;
+    background:
+        linear-gradient(180deg, rgba(13, 48, 68, 0.94) 0%, rgba(7, 28, 43, 0.92) 100%);
+    border: 1px solid rgba(129, 219, 231, 0.28);
+    box-shadow: 0 26px 44px rgba(3, 10, 18, 0.34);
+    padding: 1.25rem 1.2rem 1.22rem;
+    overflow: hidden;
+    transition: transform 0.28s ease, box-shadow 0.28s ease;
+}
+
+#<?= $componentId ?> .fan-card::after {
+    content: '';
+    position: absolute;
+    inset: 1px;
+    border-radius: 29px;
+    pointer-events: none;
+    border: 1px solid rgba(201, 246, 255, 0.1);
+}
+
+#<?= $componentId ?> .fan-card:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 34px 54px rgba(3, 10, 18, 0.38);
+}
+
+#<?= $componentId ?> .fan-left {
+    transform: rotate(-4.2deg) translateY(20px);
+}
+
+#<?= $componentId ?> .fan-center {
+    transform: translateY(-8px);
+}
+
+#<?= $componentId ?> .fan-right {
+    transform: rotate(4.2deg) translateY(20px);
+}
+
+#<?= $componentId ?> .fan-orbit {
+    position: absolute;
+    left: -34px;
+    bottom: -54px;
+    width: 186px;
+    height: 186px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(82, 241, 222, 0.2) 0%, rgba(82, 241, 222, 0) 72%);
+}
+
+#<?= $componentId ?> .fan-icon-wrap {
+    width: min(<?= (int)$iconSize ?>px, 92px);
+    height: min(<?= (int)$iconSize ?>px, 92px);
+    padding: 0.36rem;
+    border-radius: <?= (int)$iconBorderRadius ?>px;
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(138, 230, 236, 0.36);
+    box-shadow: 0 14px 24px rgba(3, 10, 18, 0.24);
+}
+
+#<?= $componentId ?> .fan-icon {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: calc(<?= (int)$iconBorderRadius ?>px - 6px);
+}
+
+#<?= $componentId ?> .fan-headline {
+    display: flex;
+    align-items: center;
+    gap: 0.82rem;
+}
+
+#<?= $componentId ?> .fan-title-wrap {
+    min-width: 0;
+}
+
+#<?= $componentId ?> .fan-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.14rem 0.5rem;
+    border-radius: 999px;
+    border: 1px solid rgba(159, 239, 255, 0.34);
+    background: rgba(159, 239, 255, 0.08);
+    color: #9fefff;
+    font-size: 0.62rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .fan-card h3 {
+    margin: 0.38rem 0 0;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.32;
+}
+
+#<?= $componentId ?> .orbit-card h3 {
+    margin-top: 0.74rem;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.32;
+}
+
+#<?= $componentId ?> .fan-card p {
+    margin-top: 0.86rem;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.78;
+    opacity: 0.92;
+}
+
+#<?= $componentId ?> .orbit-card p {
+    margin-top: 0.72rem;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.78;
+    opacity: 0.92;
+}
+
+#<?= $componentId ?> .adv-mobile-constellation {
+    display: none;
+}
+
+#<?= $componentId ?> .constellation-stage {
+    position: relative;
+    height: clamp(420px, 96vw, 510px);
+    border-radius: 20px;
+    border: none;
+    background:
+        radial-gradient(220px 140px at 50% 50%, rgba(52, 236, 214, 0.12), transparent 72%),
+        linear-gradient(160deg, rgba(8, 31, 45, 0.9), rgba(7, 22, 35, 0.86));
+    overflow: hidden;
+    isolation: isolate;
+}
+
+#<?= $componentId ?> .constellation-stage::before {
+    content: '';
+    position: absolute;
+    inset: -28%;
+    background: conic-gradient(from 0deg, rgba(52, 236, 214, 0) 0deg, rgba(52, 236, 214, 0.2) 36deg, rgba(52, 236, 214, 0) 86deg);
+    animation: oct-radar-sweep 7.2s linear infinite;
+    z-index: 0;
+}
+
+#<?= $componentId ?> .constellation-ring {
+    position: absolute;
+    border-radius: 999px;
+    border: 1px dashed rgba(138, 230, 236, 0.3);
+    animation: oct-ring-pulse 3.8s ease-in-out infinite;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .ring-1 {
+    width: 62%;
+    aspect-ratio: 1 / 1;
+    left: 19%;
+    top: 18%;
+}
+
+#<?= $componentId ?> .ring-2 {
+    width: 82%;
+    aspect-ratio: 1 / 1;
+    left: 9%;
+    top: 8%;
+    opacity: 0.66;
+    animation-delay: 0.6s;
+}
+
+#<?= $componentId ?> .constellation-ring .ring-dot {
+    position: absolute;
+    inset: 0;
+    animation: oct-ring-spin 8s linear infinite;
+}
+
+#<?= $componentId ?> .ring-2 .ring-dot {
+    animation-duration: 11s;
+    animation-direction: reverse;
+}
+
+#<?= $componentId ?> .constellation-ring .ring-dot::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -4px;
+    transform: translateX(-50%);
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #52f1de;
+    box-shadow: 0 0 0 3px rgba(82, 241, 222, 0.22), 0 0 14px rgba(82, 241, 222, 0.5);
+}
+
+#<?= $componentId ?> .constellation-core {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 100px;
+    height: 100px;
+    border-radius: 999px;
+    border: 1px solid rgba(138, 230, 236, 0.4);
+    background:
+        radial-gradient(circle at 35% 30%, rgba(52, 236, 214, 0.26), transparent 68%),
+        rgba(8, 27, 39, 0.86);
+    display: grid;
+    place-content: center;
+    gap: 0.2rem;
+    text-align: center;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+}
+
+#<?= $componentId ?> .constellation-core span {
+    color: #9fefff;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .constellation-core strong {
+    color: #ffd8ae;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+}
+
+#<?= $componentId ?> .orbit-card {
+    position: absolute;
+    width: min(178px, 46%);
+    border-radius: 14px;
+    border: 1px solid rgba(138, 230, 236, 0.24);
+    background: linear-gradient(155deg, rgba(8, 31, 45, 0.94), rgba(7, 22, 35, 0.9));
+    box-shadow: 0 12px 20px rgba(4, 12, 20, 0.32);
+    padding: 0.5rem 0.52rem 0.56rem;
+    animation: oct-orbit-float 4.6s ease-in-out infinite;
+    z-index: 2;
+}
+
+#<?= $componentId ?> .orbit-1 {
+    left: 0.46rem;
+    top: 0.5rem;
+    animation-delay: 0s;
+}
+
+#<?= $componentId ?> .orbit-2 {
+    right: 0.44rem;
+    top: 5.45rem;
+    animation-delay: 0.4s;
+}
+
+#<?= $componentId ?> .orbit-3 {
+    left: 1.1rem;
+    bottom: 0.7rem;
+    animation-delay: 0.8s;
+}
+
+#<?= $componentId ?> .orbit-index {
+    position: absolute;
+    right: 0.46rem;
+    top: 0.4rem;
+    color: rgba(201, 242, 255, 0.72);
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+}
+
+#<?= $componentId ?> .orbit-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: <?= (int)$iconBorderRadius ?>%;
+    object-fit: cover;
+    border: 1px solid rgba(223, 248, 255, 0.3);
+}
+
+#<?= $componentId ?> .adv-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    margin: 0;
+    padding: <?= (int)$btnPaddingY ?>px <?= (int)$btnPaddingX ?>px;
+    border-radius: <?= (int)$btnBorderRadius ?>px;
+    color: <?= htmlspecialchars($btnTextColor) ?>;
+    background: linear-gradient(95deg, <?= htmlspecialchars($btnGradientStart) ?>, <?= htmlspecialchars($btnGradientEnd) ?>);
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    transition: transform 0.2s ease, filter 0.2s ease;
+}
+
+#<?= $componentId ?> .adv-cta-head {
+    white-space: nowrap;
+    flex-shrink: 0;
+    align-self: center;
+}
+
+#<?= $componentId ?> .adv-cta:hover {
+    transform: translateY(-2px);
+    filter: drop-shadow(0 10px 14px rgba(255, 106, 61, 0.28));
+}
+
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .adv-desktop-fan {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: max(16px, calc(var(--adv-gap) * 0.62));
+    }
+
+    #<?= $componentId ?> .fan-left,
+    #<?= $componentId ?> .fan-center,
+    #<?= $componentId ?> .fan-right {
+        transform: none;
+    }
+
+    #<?= $componentId ?> .fan-card {
+        min-height: 286px;
+    }
+}
+
+@media (max-width: 860px) {
+    #<?= $componentId ?> .adv-desktop-fan {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .section-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $componentId ?> .adv-head h2 {
+        padding-right: clamp(52px, 18vw, 96px);
+    }
+
+    #<?= $componentId ?> .adv-head h2::after {
+        width: clamp(40px, 14vw, 74px);
+        height: 8px;
+    }
+
+    #<?= $componentId ?> .adv-head-main {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    #<?= $componentId ?> .adv-desktop-fan {
+        display: none;
+    }
+
+    #<?= $componentId ?> .adv-mobile-constellation {
+        display: grid;
+        gap: 0.64rem;
+    }
+
+    #<?= $componentId ?> .adv-cta-head {
+        width: auto;
+    }
+}
+
+@media (max-width: 380px) {
+    #<?= $componentId ?> .orbit-card {
+        width: min(166px, 47%);
+        padding: 0.46rem 0.48rem 0.52rem;
+    }
+
+    #<?= $componentId ?> .orbit-2 {
+        top: 5.1rem;
+    }
+}
+
+@keyframes oct-orbit-float {
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-6px);
+    }
+}
+
+@keyframes oct-ring-spin {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes oct-ring-pulse {
+    0%,
+    100% {
+        opacity: 0.5;
+        box-shadow: 0 0 0 rgba(82, 241, 222, 0);
+    }
+
+    50% {
+        opacity: 0.92;
+        box-shadow: 0 0 22px rgba(82, 241, 222, 0.24);
+    }
+}
+
+@keyframes oct-radar-sweep {
+    from {
+        transform: rotate(0deg);
+    }
+
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .orbit-card,
+    #<?= $componentId ?> .constellation-stage::before,
+    #<?= $componentId ?> .constellation-ring,
+    #<?= $componentId ?> .constellation-ring .ring-dot {
+        animation: none;
+    }
+}
+</style>

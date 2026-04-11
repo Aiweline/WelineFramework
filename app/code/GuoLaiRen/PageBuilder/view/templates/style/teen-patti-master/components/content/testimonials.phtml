@@ -1,0 +1,390 @@
+<?php
+/**
+ * @component_start
+ * code: testimonials
+ * name: 用户评价
+ * name_en: Testimonials
+ * description: 用户评价展示
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_rating => 显示评分:select:yes|yes,no
+ * display.show_avatar => 显示头像:select:yes|yes,no
+ * display.show_avg => 显示平均评分:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#0b0f2a
+ * style.accent_color => 强调色:color:#fbd26b
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.06)
+ * style.card_border_color => 卡片边框色:color:rgba(251,191,36,0.25)
+ * style.text_color => 正文颜色:color:#e5e7eb
+ * style.section_padding => 区域内边距(PC端):number:80|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:What Players Say
+ * texts.testimonial_1_name => 评价1姓名:text:Arjun Mehta
+ * texts.testimonial_1_tag => 评价1标签:text:High-Stakes Table
+ * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1内容:textarea:Teen Patti Master feels like a real table. Fast rounds, smooth animations, and solid competition.
+ * texts.testimonial_2_name => 评价2姓名:text:Neha Iyer
+ * texts.testimonial_2_tag => 评价2标签:text:Daily Grinder
+ * texts.testimonial_2_rating => 评价2评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2内容:textarea:Love the quick match flow. I can jump in for 10 minutes and still feel the thrill.
+ * texts.testimonial_3_name => 评价3姓名:text:Kabir Singh
+ * texts.testimonial_3_tag => 评价3标签:text:Tournament Regular
+ * texts.testimonial_3_rating => 评价3评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_3_content => 评价3内容:textarea:Tournaments run on time, and the leaderboard rewards are actually worth it.
+ * texts.testimonial_4_name => 评价4姓名:text:Priya Nair
+ * texts.testimonial_4_tag => 评价4标签:text:VIP Room
+ * texts.testimonial_4_rating => 评价4评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_4_content => 评价4内容:textarea:Great balance between skill and luck. The VIP tables are my favorite.
+ * texts.testimonial_5_name => 评价5姓名:text:Arjun Mehta
+ * texts.testimonial_5_tag => 评价5标签:text:High-Stakes Table
+ * texts.testimonial_5_rating => 评价5评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_5_content => 评价5内容:textarea:Teen Patti Master feels like a real table. Fast rounds, smooth animations, and solid competition.
+ *
+ * group:avatars => 头像配置
+ * avatars.avatar_1 => 评价1头像:textarea:
+ * avatars.avatar_2 => 评价2头像:textarea:
+ * avatars.avatar_3 => 评价3头像:textarea:
+ * avatars.avatar_4 => 评价4头像:textarea:
+ * avatars.avatar_5 => 评价5头像:textarea:
+ *
+ * @fields_end
+ */
+
+$componentId = 'tpm-testimonials-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+// 显示控制
+$display = $getConfig('display.show_section', $getConfig('testimonials.display', 'yes')) !== 'no';
+if (!$display) return;
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showRating = $getConfig('display.show_rating', 'yes') !== 'no';
+$showAvatar = $getConfig('display.show_avatar', 'yes') !== 'no';
+$showAvg = $getConfig('display.show_avg', 'yes') !== 'no';
+
+// 样式配置
+$bgColor = $getConfig('style.bg_color', $getConfig('testimonials.bg_color', '#0b0f2a'));
+$accentColor = $getConfig('style.accent_color', '#fbd26b');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.06)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(251,191,36,0.25)');
+$textColor = $getConfig('style.text_color', '#e5e7eb');
+$sectionPadding = $getConfig('style.section_padding', '80');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '48');
+
+// 文本内容
+$title = $getConfig('texts.title', $getConfig('testimonials.title', 'What Players Say'));
+
+$parseRating = function($raw) {
+    $raw = trim((string)$raw);
+    if ($raw === '') return 0;
+    if (is_numeric($raw)) return (int)$raw;
+    preg_match_all('/[★⭐]/u', $raw, $matches);
+    return count($matches[0] ?? []);
+};
+
+$defaultTestimonials = [
+    [
+        'name' => 'Arjun Mehta',
+        'tag' => 'High-Stakes Table',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'Teen Patti Master feels like a real table. Fast rounds, smooth animations, and solid competition.',
+    ],
+    [
+        'name' => 'Neha Iyer',
+        'tag' => 'Daily Grinder',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'Love the quick match flow. I can jump in for 10 minutes and still feel the thrill.',
+    ],
+    [
+        'name' => 'Kabir Singh',
+        'tag' => 'Tournament Regular',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'Tournaments run on time, and the leaderboard rewards are actually worth it.',
+    ],
+    [
+        'name' => 'Priya Nair',
+        'tag' => 'VIP Room',
+        'rating' => '⭐⭐⭐⭐☆',
+        'text' => 'Great balance between skill and luck. The VIP tables are my favorite.',
+    ],
+    [
+        'name' => 'Amit Patel (Ahmedabad)',
+        'tag' => 'High-Stakes Table',
+        'rating' => '⭐⭐⭐⭐⭐',
+        'text' => 'Love the game variety. Won ₹12K last week in a tournament.',
+    ],
+];
+
+$testimonials = [];
+for ($i = 1; $i <= 5; $i++) {
+    $defaults = $defaultTestimonials[$i - 1] ?? ['name' => '', 'tag' => '', 'rating' => '⭐⭐⭐⭐⭐', 'text' => ''];
+    $name = $getConfig("texts.testimonial_{$i}_name", $defaults['name']);
+    $tag = $getConfig("texts.testimonial_{$i}_tag", $defaults['tag']);
+    $ratingText = $getConfig("texts.testimonial_{$i}_rating", $defaults['rating']);
+    $content = $getConfig("texts.testimonial_{$i}_content", $defaults['text']);
+    $avatar = $getConfig("avatars.avatar_{$i}", '');
+
+    if ($name !== '') {
+        $ratingValue = $parseRating($ratingText);
+        $ratingDisplay = is_numeric($ratingText) ? str_repeat('★', (int)$ratingText) : $ratingText;
+        $testimonials[] = [
+            'name' => $name,
+            'tag' => $tag,
+            'rating' => max(0, min(5, $ratingValue)),
+            'rating_text' => $ratingDisplay,
+            'text' => $content,
+            'avatar' => $avatar,
+        ];
+    }
+}
+
+$totalRating = array_sum(array_column($testimonials, 'rating'));
+$avgRating = count($testimonials) ? $totalRating / count($testimonials) : 0;
+$avgRatingLabel = number_format($avgRating, 1);
+?>
+
+<style>
+#<?= $componentId ?> {
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 1rem;
+    background: radial-gradient(circle at 15% 10%, rgba(251, 191, 36, 0.08), transparent 55%),
+                radial-gradient(circle at 85% 20%, rgba(88, 20, 121, 0.18), transparent 60%),
+                linear-gradient(180deg, <?= htmlspecialchars($bgColor) ?> 0%, #120a2b 55%, #0a061a 100%);
+    position: relative;
+    overflow: hidden;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1600' height='900' viewBox='0 0 1600 900'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.035'%3E%3Ccircle cx='200' cy='120' r='90'/%3E%3Ccircle cx='1280' cy='160' r='130'/%3E%3Ccircle cx='980' cy='620' r='160'/%3E%3C/g%3E%3C/svg%3E") center/cover no-repeat;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .testimonials-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 2;
+}
+
+#<?= $componentId ?> .header {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    text-align: center;
+    margin-bottom: 3rem;
+}
+
+#<?= $componentId ?> .rating-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: rgba(251, 191, 36, 0.15);
+    color: <?= htmlspecialchars($accentColor) ?>;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+#<?= $componentId ?> .testimonials-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+}
+
+#<?= $componentId ?> .testimonial-card {
+    position: relative;
+    background: <?= htmlspecialchars($cardBgColor) ?>;
+    border-radius: 20px;
+    padding: 1.6rem 1.6rem 1.4rem;
+    border: 1px dashed <?= htmlspecialchars($cardBorderColor) ?>;
+    box-shadow: 0 14px 30px rgba(6, 4, 20, 0.25);
+    transition: transform 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+}
+
+#<?= $componentId ?> .testimonial-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(251, 191, 36, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+#<?= $componentId ?> .testimonial-card::before {
+    content: "“";
+    position: absolute;
+    top: -18px;
+    left: 16px;
+    font-size: 64px;
+    color: rgba(251, 191, 36, 0.18);
+    font-family: Georgia, "Times New Roman", serif;
+    line-height: 1;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .testimonial-card.featured {
+    background: rgba(251, 191, 36, 0.12);
+    border: 2px dashed rgba(251, 191, 36, 0.6);
+}
+
+#<?= $componentId ?> .testimonial-card.compact {
+    padding: 1.25rem 1.25rem 1.1rem;
+    border-style: solid;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+#<?= $componentId ?> .card-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 0.85rem;
+}
+
+#<?= $componentId ?> .avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #12c2e9 0%, #3a7bd5 55%, #1b3b7f 100%);
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 1rem;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .name {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .tag {
+    color: #cbd5f5;
+    font-size: 0.82rem;
+}
+
+#<?= $componentId ?> .stars {
+    margin-left: auto;
+    display: flex;
+    gap: 2px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: rgba(251, 191, 36, 0.12);
+}
+
+#<?= $componentId ?> .quote {
+    color: <?= htmlspecialchars($textColor) ?>;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin-left: 6px;
+}
+
+#<?= $componentId ?> .testimonial-card.compact .card-head {
+    flex-wrap: wrap;
+    gap: 8px 10px;
+}
+
+#<?= $componentId ?> .testimonial-card.compact .avatar {
+    display: none;
+}
+
+#<?= $componentId ?> .testimonial-card.compact .stars {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+}
+
+#<?= $componentId ?> .testimonial-card.compact .quote {
+    font-size: 0.92rem;
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 1rem;
+    }
+}
+
+@media (min-width: 992px) {
+    #<?= $componentId ?> .testimonial-card.featured {
+        grid-column: span 2;
+    }
+}
+</style>
+
+<section id="<?= $componentId ?>" class="tpmst-section tpmst-testimonials-component">
+    <div class="testimonials-container">
+        <?php if ($showTitle): ?>
+            <div class="header">
+                <h2 class="text-3xl md:text-5xl font-bold text-white"><?= htmlspecialchars($title) ?></h2>
+                <?php if ($showAvg): ?>
+                    <div class="rating-pill">⭐ <?= htmlspecialchars($avgRatingLabel) ?>/5 average rating</div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="testimonials-grid">
+
+            <?php foreach ($testimonials as $index => $t): ?>
+                <?php
+                $isFirst = $index === 0;
+                $isLast = $index === count($testimonials) - 1;
+                $featured = ($isFirst || $isLast) ? 'featured' : '';
+                $compact = (!$isFirst && !$isLast) ? 'compact' : '';
+                $parts = preg_split('/\s+/', trim($t['name']));
+                $first = $parts[0] ?? '';
+                $second = $parts[1] ?? $first;
+                $initials = strtoupper(substr($first, 0, 1) . substr($second, 0, 1));
+                ?>
+                <article class="testimonial-card <?= $featured ?> <?= $compact ?>">
+                    <div class="card-head">
+                        <?php if ($showAvatar): ?>
+                            <div class="avatar">
+                                <?php if (!empty($t['avatar'])): ?>
+                                    <img src="<?= htmlspecialchars($t['avatar']) ?>" alt="<?= htmlspecialchars($t['name']) ?>">
+                                <?php else: ?>
+                                    <?= htmlspecialchars($initials) ?>
+                                <?php endif; ?>
+                            </div>
+                        <?php endif; ?>
+                        <div>
+                            <div class="name"><?= htmlspecialchars($t['name']) ?></div>
+                            <div class="tag"><?= htmlspecialchars($t['tag']) ?></div>
+                        </div>
+                        <?php if ($showRating): ?>
+                            <div class="stars"><?= htmlspecialchars($t['rating_text']) ?></div>
+                        <?php endif; ?>
+                    </div>
+                    <p class="quote">"<?= htmlspecialchars($t['text']) ?>"</p>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>

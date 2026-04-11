@@ -1,0 +1,63 @@
+<?php
+/**
+ * 关于我们布局模板
+ * 
+ * 页面类型: about_page
+ * 描述: 关于我们页面布局，单列内容展示
+ * 
+ * 可用变量:
+ * - $page: Page 模型对象
+ * - $layout_config: 布局配置数组
+ * - $style_setting: 样式配置数组
+ * - $mode: 渲染模式 (visual/preview/live)
+ */
+
+// 获取布局配置
+$layoutConfig = $layout_config ?? [];
+$headerComponents = $layoutConfig['header'] ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+$footerComponents = $layoutConfig['footer'] ?? [];
+
+// 渲染模式
+$isVisualMode = ($mode ?? 'live') === 'visual';
+
+// 页面内容
+$pageTitle = $page->getData('title') ?? 'About Us';
+$pageContent = $page->getData('content') ?? '';
+?>
+<!DOCTYPE html>
+<html lang="<?= $lang ?? 'en' ?>">
+<head>
+    <?php $this->renderHead($page, $style_setting); ?>
+</head>
+<body class="page-about">
+    <!-- Header Region (从首页继承) -->
+    <header class="site-header" data-region="header"<?= $isVisualMode ? ' data-slot-name="Header"' : '' ?>>
+        <?php $this->renderRegionComponents('header', $headerComponents, $page); ?>
+    </header>
+    
+    <!-- Main Content Region -->
+    <main class="site-content about-content" data-region="content"<?= $isVisualMode ? ' data-slot-name="Content"' : '' ?>>
+        <div class="content-container">
+            <?php if (empty($contentComponents)): ?>
+                <!-- 无自定义内容组件时显示默认内容 -->
+                <article class="page-article">
+                    <h1 class="page-title"><?= htmlspecialchars($pageTitle) ?></h1>
+                    <div class="page-body">
+                        <?= $pageContent ?>
+                    </div>
+                </article>
+            <?php else: ?>
+                <?php $this->renderRegionComponents('content', $contentComponents, $page); ?>
+            <?php endif; ?>
+        </div>
+    </main>
+    
+    <!-- Footer Region (从首页继承) -->
+    <footer class="site-footer" data-region="footer"<?= $isVisualMode ? ' data-slot-name="Footer"' : '' ?>>
+        <?php $this->renderRegionComponents('footer', $footerComponents, $page); ?>
+    </footer>
+    
+    <?php $this->renderFooterScripts($page, $style_setting); ?>
+</body>
+</html>

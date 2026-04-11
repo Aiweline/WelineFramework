@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Request;
 
+use Weline\Framework\Context;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -24,6 +26,44 @@ use Weline\Framework\Runtime\RequestContext;
  */
 class ServerBag
 {
+    private const MEMORY_ALIAS_MAP = [
+        'REQUEST_METHOD' => 'request.method',
+        'REQUEST_SCHEME' => 'request.scheme',
+        'REQUEST_URI' => 'request.uri',
+        'QUERY_STRING' => 'request.query_string',
+        'HTTP_HOST' => 'server.http_host',
+        'REMOTE_ADDR' => 'server.remote_addr',
+        'HTTP_USER_AGENT' => 'server.user_agent',
+        'HTTP_ACCEPT' => 'server.accept',
+        'HTTP_ACCEPT_LANGUAGE' => 'server.accept_language',
+        'HTTP_ACCEPT_ENCODING' => 'server.accept_encoding',
+        'HTTP_CONNECTION' => 'server.connection',
+        'CONTENT_TYPE' => 'server.content_type',
+        'CONTENT_LENGTH' => 'server.content_length',
+        'SERVER_NAME' => 'server.server_name',
+        'SERVER_PORT' => 'server.server_port',
+        'SERVER_SOFTWARE' => 'server.server_software',
+        'HTTPS' => 'server.https',
+        'PATH_INFO' => 'server.path_info',
+        'WELINE_AREA' => 'area',
+        'WELINE_AREA_ROUTE' => 'area_route',
+        'WELINE_WEBSITE_ID' => 'website_id',
+        'WELINE_WEBSITE_CODE' => 'website_code',
+        'WELINE_WEBSITE_URL' => 'website_url',
+        'WELINE_USER_LANG' => 'user.lang',
+        'WELINE_USER_CURRENCY' => 'user.currency',
+        'WELINE_URL_PARSED' => 'url_parsed',
+        'WELINE_IS_BACKEND' => 'is_backend',
+        'WELINE_IS_STATIC_FILE' => 'is_static_file',
+        'WELINE_PARSER_URL' => 'parser_url',
+        'WELINE_ORIGIN_REQUEST_URI' => 'origin_request_uri',
+        'WELINE_FULL_REQUEST_URI' => 'full_request_uri',
+        'WLS_REDIRECT_COUNT' => 'wls.redirect_count',
+        'WLS_REQUEST_COUNT' => 'wls.request_count',
+        'WLS_INSTANCE' => 'wls.instance',
+        'WLS_INSTANCE_NAME' => 'wls.instance_name',
+        'WLS_PROCESS_TAG' => 'wls.process_tag',
+    ];
     /**
      * 服务器变量存储
      */
@@ -78,7 +118,7 @@ class ServerBag
             }
         }
         
-        $this->server = $_SERVER;
+        $this->server = $this->buildCurrentRequestServerSnapshot();
         $this->headers = null; // 清除缓存
         $this->initialized = true;
         
@@ -131,7 +171,9 @@ class ServerBag
     public function set(string $key, mixed $value): static
     {
         $this->server[$key] = $value;
-        $_SERVER[$key] = $value; // 同步到超全局变量
+        \w_env_set("server.{$key}", $value);
+        $this->headers = null;
+        return $this;
         \w_env_set("server.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
         $this->headers = null; // 清除 headers 缓存
         return $this;
@@ -157,7 +199,8 @@ class ServerBag
     public function remove(string $key): static
     {
         unset($this->server[$key]);
-        unset($_SERVER[$key]);
+        \w_env_set("server.{$key}", null);
+        return $this;
         \w_env_set("server.{$key}", null); // 同步清除 WelineEnv
         return $this;
     }
@@ -170,6 +213,37 @@ class ServerBag
     public function all(): array
     {
         return $this->server;
+    }
+
+    /**
+     * 以当前 Fiber 内存态为准构建请求快照；globals 仅作为兼容基线。
+     */
+    private function buildCurrentRequestServerSnapshot(): array
+    {
+        $context = Context::getCurrent();
+        $baseServer = \is_array($_SERVER ?? null) ? $_SERVER : [];
+        $contextServer = $context?->server() ?? [];
+        $server = \is_array($contextServer) && $contextServer !== []
+            ? \array_merge($baseServer, $contextServer)
+            : $baseServer;
+
+        foreach (self::MEMORY_ALIAS_MAP as $serverKey => $alias) {
+            $value = WelineEnv::get($alias, null);
+            if ($value === null) {
+                continue;
+            }
+            $server[$serverKey] = $value;
+        }
+
+        $server['WELINE_AREA'] = (string) WelineEnv::get('area', RequestContext::getWelineArea());
+        $server['WELINE_AREA_ROUTE'] = (string) WelineEnv::get('area_route', RequestContext::getWelineAreaRoute());
+        $server['WELINE_WEBSITE_ID'] = (string) WelineEnv::get('website_id', (string) RequestContext::getWelineWebsiteId());
+        $server['WELINE_WEBSITE_CODE'] = (string) WelineEnv::get('website_code', RequestContext::getWelineWebsiteCode());
+        $server['WELINE_WEBSITE_URL'] = (string) WelineEnv::get('website_url', RequestContext::getWelineWebsiteUrl());
+        $server['WELINE_USER_LANG'] = (string) WelineEnv::get('user.lang', RequestContext::getWelineUserLang());
+        $server['WELINE_USER_CURRENCY'] = (string) WelineEnv::get('user.currency', RequestContext::getWelineUserCurrency());
+
+        return $server;
     }
     
     // ==================== HTTP Headers 相关 ====================
@@ -524,9 +598,6 @@ class ServerBag
      */
     public function syncToGlobals(): static
     {
-        foreach ($this->server as $key => $value) {
-            $_SERVER[$key] = $value;
-        }
         return $this;
     }
 }

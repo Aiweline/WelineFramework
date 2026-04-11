@@ -1,0 +1,123 @@
+<?php
+/**
+ * Callbreak Sunlit Durbar - Theme Defaults
+ *
+ * This file exists primarily to provide editable theme-wide defaults that
+ * match the core theme configuration flow while keeping the rendered layout
+ * component-driven.
+ *
+ * @fields_start
+ *
+ * group:app_info => 应用信息
+ * app_info.app_name => 应用名称:text:Callbreak Sunlit Durbar
+ * app_info.app_size => 应用大小:text:82.4 MB
+ * app_info.app_version => 版本:text:V6.1
+ * app_info.app_updated => 更新日期:text:23-03-2026
+ * app_info.app_requires => 系统要求:text:Android 6.0 and up
+ *
+ * group:color_scheme => 配色方案
+ * color_scheme.primary => 主色调:color:#ff4f87
+ * color_scheme.secondary => 辅助色:color:#11c7b8
+ * color_scheme.background => 页面背景色:color:#fffaf7
+ * color_scheme.surface => 卡片背景色:color:rgba(255,255,255,0.82)
+ * color_scheme.text => 正文颜色:color:#321b29
+ *
+ * group:style => 通用样式
+ * style.title_color => 通用标题颜色:color:#402235
+ * style.card_title_color => 通用卡片标题颜色:color:#402235
+ * style.card_desc_color => 通用正文颜色:color:#6c4d61
+ * style.card_bg_color => 通用卡片背景色:color:rgba(255,255,255,0.78)
+ * style.item_bg_color => 通用项目背景色:color:rgba(255,255,255,0.84)
+ * style.item_border_color => 通用项目边框色:color:rgba(144,101,126,0.14)
+ * style.question_color => 通用问题颜色:color:#3a2332
+ * style.answer_color => 通用答案颜色:color:#6c4d61
+ * style.name_color => 通用姓名颜色:color:#3a2332
+ * style.content_color => 通用内容颜色:color:#62485b
+ * style.rating_color => 通用评分颜色:color:#ffcf58
+ * style.icon_color => 通用强调色:color:#11c7b8
+ *
+ * group:hero => 内页头图
+ * hero.title => Hero标题:text:
+ * hero.subtitle => Hero副标题:textarea:
+ * hero.stage_text => Hero舞台文案:text:
+ * hero.bg_color => Hero背景色:color:#fff2bf
+ * hero.bg_gradient_end => Hero渐变结束色:color:#ffd9b8
+ * hero.title_color => Hero标题颜色:color:#402235
+ * hero.text_color => Hero正文颜色:color:#6c4d61
+ *
+ * group:story => About故事模块
+ * story.title => 故事标题:text:How Sunlit Durbar Took Shape
+ * story.bg_color => 背景颜色:color:#fffdfb
+ * story.title_color => 标题颜色:color:#402235
+ *
+ * group:values => About价值模块
+ * values.bg_color => 背景颜色:color:#dcfff3
+ *
+ * group:header => Legal头部
+ * header.bg_color => 背景颜色:color:#fff2bf
+ * header.bg_gradient_end => 渐变结束色:color:#ffd9b8
+ * header.title_color => 标题颜色:color:#402235
+ * header.text_color => 正文颜色:color:#6c4d61
+ *
+ * group:content => 内容区域
+ * content.bg_color => 内容背景色:color:#fffdfb
+ * content.text_color => 内容文字颜色:color:#6c4d61
+ * content.heading_color => 内容标题颜色:color:#402235
+ * content.link_color => 内容链接颜色:color:#ff4f87
+ *
+ * group:advantages => 优势模块
+ * advantages.title => 区域标题:text:Why Callbreak Feels Better In Daylight
+ * advantages.bg_color => 背景颜色:color:#dcfff3
+ *
+ * group:texts => 文本内容
+ * texts.advantages_title => 优势模块标题:text:Why Callbreak Feels Better In Daylight
+ * texts.games_title => 游戏模块标题:text:Three Callbreak Tables With Different Heat
+ * texts.testimonials_title => 评价模块标题:text:Player Signals From The Tables
+ * texts.faq_title => FAQ标题:text:Quick Answers Before You Install
+ * texts.advantage_1_title => 优势1标题:text:Faster Table Entry
+ * texts.advantage_1_desc => 优势1描述:textarea:Jump into active callbreak rooms with fewer taps, clearer route labels, and stronger mobile focus.
+ * texts.advantage_2_title => 优势2标题:text:Sharper Trump Reading
+ * texts.advantage_2_desc => 优势2描述:textarea:Bright contrast zones make score states, trick flow, and decision moments easier to read at a glance.
+ * texts.advantage_3_title => 优势3标题:text:Four-Seat Rhythm
+ * texts.advantage_3_desc => 优势3描述:textarea:The layout is tuned for partnership-table energy, keeping action visible without crowding the screen.
+ *
+ * group:games => 游戏模块
+ * games.title => 区域标题:text:Three Callbreak Tables With Different Heat
+ * games.bg_color => 背景颜色:color:#ffe2ef
+ *
+ * group:testimonials => 评价模块
+ * testimonials.title => 区域标题:text:Player Signals From The Tables
+ * testimonials.bg_color => 背景颜色:color:#dff4ff
+ *
+ * group:faq => FAQ模块
+ * faq.title => 区域标题:text:Quick Answers Before You Install
+ * faq.bg_color => 背景颜色:color:#fff2c7
+ *
+ * group:legal => Legal内容
+ * legal.toc_title => 目录标题:text:On This Page
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = $page ? $page->getData('style') : 'callbreak-sunlit-durbar';
+
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+
+if (empty($templateCode)) {
+    $templateCode = 'callbreak-sunlit-durbar';
+}
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>

@@ -16,8 +16,10 @@ if (!defined('BP')) {
     define('BP', dirname(__DIR__) . DIRECTORY_SEPARATOR);
 }
 
+$isCliSapi = \in_array(PHP_SAPI, ['cli', 'phpdbg'], true);
+
 // 检查安装
-if ((PHP_SAPI !== 'cli') and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . 'install.lock')) {
+if ((!$isCliSapi) and !file_exists(BP . 'setup' . DIRECTORY_SEPARATOR . 'install.lock')) {
     require BP . 'setup' . DIRECTORY_SEPARATOR . 'index.php';
     exit();
 }
@@ -27,13 +29,13 @@ require __DIR__ . DIRECTORY_SEPARATOR . 'autoload.php';
 // 加载框架通用函数（必须在 TraceContext::init() 之前，因为 TraceContext 依赖 w_env() 等函数）
 require __DIR__ . '/code/Weline/Framework/Common/functions.php';
 // 初始化统一的异常处理系统
-ExceptionBootstrap::init(PHP_SAPI === 'cli' ? 'CLI' : 'FPM');
+ExceptionBootstrap::init($isCliSapi ? 'CLI' : 'FPM');
 
 // 初始化链路追踪上下文
 TraceContext::init();
 
 // 如果是 Web 请求（非 CLI），阻止加载 Pest 测试框架的函数文件
-if (PHP_SAPI !== 'cli') {
+if (!$isCliSapi) {
     if (!function_exists('beforeEach')) {
         function beforeEach() { throw new \Exception('Pest 测试框架不允许在 Web 请求生命周期中运行'); }
     }
@@ -54,7 +56,7 @@ try {
     /**
      * 初始化应用...
      */
-    $result = \Weline\Framework\App::run();
+    $result = \Weline\Framework\App::runWithRuntime();
     // 输出前先发送通过 Response::setHeader() 收集的响应头（如 Website-Id 等），否则 FPM 下不会出现在响应中
     if (!headers_sent()) {
         \Weline\Framework\Http\HeaderCollector::getInstance()->emit(true);

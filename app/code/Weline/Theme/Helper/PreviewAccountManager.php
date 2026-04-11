@@ -152,7 +152,7 @@ class PreviewAccountManager
 
         $frontendSession->login($user);
         $user->setSessionId($frontendSession->getSessionId())
-            ->setLoginIp($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1')
+            ->setLoginIp((string) (\w_env('server.remote_addr', '127.0.0.1') ?? '127.0.0.1'))
             ->save();
     }
 

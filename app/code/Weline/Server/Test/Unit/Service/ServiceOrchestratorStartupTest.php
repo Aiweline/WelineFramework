@@ -705,37 +705,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
     public function testWaitForWorkerCriticalInfraReadyFailsWhenSessionServerStaysDegraded(): void
     {
-        $sharedManager = new class extends \Weline\Server\Service\SharedStateServiceManager {
-            public function probe(string $role, array $config = [], array $envConfig = []): array
-            {
-                return [
-                    'healthy' => $role === ControlMessage::ROLE_MEMORY_SERVER,
-                    'runtime' => ['host' => '127.0.0.1', 'port' => $role === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970],
-                ];
-            }
-
-            public function ensureRuntime(
-                string $requesterInstanceName,
-                array $config,
-                array $envConfig = [],
-                bool $frontend = false,
-                bool $forceRestart = false
-            ): array {
-                throw new \RuntimeException('session unavailable');
-            }
-        };
-
-        $orchestrator = new class($sharedManager) extends ServiceOrchestrator {
-            public function __construct(private readonly \Weline\Server\Service\SharedStateServiceManager $sharedManager)
-            {
-                parent::__construct();
-            }
-
-            protected function createSharedStateServiceManager(): \Weline\Server\Service\SharedStateServiceManager
-            {
-                return $this->sharedManager;
-            }
-        };
+        $orchestrator = new ServiceOrchestrator();
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new WorkerProvider());
 
@@ -782,61 +752,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
         };
 
-        $sharedManager = new class extends \Weline\Server\Service\SharedStateServiceManager {
-            /** @var array<string, bool> */
-            public array $health = [
-                ControlMessage::ROLE_SESSION_SERVER => false,
-                ControlMessage::ROLE_MEMORY_SERVER => true,
-            ];
-
-            public function probe(string $role, array $config = [], array $envConfig = []): array
-            {
-                $port = $role === ControlMessage::ROLE_MEMORY_SERVER ? 19971 : 19970;
-
-                return [
-                    'healthy' => (bool) ($this->health[$role] ?? false),
-                    'runtime' => ['host' => '127.0.0.1', 'port' => $port, 'token_file_name' => $role === ControlMessage::ROLE_MEMORY_SERVER ? 'memory_server.token' : 'session_server.token'],
-                ];
-            }
-
-            public function ensureRuntime(
-                string $requesterInstanceName,
-                array $config,
-                array $envConfig = [],
-                bool $frontend = false,
-                bool $forceRestart = false
-            ): array {
-                $this->health[ControlMessage::ROLE_SESSION_SERVER] = true;
-                $this->health[ControlMessage::ROLE_MEMORY_SERVER] = true;
-
-                return [
-                    'session' => [
-                        'host' => '127.0.0.1',
-                        'port' => 19970,
-                        'token_file_name' => 'session_server.token',
-                        'healthy' => true,
-                    ],
-                    'memory' => [
-                        'host' => '127.0.0.1',
-                        'port' => 19971,
-                        'token_file_name' => 'memory_server.token',
-                        'healthy' => true,
-                    ],
-                ];
-            }
-        };
-
-        $orchestrator = new class($sharedManager) extends ServiceOrchestrator {
-            public function __construct(private readonly \Weline\Server\Service\SharedStateServiceManager $sharedManager)
-            {
-                parent::__construct();
-            }
-
-            protected function createSharedStateServiceManager(): \Weline\Server\Service\SharedStateServiceManager
-            {
-                return $this->sharedManager;
-            }
-        };
+        $orchestrator = new ServiceOrchestrator();
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new WorkerProvider());
 
@@ -864,14 +780,14 @@ class ServiceOrchestratorStartupTest extends TestCase
             port: 19971,
         ));
 
-        $server->pollHook = function () use ($registry, $orchestrator, $sharedManager): void {
+        $server->pollHook = function () use ($registry, $orchestrator): void {
             $session = $registry->getInstance(ControlMessage::ROLE_SESSION_SERVER, 1);
             self::assertInstanceOf(ServiceInstance::class, $session);
             $session->state = ServiceInstance::STATE_READY;
             $session->ipcClientId = 77;
             $registry->updateInstance($session);
 
-            $sharedManager->health[ControlMessage::ROLE_SESSION_SERVER] = true;
+            // 模拟 IPC 事件驱动更新 infraDegraded
             $this->writePrivate($orchestrator, 'infraDegraded', [
                 ControlMessage::ROLE_SESSION_SERVER => false,
                 ControlMessage::ROLE_MEMORY_SERVER => false,
@@ -1428,62 +1344,26 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * ensureSharedCriticalInfra 先对共享角色 probe（同步），再进入子进程批量拉起；ensureRuntime 走主循环异步，不在此断言同步调用。
+     * 共享服务作为普通服务参与并发启动批次（无特殊 probe/ensure）。
      */
-    public function testSharedCriticalInfraEnsureStartsBeforePhaseOneBatchKickoff(): void
+    public function testSharedServicesIncludedInPhaseOneBatch(): void
     {
         $events = new \ArrayObject();
-        $sharedManager = new class($events) extends \Weline\Server\Service\SharedStateServiceManager {
-            public function __construct(private readonly \ArrayObject $events) {}
 
-            public function probe(string $role, array $config = [], array $envConfig = []): array
-            {
-                $this->events->append('probe:' . $role);
-
-                return ['healthy' => false];
-            }
-
-            public function ensureRuntime(
-                string $requesterInstanceName,
-                array $config,
-                array $envConfig = [],
-                bool $frontend = false,
-                bool $forceRestart = false
-            ): array {
-                $this->events->append('ensure:' . ControlMessage::ROLE_SESSION_SERVER);
-                $this->events->append('ensure:' . ControlMessage::ROLE_MEMORY_SERVER);
-
-                return [
-                    'session' => [
-                        'host' => '127.0.0.1',
-                        'port' => 19970,
-                        'token_file_name' => 'session_server.token',
-                    ],
-                    'memory' => [
-                        'host' => '127.0.0.1',
-                        'port' => 19971,
-                        'token_file_name' => 'memory_server.token',
-                    ],
-                ];
-            }
-        };
-
-        $orchestrator = new class($sharedManager, $events) extends ServiceOrchestrator {
+        $orchestrator = new class($events) extends ServiceOrchestrator {
             public function __construct(
-                private readonly \Weline\Server\Service\SharedStateServiceManager $sharedManager,
                 private readonly \ArrayObject $events
             ) {
                 parent::__construct();
             }
 
-            protected function createSharedStateServiceManager(): \Weline\Server\Service\SharedStateServiceManager
-            {
-                return $this->sharedManager;
-            }
-
             protected function startProvidersBatch(array $providers, ServiceContext $context): array
             {
-                $this->events->append('phase_one_batch_started');
+                $roles = [];
+                foreach ($providers as $provider) {
+                    $roles[] = $provider->getRole();
+                }
+                $this->events->append('phase_one_batch_roles:' . \implode(',', $roles));
                 $result = [];
                 foreach ($providers as $provider) {
                     $role = $provider->getRole();
@@ -1510,9 +1390,10 @@ class ServiceOrchestratorStartupTest extends TestCase
         };
 
         $registry = $orchestrator->getRegistry();
+        $registry->registerProvider(new SessionServerProvider());
+        $registry->registerProvider(new MemoryServerProvider());
         $registry->registerProvider(new DispatcherProvider());
         $registry->registerProvider(new MaintenanceWorkerProvider());
-        // 不注册 WorkerProvider，避免测试中触发真实 Worker 拉起；通过既有 Worker 实例模拟 workerDesired>0。
         $registry->addInstance(new ServiceInstance(
             role: ControlMessage::ROLE_WORKER,
             instanceId: 1,
@@ -1529,51 +1410,24 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $eventList = \iterator_to_array($events, false);
         self::assertNotEmpty($eventList);
-        $phaseOneIndex = \array_search('phase_one_batch_started', $eventList, true);
-        $sessionProbeIndex = \array_search('probe:' . ControlMessage::ROLE_SESSION_SERVER, $eventList, true);
-        self::assertNotFalse($phaseOneIndex);
-        self::assertNotFalse($sessionProbeIndex);
-        self::assertLessThan($phaseOneIndex, $sessionProbeIndex);
+        // 验证共享服务包含在批量启动中
+        $batchEvent = $eventList[0] ?? '';
+        self::assertStringContainsString(ControlMessage::ROLE_SESSION_SERVER, $batchEvent);
+        self::assertStringContainsString(ControlMessage::ROLE_MEMORY_SERVER, $batchEvent);
     }
 
     /**
-     * 共享基础服务 ensure 失败时改为异步调度，不阻塞子服务批量拉起。
+     * 共享服务启动失败不阻塞其他子服务批量拉起（Provider 模式下由 Orchestrator 异步重试）。
      */
-    public function testStartAllChildServicesBodyDoesNotThrowWhenSharedCriticalInfraEnsureFails(): void
+    public function testStartAllChildServicesBodyDoesNotThrowWhenSharedServiceProviderFails(): void
     {
         $events = new \ArrayObject();
-        $sharedManager = new class($events) extends \Weline\Server\Service\SharedStateServiceManager {
-            public function __construct(private readonly \ArrayObject $events) {}
 
-            public function probe(string $role, array $config = [], array $envConfig = []): array
-            {
-                return ['healthy' => false];
-            }
-
-            public function ensureRuntime(
-                string $requesterInstanceName,
-                array $config,
-                array $envConfig = [],
-                bool $frontend = false,
-                bool $forceRestart = false
-            ): array {
-                $this->events->append('ensure_runtime_called');
-
-                throw new \RuntimeException('shared infra bootstrap failed');
-            }
-        };
-
-        $orchestrator = new class($sharedManager, $events) extends ServiceOrchestrator {
+        $orchestrator = new class($events) extends ServiceOrchestrator {
             public function __construct(
-                private readonly \Weline\Server\Service\SharedStateServiceManager $sharedManager,
                 private readonly \ArrayObject $events
             ) {
                 parent::__construct();
-            }
-
-            protected function createSharedStateServiceManager(): \Weline\Server\Service\SharedStateServiceManager
-            {
-                return $this->sharedManager;
             }
 
             protected function startProvidersBatch(array $providers, ServiceContext $context): array
@@ -1587,7 +1441,6 @@ class ServiceOrchestratorStartupTest extends TestCase
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new DispatcherProvider());
         $registry->registerProvider(new MaintenanceWorkerProvider());
-        // 不注册 WorkerProvider，避免触发真实 Worker 拉起；用现存 Worker 模拟 workerDesired>0。
         $registry->addInstance(new ServiceInstance(
             role: ControlMessage::ROLE_WORKER,
             instanceId: 1,
@@ -1609,7 +1462,6 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $eventList = \iterator_to_array($events, false);
         self::assertContains('phase_one_batch_started', $eventList);
-        self::assertNotContains('ensure_runtime_called', $eventList);
     }
 
     /**
@@ -1953,7 +1805,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($this->readPrivateBool($orchestrator, 'fullRestartRequested'));
     }
 
-    public function testCooperativeSequentialStartupBatchEnabledDuringWindowsBootstrap(): void
+    public function testCooperativeSequentialStartupBatchDisabledDuringWindowsBootstrapEvenWhenFlagEnabled(): void
     {
         $orchestrator = new ServiceOrchestrator();
 
@@ -1972,10 +1824,10 @@ class ServiceOrchestratorStartupTest extends TestCase
             [[1, 2]]
         );
 
-        self::assertSame(\defined('IS_WIN') && IS_WIN, $enabled);
+        self::assertFalse($enabled);
     }
 
-    public function testCooperativeSequentialProvidersStartupBatchEnabledDuringWindowsBootstrap(): void
+    public function testCooperativeSequentialProvidersStartupBatchDisabledDuringWindowsBootstrapEvenWhenFlagEnabled(): void
     {
         $orchestrator = new ServiceOrchestrator();
 
@@ -1994,7 +1846,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             [2, ['custom_phase_one', ControlMessage::ROLE_DISPATCHER]]
         );
 
-        self::assertSame(\defined('IS_WIN') && IS_WIN, $enabled);
+        self::assertFalse($enabled);
     }
 
     public function testCooperativeSequentialProvidersStartupBatchDisabledForDispatcherMaintenanceRedirectSet(): void
@@ -2214,6 +2066,140 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($orchestrator->checkAndDisableMaintenanceIfReady());
         self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
         self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
+    }
+
+    public function testConfiguredMaintenanceDoesNotAutoDisableWhenAllWorkersBecomeReady(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_MAINTENANCE)) {
+            $registry->registerProvider(new MaintenanceWorkerProvider());
+        }
+
+        $context = new ServiceContext(
+            instanceName: 'ai-u-maint-sticky-all-ready',
+            epoch: 14,
+            controlPort: 37985,
+            masterPid: 424246,
+            host: '127.0.0.1',
+            mainPort: 18092,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'system' => [
+                    'maintenance' => true,
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 28186,
+            workerPort: 28186,
+        );
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->invokePrivateWithArgs($orchestrator, 'autoStartMaintenanceMode', [$context]);
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'sticky-all-ready-1',
+            port: 28187,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 401,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 2,
+            epoch: $context->epoch,
+            launchId: 'sticky-all-ready-2',
+            port: 28188,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 402,
+        ));
+
+        self::assertFalse($orchestrator->checkAndDisableMaintenanceIfReady());
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceSticky'));
+    }
+
+    public function testWorkerReadyDoesNotPublishBusinessWorkerWhileMaintenanceModeActive(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'maintenanceMode', true);
+        $this->writePrivate($orchestrator, 'maintenanceSticky', false);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 2,
+            ControlMessage::ROLE_MAINTENANCE => 1,
+        ]);
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-ready-maint',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201,
+        ));
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-under-maintenance',
+            port: 18080,
+            state: ServiceInstance::STATE_STARTING,
+            startedAt: \microtime(true) - 1.0,
+            ipcClientId: 301,
+        ));
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
+            'epoch' => $context->epoch,
+            'launch_id' => 'worker-under-maintenance',
+            'port' => 18080,
+            'role' => ControlMessage::ROLE_WORKER,
+        ], 301]);
+
+        self::assertTrue($this->readPrivateBool($orchestrator, 'maintenanceMode'));
+
+        foreach ($mockControl->sent as $entry) {
+            if ($entry['clientId'] !== 201) {
+                continue;
+            }
+
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_ADD_WORKER) {
+                self::fail('维护模式仍在激活时，业务 Worker READY 不应立即发布给 Dispatcher');
+            }
+        }
     }
 
     private function createWorkerInfraContext(): ServiceContext

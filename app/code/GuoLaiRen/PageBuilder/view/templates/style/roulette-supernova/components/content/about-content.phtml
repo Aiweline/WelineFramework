@@ -1,0 +1,774 @@
+<?php
+/**
+ * Roulette Supernova - About Content Component
+ *
+ * @component_start
+ * code: about-content
+ * name: 关于我们内容
+ * name_en: About Content
+ * description: Roulette Supernova about page with a distinct orbit hero, editorial story runway, and staggered value/team structures.
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_stats => 显示数据统计:select:yes|yes,no
+ * display.show_values => 显示价值观:select:yes|yes,no
+ * display.show_team => 显示团队:select:yes|yes,no
+ * display.show_cta => 显示底部CTA:select:yes|yes,no
+ *
+ * group:hero => 顶部横幅
+ * hero.kicker => 页面辅助标题:text:Brand orbit
+ * hero.title => 页面标题:text:About Roulette Supernova
+ * hero.subtitle => 页面副标题:textarea:A roulette-focused landing system built to keep wheel entry, trust cues, and mobile hierarchy sharp.
+ * hero.bg_color => 背景色:color:#07070b
+ * hero.bg_gradient_end => 渐变结束色:color:#18070f
+ * hero.title_color => 标题颜色:color:#f7f1e8
+ * hero.text_color => 文字颜色:color:#cbbcae
+ * hero.padding => 内边距:number:88|px
+ *
+ * group:stats => 数据统计
+ * stats.stat_1_number => 统计1数字:text:24/7
+ * stats.stat_1_label => 统计1标签:text:Support route
+ * stats.stat_2_number => 统计2数字:text:1-tap
+ * stats.stat_2_label => 统计2标签:text:Wheel entry
+ * stats.stat_3_number => 统计3数字:text:3-layer
+ * stats.stat_3_label => 统计3标签:text:Contrast system
+ * stats.stat_4_number => 统计4数字:text:Mobile
+ * stats.stat_4_label => 统计4标签:text:Responsive flow
+ * stats.number_color => 数字颜色:color:#dfff5a
+ * stats.label_color => 标签颜色:color:#b8aba1
+ * stats.card_bg => 卡片背景:color:rgba(255,255,255,0.06)
+ *
+ * group:story => 故事区块
+ * story.kicker => 故事辅助标题:text:Brand story
+ * story.title => 标题:text:Why Roulette Supernova Reads Faster
+ * story.subtitle => 副标题:text:A sharper roulette presentation keeps table selection, trust cues, and support paths easy to scan.
+ * story.content => 内容:textarea:Roulette Supernova is built for roulette brands that want a stronger first impression without losing clarity. The layout keeps table entry points, support access, and trust signals visible from the first screen while still leaving room for brand story and operator details.
+ * story.bg_color => 背景色:color:#0f1219
+ * story.title_color => 标题颜色:color:#f7f1e8
+ *
+ * group:values => 价值观区块
+ * values.title => 标题:text:What Players Feel First
+ * values.subtitle => 副标题:text:Three editable pillars help this section stay bold, readable, and easy to adapt across roulette sites.
+ * values.value_1_icon => 价值1图标:text:01
+ * values.value_1_title => 价值1标题:text:Wheel Clarity
+ * values.value_1_desc => 价值1描述:textarea:The most important roulette interactions stay closest to the eye and never get buried under decoration.
+ * values.value_2_icon => 价值2图标:text:02
+ * values.value_2_title => 价值2标题:text:Bold Contrast
+ * values.value_2_desc => 价值2描述:textarea:Text, cards, and action states are tuned for fast scanning on bright screens and smaller devices.
+ * values.value_3_icon => 价值3图标:text:03
+ * values.value_3_title => 价值3标题:text:Trust Signals
+ * values.value_3_desc => 价值3描述:textarea:Support routes, policy access, and action cues stay visible so players can move through the roulette journey with more confidence.
+ * values.bg_color => 背景色:color:#f7f0e5
+ *
+ * group:team => 团队区块
+ * team.title => 标题:text:Behind The Table Flow
+ * team.subtitle => 副标题:text:Editable role cards can introduce support, trust, content, or operations teams without breaking the roulette story.
+ * team.member_1_icon => 成员1头像:text:SP
+ * team.member_1_name => 成员1姓名:text:Player Support
+ * team.member_1_role => 成员1职位:text:Issue routing and account help
+ * team.member_2_icon => 成员2头像:text:TR
+ * team.member_2_name => 成员2姓名:text:Fair Play Review
+ * team.member_2_role => 成员2职位:text:Policy, trust, and table checks
+ * team.member_3_icon => 成员3头像:text:PD
+ * team.member_3_name => 成员3姓名:text:Table Operations
+ * team.member_3_role => 成员3职位:text:Room flow and access planning
+ * team.member_4_icon => 成员4头像:text:CO
+ * team.member_4_name => 成员4姓名:text:Content Desk
+ * team.member_4_role => 成员4职位:text:Guides, updates, and player copy
+ *
+ * group:cta => 底部CTA
+ * cta.title => CTA标题:text:Need help before you join a table?
+ * cta.description => CTA描述:textarea:Use this area to guide players toward support, verification, or account help while keeping the roulette journey clear.
+ * cta.button_text => 按钮文字:text:Contact Support
+ * cta.button_url => 按钮链接:text:/contact
+ * cta.button_bg => 按钮背景:color:linear-gradient(135deg, #ff5b45 0%, #ffbf47 44%, #dfff5a 100%)
+ * cta.button_text_color => 按钮文字颜色:color:#130d08
+ *
+ * @fields_end
+ */
+
+$componentId = 'rsn-about-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$config = array_merge($styleSettings, $componentConfig);
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showStats = $getConfig('display.show_stats', 'yes') !== 'no';
+$showValues = $getConfig('display.show_values', 'yes') !== 'no';
+$showTeam = $getConfig('display.show_team', 'yes') !== 'no';
+$showCta = $getConfig('display.show_cta', 'yes') !== 'no';
+$pageTitle = $page ? trim((string) ($page->getData('title') ?? '')) : '';
+$pageContent = $page ? trim((string) ($page->getData('content') ?? '')) : '';
+$heroTitle = trim((string) $getConfig('hero.title', $pageTitle));
+if ($heroTitle === '') {
+    $heroTitle = 'About Roulette Supernova';
+}
+$heroKicker = trim((string) $getConfig('hero.kicker', 'Brand orbit'));
+$heroSubtitle = trim((string) $getConfig('hero.subtitle', 'A roulette-focused landing system built to keep wheel entry, trust cues, and mobile hierarchy sharp.'));
+$heroPadding = max(52, (int) $getConfig('hero.padding', 88));
+$storyKicker = trim((string) $getConfig('story.kicker', 'Brand story'));
+$storyTitle = trim((string) $getConfig('story.title', 'Why Roulette Supernova Reads Faster'));
+$storySubtitle = trim((string) $getConfig('story.subtitle', 'A sharper roulette presentation keeps table selection, trust cues, and support paths easy to scan.'));
+$storyContent = trim((string) $getConfig('story.content', $pageContent));
+if ($storyContent === '') {
+    $storyContent = 'Roulette Supernova is built for roulette brands that want a stronger first impression without losing clarity. The layout keeps table entry points, support access, and trust signals visible from the first screen while still leaving room for brand story and operator details.';
+}
+$storyParagraphs = preg_split('/\r?\n\s*\r?\n/', $storyContent) ?: [];
+$storyParagraphs = array_values(array_filter(array_map('trim', $storyParagraphs)));
+if (empty($storyParagraphs)) {
+    $storyParagraphs = [trim($storyContent)];
+}
+
+$defaultStats = [
+    ['24/7', 'Support route'],
+    ['1-tap', 'Wheel entry'],
+    ['3-layer', 'Contrast system'],
+    ['Mobile', 'Responsive flow'],
+];
+$stats = [];
+for ($i = 1; $i <= 4; $i++) {
+    $number = trim((string) $getConfig("stats.stat_{$i}_number", $defaultStats[$i - 1][0]));
+    $label = trim((string) $getConfig("stats.stat_{$i}_label", $defaultStats[$i - 1][1]));
+    if ($number === '' && $label === '') {
+        continue;
+    }
+    $stats[] = ['number' => $number, 'label' => $label];
+}
+$orbitStats = array_slice($stats, 0, 4);
+
+$valuesTitle = trim((string) $getConfig('values.title', 'What Players Feel First'));
+$valuesSubtitle = trim((string) $getConfig('values.subtitle', 'Three editable pillars help this section stay bold, readable, and easy to adapt across roulette sites.'));
+$defaultValues = [
+    ['01', 'Wheel Clarity', 'The most important roulette interactions stay closest to the eye and never get buried under decoration.'],
+    ['02', 'Bold Contrast', 'Text, cards, and action states are tuned for fast scanning on bright screens and smaller devices.'],
+    ['03', 'Trust Signals', 'Support routes, policy access, and action cues stay visible so players can move through the roulette journey with more confidence.'],
+];
+$values = [];
+for ($i = 1; $i <= 3; $i++) {
+    $title = trim((string) $getConfig("values.value_{$i}_title", $defaultValues[$i - 1][1]));
+    $desc = trim((string) $getConfig("values.value_{$i}_desc", $defaultValues[$i - 1][2]));
+    if ($title === '' && $desc === '') {
+        continue;
+    }
+    $values[] = [
+        'icon' => trim((string) $getConfig("values.value_{$i}_icon", $defaultValues[$i - 1][0])),
+        'title' => $title,
+        'description' => $desc,
+    ];
+}
+
+$teamTitle = trim((string) $getConfig('team.title', 'Behind The Table Flow'));
+$teamSubtitle = trim((string) $getConfig('team.subtitle', 'Editable role cards can introduce support, trust, content, or operations teams without breaking the roulette story.'));
+$defaultMembers = [
+    ['SP', 'Player Support', 'Issue routing and account help'],
+    ['TR', 'Fair Play Review', 'Policy, trust, and table checks'],
+    ['PD', 'Table Operations', 'Room flow and access planning'],
+    ['CO', 'Content Desk', 'Guides, updates, and player copy'],
+];
+$teamMembers = [];
+for ($i = 1; $i <= 4; $i++) {
+    $name = trim((string) $getConfig("team.member_{$i}_name", $defaultMembers[$i - 1][1]));
+    $role = trim((string) $getConfig("team.member_{$i}_role", $defaultMembers[$i - 1][2]));
+    if ($name === '' && $role === '') {
+        continue;
+    }
+    $teamMembers[] = [
+        'icon' => trim((string) $getConfig("team.member_{$i}_icon", $defaultMembers[$i - 1][0])),
+        'name' => $name,
+        'role' => $role,
+    ];
+}
+
+$ctaTitle = trim((string) $getConfig('cta.title', 'Need help before you join a table?'));
+$ctaDescription = trim((string) $getConfig('cta.description', 'Use this area to guide players toward support, verification, or account help while keeping the roulette journey clear.'));
+$ctaButtonText = trim((string) $getConfig('cta.button_text', 'Contact Support'));
+$ctaButtonUrl = trim((string) $getConfig('cta.button_url', '/contact')) ?: '/contact';
+$heroBg = (string) $getConfig('hero.bg_color', $colors['hero_bg'] ?? '#07070b');
+$heroBgEnd = (string) $getConfig('hero.bg_gradient_end', $colors['hero_bg_gradient_end'] ?? '#18070f');
+$heroTitleColor = (string) $getConfig('hero.title_color', $colors['text_primary'] ?? '#f7f1e8');
+$heroTextColor = (string) $getConfig('hero.text_color', $colors['text_secondary'] ?? '#cbbcae');
+$storyBg = (string) $getConfig('story.bg_color', '#0f1219');
+$storyTitleColor = (string) $getConfig('story.title_color', '#f7f1e8');
+$valuesBg = (string) $getConfig('values.bg_color', '#f7f0e5');
+$statsCardBg = (string) $getConfig('stats.card_bg', 'rgba(255,255,255,0.06)');
+$statsNumberColor = (string) $getConfig('stats.number_color', '#dfff5a');
+$statsLabelColor = (string) $getConfig('stats.label_color', '#b8aba1');
+$ctaButtonBg = (string) $getConfig('cta.button_bg', 'linear-gradient(135deg, #ff5b45 0%, #ffbf47 44%, #dfff5a 100%)');
+$ctaButtonTextColor = (string) $getConfig('cta.button_text_color', '#130d08');
+?>
+<section
+    id="<?= $componentId ?>"
+    class="rsn-about"
+    style="--rsn-about-hero-bg: <?= htmlspecialchars($heroBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-hero-end: <?= htmlspecialchars($heroBgEnd, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-hero-title: <?= htmlspecialchars($heroTitleColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-hero-text: <?= htmlspecialchars($heroTextColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-story-bg: <?= htmlspecialchars($storyBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-story-title: <?= htmlspecialchars($storyTitleColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-values-bg: <?= htmlspecialchars($valuesBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-stats-bg: <?= htmlspecialchars($statsCardBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-stat-number: <?= htmlspecialchars($statsNumberColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-stat-label: <?= htmlspecialchars($statsLabelColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-cta-bg: <?= htmlspecialchars($ctaButtonBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-cta-text: <?= htmlspecialchars($ctaButtonTextColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-about-hero-padding: <?= (int) $heroPadding ?>px;"
+>
+    <div class="about-shell">
+        <header class="hero-band">
+            <div class="hero-copy">
+                <?php if ($heroKicker !== ''): ?>
+                    <span class="hero-kicker"><?= htmlspecialchars($heroKicker) ?></span>
+                <?php endif; ?>
+                <h1><?= htmlspecialchars($heroTitle) ?></h1>
+                <?php if ($heroSubtitle !== ''): ?>
+                    <p class="hero-subtitle"><?= htmlspecialchars($heroSubtitle) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <div class="hero-orbit" aria-hidden="true">
+                <div class="orbit-core">
+                    <?php if ($storyTitle !== ''): ?>
+                        <span><?= htmlspecialchars($storyTitle) ?></span>
+                    <?php endif; ?>
+                    <?php if ($storySubtitle !== ''): ?>
+                        <strong><?= htmlspecialchars($storySubtitle) ?></strong>
+                    <?php endif; ?>
+                </div>
+                <?php foreach ($orbitStats as $index => $stat): ?>
+                    <article class="orbit-stat orbit-stat-<?= (int) ($index + 1) ?>">
+                        <strong><?= htmlspecialchars($stat['number']) ?></strong>
+                        <span><?= htmlspecialchars($stat['label']) ?></span>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </header>
+
+        <section class="story-runway">
+            <div class="runway-intro">
+                <?php if ($storyKicker !== ''): ?>
+                    <span class="section-kicker"><?= htmlspecialchars($storyKicker) ?></span>
+                <?php endif; ?>
+                <?php if ($storyTitle !== ''): ?>
+                    <h2><?= htmlspecialchars($storyTitle) ?></h2>
+                <?php endif; ?>
+                <?php if ($storySubtitle !== ''): ?>
+                    <p><?= htmlspecialchars($storySubtitle) ?></p>
+                <?php endif; ?>
+            </div>
+            <div class="runway-body">
+                <?php foreach ($storyParagraphs as $paragraph): ?>
+                    <p><?= nl2br(htmlspecialchars($paragraph)) ?></p>
+                <?php endforeach; ?>
+            </div>
+        </section>
+
+        <?php if ($showStats && !empty($stats)): ?>
+            <section class="stats-ribbon" aria-label="About highlights">
+                <?php foreach ($stats as $index => $stat): ?>
+                    <article class="ribbon-card ribbon-card-<?= (int) ($index + 1) ?>">
+                        <strong><?= htmlspecialchars($stat['number']) ?></strong>
+                        <span><?= htmlspecialchars($stat['label']) ?></span>
+                    </article>
+                <?php endforeach; ?>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($showValues && !empty($values)): ?>
+            <section class="values-track">
+                <div class="track-head">
+                    <span class="section-kicker">Player signals</span>
+                    <?php if ($valuesTitle !== ''): ?>
+                        <h2><?= htmlspecialchars($valuesTitle) ?></h2>
+                    <?php endif; ?>
+                    <?php if ($valuesSubtitle !== ''): ?>
+                        <p><?= htmlspecialchars($valuesSubtitle) ?></p>
+                    <?php endif; ?>
+                </div>
+                <div class="track-lane">
+                    <?php foreach ($values as $index => $value): ?>
+                        <article class="value-panel value-panel-<?= (int) ($index + 1) ?>">
+                            <span class="value-mark"><?= htmlspecialchars($value['icon']) ?></span>
+                            <h3><?= htmlspecialchars($value['title']) ?></h3>
+                            <p><?= htmlspecialchars($value['description']) ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($showTeam && !empty($teamMembers)): ?>
+            <section class="team-board">
+                <div class="board-head">
+                    <span class="section-kicker">Crew deck</span>
+                    <?php if ($teamTitle !== ''): ?>
+                        <h2><?= htmlspecialchars($teamTitle) ?></h2>
+                    <?php endif; ?>
+                    <?php if ($teamSubtitle !== ''): ?>
+                        <p><?= htmlspecialchars($teamSubtitle) ?></p>
+                    <?php endif; ?>
+                </div>
+                <div class="team-deck">
+                    <?php foreach ($teamMembers as $index => $member): ?>
+                        <article class="team-card team-card-<?= (int) ($index + 1) ?>">
+                            <span class="team-icon"><?= htmlspecialchars($member['icon']) ?></span>
+                            <div>
+                                <h3><?= htmlspecialchars($member['name']) ?></h3>
+                                <p><?= htmlspecialchars($member['role']) ?></p>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+        <?php endif; ?>
+
+        <?php if ($showCta && ($ctaTitle !== '' || $ctaDescription !== '' || $ctaButtonText !== '')): ?>
+            <section class="cta-ribbon">
+                <div class="cta-copy">
+                    <?php if ($ctaTitle !== ''): ?>
+                        <h2><?= htmlspecialchars($ctaTitle) ?></h2>
+                    <?php endif; ?>
+                    <?php if ($ctaDescription !== ''): ?>
+                        <p><?= htmlspecialchars($ctaDescription) ?></p>
+                    <?php endif; ?>
+                </div>
+                <?php if ($ctaButtonText !== ''): ?>
+                    <a href="<?= htmlspecialchars($ctaButtonUrl) ?>" class="cta-button"><?= htmlspecialchars($ctaButtonText) ?></a>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: clamp(4.5rem, 8vw, 6rem) 0;
+    background:
+        radial-gradient(900px 420px at 6% 0%, rgba(255,91,69,0.18), transparent 74%),
+        radial-gradient(740px 400px at 94% 8%, rgba(77,246,255,0.12), transparent 74%),
+        linear-gradient(180deg, var(--rsn-about-hero-bg) 0%, var(--rsn-about-hero-end) 42%, #07070b 100%);
+    color: var(--rsn-about-hero-text);
+    overflow: clip;
+}
+#<?= $componentId ?> .about-shell {
+    width: min(1280px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+#<?= $componentId ?> .hero-band {
+    display: grid;
+    grid-template-columns: minmax(0, 0.46fr) minmax(340px, 0.54fr);
+    gap: 1rem;
+    align-items: center;
+    padding: var(--rsn-about-hero-padding) 0 1rem;
+}
+#<?= $componentId ?> .hero-copy {
+    max-width: 36rem;
+}
+#<?= $componentId ?> .hero-copy,
+#<?= $componentId ?> .runway-intro,
+#<?= $componentId ?> .track-head,
+#<?= $componentId ?> .board-head,
+#<?= $componentId ?> .cta-copy {
+    display: grid;
+    justify-items: start;
+}
+#<?= $componentId ?> .hero-kicker,
+#<?= $componentId ?> .section-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: max-content;
+    min-height: 36px;
+    padding: 0.44rem 0.88rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.09);
+    background: rgba(255,255,255,0.05);
+    color: #f7f1e8;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+#<?= $componentId ?> .hero-kicker::before,
+#<?= $componentId ?> .section-kicker::before {
+    content: '';
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff5b45 0%, #dfff5a 44%, #4df6ff 100%);
+    box-shadow: 0 0 12px rgba(255,91,69,0.3);
+}
+#<?= $componentId ?> .hero-copy h1 {
+    margin-top: 1rem;
+    color: var(--rsn-about-hero-title);
+    font-size: clamp(2.7rem, 5vw, 5rem);
+    line-height: 0.92;
+    letter-spacing: -0.06em;
+}
+#<?= $componentId ?> .hero-copy h1,
+#<?= $componentId ?> .runway-intro h2,
+#<?= $componentId ?> .track-head h2,
+#<?= $componentId ?> .board-head h2,
+#<?= $componentId ?> .cta-copy h2 {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    padding-bottom: 1rem;
+}
+#<?= $componentId ?> .hero-copy h1::after,
+#<?= $componentId ?> .runway-intro h2::after,
+#<?= $componentId ?> .track-head h2::after,
+#<?= $componentId ?> .board-head h2::after,
+#<?= $componentId ?> .cta-copy h2::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: min(180px, 72%);
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff5b45 0%, #ffbf47 44%, #dfff5a 72%, rgba(77,246,255,0.18) 100%);
+    box-shadow: 12px 0 28px rgba(255,91,69,0.2);
+}
+#<?= $componentId ?> .hero-subtitle {
+    margin-top: 1rem;
+    max-width: 32rem;
+    line-height: 1.82;
+}
+#<?= $componentId ?> .hero-orbit {
+    position: relative;
+    min-height: 520px;
+    border-radius: 50px;
+    background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 34%, transparent 35%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 54%),
+        linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%);
+    box-shadow: 0 26px 62px rgba(0,0,0,0.3);
+    overflow: hidden;
+}
+#<?= $componentId ?> .hero-orbit::before,
+#<?= $componentId ?> .hero-orbit::after {
+    content: '';
+    position: absolute;
+    inset: 50%;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+}
+#<?= $componentId ?> .hero-orbit::before {
+    width: 76%;
+    height: 76%;
+    border: 1px dashed rgba(255,255,255,0.12);
+}
+#<?= $componentId ?> .hero-orbit::after {
+    width: 54%;
+    height: 54%;
+    border: 1px solid rgba(77,246,255,0.18);
+    box-shadow: inset 0 0 32px rgba(77,246,255,0.06);
+}
+#<?= $componentId ?> .orbit-core,
+#<?= $componentId ?> .orbit-stat {
+    position: absolute;
+    z-index: 1;
+}
+#<?= $componentId ?> .orbit-core {
+    top: 50%;
+    left: 50%;
+    width: min(280px, 62%);
+    padding: 1.25rem;
+    border-radius: 30px;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    background: linear-gradient(180deg, rgba(12,12,18,0.92) 0%, rgba(19,9,16,0.96) 100%);
+}
+#<?= $componentId ?> .orbit-core span {
+    display: block;
+    color: #dfff5a;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+#<?= $componentId ?> .orbit-core strong {
+    display: block;
+    margin-top: 0.8rem;
+    color: #f7f1e8;
+    font-size: clamp(1.3rem, 2vw, 1.8rem);
+    line-height: 1.25;
+}
+#<?= $componentId ?> .orbit-stat {
+    width: 170px;
+    padding: 0.95rem 1rem;
+    border-radius: 22px;
+    background: var(--rsn-about-stats-bg);
+    box-shadow: 0 18px 30px rgba(0,0,0,0.2);
+    backdrop-filter: blur(10px);
+}
+#<?= $componentId ?> .orbit-stat strong,
+#<?= $componentId ?> .ribbon-card strong {
+    display: block;
+    color: var(--rsn-about-stat-number);
+    font-size: 1.45rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+}
+#<?= $componentId ?> .orbit-stat span,
+#<?= $componentId ?> .ribbon-card span {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--rsn-about-stat-label);
+    line-height: 1.5;
+}
+#<?= $componentId ?> .orbit-stat-1 { top: 12%; left: 7%; transform: rotate(-8deg); }
+#<?= $componentId ?> .orbit-stat-2 { top: 14%; right: 7%; transform: rotate(8deg); }
+#<?= $componentId ?> .orbit-stat-3 { right: 10%; bottom: 13%; transform: rotate(-5deg); }
+#<?= $componentId ?> .orbit-stat-4 { left: 10%; bottom: 15%; transform: rotate(6deg); }
+#<?= $componentId ?> .story-runway {
+    display: block;
+    margin-top: 0.6rem;
+    padding: 1.1rem 1.1rem 1.2rem;
+    border-radius: 34px;
+    background:
+        linear-gradient(135deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.012) 100%),
+        var(--rsn-about-story-bg);
+    box-shadow: 0 22px 50px rgba(0,0,0,0.16);
+}
+#<?= $componentId ?> .runway-intro {
+    max-width: 46rem;
+}
+#<?= $componentId ?> .runway-intro h2,
+#<?= $componentId ?> .track-head h2,
+#<?= $componentId ?> .board-head h2,
+#<?= $componentId ?> .cta-copy h2 {
+    margin-top: 0.9rem;
+    color: var(--rsn-about-story-title);
+    font-size: clamp(1.9rem, 3.2vw, 3rem);
+    line-height: 0.98;
+    letter-spacing: -0.05em;
+}
+#<?= $componentId ?> .runway-intro p,
+#<?= $componentId ?> .track-head p,
+#<?= $componentId ?> .board-head p,
+#<?= $componentId ?> .cta-copy p,
+#<?= $componentId ?> .runway-body p,
+#<?= $componentId ?> .value-panel p,
+#<?= $componentId ?> .team-card p {
+    margin-top: 0.85rem;
+    line-height: 1.82;
+}
+#<?= $componentId ?> .runway-body {
+    width: 100%;
+    max-width: 100%;
+    margin-top: 1rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid rgba(255,255,255,0.08);
+}
+#<?= $componentId ?> .runway-body p {
+    margin-top: 0;
+    padding: 0 0 1rem;
+}
+#<?= $componentId ?> .stats-ribbon {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.9rem;
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .ribbon-card {
+    padding: 1rem;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+}
+#<?= $componentId ?> .ribbon-card-2 { transform: translateY(12px); }
+#<?= $componentId ?> .ribbon-card-3 { transform: translateY(-8px); }
+#<?= $componentId ?> .ribbon-card-4 { transform: translateY(10px); }
+#<?= $componentId ?> .values-track {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.32fr) minmax(0, 0.68fr);
+    gap: 1rem;
+    margin-top: 1rem;
+    padding: 1rem;
+    border-radius: 34px;
+    background: var(--rsn-about-values-bg);
+    color: #1b1310;
+}
+#<?= $componentId ?> .track-head h2,
+#<?= $componentId ?> .track-head p {
+    color: #1b1310;
+}
+#<?= $componentId ?> .track-lane {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.9rem;
+    align-items: start;
+}
+#<?= $componentId ?> .value-panel {
+    min-height: 100%;
+    padding: 1.15rem;
+    border-radius: 24px;
+    background: rgba(255,255,255,0.78);
+    box-shadow: 0 24px 44px rgba(44,24,12,0.08);
+}
+#<?= $componentId ?> .value-panel-2 { transform: translateY(18px) rotate(-1deg); }
+#<?= $componentId ?> .value-panel-3 { transform: translateY(-10px) rotate(1deg); }
+#<?= $componentId ?> .value-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 56px;
+    min-height: 32px;
+    padding: 0.35rem 0.72rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff5b45 0%, #ffbf47 44%, #dfff5a 100%);
+    color: #150f0a;
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+}
+#<?= $componentId ?> .value-panel h3,
+#<?= $componentId ?> .team-card h3 {
+    margin-top: 1rem;
+    color: #150f0a;
+    font-size: 1.25rem;
+    line-height: 1.18;
+}
+#<?= $componentId ?> .team-board {
+    display: grid;
+    grid-template-columns: minmax(260px, 0.3fr) minmax(0, 0.7fr);
+    gap: 1rem;
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .team-deck {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+#<?= $componentId ?> .team-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.9rem;
+    align-items: start;
+    padding: 1rem;
+    border-radius: 24px;
+    background: linear-gradient(155deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%);
+    box-shadow: 0 18px 34px rgba(0,0,0,0.16);
+}
+#<?= $componentId ?> .team-card-2 { transform: translateY(18px); }
+#<?= $componentId ?> .team-card-3 { transform: translateY(-10px); }
+#<?= $componentId ?> .team-card-4 { transform: translateY(10px); }
+#<?= $componentId ?> .team-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    border-radius: 20px;
+    color: #110c08;
+    font-weight: 900;
+    background: linear-gradient(135deg, #ff5b45 0%, #dfff5a 100%);
+}
+#<?= $componentId ?> .team-card h3,
+#<?= $componentId ?> .team-card p {
+    color: #f7f1e8;
+}
+#<?= $componentId ?> .cta-ribbon {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+    padding: 1rem 1.1rem;
+    border-radius: 30px;
+    background: linear-gradient(135deg, rgba(255,91,69,0.18) 0%, rgba(77,246,255,0.1) 100%);
+    box-shadow: 0 18px 40px rgba(0,0,0,0.16);
+}
+#<?= $componentId ?> .cta-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 48px;
+    padding: 0.9rem 1.3rem;
+    border-radius: 999px;
+    background: var(--rsn-about-cta-bg);
+    color: var(--rsn-about-cta-text);
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 18px 36px rgba(255,91,69,0.2);
+}
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .hero-band,
+    #<?= $componentId ?> .values-track,
+    #<?= $componentId ?> .team-board,
+    #<?= $componentId ?> .cta-ribbon {
+        grid-template-columns: 1fr;
+    }
+    #<?= $componentId ?> .hero-orbit {
+        min-height: 460px;
+    }
+    #<?= $componentId ?> .track-lane,
+    #<?= $componentId ?> .team-deck,
+    #<?= $componentId ?> .stats-ribbon {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 4rem 0;
+    }
+    #<?= $componentId ?> .about-shell {
+        width: min(100%, calc(100% - 0.8rem));
+    }
+    #<?= $componentId ?> .hero-band {
+        padding-top: 3rem;
+    }
+    #<?= $componentId ?> .hero-copy h1 {
+        font-size: clamp(2.2rem, 11vw, 3.5rem);
+    }
+    #<?= $componentId ?> .hero-orbit {
+        min-height: 380px;
+        border-radius: 34px;
+    }
+    #<?= $componentId ?> .orbit-core {
+        width: min(220px, 72%);
+        padding: 0.95rem;
+    }
+    #<?= $componentId ?> .orbit-stat {
+        width: 122px;
+        padding: 0.72rem;
+        border-radius: 18px;
+    }
+    #<?= $componentId ?> .orbit-stat strong,
+    #<?= $componentId ?> .ribbon-card strong {
+        font-size: 1.15rem;
+    }
+    #<?= $componentId ?> .orbit-stat span,
+    #<?= $componentId ?> .ribbon-card span {
+        font-size: 0.82rem;
+    }
+    #<?= $componentId ?> .orbit-stat-1 { top: 8%; left: 4%; }
+    #<?= $componentId ?> .orbit-stat-2 { top: 8%; right: 4%; }
+    #<?= $componentId ?> .orbit-stat-3 { right: 5%; bottom: 8%; }
+    #<?= $componentId ?> .orbit-stat-4 { left: 5%; bottom: 8%; }
+    #<?= $componentId ?> .stats-ribbon,
+    #<?= $componentId ?> .track-lane,
+    #<?= $componentId ?> .team-deck {
+        grid-template-columns: 1fr;
+    }
+    #<?= $componentId ?> .ribbon-card,
+    #<?= $componentId ?> .ribbon-card-2,
+    #<?= $componentId ?> .ribbon-card-3,
+    #<?= $componentId ?> .ribbon-card-4,
+    #<?= $componentId ?> .value-panel-2,
+    #<?= $componentId ?> .value-panel-3,
+    #<?= $componentId ?> .team-card-2,
+    #<?= $componentId ?> .team-card-3,
+    #<?= $componentId ?> .team-card-4 {
+        transform: none;
+    }
+    #<?= $componentId ?> .story-runway,
+    #<?= $componentId ?> .values-track,
+    #<?= $componentId ?> .cta-ribbon {
+        padding: 0.95rem;
+        border-radius: 24px;
+    }
+    #<?= $componentId ?> .cta-button {
+        width: 100%;
+    }
+}
+</style>

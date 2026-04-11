@@ -1,0 +1,96 @@
+<?php
+/**
+ * TPMST 简洁头部组件 - Simple Header Component
+ * 
+ * @component_start
+ * code: header-simple
+ * name: 简洁头部
+ * name_en: Simple Header
+ * description: 只包含Logo的简洁头部
+ * category: header
+ * region: header
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.url => Logo地址:textarea:|默认使用本地logo
+ * logo.width => Logo宽度:number:120|px
+ * logo.position => Logo位置:select:center|left,center,right
+ * 
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#0a0a0f
+ * style.padding => 内边距:number:20|px
+ * 
+ * @fields_end
+ */
+
+$componentId = 'court-piece-electric-mahal-header-simple-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$logoDisplay = $getConfig('logo.display', 'yes') !== 'no';
+$defaultLogoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/court-piece-electric-mahal/asset/img/logo-icon-128.avif');
+$logoUrl = $getConfig('logo.url', '') ?: ($page && $page->getData('logo') ? $page->getData('logo') : $defaultLogoUrl);
+$logoWidth = intval($getConfig('logo.width', '120'));
+$logoPosition = $getConfig('logo.position', 'center');
+$bgColor = $getConfig('style.bg_color', '#0a0a0f');
+$padding = intval($getConfig('style.padding', '20'));
+
+$justifyMap = ['left' => 'flex-start', 'center' => 'center', 'right' => 'flex-end'];
+$justify = $justifyMap[$logoPosition] ?? 'center';
+?>
+<!-- TPMST Simple Header Component Start: <?= $componentId ?> -->
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", "Liberation Sans", sans-serif;
+    line-height: 1.6;
+    padding: 0 !important;
+    margin: 0 !important;
+}
+#<?= $componentId ?> {
+    background: <?= htmlspecialchars($bgColor) ?>;
+    padding: <?= $padding ?>px 0;
+    width: 100%;
+}
+
+#<?= $componentId ?> .court-piece-electric-mahal-section-inner {
+    max-width: 1400px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: <?= $justify ?>;
+    align-items: center;
+    padding: 0 20px;
+}
+
+#<?= $componentId ?> .court-piece-electric-mahal-simple-header-logo img {
+    width: <?= $logoWidth ?>px;
+    height: auto;
+    display: block;
+}
+</style>
+
+<header id="<?= $componentId ?>" class="court-piece-electric-mahal-section court-piece-electric-mahal-header-simple-component">
+    <div class="court-piece-electric-mahal-section-inner">
+        <?php if ($logoDisplay && $logoUrl): ?>
+        <div class="court-piece-electric-mahal-simple-header-logo">
+            <img src="<?= htmlspecialchars($logoUrl) ?>" alt="Logo">
+        </div>
+        <?php endif; ?>
+    </div>
+</header>
+<!-- TPMST Simple Header Component End: <?= $componentId ?> -->

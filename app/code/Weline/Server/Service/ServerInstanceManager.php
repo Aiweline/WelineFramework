@@ -1078,6 +1078,14 @@ class ServerInstanceManager
             return false;
         }
 
+        // CLI 启动路径下，instance file 记录的 master_pid 可能对应最外层
+        // `php bin/w server:start` 进程，而不是带 `--name=weline-wls-master-*`
+        // 的受管子进程。此时严格的 Master 身份校验会误判，但真正决定
+        // IPC 可控性的仍是控制端口是否可达。
+        if (Processer::isPortInUse($info->controlPort)) {
+            return true;
+        }
+
         return $info->isMasterRunning();
     }
 
