@@ -303,8 +303,10 @@ SYSTEM_PROMPT;
         $allToolCalls = [];
         $finalContent = '';
 
-        // 检查 Provider 是否支持 generateStreamFull（流式 + tool_calls）
+        // 检查 Provider 是否支持 generateStreamFull（流式 + tool_calls）；用 callable 包装以满足静态分析（接口未声明该方法）
         $useStreamFull = method_exists($provider, 'generateStreamFull');
+        /** @var callable(AiModel, string, array): array|null $streamFullCallable */
+        $streamFullCallable = $useStreamFull ? [$provider, 'generateStreamFull'] : null;
 
         // Tool 调用编排循环
         while ($iteration < self::MAX_ITERATIONS) {
@@ -329,9 +331,9 @@ SYSTEM_PROMPT;
                     $streamCallback('heartbeat', ['ts' => time()]);
                 }
 
-                if ($useStreamFull) {
+                if ($streamFullCallable !== null) {
                     // 流式调用：实时推送 thinking/content，保持 SSE 连接活跃
-                    $response = $provider->generateStreamFull($model, '', [
+                    $response = $streamFullCallable($model, '', [
                         'messages' => $messages,
                         'tools' => $toolDefs,
                         'temperature' => (float)($params['temperature'] ?? 0.7),
@@ -524,8 +526,8 @@ SYSTEM_PROMPT;
                     'response_format' => ['type' => 'json_object'],
                 ];
                 try {
-                    if ($useStreamFull) {
-                        $jsonResponse = $provider->generateStreamFull($model, '', array_merge($jsonOnlyParams, [
+                    if ($streamFullCallable !== null) {
+                        $jsonResponse = $streamFullCallable($model, '', array_merge($jsonOnlyParams, [
                             'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $iteration) {
                                 $streamCallback('thinking', ['content' => $chunk, 'iteration' => $iteration + 1, 'streaming' => true]);
                             } : null,
@@ -591,8 +593,8 @@ SYSTEM_PROMPT;
                     'content' => 'Reply with ONLY the component JSON object. No explanation, no markdown. The entire message must be a single valid JSON starting with { and ending with }. html_content must contain full HTML. In JSON string values use \n for newlines; do not use literal line breaks.',
                 ];
 
-                if ($useStreamFull) {
-                    $forceResponse = $provider->generateStreamFull($model, '', [
+                if ($streamFullCallable !== null) {
+                    $forceResponse = $streamFullCallable($model, '', [
                         'messages' => $finalMessages,
                         'temperature' => 0.3,
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
