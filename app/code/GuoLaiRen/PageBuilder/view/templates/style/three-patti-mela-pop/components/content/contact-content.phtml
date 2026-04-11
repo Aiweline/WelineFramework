@@ -1,0 +1,834 @@
+<?php
+/**
+ * Three Patti Mela Pop - Contact Content Component
+ *
+ * @component_start
+ * code: contact-content
+ * name: 联系我们
+ * name_en: Contact Content
+ * description: 联系页面内容组件，展示联系信息、社交方式、表单与地图
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_map => 显示地图:select:yes|yes,no
+ * display.show_form => 显示联系表单:select:yes|yes,no
+ * display.show_social => 显示社交链接:select:yes|yes,no
+ * display.show_info => 显示联系信息:select:yes|yes,no
+ *
+ * group:hero => 页面头部
+ * hero.title => 页面标题:text:Contact Us
+ * hero.subtitle => 页面副标题:textarea:We would love to hear from you. Reach the right desk through the routes below.
+ * hero.bg_color => 背景颜色:color:#ffe067
+ * hero.bg_gradient_end => 渐变结束色:color:#ff8e3c
+ * hero.title_color => 标题颜色:color:#2d170b
+ *
+ * group:contact_info => 联系信息
+ * contact_info.address_label => 地址标签:text:Address
+ * contact_info.address => 地址:textarea:Mumbai, India
+ * contact_info.phone_label => 电话标签:text:Phone
+ * contact_info.phone => 电话:text:+91 1800-XXX-XXXX
+ * contact_info.email_label => 邮箱标签:text:Email
+ * contact_info.email => 邮箱:text:support@example.com
+ * contact_info.work_hours_label => 工作时间标签:text:Hours
+ * contact_info.work_hours => 工作时间:text:24/7 Support
+ *
+ * group:social => 社交链接
+ * social.wechat => 微信:text:
+ * social.weibo => 微博:text:
+ * social.facebook => Facebook:text:
+ * social.twitter => Twitter:text:
+ * social.linkedin => LinkedIn:text:
+ *
+ * group:form => 表单设置
+ * form.title => 表单标题:text:Send us a Message
+ * form.name_label => 姓名字段标签:text:Full Name
+ * form.email_label => 邮箱字段标签:text:Email Address
+ * form.subject_label => 主题字段标签:text:Subject
+ * form.message_label => 消息字段标签:text:Message
+ * form.submit_text => 提交按钮文字:text:Send Message
+ * form.success_message => 成功提示:text:Thanks for your message. We will get back to you soon.
+ *
+ * group:map => 地图设置
+ * map.title => 地图标题:text:Location map
+ * map.embed_url => 地图嵌入地址:textarea:
+ * map.height => 地图高度:number:400|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'mela-contact-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$showMap = $normalizeToggle($getConfig('display.show_map', $getConfig('show_map', 'yes'))) !== 'no';
+$showForm = $normalizeToggle($getConfig('display.show_form', $getConfig('show_form', 'yes'))) !== 'no';
+$showSocial = $normalizeToggle($getConfig('display.show_social', $getConfig('show_social', 'yes'))) !== 'no';
+$showInfo = $normalizeToggle($getConfig('display.show_info', $getConfig('show_info', 'yes'))) !== 'no';
+
+$pageTitle = trim((string) $getConfig('hero.title', $page ? ($page->getData('title') ?: 'Contact Us') : 'Contact Us'));
+if ($pageTitle === '') {
+    $pageTitle = 'Contact Us';
+}
+$pageSubtitle = trim((string) $getConfig('hero.subtitle', $page ? ($page->getData('meta_description') ?: '') : ''));
+$pageIntro = $page ? (string) ($page->getData('content') ?: '') : '';
+
+$heroBg = $getConfig('hero.bg_color', $colors['hero_bg'] ?? '#ffe067');
+$heroGradientEnd = $getConfig('hero.bg_gradient_end', $colors['hero_bg_gradient_end'] ?? '#ff8e3c');
+$heroTitleColor = $getConfig('hero.title_color', $colors['heading_color'] ?? '#2d170b');
+
+$addressLabel = trim((string) $getConfig('contact_info.address_label', 'Address'));
+$address = trim((string) $getConfig('contact_info.address', 'Mumbai, India'));
+$phoneLabel = trim((string) $getConfig('contact_info.phone_label', 'Phone'));
+$phone = trim((string) $getConfig('contact_info.phone', '+91 1800-XXX-XXXX'));
+$emailLabel = trim((string) $getConfig('contact_info.email_label', 'Email'));
+$email = trim((string) $getConfig('contact_info.email', 'support@example.com'));
+$workHoursLabel = trim((string) $getConfig('contact_info.work_hours_label', 'Hours'));
+$workHours = trim((string) $getConfig('contact_info.work_hours', '24/7 Support'));
+
+$socialSeed = [
+    'WeChat' => trim((string) $getConfig('social.wechat', '')),
+    'Weibo' => trim((string) $getConfig('social.weibo', '')),
+    'Facebook' => trim((string) $getConfig('social.facebook', '')),
+    'Twitter' => trim((string) $getConfig('social.twitter', '')),
+    'LinkedIn' => trim((string) $getConfig('social.linkedin', '')),
+];
+$socials = [];
+foreach ($socialSeed as $label => $value) {
+    if ($value === '') {
+        continue;
+    }
+    $socials[] = [
+        'label' => $label,
+        'value' => $value,
+        'href' => preg_match('/^https?:\/\//i', $value) ? $value : '',
+        'mark' => strtoupper(substr(preg_replace('/[^A-Za-z]/', '', $label), 0, 2) ?: substr($label, 0, 2)),
+    ];
+}
+
+$formTitle = trim((string) $getConfig('form.title', 'Send us a Message'));
+$formNameLabel = trim((string) $getConfig('form.name_label', 'Full Name'));
+$formEmailLabel = trim((string) $getConfig('form.email_label', 'Email Address'));
+$formSubjectLabel = trim((string) $getConfig('form.subject_label', 'Subject'));
+$formMessageLabel = trim((string) $getConfig('form.message_label', 'Message'));
+$formSubmitText = trim((string) $getConfig('form.submit_text', 'Send Message'));
+$formSuccessMessage = trim((string) $getConfig('form.success_message', 'Thanks for your message. We will get back to you soon.'));
+$mapTitle = trim((string) $getConfig('map.title', 'Location map'));
+$mapEmbedUrl = trim((string) $getConfig('map.embed_url', ''));
+$mapHeight = (int) $getConfig('map.height', '400');
+if ($mapHeight < 280) {
+    $mapHeight = 280;
+}
+
+$textPrimary = $colors['text_primary'] ?? '#2d170b';
+$textSecondary = $colors['text_secondary'] ?? '#6b4b34';
+$textMuted = $colors['text_muted'] ?? '#97725a';
+$borderLight = $colors['border_light'] ?? 'rgba(45,23,11,0.12)';
+$surface = $colors['card_bg'] ?? 'rgba(255,255,255,0.76)';
+$buttonBg = $colors['button_primary_bg'] ?? 'linear-gradient(135deg, #ff5a36 0%, #ffb703 100%)';
+$buttonText = $colors['button_primary_text'] ?? '#fffdf8';
+$accentPrimary = $colors['accent_primary'] ?? '#ff5a36';
+$accentSecondary = $colors['accent_secondary'] ?? '#00c2a8';
+
+$routeSeed = [
+    ['label' => $addressLabel !== '' ? $addressLabel : 'Address', 'value' => $address, 'href' => ''],
+    ['label' => $phoneLabel !== '' ? $phoneLabel : 'Phone', 'value' => $phone, 'href' => $phone !== '' ? 'tel:' . preg_replace('/\s+/', '', $phone) : ''],
+    ['label' => $emailLabel !== '' ? $emailLabel : 'Email', 'value' => $email, 'href' => $email !== '' ? 'mailto:' . $email : ''],
+    ['label' => $workHoursLabel !== '' ? $workHoursLabel : 'Hours', 'value' => $workHours, 'href' => ''],
+];
+$contactItems = [];
+foreach ($routeSeed as $route) {
+    if (trim((string) $route['value']) === '') {
+        continue;
+    }
+    $contactItems[] = $route;
+}
+foreach ($contactItems as $index => &$route) {
+    $route['slot'] = str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT);
+}
+unset($route);
+
+$hasBrief = $showInfo && ($pageIntro !== '' || ($showSocial && !empty($socials)));
+$hasRoutes = $showInfo && !empty($contactItems);
+?>
+<section id="<?= $componentId ?>" class="mela-contact-page" aria-labelledby="<?= $componentId ?>-title">
+    <span class="contact-float float-a" aria-hidden="true" data-mela-parallax data-mela-speed="0.04"></span>
+    <span class="contact-float float-b" aria-hidden="true" data-mela-parallax data-mela-speed="0.06"></span>
+
+    <div class="contact-shell">
+        <header class="contact-hero<?= $hasRoutes ? ' has-routes' : ' hero-copy-only' ?>">
+            <div class="hero-copy wow animate__fadeInUp">
+                <span class="hero-suits" aria-hidden="true">♠ ♥ ♦ ♣</span>
+                <h1 id="<?= $componentId ?>-title"><?= htmlspecialchars($pageTitle) ?></h1>
+                <?php if ($pageSubtitle !== ''): ?>
+                    <p><?= htmlspecialchars($pageSubtitle) ?></p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($hasRoutes): ?>
+                <dl class="route-board" aria-label="Contact routes">
+                    <?php foreach ($contactItems as $index => $item): ?>
+                        <div class="route-card wow animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.05 * ($index + 1), 2)) ?>s">
+                            <dt>
+                                <span class="route-order"><?= htmlspecialchars($item['slot']) ?></span>
+                                <span class="route-label"><?= htmlspecialchars($item['label']) ?></span>
+                            </dt>
+                            <?php echo '<dd>'; ?>
+                            <?php if ($item['href'] !== ''): ?>
+                                <a href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['value']) ?></a>
+                            <?php else: ?>
+                                <p><?= nl2br(htmlspecialchars($item['value'])) ?></p>
+                            <?php endif; ?>
+                            <?php echo '</dd>'; ?>
+                        </div>
+                    <?php endforeach; ?>
+                </dl>
+            <?php endif; ?>
+        </header>
+
+        <?php if ($hasBrief || $showForm): ?>
+            <div class="contact-stage<?= (!$hasBrief || !$showForm) ? ' stage-single' : '' ?>">
+                <?php if ($hasBrief): ?>
+                    <section class="contact-brief" aria-labelledby="<?= $componentId ?>-brief-title">
+                        <div class="brief-card wow animate__fadeInUp">
+                            <h2 id="<?= $componentId ?>-brief-title"><?= htmlspecialchars($pageTitle) ?></h2>
+                            <?php if ($pageIntro !== ''): ?>
+                                <div class="brief-prose"><?= $pageIntro ?></div>
+                            <?php endif; ?>
+                        </div>
+
+                        <?php if ($showSocial && !empty($socials)): ?>
+                            <div class="social-shelf" aria-label="Social links">
+                                <?php foreach ($socials as $index => $social): ?>
+                                    <?php if ($social['href'] !== ''): ?>
+                                        <a
+                                            class="social-card wow animate__fadeInUp"
+                                            data-wow-delay="<?= htmlspecialchars(number_format(0.05 * (($index % 5) + 1), 2)) ?>s"
+                                            href="<?= htmlspecialchars($social['href']) ?>"
+                                            target="_blank"
+                                            rel="noopener"
+                                        >
+                                            <span class="social-mark" aria-hidden="true"><?= htmlspecialchars($social['mark']) ?></span>
+                                            <span class="social-meta">
+                                                <strong><?= htmlspecialchars($social['label']) ?></strong>
+                                                <small><?= htmlspecialchars($social['value']) ?></small>
+                                            </span>
+                                        </a>
+                                    <?php else: ?>
+                                        <div
+                                            class="social-card wow animate__fadeInUp"
+                                            data-wow-delay="<?= htmlspecialchars(number_format(0.05 * (($index % 5) + 1), 2)) ?>s"
+                                        >
+                                            <span class="social-mark" aria-hidden="true"><?= htmlspecialchars($social['mark']) ?></span>
+                                            <span class="social-meta">
+                                                <strong><?= htmlspecialchars($social['label']) ?></strong>
+                                                <small><?= htmlspecialchars($social['value']) ?></small>
+                                            </span>
+                                        </div>
+                                    <?php endif; ?>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+                    </section>
+                <?php endif; ?>
+
+                <?php if ($showForm): ?>
+                    <section class="contact-form-panel wow animate__fadeInUp" data-wow-delay="0.08s" aria-labelledby="<?= $componentId ?>-form-title">
+                        <div class="form-head">
+                            <div>
+                                <span class="form-suits" aria-hidden="true">♠</span>
+                                <h2 id="<?= $componentId ?>-form-title"><?= htmlspecialchars($formTitle !== '' ? $formTitle : 'Send us a Message') ?></h2>
+                                <?php if ($formSuccessMessage !== ''): ?>
+                                    <p><?= htmlspecialchars($formSuccessMessage) ?></p>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <form class="contact-form" action="#" method="post" onsubmit="return false;" data-success-text="<?= htmlspecialchars($formSuccessMessage) ?>">
+                            <div class="field-grid">
+                                <label>
+                                    <span><?= htmlspecialchars($formNameLabel !== '' ? $formNameLabel : 'Full Name') ?></span>
+                                    <input type="text" name="name" autocomplete="name" placeholder="Your name" required>
+                                </label>
+                                <label>
+                                    <span><?= htmlspecialchars($formEmailLabel !== '' ? $formEmailLabel : 'Email Address') ?></span>
+                                    <input type="email" name="email" autocomplete="email" placeholder="name@example.com" required>
+                                </label>
+                            </div>
+                            <label>
+                                <span><?= htmlspecialchars($formSubjectLabel !== '' ? $formSubjectLabel : 'Subject') ?></span>
+                                <input type="text" name="subject" placeholder="Account, gameplay, or payout issue">
+                            </label>
+                            <label>
+                                <span><?= htmlspecialchars($formMessageLabel !== '' ? $formMessageLabel : 'Message') ?></span>
+                                <textarea name="message" rows="6" placeholder="Share your table, UID, device, or payment details so the support desk can route the request quickly." required></textarea>
+                            </label>
+                            <button type="submit">
+                                <span><?= htmlspecialchars($formSubmitText !== '' ? $formSubmitText : 'Send Message') ?></span>
+                            </button>
+                            <p class="contact-form-status" hidden></p>
+                        </form>
+                    </section>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($showMap && $mapEmbedUrl !== ''): ?>
+            <section class="contact-map wow animate__fadeInUp" data-wow-delay="0.12s" aria-label="<?= htmlspecialchars($mapTitle !== '' ? $mapTitle : 'Location map') ?>">
+                <div class="map-frame">
+                    <span class="map-suits" aria-hidden="true">♣</span>
+                    <iframe src="<?= htmlspecialchars($mapEmbedUrl) ?>" title="<?= htmlspecialchars($mapTitle !== '' ? $mapTitle : 'Location map') ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+                </div>
+            </section>
+        <?php endif; ?>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: clamp(7.2rem, 11vw, 8.9rem) 0 clamp(3.2rem, 7vw, 4.8rem);
+    background:
+        radial-gradient(760px 340px at 8% 0%, rgba(255,255,255,0.42), transparent 72%),
+        radial-gradient(560px 260px at 88% 14%, rgba(0,194,168,0.18), transparent 72%),
+        linear-gradient(180deg, rgba(255,248,232,0.92) 0%, rgba(255,242,214,0.96) 100%);
+    overflow: clip;
+}
+
+#<?= $componentId ?> .contact-shell {
+    width: var(--mela-shell, min(1280px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .contact-hero {
+    position: relative;
+    display: grid;
+    gap: clamp(1rem, 3vw, 1.6rem);
+    padding: clamp(3.6rem, 7vw, 5.2rem) clamp(1.2rem, 3vw, 2rem);
+    border-radius: clamp(1.8rem, 4vw, 2.5rem);
+    background:
+        radial-gradient(360px 200px at 8% 8%, rgba(255,255,255,0.56), transparent 72%),
+        linear-gradient(135deg, <?= htmlspecialchars($heroBg) ?> 0%, <?= htmlspecialchars($heroGradientEnd) ?> 100%);
+    box-shadow: 0 26px 54px rgba(255, 142, 60, 0.16);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .contact-hero::after {
+    content: '♠ ♥ ♦ ♣';
+    position: absolute;
+    right: -0.3rem;
+    bottom: -1rem;
+    font-size: clamp(4.2rem, 10vw, 8rem);
+    line-height: 1;
+    letter-spacing: 0.6rem;
+    color: rgba(45, 23, 11, 0.06);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .contact-hero.has-routes {
+    grid-template-columns: minmax(0, 0.92fr) minmax(18rem, 1.08fr);
+    align-items: start;
+}
+
+#<?= $componentId ?> .hero-copy {
+    position: relative;
+    z-index: 1;
+    max-width: 34rem;
+}
+
+#<?= $componentId ?> .hero-suits {
+    display: inline-flex;
+    gap: 0.3rem;
+    font-size: 0.9rem;
+    letter-spacing: 0.22rem;
+    color: rgba(45, 23, 11, 0.45);
+}
+
+#<?= $componentId ?> .hero-copy h1 {
+    margin: 0.85rem 0 0;
+    font-size: clamp(2.5rem, 8vw, 4.9rem);
+    line-height: 0.92;
+    color: <?= htmlspecialchars($heroTitleColor) ?>;
+}
+
+#<?= $componentId ?> .hero-copy p {
+    margin: 1rem 0 0;
+    max-width: 36rem;
+    color: <?= htmlspecialchars($textSecondary) ?>;
+    line-height: 1.85;
+}
+
+#<?= $componentId ?> .route-board {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+    align-self: stretch;
+}
+
+#<?= $componentId ?> .route-card {
+    position: relative;
+    min-height: 8.8rem;
+    padding: 1rem 1rem 1.1rem;
+    border-radius: 1.6rem;
+    border: 1px solid <?= htmlspecialchars($borderLight) ?>;
+    box-shadow: 0 18px 34px rgba(45,23,11,0.08);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .route-card:nth-child(1) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(255,248,231,0.88));
+}
+
+#<?= $componentId ?> .route-card:nth-child(2) {
+    background: linear-gradient(180deg, rgba(247,255,252,0.9), rgba(224,255,245,0.88));
+    transform: translateY(1rem);
+}
+
+#<?= $componentId ?> .route-card:nth-child(3) {
+    background: linear-gradient(180deg, rgba(255,248,255,0.9), rgba(255,236,247,0.88));
+    transform: translateY(0.4rem);
+}
+
+#<?= $componentId ?> .route-card:nth-child(4) {
+    background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(236,246,255,0.88));
+    transform: translateY(1.4rem);
+}
+
+#<?= $componentId ?> .route-card::after {
+    content: '';
+    position: absolute;
+    inset: auto auto 0 0;
+    width: 5.2rem;
+    height: 5.2rem;
+    background: radial-gradient(circle, rgba(255,255,255,0.68), rgba(255,255,255,0));
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .route-card dt {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin: 0;
+}
+
+#<?= $componentId ?> .route-order {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.1rem;
+    height: 2.1rem;
+    border-radius: 999px;
+    background: rgba(45,23,11,0.08);
+    color: <?= htmlspecialchars($textPrimary) ?>;
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-weight: 800;
+    font-size: 0.82rem;
+}
+
+#<?= $componentId ?> .route-label {
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: <?= htmlspecialchars($textMuted) ?>;
+}
+
+#<?= $componentId ?> .route-card dd {
+    margin: 0.95rem 0 0;
+}
+
+#<?= $componentId ?> .route-card a,
+#<?= $componentId ?> .route-card p {
+    margin: 0;
+    color: <?= htmlspecialchars($textPrimary) ?>;
+    font-size: clamp(1.02rem, 2vw, 1.18rem);
+    line-height: 1.75;
+}
+
+#<?= $componentId ?> .contact-stage,
+#<?= $componentId ?> .contact-map {
+    margin-top: clamp(1.3rem, 4vw, 1.9rem);
+}
+
+#<?= $componentId ?> .contact-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+    gap: clamp(1rem, 3vw, 1.6rem);
+    align-items: start;
+}
+
+#<?= $componentId ?> .contact-stage.stage-single {
+    grid-template-columns: 1fr;
+}
+
+#<?= $componentId ?> .contact-brief,
+#<?= $componentId ?> .contact-form-panel,
+#<?= $componentId ?> .map-frame {
+    position: relative;
+    border-radius: 2rem;
+    border: 1px solid <?= htmlspecialchars($borderLight) ?>;
+    box-shadow: 0 20px 38px rgba(45,23,11,0.08);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .contact-brief {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .brief-card {
+    padding: clamp(1.2rem, 3vw, 1.6rem);
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,247,233,0.9));
+}
+
+#<?= $componentId ?> .brief-card h2 {
+    margin: 0;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    line-height: 0.96;
+    color: <?= htmlspecialchars($textPrimary) ?>;
+}
+
+#<?= $componentId ?> .brief-prose {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($textSecondary) ?>;
+}
+
+#<?= $componentId ?> .brief-prose > *:first-child {
+    margin-top: 0;
+}
+
+#<?= $componentId ?> .brief-prose > *:last-child {
+    margin-bottom: 0;
+}
+
+#<?= $componentId ?> .brief-prose p,
+#<?= $componentId ?> .brief-prose li,
+#<?= $componentId ?> .brief-prose blockquote {
+    line-height: 1.88;
+}
+
+#<?= $componentId ?> .brief-prose h2,
+#<?= $componentId ?> .brief-prose h3,
+#<?= $componentId ?> .brief-prose h4 {
+    color: <?= htmlspecialchars($accentPrimary) ?>;
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .social-shelf {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+#<?= $componentId ?> .social-card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+    padding: 1rem;
+    border-radius: 1.5rem;
+    border: 1px solid <?= htmlspecialchars($borderLight) ?>;
+    background: linear-gradient(180deg, rgba(250,255,252,0.92), rgba(227,255,245,0.84));
+    box-shadow: 0 18px 32px rgba(0, 194, 168, 0.08);
+    color: <?= htmlspecialchars($textPrimary) ?>;
+}
+
+#<?= $componentId ?> .social-card:nth-child(2n) {
+    background: linear-gradient(180deg, rgba(255,254,250,0.92), rgba(255,243,219,0.86));
+}
+
+#<?= $componentId ?> .social-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.8rem;
+    height: 2.8rem;
+    border-radius: 1rem;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid <?= htmlspecialchars($borderLight) ?>;
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-weight: 800;
+    color: <?= htmlspecialchars($accentSecondary) ?>;
+}
+
+#<?= $componentId ?> .social-meta {
+    min-width: 0;
+}
+
+#<?= $componentId ?> .social-meta strong,
+#<?= $componentId ?> .social-meta small {
+    display: block;
+}
+
+#<?= $componentId ?> .social-meta strong {
+    color: <?= htmlspecialchars($textPrimary) ?>;
+    line-height: 1.35;
+}
+
+#<?= $componentId ?> .social-meta small {
+    margin-top: 0.18rem;
+    color: <?= htmlspecialchars($textMuted) ?>;
+    font-size: 0.82rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+#<?= $componentId ?> .contact-form-panel {
+    padding: clamp(1.2rem, 3vw, 1.6rem);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,246,229,0.92));
+}
+
+#<?= $componentId ?> .contact-form-panel::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255, 90, 54, 0.06) 0, rgba(255, 90, 54, 0.06) 1px, transparent 1px, transparent 100%),
+        linear-gradient(180deg, rgba(255, 183, 3, 0.06) 0, rgba(255, 183, 3, 0.06) 1px, transparent 1px, transparent 100%);
+    background-size: 1.15rem 1.15rem;
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .form-head,
+#<?= $componentId ?> .contact-form {
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .form-head {
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .form-head h2 {
+    margin: 0.65rem 0 0;
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+    line-height: 0.96;
+    color: <?= htmlspecialchars($textPrimary) ?>;
+}
+
+#<?= $componentId ?> .form-head p {
+    margin: 0.85rem 0 0;
+    max-width: 32rem;
+    color: <?= htmlspecialchars($textSecondary) ?>;
+    line-height: 1.75;
+}
+
+#<?= $componentId ?> .form-suits {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.15rem;
+    height: 2.15rem;
+    border-radius: 999px;
+    background: rgba(45,23,11,0.08);
+    color: <?= htmlspecialchars($accentPrimary) ?>;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .contact-form {
+    display: grid;
+    gap: 0.95rem;
+}
+
+#<?= $componentId ?> .field-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.95rem;
+}
+
+#<?= $componentId ?> .contact-form label {
+    display: grid;
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .contact-form span {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: <?= htmlspecialchars($textPrimary) ?>;
+}
+
+#<?= $componentId ?> .contact-form input,
+#<?= $componentId ?> .contact-form textarea {
+    width: 100%;
+    border: 1px solid <?= htmlspecialchars($borderLight) ?>;
+    border-radius: 1rem;
+    background: rgba(255,255,255,0.8);
+    padding: 0.95rem 1rem;
+    font: inherit;
+    color: <?= htmlspecialchars($textPrimary) ?>;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6);
+}
+
+#<?= $componentId ?> .contact-form textarea {
+    resize: vertical;
+    min-height: 11rem;
+}
+
+#<?= $componentId ?> .contact-form input::placeholder,
+#<?= $componentId ?> .contact-form textarea::placeholder {
+    color: <?= htmlspecialchars($textMuted) ?>;
+}
+
+#<?= $componentId ?> .contact-form button {
+    border: 0;
+    border-radius: 999px;
+    min-height: 3.35rem;
+    padding: 0.85rem 1.4rem;
+    background: <?= htmlspecialchars($buttonBg) ?>;
+    color: <?= htmlspecialchars($buttonText) ?>;
+    font: inherit;
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: 0 18px 30px rgba(255, 90, 54, 0.18);
+}
+
+#<?= $componentId ?> .contact-form-status {
+    margin: 0;
+    color: <?= htmlspecialchars($textSecondary) ?>;
+    font-weight: 600;
+}
+
+#<?= $componentId ?> .map-frame {
+    padding: 0.75rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(235,250,255,0.9));
+}
+
+#<?= $componentId ?> .map-suits {
+    position: absolute;
+    right: 1.2rem;
+    top: 0.8rem;
+    font-size: 1.2rem;
+    color: rgba(45, 23, 11, 0.22);
+    z-index: 1;
+}
+
+#<?= $componentId ?> .contact-map iframe {
+    display: block;
+    width: 100%;
+    height: <?= (int) $mapHeight ?>px;
+    border: 0;
+    border-radius: 1.4rem;
+}
+
+#<?= $componentId ?> .contact-float {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .float-a {
+    left: -5rem;
+    top: 6rem;
+    width: 13rem;
+    height: 13rem;
+    background: radial-gradient(circle, rgba(255,255,255,0.52), rgba(255,255,255,0) 72%);
+}
+
+#<?= $componentId ?> .float-b {
+    right: -3rem;
+    top: 22rem;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, rgba(0,194,168,0.16), rgba(0,194,168,0) 72%);
+}
+
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .contact-hero.has-routes,
+    #<?= $componentId ?> .contact-stage {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .route-board {
+        margin-top: 0.2rem;
+    }
+
+    #<?= $componentId ?> .route-card:nth-child(2),
+    #<?= $componentId ?> .route-card:nth-child(3),
+    #<?= $componentId ?> .route-card:nth-child(4) {
+        transform: none;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .contact-shell {
+        width: min(100%, calc(100% - 0.85rem));
+    }
+
+    #<?= $componentId ?> .contact-hero,
+    #<?= $componentId ?> .contact-brief,
+    #<?= $componentId ?> .contact-form-panel,
+    #<?= $componentId ?> .map-frame {
+        border-radius: 1.5rem;
+    }
+
+    #<?= $componentId ?> .route-board,
+    #<?= $componentId ?> .social-shelf,
+    #<?= $componentId ?> .field-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .route-card {
+        min-height: auto;
+    }
+
+    #<?= $componentId ?> .contact-form button {
+        width: 100%;
+    }
+
+    #<?= $componentId ?> .contact-map iframe {
+        height: <?= max(280, (int) ($mapHeight - 40)) ?>px;
+    }
+}
+</style>
+<script>
+(function () {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+    var form = root.querySelector('.contact-form');
+    if (!form) {
+        return;
+    }
+    var status = form.querySelector('.contact-form-status');
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        if (!status) {
+            return;
+        }
+        status.hidden = false;
+        status.textContent = form.getAttribute('data-success-text') || 'Thanks for your message.';
+        form.reset();
+    });
+})();
+</script>

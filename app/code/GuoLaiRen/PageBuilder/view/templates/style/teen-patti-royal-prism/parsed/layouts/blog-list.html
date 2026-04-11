@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Head content rendered by $this->renderHead() -->
+</head>
+<body class="page-blog page-blog-list">
+    <!-- Header Region (继承自首页) -->
+    <header class="site-header" data-region="header">
+        <!-- Inherited from home page -->
+    </header>
+    
+    <!-- Main Content Region -->
+    <main class="site-content blog-content" data-region="content">
+        <div class="blog-container">
+            <!-- blog-list component -->
+            <div class="tpmst-component-wrapper" data-component="blog-list">
+                <div class="blog-list-wrapper">
+                    <!-- Main content area -->
+                    <div class="blog-main">
+                        <div class="blog-posts-grid">
+                            <!-- Blog post cards -->
+                            <article class="blog-card">
+                                <div class="blog-card-image">
+                                    <img src="..." alt="Post title">
+                                </div>
+                                <div class="blog-card-content">
+                                    <span class="blog-card-category">Category</span>
+                                    <h2 class="blog-card-title">Post Title</h2>
+                                    <p class="blog-card-excerpt">Post excerpt...</p>
+                                    <div class="blog-card-meta">
+                                        <span class="blog-card-date">Jan 1, 2024</span>
+                                    </div>
+                                </div>
+                            </article>
+                            <!-- More blog cards... -->
+                        </div>
+                        
+                        <!-- Pagination -->
+                        <nav class="blog-pagination">
+                            <a href="#" class="page-link">Previous</a>
+                            <a href="#" class="page-link active">1</a>
+                            <a href="#" class="page-link">2</a>
+                            <a href="#" class="page-link">Next</a>
+                        </nav>
+                    </div>
+                    
+                    <!-- Sidebar -->
+                    <aside class="blog-sidebar">
+                        <div class="sidebar-widget categories-widget">
+                            <h3>Categories</h3>
+                            <ul>
+                                <li><a href="#">Category 1</a></li>
+                                <li><a href="#">Category 2</a></li>
+                            </ul>
+                        </div>
+                        <div class="sidebar-widget recent-posts-widget">
+                            <h3>Recent Posts</h3>
+                            <ul>
+                                <li><a href="#">Recent Post 1</a></li>
+                                <li><a href="#">Recent Post 2</a></li>
+                            </ul>
+                        </div>
+                    </aside>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Footer Region (继承自首页) -->
+    <footer class="site-footer" data-region="footer">
+        <!-- Inherited from home page -->
+    </footer>
+    
+    <!-- Footer scripts -->
+</body>
+</html>

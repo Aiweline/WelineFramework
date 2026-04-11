@@ -22,7 +22,7 @@ class Gateway extends FrontendController
             (string)$this->request->getParam('preview_area', 'frontend')
         );
         $area = $editorArea === 'backend' ? 'backend' : 'frontend';
-        $explicitPreviewThemeId = \max(0, (int)($_GET['preview_theme'] ?? $this->request->getParam('preview_theme', 0)));
+        $explicitPreviewThemeId = \max(0, (int)$this->request->getParam('preview_theme', 0));
         $frontendThemeId = (int)$this->request->getParam('frontend_theme_id', 0);
         $backendThemeId = (int)$this->request->getParam('backend_theme_id', 0);
 

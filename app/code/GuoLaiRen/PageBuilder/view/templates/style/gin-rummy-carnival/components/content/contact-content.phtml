@@ -1,0 +1,873 @@
+<?php
+/**
+ * Gin Rummy Carnival - Contact Content Component
+ *
+ * @component_start
+ * code: contact-content
+ * name: Contact Content
+ * name_en: Contact Content
+ * description: Contact routes and contact form module
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_map => 显示地图:select:yes|yes,no
+ * display.show_form => 显示联系表单:select:yes|yes,no
+ * display.show_social => 显示社交链接:select:yes|yes,no
+ * display.show_info => 显示联系信息:select:yes|yes,no
+ *
+ * group:hero => Hero区域
+ * hero.kicker => 页面提示语:text:Support Switchboard
+ * hero.title => 页面标题:text:|留空使用页面标题
+ * hero.subtitle => 页面副标题:textarea:
+ * hero.bg_color => 背景颜色:color:#0b1525
+ * hero.bg_gradient_end => 渐变结束色:color:#0f2538
+ * hero.title_color => 标题颜色:color:#f8fafc
+ *
+ * group:contact_info => 联系信息
+ * contact_info.address_label => 地址标签:text:Address
+ * contact_info.address => 地址:textarea:Mumbai, India
+ * contact_info.phone_label => 电话标签:text:Phone
+ * contact_info.phone => 电话:text:+91 1800-XXX-XXXX
+ * contact_info.email_label => 邮箱标签:text:Email
+ * contact_info.email => 邮箱:text:support@ginrummycarnival.com
+ * contact_info.work_hours_label => 工作时间标签:text:Support Hours
+ * contact_info.work_hours => 工作时间:text:24/7 Customer Support
+ *
+ * group:contact => 联系模块文案
+ * contact.routes_kicker => 联系区提示语:text:Contact Routes
+ * contact.routes_title => 联系区标题:text:Reach the right Gin Rummy desk without extra steps
+ * contact.summary_label => 默认摘要标签:text:Support Desk
+ * contact.summary_text => 默认摘要说明:textarea:Use the channels configured for this page to route account, game, or payout questions quickly.
+ * contact.social_title => 社交区提示语:text:Follow the desk
+ *
+ * group:social => 社交媒体
+ * social.wechat => 微信:text:
+ * social.weibo => 微博:text:
+ * social.facebook => Facebook:text:
+ * social.twitter => Twitter:text:
+ * social.linkedin => LinkedIn:text:
+ *
+ * group:form => 表单设置
+ * form.kicker => 表单提示语:text:Message Desk
+ * form.title => 表单标题:text:Send us a Message
+ * form.name_label => 姓名标签:text:Full Name
+ * form.email_label => 邮箱标签:text:Email Address
+ * form.subject_label => 主题标签:text:Subject
+ * form.message_label => 消息标签:text:Message
+ * form.name_placeholder => 姓名占位:text:Your name
+ * form.email_placeholder => 邮箱占位:text:name@example.com
+ * form.subject_placeholder => 主题占位:text:Account, gameplay, or payout issue
+ * form.message_placeholder => 消息占位:textarea:Share your table, UID, device, or payment details so the support desk can route the request quickly.
+ * form.submit_text => 提交按钮文本:text:Send Message
+ * form.success_message => 成功提示:text:Share the table, account, or payout context so the support team can route your request faster.
+ *
+ * group:map => 地图设置
+ * map.title => 地图标题:text:Desk Location
+ * map.embed_url => 地图嵌入地址:textarea:
+ * map.height => 地图高度:number:360|px
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$config = array_merge($styleSettings, $componentConfig);
+$componentId = 'grc-contact-' . uniqid();
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showMap = $getConfig('display.show_map', 'yes') !== 'no';
+$showForm = $getConfig('display.show_form', 'yes') !== 'no';
+$showSocial = $getConfig('display.show_social', 'yes') !== 'no';
+$showInfo = $getConfig('display.show_info', 'yes') !== 'no';
+
+$pageTitle = $page ? trim((string) ($page->getData('title') ?? '')) : '';
+$pageContent = $page ? trim((string) ($page->getData('content') ?? '')) : '';
+
+$flattenText = static function ($value) {
+    $value = trim(strip_tags((string) $value));
+    if ($value === '') {
+        return '';
+    }
+    return preg_replace('/\s+/u', ' ', $value) ?: $value;
+};
+
+$pageContentText = $flattenText($pageContent);
+
+$heroKicker = trim((string) $getConfig('hero.kicker', 'Support Switchboard'));
+$title = trim((string) $getConfig('hero.title', $getConfig('content.title', $pageTitle)));
+if ($title === '') {
+    $title = 'Get in Touch';
+}
+$description = trim((string) $getConfig('hero.subtitle', $getConfig('content.description', $pageContentText !== '' ? $pageContentText : 'Need help with Gin Rummy tables, account access, or payout questions? Use the contact routes below to reach the right desk quickly.')));
+
+$addressLabel = trim((string) $getConfig('contact_info.address_label', 'Address'));
+$email = trim((string) $getConfig('contact_info.email', $getConfig('contact.email', 'support@ginrummycarnival.com')));
+$emailLabel = trim((string) $getConfig('contact_info.email_label', 'Email'));
+$phone = trim((string) $getConfig('contact_info.phone', $getConfig('contact.phone', '+91 1800-XXX-XXXX')));
+$phoneLabel = trim((string) $getConfig('contact_info.phone_label', 'Phone'));
+$address = trim((string) $getConfig('contact_info.address', $getConfig('contact.address', 'Mumbai, India')));
+$hoursLabel = trim((string) $getConfig('contact_info.work_hours_label', 'Support Hours'));
+$hours = trim((string) $getConfig('contact_info.work_hours', $getConfig('contact.hours', '24/7 Customer Support')));
+
+$routesKicker = trim((string) $getConfig('contact.routes_kicker', 'Contact Routes'));
+$routesTitle = trim((string) $getConfig('contact.routes_title', 'Reach the right Gin Rummy desk without extra steps'));
+$summaryLabel = trim((string) $getConfig('contact.summary_label', 'Support Desk'));
+$summaryText = trim((string) $getConfig('contact.summary_text', 'Use the channels configured for this page to route account, game, or payout questions quickly.'));
+$socialTitle = trim((string) $getConfig('contact.social_title', 'Follow the desk'));
+$formKicker = trim((string) $getConfig('form.kicker', 'Message Desk'));
+$formTitle = trim((string) $getConfig('form.title', $getConfig('content.form_title', 'Send us a Message')));
+$formNameLabel = trim((string) $getConfig('form.name_label', 'Full Name'));
+$formEmailLabel = trim((string) $getConfig('form.email_label', 'Email Address'));
+$formSubjectLabel = trim((string) $getConfig('form.subject_label', 'Subject'));
+$formMessageLabel = trim((string) $getConfig('form.message_label', 'Message'));
+$formNamePlaceholder = trim((string) $getConfig('form.name_placeholder', 'Your name'));
+$formEmailPlaceholder = trim((string) $getConfig('form.email_placeholder', 'name@example.com'));
+$formSubjectPlaceholder = trim((string) $getConfig('form.subject_placeholder', 'Account, gameplay, or payout issue'));
+$formMessagePlaceholder = trim((string) $getConfig('form.message_placeholder', 'Share your table, UID, device, or payment details so the support desk can route the request quickly.'));
+$formSubmitText = trim((string) $getConfig('form.submit_text', 'Send Message'));
+$formSuccessMessage = trim((string) $getConfig('form.success_message', $getConfig('content.form_intro', 'Share the table, account, or payout context so the support team can route your request faster.')));
+$mapTitle = trim((string) $getConfig('map.title', 'Desk Location'));
+$mapEmbedUrl = trim((string) $getConfig('map.embed_url', ''));
+$mapHeight = max(240, (int) $getConfig('map.height', 360));
+
+$socialMap = [
+    'social.wechat' => 'WeChat',
+    'social.weibo' => 'Weibo',
+    'social.facebook' => 'Facebook',
+    'social.twitter' => 'Twitter',
+    'social.linkedin' => 'LinkedIn',
+];
+$socials = [];
+foreach ($socialMap as $key => $label) {
+    $url = trim((string) $getConfig($key, ''));
+    if ($url === '') {
+        continue;
+    }
+    $socials[] = [
+        'name' => $label,
+        'url' => $url,
+    ];
+}
+
+if (empty($socials)) {
+    $socialRaw = (string) $getConfig('social.items', "Facebook|#\nTwitter|#\nInstagram|#\nYouTube|#");
+    if (strpos($socialRaw, '\\n') !== false && strpos($socialRaw, "\n") === false) {
+        $socialRaw = str_replace('\\n', "\n", $socialRaw);
+    }
+    foreach (preg_split('/[\r\n]+/', $socialRaw) ?: [] as $line) {
+        if (trim($line) === '') {
+            continue;
+        }
+        $parts = explode('|', $line, 2);
+        if (trim((string) ($parts[0] ?? '')) === '') {
+            continue;
+        }
+        $socials[] = [
+            'name' => trim((string) ($parts[0] ?? '')),
+            'url' => trim((string) ($parts[1] ?? '#')),
+        ];
+    }
+}
+
+$channels = [];
+if ($email !== '') {
+    $channels[] = ['icon' => 'EM', 'label' => $emailLabel !== '' ? $emailLabel : 'Email', 'value' => $email, 'href' => 'mailto:' . $email];
+}
+if ($phone !== '') {
+    $channels[] = ['icon' => 'PH', 'label' => $phoneLabel !== '' ? $phoneLabel : 'Phone', 'value' => $phone, 'href' => 'tel:' . preg_replace('/[^0-9+]/', '', $phone)];
+}
+if ($address !== '') {
+    $channels[] = ['icon' => 'AD', 'label' => $addressLabel !== '' ? $addressLabel : 'Address', 'value' => $address, 'href' => ''];
+}
+if ($hours !== '') {
+    $channels[] = ['icon' => '24', 'label' => $hoursLabel !== '' ? $hoursLabel : 'Support Hours', 'value' => $hours, 'href' => ''];
+}
+
+$showSupportSummary = empty($channels);
+$channelLead = $channels[0] ?? null;
+$channelTrail = array_slice($channels, 1);
+
+$getInitials = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return 'NA';
+    }
+
+    $parts = preg_split('/\s+/', $value) ?: [];
+    $initials = '';
+    foreach ($parts as $part) {
+        if ($part === '') {
+            continue;
+        }
+        if (function_exists('mb_substr')) {
+            $initials .= mb_strtoupper(mb_substr($part, 0, 1));
+        } else {
+            $initials .= strtoupper(substr($part, 0, 1));
+        }
+        if (strlen($initials) >= 2) {
+            break;
+        }
+    }
+
+    if ($initials === '') {
+        $initials = function_exists('mb_substr') ? mb_strtoupper(mb_substr($value, 0, 2)) : strtoupper(substr($value, 0, 2));
+    }
+
+    return $initials;
+};
+?>
+
+<section id="<?= $componentId ?>" class="grc-contact-page" aria-labelledby="<?= $componentId ?>-title">
+    <div class="contact-suits" aria-hidden="true">
+        <span class="contact-suit contact-suit-club">&clubs;</span>
+        <span class="contact-suit contact-suit-heart">&hearts;</span>
+        <span class="contact-suit contact-suit-diamond">&diams;</span>
+    </div>
+
+    <div class="contact-shell">
+        <header class="contact-mast wow animate__fadeInUp" data-wow-duration="0.84s">
+            <div class="mast-copy">
+                <span class="mast-kicker"><?= htmlspecialchars($heroKicker !== '' ? $heroKicker : 'Support Switchboard') ?></span>
+                <h1 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h1>
+                <?php if ($description !== ''): ?>
+                    <p><?= htmlspecialchars($description) ?></p>
+                <?php endif; ?>
+            </div>
+        </header>
+
+        <main class="contact-grid<?= !$showInfo ? ' no-info' : '' ?><?= !$showForm ? ' no-form' : '' ?>">
+            <?php if ($showInfo): ?>
+                <section class="routes-stage wow animate__fadeInUp" data-wow-delay="0.08s" data-wow-duration="0.88s" aria-labelledby="<?= $componentId ?>-routes-title">
+                    <div class="panel-head">
+                        <span class="panel-kicker"><?= htmlspecialchars($routesKicker !== '' ? $routesKicker : 'Contact Routes') ?></span>
+                        <h2 id="<?= $componentId ?>-routes-title"><?= htmlspecialchars($routesTitle !== '' ? $routesTitle : 'Reach the right Gin Rummy desk without extra steps') ?></h2>
+                    </div>
+
+                    <?php if ($showSupportSummary): ?>
+                        <article class="route-lead route-summary">
+                            <span class="route-type"><?= htmlspecialchars($summaryLabel !== '' ? $summaryLabel : 'Support Desk') ?></span>
+                            <strong><?= htmlspecialchars($hours !== '' ? $hours : $title) ?></strong>
+                            <p><?= htmlspecialchars($summaryText !== '' ? $summaryText : 'Use the channels configured for this page to route account, game, or payout questions quickly.') ?></p>
+                        </article>
+                    <?php endif; ?>
+
+                    <?php if ($channelLead): ?>
+                        <?php if ($channelLead['href'] !== ''): ?>
+                            <a class="route-lead" href="<?= htmlspecialchars($channelLead['href']) ?>">
+                                <span class="route-type"><?= htmlspecialchars($channelLead['label']) ?></span>
+                                <strong><?= htmlspecialchars($channelLead['value']) ?></strong>
+                                <small><?= htmlspecialchars($channelLead['icon']) ?></small>
+                            </a>
+                        <?php else: ?>
+                            <article class="route-lead">
+                                <span class="route-type"><?= htmlspecialchars($channelLead['label']) ?></span>
+                                <strong><?= htmlspecialchars($channelLead['value']) ?></strong>
+                                <small><?= htmlspecialchars($channelLead['icon']) ?></small>
+                            </article>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php if (!empty($channelTrail)): ?>
+                        <div class="route-grid">
+                            <?php foreach ($channelTrail as $channel): ?>
+                                <?php if ($channel['href'] !== ''): ?>
+                                    <a class="route-card" href="<?= htmlspecialchars($channel['href']) ?>">
+                                        <span class="route-icon"><?= htmlspecialchars($channel['icon']) ?></span>
+                                        <div class="route-copy">
+                                            <span><?= htmlspecialchars($channel['label']) ?></span>
+                                            <strong><?= htmlspecialchars($channel['value']) ?></strong>
+                                        </div>
+                                    </a>
+                                <?php else: ?>
+                                    <article class="route-card">
+                                        <span class="route-icon"><?= htmlspecialchars($channel['icon']) ?></span>
+                                        <div class="route-copy">
+                                            <span><?= htmlspecialchars($channel['label']) ?></span>
+                                            <strong><?= htmlspecialchars($channel['value']) ?></strong>
+                                        </div>
+                                    </article>
+                                <?php endif; ?>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <?php if ($showSocial && !empty($socials)): ?>
+                        <div class="social-stage" aria-label="Social links">
+                            <span class="panel-kicker"><?= htmlspecialchars($socialTitle !== '' ? $socialTitle : 'Follow the desk') ?></span>
+                            <div class="social-grid">
+                                <?php foreach ($socials as $social): ?>
+                                    <a href="<?= htmlspecialchars($social['url']) ?>" class="social-link" aria-label="<?= htmlspecialchars($social['name']) ?>">
+                                        <span class="social-mark"><?= htmlspecialchars($getInitials($social['name'])) ?></span>
+                                        <span class="social-name"><?= htmlspecialchars($social['name']) ?></span>
+                                    </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    <?php endif; ?>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($showForm): ?>
+                <section class="form-stage wow animate__fadeInUp" data-wow-delay="0.12s" data-wow-duration="0.9s" aria-labelledby="<?= $componentId ?>-form-title">
+                    <header class="panel-head">
+                        <span class="panel-kicker"><?= htmlspecialchars($formKicker !== '' ? $formKicker : 'Message Desk') ?></span>
+                        <h2 id="<?= $componentId ?>-form-title"><?= htmlspecialchars($formTitle !== '' ? $formTitle : 'Send us a Message') ?></h2>
+                        <?php if ($formSuccessMessage !== ''): ?>
+                            <p><?= htmlspecialchars($formSuccessMessage) ?></p>
+                        <?php endif; ?>
+                    </header>
+
+                    <form class="contact-form" action="#" method="post" onsubmit="return false;">
+                        <label>
+                            <span><?= htmlspecialchars($formNameLabel !== '' ? $formNameLabel : 'Full Name') ?></span>
+                            <input type="text" name="name" placeholder="<?= htmlspecialchars($formNamePlaceholder !== '' ? $formNamePlaceholder : 'Your name') ?>">
+                        </label>
+
+                        <label>
+                            <span><?= htmlspecialchars($formEmailLabel !== '' ? $formEmailLabel : 'Email Address') ?></span>
+                            <input type="email" name="email" placeholder="<?= htmlspecialchars($formEmailPlaceholder !== '' ? $formEmailPlaceholder : 'name@example.com') ?>">
+                        </label>
+
+                        <label>
+                            <span><?= htmlspecialchars($formSubjectLabel !== '' ? $formSubjectLabel : 'Subject') ?></span>
+                            <input type="text" name="subject" placeholder="<?= htmlspecialchars($formSubjectPlaceholder !== '' ? $formSubjectPlaceholder : 'Account, gameplay, or payout issue') ?>">
+                        </label>
+
+                        <label>
+                            <span><?= htmlspecialchars($formMessageLabel !== '' ? $formMessageLabel : 'Message') ?></span>
+                            <textarea name="message" rows="6" placeholder="<?= htmlspecialchars($formMessagePlaceholder !== '' ? $formMessagePlaceholder : 'Share your table, UID, device, or payment details so the support desk can route the request quickly.') ?>"></textarea>
+                        </label>
+
+                        <button type="submit" class="contact-submit"><?= htmlspecialchars($formSubmitText !== '' ? $formSubmitText : 'Send Message') ?></button>
+                    </form>
+                </section>
+            <?php endif; ?>
+        </main>
+
+        <?php if ($showMap): ?>
+            <section class="map-stage wow animate__fadeInUp" data-wow-delay="0.16s" data-wow-duration="0.92s" aria-labelledby="<?= $componentId ?>-map-title">
+                <div class="map-head">
+                    <span class="panel-kicker"><?= htmlspecialchars($mapTitle !== '' ? $mapTitle : 'Desk Location') ?></span>
+                    <h2 id="<?= $componentId ?>-map-title"><?= htmlspecialchars($mapTitle !== '' ? $mapTitle : ($mapEmbedUrl !== '' ? 'Desk Location' : 'Location Details')) ?></h2>
+                </div>
+
+                <?php if ($mapEmbedUrl !== ''): ?>
+                    <div class="map-frame" style="height: <?= (int) $mapHeight ?>px;">
+                        <iframe src="<?= htmlspecialchars($mapEmbedUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" allowfullscreen title="<?= htmlspecialchars($title) ?> map"></iframe>
+                    </div>
+                <?php else: ?>
+                    <div class="map-fallback">
+                        <?php if ($address !== ''): ?>
+                            <div>
+                                <span><?= htmlspecialchars($addressLabel !== '' ? $addressLabel : 'Address') ?></span>
+                                <strong><?= htmlspecialchars($address) ?></strong>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($hours !== ''): ?>
+                            <div>
+                                <span><?= htmlspecialchars($hoursLabel !== '' ? $hoursLabel : 'Support Hours') ?></span>
+                                <strong><?= htmlspecialchars($hours) ?></strong>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($phone !== ''): ?>
+                            <div>
+                                <span><?= htmlspecialchars($phoneLabel !== '' ? $phoneLabel : 'Phone') ?></span>
+                                <strong><?= htmlspecialchars($phone) ?></strong>
+                            </div>
+                        <?php endif; ?>
+                        <?php if ($email !== ''): ?>
+                            <div>
+                                <span><?= htmlspecialchars($emailLabel !== '' ? $emailLabel : 'Email') ?></span>
+                                <strong><?= htmlspecialchars($email) ?></strong>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </section>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.5rem, 8vw, 6.6rem) 0;
+    background:
+        radial-gradient(980px 420px at 0% 0%, rgba(255, 106, 155, 0.16), transparent 68%),
+        radial-gradient(880px 460px at 100% 14%, rgba(88, 230, 214, 0.15), transparent 66%),
+        radial-gradient(720px 320px at 50% 100%, rgba(255, 197, 92, 0.1), transparent 72%),
+        linear-gradient(180deg, #071320 0%, #091a2b 54%, #07111d 100%);
+    color: #eef6ff;
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background: repeating-linear-gradient(122deg, rgba(255, 255, 255, 0.03) 0 1px, transparent 1px 30px);
+    opacity: 0.24;
+}
+
+#<?= $componentId ?> .contact-suits {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .contact-suit {
+    position: absolute;
+    font-family: 'Georgia', 'Times New Roman', serif;
+    line-height: 0.78;
+    font-weight: 700;
+    opacity: 0.1;
+}
+
+#<?= $componentId ?> .contact-suit-club {
+    top: 6%;
+    left: -0.5rem;
+    font-size: clamp(6rem, 16vw, 12rem);
+    color: rgba(88, 230, 214, 0.6);
+    transform: rotate(-9deg);
+}
+
+#<?= $componentId ?> .contact-suit-heart {
+    top: 24%;
+    right: 7%;
+    font-size: clamp(5.8rem, 14vw, 10rem);
+    color: rgba(255, 106, 155, 0.4);
+    transform: rotate(12deg);
+}
+
+#<?= $componentId ?> .contact-suit-diamond {
+    right: -0.7rem;
+    bottom: 10%;
+    font-size: clamp(7rem, 17vw, 13rem);
+    color: rgba(255, 192, 88, 0.28);
+    transform: rotate(-13deg);
+}
+
+#<?= $componentId ?> .contact-shell {
+    width: min(1240px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .contact-mast {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    align-items: end;
+}
+
+#<?= $componentId ?> .mast-kicker,
+#<?= $componentId ?> .panel-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.48rem;
+    color: #e65b81;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .mast-kicker::before,
+#<?= $componentId ?> .panel-kicker::before {
+    content: '';
+    width: 34px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff8d5e 0%, rgba(255, 141, 94, 0) 100%);
+}
+
+#<?= $componentId ?> h1,
+#<?= $componentId ?> h2,
+#<?= $componentId ?> h3 {
+    margin: 0;
+    font-family: 'Space Grotesk', 'Manrope', sans-serif;
+}
+
+#<?= $componentId ?> .mast-copy h1 {
+    margin-top: 0.72rem;
+    max-width: 10ch;
+    font-size: clamp(2.85rem, 6vw, 5.4rem);
+    line-height: 0.92;
+    letter-spacing: -0.07em;
+    color: #f2fbff;
+}
+
+#<?= $componentId ?> .mast-copy p {
+    margin: 1rem 0 0;
+    max-width: 58ch;
+    color: #abc1d5;
+    line-height: 1.88;
+}
+
+#<?= $componentId ?> .route-lead,
+#<?= $componentId ?> .route-card {
+    position: relative;
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(10, 23, 38, 0.9) 0%, rgba(12, 28, 45, 0.92) 100%);
+    box-shadow: 0 24px 44px rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(123, 154, 180, 0.16);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+}
+
+#<?= $componentId ?> .contact-grid {
+    margin-top: 1.15rem;
+    display: grid;
+    grid-template-columns: minmax(0, 0.98fr) minmax(320px, 0.78fr);
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .contact-grid.no-info {
+    grid-template-columns: 1fr;
+}
+
+#<?= $componentId ?> .contact-grid.no-form {
+    grid-template-columns: 1fr;
+}
+
+#<?= $componentId ?> .routes-stage,
+#<?= $componentId ?> .form-stage,
+#<?= $componentId ?> .map-stage {
+    padding: 0;
+}
+
+#<?= $componentId ?> .panel-head,
+#<?= $componentId ?> .map-head {
+    display: grid;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .panel-head h2,
+#<?= $componentId ?> .map-head h2 {
+    font-size: clamp(1.8rem, 3.2vw, 3rem);
+    line-height: 0.96;
+    letter-spacing: -0.05em;
+    color: #f2fbff;
+}
+
+#<?= $componentId ?> .panel-head p {
+    margin: 0;
+    color: #a2bad0;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .route-summary {
+    margin-top: 0.95rem;
+}
+
+#<?= $componentId ?> .route-lead {
+    margin-top: 0.95rem;
+    display: grid;
+    gap: 0.4rem;
+    padding: 1rem;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .route-type {
+    color: #e65b81;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .route-lead strong {
+    color: #f1fbff;
+    font-size: clamp(1.4rem, 2.5vw, 2.2rem);
+    line-height: 1.05;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .route-lead p,
+#<?= $componentId ?> .route-card span {
+    margin: 0;
+    color: #9ab4cb;
+}
+
+#<?= $componentId ?> .route-lead small {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    color: rgba(242, 251, 255, 0.46);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+#<?= $componentId ?> .route-grid {
+    margin-top: 0.9rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.82rem;
+}
+
+#<?= $componentId ?> .route-card {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.8rem;
+    align-items: start;
+    padding: 0.92rem;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .route-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+    color: #f4fbff;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    background: linear-gradient(135deg, rgba(255, 199, 90, 0.22) 0%, rgba(88, 230, 214, 0.28) 100%);
+}
+
+#<?= $componentId ?> .route-copy strong {
+    display: block;
+    margin-top: 0.2rem;
+    color: #edf7ff;
+    line-height: 1.68;
+}
+
+#<?= $componentId ?> .social-stage {
+    margin-top: 0.95rem;
+}
+
+#<?= $componentId ?> .social-grid {
+    margin-top: 0.65rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+}
+
+#<?= $componentId ?> .social-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.62rem;
+    min-height: 48px;
+    padding: 0.42rem 0.7rem 0.42rem 0.42rem;
+    border-radius: 999px;
+    color: #edf7ff;
+    text-decoration: none;
+    background: rgba(11, 28, 45, 0.72);
+    border: 1px solid rgba(123, 154, 180, 0.16);
+}
+
+#<?= $componentId ?> .social-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 999px;
+    color: #f5fbff;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    background: linear-gradient(135deg, rgba(255, 139, 94, 0.22) 0%, rgba(88, 230, 214, 0.22) 100%);
+}
+
+#<?= $componentId ?> .social-name {
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .contact-form {
+    margin-top: 0.95rem;
+    display: grid;
+    gap: 0.78rem;
+    padding: 1rem;
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(9, 22, 37, 0.88) 0%, rgba(11, 27, 43, 0.92) 100%);
+    box-shadow: 0 24px 44px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(123, 154, 180, 0.14);
+}
+
+#<?= $componentId ?> .contact-form label {
+    display: grid;
+    gap: 0.36rem;
+}
+
+#<?= $componentId ?> .contact-form span {
+    color: #92adbf;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .contact-form input,
+#<?= $componentId ?> .contact-form textarea {
+    width: 100%;
+    border: 1px solid rgba(123, 154, 180, 0.16);
+    border-radius: 22px;
+    padding: 0.95rem 1rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: #edf7ff;
+    font: inherit;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.01);
+}
+
+#<?= $componentId ?> .contact-form input::placeholder,
+#<?= $componentId ?> .contact-form textarea::placeholder {
+    color: #6f8aa2;
+}
+
+#<?= $componentId ?> .contact-form input:focus,
+#<?= $componentId ?> .contact-form textarea:focus {
+    outline: none;
+    border-color: rgba(255, 205, 99, 0.4);
+    box-shadow: 0 0 0 4px rgba(255, 205, 99, 0.08);
+}
+
+#<?= $componentId ?> .contact-form textarea {
+    resize: vertical;
+    min-height: 150px;
+}
+
+#<?= $componentId ?> .contact-submit {
+    border: none;
+    border-radius: 999px;
+    min-height: 50px;
+    padding: 0.9rem 1.3rem;
+    color: #102235;
+    font-size: 0.84rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    background: linear-gradient(92deg, #ffd56d 0%, #ff8d5e 46%, #56e6d6 100%);
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .map-stage {
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .map-frame {
+    margin-top: 0.92rem;
+    overflow: hidden;
+    border-radius: 28px;
+    border: 1px solid rgba(123, 154, 180, 0.14);
+    box-shadow: 0 24px 44px rgba(0, 0, 0, 0.2);
+}
+
+#<?= $componentId ?> .map-frame iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+}
+
+#<?= $componentId ?> .map-fallback {
+    margin-top: 0.92rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.78rem;
+}
+
+#<?= $componentId ?> .map-fallback div {
+    padding: 0.95rem 1rem;
+    border-radius: 24px;
+    background: linear-gradient(180deg, rgba(10, 23, 38, 0.88) 0%, rgba(12, 28, 45, 0.92) 100%);
+    border: 1px solid rgba(123, 154, 180, 0.14);
+    box-shadow: 0 20px 36px rgba(0, 0, 0, 0.16);
+}
+
+#<?= $componentId ?> .map-fallback span {
+    display: block;
+    color: #8da9be;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .map-fallback strong {
+    display: block;
+    margin-top: 0.35rem;
+    color: #edf7ff;
+    line-height: 1.7;
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .contact-mast,
+    #<?= $componentId ?> .contact-grid,
+    #<?= $componentId ?> .contact-grid.no-info,
+    #<?= $componentId ?> .contact-grid.no-form {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .route-grid,
+    #<?= $componentId ?> .map-fallback {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 4.15rem 0 4.9rem;
+    }
+
+    #<?= $componentId ?> .contact-shell {
+        width: min(100%, calc(100% - 0.78rem));
+    }
+
+    #<?= $componentId ?> .mast-copy h1 {
+        max-width: none;
+    }
+
+    #<?= $componentId ?> .route-grid,
+    #<?= $componentId ?> .map-fallback {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .routes-stage,
+    #<?= $componentId ?> .form-stage,
+    #<?= $componentId ?> .map-stage {
+        padding: 0;
+        border-radius: 0;
+    }
+
+    #<?= $componentId ?> .contact-suit {
+        opacity: 0.08;
+    }
+
+    #<?= $componentId ?> .contact-suit-club {
+        font-size: 5.6rem;
+        top: 3%;
+    }
+
+    #<?= $componentId ?> .contact-suit-heart {
+        right: -0.4rem;
+        font-size: 5.2rem;
+    }
+
+    #<?= $componentId ?> .contact-suit-diamond {
+        bottom: 8%;
+        font-size: 5.8rem;
+    }
+}
+</style>

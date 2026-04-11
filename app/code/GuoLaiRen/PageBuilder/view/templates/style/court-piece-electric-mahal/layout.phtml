@@ -1,0 +1,315 @@
+<?php
+/**
+ * TPMST 模板主布局 - Main Layout
+ * 
+ * 定义 header/content/footer 三个区域容器
+ * 支持组件动态加载和可视化拖拽
+ * 
+ * @var \Weline\Framework\View\Template $this
+ * @var \GuoLaiRen\PageBuilder\Model\Page $page
+ */
+
+$page = $this->getData('page');
+$styleSettingsRaw = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$styleSettings = is_array($styleSettingsRaw) ? $styleSettingsRaw : [];
+$pageId = $page && $page->getId() ? $page->getId() : 0;
+$templateCode = 'court-piece-electric-mahal';
+
+// 获取页面布局配置（包含组件配置）
+$layoutConfigRaw = $this->getData('layout_config');
+if (is_string($layoutConfigRaw)) {
+    $layoutConfig = json_decode($layoutConfigRaw, true) ?: [];
+} else {
+    $layoutConfig = is_array($layoutConfigRaw) ? $layoutConfigRaw : [];
+}
+// 规范化 header/footer：PageLayout::exportConfig() 返回单组件对象 ['component'=>..., 'config'=>...]，模板需要组件数组 [['code'=>..., 'enabled'=>..., 'config'=>...]]
+$headerRaw = $layoutConfig['header'] ?? [];
+$footerRaw = $layoutConfig['footer'] ?? [];
+$headerComponents = is_array($headerRaw) && !isset($headerRaw[0]) && isset($headerRaw['component'])
+    ? [['code' => $headerRaw['component'], 'enabled' => true, 'config' => $headerRaw['config'] ?? []]]
+    : (is_array($headerRaw) ? $headerRaw : []);
+$contentComponents = is_array($layoutConfig['content'] ?? null) ? $layoutConfig['content'] : [];
+$footerComponents = is_array($footerRaw) && !isset($footerRaw[0]) && isset($footerRaw['component'])
+    ? [['code' => $footerRaw['component'], 'enabled' => true, 'config' => $footerRaw['config'] ?? []]]
+    : (is_array($footerRaw) ? $footerRaw : []);
+
+// 如果没有配置，使用默认组件
+if (empty($headerComponents)) {
+    $headerComponents = [
+        ['code' => 'header-nav', 'enabled' => true, 'config' => []]
+    ];
+}
+
+if (empty($contentComponents)) {
+    $contentComponents = [
+        ['code' => 'hero-slider', 'enabled' => true, 'config' => ['banner.display' => 'yes', 'layout.slider_classes' => 'rs-slider slider-style2', 'layout.margin_top' => '-75']],
+        ['code' => 'advantages', 'enabled' => true, 'config' => []],
+        ['code' => 'games', 'enabled' => true, 'config' => []],
+        ['code' => 'testimonials', 'enabled' => true, 'config' => []],
+        ['code' => 'faq', 'enabled' => true, 'config' => []],
+    ];
+}
+
+if (empty($footerComponents)) {
+    $footerComponents = [
+        ['code' => 'footer-links', 'enabled' => true, 'config' => []]
+    ];
+}
+
+// 组件代码到文件的映射
+// 注意：此映射必须与 component.json 保持同步
+// 所有组件文件必须实际存在于 components/ 目录下
+$componentFiles = [
+    // Header 组件
+    'header-nav' => 'header/nav.phtml',
+    'header-simple' => 'header/simple.phtml',
+    'header-dark' => 'header/dark.phtml',
+    
+    // Content 组件
+    'hero-slider' => 'content/hero-slider.phtml',
+    'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
+    'advantages' => 'content/advantages.phtml',
+    'games' => 'content/games.phtml',
+    'testimonials' => 'content/testimonials.phtml',
+    'faq' => 'content/faq.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
+    'blog-category' => 'content/blog-category.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
+    
+    // Footer 组件
+    'footer-links' => 'footer/links.phtml',
+    'footer-simple' => 'footer/simple.phtml',
+];
+
+/**
+ * 渲染单个组件
+ */
+$renderComponent = function($component) use ($componentFiles, $page, $styleSettings) {
+    $code = $component['code'] ?? '';
+    $enabled = $component['enabled'] ?? true;
+    $componentConfig = $component['config'] ?? [];
+    
+    if (!$enabled || empty($code)) {
+        return '';
+    }
+    
+    $file = $componentFiles[$code] ?? null;
+    if (!$file) {
+        // 尝试查找共享组件
+        $sharedFile = 'GuoLaiRen_PageBuilder::style/_shared/components/' . $code . '.phtml';
+        if (file_exists($this->getTemplateFile($sharedFile))) {
+            $this->assign('page', $page);
+            $this->assign('style', $styleSettings);
+            $this->assign('style_settings', $styleSettings);
+            $this->assign('component_config', $componentConfig);
+            return $this->fetchTemplate($sharedFile);
+        }
+        return "<!-- Component not found: {$code} -->";
+    }
+    
+    $templatePath = 'GuoLaiRen_PageBuilder::style/court-piece-electric-mahal/components/' . $file;
+    
+    // 传递数据到组件
+    $this->assign('page', $page);
+    $this->assign('style', $styleSettings);
+    $this->assign('style_settings', $styleSettings);
+    $this->assign('component_config', $componentConfig);
+    
+    try {
+        return $this->fetchTemplate($templatePath);
+    } catch (\Exception $e) {
+        return "<!-- Error loading component {$code}: " . htmlspecialchars($e->getMessage()) . " -->";
+    }
+};
+
+// 加载颜色配置
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+
+// SEO 信息
+$metaTitle = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'Court Piece Electric Mahal';
+$metaDescription = $page ? ($page->getData('meta_description') ?: '') : '';
+$metaKeywords = $page ? ($page->getData('meta_keywords') ?: '') : '';
+$pageIcon = $page ? ($page->getData('icon') ?: '') : '';
+
+// 像素配置
+$getConfig = function($key, $default = '') use ($styleSettings) {
+    return isset($styleSettings[$key]) && $styleSettings[$key] !== '' ? $styleSettings[$key] : $default;
+};
+$pixelEnabled = $getConfig('pixel.enabled', 'yes');
+$pixelName = $getConfig('pixel.name', '');
+if (empty($pixelName) && $page) {
+    $pixelName = $page->getData('handle') ?? '';
+}
+$websiteId = $page ? (int)($page->getData('website_id') ?? 0) : 0;
+$pathInfo = $this->getRequest()->getPathInfo();
+$isPreviewMode = $pathInfo ? (strpos($pathInfo, '/preview/') !== false) : false;
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle) ?>233</title>
+    
+    <!-- Favicon -->
+    <?php if (!empty($pageIcon)): ?>
+    <link rel="icon" type="image/x-icon" href="<?= htmlspecialchars($pageIcon) ?>">
+    <?php else: ?>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <?php endif; ?>
+    
+    <?php if ($metaDescription): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    
+    <?php if ($metaKeywords): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+    
+    <!-- 本地CSS资源 -->
+    <?php $localCssUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/court-piece-electric-mahal/asset/css/home.css'); ?>
+    <link rel="stylesheet" type="text/css" href="<?= htmlspecialchars($localCssUrl) ?>">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: "Trebuchet MS", "Segoe UI", Tahoma, sans-serif;
+            background:
+                radial-gradient(circle at top left, rgba(255, 111, 60, 0.16), transparent 24%),
+                radial-gradient(circle at 85% 8%, rgba(110, 243, 255, 0.14), transparent 22%),
+                linear-gradient(180deg, #150a22 0%, #0f0718 54%, #09111e 100%);
+            color: #fff9f1;
+            line-height: 1.6;
+        }
+
+        .court-piece-electric-mahal-layout {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            isolation: isolate;
+        }
+
+        .court-piece-electric-mahal-region {
+            width: 100%;
+        }
+
+        .court-piece-electric-mahal-region-header {
+            position: relative;
+            z-index: 1000;
+        }
+
+        .court-piece-electric-mahal-region-content {
+            flex: 1;
+        }
+
+        .court-piece-electric-mahal-region-footer {
+            margin-top: auto;
+        }
+
+        .court-piece-electric-mahal-component-wrapper {
+            position: relative;
+        }
+
+        .court-piece-electric-mahal-layout[data-visual-mode="true"] .court-piece-electric-mahal-component-wrapper {
+            outline: 2px dashed transparent;
+            transition: outline 0.2s ease;
+        }
+
+        .court-piece-electric-mahal-layout[data-visual-mode="true"] .court-piece-electric-mahal-component-wrapper:hover {
+            outline-color: rgba(110, 243, 255, 0.72);
+        }
+
+        .court-piece-electric-mahal-region-empty {
+            padding: 40px;
+            text-align: center;
+            background: rgba(255,255,255,0.05);
+            border: 2px dashed rgba(255,255,255,0.16);
+            border-radius: 24px;
+            margin: 20px;
+            color: rgba(255,255,255,0.55);
+        }
+    </style>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/head-common.phtml'); ?>
+</head>
+<body>
+    <div class="court-piece-electric-mahal-layout" data-template="court-piece-electric-mahal" data-page-id="<?= $pageId ?>">
+        
+        <!-- ========== HEADER 区域 ========== -->
+        <header class="court-piece-electric-mahal-region court-piece-electric-mahal-region-header" data-region="header" data-multiple="false">
+            <?php if (!empty($headerComponents)): ?>
+                <?php foreach ($headerComponents as $component): ?>
+                    <?php if (!is_array($component)) continue; ?>
+                    <?php if ($component['enabled'] ?? true): ?>
+                    <div class="court-piece-electric-mahal-component-wrapper" 
+                         data-component="<?= htmlspecialchars($component['code']) ?>"
+                         data-region="header">
+                        <?= $renderComponent($component) ?>
+                    </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="court-piece-electric-mahal-region-empty">
+                    <p>拖拽一个 Header 组件到此处</p>
+                </div>
+            <?php endif; ?>
+        </header>
+        
+        <!-- ========== CONTENT 区域 ========== -->
+        <main class="court-piece-electric-mahal-region court-piece-electric-mahal-region-content" data-region="content" data-multiple="true">
+            <?php if (!empty($contentComponents)): ?>
+                <?php foreach ($contentComponents as $index => $component): ?>
+                    <?php if (!is_array($component)) continue; ?>
+                    <?php if ($component['enabled'] ?? true): ?>
+                    <div class="court-piece-electric-mahal-component-wrapper" 
+                         data-component="<?= htmlspecialchars($component['code']) ?>"
+                         data-region="content"
+                         data-index="<?= $index ?>">
+                        <?= $renderComponent($component) ?>
+                    </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="court-piece-electric-mahal-region-empty">
+                    <p>拖拽 Content 组件到此处</p>
+                </div>
+            <?php endif; ?>
+        </main>
+        
+        <!-- ========== FOOTER 区域 ========== -->
+        <footer class="court-piece-electric-mahal-region court-piece-electric-mahal-region-footer" data-region="footer" data-multiple="false">
+            <?php if (!empty($footerComponents)): ?>
+                <?php foreach ($footerComponents as $component): ?>
+                    <?php if (!is_array($component)) continue; ?>
+                    <?php if ($component['enabled'] ?? true): ?>
+                    <div class="court-piece-electric-mahal-component-wrapper" 
+                         data-component="<?= htmlspecialchars($component['code']) ?>"
+                         data-region="footer">
+                        <?= $renderComponent($component) ?>
+                    </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="court-piece-electric-mahal-region-empty">
+                    <p>拖拽一个 Footer 组件到此处</p>
+                </div>
+            <?php endif; ?>
+        </footer>
+        
+    </div>
+    
+    <!-- 本地JS资源 -->
+    <?php 
+    $localZeptoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/court-piece-electric-mahal/asset/js/zepto.min.js');
+    $localCommonJsUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/court-piece-electric-mahal/asset/js/common.js');
+    ?>
+    <script src="<?= htmlspecialchars($localZeptoUrl) ?>" defer></script>
+    <script src="<?= htmlspecialchars($localCommonJsUrl) ?>" defer></script>
+    <?php echo $this->fetchTemplate('GuoLaiRen_PageBuilder::templates/style/_shared/partials/footer-common.phtml'); ?>
+</body>
+</html>

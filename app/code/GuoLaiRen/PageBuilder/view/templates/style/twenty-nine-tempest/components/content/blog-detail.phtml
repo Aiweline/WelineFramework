@@ -1,0 +1,685 @@
+<?php
+/**
+ * Twenty Nine Tempest Blog Detail Component
+ *
+ * @fields_start
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_cover|显示封面图|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_tags|显示标签|select:yes=是,no=否|yes
+ * blog.show_share|显示分享按钮|select:yes=是,no=否|yes
+ * blog.show_related|显示相关文章|select:yes=是,no=否|yes
+ * blog.related_count|相关文章数量|number|3
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$currentPost = $this->getData('current_post') ?: [];
+$relatedPosts = $this->getData('related_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+$componentId = 'tnt-blog-detail-' . uniqid();
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCover = $getConfig('blog.show_cover', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showTags = $getConfig('blog.show_tags', 'yes') === 'yes';
+$showShare = $getConfig('blog.show_share', 'yes') === 'yes';
+$showRelated = $getConfig('blog.show_related', 'yes') === 'yes';
+$relatedCount = (int) $getConfig('blog.related_count', 3);
+if ($relatedCount <= 0) {
+    $relatedCount = 3;
+}
+
+$primaryColor = $getConfig('color_scheme.primary', '#1eb980');
+$secondaryColor = $getConfig('color_scheme.secondary', '#f2a93b');
+$bgColor = $getConfig('color_scheme.background', '#0b1525');
+$textColor = $getConfig('color_scheme.text', '#f8fafc');
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/twenty-nine-tempest/asset/img/poker-header-bg.svg');
+
+$tags = [];
+if (!empty($currentPost['tags'])) {
+    $tags = is_array($currentPost['tags']) ? $currentPost['tags'] : explode(',', $currentPost['tags']);
+    $tags = array_values(array_filter(array_map('trim', $tags), static function ($item) {
+        return $item !== '';
+    }));
+}
+
+$articleContent = (string) ($currentPost['content'] ?? '');
+$jumpLinks = [];
+if ($articleContent !== '') {
+    $headingIndex = 0;
+    $articleContent = preg_replace_callback('/<h([23])([^>]*)>(.*?)<\/h\1>/is', static function ($matches) use (&$jumpLinks, &$headingIndex) {
+        $text = trim(strip_tags($matches[3]));
+        if ($text === '') {
+            return $matches[0];
+        }
+
+        $slug = strtolower((string) preg_replace('/[^a-z0-9]+/i', '-', $text));
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'article-section';
+        }
+
+        $id = $slug . '-' . (++$headingIndex);
+        $jumpLinks[] = [
+            'id' => $id,
+            'label' => $text,
+            'level' => (int) $matches[1],
+        ];
+
+        return '<h' . $matches[1] . $matches[2] . ' id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">' . $matches[3] . '</h' . $matches[1] . '>';
+    }, $articleContent);
+}
+
+$hasRail = $showSidebar || ($showShare && !empty($currentPost)) || ($showTags && !empty($tags)) || !empty($jumpLinks);
+$shareUrl = urlencode((string) ($_SERVER['REQUEST_URI'] ?? ''));
+$shareTitle = urlencode((string) ($currentPost['title'] ?? ''));
+?>
+
+<?php if (empty($currentPost)): ?>
+    <section id="<?= $componentId ?>" class="tnt-blog-detail">
+        <div class="detail-shell">
+            <div class="detail-empty">
+                <div class="empty-icon">
+                    <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                    </svg>
+                </div>
+                <h2><?= __('Article Not Found') ?></h2>
+                <p><?= __('The article you are looking for does not exist or has been removed.') ?></p>
+                <a href="/blog" class="back-home"><?= __('Back to Blog') ?></a>
+            </div>
+        </div>
+    </section>
+<?php else: ?>
+    <section id="<?= $componentId ?>" class="tnt-blog-detail">
+        <div class="detail-shell">
+            <nav class="detail-breadcrumb">
+                <a href="/"><?= __('Home') ?></a>
+                <span>/</span>
+                <a href="/blog"><?= __('Blog') ?></a>
+                <span>/</span>
+                <strong><?= htmlspecialchars(function_exists('mb_substr') ? mb_substr($currentPost['title'], 0, 42) : substr($currentPost['title'], 0, 42)) ?><?= (function_exists('mb_strlen') ? mb_strlen($currentPost['title']) : strlen($currentPost['title'])) > 42 ? '...' : '' ?></strong>
+            </nav>
+
+            <header class="article-hero">
+                <div class="hero-copy">
+                    <?php if (!empty($currentPost['category_name'])): ?>
+                        <span class="hero-chip"><?= htmlspecialchars($currentPost['category_name']) ?></span>
+                    <?php endif; ?>
+
+                    <h1><?= htmlspecialchars($currentPost['title']) ?></h1>
+
+                    <div class="hero-meta">
+                        <?php if ($showDate && !empty($currentPost['published_at'])): ?>
+                            <span><?= date('F d, Y', strtotime($currentPost['published_at'])) ?></span>
+                        <?php endif; ?>
+                        <?php if ($showAuthor && !empty($currentPost['author'])): ?>
+                            <span><?= htmlspecialchars($currentPost['author']) ?></span>
+                        <?php endif; ?>
+                        <?php if (!empty($currentPost['view_count'])): ?>
+                            <span><?= number_format($currentPost['view_count']) ?> <?= __('views') ?></span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if (!empty($currentPost['summary'])): ?>
+                        <p class="hero-summary"><?= htmlspecialchars($currentPost['summary']) ?></p>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($showCover && !empty($currentPost['cover_image'])): ?>
+                    <div class="hero-cover">
+                        <img src="<?= htmlspecialchars($currentPost['cover_image']) ?>" alt="<?= htmlspecialchars($currentPost['title']) ?>">
+                    </div>
+                <?php endif; ?>
+            </header>
+
+            <div class="detail-layout<?= $hasRail ? ' has-rail' : '' ?>">
+                <?php if ($hasRail): ?>
+                    <aside class="reader-rail">
+                        <?php if (!empty($jumpLinks)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker">Jump Within</span>
+                                <div class="jump-links">
+                                    <?php foreach ($jumpLinks as $index => $item): ?>
+                                        <a href="#<?= htmlspecialchars($item['id']) ?>" class="jump-link level-<?= (int) $item['level'] ?>">
+                                            <small>0<?= (int) ($index + 1) ?></small>
+                                            <span><?= htmlspecialchars($item['label']) ?></span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showTags && !empty($tags)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker">Tags</span>
+                                <div class="tag-list">
+                                    <?php foreach ($tags as $tag): ?>
+                                        <a href="/blog/tag/<?= urlencode($tag) ?>" class="tag-chip">#<?= htmlspecialchars($tag) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showShare): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker">Share</span>
+                                <div class="share-row">
+                                    <a href="https://www.facebook.com/sharer/sharer.php?u=<?= $shareUrl ?>" target="_blank" rel="noopener" class="share-btn" title="Share on Facebook">FB</a>
+                                    <a href="https://twitter.com/intent/tweet?url=<?= $shareUrl ?>&text=<?= $shareTitle ?>" target="_blank" rel="noopener" class="share-btn" title="Share on X">X</a>
+                                    <a href="https://www.linkedin.com/shareArticle?mini=true&url=<?= $shareUrl ?>&title=<?= $shareTitle ?>" target="_blank" rel="noopener" class="share-btn" title="Share on LinkedIn">IN</a>
+                                    <button type="button" class="share-btn" title="Copy Link" onclick="copyToClipboard('<?= $componentId ?>')">CP</button>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showSidebar && !empty($blogCategories)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker">Categories</span>
+                                <div class="category-list">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="category-entry"><?= htmlspecialchars($category['name']) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if ($showSidebar && !empty($recentPosts)): ?>
+                            <section class="rail-card">
+                                <span class="rail-kicker">Recent Posts</span>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 4) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+
+                <article class="reading-stage">
+                    <div class="article-card">
+                        <div class="article-content">
+                            <?= $articleContent ?>
+                        </div>
+
+                        <div class="article-navigation">
+                            <a href="/blog" class="back-home"><?= __('Back to Blog') ?></a>
+                        </div>
+                    </div>
+                </article>
+            </div>
+
+            <?php if ($showRelated && !empty($relatedPosts)): ?>
+                <section class="related-strip">
+                    <div class="related-head">
+                        <span class="related-kicker">Continue Reading</span>
+                        <h3><?= __('Related Articles') ?></h3>
+                    </div>
+                    <div class="related-grid">
+                        <?php foreach (array_slice($relatedPosts, 0, $relatedCount) as $post): ?>
+                            <article class="related-card">
+                                <?php if (!empty($post['cover_image'])): ?>
+                                    <a href="<?= htmlspecialchars($post['url']) ?>" class="related-media">
+                                        <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                    </a>
+                                <?php endif; ?>
+                                <div class="related-copy">
+                                    <h4><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h4>
+                                    <?php if (!empty($post['published_at'])): ?>
+                                        <span><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+        </div>
+    </section>
+
+    <script>
+    function copyToClipboard(componentId) {
+        var text = window.location.href;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+                alert('<?= __('Link copied to clipboard!') ?>');
+            });
+            return;
+        }
+
+        var temp = document.createElement('input');
+        temp.value = text;
+        document.body.appendChild(temp);
+        temp.select();
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        alert('<?= __('Link copied to clipboard!') ?>');
+    }
+    </script>
+<?php endif; ?>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: clamp(4.5rem, 8vw, 6.2rem) 0;
+    background:
+        radial-gradient(960px 420px at 12% 8%, rgba(30, 185, 128, 0.18), transparent 68%),
+        radial-gradient(760px 360px at 92% 16%, rgba(242, 169, 59, 0.16), transparent 64%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: <?= htmlspecialchars($textColor) ?>;
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.08;
+}
+
+#<?= $componentId ?>::after {
+    background: repeating-linear-gradient(128deg, rgba(255,255,255,0.03) 0 1px, transparent 1px 28px);
+    opacity: 0.24;
+}
+
+#<?= $componentId ?> .detail-shell {
+    width: min(1240px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .detail-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    margin-bottom: 1rem;
+    color: rgba(248,250,252,0.68);
+    font-size: 0.9rem;
+}
+
+#<?= $componentId ?> .detail-breadcrumb a,
+#<?= $componentId ?> .back-home,
+#<?= $componentId ?> .related-copy a,
+#<?= $componentId ?> .category-entry,
+#<?= $componentId ?> .jump-link,
+#<?= $componentId ?> .recent-link,
+#<?= $componentId ?> .tag-chip {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .article-hero,
+#<?= $componentId ?> .rail-card,
+#<?= $componentId ?> .article-card,
+#<?= $componentId ?> .related-card,
+#<?= $componentId ?> .detail-empty {
+    position: relative;
+    border-radius: 28px;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .article-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 0.96fr) minmax(280px, 1.04fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .hero-copy {
+    padding: clamp(1.4rem, 3vw, 2rem);
+    background: linear-gradient(180deg, rgba(255,255,255,0.1), rgba(255,255,255,0.03));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .hero-chip,
+#<?= $componentId ?> .rail-kicker,
+#<?= $componentId ?> .related-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0.44rem 0.88rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .hero-chip {
+    color: #08131f;
+    background: linear-gradient(135deg, <?= htmlspecialchars($secondaryColor) ?>, <?= htmlspecialchars($primaryColor) ?>);
+}
+
+#<?= $componentId ?> .rail-kicker,
+#<?= $componentId ?> .related-kicker {
+    color: #dce8f5;
+    background: rgba(255,255,255,0.08);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .hero-copy h1 {
+    margin-top: 0.9rem;
+    font-size: clamp(2.2rem, 4.8vw, 4.4rem);
+    line-height: 0.95;
+    letter-spacing: -0.06em;
+    text-wrap: balance;
+}
+
+#<?= $componentId ?> .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 1rem;
+    color: rgba(248,250,252,0.68);
+    font-size: 0.88rem;
+}
+
+#<?= $componentId ?> .hero-summary {
+    margin-top: 1rem;
+    color: rgba(248,250,252,0.8);
+    line-height: 1.86;
+}
+
+#<?= $componentId ?> .hero-cover {
+    min-height: 100%;
+    background: linear-gradient(180deg, rgba(255,245,224,0.97), rgba(247,250,255,0.94));
+    box-shadow: 0 28px 62px rgba(3, 10, 20, 0.26);
+}
+
+#<?= $componentId ?> .hero-cover img,
+#<?= $componentId ?> .related-media img,
+#<?= $componentId ?> .recent-link img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .detail-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .detail-layout.has-rail {
+    grid-template-columns: minmax(240px, 0.34fr) minmax(0, 1fr);
+}
+
+#<?= $componentId ?> .reader-rail {
+    display: grid;
+    align-content: start;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .rail-card {
+    padding: 1rem;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .jump-links,
+#<?= $componentId ?> .category-list,
+#<?= $componentId ?> .recent-stack {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 0.9rem;
+}
+
+#<?= $componentId ?> .jump-link {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.7rem;
+    align-items: start;
+    padding: 0.72rem 0.82rem;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.05);
+}
+
+#<?= $componentId ?> .jump-link small {
+    color: rgba(255,255,255,0.42);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .jump-link.level-3 {
+    padding-left: 1.15rem;
+}
+
+#<?= $componentId ?> .tag-list,
+#<?= $componentId ?> .share-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 0.9rem;
+}
+
+#<?= $componentId ?> .tag-chip,
+#<?= $componentId ?> .share-btn,
+#<?= $componentId ?> .category-entry,
+#<?= $componentId ?> .back-home {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0.62rem 0.88rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.06);
+}
+
+#<?= $componentId ?> .share-btn {
+    border: 0;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+}
+
+#<?= $componentId ?> .category-entry {
+    justify-content: flex-start;
+}
+
+#<?= $componentId ?> .recent-link {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .recent-link img {
+    width: 72px;
+    height: 72px;
+    border-radius: 18px;
+}
+
+#<?= $componentId ?> .recent-link strong {
+    display: block;
+    line-height: 1.45;
+}
+
+#<?= $componentId ?> .recent-link small {
+    display: block;
+    margin-top: 0.32rem;
+    color: rgba(248,250,252,0.62);
+}
+
+#<?= $componentId ?> .article-card {
+    padding: clamp(1rem, 2.8vw, 1.8rem);
+    background: linear-gradient(180deg, rgba(255,245,224,0.97), rgba(247,250,255,0.94));
+    box-shadow: 0 28px 62px rgba(3, 10, 20, 0.24);
+}
+
+#<?= $componentId ?> .article-content {
+    color: #0e1d2d;
+    line-height: 1.9;
+}
+
+#<?= $componentId ?> .article-content > *:first-child {
+    margin-top: 0;
+}
+
+#<?= $componentId ?> .article-content h1,
+#<?= $componentId ?> .article-content h2,
+#<?= $componentId ?> .article-content h3,
+#<?= $componentId ?> .article-content h4 {
+    color: #102131;
+    margin: 1.7rem 0 0.8rem;
+    line-height: 1.18;
+    scroll-margin-top: 1rem;
+}
+
+#<?= $componentId ?> .article-content h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+}
+
+#<?= $componentId ?> .article-content h3 {
+    font-size: clamp(1.2rem, 2vw, 1.45rem);
+}
+
+#<?= $componentId ?> .article-content p,
+#<?= $componentId ?> .article-content ul,
+#<?= $componentId ?> .article-content ol,
+#<?= $componentId ?> .article-content table,
+#<?= $componentId ?> .article-content blockquote {
+    margin: 0.9rem 0;
+}
+
+#<?= $componentId ?> .article-content ul,
+#<?= $componentId ?> .article-content ol {
+    padding-left: 1.35rem;
+}
+
+#<?= $componentId ?> .article-content table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#<?= $componentId ?> .article-content table th,
+#<?= $componentId ?> .article-content table td {
+    padding: 0.8rem 0.9rem;
+    border: 1px solid rgba(14,29,45,0.12);
+    vertical-align: top;
+}
+
+#<?= $componentId ?> .article-content blockquote {
+    padding: 1rem 1rem 1rem 1.2rem;
+    border-left: 3px solid <?= htmlspecialchars($primaryColor) ?>;
+    background: rgba(8, 21, 37, 0.06);
+    border-radius: 0 18px 18px 0;
+}
+
+#<?= $componentId ?> .article-navigation {
+    margin-top: 1.4rem;
+}
+
+#<?= $componentId ?> .back-home {
+    color: #0e1d2d;
+}
+
+#<?= $componentId ?> .related-strip {
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .related-head h3 {
+    margin-top: 0.8rem;
+    font-size: clamp(1.5rem, 3vw, 2.3rem);
+    line-height: 1.04;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .related-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .related-card {
+    background: linear-gradient(180deg, rgba(255,245,224,0.96), rgba(247,250,255,0.93));
+    box-shadow: 0 22px 48px rgba(3, 10, 20, 0.22);
+}
+
+#<?= $componentId ?> .related-media {
+    display: block;
+    aspect-ratio: 1.2;
+}
+
+#<?= $componentId ?> .related-copy {
+    padding: 1rem;
+    color: #0e1d2d;
+}
+
+#<?= $componentId ?> .related-copy h4 {
+    font-size: 1.1rem;
+    line-height: 1.35;
+}
+
+#<?= $componentId ?> .related-copy span {
+    display: block;
+    margin-top: 0.55rem;
+    color: rgba(14,29,45,0.6);
+}
+
+#<?= $componentId ?> .detail-empty {
+    padding: 2.2rem 1rem;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
+
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .article-hero,
+    #<?= $componentId ?> .detail-layout.has-rail,
+    #<?= $componentId ?> .related-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 720px) {
+    #<?= $componentId ?> .article-hero,
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .article-card,
+    #<?= $componentId ?> .related-card,
+    #<?= $componentId ?> .detail-empty {
+        border-radius: 24px;
+    }
+
+    #<?= $componentId ?> .recent-link {
+        grid-template-columns: 60px minmax(0, 1fr);
+    }
+
+    #<?= $componentId ?> .recent-link img {
+        width: 60px;
+        height: 60px;
+        border-radius: 16px;
+    }
+}
+</style>

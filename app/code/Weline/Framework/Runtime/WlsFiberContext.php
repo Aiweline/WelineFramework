@@ -3,51 +3,36 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\Context;
 use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
-use Weline\Framework\Http\Url;
 use Weline\Framework\Http\Sse\SseContext;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Framework\Env\WelineEnv;
 
 /**
- * WLS Fiber 请求级上下文
+ * Transitional fiber-context bridge for WLS.
  *
- * 每个 Fiber（请求）suspend 前调用 capture() 保存当前请求状态快照，
- * resume 前调用 restore() 恢复该 Fiber 的独立上下文，防止多 Fiber 并发时状态互相覆盖。
- *
- * 审计提示：未纳入快照的进程级状态仍可能串请求，须注册 StateManager::registerResetCallback
- * / registerStaticReset，或改为 RequestContext::set（Fiber 下走 WeakMap）。
- * 典型风险：仅用 static 存请求缓存、Session 引用缓存、HeaderCollector 以外的自定义单例。
- * Url 解析可变静态见 {@see Url::resetWlsFiberInterleavedParserScratch()}。
+ * It now keeps only the thin compatibility pieces still needed while the
+ * framework moves toward Context as the real source of request state.
  */
 class WlsFiberContext
 {
-    /** @var resource|null SSE 连接资源 */
     private mixed $sseConnection;
     private bool $sseEnabled;
     private bool $sseHeadersSent;
     private mixed $sseWriteCallback = null;
 
-    private array $serverVars;
-    private array $getVars;
-    private array $postVars;
-    private array $cookieVars;
-    private array $requestVars;
-    /** @var array<mixed> */
-    private array $filesVars;
+    private array $serverVars = [];
+    private array $getVars = [];
+    private array $postVars = [];
+    private array $cookieVars = [];
+    private array $requestVars = [];
+    private array $filesVars = [];
 
-    /** WelineEnv 状态快照 */
-    private ?array $welineEnvState = null;
-
-    /** WelineEnv Cookie 快照（单独保存 cookie 数据） */
-    private ?array $welineEnvCookie = null;
-
-    /** Request 对象引用（WlsRequest 或 Request），使用引用以兼容 ObjectManager::setInstance */
     private ?object $request = null;
+    private ?array $contextSnapshot = null;
 
-    /** RequestContext 存储快照 */
-    private ?string $requestId;
     /** @var array{headers: array<string, string|array>, cookies: array<string, array<string, mixed>>, status_code: int, status_code_explicit: bool} */
     private array $headerCollectorState = [
         'headers' => [],
@@ -56,11 +41,10 @@ class WlsFiberContext
         'status_code_explicit' => false,
     ];
 
-    private function __construct() {}
+    private function __construct()
+    {
+    }
 
-    /**
-     * 从当前全局环境快照：suspend 前调用
-     */
     public static function capture(): self
     {
         $ctx = new self();
@@ -70,19 +54,12 @@ class WlsFiberContext
         $ctx->sseHeadersSent = SseContext::isHeadersSent();
         $ctx->sseWriteCallback = SseContext::getWriteCallback();
 
-        $ctx->serverVars = $_SERVER;
-        $ctx->getVars = $_GET;
-        $ctx->postVars = $_POST;
-        $ctx->cookieVars = $_COOKIE;
-        $ctx->requestVars = $_REQUEST;
-
-        // 单独快照 WelineEnv 的 cookie 数据
-        try {
-            $ctx->welineEnvCookie = WelineEnv::getInstance()->capture()['cookie'] ?? null;
-        } catch (\Throwable) {
-            $ctx->welineEnvCookie = null;
-        }
-        $ctx->filesVars = $_FILES;
+        $ctx->serverVars = \is_array($_SERVER ?? null) ? $_SERVER : [];
+        $ctx->getVars = \is_array($_GET ?? null) ? $_GET : [];
+        $ctx->postVars = \is_array($_POST ?? null) ? $_POST : [];
+        $ctx->cookieVars = \is_array($_COOKIE ?? null) ? $_COOKIE : [];
+        $ctx->requestVars = \is_array($_REQUEST ?? null) ? $_REQUEST : [];
+        $ctx->filesVars = \is_array($_FILES ?? null) ? $_FILES : [];
 
         try {
             $ctx->request = ObjectManager::getInstance(Request::class);
@@ -90,28 +67,19 @@ class WlsFiberContext
             $ctx->request = null;
         }
 
-        $ctx->requestId = RequestContext::getId();
-        $ctx->headerCollectorState = HeaderCollector::getInstance()->captureState();
-
-        // 快照 WelineEnv 状态
         try {
-            $ctx->welineEnvState = WelineEnv::getInstance()->capture();
+            $ctx->contextSnapshot = Context::getCurrent()?->toArray();
         } catch (\Throwable) {
-            $ctx->welineEnvState = null;
+            $ctx->contextSnapshot = null;
         }
+
+        $ctx->headerCollectorState = HeaderCollector::getInstance()->captureState();
 
         return $ctx;
     }
 
-    /**
-     * 将此快照恢复到全局环境：resume 前调用
-     */
     public function restore(bool $restoreResponseState = true): void
     {
-        // SSE 上下文恢复：先完全重置再按快照精确还原，
-        // 避免上一个 Fiber 遗留的 sseEnabled/headersSent 污染当前 Fiber。
-        // 旧实现仅在快照值为 true 时调用 enableSse()/markHeadersSent()，
-        // 但从不将它们重置为 false，导致 SSE Fiber 的状态泄漏到普通请求 Fiber。
         SseContext::reset();
         SseContext::setConnection($this->sseConnection);
         if (\is_callable($this->sseWriteCallback)) {
@@ -131,24 +99,55 @@ class WlsFiberContext
         $_POST = $this->postVars;
         $_COOKIE = $this->cookieVars;
         $_REQUEST = $this->requestVars;
-
-        // 恢复 WelineEnv 的 cookie 数据（仅当存在独立 cookie 快照时）
-        // 注意：后续的 welineEnvState 完整恢复会覆盖此处效果，
-        // 此处仅为兼容需要单独处理 cookie 快照的场景
-        if ($this->welineEnvCookie !== null) {
-            try {
-                $currentSnapshot = WelineEnv::getInstance()->capture();
-                $currentSnapshot['cookie'] = $this->welineEnvCookie;
-                WelineEnv::getInstance()->restore($currentSnapshot);
-            } catch (\Throwable) {
-                // 忽略 WelineEnv cookie 恢复错误
-            }
-        }
         $_FILES = $this->filesVars;
 
         Url::resetWlsFiberInterleavedParserScratch();
 
+        if ($this->contextSnapshot !== null) {
+            $context = new Context($this->contextSnapshot);
+            $context->merge([
+                'input' => [
+                    'query' => $this->getVars,
+                    'post' => $this->postVars,
+                    'cookie' => $this->cookieVars,
+                    'files' => $this->filesVars,
+                    'server' => $this->serverVars,
+                    'uri' => (string)($this->serverVars['REQUEST_URI'] ?? $context->get('input.uri', '/')),
+                    'method' => (string)($this->serverVars['REQUEST_METHOD'] ?? $context->get('input.method', 'GET')),
+                    'scheme' => (string)($this->serverVars['REQUEST_SCHEME'] ?? $context->get('input.scheme', 'http')),
+                    'host' => (string)($this->serverVars['HTTP_HOST'] ?? $this->serverVars['SERVER_NAME'] ?? $context->get('input.host', '')),
+                    'ip' => (string)($this->serverVars['REMOTE_ADDR'] ?? $context->get('input.ip', '')),
+                ],
+                'route' => [
+                    'area' => (string)($this->serverVars['WELINE_AREA'] ?? $context->get('route.area', RequestContext::AREA_FRONTEND)),
+                    'area_route' => (string)($this->serverVars['WELINE_AREA_ROUTE'] ?? $context->get('route.area_route', '')),
+                    'website_id' => (int)($this->serverVars['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)),
+                    'website_code' => (string)($this->serverVars['WELINE_WEBSITE_CODE'] ?? $context->get('route.website_code', '')),
+                    'website_url' => (string)($this->serverVars['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', '')),
+                    'language' => (string)($this->serverVars['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')),
+                    'currency' => (string)($this->serverVars['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')),
+                    'is_backend' => (bool)($this->serverVars['WELINE_IS_BACKEND']
+                        ?? $context->get('route.is_backend',
+                            \in_array(($this->serverVars['WELINE_AREA'] ?? ''), [RequestContext::AREA_BACKEND, RequestContext::AREA_REST_BACKEND], true))),
+                    'is_static' => (bool)($this->serverVars['WELINE_IS_STATIC_FILE'] ?? $context->get('route.is_static', false)),
+                    'url_parsed' => (bool)($this->serverVars['WELINE_URL_PARSED'] ?? $context->get('route.url_parsed', false)),
+                ],
+            ]);
+            Context::enter($context);
+        } else {
+            Context::leave();
+            Context::enter(Context::fromGlobals());
+        }
+
         RequestContext::syncFromServer();
+        $currentContext = Context::getCurrent();
+        RequestContext::area((string)($this->serverVars['WELINE_AREA'] ?? $currentContext?->get('route.area', RequestContext::AREA_FRONTEND)));
+        RequestContext::setWelineAreaRoute((string)($this->serverVars['WELINE_AREA_ROUTE'] ?? $currentContext?->get('route.area_route', '')));
+        RequestContext::setWelineWebsiteId((int)($this->serverVars['WELINE_WEBSITE_ID'] ?? $currentContext?->get('route.website_id', 0)));
+        RequestContext::setWelineWebsiteCode((string)($this->serverVars['WELINE_WEBSITE_CODE'] ?? $currentContext?->get('route.website_code', '')));
+        RequestContext::setWelineWebsiteUrl((string)($this->serverVars['WELINE_WEBSITE_URL'] ?? $currentContext?->get('route.website_url', '')));
+        RequestContext::locale((string)($this->serverVars['WELINE_USER_LANG'] ?? $currentContext?->get('route.language', 'zh_Hans_CN')));
+        RequestContext::currency((string)($this->serverVars['WELINE_USER_CURRENCY'] ?? $currentContext?->get('route.currency', 'CNY')));
 
         if ($this->request !== null) {
             ObjectManager::setInstance(Request::class, $this->request);
@@ -170,26 +169,11 @@ class WlsFiberContext
             }
         }
 
-        if ($this->requestId !== null) {
-            RequestContext::setId($this->requestId);
-        }
         if ($restoreResponseState) {
             HeaderCollector::getInstance()->restoreState($this->headerCollectorState);
         }
-
-        // 恢复 WelineEnv 状态
-        if ($this->welineEnvState !== null) {
-            try {
-                WelineEnv::getInstance()->restore($this->welineEnvState);
-            } catch (\Throwable) {
-                // 忽略 WelineEnv 恢复错误
-            }
-        }
     }
 
-    /**
-     * 获取 SSE 连接（用于 Worker 检查连接状态等场景）
-     */
     public function getSseConnection(): mixed
     {
         return $this->sseConnection;

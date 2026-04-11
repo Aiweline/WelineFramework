@@ -1,0 +1,89 @@
+<?php
+/**
+ * SaaS Starter — 博客分类列表
+ *
+ * @var array $blog_posts
+ * @var array $current_category
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$colors = $this->getData('colors') ?: [];
+if (!is_array($colors)) {
+    $colors = [];
+}
+$blogPosts = $this->getData('blog_posts') ?: [];
+$currentCategory = $this->getData('current_category') ?: [];
+
+$getConfig = static function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = $getConfig('blog.title', (string) ($currentCategory['name'] ?? __('Category Posts')));
+$subtitle = $getConfig('blog.subtitle', __('Browse articles by category'));
+$accent = $colors['accent_primary'] ?? '#10b981';
+$textPrimary = $colors['text_primary'] ?? '#f1f5f9';
+$textSecondary = $colors['text_secondary'] ?? '#94a3b8';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,255,255,0.04)';
+$cardBorder = $colors['card_border'] ?? 'rgba(255,255,255,0.08)';
+?>
+<style>
+.ss-blog-cat { --a: <?= htmlspecialchars($accent) ?>; --tp: <?= htmlspecialchars($textPrimary) ?>; --ts: <?= htmlspecialchars($textSecondary) ?>; }
+.ss-blog-cat .ss-bc-shell { max-width: 1200px; margin: 0 auto; padding: 0 20px 80px; }
+.ss-blog-cat .ss-bc-head { margin-bottom: 2rem; }
+.ss-blog-cat .ss-bc-head h1 { font-size: clamp(1.75rem, 4vw, 2.25rem); color: var(--tp); margin-bottom: 0.5rem; }
+.ss-blog-cat .ss-bc-head p { color: var(--ts); }
+.ss-blog-cat .ss-bc-grid { display: grid; gap: 1.5rem; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+.ss-blog-cat .ss-bc-card { border-radius: 16px; overflow: hidden; border: 1px solid <?= htmlspecialchars($cardBorder) ?>; background: <?= htmlspecialchars($cardBg) ?>; }
+.ss-blog-cat .ss-bc-card a { text-decoration: none; color: inherit; }
+.ss-blog-cat .ss-bc-card img { width: 100%; height: 160px; object-fit: cover; }
+.ss-blog-cat .ss-bc-body { padding: 1.25rem; }
+.ss-blog-cat .ss-bc-body h2 { font-size: 1.1rem; color: var(--tp); margin-bottom: 0.5rem; }
+.ss-blog-cat .ss-bc-meta { font-size: 0.8rem; color: var(--ts); }
+.ss-blog-cat .ss-bc-empty { text-align: center; padding: 3rem 1rem; color: var(--ts); }
+.ss-blog-cat .ss-bc-empty a { color: var(--a); font-weight: 600; }
+</style>
+
+<section class="ss-blog-cat">
+    <div class="ss-bc-shell">
+        <header class="ss-bc-head">
+            <h1><?= htmlspecialchars($title) ?></h1>
+            <?php if ($subtitle !== ''): ?>
+                <p><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+            <?php if (!empty($currentCategory['description'])): ?>
+                <p><?= htmlspecialchars((string) $currentCategory['description']) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <?php if (empty($blogPosts)): ?>
+            <div class="ss-bc-empty">
+                <p><?= __('该分类下暂时还没有文章，稍后再来看看吧～') ?></p>
+                <p><a href="/blog"><?= __('返回博客列表') ?></a></p>
+            </div>
+        <?php else: ?>
+            <div class="ss-bc-grid">
+                <?php foreach ($blogPosts as $post): ?>
+                    <article class="ss-bc-card">
+                        <a href="<?= htmlspecialchars((string) ($post['url'] ?? '#')) ?>">
+                            <?php if (!empty($post['cover_image'])): ?>
+                                <img src="<?= htmlspecialchars((string) $post['cover_image']) ?>" alt="<?= htmlspecialchars((string) ($post['title'] ?? '')) ?>" loading="lazy">
+                            <?php endif; ?>
+                            <div class="ss-bc-body">
+                                <h2><?= htmlspecialchars((string) ($post['title'] ?? '')) ?></h2>
+                                <div class="ss-bc-meta">
+                                    <?php if (!empty($post['published_at'])): ?>
+                                        <?= htmlspecialchars(date('Y-m-d', strtotime((string) $post['published_at']))) ?>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </a>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>

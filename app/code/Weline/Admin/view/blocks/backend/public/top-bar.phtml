@@ -68,22 +68,7 @@ if ((string) $logoHook !== '') {
                 </div>
             </div>
 
-            <div class="dropdown d-none d-sm-inline-block">
-                <!-- 语言 -->
-                <button type='button' class='btn header-item waves-effect'
-                        data-bs-toggle='dropdown' aria-haspopup='true' aria-expanded='false'>
-                    {{current_language.flag}}<span class='align-middle'> {{current_language.name}}</span>
-                </button>
-                <div class='dropdown-menu dropdown-menu-end languages'>
-                    <foreach name='languages' item='language' key='code'>
-                        <!-- item-->
-                        <a href='javascript:void(0);' onclick='select_language("{{code}}");'
-                           class='dropdown-item notify-item <?= $current_language["code"] == $code ? "active" : "" ?>'>
-                            {{language.flag}}<span class='align-middle'> {{language.name}}</span>
-                        </a>
-                    </foreach>
-                </div>
-            </div>
+            <w:i18n:language:switcher />
 
             <button type="button"
                     class="btn header-item noti-icon waves-effect ms-1"

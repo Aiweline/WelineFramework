@@ -99,6 +99,48 @@ final class SseWriterTest extends TestCase
         $this->assertTrue($sse->isAlive());
     }
 
+    public function testIsAliveReturnsFalseAfterPeerDisconnect(): void
+    {
+        $server = @\stream_socket_server('tcp://127.0.0.1:0', $errno, $errstr);
+        if (!\is_resource($server)) {
+            $this->markTestSkipped('Unable to create local socket server: ' . $errstr . ' (' . $errno . ')');
+        }
+        $this->streams[] = $server;
+
+        $endpoint = \stream_socket_get_name($server, false);
+        $client = @\stream_socket_client('tcp://' . $endpoint, $errno, $errstr, 1.0);
+        if (!\is_resource($client)) {
+            $this->markTestSkipped('Unable to connect local socket client: ' . $errstr . ' (' . $errno . ')');
+        }
+        $this->streams[] = $client;
+
+        $accepted = @\stream_socket_accept($server, 1.0);
+        if (!\is_resource($accepted)) {
+            $this->markTestSkipped('Unable to accept local socket connection.');
+        }
+        $this->streams[] = $accepted;
+
+        \stream_set_blocking($accepted, false);
+
+        SseContext::setConnection($accepted);
+        $sse = new SseWriter();
+        $this->assertTrue($sse->isAlive());
+
+        \fclose($client);
+
+        $disconnected = false;
+        $deadline = \microtime(true) + 1.0;
+        while (\microtime(true) < $deadline) {
+            if (!$sse->isAlive()) {
+                $disconnected = true;
+                break;
+            }
+            \usleep(20_000);
+        }
+
+        $this->assertTrue($disconnected, 'Peer disconnect should be detected without waiting for the next SSE write.');
+    }
+
     public function testYieldAfterSendDoesNotThrowWithoutScheduler(): void
     {
         $stream = $this->createStream();
@@ -156,14 +198,21 @@ final class SseWriterTest extends TestCase
 
     public function testCompleteSendsDoneEventAndCloses(): void
     {
-        $stream = $this->createStream();
+        $stream = \tmpfile();
+        self::assertIsResource($stream);
+        $meta = \stream_get_meta_data($stream);
+        $reader = \fopen((string)($meta['uri'] ?? ''), 'r+');
+        self::assertIsResource($reader);
+        $this->streams[] = $stream;
+        $this->streams[] = $reader;
+
         SseContext::setConnection($stream);
 
         $sse = new SseWriter();
         $sse->complete(['result' => 'success']);
 
-        \rewind($stream);
-        $content = \stream_get_contents($stream);
+        \rewind($reader);
+        $content = \stream_get_contents($reader);
 
         $this->assertStringContainsString('event: done', $content);
         $this->assertStringContainsString('data: {"result":"success"}', $content);

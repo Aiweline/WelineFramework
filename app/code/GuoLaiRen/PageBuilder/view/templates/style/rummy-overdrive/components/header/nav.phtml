@@ -1,0 +1,1119 @@
+<?php
+/**
+ * Rummy Overdrive - Navigation
+ *
+ * @component_start
+ * code: header-nav
+ * name: 导航栏
+ * name_en: Navigation Bar
+ * description: 霓虹赛道风导航，支持移动端菜单与底部流光动画
+ * category: header
+ * region: header
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo旁文本:text:Rummy Overdrive
+ * logo.subline => Logo副标题:text:Neon Rummy Route
+ * logo.url => Logo地址:textarea:|留空使用默认图标
+ * logo.width => Logo宽度:responsive:52/52|px
+ * logo.height => Logo高度:responsive:|px[可选，默认跟随宽度]
+ *
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 导航背景色:color:rgba(7,10,20,0.82)
+ * navigation.bg_color_scrolled => 滚动后背景色:color:rgba(7,10,20,0.96)
+ * navigation.text_color => 导航文字颜色:color:#f7f8fc
+ * navigation.link_color => 链接颜色:color:#d4d8e5
+ * navigation.link_hover_color => 链接悬停颜色:color:#d2ff3f
+ * navigation.link_font_size => 链接字号:number:14|px
+ * navigation.link_font_weight => 链接字重:number:600
+ * navigation.link_gap => 链接间距:number:16|px
+ * navigation.padding_x => 水平内边距:number:16|px
+ * navigation.padding_y => 垂直内边距:number:13|px
+ * navigation.min_height => 最小高度:number:78|px
+ * navigation.box_shadow => 阴影:text:0 18px 42px rgba(0,0,0,0.24)
+ * navigation.backdrop_blur => 背景模糊:number:18|px
+ * navigation.use_custom_links => 使用自定义导航链接:select:yes|yes,no
+ * navigation.items => 导航项配置:textarea:Home=>/\r\nTables=>#tables\r\nWhy Overdrive=>#advantages\r\nPlayers=>#reviews\r\nFAQ=>#faq|配置格式：名字=>url，一行一个
+ * group:navigation_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * navigation.label_home_page => 首页菜单名:text:
+ * navigation.label_about_page => 关于我们菜单名:text:
+ * navigation.label_blog_list => 博客菜单名:text:
+ * navigation.label_contact_page => 联系我们菜单名:text:
+ * navigation.label_terms_of_service => 条款菜单名:text:
+ * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * navigation.use_subpages => 兼容旧版-使用子页面生成导航:select:no|yes,no
+ *
+ * group:download_button => 下载按钮
+ * download_button.display => 显示下载按钮:select:yes|yes,no
+ * download_button.text => 按钮文字:text:Download Pulse
+ * download_button.url => 按钮链接:text:#download
+ * download_button.bg_color => 按钮背景色:color:#ff4d7a
+ * download_button.bg_hover_color => 按钮悬停背景色:color:#ff8c42
+ * download_button.text_color => 按钮文字颜色:color:#05070e
+ * download_button.font_size => 按钮字号:number:13|px
+ * download_button.font_weight => 按钮字重:number:800
+ * download_button.border_radius => 按钮圆角:number:999|px
+ * download_button.padding_x => 按钮水平内边距:number:18|px
+ * download_button.padding_y => 按钮垂直内边距:number:12|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'rov-nav-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$standaloneShell = !($this->getData('__rov_shell_managed') || $this->getData('__pagebuilder_shell_managed'));
+
+$getConfigAny = function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+
+    return $default;
+};
+
+$sanitizeTitle = function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$parseResponsive = static function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string) $value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string) ($parts[0] ?? '')),
+        'desktop' => trim((string) ($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = static function ($parsed) {
+    $mobile = (float) $parsed['mobile'];
+    $desktop = (float) $parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$pageTitleRaw = $page ? ($page->getData('meta_title') ?: $page->getData('title') ?: '') : '';
+$pageTitle = $sanitizeTitle($pageTitleRaw);
+if ($pageTitle === '') {
+    $pageTitle = 'Rummy Overdrive';
+}
+
+$logoDisplay = $normalizeToggle($getConfigAny(['logo.display', 'header.logo.display'], 'yes')) !== 'no';
+$logoText = $sanitizeTitle((string) $getConfigAny(['logo.text', 'header.logo.text'], $pageTitle));
+if ($logoText === '') {
+    $logoText = 'Rummy Overdrive';
+}
+$logoSubline = trim((string) $getConfigAny(['logo.subline', 'header.logo.subline'], 'Neon Rummy Route'));
+$logoIconUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/rummy-overdrive/asset/img/overdrive-logo-icon.svg');
+$logoUrl = trim((string) $getConfigAny(['logo.url', 'header.logo.url'], ''));
+$logoUrl = $logoUrl !== '' ? $logoUrl : ($page && $page->getData('logo') ? (string) $page->getData('logo') : $logoIconUrl);
+$logoWidth = $genResponsiveCSS($parseResponsive($getConfigAny(['logo.width', 'header.logo.width'], '52/52') . 'px'));
+$logoHeightConfig = trim((string) $getConfigAny(['logo.height', 'header.logo.height'], ''));
+$logoHeight = $logoHeightConfig !== '' ? $genResponsiveCSS($parseResponsive($logoHeightConfig . 'px')) : $logoWidth;
+
+$navDisplay = $normalizeToggle($getConfigAny(['navigation.display', 'header.navigation.display'], 'yes')) !== 'no';
+$navBgColor = (string) $getConfigAny(['navigation.bg_color', 'header.navigation.bg_color'], 'rgba(7,10,20,0.82)');
+$navBgColorScrolled = (string) $getConfigAny(['navigation.bg_color_scrolled'], 'rgba(7,10,20,0.96)');
+$navTextColor = (string) $getConfigAny(['navigation.text_color', 'header.navigation.text_color'], '#f7f8fc');
+$navLinkColor = (string) $getConfigAny(['navigation.link_color', 'header.navigation.link_color'], '#d4d8e5');
+$navLinkHoverColor = (string) $getConfigAny(['navigation.link_hover_color', 'header.navigation.link_hover_color'], '#d2ff3f');
+$navLinkFontSize = (int) $getConfigAny(['navigation.link_font_size'], '14');
+$navLinkFontWeight = (int) $getConfigAny(['navigation.link_font_weight'], '600');
+$navLinkGap = (int) $getConfigAny(['navigation.link_gap'], '16');
+$navPaddingX = (int) $getConfigAny(['navigation.padding_x'], '16');
+$navPaddingY = (int) $getConfigAny(['navigation.padding_y'], '13');
+$navMinHeight = (int) $getConfigAny(['navigation.min_height'], '78');
+$navBoxShadow = (string) $getConfigAny(['navigation.box_shadow'], '0 18px 42px rgba(0,0,0,0.24)');
+$navBackdropBlur = (int) $getConfigAny(['navigation.backdrop_blur'], '18');
+$useCustomLinksRaw = (string) $getConfigAny(['navigation.use_custom_links', 'header.navigation.use_custom_links'], '');
+$legacyUseSubpagesRaw = (string) $getConfigAny(['navigation.use_subpages'], '');
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($legacyUseSubpagesRaw, 'no') !== 'yes';
+$navItemsConfig = (string) $getConfigAny(
+    ['navigation.items', 'header.navigation.items'],
+    "Home=>/\nTables=>#tables\nWhy Overdrive=>#advantages\nPlayers=>#reviews\nFAQ=>#faq"
+);
+
+$downloadBtnDisplay = $normalizeToggle($getConfigAny(['download_button.display', 'header.download_button.display'], 'yes')) !== 'no';
+$ctaText = trim((string) $getConfigAny(['download_button.text', 'header.download_button.text', 'navigation.cta_text'], 'Download Pulse'));
+$ctaUrl = (string) $getConfigAny(['download_button.url', 'header.download_button.url', 'navigation.cta_url'], '#download');
+$downloadBtnBgColor = (string) $getConfigAny(['download_button.bg_color', 'header.download_button.bg_color'], '#ff4d7a');
+$downloadBtnBgHoverColor = (string) $getConfigAny(['download_button.bg_hover_color', 'header.download_button.hover_bg_color'], '#ff8c42');
+$downloadBtnTextColor = (string) $getConfigAny(['download_button.text_color', 'header.download_button.text_color'], '#05070e');
+$downloadBtnFontSize = (int) $getConfigAny(['download_button.font_size'], '13');
+$downloadBtnFontWeight = (int) $getConfigAny(['download_button.font_weight'], '800');
+$downloadBtnRadius = (int) $getConfigAny(['download_button.border_radius', 'header.download_button.border_radius'], '999');
+$downloadBtnPaddingX = (int) $getConfigAny(['download_button.padding_x'], '18');
+$downloadBtnPaddingY = (int) $getConfigAny(['download_button.padding_y'], '12');
+
+if (!$navDisplay) {
+    return;
+}
+
+$navItems = [];
+
+if (!$useCustomLinks && $page) {
+    $navigationPages = method_exists($page, 'getHeaderNavigationPages')
+        ? $page->getHeaderNavigationPages(12)
+        : $page->getNavigationPages([], 12);
+    foreach ($navigationPages as $navPage) {
+        $type = trim((string) ($navPage['type'] ?? ''));
+        $configuredLabel = $type !== '' ? trim((string) $getConfigAny([
+            'navigation.label_' . $type,
+            'header.navigation.label_' . $type,
+        ], '')) : '';
+        $navItems[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : ($navPage['title'] ?? ''),
+            'href' => $navPage['url'] ?? '#',
+        ];
+    }
+}
+
+if (empty($navItems)) {
+    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+    }
+    foreach (preg_split('/\r?\n/', $navItemsConfig) as $line) {
+        $line = trim($line);
+        if ($line === '' || strpos($line, '=>') === false) {
+            continue;
+        }
+        [$text, $href] = array_map('trim', explode('=>', $line, 2));
+        if ($text !== '') {
+            $navItems[] = ['text' => $text, 'href' => $href !== '' ? $href : '#'];
+        }
+    }
+}
+
+if (empty($navItems)) {
+    $navItems = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQ', 'href' => '/faq'],
+    ];
+}
+?>
+<?php if ($standaloneShell): ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/animate.css@4.1.1/animate.min.css">
+    <script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'rov-night': '#080b14',
+                    'rov-panel': '#101628',
+                    'rov-ember': '#ff4d7a',
+                    'rov-lime': '#d2ff3f',
+                    'rov-aqua': '#2be7ff',
+                    'rov-paper': '#f7f8fc'
+                }
+            }
+        }
+    }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Space+Grotesk:wght@400;500;700&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        .wow {
+            visibility: visible;
+        }
+        html.wow-ready .wow {
+            visibility: hidden;
+        }
+        body {
+            font-family: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(760px 360px at 12% 0%, rgba(255, 77, 122, 0.18), transparent 62%),
+                radial-gradient(720px 320px at 100% 0%, rgba(43, 231, 255, 0.14), transparent 58%),
+                linear-gradient(180deg, #090d18 0%, #080b14 100%);
+            color: #f7f8fc;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+        a { color: inherit; }
+        @media (prefers-reduced-motion: reduce) {
+            .wow,
+            html.wow-ready .wow {
+                visibility: visible !important;
+            }
+            .animate__animated {
+                animation: none !important;
+            }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
+    <script>
+    (function () {
+        if (window.__rovWowBootstrapped) {
+            return;
+        }
+        window.__rovWowBootstrapped = true;
+
+        var isEmbeddedFrame = function () {
+            try {
+                return window.top !== window.self;
+            } catch (error) {
+                return true;
+            }
+        };
+
+
+
+        var playPreviewAnimation = function (element, fallbackDelay) {
+            if (!element || element.dataset.rovPreviewAnimated === '1') {
+                return;
+            }
+
+            element.dataset.rovPreviewAnimated = '1';
+            element.style.visibility = 'visible';
+
+            var effectClasses = Array.prototype.filter.call(element.classList, function (className) {
+                return className.indexOf('animate__') === 0 && className !== 'animate__animated';
+            });
+
+            if (!effectClasses.length) {
+                effectClasses.push('animate__fadeInUp');
+            }
+
+            element.classList.remove('animate__animated');
+            effectClasses.forEach(function (className) {
+                element.classList.remove(className);
+            });
+
+            void element.offsetWidth;
+
+            effectClasses.forEach(function (className) {
+                element.classList.add(className);
+            });
+
+            element.style.animationDelay = element.getAttribute('data-wow-delay') || fallbackDelay;
+
+            var duration = element.getAttribute('data-wow-duration');
+            if (duration) {
+                element.style.animationDuration = duration;
+            }
+
+            requestAnimationFrame(function () {
+                element.classList.add('animate__animated');
+            });
+        };
+
+        var initPreviewAnimations = function (root) {
+            var scope = root && root.querySelectorAll ? root : document;
+            var wowElements = scope.querySelectorAll('.wow');
+
+            wowElements.forEach(function (element, index) {
+                playPreviewAnimation(element, Math.min(index * 70, 420) + 'ms');
+            });
+        };
+
+        var observePreviewMutations = function () {
+            if (window.__rovPreviewObserverStarted || !window.MutationObserver || !document.body) {
+                return;
+            }
+
+            window.__rovPreviewObserverStarted = true;
+
+            var observer = new MutationObserver(function (mutations) {
+                mutations.forEach(function (mutation) {
+                    mutation.addedNodes.forEach(function (node) {
+                        if (!node || node.nodeType !== 1) {
+                            return;
+                        }
+
+                        if (node.matches && node.matches('.wow')) {
+                            playPreviewAnimation(node, '0ms');
+                        }
+
+                        if (node.querySelectorAll) {
+                            initPreviewAnimations(node);
+                        }
+                    });
+                });
+            });
+
+            observer.observe(document.body, { childList: true, subtree: true });
+            window.__rovPreviewObserver = observer;
+        };
+
+        var initWow = function () {
+            if (isEmbeddedFrame()) {
+                document.documentElement.classList.remove('wow-ready');
+                initPreviewAnimations();
+                observePreviewMutations();
+                return;
+            }
+
+            if (!window.WOW) {
+                return;
+            }
+
+            try {
+                document.documentElement.classList.add('wow-ready');
+                new window.WOW({
+                    boxClass: 'wow',
+                    animateClass: 'animate__animated',
+                    offset: 24,
+                    mobile: true,
+                    live: true
+                }).init();
+            } catch (error) {
+                console.warn('Rummy Overdrive WOW init skipped:', error);
+            }
+        };
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initWow, { once: true });
+        } else {
+            initWow();
+        }
+    })();
+    </script>
+</head>
+<body class="rov-standalone-body">
+<?php endif; ?>
+
+<nav id="<?= $componentId ?>" class="rov-nav sticky top-0 z-[90] w-full" aria-label="Main navigation" data-mobile-open="false" style="--rov-nav-bg: <?= htmlspecialchars($navBgColor) ?>; --rov-nav-bg-scrolled: <?= htmlspecialchars($navBgColorScrolled) ?>; --rov-nav-text: <?= htmlspecialchars($navTextColor) ?>; --rov-nav-link: <?= htmlspecialchars($navLinkColor) ?>; --rov-nav-link-hover: <?= htmlspecialchars($navLinkHoverColor) ?>; --rov-nav-link-size: <?= (int) $navLinkFontSize ?>px; --rov-nav-link-weight: <?= (int) $navLinkFontWeight ?>; --rov-nav-link-gap: <?= (int) $navLinkGap ?>px; --rov-nav-padding-x: <?= (int) $navPaddingX ?>px; --rov-nav-padding-y: <?= (int) $navPaddingY ?>px; --rov-nav-min-height: <?= (int) $navMinHeight ?>px; --rov-nav-shadow: <?= htmlspecialchars($navBoxShadow) ?>; --rov-nav-blur: <?= (int) $navBackdropBlur ?>px; --rov-nav-cta-bg: linear-gradient(90deg, <?= htmlspecialchars($downloadBtnBgColor) ?> 0%, <?= htmlspecialchars($downloadBtnBgHoverColor) ?> 100%); --rov-nav-cta-bg-hover: linear-gradient(90deg, <?= htmlspecialchars($downloadBtnBgHoverColor) ?> 0%, <?= htmlspecialchars($downloadBtnBgColor) ?> 100%); --rov-nav-cta-text: <?= htmlspecialchars($downloadBtnTextColor) ?>; --rov-nav-cta-size: <?= (int) $downloadBtnFontSize ?>px; --rov-nav-cta-weight: <?= (int) $downloadBtnFontWeight ?>; --rov-nav-cta-radius: <?= (int) $downloadBtnRadius ?>px; --rov-nav-cta-pad-x: <?= (int) $downloadBtnPaddingX ?>px; --rov-nav-cta-pad-y: <?= (int) $downloadBtnPaddingY ?>px; --rov-logo-width: <?= htmlspecialchars($logoWidth) ?>; --rov-logo-height: <?= htmlspecialchars($logoHeight) ?>;">
+    <div class="nav-shell mx-auto w-full">
+        <div class="brand-block min-w-0">
+            <?php if ($logoDisplay): ?>
+                <a href="/" class="brand-link" aria-label="<?= htmlspecialchars($logoText) ?> home">
+                    <img class="brand-icon" src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+                    <span class="brand-copy">
+                        <strong><?= htmlspecialchars($logoText) ?></strong>
+                        <?php if ($logoSubline !== ''): ?>
+                            <em><?= htmlspecialchars($logoSubline) ?></em>
+                        <?php endif; ?>
+                    </span>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <div class="nav-links" role="list">
+            <?php foreach ($navItems as $item): ?>
+                <a class="nav-link" href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="nav-actions shrink-0">
+            <?php if ($downloadBtnDisplay && $ctaText !== ''): ?>
+                <a class="nav-cta" href="<?= htmlspecialchars($ctaUrl) ?>">
+                    <span><?= htmlspecialchars($ctaText) ?></span>
+                </a>
+            <?php endif; ?>
+            <button class="nav-toggle lg:hidden" type="button" aria-expanded="false" aria-controls="<?= $componentId ?>-mobile" aria-label="Toggle navigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </div>
+
+</nav>
+
+<div class="mobile-overlay" id="<?= $componentId ?>-overlay" aria-hidden="true"></div>
+
+<section class="mobile-panel" id="<?= $componentId ?>-mobile" aria-hidden="true" aria-label="Mobile navigation panel">
+    <div class="mobile-panel-shell">
+        <div class="mobile-panel-head">
+            <div class="mobile-panel-brand">
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+                <div>
+                    <strong><?= htmlspecialchars($logoText) ?></strong>
+                    <?php if ($logoSubline !== ''): ?>
+                        <span><?= htmlspecialchars($logoSubline) ?></span>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <button class="mobile-close" type="button" aria-label="Close navigation">
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+
+        <div class="mobile-panel-orbit" aria-hidden="true">
+            <span class="orbit-line orbit-line-a"></span>
+            <span class="orbit-line orbit-line-b"></span>
+            <span class="orbit-dot orbit-dot-a"></span>
+            <span class="orbit-dot orbit-dot-b"></span>
+        </div>
+
+        <div class="mobile-links">
+            <?php foreach ($navItems as $index => $item): ?>
+                <a class="mobile-link" href="<?= htmlspecialchars($item['href']) ?>" style="--mobile-order: <?= (int) $index ?>;">
+                    <span class="mobile-link-mark" aria-hidden="true"></span>
+                    <span class="mobile-link-copy">
+                        <strong><?= htmlspecialchars($item['text']) ?></strong>
+                    </span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if ($downloadBtnDisplay && $ctaText !== ''): ?>
+            <a class="mobile-cta" href="<?= htmlspecialchars($ctaUrl) ?>"><?= htmlspecialchars($ctaText) ?></a>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 90;
+    width: 100%;
+    min-height: var(--rov-nav-min-height);
+    padding: var(--rov-nav-padding-y) var(--rov-nav-padding-x);
+    background: var(--rov-nav-bg);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    box-shadow: var(--rov-nav-shadow);
+    backdrop-filter: blur(var(--rov-nav-blur));
+    overflow: hidden;
+    transition: background 0.24s ease;
+}
+
+#<?= $componentId ?>.is-scrolled {
+    background: var(--rov-nav-bg-scrolled);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    top: -26px;
+    left: -28%;
+    width: min(220px, 18vw);
+    height: calc(100% + 52px);
+    transform: skewX(-24deg);
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.05) 28%, rgba(255,255,255,0.82) 36%, rgba(43,231,255,0.42) 44%, rgba(255,77,122,0.24) 52%, rgba(255,255,255,0) 68%),
+        repeating-linear-gradient(180deg, rgba(255,255,255,0) 0 14px, rgba(255,255,255,0.18) 14px 16px, rgba(255,255,255,0) 16px 30px);
+    opacity: 0;
+    filter: blur(0.4px);
+    mix-blend-mode: screen;
+    pointer-events: none;
+    animation: rov-nav-prism 9.2s cubic-bezier(0.19, 0.8, 0.2, 1) infinite;
+}
+
+#<?= $componentId ?> .nav-shell {
+    width: min(1280px, 100%);
+    display: grid;
+    grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 1rem;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .brand-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.85rem;
+    text-decoration: none;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .brand-icon {
+    width: var(--rov-logo-width);
+    height: var(--rov-logo-height);
+    border-radius: 18px;
+    box-shadow: 0 10px 24px rgba(255, 77, 122, 0.18);
+}
+
+#<?= $componentId ?> .brand-copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .brand-copy strong {
+    color: var(--rov-nav-text);
+    font-family: 'Sora', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .brand-copy em {
+    margin-top: 0.2rem;
+    color: #92a0bb;
+    font-size: 0.72rem;
+    font-style: normal;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .nav-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--rov-nav-link-gap);
+}
+
+#<?= $componentId ?> .nav-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0.6rem 0.95rem;
+    border-radius: 999px;
+    color: var(--rov-nav-link);
+    text-decoration: none;
+    font-size: var(--rov-nav-link-size);
+    font-weight: var(--rov-nav-link-weight);
+    transition: color 0.22s ease, background 0.22s ease, transform 0.22s ease;
+}
+
+#<?= $componentId ?> .nav-link:hover {
+    color: var(--rov-nav-link-hover);
+    background: rgba(255,255,255,0.05);
+    transform: translateY(-1px);
+}
+
+#<?= $componentId ?> .nav-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+#<?= $componentId ?> .nav-cta,
+#<?= $componentId ?>-mobile .mobile-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: var(--rov-nav-cta-pad-y) var(--rov-nav-cta-pad-x);
+    border-radius: var(--rov-nav-cta-radius);
+    background: var(--rov-nav-cta-bg);
+    color: var(--rov-nav-cta-text);
+    text-decoration: none;
+    font-size: var(--rov-nav-cta-size);
+    font-weight: var(--rov-nav-cta-weight);
+    letter-spacing: 0.04em;
+    box-shadow: 0 12px 24px rgba(255, 77, 122, 0.22);
+    transition: transform 0.22s ease, box-shadow 0.22s ease;
+}
+
+#<?= $componentId ?> .nav-cta:hover,
+#<?= $componentId ?>-mobile .mobile-cta:hover {
+    background: var(--rov-nav-cta-bg-hover);
+    transform: translateY(-1px);
+    box-shadow: 0 16px 28px rgba(255, 77, 122, 0.28);
+}
+
+#<?= $componentId ?> .nav-toggle {
+    display: none;
+    position: relative;
+    width: 46px;
+    height: 46px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    background: rgba(255,255,255,0.04);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-direction: column;
+    gap: 5px;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .nav-toggle span {
+    display: block;
+    width: 18px;
+    height: 2px;
+    border-radius: 999px;
+    background: #f7f8fc;
+    transition: transform 0.22s ease, opacity 0.22s ease;
+}
+
+#<?= $componentId ?> .nav-toggle::before {
+    content: '';
+    position: absolute;
+    inset: auto -10px 8px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(43,231,255,0.8) 50%, rgba(255,255,255,0) 100%);
+    opacity: 0.6;
+}
+
+#<?= $componentId ?>[data-mobile-open="true"] .nav-toggle span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+#<?= $componentId ?>[data-mobile-open="true"] .nav-toggle span:nth-child(2) { opacity: 0; }
+#<?= $componentId ?>[data-mobile-open="true"] .nav-toggle span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+#<?= $componentId ?>-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    background:
+        radial-gradient(560px 320px at 80% 10%, rgba(255,77,122,0.06), transparent 62%),
+        rgba(4, 7, 14, 0.28);
+    backdrop-filter: blur(10px);
+    opacity: 0;
+    transition: opacity 0.28s ease;
+}
+
+#<?= $componentId ?>-overlay[aria-hidden="true"],
+#<?= $componentId ?>-mobile[aria-hidden="true"] {
+    display: none;
+}
+
+#<?= $componentId ?>-overlay.is-active {
+    opacity: 1;
+}
+
+#<?= $componentId ?>-mobile {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 96;
+    width: min(420px, calc(100vw - 1rem));
+    max-height: calc(100vh - 2rem);
+    opacity: 0;
+    transform: translate3d(0, -12px, 0) scale(0.96);
+    transform-origin: top right;
+    transition: opacity 0.28s ease, transform 0.32s cubic-bezier(0.2, 0.9, 0.2, 1);
+}
+
+#<?= $componentId ?>-mobile.is-active {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-shell {
+    position: relative;
+    padding: 1rem;
+    border-radius: 30px;
+    border: 1px solid rgba(255,255,255,0.01);
+    background: linear-gradient(180deg, rgba(13,18,32,0.98) 0%, rgba(8,11,20,0.98) 100%);
+    box-shadow: 0 28px 56px rgba(0,0,0,0.28);
+    overflow: hidden;
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-shell::before {
+    content: '';
+    position: absolute;
+    top: -16%;
+    right: -8%;
+    width: 180px;
+    height: 180px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(255,77,122,0.2) 0%, rgba(255,77,122,0.04) 56%, transparent 72%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-head,
+#<?= $componentId ?>-mobile .mobile-links,
+#<?= $componentId ?>-mobile .mobile-cta {
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-width: 0;
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-brand img {
+    width: 48px;
+    height: 48px;
+    border-radius: 16px;
+    box-shadow: 0 12px 24px rgba(255, 77, 122, 0.16);
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-brand strong {
+    display: block;
+    color: #ffffff;
+    font-size: 0.98rem;
+    line-height: 1.05;
+}
+
+#<?= $componentId ?>-mobile .mobile-panel-brand span {
+    display: block;
+    margin-top: 0.18rem;
+    color: #8fa1c3;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?>-mobile .mobile-close {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.04);
+    cursor: pointer;
+    flex: 0 0 auto;
+}
+
+#<?= $componentId ?>-mobile .mobile-close span {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 2px;
+    border-radius: 999px;
+    background: #f7f8fc;
+}
+
+#<?= $componentId ?>-mobile .mobile-close span:nth-child(1) { transform: translate(-50%, -50%) rotate(45deg); }
+#<?= $componentId ?>-mobile .mobile-close span:nth-child(2) { transform: translate(-50%, -50%) rotate(-45deg); }
+
+#<?= $componentId ?>-mobile .mobile-panel-orbit {
+    position: relative;
+    height: 58px;
+    margin-top: 0.8rem;
+    opacity: 0.9;
+}
+
+#<?= $componentId ?>-mobile .orbit-line,
+#<?= $componentId ?>-mobile .orbit-dot {
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>-mobile .orbit-line {
+    left: 0;
+    right: 0;
+    height: 1px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.14) 18%, rgba(43,231,255,0.42) 48%, rgba(210,255,63,0.24) 76%, rgba(255,255,255,0) 100%);
+}
+
+#<?= $componentId ?>-mobile .orbit-line-a { top: 18px; }
+#<?= $componentId ?>-mobile .orbit-line-b { bottom: 16px; }
+
+#<?= $componentId ?>-mobile .orbit-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #2be7ff;
+    box-shadow: 0 0 16px rgba(43,231,255,0.4);
+}
+
+#<?= $componentId ?>-mobile .orbit-dot-a {
+    top: 14px;
+    left: 8%;
+    animation: rov-mobile-orbit 4.8s linear infinite;
+}
+
+#<?= $componentId ?>-mobile .orbit-dot-b {
+    bottom: 12px;
+    left: 56%;
+    width: 7px;
+    height: 7px;
+    background: #d2ff3f;
+    box-shadow: 0 0 14px rgba(210,255,63,0.38);
+    animation: rov-mobile-orbit 5.8s linear infinite reverse;
+}
+
+#<?= $componentId ?>-mobile .mobile-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem 0.75rem;
+}
+
+#<?= $componentId ?>-mobile .mobile-link {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: 0.72rem;
+    min-width: 0;
+    padding: 0.82rem 0.25rem 0.82rem 0.1rem;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid rgba(255,255,255,0.25);
+    color: #f7f8fc;
+    text-decoration: none;
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+    transition: transform 0.32s ease, opacity 0.32s ease, border-color 0.22s ease, color 0.22s ease;
+    transition-delay: calc(var(--mobile-order) * 55ms);
+}
+
+#<?= $componentId ?>-mobile.is-active .mobile-link,
+#<?= $componentId ?>-mobile.is-active .mobile-cta {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+}
+
+#<?= $componentId ?>-mobile .mobile-link:hover {
+    border-color: rgba(43,231,255,0.24);
+    color: #ffffff;
+}
+
+#<?= $componentId ?>-mobile .mobile-link-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,77,122,0.8) 0%, rgba(43,231,255,0.9) 100%);
+    box-shadow: 0 0 12px rgba(43,231,255,0.18);
+}
+
+#<?= $componentId ?>-mobile .mobile-link-copy {
+    min-width: 0;
+}
+
+#<?= $componentId ?>-mobile .mobile-link-copy strong {
+    display: block;
+    color: #ffffff;
+    font-size: 0.92rem;
+    line-height: 1.08;
+}
+
+#<?= $componentId ?>-mobile .mobile-cta {
+    margin-top: 0.9rem;
+    width: 100%;
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+    transition: transform 0.32s ease, opacity 0.32s ease;
+    transition-delay: 220ms;
+    border: 0;
+}
+
+@keyframes rov-nav-prism {
+    0%, 54% {
+        transform: skewX(-24deg) translateX(0);
+        opacity: 0;
+    }
+    62% {
+        opacity: 0.94;
+    }
+    100% {
+        transform: skewX(-24deg) translateX(560%);
+        opacity: 0;
+    }
+}
+
+@keyframes rov-mobile-orbit {
+    0% { transform: translateX(0); opacity: 0.65; }
+    50% { transform: translateX(220px); opacity: 1; }
+    100% { transform: translateX(0); opacity: 0.65; }
+}
+
+@media (max-width: 1023px) {
+    #<?= $componentId ?> .nav-links,
+    #<?= $componentId ?> .nav-cta {
+        display: none;
+    }
+
+    #<?= $componentId ?> .nav-shell {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    #<?= $componentId ?> .nav-toggle {
+        display: inline-flex;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: max(10px, var(--rov-nav-padding-y)) max(12px, var(--rov-nav-padding-x));
+    }
+
+    #<?= $componentId ?> .brand-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 16px;
+    }
+
+    #<?= $componentId ?> .brand-copy strong {
+        font-size: 0.94rem;
+    }
+
+    #<?= $componentId ?> .brand-copy em {
+        font-size: 0.66rem;
+    }
+
+    #<?= $componentId ?>-mobile {
+        top: 0.5rem;
+        right: 0.5rem;
+        left: 0.5rem;
+        width: auto;
+        max-height: calc(100vh - 1rem);
+    }
+
+    #<?= $componentId ?>-mobile .mobile-panel-shell {
+        border-radius: 24px;
+        padding: 0.9rem;
+    }
+
+    #<?= $componentId ?>-mobile .mobile-links {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?>-mobile .mobile-panel-orbit {
+        height: 46px;
+    }
+}
+</style>
+
+<script>
+(function() {
+    var nav = document.getElementById('<?= $componentId ?>');
+    if (!nav) {
+        return;
+    }
+
+    var toggle = nav.querySelector('.nav-toggle');
+    var panel = document.getElementById('<?= $componentId ?>-mobile');
+    var overlay = document.getElementById('<?= $componentId ?>-overlay');
+    var closeButton = panel ? panel.querySelector('.mobile-close') : null;
+    if (!toggle || !panel || !overlay) {
+        return;
+    }
+
+    var syncScrolledState = function () {
+        nav.classList.toggle('is-scrolled', window.scrollY > 10);
+    };
+
+    var closePanel = function() {
+        nav.setAttribute('data-mobile-open', 'false');
+        toggle.setAttribute('aria-expanded', 'false');
+        panel.classList.remove('is-active');
+        overlay.classList.remove('is-active');
+        panel.setAttribute('aria-hidden', 'true');
+        overlay.setAttribute('aria-hidden', 'true');
+        window.setTimeout(function() {
+            if (nav.getAttribute('data-mobile-open') === 'false') {
+                panel.style.display = '';
+                overlay.style.display = '';
+            }
+        }, 280);
+    };
+
+    var openPanel = function() {
+        nav.setAttribute('data-mobile-open', 'true');
+        toggle.setAttribute('aria-expanded', 'true');
+        panel.setAttribute('aria-hidden', 'false');
+        overlay.setAttribute('aria-hidden', 'false');
+        window.requestAnimationFrame(function() {
+            panel.classList.add('is-active');
+            overlay.classList.add('is-active');
+        });
+    };
+
+    toggle.addEventListener('click', function() {
+        var isOpen = nav.getAttribute('data-mobile-open') === 'true';
+        if (isOpen) {
+            closePanel();
+            return;
+        }
+        openPanel();
+    });
+
+    panel.querySelectorAll('a').forEach(function(link) {
+        link.addEventListener('click', closePanel);
+    });
+
+    if (closeButton) {
+        closeButton.addEventListener('click', closePanel);
+    }
+
+    overlay.addEventListener('click', closePanel);
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape' && nav.getAttribute('data-mobile-open') === 'true') {
+            closePanel();
+        }
+    });
+
+    window.addEventListener('resize', function () {
+        if (window.innerWidth > 1023 && nav.getAttribute('data-mobile-open') === 'true') {
+            closePanel();
+        }
+    });
+
+    window.addEventListener('scroll', syncScrolledState, { passive: true });
+    syncScrolledState();
+})();
+</script>
+<?php if ($standaloneShell): ?>
+</body>
+</html>
+<?php endif; ?>

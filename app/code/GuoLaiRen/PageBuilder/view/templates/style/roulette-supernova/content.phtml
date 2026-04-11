@@ -1,0 +1,278 @@
+<?php
+/**
+ * Roulette Supernova - Content
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @fields_start
+ *
+ * group:slider => Hero轮播兼容
+ * slider.display => 显示轮播:select:yes|yes,no
+ * slider.items => 轮播项:json:[]|兼容轮播数据的JSON数组
+ * slider.autoplay => 自动播放:select:yes|yes,no
+ * slider.autoplay_interval => 自动播放间隔:number:5000|ms
+ * slider.bg_color => 轮播背景色:color:#05060d
+ * slider.banner_image_mobile => 默认移动端横幅图:textarea:|使用本地banner-2.svg
+ * slider.banner_image_desktop => 默认桌面端横幅图:textarea:|使用本地banner-03.svg
+ * slider.download_btn_image => 默认下载按钮图片:textarea:|使用本地download-btn.svg
+ *
+ * group:hero => 首屏模块
+ * hero.display => 显示首屏模块:select:yes|yes,no
+ * hero.title => 首屏标题:text:Own the Wheel at Roulette Supernova
+ * hero.subtitle => 首屏副标题:textarea:A bold roulette landing system built for quick table scans, stronger contrast, and faster mobile entry.
+ * hero.signal_card_a_value => 信号卡片A主值:text:Own the Wheel at Roulette Supernova
+ * hero.signal_card_b_value => 信号卡片B主值:textarea:A bold roulette landing system built for quick table scans, stronger contrast, and faster mobile entry.
+ * hero.cta_text => 首屏主按钮文本:text:Download Now
+ * hero.cta_url => 首屏主按钮链接:text:#download
+ * hero.secondary_cta_text => 首屏次按钮文本:text:Browse Tables
+ * hero.secondary_cta_url => 首屏次按钮链接:text:#tables
+ * hero.image => Hero主图:textarea:|留空使用默认图
+ * hero.bg_image => Hero背景图:textarea:|留空使用默认图
+ * hero.bg_color => Hero背景颜色:color:#05060d
+ *
+ * group:banner => Banner兼容字段
+ * banner.display => 显示Banner区域:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|留空使用默认图
+ * banner.image_desktop => PC端Banner图片:textarea:|留空使用默认图
+ * banner.alt => Banner图片描述:text:Roulette Supernova hero
+ * banner.bg_color => Banner背景颜色:color:#05060d
+ * banner.download_btn_alt => Banner下载按钮描述:text:Download
+ *
+ * group:download_btn => 下载按钮兼容字段
+ * download_btn.display => 显示下载按钮:select:yes|yes,no
+ * download_btn.alt => 下载按钮描述:text:Download
+ * download_btn.url => 下载链接:text:#download
+ *
+ * group:layout => Hero布局兼容字段
+ * layout.slider_classes => Hero附加类名:textarea:rsn-hero-stage
+ *
+ * group:advantages => 优势模块
+ * advantages.title => 区域标题:text:Why Roulette Supernova Shifts The Feel
+ * advantages.display => 显示此区域:select:yes|yes,no
+ * advantages.bg_color => 背景颜色:color:#f7f0e5
+ *
+ * group:games => 游戏展示
+ * games.title => 区域标题:text:Choose Your Supernova Table
+ * games.display => 显示此区域:select:yes|yes,no
+ * games.bg_color => 背景颜色:color:#071a15
+ *
+ * group:app_info => 应用信息
+ * app_info.display => 显示应用信息:select:no|yes,no
+ * app_info.app_name => 应用名称:text:Roulette Supernova
+ * app_info.app_size => 应用大小:text:
+ * app_info.app_version => 版本:text:
+ * app_info.app_updated => 更新日期:text:
+ * app_info.app_requires => 系统要求:text:
+ *
+ * group:testimonials => 用户评价
+ * testimonials.title => 区域标题:text:What Players Notice First
+ * testimonials.display => 显示此区域:select:yes|yes,no
+ * testimonials.bg_color => 背景颜色:color:#0b0b12
+ *
+ * group:faq => 常见问题
+ * faq.title => 区域标题:text:Frequently Asked Questions
+ * faq.display => 显示此区域:select:yes|yes,no
+ * faq.bg_color => 背景颜色:color:#1b0910
+ *
+ * group:styles => 全局样式
+ * styles.section_padding => 区域内边距:responsive:60/100|px[MD]
+ * styles.text_color => 正文颜色:color:#f7f1e8
+ * styles.heading_color => 标题颜色:color:#f7f1e8
+ * styles.link_color => 链接颜色:color:#4df6ff
+ *
+ * group:texts => 文本内容
+ * texts.games_summary => 游戏模块辅助文案:text:Move from fast roulette rooms to steadier tables without losing sight of the wheel, the stake zones, or the entry path.
+ * texts.games_kicker => 游戏模块辅助标题:text:Table spread
+ * texts.games_link_text => 游戏模块按钮文案:text:Open table
+ * texts.game_1_badge => 游戏1徽章:text:Popular Table
+ * texts.game_1_title => 游戏1标题:text:Flash Wheel
+ * texts.game_1_desc => 游戏1描述:textarea:High-energy roulette room with quick joins and a bright action path for short sessions.
+ * texts.game_1_tag => 游戏1标签:text:Live Wheel
+ * texts.game_1_url => 游戏1链接:text:#download
+ * texts.game_2_badge => 游戏2徽章:text:Fast Access
+ * texts.game_2_title => 游戏2标题:text:Classic Orbit
+ * texts.game_2_desc => 游戏2描述:textarea:Balanced roulette pacing for players who want a steadier table rhythm.
+ * texts.game_2_tag => 游戏2标签:text:Fast Join
+ * texts.game_2_url => 游戏2链接:text:#download
+ * texts.game_3_badge => 游戏3徽章:text:Classic Pace
+ * texts.game_3_title => 游戏3标题:text:Night Table
+ * texts.game_3_desc => 游戏3描述:textarea:A darker live roulette lane with stronger focus on the wheel and stake zones.
+ * texts.game_3_tag => 游戏3标签:text:Night Table
+ * texts.game_3_url => 游戏3链接:text:#download
+ * texts.game_4_badge => 游戏4徽章:text:Private Lounge
+ * texts.game_4_title => 游戏4标题:text:Private Pit
+ * texts.game_4_desc => 游戏4描述:textarea:A tighter roulette route for invite groups, returning players, and focused sessions.
+ * texts.game_4_tag => 游戏4标签:text:Invite Group
+ * texts.game_4_url => 游戏4链接:text:#download
+ * texts.game_5_badge => 游戏5徽章:text:High Limit
+ * texts.game_5_title => 游戏5标题:text:Streak Room
+ * texts.game_5_desc => 游戏5描述:textarea:Built for players who like faster table turns and immediate re-entry.
+ * texts.game_5_tag => 游戏5标签:text:Fast Re-entry
+ * texts.game_5_url => 游戏5链接:text:#download
+ * texts.game_6_badge => 游戏6徽章:text:Beginner Friendly
+ * texts.game_6_title => 游戏6标题:text:Starter Wheel
+ * texts.game_6_desc => 游戏6描述:textarea:A cleaner roulette lane that helps new players settle in before moving faster.
+ * texts.game_6_tag => 游戏6标签:text:Easy Start
+ * texts.game_6_url => 游戏6链接:text:#download
+ * texts.advantage_1_icon => 优势1编号:text:01
+ * texts.advantage_1_title => 优势1标题:text:Wheel-First Hierarchy
+ * texts.advantage_1_desc => 优势1描述:textarea:Key roulette actions, bet labels, and room entry points are surfaced without burying the wheel itself.
+ * texts.advantage_2_icon => 优势2编号:text:02
+ * texts.advantage_2_title => 优势2标题:text:Hard Contrast, Fast Scan
+ * texts.advantage_2_desc => 优势2描述:textarea:Dark panels, sharp highlights, and bright state markers keep busy screens easier to read on mobile.
+ * texts.advantage_3_icon => 优势3编号:text:03
+ * texts.advantage_3_title => 优势3标题:text:Pace Changes Stay Clear
+ * texts.advantage_3_desc => 优势3描述:textarea:Switching from faster tables to steadier roulette rooms still feels clean because the wheel, labels, and actions stay easy to track.
+ * texts.testimonial_1_name => 评价1姓名:text:Aarav Sinha
+ * texts.testimonial_1_tag => 评价1标签:text:Flash Wheel
+ * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1内容:textarea:The wheel stays obvious, the join path is quick, and I never lose the important roulette actions on mobile.
+ * texts.testimonial_2_name => 评价2姓名:text:Meera Joshi
+ * texts.testimonial_2_tag => 评价2标签:text:Classic Orbit
+ * texts.testimonial_2_rating => 评价2评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2内容:textarea:The contrast helps me read stake zones fast, especially when I move between slower and faster roulette rooms.
+ * texts.testimonial_3_name => 评价3姓名:text:Rohan Verma
+ * texts.testimonial_3_tag => 评价3标签:text:Night Table
+ * texts.testimonial_3_rating => 评价3评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_3_content => 评价3内容:textarea:I like that the darker table still keeps the wheel bright, so the page feels lively without getting messy.
+ * texts.testimonial_4_name => 评价4姓名:text:Ananya Pillai
+ * texts.testimonial_4_tag => 评价4标签:text:Private Pit
+ * texts.testimonial_4_rating => 评价4评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_4_content => 评价4内容:textarea:The layout makes private roulette rooms feel premium, and the action buttons stay easy to hit.
+ * texts.testimonial_5_name => 评价5姓名:text:Kabir Rao
+ * texts.testimonial_5_tag => 评价5标签:text:Starter Wheel
+ * texts.testimonial_5_rating => 评价5评分:text:⭐⭐⭐⭐☆
+ * texts.testimonial_5_content => 评价5内容:textarea:New players can settle in quickly because the table names, buttons, and wheel are all easy to spot.
+ * texts.faq_badge => FAQ徽标:text:Roulette Support
+ * texts.faq_intro => FAQ辅助文案:text:Open any roulette question inline to compare table flow, mobile readability, and support paths without leaving the section.
+ * texts.faq_1_question => FAQ问题1:text:How do I choose the right roulette table here?
+ * texts.faq_1_answer => FAQ答案1:textarea:Start with the table labels and short descriptions. Faster rooms suit short sessions, while steadier rooms are better if you want more time to read the wheel and bets.
+ * texts.faq_2_question => FAQ问题2:text:Does Roulette Supernova work well on mobile?
+ * texts.faq_2_answer => FAQ答案2:textarea:Yes. The key wheel view, table buttons, and support sections are arranged to stay readable on smaller screens without awkward overflow.
+ * texts.faq_3_question => FAQ问题3:text:Can I move between live and classic roulette rooms quickly?
+ * texts.faq_3_answer => FAQ答案3:textarea:Yes. The homepage keeps table switching direct, so you can compare room styles and move into another roulette lane without digging through clutter.
+ * texts.faq_4_question => FAQ问题4:text:Are the bet zones easy to read for new players?
+ * texts.faq_4_answer => FAQ答案4:textarea:Yes. Contrast is kept strong so straight bets, color bets, and common roulette actions remain easy to scan before you join.
+ * texts.faq_5_question => FAQ问题5:text:Do the quick-entry buttons take me straight to the room list?
+ * texts.faq_5_answer => FAQ答案5:textarea:Yes. Primary actions are placed close to the table descriptions so the route from homepage to roulette room stays short and obvious.
+ * texts.faq_6_question => FAQ问题6:text:Where can I find help if I get stuck on a table?
+ * texts.faq_6_answer => FAQ答案6:textarea:Use the support and contact areas linked across the site. They stay easy to reach from the main navigation and footer.
+ *
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$templateCode = $page ? $page->getData('style') : 'roulette-supernova';
+if (empty($templateCode)) {
+    $request = $this->getRequest();
+    if ($request) {
+        $templateCode = $request->getParam('style_code') ?: '';
+    }
+}
+if (empty($templateCode)) {
+    $templateCode = 'roulette-supernova';
+}
+
+$this->assign('template_code', $templateCode);
+$this->assign('style', $styleSettings);
+$this->assign('style_settings', $styleSettings);
+$this->assign('component_config', []);
+$this->assign('__rsn_shell_managed', true);
+$this->assign('__pagebuilder_shell_managed', true);
+?>
+<div style="display:none;">
+    <w:template>GuoLaiRen_PageBuilder::base/colors.phtml</w:template>
+</div>
+<?php
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$layoutConfigRaw = $this->getData('layout_config');
+if (is_string($layoutConfigRaw)) {
+    $layoutConfig = json_decode($layoutConfigRaw, true) ?: [];
+} else {
+    $layoutConfig = is_array($layoutConfigRaw) ? $layoutConfigRaw : [];
+}
+$contentComponents = $layoutConfig['content'] ?? [];
+if (!is_array($contentComponents)) {
+    $contentComponents = [];
+}
+$pageType = $page ? (string) ($page->getData('type') ?: '') : '';
+
+if (empty($contentComponents)) {
+    if ($pageType === 'about_page') {
+        $contentComponents = [['code' => 'about-content', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'contact_page') {
+        $contentComponents = [['code' => 'contact-content', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'games_page') {
+        $contentComponents = [['code' => 'games-showcase', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'faq_page') {
+        $contentComponents = [['code' => 'faq', 'enabled' => true, 'config' => []]];
+    } elseif (in_array($pageType, ['privacy_policy', 'terms_of_service', 'refund_policy', 'shipping_policy', 'cookie_policy'], true)) {
+        $contentComponents = [['code' => 'legal-content', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'blog_list') {
+        $contentComponents = [['code' => 'blog-list', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'blog_category') {
+        $contentComponents = [['code' => 'blog-category', 'enabled' => true, 'config' => []]];
+    } elseif ($pageType === 'blog_post') {
+        $contentComponents = [['code' => 'blog-detail', 'enabled' => true, 'config' => []]];
+    } else {
+        $contentComponents = [
+            ['code' => 'hero-slider', 'enabled' => true, 'config' => []],
+            ['code' => 'advantages', 'enabled' => true, 'config' => []],
+            ['code' => 'games-showcase', 'enabled' => true, 'config' => []],
+            ['code' => 'testimonials', 'enabled' => true, 'config' => []],
+            ['code' => 'faq', 'enabled' => true, 'config' => []],
+        ];
+    }
+}
+
+$componentFiles = [
+    'hero-slider' => 'content/hero-slider.phtml',
+    'slider' => 'content/slider.phtml',
+    'banner' => 'content/banner.phtml',
+    'advantages' => 'content/advantages.phtml',
+    'games-showcase' => 'content/games.phtml',
+    'games' => 'content/games.phtml',
+    'testimonials' => 'content/testimonials.phtml',
+    'faq' => 'content/faq.phtml',
+    'blog-list' => 'content/blog-list.phtml',
+    'blog-detail' => 'content/blog-detail.phtml',
+    'blog-category' => 'content/blog-category.phtml',
+    'legal-content' => 'content/legal-content.phtml',
+    'about-content' => 'content/about-content.phtml',
+    'contact-content' => 'content/contact-content.phtml',
+];
+
+$renderComponent = function (array $component, int $index) use ($componentFiles, $page, $styleSettings, $colors) {
+    $code = $component['code'] ?? $component['component'] ?? '';
+    $enabled = $component['enabled'] ?? true;
+    $componentConfig = $component['config'] ?? [];
+
+    if (!$enabled || $code === '') {
+        return '';
+    }
+
+    $file = $componentFiles[$code] ?? null;
+    if (!$file) {
+        return '<!-- Unknown content component: ' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . ' -->';
+    }
+
+    ob_start();
+    $this->assign('page', $page);
+    $this->assign('style', $styleSettings);
+    $this->assign('style_settings', $styleSettings);
+    $this->assign('component_config', is_array($componentConfig) ? $componentConfig : []);
+    $this->assign('component_index', $index);
+    $this->assign('colors', $colors);
+    $this->assign('__rsn_shell_managed', true);
+    $this->assign('__pagebuilder_shell_managed', true);
+    echo $this->fetchTemplate('GuoLaiRen_PageBuilder::style/roulette-supernova/components/' . $file);
+    return ob_get_clean();
+};
+
+foreach ($contentComponents as $index => $component) {
+    echo $renderComponent($component, $index);
+}

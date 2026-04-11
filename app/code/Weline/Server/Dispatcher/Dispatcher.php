@@ -28,6 +28,7 @@ use Weline\Server\IPC\ControlMessage;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Log\LogLevel;
 use Weline\Server\Security\AttackDetector;
+use Weline\Server\Service\MainLoopUnblockedLogConfig;
 use Weline\Server\Service\AttackLogService;
 use Weline\Server\Service\AttackSignalFileService;
 use Weline\Server\Service\StatusLogService;
@@ -265,6 +266,9 @@ class Dispatcher
     private int $maintenanceTakeoverRetryTicks = 3;
     private float $lastMaintenanceOperationLogAt = 0.0;
     private string $lastMaintenanceOperationSignature = '';
+    private int $mainLoopUnblockedLogEvery = 10000;
+    private float $mainLoopUnblockedLogIntervalSec = 30.0;
+    private float $lastMainLoopUnblockedLogAt = 0.0;
     
     /**
      * 封禁拦截日志限流记录（IP => 上次记录时间）
@@ -377,6 +381,12 @@ class Dispatcher
         
         if (isset($config['attack_detection_enabled'])) {
             $this->attackDetectionEnabled = (bool) $config['attack_detection_enabled'];
+        }
+        if (isset($config['main_loop_unblocked_log_every'])) {
+            $this->mainLoopUnblockedLogEvery = \max(0, (int) $config['main_loop_unblocked_log_every']);
+        }
+        if (isset($config['main_loop_unblocked_log_interval_sec'])) {
+            $this->mainLoopUnblockedLogIntervalSec = \max(0.0, (float) $config['main_loop_unblocked_log_interval_sec']);
         }
         
         // 传递攻击探测规则配置
@@ -1047,6 +1057,21 @@ class Dispatcher
         while ($this->running) {
             try {
                 $loopCount++;
+                $loopHeartbeatNow = \microtime(true);
+
+                // 定期输出循环计数，便于直观看到主循环是否仍在推进
+                if (
+                    MainLoopUnblockedLogConfig::shouldEmit($loopCount, $this->mainLoopUnblockedLogEvery)
+                    || MainLoopUnblockedLogConfig::shouldEmitByInterval(
+                        $loopHeartbeatNow,
+                        $this->lastMainLoopUnblockedLogAt,
+                        $this->mainLoopUnblockedLogIntervalSec
+                    )
+                ) {
+                    $this->lastMainLoopUnblockedLogAt = $loopHeartbeatNow;
+                    $this->log("Dispatcher 主循环未被阻塞 #{$loopCount}", 'INFO');
+                }
+
                 // 信号处理
                 if (\function_exists('pcntl_signal_dispatch')) {
                     \pcntl_signal_dispatch();
@@ -1149,18 +1174,19 @@ class Dispatcher
             return;
         }
         $now = \time();
-        if (($now - $this->lastMasterPidCheck) < 5) {
+        if (($now - $this->lastMasterPidCheck) < 30) {  // 增加到 30 秒，减少阻塞频率
             return;
         }
         $this->lastMasterPidCheck = $now;
-        
+
         // IPC 连接正常 → Master 存活，无需 PID 检测
         if ($this->ipcClient && $this->ipcClient->isConnected()) {
             $this->masterDeadCount = 0;
             return;
         }
-        
+
         // IPC 断开，用 PID 检测确认 Master 是否真的死了
+        // 注意：Windows 下 isRunningByPid 会执行 tasklist 命令（阻塞），但只在 IPC 断开时才执行
         $alive = false;
         if (\function_exists('posix_kill')) {
             $alive = @\posix_kill($this->masterPid, 0);
@@ -1173,7 +1199,7 @@ class Dispatcher
                 }
             }
         } elseif (\defined('IS_WIN') && IS_WIN) {
-            // Windows: 使用 Processer::isRunningByPid() 检测
+            // Windows: 使用 Processer::isRunningByPid() 检测（会阻塞，但只在 IPC 断开时执行）
             $alive = Processer::isRunningByPid($this->masterPid);
         } else {
             $alive = @\file_exists("/proc/{$this->masterPid}");
@@ -1182,12 +1208,12 @@ class Dispatcher
                 $alive = ($code === 0);
             }
         }
-        
+
         if ($alive) {
             $this->masterDeadCount = 0;
             return;
         }
-        
+
         $this->masterDeadCount++;
         $this->log("Master PID {$this->masterPid} 不可达且 IPC 断开 ({$this->masterDeadCount}/3)", 'WARN');
         if ($this->masterDeadCount >= 3) {

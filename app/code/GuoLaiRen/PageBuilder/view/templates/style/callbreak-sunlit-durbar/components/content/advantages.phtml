@@ -1,0 +1,523 @@
+<?php
+/**
+ * Callbreak Sunlit Durbar - Advantages Component
+ *
+ * @component_start
+ * code: advantages
+ * name: 优势展示
+ * name_en: Advantages Section
+ * description: Display core benefits with a promenade-style responsive layout.
+ * category: content
+ * region: content
+ * thumbnail: asset/img/our-advantages/icon01.webp
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示描述:select:yes|yes,no
+ * display.show_button => 显示按钮:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#ddfff5
+ * style.title_color => 标题颜色:color:#3d2217
+ * style.title_font_size => 标题字号(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:24|px
+ * style.card_title_color => 卡片标题颜色:color:#3d2217
+ * style.card_title_font_size => 卡片标题字号:number:18|px
+ * style.card_desc_color => 卡片描述颜色:color:#6b4e41
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.icon_size => 图标尺寸:number:85|px
+ * style.icon_border_radius => 图标圆角:number:50|%
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:30|px
+ *
+ * group:button => 按钮配置
+ * button.text => 按钮文本:text:Join Table
+ * button.url => 按钮链接:text:#download
+ * button.bg_gradient_start => 按钮渐变起始色:color:#ffd661
+ * button.bg_gradient_end => 按钮渐变结束色:color:#ff764d
+ * button.text_color => 按钮文字颜色:color:#2b140d
+ * button.border_radius => 按钮圆角:number:999|px
+ * button.padding_x => 按钮水平内边距:number:32|px
+ * button.padding_y => 按钮垂直内边距:number:10|px
+ *
+ * group:icons => 图标配置
+ * icons.icon_1 => 优势1图标:textarea:|默认使用本地icon01.webp
+ * icons.icon_2 => 优势2图标:textarea:|默认使用本地icon02.webp
+ * icons.icon_3 => 优势3图标:textarea:|默认使用本地icon03.webp
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Why Callbreak Feels Better In Daylight
+ * texts.summary => 区域说明:textarea:Play feels brighter when routes, reads, and round tempo are separated into clear table lanes.
+ * texts.advantage_1_title => 优势1标题:text:Faster Table Entry
+ * texts.advantage_1_desc => 优势1描述:textarea:Jump into active callbreak rooms with fewer taps, clearer route labels, and stronger mobile focus.
+ * texts.advantage_2_title => 优势2标题:text:Sharper Trump Reading
+ * texts.advantage_2_desc => 优势2描述:textarea:Bright contrast zones make score states, trick flow, and decision moments easier to read at a glance.
+ * texts.advantage_3_title => 优势3标题:text:Four-Seat Rhythm
+ * texts.advantage_3_desc => 优势3描述:textarea:The layout is tuned for partnership-table energy, keeping action visible without crowding the screen.
+ *
+ * @fields_end
+ */
+
+$componentId = 'durbar-advantages-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+$showButton = $getConfig('display.show_button', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('advantages.bg_color', '#ddfff5'));
+$titleColor = $getConfig('style.title_color', '#3d2217');
+$titleFontSize = (int)$getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = (int)$getConfig('style.title_font_size_mobile', '24');
+$cardTitleColor = $getConfig('style.card_title_color', '#3d2217');
+$cardTitleFontSize = (int)$getConfig('style.card_title_font_size', '18');
+$cardDescColor = $getConfig('style.card_desc_color', '#6b4e41');
+$cardDescFontSize = (int)$getConfig('style.card_desc_font_size', '14');
+$iconSize = (int)$getConfig('style.icon_size', '85');
+$iconBorderRadius = (int)$getConfig('style.icon_border_radius', '50');
+$sectionPadding = (int)$getConfig('style.section_padding', '60');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '40');
+$cardGap = (int)$getConfig('style.card_gap', '30');
+
+$btnText = $getConfig('button.text', 'Join Table');
+$btnUrl = $getConfig('button.url', '#download');
+$btnGradientStart = $getConfig('button.bg_gradient_start', '#ffd661');
+$btnGradientEnd = $getConfig('button.bg_gradient_end', '#ff764d');
+$btnTextColor = $getConfig('button.text_color', '#2b140d');
+$btnBorderRadius = (int)$getConfig('button.border_radius', '999');
+$btnPaddingX = (int)$getConfig('button.padding_x', '32');
+$btnPaddingY = (int)$getConfig('button.padding_y', '10');
+
+$defaultIcon1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-sunlit-durbar/asset/img/our-advantages/icon01.webp');
+$defaultIcon2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-sunlit-durbar/asset/img/our-advantages/icon02.webp');
+$defaultIcon3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/callbreak-sunlit-durbar/asset/img/our-advantages/icon03.webp');
+
+$icon1 = $getConfig('icons.icon_1', $getConfig('advantages.icon_1', '')) ?: $defaultIcon1;
+$icon2 = $getConfig('icons.icon_2', $getConfig('advantages.icon_2', '')) ?: $defaultIcon2;
+$icon3 = $getConfig('icons.icon_3', $getConfig('advantages.icon_3', '')) ?: $defaultIcon3;
+
+$defaultSectionTitle = 'Why Callbreak Feels Better In Daylight';
+$defaultCards = [
+    [
+        'title' => 'Faster Table Entry',
+        'desc' => 'Jump into active callbreak rooms with fewer taps, clearer route labels, and stronger mobile focus.',
+    ],
+    [
+        'title' => 'Sharper Trump Reading',
+        'desc' => 'Bright contrast zones make score states, trick flow, and decision moments easier to read at a glance.',
+    ],
+    [
+        'title' => 'Four-Seat Rhythm',
+        'desc' => 'The layout is tuned for partnership-table energy, keeping action visible without crowding the screen.',
+    ],
+];
+
+$title = $getConfig('texts.title', $getConfig('advantages.title', $getConfig('texts.advantages_title', $defaultSectionTitle)));
+$summary = $getConfig('texts.summary', $getConfig('texts.advantages_summary', 'Play feels brighter when routes, reads, and round tempo are separated into clear table lanes.'));
+$title1 = $getConfig('texts.advantage_1_title', $defaultCards[0]['title']);
+$desc1 = $getConfig('texts.advantage_1_desc', $defaultCards[0]['desc']);
+$title2 = $getConfig('texts.advantage_2_title', $defaultCards[1]['title']);
+$desc2 = $getConfig('texts.advantage_2_desc', $defaultCards[1]['desc']);
+$title3 = $getConfig('texts.advantage_3_title', $defaultCards[2]['title']);
+$desc3 = $getConfig('texts.advantage_3_desc', $defaultCards[2]['desc']);
+
+$cards = [
+    ['icon' => $icon1, 'title' => $title1, 'desc' => $desc1, 'index' => '01', 'tone' => 'sun'],
+    ['icon' => $icon2, 'title' => $title2, 'desc' => $desc2, 'index' => '02', 'tone' => 'mint'],
+    ['icon' => $icon3, 'title' => $title3, 'desc' => $desc3, 'index' => '03', 'tone' => 'rose'],
+];
+$markerEffects = ['animate__fadeInLeft', 'animate__zoomIn', 'animate__fadeInRight'];
+?>
+<section id="<?= $componentId ?>" class="durbar-advantages" aria-labelledby="<?= $componentId ?>-title">
+    <span class="adv-deco adv-deco-a" aria-hidden="true"></span>
+    <span class="adv-deco adv-deco-b" aria-hidden="true"></span>
+    <span class="adv-deco adv-deco-c" aria-hidden="true"></span>
+    <div class="section-inner">
+        <div class="adv-stage">
+            <header class="adv-command"<?= $showTitle ? '' : ' aria-hidden="true"' ?>>
+                <?php if ($showTitle): ?>
+                    <span class="adv-head-mark" data-durbar-reveal data-durbar-effect="animate__fadeInDown" aria-hidden="true">
+                        <span class="adv-mark-node adv-mark-node-a"></span>
+                        <span class="adv-mark-track"></span>
+                        <span class="adv-mark-node adv-mark-node-b"></span>
+                    </span>
+                    <h2 id="<?= $componentId ?>-title" data-durbar-reveal data-durbar-effect="animate__fadeInLeft"><?= htmlspecialchars($title) ?></h2>
+                    <?php if ($summary !== ''): ?>
+                        <p class="adv-summary" data-durbar-reveal data-durbar-effect="animate__fadeInLeft" data-wow-delay="60ms"><?= htmlspecialchars($summary) ?></p>
+                    <?php endif; ?>
+                <?php endif; ?>
+                <?php if ($showButton): ?>
+                    <a href="<?= htmlspecialchars($btnUrl) ?>" class="adv-cta" data-durbar-reveal data-durbar-effect="animate__zoomIn" data-wow-delay="80ms"><?= htmlspecialchars($btnText) ?></a>
+                <?php endif; ?>
+            </header>
+
+            <div class="adv-route" aria-label="Core advantages">
+                <span class="adv-route-line" aria-hidden="true"></span>
+                <?php foreach ($cards as $index => $card): ?>
+                    <?php $markerEffect = $markerEffects[$index % count($markerEffects)]; ?>
+                    <article class="adv-marker adv-marker-<?= (int)($index + 1) ?> adv-tone-<?= htmlspecialchars($card['tone']) ?>" data-durbar-reveal data-durbar-effect="<?= htmlspecialchars($markerEffect) ?>" data-wow-delay="<?= htmlspecialchars((string)(120 + ($index * 100))) ?>ms">
+                        <span class="adv-marker-index"><?= htmlspecialchars($card['index']) ?></span>
+                        <div class="adv-marker-media">
+                            <img src="<?= htmlspecialchars($card['icon']) ?>" alt="<?= htmlspecialchars($card['title']) ?>" loading="lazy" decoding="async">
+                        </div>
+                        <div class="adv-marker-copy">
+                            <h3><?= htmlspecialchars($card['title']) ?></h3>
+                            <?php if ($showDescription): ?>
+                                <p><?= htmlspecialchars($card['desc']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: clip;
+    isolation: isolate;
+    padding: <?= $sectionPadding ?>px 0;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.22), rgba(255,255,255,0) 26%),
+        radial-gradient(1100px 420px at -4% 0%, rgba(255, 212, 92, 0.28), transparent 70%),
+        radial-gradient(1100px 520px at 104% 100%, rgba(255, 122, 69, 0.22), transparent 68%),
+        radial-gradient(880px 240px at 50% 12%, rgba(17, 199, 184, 0.12), transparent 72%),
+        <?= htmlspecialchars($bgColor) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto;
+    height: clamp(120px, 16vw, 180px);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.4), rgba(255,255,255,0)),
+        radial-gradient(280px 110px at 16% 22%, rgba(255,255,255,0.26), transparent 76%),
+        radial-gradient(300px 120px at 84% 18%, rgba(255,255,255,0.2), transparent 78%);
+    clip-path: polygon(0 0, 100% 0, 100% 64%, 82% 100%, 18% 100%, 0 66%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .adv-deco {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.22;
+}
+
+#<?= $componentId ?> .adv-deco-a {
+    left: clamp(0.8rem, 5vw, 4rem);
+    top: 60px;
+    width: 92px;
+    height: 18px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 139, 87, 0.9), rgba(255, 139, 87, 0));
+    transform: rotate(-18deg);
+}
+
+#<?= $componentId ?> .adv-deco-b {
+    right: clamp(0.8rem, 8vw, 7rem);
+    top: 110px;
+    width: 18px;
+    height: 84px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(23, 203, 184, 0.92), rgba(23, 203, 184, 0));
+}
+
+#<?= $componentId ?> .adv-deco-c {
+    right: clamp(1rem, 6vw, 5rem);
+    bottom: 80px;
+    width: 70px;
+    height: 70px;
+    border-radius: 24px;
+    border: 2px dashed rgba(242, 185, 80, 0.42);
+    transform: rotate(16deg);
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1240px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-stage {
+    display: grid;
+    grid-template-columns: minmax(280px, 0.84fr) minmax(0, 1.16fr);
+    gap: <?= $cardGap ?>px;
+    align-items: center;
+}
+
+#<?= $componentId ?> .adv-command {
+    display: grid;
+    gap: 1.2rem;
+    align-content: start;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+#<?= $componentId ?> .adv-head-mark {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .adv-mark-node {
+    display: inline-flex;
+    width: 11px;
+    height: 11px;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .adv-mark-node-a {
+    background: #ff8b57;
+}
+
+#<?= $componentId ?> .adv-mark-node-b {
+    background: #17cbb8;
+}
+
+#<?= $componentId ?> .adv-mark-track {
+    width: 56px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 139, 87, 0.88), rgba(23, 203, 184, 0.88));
+}
+
+#<?= $componentId ?> .adv-command h2 {
+    margin: 0;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    font-size: clamp(<?= $titleFontSizeMobile ?>px, 5vw, <?= $titleFontSize ?>px);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.06em;
+    text-wrap: balance;
+}
+
+#<?= $componentId ?> .adv-summary {
+    margin: 0;
+    max-width: 28rem;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: clamp(0.96rem, 1.6vw, 1.04rem);
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .adv-cta {
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 52px;
+    padding: <?= $btnPaddingY ?>px <?= $btnPaddingX ?>px;
+    border-radius: <?= $btnBorderRadius ?>px;
+    background: linear-gradient(135deg, <?= htmlspecialchars($btnGradientStart) ?>, <?= htmlspecialchars($btnGradientEnd) ?>);
+    color: <?= htmlspecialchars($btnTextColor) ?>;
+    text-decoration: none;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 0 18px 28px rgba(255, 122, 69, 0.18);
+}
+
+#<?= $componentId ?> .adv-route {
+    position: relative;
+    min-height: 620px;
+}
+
+#<?= $componentId ?> .adv-route-line {
+    position: absolute;
+    inset: 60px 12% 70px 10%;
+    border-radius: 999px;
+    border: 2px dashed rgba(126, 91, 67, 0.22);
+    clip-path: polygon(0 12%, 48% 12%, 48% 0, 100% 0, 100% 42%, 54% 42%, 54% 62%, 100% 62%, 100% 100%, 0 100%, 0 78%, 42% 78%, 42% 56%, 0 56%);
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .adv-marker {
+    position: absolute;
+    width: min(100%, 320px);
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 28px;
+    background: rgba(255,255,255,0.84);
+    box-shadow: 0 20px 34px rgba(191, 133, 96, 0.12);
+}
+
+#<?= $componentId ?> .adv-marker-1 {
+    top: 0;
+    left: 0;
+    transform: rotate(-3deg);
+}
+
+#<?= $componentId ?> .adv-marker-2 {
+    top: 184px;
+    right: 0;
+    transform: rotate(2deg);
+}
+
+#<?= $componentId ?> .adv-marker-3 {
+    bottom: 0;
+    left: 8%;
+    transform: rotate(-2deg);
+}
+
+#<?= $componentId ?> .adv-tone-sun {
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255, 246, 219, 0.84));
+}
+
+#<?= $componentId ?> .adv-tone-mint {
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(231, 255, 249, 0.84));
+}
+
+#<?= $componentId ?> .adv-tone-rose {
+    background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255, 238, 230, 0.84));
+}
+
+#<?= $componentId ?> .adv-marker-index {
+    display: inline-flex;
+    width: fit-content;
+    align-items: center;
+    justify-content: center;
+    min-width: 3.2rem;
+    height: 2rem;
+    padding: 0 0.8rem;
+    border-radius: 999px;
+    background: rgba(61, 34, 23, 0.08);
+    color: #714937;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+}
+
+#<?= $componentId ?> .adv-marker-media {
+    width: <?= $iconSize ?>px;
+    height: <?= $iconSize ?>px;
+    padding: 0.85rem;
+    border-radius: <?= $iconBorderRadius ?>%;
+    background: rgba(255,255,255,0.88);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.82);
+}
+
+#<?= $componentId ?> .adv-marker-media img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+#<?= $componentId ?> .adv-marker-copy {
+    display: grid;
+    gap: 0.45rem;
+}
+
+#<?= $componentId ?> .adv-marker-copy h3 {
+    margin: 0;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= $cardTitleFontSize ?>px;
+    line-height: 1.08;
+    letter-spacing: -0.03em;
+}
+
+#<?= $componentId ?> .adv-marker-copy p {
+    margin: 0;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= $cardDescFontSize ?>px;
+    line-height: 1.72;
+}
+
+@media (max-width: 991px) {
+    #<?= $componentId ?> .adv-stage {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .adv-route {
+        min-height: auto;
+        display: grid;
+        gap: 1rem;
+    }
+
+    #<?= $componentId ?> .adv-route-line {
+        display: none;
+    }
+
+    #<?= $componentId ?> .adv-marker {
+        position: relative;
+        width: auto;
+    }
+
+    #<?= $componentId ?> .adv-marker-1,
+    #<?= $componentId ?> .adv-marker-2,
+    #<?= $componentId ?> .adv-marker-3 {
+        inset: auto;
+    }
+
+    #<?= $componentId ?> .adv-marker-1 {
+        margin-right: 9%;
+    }
+
+    #<?= $componentId ?> .adv-marker-2 {
+        margin-left: 12%;
+    }
+
+    #<?= $componentId ?> .adv-marker-3 {
+        margin-right: 6%;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .section-inner {
+        width: min(100%, calc(100% - 0.7rem));
+    }
+
+    #<?= $componentId ?> .adv-command {
+        gap: 1rem;
+        padding: 1.1rem 1rem 1.15rem;
+    }
+
+    #<?= $componentId ?> .adv-marker {
+        gap: 0.8rem;
+        padding: 0.92rem;
+    }
+
+    #<?= $componentId ?> .adv-marker-1 {
+        transform: rotate(-2deg);
+        margin-right: 1.1rem;
+    }
+
+    #<?= $componentId ?> .adv-marker-2 {
+        transform: rotate(2deg);
+        margin-left: 1.3rem;
+    }
+
+    #<?= $componentId ?> .adv-marker-3 {
+        transform: rotate(-1.5deg);
+        margin-right: 0.8rem;
+    }
+}
+</style>

@@ -1,0 +1,364 @@
+<?php
+/**
+ * @component_start
+ * code: advantages
+ * name: 优势展示
+ * name_en: Advantages
+ * description: 展示产品核心优势
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#f8efe7
+ * style.title_color => 标题颜色:color:#171117
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.8)
+ * style.card_border_color => 卡片边框色:color:rgba(255,95,58,0.16)
+ * style.card_title_color => 卡片标题颜色:color:#171117
+ * style.card_desc_color => 卡片描述颜色:color:#5d4650
+ * style.section_padding => 区域内边距(PC端):number:88|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:52|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Why Baccarat Wildfire Changes The Pace
+ * texts.advantage_1_icon => 优势1图标:text:♠
+ * texts.advantage_1_title => 优势1标题:text:Sharper Table Picking
+ * texts.advantage_1_desc => 优势1描述:textarea:Room choices are framed with stronger contrast so players can compare pace, limits, and table mood faster.
+ * texts.advantage_2_icon => 优势2图标:text:✦
+ * texts.advantage_2_title => 优势2标题:text:High Contrast Reading
+ * texts.advantage_2_desc => 优势2描述:textarea:Important baccarat actions stay clearer on bright screens and smaller devices without losing atmosphere.
+ * texts.advantage_3_icon => 优势3图标:text:⬢
+ * texts.advantage_3_title => 优势3标题:text:Cleaner Mobile Movement
+ * texts.advantage_3_desc => 优势3描述:textarea:Touch targets, spacing, and visual rhythm are tuned for players jumping from landing page to live room.
+ *
+ * @fields_end
+ */
+
+$componentId = 'bwf-advantages-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$bgColor = $getConfig('style.bg_color', '#f8efe7');
+$titleColor = $getConfig('style.title_color', '#171117');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.8)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(255,95,58,0.16)');
+$cardTitleColor = $getConfig('style.card_title_color', '#171117');
+$cardDescColor = $getConfig('style.card_desc_color', '#5d4650');
+$sectionPadding = (int)$getConfig('style.section_padding', '88');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '52');
+$cardGap = (int)$getConfig('style.card_gap', '24');
+
+$title = $getConfig('texts.title', 'Why Baccarat Wildfire Changes The Pace');
+$items = [
+    [
+        'icon' => $getConfig('texts.advantage_1_icon', '♠'),
+        'title' => $getConfig('texts.advantage_1_title', 'Sharper Table Picking'),
+        'desc' => $getConfig('texts.advantage_1_desc', 'Room choices are framed with stronger contrast so players can compare pace, limits, and table mood faster.'),
+    ],
+    [
+        'icon' => $getConfig('texts.advantage_2_icon', '✦'),
+        'title' => $getConfig('texts.advantage_2_title', 'High Contrast Reading'),
+        'desc' => $getConfig('texts.advantage_2_desc', 'Important baccarat actions stay clearer on bright screens and smaller devices without losing atmosphere.'),
+    ],
+    [
+        'icon' => $getConfig('texts.advantage_3_icon', '⬢'),
+        'title' => $getConfig('texts.advantage_3_title', 'Cleaner Mobile Movement'),
+        'desc' => $getConfig('texts.advantage_3_desc', 'Touch targets, spacing, and visual rhythm are tuned for players jumping from landing page to live room.'),
+    ],
+];
+?>
+
+<section id="<?= $componentId ?>" class="bwf-advantages">
+    <div class="adv-shell">
+        <div class="adv-layout" style="--adv-gap: <?= $cardGap ?>px;">
+            <?php if ($showTitle): ?>
+                <header class="adv-header" id="advantages">
+                    <span class="adv-knot" aria-hidden="true"></span>
+                    <h2><?= htmlspecialchars($title) ?></h2>
+                </header>
+            <?php endif; ?>
+
+            <div class="adv-rail">
+                <span class="rail-path"></span>
+                <span class="rail-path rail-path-soft"></span>
+                <span class="rail-glow glow-coral"></span>
+                <span class="rail-glow glow-cyan"></span>
+
+                <?php foreach ($items as $index => $item): ?>
+                    <article class="adv-card adv-card-<?= (int)($index + 1) ?>">
+                        <div class="adv-card-top">
+                            <span class="adv-icon"><?= htmlspecialchars($item['icon']) ?></span>
+                        </div>
+                        <h3><?= htmlspecialchars($item['title']) ?></h3>
+                        <p><?= htmlspecialchars($item['desc']) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --adv-bg: <?= htmlspecialchars($bgColor) ?>;
+    --adv-title: <?= htmlspecialchars($titleColor) ?>;
+    --adv-card-bg: <?= htmlspecialchars($cardBgColor) ?>;
+    --adv-card-border: <?= htmlspecialchars($cardBorderColor) ?>;
+    --adv-card-title: <?= htmlspecialchars($cardTitleColor) ?>;
+    --adv-card-desc: <?= htmlspecialchars($cardDescColor) ?>;
+    position: relative;
+    padding: <?= $sectionPadding ?>px 0;
+    overflow: hidden;
+    background:
+        radial-gradient(620px 320px at 8% 0%, rgba(255,95,58,0.14), transparent 68%),
+        radial-gradient(620px 340px at 92% 18%, rgba(199,255,65,0.16), transparent 62%),
+        radial-gradient(560px 320px at 84% 82%, rgba(8,231,216,0.12), transparent 62%),
+        linear-gradient(180deg, var(--adv-bg) 0%, #eefcf7 100%);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+    background-size: 42px 42px;
+    opacity: 0.18;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .adv-shell {
+    width: min(1260px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-layout {
+    display: grid;
+    grid-template-columns: minmax(220px, 0.42fr) minmax(0, 0.58fr);
+    gap: clamp(1.2rem, 4vw, 3rem);
+    align-items: start;
+}
+
+#<?= $componentId ?> .adv-header {
+    position: sticky;
+    top: 6.5rem;
+    max-width: 22rem;
+}
+
+#<?= $componentId ?> .adv-knot {
+    display: inline-flex;
+    width: 120px;
+    height: 12px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff5f3a 0%, #ffb347 34%, #c7ff41 68%, #08e7d8 100%);
+    box-shadow: 0 0 22px rgba(199,255,65,0.18);
+}
+
+#<?= $componentId ?> .adv-header h2 {
+    margin-top: 1.1rem;
+    color: var(--adv-title);
+    font-family: 'Outfit', 'Manrope', sans-serif;
+    font-size: clamp(2.2rem, 4.8vw, 4.3rem);
+    line-height: 0.96;
+    letter-spacing: -0.06em;
+}
+
+#<?= $componentId ?> .adv-rail {
+    position: relative;
+    min-height: 620px;
+}
+
+#<?= $componentId ?> .rail-path,
+#<?= $componentId ?> .rail-glow {
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .rail-path {
+    left: 17%;
+    top: 2%;
+    width: calc(100% - 30%);
+    height: calc(100% - 4%);
+    border-radius: 42px;
+    border: 1px solid rgba(23,17,23,0.08);
+    clip-path: polygon(6% 0, 100% 0, 74% 44%, 100% 100%, 0 100%, 26% 56%, 0 0);
+}
+
+#<?= $componentId ?> .rail-path-soft {
+    left: 11%;
+    top: 9%;
+    width: calc(100% - 22%);
+    height: calc(100% - 18%);
+    border-color: rgba(8,231,216,0.16);
+    filter: drop-shadow(0 0 18px rgba(8,231,216,0.08));
+}
+
+#<?= $componentId ?> .rail-glow {
+    border-radius: 50%;
+    filter: blur(24px);
+}
+
+#<?= $componentId ?> .glow-coral {
+    width: 220px;
+    height: 220px;
+    left: 10%;
+    top: 8%;
+    background: radial-gradient(circle, rgba(255,95,58,0.22) 0%, rgba(255,95,58,0.02) 68%, transparent 78%);
+}
+
+#<?= $componentId ?> .glow-cyan {
+    width: 210px;
+    height: 210px;
+    right: 6%;
+    bottom: 6%;
+    background: radial-gradient(circle, rgba(8,231,216,0.18) 0%, rgba(8,231,216,0.02) 68%, transparent 78%);
+}
+
+#<?= $componentId ?> .adv-card {
+    position: absolute;
+    width: min(360px, calc(100% - 2rem));
+    padding: 1.38rem;
+    border: 1px solid var(--adv-card-border);
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.94) 0%, var(--adv-card-bg) 100%);
+    box-shadow: 0 22px 48px rgba(68, 28, 40, 0.1);
+    backdrop-filter: blur(14px);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .adv-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(145deg, rgba(255,255,255,0.54) 0%, rgba(255,255,255,0) 46%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .adv-card-1 {
+    left: 0;
+    top: 0;
+    border-radius: 34px 34px 80px 34px;
+    transform: rotate(-3.5deg);
+}
+
+#<?= $componentId ?> .adv-card-2 {
+    right: 0;
+    top: 30%;
+    border-radius: 34px 76px 34px 34px;
+    transform: rotate(3deg);
+}
+
+#<?= $componentId ?> .adv-card-3 {
+    left: 12%;
+    bottom: 0;
+    border-radius: 72px 34px 34px 34px;
+    transform: rotate(-1deg);
+}
+
+#<?= $componentId ?> .adv-card-top {
+    display: flex;
+    align-items: center;
+}
+
+#<?= $componentId ?> .adv-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.3rem;
+    height: 3.3rem;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(255,95,58,0.16) 0%, rgba(199,255,65,0.18) 52%, rgba(8,231,216,0.16) 100%);
+    color: #111117;
+    font-size: 1.28rem;
+    font-weight: 900;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.56);
+}
+
+#<?= $componentId ?> .adv-card h3 {
+    margin-top: 1rem;
+    color: var(--adv-card-title);
+    font-size: clamp(1.4rem, 2vw, 2rem);
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .adv-card p {
+    margin-top: 0.84rem;
+    color: var(--adv-card-desc);
+    font-size: 0.97rem;
+    line-height: 1.86;
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .adv-layout {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .adv-header {
+        position: relative;
+        top: auto;
+        max-width: 42rem;
+    }
+
+    #<?= $componentId ?> .adv-rail {
+        min-height: auto;
+        display: grid;
+        gap: var(--adv-gap);
+    }
+
+    #<?= $componentId ?> .rail-path,
+    #<?= $componentId ?> .rail-glow {
+        display: none;
+    }
+
+    #<?= $componentId ?> .adv-card {
+        position: relative;
+        width: auto;
+        left: auto;
+        right: auto;
+        top: auto;
+        bottom: auto;
+        transform: none;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding: <?= $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .adv-shell {
+        width: min(100% - 1rem, 100%);
+    }
+
+    #<?= $componentId ?> .adv-card {
+        padding: 1.18rem;
+    }
+
+    #<?= $componentId ?> .adv-icon {
+        width: 2.96rem;
+        height: 2.96rem;
+        border-radius: 18px;
+    }
+}
+</style>
