@@ -1,0 +1,436 @@
+<?php
+/**
+ * @component_start
+ * code: advantages
+ * name: Advantages
+ * name_en: Advantages
+ * description: Visual edge map for core product strengths
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示摘要:select:yes|yes,no
+ * display.show_button => 显示按钮:select:no|yes,no
+ *
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#f4f8ff
+ * style.title_color => 标题颜色:color:#08111f
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.9)
+ * style.card_border_color => 卡片边框色:color:rgba(41,208,255,0.16)
+ * style.card_title_color => 卡片标题颜色:color:#08111f
+ * style.card_desc_color => 卡片描述颜色:color:#4d6078
+ * style.title_font_size => 标题字号:number:58|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:34|px
+ * style.card_title_font_size => 卡片标题字号:number:24|px
+ * style.card_desc_font_size => 卡片描述字号:number:16|px
+ * style.icon_size => 图标尺寸:number:40|px
+ * style.icon_border_radius => 图标圆角:number:999|px
+ * style.section_padding => 区域内边距(PC端):number:80|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:icons => 图标设置
+ * icons.icon_1 => 优势1图标:text:01
+ * icons.icon_2 => 优势2图标:text:02
+ * icons.icon_3 => 优势3图标:text:03
+ *
+ * group:texts => 文案设置
+ * texts.title => 区域标题:text:Why Twenty Nine Tempest Changes The Pace
+ * texts.summary => 区域摘要:textarea:A sharper route board for players who want to compare room pace, support paths, and next actions quickly.
+ * texts.advantage_1_icon => 优势1图标:text:01
+ * texts.advantage_1_title => 优势1标题:text:Faster Read
+ * texts.advantage_1_desc => 优势1描述:textarea:Multiplier cues, install actions, and mode links stay visible without drowning the screen in repeated blocks.
+ * texts.advantage_2_icon => 优势2图标:text:02
+ * texts.advantage_2_title => 优势2标题:text:Trick Deck Structure
+ * texts.advantage_2_desc => 优势2描述:textarea:Each module is framed differently so players can scan the homepage like a route board instead of a generic landing stack.
+ * texts.advantage_3_icon => 优势3图标:text:03
+ * texts.advantage_3_title => 优势3标题:text:Responsive Lift
+ * texts.advantage_3_desc => 优势3描述:textarea:The same hierarchy holds on mobile, with cards reflowing into larger touch targets instead of shrinking into noise.
+ *
+ * group:button => 按钮设置
+ * button.text => 按钮文本:text:Explore Rooms
+ * button.url => 按钮链接:text:#tables
+ * button.text_color => 按钮文字颜色:color:#091523
+ * button.bg_gradient_start => 按钮渐变起始色:color:#ff783f
+ * button.bg_gradient_end => 按钮渐变结束色:color:#28e6ff
+ * button.border_radius => 按钮圆角:number:18|px
+ * button.padding_x => 按钮左右内边距:number:20|px
+ * button.padding_y => 按钮上下内边距:number:12|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'tnt-advantages-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('advantages.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+$showButton = $getConfig('display.show_button', 'no') !== 'no';
+
+$bgColor = (string) $getConfig('style.bg_color', '#f4f8ff');
+$titleColor = (string) $getConfig('style.title_color', '#08111f');
+$cardBgColor = (string) $getConfig('style.card_bg_color', 'rgba(255,255,255,0.9)');
+$cardBorderColor = (string) $getConfig('style.card_border_color', 'rgba(41,208,255,0.16)');
+$cardTitleColor = (string) $getConfig('style.card_title_color', '#08111f');
+$cardDescColor = (string) $getConfig('style.card_desc_color', '#4d6078');
+$titleFontSize = max(28, (int) $getConfig('style.title_font_size', '58'));
+$titleFontSizeMobile = max(24, (int) $getConfig('style.title_font_size_mobile', '34'));
+$cardTitleFontSize = max(18, (int) $getConfig('style.card_title_font_size', '24'));
+$cardDescFontSize = max(13, (int) $getConfig('style.card_desc_font_size', '16'));
+$iconSize = max(28, (int) $getConfig('style.icon_size', '40'));
+$iconBorderRadius = max(8, (int) $getConfig('style.icon_border_radius', '999'));
+$sectionPadding = max(48, (int) $getConfig('style.section_padding', '80'));
+$sectionPaddingMobile = max(34, (int) $getConfig('style.section_padding_mobile', '48'));
+$cardGap = max(12, (int) $getConfig('style.card_gap', '24'));
+
+$title = (string) $getConfig('texts.title', 'Why Twenty Nine Tempest Changes The Pace');
+$summary = (string) $getConfig('texts.summary', 'A sharper route board for players who want to compare room pace, support paths, and next actions quickly.');
+$buttonText = trim((string) $getConfig('button.text', 'Explore Rooms'));
+$buttonUrl = trim((string) $getConfig('button.url', '#tables'));
+$buttonTextColor = (string) $getConfig('button.text_color', '#091523');
+$buttonGradientStart = (string) $getConfig('button.bg_gradient_start', '#ff783f');
+$buttonGradientEnd = (string) $getConfig('button.bg_gradient_end', '#28e6ff');
+$buttonRadius = max(10, (int) $getConfig('button.border_radius', '18'));
+$buttonPaddingX = max(12, (int) $getConfig('button.padding_x', '20'));
+$buttonPaddingY = max(8, (int) $getConfig('button.padding_y', '12'));
+$items = [
+    [
+        'icon' => (string) $getConfig('icons.icon_1', (string) $getConfig('texts.advantage_1_icon', '01')),
+        'title' => (string) $getConfig('texts.advantage_1_title', 'Faster Read'),
+        'desc' => (string) $getConfig('texts.advantage_1_desc', 'Multiplier cues, install actions, and mode links stay visible without drowning the screen in repeated blocks.'),
+    ],
+    [
+        'icon' => (string) $getConfig('icons.icon_2', (string) $getConfig('texts.advantage_2_icon', '02')),
+        'title' => (string) $getConfig('texts.advantage_2_title', 'Trick Deck Structure'),
+        'desc' => (string) $getConfig('texts.advantage_2_desc', 'Each module is framed differently so players can scan the homepage like a route board instead of a generic landing stack.'),
+    ],
+    [
+        'icon' => (string) $getConfig('icons.icon_3', (string) $getConfig('texts.advantage_3_icon', '03')),
+        'title' => (string) $getConfig('texts.advantage_3_title', 'Responsive Lift'),
+        'desc' => (string) $getConfig('texts.advantage_3_desc', 'The same hierarchy holds on mobile, with cards reflowing into larger touch targets instead of shrinking into noise.'),
+    ],
+];
+$cardEffects = ['animate__zoomIn', 'animate__fadeInUp', 'animate__fadeInRight'];
+
+?>
+
+<section id="<?= $componentId ?>" class="tnt-advantages" aria-labelledby="<?= $componentId ?>-title">
+    <div class="adv-shell" id="advantages">
+        <div class="adv-layout" style="--adv-gap: <?= (int) $cardGap ?>px;">
+            <header class="adv-intro wow animate__fadeInLeft" data-wow-duration="0.82s">
+                <span class="adv-kicker">Why It Wins</span>
+                <?php if ($showTitle): ?>
+                    <h2 id="<?= $componentId ?>-title"><span><?= htmlspecialchars($title) ?></span></h2>
+                <?php endif; ?>
+                <?php if ($showDescription && $summary !== ''): ?>
+                    <p><?= htmlspecialchars($summary) ?></p>
+                <?php endif; ?>
+                <span class="adv-divider" aria-hidden="true"></span>
+                <?php if ($showButton && $buttonText !== ''): ?>
+                    <a class="adv-cta" href="<?= htmlspecialchars($buttonUrl !== '' ? $buttonUrl : '#') ?>"><?= htmlspecialchars($buttonText) ?></a>
+                <?php endif; ?>
+            </header>
+
+                <div class="adv-board">
+                    <?php foreach ($items as $index => $item): ?>
+                    <article class="adv-card adv-card-<?= (int) $index ?><?= $index === 0 ? ' is-feature' : '' ?> wow <?= htmlspecialchars($cardEffects[$index % count($cardEffects)]) ?>" data-wow-delay="<?= htmlspecialchars(number_format(0.16 + ($index * 0.08), 2)) ?>s" data-wow-duration="<?= htmlspecialchars(number_format(0.78 + ($index * 0.06), 2)) ?>s">
+                        <div class="adv-card-top">
+                            <span class="adv-badge"><?= htmlspecialchars($item['icon']) ?></span>
+                            <span class="adv-line" aria-hidden="true"></span>
+                        </div>
+                        <h3><?= htmlspecialchars($item['title']) ?></h3>
+                        <p><?= htmlspecialchars($item['desc']) ?></p>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int) $sectionPadding ?>px 0;
+    background:
+        radial-gradient(760px 320px at 0% 6%, rgba(255, 89, 94, 0.22), transparent 74%),
+        radial-gradient(760px 320px at 100% 12%, rgba(0, 240, 255, 0.2), transparent 72%),
+        linear-gradient(120deg, #fff0bd 0%, <?= htmlspecialchars($bgColor) ?> 42%, #f0f7ff 78%, #ffe8d6 100%);
+}
+
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::before {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.42) 0%, rgba(255,255,255,0) 28%),
+        repeating-linear-gradient(122deg, rgba(11, 24, 48, 0.05) 0 1px, transparent 1px 30px);
+    opacity: 0.35;
+}
+
+#<?= $componentId ?>::after {
+    inset: 8% -8% auto auto;
+    width: 58%;
+    height: 68%;
+    background:
+        conic-gradient(from 220deg at 60% 40%, rgba(255, 120, 63, 0.18), rgba(0, 240, 255, 0.16), rgba(255, 120, 63, 0.18)),
+        repeating-linear-gradient(150deg, rgba(255,255,255,0.18) 0 1px, transparent 1px 20px);
+    clip-path: polygon(20% 0%, 100% 12%, 84% 100%, 0% 82%);
+    opacity: 0.5;
+}
+
+#<?= $componentId ?> .adv-shell {
+    width: min(1260px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .adv-layout {
+    display: grid;
+    grid-template-columns: minmax(250px, 0.82fr) minmax(0, 1.18fr);
+    gap: var(--adv-gap);
+    align-items: start;
+}
+
+#<?= $componentId ?> .adv-intro {
+    position: sticky;
+    top: 104px;
+    padding: 1.2rem;
+    border-radius: 30px;
+    
+    backdrop-filter: blur(8px);
+}
+
+#<?= $componentId ?> .adv-kicker,
+#<?= $componentId ?> .adv-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .adv-kicker {
+    color: #9f3a24;
+    background: rgba(255, 92, 53, 0.12);
+    border: 1px solid rgba(255, 92, 53, 0.2);
+}
+
+#<?= $componentId ?> .adv-intro h2 {
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .adv-intro h2 span {
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int) $titleFontSizeMobile ?>px, 4.2vw, <?= (int) $titleFontSize ?>px);
+    line-height: 0.96;
+    letter-spacing: -0.05em;
+    position: relative;
+    display: inline-block;
+    padding: 0.08rem 0 0.2rem 1.4rem;
+    text-shadow: 0 2px 8px rgba(255, 255, 255, 0.34);
+}
+
+#<?= $componentId ?> .adv-intro h2 span::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.34em;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    transform: rotate(45deg);
+    background: linear-gradient(130deg, rgba(0,240,255,0.92) 0%, rgba(255,92,53,0.9) 100%);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.32);
+}
+
+#<?= $componentId ?> .adv-divider {
+    display: block;
+    margin-top: 1rem;
+    width: min(220px, 100%);
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 92, 53, 0.9), rgba(0, 240, 255, 0.9), rgba(255,255,255,0));
+}
+
+#<?= $componentId ?> .adv-intro p {
+    margin-top: 0.95rem;
+    color: #42597a;
+    font-size: 1rem;
+    line-height: 1.8;
+}
+
+#<?= $componentId ?> .adv-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1rem;
+    padding: <?= (int) $buttonPaddingY ?>px <?= (int) $buttonPaddingX ?>px;
+    border-radius: <?= (int) $buttonRadius ?>px;
+    color: <?= htmlspecialchars($buttonTextColor) ?>;
+    background: linear-gradient(135deg, <?= htmlspecialchars($buttonGradientStart) ?> 0%, <?= htmlspecialchars($buttonGradientEnd) ?> 100%);
+    font-size: 0.8rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    text-decoration: none;
+    box-shadow: 0 16px 28px rgba(20, 38, 67, 0.16);
+}
+
+#<?= $componentId ?> .adv-board {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+        'main main'
+        'card2 card3';
+    gap: var(--adv-gap);
+}
+
+#<?= $componentId ?> .adv-card {
+    position: relative;
+    border-radius: 28px;
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.96) 0%, <?= htmlspecialchars($cardBgColor) ?> 100%);
+    padding: 1.16rem;
+    box-shadow: 0 24px 44px rgba(19, 31, 62, 0.12);
+    overflow: hidden;
+    transition: transform 0.24s ease, box-shadow 0.24s ease;
+}
+
+#<?= $componentId ?> .adv-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 32px 52px rgba(19, 31, 62, 0.18);
+}
+
+#<?= $componentId ?> .adv-card-0 {
+    grid-area: main;
+    min-height: 220px;
+    border-color: rgba(255, 92, 53, 0.25);
+    background:
+        radial-gradient(280px 140px at 88% 0%, rgba(255, 191, 63, 0.3), transparent 72%),
+        linear-gradient(160deg, rgba(255,248,235,0.96) 0%, <?= htmlspecialchars($cardBgColor) ?> 100%);
+}
+
+#<?= $componentId ?> .adv-card-1 { grid-area: card2; }
+#<?= $componentId ?> .adv-card-2 { grid-area: card3; }
+
+#<?= $componentId ?> .adv-card-top {
+    display: flex;
+    align-items: center;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .adv-badge {
+    width: <?= (int) $iconSize ?>px;
+    min-width: <?= (int) $iconSize ?>px;
+    height: <?= (int) $iconSize ?>px;
+    min-height: <?= (int) $iconSize ?>px;
+    padding: 0;
+    border-radius: <?= (int) $iconBorderRadius ?>px;
+    color: #0f1f3f;
+    background: linear-gradient(140deg, rgba(0, 240, 255, 0.26) 0%, rgba(255, 92, 53, 0.2) 100%);
+}
+
+#<?= $componentId ?> .adv-line {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(0, 240, 255, 0.6), rgba(255, 92, 53, 0.6), rgba(255,255,255,0));
+}
+
+#<?= $componentId ?> .adv-card h3 {
+    margin-top: 0.9rem;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: clamp(1.2rem, 2.2vw, <?= (int) $cardTitleFontSize ?>px);
+    line-height: 1.08;
+}
+
+#<?= $componentId ?> .adv-card p {
+    margin-top: 0.76rem;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int) $cardDescFontSize ?>px;
+    line-height: 1.82;
+}
+
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .adv-layout {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .adv-intro {
+        position: static;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int) $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .adv-shell {
+        width: min(100%, calc(100% - 0.95rem));
+    }
+
+    #<?= $componentId ?> .adv-board {
+        display: flex;
+        overflow-x: auto;
+        gap: 0.6rem;
+        scroll-snap-type: x mandatory;
+        padding-bottom: 0.18rem;
+        scrollbar-width: none;
+    }
+
+    #<?= $componentId ?> .adv-board::-webkit-scrollbar {
+        display: none;
+    }
+
+    #<?= $componentId ?> .adv-card {
+        min-width: min(17rem, calc(100vw - 1.1rem));
+        scroll-snap-align: start;
+    }
+
+    #<?= $componentId ?> .adv-card-0 {
+        min-width: min(20.5rem, calc(100vw - 1.1rem));
+    }
+
+    #<?= $componentId ?> .adv-intro h2 span {
+        padding: 0.2rem 0 0.34rem 1.2rem;
+    }
+
+    #<?= $componentId ?> .adv-intro h2 span::before {
+        width: 12px;
+        height: 12px;
+    }
+
+    #<?= $componentId ?> .adv-intro,
+    #<?= $componentId ?> .adv-card {
+        border-radius: 22px;
+    }
+}
+</style>

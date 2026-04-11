@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Request;
 
+use Weline\Framework\Env\WelineEnv;
+
 /**
  * ParameterBag - 请求参数管理类
  * 
@@ -80,8 +82,8 @@ class ParameterBag
             return $this;
         }
         
-        $this->query = $_GET;
-        $this->request = $_POST;
+        $this->query = WelineEnv::getGet() ?? [];
+        $this->request = WelineEnv::getPost() ?? [];
         $this->body = $this->parseBodyParams();
         $this->initialized = true;
         $this->allParams = null; // 清除缓存
@@ -101,7 +103,10 @@ class ParameterBag
     {
         $rawBody = $this->rawBody;
         if ($rawBody === '') {
-            $rawBody = file_get_contents('php://input') ?: '';
+            $rawBody = (string)\w_env('request.body', '');
+            if ($rawBody === '') {
+                $rawBody = file_get_contents('php://input') ?: '';
+            }
             $this->rawBody = $rawBody;
         }
         if ($rawBody === '') {
@@ -194,7 +199,9 @@ class ParameterBag
     public function setQuery(string $key, mixed $value): static
     {
         $this->query[$key] = $value;
-        $_GET[$key] = $value; // 同步到超全局变量以保持兼容
+        \w_env_set("get.{$key}", $value);
+        $this->allParams = null;
+        return $this;
         \w_env_set("get.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
         $this->allParams = null; // 清除缓存
         return $this;
@@ -220,7 +227,10 @@ class ParameterBag
     public function removeQuery(string $key): static
     {
         unset($this->query[$key]);
-        unset($_GET[$key]); // 同步到超全局变量
+        \w_env_set("get.{$key}", null);
+        $this->allParams = null;
+        return $this;
+        unset($this->query[$key]);
         \w_env_set("get.{$key}", null); // 同步清除 WelineEnv
         $this->allParams = null;
         return $this;
@@ -257,11 +267,23 @@ class ParameterBag
      */
     public function setQueryByPrefix(string $prefix, array $data): static
     {
+        foreach (array_keys($this->query) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                unset($this->query[$key]);
+                \w_env_set("get.{$key}", null);
+            }
+        }
+        foreach ($data as $key => $value) {
+            $fullKey = $prefix . $key;
+            $this->query[$fullKey] = $value;
+            \w_env_set("get.{$fullKey}", $value);
+        }
+        $this->allParams = null;
+        return $this;
         // 先删除所有带该前缀的参数
         foreach (array_keys($this->query) as $key) {
             if (str_starts_with($key, $prefix)) {
                 unset($this->query[$key]);
-                unset($_GET[$key]);
                 \w_env_set("get.{$key}", null);
             }
         }
@@ -269,7 +291,6 @@ class ParameterBag
         foreach ($data as $key => $value) {
             $fullKey = $prefix . $key;
             $this->query[$fullKey] = $value;
-            $_GET[$fullKey] = $value;
             \w_env_set("get.{$fullKey}", $value);
         }
         $this->allParams = null;
@@ -287,7 +308,14 @@ class ParameterBag
         foreach (array_keys($this->query) as $key) {
             if (str_starts_with($key, $prefix)) {
                 unset($this->query[$key]);
-                unset($_GET[$key]);
+                \w_env_set("get.{$key}", null);
+            }
+        }
+        $this->allParams = null;
+        return $this;
+        foreach (array_keys($this->query) as $key) {
+            if (str_starts_with($key, $prefix)) {
+                unset($this->query[$key]);
                 \w_env_set("get.{$key}", null);
             }
         }
@@ -328,7 +356,10 @@ class ParameterBag
     public function setRequest(string $key, mixed $value): static
     {
         $this->request[$key] = $value;
-        $_POST[$key] = $value; // 同步到超全局变量以保持兼容
+        \w_env_set("post.{$key}", $value);
+        $this->allParams = null;
+        return $this;
+        $this->request[$key] = $value;
         \w_env_set("post.{$key}", $value); // 同步到 WelineEnv 支持 Fiber 隔离
         $this->allParams = null;
         return $this;

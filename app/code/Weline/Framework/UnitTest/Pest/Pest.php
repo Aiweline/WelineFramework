@@ -17,6 +17,44 @@ use Weline\Framework\App\Env;
  */
 class Pest
 {
+    private static function isCoverageRequested(array $options): bool
+    {
+        foreach (['coverage', 'c', 'min', 'coverage-html', 'coverage-text', 'coverage-xml', 'coverage-clover'] as $key) {
+            if (isset($options[$key])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static function resolvePhpCommandForTests(bool $coverageRequested): string
+    {
+        if (!$coverageRequested) {
+            return escapeshellarg(PHP_BINARY);
+        }
+
+        if (extension_loaded('xdebug')) {
+            putenv('XDEBUG_MODE=coverage');
+            $_SERVER['XDEBUG_MODE'] = 'coverage';
+            return escapeshellarg(PHP_BINARY);
+        }
+
+        if (extension_loaded('pcov')) {
+            return escapeshellarg(PHP_BINARY);
+        }
+
+        $phpDir = dirname(PHP_BINARY);
+        $phpdbg = PHP_OS_FAMILY === 'Windows'
+            ? $phpDir . DIRECTORY_SEPARATOR . 'phpdbg.exe'
+            : $phpDir . DIRECTORY_SEPARATOR . 'phpdbg';
+
+        if (is_file($phpdbg)) {
+            return escapeshellarg($phpdbg) . ' -qrr';
+        }
+
+        return escapeshellarg(PHP_BINARY);
+    }
     /**
      * @DESC         |初始化 Pest 测试环境
      *
@@ -339,7 +377,7 @@ class Pest
         // 使用 -d 参数来抑制弃用警告（Pest 1.x 在 PHP 8.1+ 的兼容性问题）
         $errorReporting = error_reporting() & ~E_DEPRECATED;
         $commandParts = [
-            PHP_BINARY,
+            self::resolvePhpCommandForTests(self::isCoverageRequested($options)),
             '-d', 'error_reporting=' . $errorReporting,
             '-d', 'display_errors=0',
             escapeshellarg($pestBinary)
@@ -525,8 +563,15 @@ class Pest
     private static function runPestCommand(array $pestArgs, ?string $testPath, string $pestBinary): void
     {
         $errorReporting = error_reporting() & ~E_DEPRECATED;
+        $coverageRequested = false;
+        foreach ($pestArgs as $arg) {
+            if (\str_starts_with($arg, '--coverage')) {
+                $coverageRequested = true;
+                break;
+            }
+        }
         $commandParts = [
-            PHP_BINARY,
+            self::resolvePhpCommandForTests($coverageRequested),
             '-d', 'error_reporting=' . $errorReporting,
             '-d', 'display_errors=0',
             escapeshellarg($pestBinary)

@@ -1,0 +1,1035 @@
+<?php
+/**
+ * Dragon Tiger Sunrise - Games Showcase Component
+ *
+ * @component_start
+ * code: games-showcase
+ * name: 游戏展示区
+ * name_en: Games Showcase
+ * description: 创意游戏展示，支持编辑标题、描述与列表
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_subtitle => 显示副标题:select:yes|yes,no
+ * display.show_tags => 显示标签:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#fff7ed
+ * style.accent_color => 强调色:color:#f3b53f
+ * style.title_color => 标题颜色:color:#b5482a
+ * style.subtitle_color => 副标题颜色:color:#6f4b37
+ * style.panel_bg_color => 介绍面板背景:color:rgba(255,255,255,0.82)
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.84)
+ * style.card_border_color => 卡片边框色:color:rgba(242,107,79,0.16)
+ * style.card_radius => 卡片圆角:number:24|px
+ * style.section_padding => 区域内边距(PC端):number:80|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:texts => 文本内容
+ * texts.kicker => 辅助标签:text:Table atlas
+ * texts.title => 区域标题:text:Choose Your Sunrise Table
+ * texts.subtitle => 副标题:textarea:Every table keeps the same core logic, but the speed, mood, and stakes can shift fast.
+ * texts.tags => 标签:textarea:Quick Flip|Classic Pace|Private Lounge
+ * texts.cta_text => 按钮文字:text:Enter table
+ * texts.route_map_label => 路线图标签:text:Route map
+ * texts.route_map_summary => 路线图说明:textarea:Follow the sunrise curve, pick a route, then open the right-hand stage for the full room profile.
+ * texts.route_prefix => 路线前缀:text:Route
+ * texts.meta_play_style_label => 玩法标签:text:Play style
+ * texts.meta_play_style_note => 玩法说明:textarea:This route keeps the look bright while giving the table its own surface mood.
+ * texts.meta_table_focus_label => 桌面焦点标签:text:Table focus
+ * texts.meta_access_label => 访问说明标签:text:Access note
+ * texts.meta_access_note => 访问说明内容:textarea:Use the main action to enter the selected route directly.
+ *
+ * group:game_1 => 游戏1配置
+ * texts.game_1_badge => 游戏1徽章:text:Hot Table
+ * texts.game_1_title => 游戏1标题:text:Quick Flip
+ * texts.game_1_desc => 游戏1描述:textarea:Short-format room for rapid back-to-back rounds
+ * links.game_1_url => 游戏1链接:text:#quick
+ *
+ * group:game_2 => 游戏2配置
+ * texts.game_2_badge => 游戏2徽章:text:Fast Entry
+ * texts.game_2_title => 游戏2标题:text:Classic Table
+ * texts.game_2_desc => 游戏2描述:textarea:Balanced pace with clear rhythm for everyday players
+ * links.game_2_url => 游戏2链接:text:#classic
+ *
+ * group:game_3 => 游戏3配置
+ * texts.game_3_badge => 游戏3徽章:text:Beginner Friendly
+ * texts.game_3_title => 游戏3标题:text:Golden Room
+ * texts.game_3_desc => 游戏3描述:textarea:Softer visual lobby with premium table styling
+ * links.game_3_url => 游戏3链接:text:#golden
+ *
+ * group:game_4 => 游戏4配置
+ * texts.game_4_badge => 游戏4徽章:text:High Energy
+ * texts.game_4_title => 游戏4标题:text:Private Lounge
+ * texts.game_4_desc => 游戏4描述:textarea:Invite-only room for friend circles and focused sessions
+ * links.game_4_url => 游戏4链接:text:#private
+ *
+ * group:game_5 => 游戏5配置
+ * texts.game_5_badge => 游戏5徽章:text:VIP Ready
+ * texts.game_5_title => 游戏5标题:text:Streak Table
+ * texts.game_5_desc => 游戏5描述:textarea:Designed for players chasing fast win runs
+ * links.game_5_url => 游戏5链接:text:#streak
+ *
+ * group:game_6 => 游戏6配置
+ * texts.game_6_badge => 游戏6徽章:text:Night Mode
+ * texts.game_6_title => 游戏6标题:text:Learn & Play
+ * texts.game_6_desc => 游戏6描述:textarea:A low-pressure room for new users to understand the flow
+ * links.game_6_url => 游戏6链接:text:#learn
+ *
+ * @fields_end
+ */
+
+$componentId = 'dts-games-' . uniqid();
+$gradientId = $componentId . '-arc-gradient';
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+    return $default;
+};
+
+$getConfig = function ($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$normalizeLines = static function ($value) {
+    $value = (string) $value;
+    if (strpos($value, '\\n') !== false && strpos($value, "\n") === false) {
+        $value = str_replace('\\n', "\n", $value);
+    }
+    $value = str_replace(["\r\n", "\r"], "\n", $value);
+    return array_values(array_filter(array_map('trim', preg_split('/\n+/', $value) ?: []), static function ($item) {
+        return $item !== '';
+    }));
+};
+
+$parseLegacyGames = static function ($value) use ($normalizeLines) {
+    $games = [];
+    foreach ($normalizeLines((string) $value) as $line) {
+        $parts = array_map('trim', explode('|', $line));
+        $title = $parts[0] ?? '';
+        if ($title === '') {
+            continue;
+        }
+        $games[] = [
+            'title' => $title,
+            'description' => $parts[1] ?? '',
+            'url' => $parts[2] ?? '#',
+        ];
+    }
+    return $games;
+};
+
+$parseLegacyBadgeList = static function ($value) use ($normalizeLines) {
+    return $normalizeLines((string) $value);
+};
+
+$getLegacyIndexed = static function (array $items, $index, $field, $default = '') {
+    return isset($items[$index][$field]) && $items[$index][$field] !== '' ? $items[$index][$field] : $default;
+};
+
+$getLegacyToken = static function (array $items, $index, $default = '') {
+    return isset($items[$index]) && $items[$index] !== '' ? $items[$index] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showSubtitle = $getConfig('display.show_subtitle', 'yes') !== 'no';
+$showTags = $getConfig('display.show_tags', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', '#fffaf4');
+$accentColor = $getConfig('style.accent_color', '#efbc57');
+$titleColor = $getConfig('style.title_color', '#b5482a');
+$subtitleColor = $getConfig('style.subtitle_color', '#6f4b37');
+$panelBgColor = $getConfig('style.panel_bg_color', 'rgba(255,255,255,0.82)');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.84)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(234,123,93,0.16)');
+$cardRadius = (int)$getConfig('style.card_radius', '24');
+$sectionPadding = (int)$getConfig('style.section_padding', '80');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '48');
+$cardGap = (int)$getConfig('style.card_gap', '24');
+
+$kicker = $getConfig('texts.kicker', 'Table atlas');
+$title = $getConfig('texts.title', 'Choose Your Sunrise Table');
+$subtitle = $getConfig('texts.subtitle', 'Every table keeps the same core logic, but the speed, mood, and stakes can shift fast.');
+$tagsConfig = $getConfig('texts.tags', 'Quick Flip|Classic Pace|Private Lounge');
+$ctaText = trim((string)$getConfig('texts.cta_text', 'Enter table'));
+$routeMapLabel = $getConfig('texts.route_map_label', 'Route map');
+$routeMapSummary = $getConfig('texts.route_map_summary', 'Follow the sunrise curve, pick a route, then open the right-hand stage for the full room profile.');
+$routePrefix = $getConfig('texts.route_prefix', 'Route');
+$metaPlayStyleLabel = $getConfig('texts.meta_play_style_label', 'Play style');
+$metaPlayStyleNote = $getConfig('texts.meta_play_style_note', 'This route keeps the look bright while giving the table its own surface mood.');
+$metaTableFocusLabel = $getConfig('texts.meta_table_focus_label', 'Table focus');
+$metaAccessLabel = $getConfig('texts.meta_access_label', 'Access note');
+$metaAccessNote = $getConfig('texts.meta_access_note', 'Use the main action to enter the selected route directly.');
+if ($ctaText === '') {
+    $ctaText = 'Enter table';
+}
+
+$tags = array_values(array_filter(array_map('trim', preg_split('/[\r\n\|]+/', $tagsConfig))));
+$legacyGames = $parseLegacyGames($getConfigAny(['games.items'], ''));
+$legacyBadges = $parseLegacyBadgeList($getConfigAny(['texts.badges'], ''));
+$defaultGames = [
+    ['badge' => 'Hot Table', 'title' => 'Quick Flip', 'description' => 'Short-format room for rapid back-to-back rounds', 'url' => '#quick'],
+    ['badge' => 'Fast Entry', 'title' => 'Classic Table', 'description' => 'Balanced pace with clear rhythm for everyday players', 'url' => '#classic'],
+    ['badge' => 'Beginner Friendly', 'title' => 'Golden Room', 'description' => 'Softer visual lobby with premium table styling', 'url' => '#golden'],
+    ['badge' => 'High Energy', 'title' => 'Private Lounge', 'description' => 'Invite-only room for friend circles and focused sessions', 'url' => '#private'],
+    ['badge' => 'VIP Ready', 'title' => 'Streak Table', 'description' => 'Designed for players chasing fast win runs', 'url' => '#streak'],
+    ['badge' => 'Night Mode', 'title' => 'Learn & Play', 'description' => 'A low-pressure room for new users to understand the flow', 'url' => '#learn'],
+];
+
+$games = [];
+$badges = [];
+for ($i = 1; $i <= 6; $i++) {
+    $default = $defaultGames[$i - 1];
+    $badge = (string)$getConfigAny([
+        'game_' . $i . '.texts.game_' . $i . '_badge',
+        'texts.game_' . $i . '_badge',
+    ], $getLegacyToken($legacyBadges, $i - 1, $default['badge']));
+    $games[] = [
+        'name' => (string)$getConfigAny([
+            'game_' . $i . '.texts.game_' . $i . '_title',
+            'texts.game_' . $i . '_title',
+        ], $getLegacyIndexed($legacyGames, $i - 1, 'title', $default['title'])),
+        'description' => (string)$getConfigAny([
+            'game_' . $i . '.texts.game_' . $i . '_desc',
+            'texts.game_' . $i . '_desc',
+        ], $getLegacyIndexed($legacyGames, $i - 1, 'description', $default['description'])),
+        'link' => (string)$getConfigAny([
+            'game_' . $i . '.links.game_' . $i . '_url',
+            'links.game_' . $i . '_url',
+        ], $getLegacyIndexed($legacyGames, $i - 1, 'url', $default['url'])),
+    ];
+    $badges[] = $badge;
+}
+
+if (empty($games)) {
+    return;
+}
+
+$defaultTags = ['Quick entry', 'Steady rhythm', 'Private focus'];
+$defaultBadges = ['Open Table', 'Active Route', 'Sunrise Pick'];
+$tags = !empty($tags) ? $tags : $defaultTags;
+$badges = !empty($badges) ? $badges : $defaultBadges;
+
+$gameCount = count($games);
+$pathStart = ['x' => 34, 'y' => 92];
+$pathControl = ['x' => 6, 'y' => 50];
+$pathEnd = ['x' => 34, 'y' => 8];
+$selectorPath = sprintf(
+    'M %.2F %.2F Q %.2F %.2F %.2F %.2F',
+    $pathStart['x'],
+    $pathStart['y'],
+    $pathControl['x'],
+    $pathControl['y'],
+    $pathEnd['x'],
+    $pathEnd['y']
+);
+
+$nodePositions = [];
+foreach ($games as $index => $game) {
+    $t = $gameCount > 1 ? $index / ($gameCount - 1) : 0.5;
+    $oneMinusT = 1 - $t;
+    $x = ($oneMinusT * $oneMinusT * $pathStart['x']) + (2 * $oneMinusT * $t * $pathControl['x']) + ($t * $t * $pathEnd['x']);
+    $y = ($oneMinusT * $oneMinusT * $pathStart['y']) + (2 * $oneMinusT * $t * $pathControl['y']) + ($t * $t * $pathEnd['y']);
+    $nodePositions[$index] = [
+        'x' => number_format($x, 2, '.', ''),
+        'y' => number_format($y, 2, '.', ''),
+    ];
+}
+?>
+
+<section id="<?= $componentId ?>" class="dts-games" aria-labelledby="<?= $componentId ?>-title">
+    <div class="games-shell">
+        <header class="games-head">
+            <?php if ($kicker !== ''): ?>
+                <span class="games-kicker"><?= htmlspecialchars($kicker) ?></span>
+            <?php endif; ?>
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($showSubtitle): ?>
+                <p class="games-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+
+            <?php if ($showTags && !empty($tags)): ?>
+                <div class="games-tags" aria-label="Table themes">
+                    <?php foreach ($tags as $tag): ?>
+                        <span><?= htmlspecialchars($tag) ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </header>
+
+        <div class="atlas-layout">
+            <div class="selector-wrap">
+                <div class="selector-orbit" role="tablist" aria-label="Sunrise tables">
+                    <svg class="selector-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                        <defs>
+                            <linearGradient id="<?= htmlspecialchars($gradientId) ?>" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#ea7b5d"/>
+                                <stop offset="100%" stop-color="<?= htmlspecialchars($accentColor) ?>"/>
+                            </linearGradient>
+                        </defs>
+                        <path class="orbit-path-shadow" d="<?= htmlspecialchars($selectorPath) ?>"></path>
+                        <path class="orbit-path-base" d="<?= htmlspecialchars($selectorPath) ?>"></path>
+                        <path class="orbit-path-glow" d="<?= htmlspecialchars($selectorPath) ?>"></path>
+                        <circle class="orbit-runner" r="1.8" fill="url(#<?= htmlspecialchars($gradientId) ?>)">
+                            <animateMotion dur="<?= max(7, min(12, $gameCount + 4)) ?>s" repeatCount="indefinite" path="<?= htmlspecialchars($selectorPath) ?>" />
+                        </circle>
+                    </svg>
+
+                    <div class="selector-caption">
+                        <?php if ($routeMapLabel !== ''): ?>
+                            <span class="selector-caption-kicker"><?= htmlspecialchars($routeMapLabel) ?></span>
+                        <?php endif; ?>
+                        <strong><?= (int)$gameCount ?> table paths</strong>
+                        <?php if ($routeMapSummary !== ''): ?>
+                            <p><?= htmlspecialchars($routeMapSummary) ?></p>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php foreach ($games as $index => $game): ?>
+                        <?php
+                        $badge = $badges[$index % count($badges)] ?? 'Open Table';
+                        $isActive = $index === 0;
+                        $position = $nodePositions[$index];
+                        ?>
+                        <button
+                            type="button"
+                            class="table-stop<?= $isActive ? ' is-active' : '' ?>"
+                            role="tab"
+                            id="<?= $componentId ?>-tab-<?= (int)$index ?>"
+                            aria-selected="<?= $isActive ? 'true' : 'false' ?>"
+                            aria-controls="<?= $componentId ?>-panel-<?= (int)$index ?>"
+                            tabindex="<?= $isActive ? '0' : '-1' ?>"
+                            data-table-trigger="<?= (int)$index ?>"
+                            style="--node-x: <?= htmlspecialchars($position['x']) ?>%; --node-y: <?= htmlspecialchars($position['y']) ?>%;"
+                        >
+                            <span class="stop-pin"><?= sprintf('%02d', $index + 1) ?></span>
+                            <span class="stop-card">
+                                <strong><?= htmlspecialchars($game['name']) ?></strong>
+                                <small><?= htmlspecialchars($badge) ?></small>
+                            </span>
+                        </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <div class="games-stage">
+                <?php foreach ($games as $index => $game): ?>
+                    <?php
+                    $badge = $badges[$index % count($badges)] ?? 'Open Table';
+                    $tag = $tags[$index % count($tags)] ?? 'Sunrise Mode';
+                    $isActive = $index === 0;
+                    ?>
+                    <article
+                        class="table-panel-frame<?= $isActive ? ' is-active' : '' ?>"
+                        id="<?= $componentId ?>-panel-<?= (int)$index ?>"
+                        role="tabpanel"
+                        aria-labelledby="<?= $componentId ?>-tab-<?= (int)$index ?>"
+                        data-table-panel="<?= (int)$index ?>"
+                        <?= $isActive ? '' : 'hidden' ?>
+                    >
+                        <div class="table-panel-main">
+                            <div class="panel-sun" aria-hidden="true"></div>
+
+                            <div class="panel-topline">
+                                <span class="panel-route"><?= htmlspecialchars($routePrefix) ?> <?= sprintf('%02d', $index + 1) ?></span>
+                                <span class="panel-badge"><?= htmlspecialchars($badge) ?></span>
+                            </div>
+
+                            <div class="panel-copy">
+                                <h3><?= htmlspecialchars($game['name']) ?></h3>
+                                <p><?= htmlspecialchars($game['description']) ?></p>
+                            </div>
+
+                            <div class="panel-actions">
+                                <a href="<?= htmlspecialchars($game['link']) ?>" class="panel-link"><?= htmlspecialchars($ctaText) ?></a>
+                            </div>
+                        </div>
+
+                        <div class="panel-meta-grid">
+                            <article class="meta-card">
+                                <span class="meta-label"><?= htmlspecialchars($metaPlayStyleLabel) ?></span>
+                                <strong><?= htmlspecialchars($tag) ?></strong>
+                                <p><?= htmlspecialchars($metaPlayStyleNote) ?></p>
+                            </article>
+
+                            <article class="meta-card">
+                                <span class="meta-label"><?= htmlspecialchars($metaTableFocusLabel) ?></span>
+                                <strong><?= htmlspecialchars($game['name']) ?></strong>
+                                <p><?= htmlspecialchars($game['description']) ?></p>
+                            </article>
+
+                            <article class="meta-card is-accent">
+                                <span class="meta-label"><?= htmlspecialchars($metaAccessLabel) ?></span>
+                                <strong><?= htmlspecialchars($badge) ?></strong>
+                                <p><?= htmlspecialchars($metaAccessNote) ?></p>
+                            </article>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    padding: <?= $sectionPadding ?>px 0;
+    background:
+        radial-gradient(560px 260px at 0% 8%, rgba(255, 185, 152, 0.22), transparent 74%),
+        radial-gradient(620px 320px at 100% 18%, rgba(239, 188, 87, 0.22), transparent 72%),
+        linear-gradient(180deg, <?= htmlspecialchars($bgColor) ?> 0%, #fff3e8 100%);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .games-shell {
+    width: var(--dts-shell-width, min(1240px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+    position: relative;
+}
+
+#<?= $componentId ?> .games-head {
+    max-width: 760px;
+}
+
+#<?= $componentId ?> .games-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.84rem;
+    border-radius: 999px;
+    background: rgba(234, 123, 93, 0.08);
+    border: 1px solid rgba(234, 123, 93, 0.16);
+    color: #b5482a;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .games-head h2 {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(2rem, 4.8vw, 3.8rem);
+    line-height: 1.02;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .games-subtitle {
+    margin-top: 0.95rem;
+    color: <?= htmlspecialchars($subtitleColor) ?>;
+    line-height: 1.82;
+    font-size: 1rem;
+}
+
+#<?= $componentId ?> .games-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .games-tags span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.46rem 0.76rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.76);
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    color: #7c604e;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .atlas-layout {
+    margin-top: 1.8rem;
+    display: grid;
+    grid-template-columns: minmax(320px, 0.46fr) minmax(0, 0.54fr);
+    gap: clamp(1rem, 3vw, 2rem);
+    align-items: center;
+}
+
+#<?= $componentId ?> .selector-wrap {
+    position: relative;
+}
+
+#<?= $componentId ?> .selector-orbit {
+    position: relative;
+    min-height: 640px;
+    overflow: visible;
+}
+
+#<?= $componentId ?> .selector-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+#<?= $componentId ?> .orbit-path-shadow,
+#<?= $componentId ?> .orbit-path-base,
+#<?= $componentId ?> .orbit-path-glow {
+    fill: none;
+    stroke-linecap: round;
+}
+
+#<?= $componentId ?> .orbit-path-shadow {
+    stroke: rgba(194, 130, 94, 0.1);
+    stroke-width: 1.6;
+}
+
+#<?= $componentId ?> .orbit-path-base {
+    stroke: rgba(194, 130, 94, 0.16);
+    stroke-width: 0.72;
+}
+
+#<?= $componentId ?> .orbit-path-glow {
+    stroke: url(#<?= htmlspecialchars($gradientId) ?>);
+    stroke-width: 1.02;
+    stroke-dasharray: 8 13;
+    animation: <?= $componentId ?>-arc-flow 10s linear infinite;
+}
+
+@keyframes <?= $componentId ?>-arc-flow {
+    from { stroke-dashoffset: 0; }
+    to { stroke-dashoffset: -96; }
+}
+
+#<?= $componentId ?> .selector-caption {
+    position: absolute;
+    top: 50%;
+    right: 8%;
+    z-index: 1;
+    width: min(210px, 40%);
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .selector-caption-kicker {
+    display: inline-flex;
+    align-items: center;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    border: 0;
+    color: #9b7a63;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .selector-caption strong {
+    display: block;
+    margin-top: 0.85rem;
+    color: #3f2418;
+    font-size: 1.5rem;
+    line-height: 1.12;
+}
+
+#<?= $componentId ?> .selector-caption p {
+    margin-top: 0.7rem;
+    color: #7c604e;
+    font-size: 0.92rem;
+    line-height: 1.72;
+}
+
+#<?= $componentId ?> .table-stop {
+    position: absolute;
+    left: var(--node-x);
+    top: var(--node-y);
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+    transform: translate(-10%, -50%);
+    text-align: left;
+}
+
+#<?= $componentId ?> .stop-pin {
+    position: relative;
+    width: 3.2rem;
+    height: 3.2rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(234,123,93,0.16), rgba(239,188,87,0.28));
+    color: #b5482a;
+    font-size: 0.86rem;
+    font-weight: 800;
+    box-shadow: 0 0 0 8px rgba(255, 246, 235, 0.92), 0 14px 26px rgba(194, 130, 94, 0.12);
+    transition: transform 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+}
+
+#<?= $componentId ?> .stop-pin::after {
+    content: '';
+    position: absolute;
+    inset: -7px;
+    border-radius: inherit;
+    border: 1px dashed rgba(234, 123, 93, 0.22);
+    opacity: 0;
+    transform: scale(0.94);
+    transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+#<?= $componentId ?> .stop-card {
+    position: relative;
+    min-width: 170px;
+    padding: 0.78rem 0.92rem;
+    border-radius: <?= max(18, $cardRadius - 4) ?>px;
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow: 0 18px 34px rgba(194, 130, 94, 0.1);
+    transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+}
+
+#<?= $componentId ?> .stop-card::before {
+    content: '';
+    position: absolute;
+    left: 0.62rem;
+    top: 0.72rem;
+    bottom: 0.72rem;
+    width: 4px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(234, 123, 93, 0.96) 0%, rgba(239, 188, 87, 0.94) 100%);
+    opacity: 0;
+    transform: scaleY(0.72);
+    transform-origin: center;
+    transition: opacity 0.24s ease, transform 0.24s ease;
+}
+
+#<?= $componentId ?> .stop-card strong {
+    display: block;
+    color: #3f2418;
+    font-size: 0.94rem;
+    line-height: 1.28;
+}
+
+#<?= $componentId ?> .stop-card small {
+    display: block;
+    margin-top: 0.28rem;
+    color: #8f725f;
+    font-size: 0.76rem;
+    line-height: 1.4;
+}
+
+#<?= $componentId ?> .table-stop:hover .stop-card,
+#<?= $componentId ?> .table-stop.is-active .stop-card {
+    border-color: rgba(234, 123, 93, 0.24);
+    box-shadow: 0 22px 40px rgba(194, 130, 94, 0.14);
+}
+
+#<?= $componentId ?> .table-stop:hover .stop-card {
+    transform: translateX(4px);
+}
+
+#<?= $componentId ?> .table-stop.is-active .stop-pin {
+    transform: scale(1.08);
+    background: linear-gradient(145deg, rgba(234, 123, 93, 0.96), rgba(239, 188, 87, 0.98));
+    color: #fff9f2;
+    box-shadow:
+        0 0 0 10px rgba(255, 246, 235, 0.96),
+        0 0 0 1px rgba(234, 123, 93, 0.2),
+        0 20px 32px rgba(194, 130, 94, 0.2);
+}
+
+#<?= $componentId ?> .table-stop.is-active .stop-pin::after {
+    opacity: 1;
+    transform: scale(1);
+}
+
+#<?= $componentId ?> .table-stop.is-active .stop-card {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255, 244, 232, 0.92) 100%);
+    border-color: rgba(234, 123, 93, 0.28);
+    box-shadow:
+        0 0 0 1px rgba(239, 188, 87, 0.32),
+        0 24px 42px rgba(194, 130, 94, 0.16);
+}
+
+#<?= $componentId ?> .table-stop.is-active .stop-card::before {
+    opacity: 1;
+    transform: scaleY(1);
+}
+
+#<?= $componentId ?> .games-stage {
+    min-width: 0;
+}
+
+#<?= $componentId ?> .table-panel-frame {
+    display: grid;
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .table-panel-frame[hidden] {
+    display: none !important;
+}
+
+#<?= $componentId ?> .table-panel-frame.is-active {
+    animation: <?= $componentId ?>-panel-shell-reveal 0.52s cubic-bezier(0.2, 0.9, 0.24, 1) both;
+}
+
+#<?= $componentId ?> .table-panel-frame.is-active .table-panel-main {
+    animation: <?= $componentId ?>-panel-main-reveal 0.54s cubic-bezier(0.2, 0.9, 0.24, 1) both;
+}
+
+#<?= $componentId ?> .table-panel-frame.is-active .meta-card {
+    animation: <?= $componentId ?>-panel-meta-reveal 0.56s cubic-bezier(0.22, 0.88, 0.28, 1) both;
+}
+
+#<?= $componentId ?> .table-panel-frame.is-active .meta-card:nth-child(1) {
+    animation-delay: 0.04s;
+}
+
+#<?= $componentId ?> .table-panel-frame.is-active .meta-card:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+#<?= $componentId ?> .table-panel-frame.is-active .meta-card:nth-child(3) {
+    animation-delay: 0.16s;
+}
+
+@keyframes <?= $componentId ?>-panel-shell-reveal {
+    from {
+        opacity: 0.01;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes <?= $componentId ?>-panel-main-reveal {
+    from {
+        opacity: 0;
+        transform: translate3d(18px, 10px, 0) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+    }
+}
+
+@keyframes <?= $componentId ?>-panel-meta-reveal {
+    from {
+        opacity: 0;
+        transform: translate3d(0, 12px, 0);
+    }
+    to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+    }
+}
+
+#<?= $componentId ?> .table-panel-main {
+    position: relative;
+    padding: clamp(1.3rem, 3vw, 2rem);
+    border-radius: <?= max(32, $cardRadius + 10) ?>px;
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.94) 0%, <?= htmlspecialchars($panelBgColor) ?> 100%);
+    box-shadow: 0 24px 56px rgba(194, 130, 94, 0.12);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .panel-sun {
+    position: absolute;
+    top: -84px;
+    right: -54px;
+    width: 280px;
+    height: 280px;
+    border-radius: 999px;
+    background:
+        radial-gradient(circle, rgba(239, 188, 87, 0.28) 0%, rgba(255, 224, 163, 0.12) 38%, transparent 70%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .panel-topline {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+#<?= $componentId ?> .panel-route,
+#<?= $componentId ?> .panel-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 36px;
+    padding: 0.42rem 0.8rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .panel-route {
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    color: #7c604e;
+}
+
+#<?= $componentId ?> .panel-badge {
+    background: rgba(239, 188, 87, 0.16);
+    border: 1px solid rgba(239, 188, 87, 0.18);
+    color: #9a6517;
+}
+
+#<?= $componentId ?> .panel-copy {
+    position: relative;
+    z-index: 1;
+    margin-top: 1.1rem;
+    max-width: 52rem;
+}
+
+#<?= $componentId ?> .panel-copy h3 {
+    color: #3f2418;
+    font-size: clamp(2rem, 4.6vw, 3.6rem);
+    line-height: 0.98;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .panel-copy p {
+    margin-top: 0.9rem;
+    color: #6f4b37;
+    font-size: 1rem;
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .panel-actions {
+    margin-top: 1.35rem;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .panel-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0.56rem 0.9rem;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ea7b5d 0%, <?= htmlspecialchars($accentColor) ?> 100%);
+    color: #24140d;
+    font-size: 0.88rem;
+    font-weight: 800;
+    text-decoration: none;
+    box-shadow: 0 12px 22px rgba(234, 123, 93, 0.14);
+    transition: transform 0.24s ease, box-shadow 0.24s ease;
+}
+
+#<?= $componentId ?> .panel-link:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 22px 38px rgba(234, 123, 93, 0.24);
+}
+
+#<?= $componentId ?> .panel-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: <?= $cardGap ?>px;
+}
+
+#<?= $componentId ?> .meta-card {
+    min-height: 100%;
+    padding: 1rem;
+    border-radius: <?= max(18, $cardRadius - 4) ?>px;
+    border: 1px solid rgba(194, 130, 94, 0.12);
+    background: linear-gradient(180deg, rgba(255,255,255,0.82) 0%, rgba(255,249,242,0.74) 100%);
+    box-shadow: 0 16px 34px rgba(194, 130, 94, 0.08);
+}
+
+#<?= $componentId ?> .meta-card.is-accent {
+    background:
+        radial-gradient(180px 90px at 100% 0%, rgba(239,188,87,0.18), transparent 72%),
+        linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(255,246,236,0.82) 100%);
+}
+
+#<?= $componentId ?> .meta-label {
+    display: block;
+    color: #9b7a63;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .meta-card strong {
+    display: block;
+    margin-top: 0.55rem;
+    color: #3f2418;
+    font-size: 1.12rem;
+    line-height: 1.3;
+}
+
+#<?= $componentId ?> .meta-card p {
+    margin-top: 0.5rem;
+    color: #7c604e;
+    font-size: 0.9rem;
+    line-height: 1.72;
+}
+
+@media (max-width: 1080px) {
+    #<?= $componentId ?> .atlas-layout {
+        grid-template-columns: minmax(280px, 0.44fr) minmax(0, 0.56fr);
+    }
+
+    #<?= $componentId ?> .selector-caption {
+        right: 6%;
+        width: min(185px, 38%);
+    }
+
+    #<?= $componentId ?> .stop-card {
+        min-width: 150px;
+    }
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .atlas-layout {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .selector-orbit {
+        min-height: auto;
+        padding: 0;
+        border-radius: 0;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+        overflow: visible;
+    }
+
+    #<?= $componentId ?> .selector-svg,
+    #<?= $componentId ?> .selector-caption {
+        display: none;
+    }
+
+    #<?= $componentId ?> .table-stop {
+        position: static;
+        width: 100%;
+        display: grid;
+        grid-template-columns: 3.2rem minmax(0, 1fr);
+        gap: 0.8rem;
+        transform: none !important;
+        margin-bottom: 0.75rem;
+    }
+
+    #<?= $componentId ?> .stop-card {
+        min-width: 0;
+    }
+
+    #<?= $componentId ?> .panel-meta-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: <?= $sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .games-head h2 {
+        font-size: clamp(1.9rem, 10vw, 3rem);
+    }
+
+    #<?= $componentId ?> .table-panel-main {
+        border-radius: 26px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .orbit-path-glow,
+    #<?= $componentId ?> .table-panel-frame,
+    #<?= $componentId ?> .table-panel-main,
+    #<?= $componentId ?> .meta-card,
+    #<?= $componentId ?> .table-stop,
+    #<?= $componentId ?> .stop-pin,
+    #<?= $componentId ?> .stop-card,
+    #<?= $componentId ?> .panel-link {
+        animation: none;
+        transition: none;
+    }
+}
+</style>
+
+<script>
+(() => {
+    const root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    const buttons = Array.from(root.querySelectorAll('[data-table-trigger]'));
+    const panels = Array.from(root.querySelectorAll('[data-table-panel]'));
+
+    const activate = (index) => {
+        buttons.forEach((button, buttonIndex) => {
+            const isActive = buttonIndex === index;
+            button.classList.toggle('is-active', isActive);
+            button.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            button.setAttribute('tabindex', isActive ? '0' : '-1');
+        });
+
+        panels.forEach((panel, panelIndex) => {
+            const isActive = panelIndex === index;
+            if (isActive) {
+                panel.hidden = false;
+                panel.classList.remove('is-active');
+                void panel.offsetWidth;
+                panel.classList.add('is-active');
+            } else {
+                panel.classList.remove('is-active');
+                panel.hidden = true;
+            }
+        });
+    };
+
+    buttons.forEach((button, index) => {
+        button.addEventListener('click', () => activate(index));
+        button.addEventListener('keydown', (event) => {
+            if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+                return;
+            }
+
+            event.preventDefault();
+            const direction = (event.key === 'ArrowRight' || event.key === 'ArrowDown') ? 1 : -1;
+            const nextIndex = (index + direction + buttons.length) % buttons.length;
+            activate(nextIndex);
+            buttons[nextIndex].focus();
+        });
+    });
+})();
+</script>

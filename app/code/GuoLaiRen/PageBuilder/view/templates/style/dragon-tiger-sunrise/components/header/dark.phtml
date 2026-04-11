@@ -1,0 +1,154 @@
+<?php
+/**
+ * Generic dark header component.
+ *
+ * @component_start
+ * code: header-dark
+ * name: 深色头部
+ * name_en: Dark Header
+ * region: header
+ * category: header
+ * @component_end
+ *
+ * @fields_start
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.url => Logo地址:textarea:|优先使用页面Logo
+ * logo.width => Logo宽度:text:160px
+ *
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.use_subpages => 使用子页面作为导航:select:no|yes,no
+ * navigation.items => 导航项:textarea:Home=>/
+About=>/about
+Blog=>/blog
+Contact=>/contact
+ *
+ * group:button => 按钮设置
+ * button.display => 显示按钮:select:yes|yes,no
+ * button.text => 按钮文字:text:Download Now
+ * button.url => 按钮链接:text:#download
+ *
+ * group:style => 样式设置
+ * style.background => 背景色:color:#101322
+ * style.nav_color => 导航文字色:color:#ffffff
+ * style.accent_color => 强调色:color:#f59e0b
+ * style.height => 头部高度:text:72px
+ * @fields_end
+ */
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$componentId = 'generic-header-dark-' . uniqid();
+$themeCode = basename(dirname(dirname(__DIR__)));
+$themeLabel = ucwords(str_replace('-', ' ', $themeCode));
+
+$getConfig = function ($key, $default = '') use ($styleSettings, $componentConfig) {
+    if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+        return $styleSettings[$key];
+    }
+    return $default;
+};
+
+$showLogo = $getConfig('logo.display', 'yes') !== 'no';
+$logoUrl = trim((string)$getConfig('logo.url', ''));
+if ($logoUrl === '' && $page && $page->getData('logo')) {
+    $logoUrl = (string)$page->getData('logo');
+}
+$logoWidth = (string)$getConfig('logo.width', '160px');
+$brandText = trim((string)($page ? ($page->getData('title') ?: '') : ''));
+if ($brandText === '') {
+    $brandText = $themeLabel;
+}
+
+$showNav = $getConfig('navigation.display', 'yes') !== 'no';
+$useSubpages = $getConfig('navigation.use_subpages', 'no') === 'yes';
+$navItems = [];
+if ($useSubpages && $page) {
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $navItems = $page->getHeaderNavigationPages() ?: [];
+    }
+    if (empty($navItems) && method_exists($page, 'getNavigationPages')) {
+        $navItems = $page->getNavigationPages([], 10) ?: [];
+    }
+}
+if (empty($navItems)) {
+    $raw = (string)$getConfig('navigation.items', "Home=>/\nAbout=>/about\nBlog=>/blog\nContact=>/contact");
+    if (strpos($raw, '\\n') !== false && strpos($raw, "\n") === false) {
+        $raw = str_replace('\\n', "\n", $raw);
+    }
+    foreach (preg_split('/[\r\n]+/', $raw) as $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
+        }
+        $parts = explode('=>', $line, 2);
+        $label = trim($parts[0] ?? '');
+        $href = trim($parts[1] ?? '');
+        if ($label === '') {
+            continue;
+        }
+        if ($href === '') {
+            $href = '#';
+        }
+        $navItems[] = ['title' => $label, 'url' => $href];
+    }
+}
+
+$showButton = $getConfig('button.display', 'yes') !== 'no';
+$buttonText = trim((string)$getConfig('button.text', 'Download Now'));
+$buttonUrl = trim((string)$getConfig('button.url', '#download'));
+$buttonHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl($buttonUrl === '' ? '#download' : $buttonUrl);
+$buttonRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($buttonHref, 'url');
+
+$bgColor = (string)$getConfig('style.background', '#101322');
+$navColor = (string)$getConfig('style.nav_color', '#ffffff');
+$accentColor = (string)$getConfig('style.accent_color', '#f59e0b');
+$headerHeight = (string)$getConfig('style.height', '72px');
+?>
+<style>
+#<?= $componentId ?> { background: <?= htmlspecialchars($bgColor) ?>; min-height: <?= htmlspecialchars($headerHeight) ?>; position: sticky; top: 0; z-index: 1000; box-shadow: 0 10px 30px rgba(0,0,0,0.12); }
+#<?= $componentId ?> .header-inner { max-width: 1200px; min-height: <?= htmlspecialchars($headerHeight) ?>; margin: 0 auto; padding: 0 20px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+#<?= $componentId ?> .brand-link { color: <?= htmlspecialchars($navColor) ?>; text-decoration: none; display: inline-flex; align-items: center; gap: 12px; font-weight: 700; }
+#<?= $componentId ?> .brand-link img { width: <?= htmlspecialchars($logoWidth) ?>; height: auto; display: block; }
+#<?= $componentId ?> nav ul { list-style: none; display: flex; align-items: center; gap: 22px; margin: 0; padding: 0; }
+#<?= $componentId ?> nav a { color: <?= htmlspecialchars($navColor) ?>; text-decoration: none; font-size: 15px; }
+#<?= $componentId ?> .header-cta { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: <?= htmlspecialchars($accentColor) ?>; color: #111; padding: 10px 18px; font-weight: 700; text-decoration: none; }
+@media (max-width: 767px) {
+    #<?= $componentId ?> .header-inner { flex-wrap: wrap; padding: 12px 16px; }
+    #<?= $componentId ?> nav { width: 100%; }
+    #<?= $componentId ?> nav ul { flex-wrap: wrap; gap: 12px 16px; }
+    #<?= $componentId ?> .header-cta { width: 100%; }
+}
+</style>
+<header id="<?= $componentId ?>" class="theme-header-dark">
+    <div class="header-inner">
+        <?php if ($showLogo): ?>
+            <a class="brand-link" href="/">
+                <?php if ($logoUrl !== ''): ?>
+                    <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($brandText) ?>">
+                <?php else: ?>
+                    <span><?= htmlspecialchars($brandText) ?></span>
+                <?php endif; ?>
+            </a>
+        <?php endif; ?>
+        <?php if ($showNav && !empty($navItems)): ?>
+            <nav aria-label="Primary">
+                <ul>
+                    <?php foreach ($navItems as $item): ?>
+                        <li><a href="<?= htmlspecialchars($item['url'] ?? '#') ?>"><?= htmlspecialchars($item['title'] ?? ($item['text'] ?? 'Link')) ?></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            </nav>
+        <?php endif; ?>
+        <?php if ($showButton && $buttonText !== ''): ?>
+            <a class="header-cta" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($buttonRef)) ?>" data-glr-ref="<?= htmlspecialchars($buttonRef) ?>"><?= htmlspecialchars($buttonText) ?></a>
+        <?php endif; ?>
+    </div>
+</header>

@@ -1,0 +1,671 @@
+<?php
+/**
+ * IPL Sunflare - Games Showcase Component
+ *
+ * @component_start
+ * code: games-showcase
+ * name: 游戏展示区
+ * name_en: Games Showcase
+ * description: 创意游戏展示，支持编辑标题、描述与列表
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_subtitle => 显示副标题:select:yes|yes,no
+ * display.show_tags => 显示标签:select:yes|yes,no
+ * display.show_overview => 显示路线说明:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#081e17
+ * style.accent_color => 强调色:color:#42e7c6
+ * style.title_color => 标题颜色:color:#8cf5cc
+ * style.subtitle_color => 副标题颜色:color:#b8e6d5
+ * style.panel_bg_color => 介绍面板背景:color:rgba(9, 33, 27, 0.86)
+ * style.card_bg_color => 卡片背景色:color:rgba(12, 41, 34, 0.9)
+ * style.card_border_color => 卡片边框色:color:rgba(69, 189, 150, 0.22)
+ * style.card_radius => 卡片圆角:number:24|px
+ * style.section_padding => 区域内边距(PC端):number:80|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ * style.card_gap => 卡片间距:number:24|px
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Choose Your Match Route
+ * texts.kicker => 区域提示:text:IPL Match Route Board
+ * texts.subtitle => 副标题:textarea:Pick the IPL route that matches your pace, from instant-entry rooms to private focused tables.
+ * texts.tags => 标签:textarea:Turbo Entry\nLive Heat\nPrivate Rooms
+ * texts.overview_label => 路线说明标签:text:Route Map
+ * texts.overview_summary => 路线说明文案:textarea:Routes now run in an alternating timeline lane, so players can compare pace, room style, and entry path in one scan.
+ * texts.link_text => 卡片链接文字:text:Enter Route
+ *
+ * group:game_1 => 游戏卡片1
+ * texts.game_1_badge => 游戏1徽标:text:Sprint Route
+ * texts.game_1_tempo => 游戏1节奏标签:text:Powerplay
+ * texts.game_1_focus => 游戏1焦点标签:text:Fast queue-in
+ * texts.game_1_mood => 游戏1氛围标签:text:Stadium spark
+ * texts.game_1_title => 游戏1标题:text:Turbo Toss
+ * texts.game_1_desc => 游戏1描述:textarea:Fast queue table built for short IPL rounds and quick re-entry.
+ * links.game_1_url => 游戏1链接:text:#turbo
+ *
+ * group:game_2 => 游戏卡片2
+ * texts.game_2_badge => 游戏2徽标:text:Classic Route
+ * texts.game_2_tempo => 游戏2节奏标签:text:Steady Overs
+ * texts.game_2_focus => 游戏2焦点标签:text:Balanced session
+ * texts.game_2_mood => 游戏2氛围标签:text:Calm rhythm
+ * texts.game_2_title => 游戏2标题:text:Classic Arena
+ * texts.game_2_desc => 游戏2描述:textarea:Balanced room with steady pace for daily IPL sessions.
+ * links.game_2_url => 游戏2链接:text:#classic
+ *
+ * group:game_3 => 游戏卡片3
+ * texts.game_3_badge => 游戏3徽标:text:Prime Route
+ * texts.game_3_tempo => 游戏3节奏标签:text:Prime Flow
+ * texts.game_3_focus => 游戏3焦点标签:text:Refined room
+ * texts.game_3_mood => 游戏3氛围标签:text:Polished focus
+ * texts.game_3_title => 游戏3标题:text:Sunflare Prime
+ * texts.game_3_desc => 游戏3描述:textarea:Premium route with refined visuals and focused match flow.
+ * links.game_3_url => 游戏3链接:text:#prime
+ *
+ * group:game_4 => 游戏卡片4
+ * texts.game_4_badge => 游戏4徽标:text:Private Route
+ * texts.game_4_tempo => 游戏4节奏标签:text:Private Pace
+ * texts.game_4_focus => 游戏4焦点标签:text:Invite control
+ * texts.game_4_mood => 游戏4氛围标签:text:Quiet circle
+ * texts.game_4_title => 游戏4标题:text:Private Circle
+ * texts.game_4_desc => 游戏4描述:textarea:Invite-only table for friend groups and controlled pace.
+ * links.game_4_url => 游戏4链接:text:#private
+ *
+ * group:game_5 => 游戏卡片5
+ * texts.game_5_badge => 游戏5徽标:text:Streak Route
+ * texts.game_5_tempo => 游戏5节奏标签:text:Chase Mode
+ * texts.game_5_focus => 游戏5焦点标签:text:Win-streak rhythm
+ * texts.game_5_mood => 游戏5氛围标签:text:High pressure
+ * texts.game_5_title => 游戏5标题:text:Streak Rush
+ * texts.game_5_desc => 游戏5描述:textarea:High-tempo room for players chasing continuous win runs.
+ * links.game_5_url => 游戏5链接:text:#streak
+ *
+ * group:game_6 => 游戏卡片6
+ * texts.game_6_badge => 游戏6徽标:text:Rookie Route
+ * texts.game_6_tempo => 游戏6节奏标签:text:Warmup Lane
+ * texts.game_6_focus => 游戏6焦点标签:text:Beginner guide
+ * texts.game_6_mood => 游戏6氛围标签:text:Smooth start
+ * texts.game_6_title => 游戏6标题:text:Rookie Deck
+ * texts.game_6_desc => 游戏6描述:textarea:Guided route with lower pressure onboarding and clearer hints.
+ * links.game_6_url => 游戏6链接:text:#rookie
+ *
+ * @fields_end
+ */
+
+$componentId = 'isf-games-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = function(array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+
+    return $default;
+};
+
+$getConfig = function($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showSubtitle = $getConfig('display.show_subtitle', 'yes') !== 'no';
+$showTags = $getConfig('display.show_tags', 'yes') !== 'no';
+$showOverview = $getConfig('display.show_overview', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', '#081e17');
+$accentColor = $getConfig('style.accent_color', '#42e7c6');
+$titleColor = $getConfig('style.title_color', '#8cf5cc');
+$subtitleColor = $getConfig('style.subtitle_color', '#b8e6d5');
+$panelBgColor = $getConfig('style.panel_bg_color', 'rgba(9, 33, 27, 0.86)');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(12, 41, 34, 0.9)');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(69, 189, 150, 0.22)');
+$cardRadius = (int)$getConfig('style.card_radius', '24');
+$sectionPadding = (int)$getConfig('style.section_padding', '80');
+$sectionPaddingMobile = (int)$getConfig('style.section_padding_mobile', '48');
+$cardGap = (int)$getConfig('style.card_gap', '24');
+
+$title = $getConfig('texts.title', 'Choose Your Match Route');
+$kicker = trim((string)$getConfig('texts.kicker', 'IPL Match Route Board'));
+$subtitle = $getConfig('texts.subtitle', 'Pick the IPL route that matches your pace, from instant-entry rooms to private focused tables.');
+$tagsConfig = $getConfig('texts.tags', "Turbo Entry\nLive Heat\nPrivate Rooms");
+$overviewLabel = trim((string)$getConfig('texts.overview_label', 'Route Map'));
+$overviewSummary = trim((string)$getConfig('texts.overview_summary', 'Routes now run in an alternating timeline lane, so players can compare pace, room style, and entry path in one scan.'));
+$linkText = trim((string)$getConfig('texts.link_text', 'Enter Route'));
+
+$tags = array_values(array_filter(array_map('trim', preg_split('/[\r\n\|]+/', $tagsConfig))));
+
+$legacyGamesConfig = $getConfig('games.items', "Turbo Toss|Fast queue table built for short IPL rounds and quick re-entry.|#turbo\r\nClassic Arena|Balanced room with steady pace for daily IPL sessions.|#classic\r\nSunflare Prime|Premium route with refined visuals and focused match flow.|#prime\r\nPrivate Circle|Invite-only table for friend groups and controlled pace.|#private\r\nStreak Rush|High-tempo room for players chasing continuous win runs.|#streak\r\nRookie Deck|Guided route with lower pressure onboarding and clearer hints.|#rookie");
+$legacyGames = [];
+foreach (preg_split('/\r?\n/', str_replace('\\n', "\n", $legacyGamesConfig)) as $line) {
+    $line = trim($line);
+    if ($line === '') {
+        continue;
+    }
+
+    $parts = array_map('trim', explode('|', $line));
+    if (count($parts) >= 2) {
+        $legacyGames[] = [
+            'title' => $parts[0],
+            'desc' => $parts[1],
+            'url' => $parts[2] ?? '#',
+        ];
+    }
+}
+
+$cardDefaults = [
+    ['title' => 'Turbo Toss', 'desc' => 'Fast queue table built for short IPL rounds and quick re-entry.', 'url' => '#turbo', 'badge' => 'Sprint Route', 'tempo' => 'Powerplay', 'focus' => 'Fast queue-in', 'mood' => 'Stadium spark'],
+    ['title' => 'Classic Arena', 'desc' => 'Balanced room with steady pace for daily IPL sessions.', 'url' => '#classic', 'badge' => 'Classic Route', 'tempo' => 'Steady Overs', 'focus' => 'Balanced session', 'mood' => 'Calm rhythm'],
+    ['title' => 'Sunflare Prime', 'desc' => 'Premium route with refined visuals and focused match flow.', 'url' => '#prime', 'badge' => 'Prime Route', 'tempo' => 'Prime Flow', 'focus' => 'Refined room', 'mood' => 'Polished focus'],
+    ['title' => 'Private Circle', 'desc' => 'Invite-only table for friend groups and controlled pace.', 'url' => '#private', 'badge' => 'Private Route', 'tempo' => 'Private Pace', 'focus' => 'Invite control', 'mood' => 'Quiet circle'],
+    ['title' => 'Streak Rush', 'desc' => 'High-tempo room for players chasing continuous win runs.', 'url' => '#streak', 'badge' => 'Streak Route', 'tempo' => 'Chase Mode', 'focus' => 'Win-streak rhythm', 'mood' => 'High pressure'],
+    ['title' => 'Rookie Deck', 'desc' => 'Guided route with lower pressure onboarding and clearer hints.', 'url' => '#rookie', 'badge' => 'Rookie Route', 'tempo' => 'Warmup Lane', 'focus' => 'Beginner guide', 'mood' => 'Smooth start'],
+];
+
+$getCardValue = function ($index, $field, $default = '') use ($getConfigAny, $legacyGames, $cardDefaults) {
+    $legacyCard = $legacyGames[$index - 1] ?? [];
+    $fallback = $legacyCard[$field] ?? ($cardDefaults[$index - 1][$field] ?? $default);
+
+    $keys = $field === 'url'
+        ? ['game_' . $index . '.links.game_' . $index . '_url', 'links.game_' . $index . '_url']
+        : ['game_' . $index . '.texts.game_' . $index . '_' . $field, 'texts.game_' . $index . '_' . $field];
+
+    return $getConfigAny($keys, $fallback);
+};
+
+$legacyBadgeConfig = $getConfig('texts.badges', "Sprint Route\nClassic Route\nPrime Route\nPrivate Route\nStreak Route\nRookie Route");
+$legacyTempoConfig = $getConfig('texts.tempo_labels', "Powerplay\nSteady Overs\nPrime Flow\nPrivate Pace\nChase Mode\nWarmup Lane");
+$legacyFocusConfig = $getConfig('texts.focus_labels', "Fast queue-in\nBalanced session\nRefined room\nInvite control\nWin-streak rhythm\nBeginner guide");
+$legacyMoodConfig = $getConfig('texts.mood_labels', "Stadium spark\nCalm rhythm\nPolished focus\nQuiet circle\nHigh pressure\nSmooth start");
+
+$normalizeTextareaLines = static function ($value) {
+    $value = str_replace('\\n', "\n", (string)$value);
+    return array_values(array_filter(array_map('trim', preg_split('/\r?\n/', $value))));
+};
+
+$legacyBadges = $normalizeTextareaLines($legacyBadgeConfig);
+$legacyTempoLabels = $normalizeTextareaLines($legacyTempoConfig);
+$legacyFocusLabels = $normalizeTextareaLines($legacyFocusConfig);
+$legacyMoodLabels = $normalizeTextareaLines($legacyMoodConfig);
+
+$games = [];
+for ($index = 1; $index <= 6; $index++) {
+    $legacyIndex = $index - 1;
+    $groupPrefix = 'game_' . $index . '.';
+    $games[] = [
+        'name' => $getCardValue($index, 'title'),
+        'description' => $getCardValue($index, 'desc'),
+        'link' => $getCardValue($index, 'url', '#'),
+        'badge' => $getConfigAny([$groupPrefix . 'texts.game_' . $index . '_badge', 'texts.game_' . $index . '_badge'], $legacyBadges[$legacyIndex] ?? ($cardDefaults[$legacyIndex]['badge'] ?? 'Route')),
+        'tempo' => $getConfigAny([$groupPrefix . 'texts.game_' . $index . '_tempo', 'texts.game_' . $index . '_tempo'], $legacyTempoLabels[$legacyIndex] ?? ($cardDefaults[$legacyIndex]['tempo'] ?? 'Balanced')),
+        'focus' => $getConfigAny([$groupPrefix . 'texts.game_' . $index . '_focus', 'texts.game_' . $index . '_focus'], $legacyFocusLabels[$legacyIndex] ?? ($cardDefaults[$legacyIndex]['focus'] ?? 'Quick entry')),
+        'mood' => $getConfigAny([$groupPrefix . 'texts.game_' . $index . '_mood', 'texts.game_' . $index . '_mood'], $legacyMoodLabels[$legacyIndex] ?? ($cardDefaults[$legacyIndex]['mood'] ?? 'Warm pace')),
+    ];
+}
+
+if (empty($games)) {
+    return;
+}
+
+$defaultTags = ['Quick Match Entry', 'Live Route Ladder', 'Mobile Ready'];
+$tags = !empty($tags) ? $tags : $defaultTags;
+
+?>
+
+<section id="<?= $componentId ?>" class="isf-games" aria-labelledby="<?= $componentId ?>-title">
+    <div class="games-shell">
+        <header class="games-head">
+            <?php if ($kicker !== ''): ?>
+                <span class="games-kicker"><?= htmlspecialchars($kicker) ?></span>
+            <?php endif; ?>
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($showSubtitle): ?>
+                <p class="games-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+
+            <?php if ($showTags && !empty($tags)): ?>
+                <div class="games-tags" aria-label="Tag highlights">
+                    <?php foreach ($tags as $tag): ?>
+                        <span><?= htmlspecialchars($tag) ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </header>
+
+        <div class="games-layout" style="--isf-gap: <?= (int)$cardGap ?>px; --isf-radius: <?= max(16, $cardRadius) ?>px;">
+            <aside class="route-overview" aria-label="Route overview">
+                <?php if ($showOverview && ($overviewLabel !== '' || $overviewSummary !== '')): ?>
+                    <div class="overview-head">
+                        <?php if ($overviewLabel !== ''): ?>
+                            <span><?= htmlspecialchars($overviewLabel) ?></span>
+                        <?php endif; ?>
+                        <?php if ($overviewSummary !== ''): ?>
+                            <p><?= htmlspecialchars($overviewSummary) ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <div class="route-track">
+                    <?php foreach ($games as $index => $game): ?>
+                        <article class="route-stop" style="--stop-order: <?= (int)$index ?>;">
+                            <span class="stop-node" aria-hidden="true"></span>
+                            <div class="stop-copy">
+                                <div class="stop-head">
+                                    <span class="stop-index"><?= sprintf('%02d', $index + 1) ?></span>
+                                    <span class="stop-badge"><?= htmlspecialchars((string)$game['badge']) ?></span>
+                                    <span class="stop-tempo"><?= htmlspecialchars((string)$game['tempo']) ?></span>
+                                </div>
+                                <strong><?= htmlspecialchars($game['name']) ?></strong>
+                                <p class="stop-desc"><?= htmlspecialchars($game['description']) ?></p>
+                                <small><?= htmlspecialchars((string)$game['focus']) ?> · <?= htmlspecialchars((string)$game['mood']) ?></small>
+                            </div>
+                            <a class="stop-link" href="<?= htmlspecialchars($game['link']) ?>"><?= htmlspecialchars($linkText !== '' ? $linkText : 'Enter Route') ?></a>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </aside>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --isf-bg: <?= htmlspecialchars($bgColor) ?>;
+    --isf-accent: <?= htmlspecialchars($accentColor) ?>;
+    --isf-title: <?= htmlspecialchars($titleColor) ?>;
+    --isf-subtitle: <?= htmlspecialchars($subtitleColor) ?>;
+    --isf-panel-bg: <?= htmlspecialchars($panelBgColor) ?>;
+    --isf-card-bg: <?= htmlspecialchars($cardBgColor) ?>;
+    --isf-card-border: <?= htmlspecialchars($cardBorderColor) ?>;
+    position: relative;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background:
+        radial-gradient(620px 280px at 8% 6%, rgba(72, 222, 171, 0.3), transparent 68%),
+        radial-gradient(760px 320px at 94% 16%, rgba(93, 193, 255, 0.24), transparent 72%),
+        linear-gradient(180deg, #051712 0%, var(--isf-bg) 56%, #071620 100%);
+    border-top: 1px solid rgba(72, 222, 171, 0.2);
+    border-bottom: 1px solid rgba(93, 193, 255, 0.16);
+}
+
+#<?= $componentId ?> .games-shell {
+    width: var(--isf-shell-width, min(1260px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .games-head {
+    max-width: 780px;
+    margin-bottom: 1.8rem;
+}
+
+#<?= $componentId ?> .games-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.78rem;
+    border-radius: 999px;
+    color: #8cf5cc;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    background: rgba(66, 231, 198, 0.12);
+    border: 1px solid rgba(66, 231, 198, 0.24);
+}
+
+#<?= $componentId ?> .games-head h2 {
+    margin-top: 1rem;
+    color: var(--isf-title);
+    font-size: clamp(2rem, 4.7vw, 3.5rem);
+    line-height: 1.03;
+}
+
+#<?= $componentId ?> .games-subtitle {
+    margin-top: 0.84rem;
+    color: var(--isf-subtitle);
+    line-height: 1.82;
+}
+
+#<?= $componentId ?> .games-tags {
+    margin-top: 1rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+#<?= $componentId ?> .games-tags span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.42rem 0.74rem;
+    border-radius: 999px;
+    color: #c4f0df;
+    font-size: 0.74rem;
+    font-weight: 700;
+    background: rgba(12, 41, 34, 0.78);
+    border: 1px solid rgba(66, 231, 198, 0.16);
+}
+
+#<?= $componentId ?> .games-layout {
+    display: block;
+}
+
+#<?= $componentId ?> .route-overview {
+    padding: 0;
+}
+
+#<?= $componentId ?> .overview-head span {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.32rem 0.6rem;
+    border-radius: 999px;
+    color: #8cf5cc;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: rgba(66, 231, 198, 0.12);
+    border: 1px solid rgba(66, 231, 198, 0.24);
+}
+
+#<?= $componentId ?> .overview-head p {
+    margin-top: 0.68rem;
+    color: #9dc6b6;
+    font-size: 0.86rem;
+    line-height: 1.7;
+}
+
+#<?= $componentId ?> .route-track {
+    position: relative;
+    margin-top: 1rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.9rem 2.5rem;
+}
+
+#<?= $componentId ?> .route-track::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0.6rem;
+    bottom: 0.6rem;
+    width: 2px;
+    transform: translateX(-50%);
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(72, 222, 171, 0.24), rgba(93, 193, 255, 0.3));
+}
+
+#<?= $componentId ?> .route-stop {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.56rem;
+    align-items: flex-start;
+    border-radius: 16px;
+    border: 1px solid rgba(66, 231, 198, 0.2);
+    background: linear-gradient(180deg, rgba(12, 41, 34, 0.9), var(--isf-card-bg));
+    padding: 0.72rem;
+    min-height: 188px;
+    animation: isf-route-rise 0.45s ease both;
+    animation-delay: calc(var(--stop-order) * 70ms);
+}
+
+#<?= $componentId ?> .route-stop:nth-child(odd) {
+    margin-right: 0.48rem;
+}
+
+#<?= $componentId ?> .route-stop:nth-child(even) {
+    margin-left: 0.48rem;
+}
+
+#<?= $componentId ?> .route-stop::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 2.02rem;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(72, 222, 171, 0.16), rgba(93, 193, 255, 0.36));
+}
+
+#<?= $componentId ?> .route-stop:nth-child(odd)::before {
+    right: -2.02rem;
+}
+
+#<?= $componentId ?> .route-stop:nth-child(even)::before {
+    left: -2.02rem;
+}
+
+#<?= $componentId ?> .stop-node {
+    position: absolute;
+    top: 50%;
+    width: 0.62rem;
+    height: 0.62rem;
+    border-radius: 999px;
+    background: linear-gradient(140deg, #42e7c6, #5dc1ff);
+    box-shadow: 0 0 0 3px rgba(66, 231, 198, 0.22);
+    z-index: 1;
+}
+
+#<?= $componentId ?> .route-stop:nth-child(odd) .stop-node {
+    right: -2.33rem;
+    transform: translate(50%, -50%);
+}
+
+#<?= $componentId ?> .route-stop:nth-child(even) .stop-node {
+    left: -2.33rem;
+    transform: translate(-50%, -50%);
+}
+
+#<?= $componentId ?> .stop-copy {
+    min-width: 0;
+    width: 100%;
+    display: grid;
+    gap: 0.42rem;
+}
+
+#<?= $componentId ?> .stop-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.34rem;
+}
+
+#<?= $componentId ?> .stop-index {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 20px;
+    padding: 0.1rem 0.44rem;
+    border-radius: 999px;
+    color: #8cf5cc;
+    font-size: 0.64rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    background: rgba(66, 231, 198, 0.1);
+    border: 1px solid rgba(66, 231, 198, 0.24);
+}
+
+#<?= $componentId ?> .stop-tempo {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 0.16rem 0.44rem;
+    border-radius: 999px;
+    color: #bfe8da;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(93, 193, 255, 0.18);
+}
+
+#<?= $componentId ?> .stop-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.22rem 0.46rem;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #d7f6ff;
+    background: rgba(93, 193, 255, 0.16);
+    border: 1px solid rgba(93, 193, 255, 0.34);
+}
+
+#<?= $componentId ?> .stop-copy strong {
+    display: block;
+    color: #dbfff2;
+    font-size: 1rem;
+    line-height: 1.3;
+}
+
+#<?= $componentId ?> .stop-desc {
+    margin: 0;
+    color: #b7dfcf;
+    line-height: 1.66;
+    font-size: 0.87rem;
+}
+
+#<?= $componentId ?> .stop-copy small {
+    display: block;
+    color: #78a997;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.45;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .stop-link {
+    margin-top: auto;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 34px;
+    padding: 0.36rem 0.72rem;
+    border-radius: 999px;
+    text-decoration: none;
+    color: #06221c;
+    font-size: 0.7rem;
+    font-weight: 800;
+    background: linear-gradient(98deg, #42e7c6 0%, #5dc1ff 100%);
+    box-shadow: 0 8px 16px rgba(72, 176, 150, 0.28);
+}
+
+#<?= $componentId ?> .stop-link:hover {
+    transform: translateY(-1px);
+}
+
+@media (max-width: 1120px) {
+    #<?= $componentId ?> .route-track {
+        gap: 0.86rem 2rem;
+    }
+
+    #<?= $componentId ?> .route-stop::before {
+        width: 1.52rem;
+    }
+
+    #<?= $componentId ?> .route-stop:nth-child(odd)::before {
+        right: -1.52rem;
+    }
+
+    #<?= $componentId ?> .route-stop:nth-child(even)::before {
+        left: -1.52rem;
+    }
+
+    #<?= $componentId ?> .route-stop:nth-child(odd) .stop-node {
+        right: -1.82rem;
+    }
+
+    #<?= $componentId ?> .route-stop:nth-child(even) .stop-node {
+        left: -1.82rem;
+    }
+}
+
+@media (max-width: 940px) {
+    #<?= $componentId ?> .route-track {
+        grid-template-columns: 1fr;
+        gap: 0.72rem;
+        padding-left: 2rem;
+    }
+
+    #<?= $componentId ?> .route-track::before {
+        left: 0.92rem;
+        transform: none;
+    }
+
+    #<?= $componentId ?> .route-stop {
+        min-height: 0;
+        margin-right: 0;
+        margin-left: 0;
+    }
+
+    #<?= $componentId ?> .route-stop::before {
+        left: -1.08rem;
+        right: auto;
+        width: 1.08rem;
+    }
+
+    #<?= $componentId ?> .route-stop:nth-child(odd)::before {
+        right: auto;
+        left: -1.08rem;
+    }
+
+    #<?= $componentId ?> .route-stop:nth-child(odd) .stop-node,
+    #<?= $componentId ?> .route-stop:nth-child(even) .stop-node {
+        left: -1.38rem;
+        right: auto;
+        transform: translate(-50%, -50%);
+    }
+
+    #<?= $componentId ?> .stop-link {
+        width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+}
+
+@media (max-width: 520px) {
+    #<?= $componentId ?> .route-track {
+        padding-left: 1.92rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .route-stop {
+        animation: none;
+    }
+}
+
+@keyframes isf-route-rise {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>

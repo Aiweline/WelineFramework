@@ -18,6 +18,19 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
             ->method('getWorkerCount')
             ->willReturn(0);
 
+        $core->expects(self::atLeastOnce())
+            ->method('getMaintenanceWorkerPorts')
+            ->willReturn([19001]);
+
+        $core->expects(self::atLeastOnce())
+            ->method('getWorkerHealthSummary')
+            ->willReturn([
+                'total' => 0,
+                'healthy' => 0,
+                'unhealthy' => 0,
+                'saturated' => 0,
+            ]);
+
         $core->expects(self::exactly(2))
             ->method('handleNewConnection')
             ->willReturnOnConsecutiveCalls(false, true);
@@ -54,12 +67,6 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         $core = $this->createMock(PassthroughCore::class);
 
         $core->expects(self::never())->method('handleNewConnection');
-        $core->expects(self::once())->method('getWorkerHealthSummary')->willReturn([
-            'total' => 1,
-            'healthy' => 1,
-            'unhealthy' => 0,
-            'saturated' => 0,
-        ]);
         $core->method('getMaintenanceWorkerPorts')->willReturn([]);
 
         $this->setProperty($dispatcher, 'passthroughCore', $core);

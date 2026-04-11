@@ -261,10 +261,10 @@ class RequestFilter extends DataObject
         $cookiefilter = '\\b(and|or)\\b.{1,6}?(=|>|<|\\bin\\b|\\blike\\b)|\\/\\*.+?\\*\\/|<\\s*script\\b|\\bEXEC\\b|UNION.+?SELECT|UPDATE.+?SET|INSERT\\s+INTO.+?VALUES|(SELECT|DELETE).+?FROM|(CREATE|ALTER|DROP|TRUNCATE)\\s+(TABLE|DATABASE)';
 
         //$ArrPGC=array_merge($_GET,$_POST,$_COOKIE);
-        foreach ($_GET as $key => $value) {
+        foreach (\Weline\Framework\Env\WelineEnv::getGet() as $key => $value) {
             $this->StopAttack($key, $value, $getfilter);
         }
-        foreach ($_POST as $key => $value) {
+        foreach (\Weline\Framework\Env\WelineEnv::getPost() as $key => $value) {
             $this->StopAttack($key, $value, $postfilter);
         }
         foreach (\w_env_cookie() as $key => $value) {

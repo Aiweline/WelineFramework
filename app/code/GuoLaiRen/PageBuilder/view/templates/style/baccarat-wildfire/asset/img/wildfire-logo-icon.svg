@@ -1,0 +1,24 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wf-bg" x1="14" y1="16" x2="112" y2="116" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF6A3D"/>
+      <stop offset="0.52" stop-color="#FFB347"/>
+      <stop offset="1" stop-color="#FF3D6E"/>
+    </linearGradient>
+    <linearGradient id="wf-line" x1="26" y1="24" x2="102" y2="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF4D0"/>
+      <stop offset="1" stop-color="#FFE17A"/>
+    </linearGradient>
+    <filter id="wf-glow" x="10" y="10" width="108" height="108" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>
+  <rect x="12" y="12" width="104" height="104" rx="28" fill="#17070D"/>
+  <rect x="16" y="16" width="96" height="96" rx="24" fill="url(#wf-bg)"/>
+  <g opacity="0.35" filter="url(#wf-glow)">
+    <circle cx="64" cy="64" r="28" fill="#FFF1B8"/>
+  </g>
+  <path d="M40 92L60.5 36L69 63L78 48L88 92" stroke="url(#wf-line)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M52 84H84" stroke="#FFF6DB" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="64" cy="30" r="6" fill="#FFF6DB"/>
+</svg>

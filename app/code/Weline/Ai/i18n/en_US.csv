@@ -611,6 +611,11 @@ ID,ID
 未自配置,Unconfigured
 通过,Through
 无配置,"No configuration"
+第,第
+"页 / 共","页 / 共"
+页,页
+上一页,Previous
+下一页,Next
 模型名称或代码,"Model name or code"
 自定义模型,自定义模型
 已配置自配置密钥,"Self-configuration key has been configured."
@@ -745,8 +750,6 @@ API密钥将被加密存储,API密钥将被加密存储
 加载中...,Loading...
 加载失败，请重试,加载失败，请重试
 暂无数据,"No data"
-上一页,Previous
-下一页,Next
 请求ID,请求ID
 错误信息,"Error message"
 请求数据,请求数据

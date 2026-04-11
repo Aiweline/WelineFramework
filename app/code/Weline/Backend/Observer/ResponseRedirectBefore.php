@@ -169,7 +169,7 @@ class ResponseRedirectBefore implements ObserverInterface
                 $host = $parsedUrl['host'];
                 // HTTP_HOST 可能包含端口（如 my.com:9981），parse_url()['host'] 不含端口
                 // 必须统一比较纯主机名，否则 "my.com" !== "my.com:9981" 会误判为攻击
-                $currentHost = strtok($_SERVER['HTTP_HOST'] ?? '', ':') ?: '';
+                $currentHost = strtok((string) \w_env('server.http_host', ''), ':') ?: '';
                 
                 // 只允许重定向到当前域名或白名单域名
                 if ($host !== $currentHost && !$this->isAllowedHost($host)) {
@@ -320,8 +320,8 @@ class ResponseRedirectBefore implements ObserverInterface
             return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
         }
         if ($backendPrefix !== null && $backendPrefix !== '') {
-            $currency = $this->request->getServer('WELINE_USER_CURRENCY') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
-            $language = $this->request->getServer('WELINE_USER_LANG') ?? $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            $currency = (string) (\w_env('user.currency', 'CNY') ?? 'CNY');
+            $language = (string) (\w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
             return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
         }
         return $this->request->getUrlBuilder()->getBackendUrlPath($path);

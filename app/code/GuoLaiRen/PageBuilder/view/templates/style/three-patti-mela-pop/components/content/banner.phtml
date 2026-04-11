@@ -1,0 +1,221 @@
+<?php
+/**
+ * TPMST Banner 组件 - Banner Component
+ * 
+ * 独立的 Banner 横幅组件，用于 content 区域
+ * 
+ * @component_start
+ * code: banner
+ * name: Banner横幅
+ * name_en: Banner
+ * description: 首屏Banner横幅，支持响应式图片和下载按钮
+ * category: content
+ * region: content
+ * thumbnail: asset/img/banner-03.webp
+ * @component_end
+ * 
+ * @fields_start
+ * 
+ * group:banner => Banner设置
+ * banner.display => 显示Banner:select:yes|yes,no
+ * banner.image_mobile => 移动端图片:textarea:|默认使用本地banner-2.jpg
+ * banner.image_desktop => PC端图片:textarea:|默认使用本地banner-03.webp
+ * banner.alt => 图片描述:text:Three Patti Mela Pop banner
+ * banner.download_btn_image => 下载按钮图片:textarea:|默认使用download-btn-m.webp
+ * banner.bg_color => 背景颜色:color:#ffe067
+ * banner.bg_gradient_end => 背景渐变色结束:color:#ff8e3c
+ * banner.image_offset_top => 图片向上偏移:number:90|px（用于与header重叠效果）
+ * banner.image_offset_top_mobile => 移动端容器向上偏移:number:75|px
+ * 
+ * @fields_end
+ */
+
+// 组件唯一标识
+$componentId = 'tpmst-banner-' . uniqid();
+
+// 获取数据
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+
+// 合并配置
+$config = array_merge($styleSettings, $componentConfig);
+
+// 辅助函数
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+// Banner配置
+$bannerDisplay = $getConfig('banner.display', 'yes') !== 'no';
+$defaultBannerMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/banner-2.jpg');
+$defaultBannerDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/banner-03.webp');
+$defaultDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/download-btn-m.webp');
+
+$bannerMobile = $getConfig('banner.image_mobile', '') ?: $defaultBannerMobile;
+$bannerDesktop = $getConfig('banner.image_desktop', '') ?: $defaultBannerDesktop;
+$bannerAlt = $getConfig('banner.alt', 'Three Patti Mela Pop banner');
+$bannerDownloadImg = $getConfig('banner.download_btn_image', '') ?: $defaultDownloadBtn;
+$bannerBgColor = $getConfig('banner.bg_color', '#ffe067');
+$bannerBgGradientEnd = $getConfig('banner.bg_gradient_end', '#ff8e3c');
+
+// Banner 图片负边距补偿值（用于与 header 重叠效果）
+$bannerImageOffsetTop = intval($getConfig('banner.image_offset_top', '90')); // 单位：px，桌面端图片的 margin-top 负值
+$bannerImageOffsetTopMobile = intval($getConfig('banner.image_offset_top_mobile', '75')); // 单位：px，移动端 banner 容器的 margin-top 负值
+
+if (!$bannerDisplay) return;
+?>
+<!-- TPMST Banner Component Start: <?= $componentId ?> -->
+<style>
+/* ============================================
+   TPMST Banner Component - Scoped Styles
+   Component ID: <?= $componentId ?>
+   ============================================ */
+
+#<?= $componentId ?> .tpmst-banner {
+    display: block;
+    background: linear-gradient(180deg, <?= htmlspecialchars($bannerBgColor) ?> 0%, <?= htmlspecialchars($bannerBgGradientEnd) ?> 100%);
+    position: relative;
+    overflow: visible; /* 允许图片超出显示 */
+    height: auto; /* 跟随内容高度 */
+    min-height: 0; /* 确保可以收缩 */
+    z-index: 1;
+}
+
+#<?= $componentId ?> .tpmst-banner-inner {
+    display: block; /* 改为 block，让高度跟随内容 */
+    position: relative;
+    margin-left: -12px;
+    margin-right: -12px;
+    width: calc(100% + 24px); /* 补偿负边距 */
+    /* 确保高度跟随图片，使用 padding-top 补偿负边距 */
+    padding-top: <?= $bannerImageOffsetTop ?>px; /* 补偿图片的 margin-top 负值 */
+    height: auto;
+    min-height: 0;
+    box-sizing: border-box;
+}
+
+#<?= $componentId ?> .tpmst-banner-slide {
+    text-align: center;
+    width: 100%;
+    display: block; /* 确保是块级元素 */
+    /* 确保高度跟随图片 */
+    height: auto;
+    line-height: 0; /* 消除行高对高度的影响 */
+    margin: 0;
+    padding: 0;
+}
+
+#<?= $componentId ?> .tpmst-banner-img {
+    width: 100%;
+    height: auto !important; /* 高度自适应，使用 !important 确保优先级 */
+    display: block;
+    object-fit: contain;
+    margin-top: -<?= $bannerImageOffsetTop ?>px; /* 负边距向上移动，但容器用 padding-top 补偿 */
+    /* 确保图片高度被正确计算 */
+    max-width: 100%;
+}
+
+#<?= $componentId ?> .tpmst-banner-download {
+    position: absolute;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    cursor: pointer;
+    margin: 0;
+    z-index: 10;
+}
+
+#<?= $componentId ?> .tpmst-banner-download-icon {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(255, 90, 54, 0.96) 0%, rgba(255, 183, 3, 0.94) 100%);
+    color: #fffdf8;
+    box-shadow: 0 14px 24px rgba(255, 90, 54, 0.24);
+}
+
+#<?= $componentId ?> .tpmst-banner-download-icon svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+}
+
+#<?= $componentId ?> .tpmst-banner-download img {
+    animation: <?= $componentId ?>-zoomBtn 2s infinite;
+}
+
+@keyframes <?= $componentId ?>-zoomBtn {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.9); }
+    100% { transform: scale(1); }
+}
+
+/* Mobile Responsive */
+@media (max-width: 991px) {
+    #<?= $componentId ?> .tpmst-banner {
+        margin-top: -<?= $bannerImageOffsetTopMobile ?>px;
+        height: auto; /* 确保移动端也跟随图片高度 */
+    }
+    
+    #<?= $componentId ?> .tpmst-banner-inner {
+        padding-top: 0; /* 移动端不需要补偿，因为图片没有负边距 */
+    }
+    
+    #<?= $componentId ?> .tpmst-banner-img {
+        margin-top: 0;
+        min-width: 100vw;
+        height: auto !important; /* 移动端高度自适应 */
+    }
+
+    #<?= $componentId ?> .tpmst-banner-download-icon {
+        width: 34px;
+        height: 34px;
+        top: -8px;
+        right: -6px;
+    }
+
+    #<?= $componentId ?> .tpmst-banner-download-icon svg {
+        width: 15px;
+        height: 15px;
+    }
+}
+</style>
+
+<div id="<?= $componentId ?>" class="tpmst-banner-component">
+    <div class="tpmst-banner">
+        <div class="tpmst-banner-inner">
+            <div class="tpmst-banner-slide">
+                <picture>
+                    <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($bannerMobile) ?>">
+                    <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($bannerDesktop) ?>">
+                    <img class="tpmst-banner-img" 
+                         src="<?= htmlspecialchars($bannerMobile) ?>" 
+                         alt="<?= htmlspecialchars($bannerAlt) ?>" 
+                         fetchpriority="high" 
+                         decoding="async">
+                </picture>
+            </div>
+            <?php if ($bannerDownloadImg): ?>
+            <p class="tpmst-banner-download">
+                <span class="tpmst-banner-download-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                        <path d="M12 3v10.17l3.59-3.58L17 11l-5 5-5-5 1.41-1.41L12 13.17V3h2Zm-7 14h14v2H5v-2Z" fill="currentColor"></path>
+                    </svg>
+                </span>
+                <img src="<?= htmlspecialchars($bannerDownloadImg) ?>" 
+                     alt="DOWNLOAD APP" 
+                     width="210" 
+                     height="54">
+            </p>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>
+<!-- TPMST Banner Component End: <?= $componentId ?> -->

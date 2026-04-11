@@ -1,0 +1,24 @@
+<svg width="560" height="720" viewBox="0 0 560 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="560" height="720" rx="34" fill="#0A1020"/>
+  <circle cx="282" cy="292" r="170" fill="#FF4D7A" fill-opacity="0.18"/>
+  <circle cx="282" cy="292" r="134" fill="#D2FF3F" fill-opacity="0.1"/>
+  <path d="M86 522C162 438 234 396 310 386C386 376 445 331 494 264" stroke="#2BE7FF" stroke-width="4" stroke-dasharray="12 16" stroke-linecap="round"/>
+  <rect x="112" y="112" width="336" height="404" rx="30" fill="#131A31" stroke="rgba(255,255,255,0.08)"/>
+  <rect x="138" y="144" width="284" height="46" rx="16" fill="rgba(255,255,255,0.05)"/>
+  <circle cx="164" cy="167" r="9" fill="#FF4D7A"/>
+  <circle cx="194" cy="167" r="9" fill="#FF8C42"/>
+  <circle cx="224" cy="167" r="9" fill="#D2FF3F"/>
+  <rect x="144" y="224" width="272" height="170" rx="24" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.08)"/>
+  <circle cx="280" cy="309" r="56" fill="rgba(210,255,63,0.12)" stroke="#D2FF3F" stroke-opacity="0.5" stroke-width="2"/>
+  <path d="M281 272L289 286L305 289L294 301L297 318L281 309L265 318L268 301L257 289L273 286L281 272Z" fill="#D2FF3F"/>
+  <rect x="144" y="424" width="124" height="58" rx="18" fill="#FF4D7A" fill-opacity="0.16" stroke="#FF4D7A" stroke-opacity="0.28"/>
+  <rect x="292" y="424" width="124" height="58" rx="18" fill="#2BE7FF" fill-opacity="0.12" stroke="#2BE7FF" stroke-opacity="0.28"/>
+  <g transform="translate(70 246) rotate(-12)">
+    <rect width="104" height="150" rx="20" fill="#F8FAFF"/>
+    <text x="22" y="38" font-family="Sora, Arial, sans-serif" font-size="32" font-weight="700" fill="#131A31">7</text>
+  </g>
+  <g transform="translate(388 222) rotate(12)">
+    <rect width="104" height="150" rx="20" fill="#F8FAFF"/>
+    <text x="22" y="38" font-family="Sora, Arial, sans-serif" font-size="32" font-weight="700" fill="#FF4D7A">8</text>
+  </g>
+</svg>

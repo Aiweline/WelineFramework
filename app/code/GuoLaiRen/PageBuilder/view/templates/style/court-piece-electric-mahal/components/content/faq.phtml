@@ -1,0 +1,456 @@
+<?php
+/**
+ * TPMST FAQ组件 - FAQ Component
+ *
+ * @component_start
+ * code: faq
+ * name: 常见问题
+ * name_en: FAQ
+ * description: FAQ折叠面板，支持问答展开收起
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.first_open => 首个问题默认展开:select:no|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#0f0f1e
+ * style.title_color => 标题颜色:color:#ffd700
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.item_bg_color => 问题卡片背景色:color:rgba(255,255,255,0.05)
+ * style.item_border_radius => 问题卡片圆角:number:8|px
+ * style.item_border_color => 问题卡片边框色:color:rgba(255,255,255,0.1)
+ * style.item_gap => 问题间距:number:15|px
+ * style.question_color => 问题文字颜色:color:#ffd700
+ * style.question_font_size => 问题字号(PC端):number:16|px
+ * style.question_font_size_mobile => 问题字号(移动端):number:14|px
+ * style.question_padding => 问题内边距:number:20|px
+ * style.question_hover_bg => 问题悬停背景:color:rgba(255,255,255,0.05)
+ * style.icon_color => 图标颜色:color:#ffd700
+ * style.icon_size => 图标大小:number:20|px
+ * style.answer_color => 答案文字颜色:color:#ffffff
+ * style.answer_font_size => 答案字号:number:14|px
+ * style.answer_padding => 答案内边距:number:20|px
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ *
+ * group:texts => FAQ内容
+ * texts.title => 区域标题:text:Frequently called questions
+ * texts.intro => 区域辅助文案:text:Open the question deck to read table rules, mobile flow, and the return-play habits behind Court Piece sessions.
+ * texts.faq_1_question => 问题1:text:How many players usually join a Court Piece table?
+ * texts.faq_1_answer => 答案1:textarea:Most tables are built for four players in two partnerships, so reading your partner and timing each trick matters as much as the cards in hand.
+ * texts.faq_2_question => 问题2:text:Do I need to know trump strategy before I start?
+ * texts.faq_2_answer => 答案2:textarea:No. New players can learn quickly, but experienced players will feel the biggest edge when they read suit strength and call trump with confidence.
+ * texts.faq_3_question => 问题3:text:Is Court Piece better for quick rounds or longer sessions?
+ * texts.faq_3_answer => 答案3:textarea:It works well for both. You can jump into fast rematches, or stay longer and build stronger partner rhythm over multiple rounds.
+ * texts.faq_4_question => 问题4:text:Can I play comfortably on mobile?
+ * texts.faq_4_answer => 答案4:textarea:Yes. The mobile flow keeps the table clear, the CTA path short, and the main content readable during quick joins and repeat sessions.
+ * texts.faq_5_question => 问题5:text:What keeps players coming back to Court Piece rooms?
+ * texts.faq_5_answer => 答案5:textarea:Players stay for the mix of partner coordination, sharper trump calls, faster rematches, and the tension of every trick carrying real momentum.
+ *
+ * @fields_end
+ */
+
+$componentId = 'court-piece-electric-mahal-faq-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+if ($getConfig('display.show_section', $getConfig('faq.display', 'yes')) === 'no') {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
+$bgColor = $getConfig('style.bg_color', $colors['faq_bg'] ?? '#120c22');
+$titleColor = $getConfig('style.title_color', '#fff0af');
+$titleFontSize = (int) $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = (int) $getConfig('style.title_font_size_mobile', '24');
+$itemBgColor = $getConfig('style.item_bg_color', 'rgba(255,255,255,0.05)');
+$itemBorderRadius = (int) $getConfig('style.item_border_radius', '24');
+$itemBorderColor = $getConfig('style.item_border_color', 'rgba(255,255,255,0.12)');
+$itemGap = (int) $getConfig('style.item_gap', '16');
+$questionColor = $getConfig('style.question_color', '#fff8e9');
+$questionFontSize = (int) $getConfig('style.question_font_size', '16');
+$questionFontSizeMobile = (int) $getConfig('style.question_font_size_mobile', '14');
+$questionPadding = (int) $getConfig('style.question_padding', '22');
+$questionHoverBg = $getConfig('style.question_hover_bg', 'rgba(255,255,255,0.05)');
+$iconColor = $getConfig('style.icon_color', '#6ef3ff');
+$iconSize = (int) $getConfig('style.icon_size', '20');
+$answerColor = $getConfig('style.answer_color', '#efe6ff');
+$answerFontSize = (int) $getConfig('style.answer_font_size', '14');
+$answerPadding = (int) $getConfig('style.answer_padding', '22');
+$sectionPadding = (int) $getConfig('style.section_padding', '78');
+$sectionPaddingMobile = (int) $getConfig('style.section_padding_mobile', '46');
+$title = $getConfig('texts.title', $getConfig('faq.title', 'Frequently called questions'));
+$intro = trim((string) $getConfig('texts.intro', $getConfig('faq.intro', 'Open the question deck to read table rules, mobile flow, and the return-play habits behind Court Piece sessions.')));
+$faqs = [
+    ['q' => $getConfig('texts.faq_1_question', 'How many players usually join a Court Piece table?'), 'a' => $getConfig('texts.faq_1_answer', 'Most tables are built for four players in two partnerships, so reading your partner and timing each trick matters as much as the cards in hand.')],
+    ['q' => $getConfig('texts.faq_2_question', 'Do I need to know trump strategy before I start?'), 'a' => $getConfig('texts.faq_2_answer', 'No. New players can learn quickly, but experienced players will feel the biggest edge when they read suit strength and call trump with confidence.')],
+    ['q' => $getConfig('texts.faq_3_question', 'Is Court Piece better for quick rounds or longer sessions?'), 'a' => $getConfig('texts.faq_3_answer', 'It works well for both. You can jump into fast rematches, or stay longer and build stronger partner rhythm over multiple rounds.')],
+    ['q' => $getConfig('texts.faq_4_question', 'Can I play comfortably on mobile?'), 'a' => $getConfig('texts.faq_4_answer', 'Yes. The mobile flow keeps the table clear, the CTA path short, and the main content readable during quick joins and repeat sessions.')],
+    ['q' => $getConfig('texts.faq_5_question', 'What keeps players coming back to Court Piece rooms?'), 'a' => $getConfig('texts.faq_5_answer', 'Players stay for the mix of partner coordination, sharper trump calls, faster rematches, and the tension of every trick carrying real momentum.')],
+];
+?>
+<section id="<?= $componentId ?>" class="cpe-faq" aria-labelledby="<?= $componentId ?>-title">
+    <style>
+        #<?= $componentId ?> {
+            position: relative;
+            padding: <?= $sectionPadding ?>px 0;
+            background:
+                radial-gradient(circle at 10% 16%, rgba(68,243,198,0.16), transparent 18%),
+                radial-gradient(circle at 90% 10%, rgba(255,214,132,0.16), transparent 20%),
+                radial-gradient(circle at 54% 88%, rgba(123,189,255,0.14), transparent 26%),
+                linear-gradient(135deg, #093338 0%, #0b1f2f 42%, <?= htmlspecialchars($bgColor) ?> 100%);
+            overflow: hidden;
+        }
+
+        #<?= $componentId ?>::before,
+        #<?= $componentId ?>::after {
+            content: "";
+            position: absolute;
+            pointer-events: none;
+        }
+
+        #<?= $componentId ?>::before {
+            inset: 18px;
+            border-radius: 34px;
+            border: 1px solid rgba(142,243,255,0.08);
+            background:
+                radial-gradient(circle at 50% 50%, transparent 37%, rgba(142,243,255,0.08) 37% 38%, transparent 38%),
+                linear-gradient(90deg, transparent calc(50% - 1px), rgba(255,255,255,0.06) calc(50% - 1px), rgba(255,255,255,0.06) calc(50% + 1px), transparent calc(50% + 1px)),
+                linear-gradient(180deg, transparent calc(50% - 1px), rgba(255,255,255,0.05) calc(50% - 1px), rgba(255,255,255,0.05) calc(50% + 1px), transparent calc(50% + 1px));
+            opacity: 0.62;
+        }
+
+        #<?= $componentId ?>::after {
+            content: "♣  ♠  ♥";
+            right: 22px;
+            bottom: 12px;
+            color: rgba(255,255,255,0.08);
+            font-size: clamp(34px, 5vw, 72px);
+            font-weight: 700;
+            letter-spacing: 0.22em;
+            white-space: nowrap;
+        }
+
+        #<?= $componentId ?> .cpe-wrap {
+            position: relative;
+            z-index: 1;
+            width: min(100% - 32px, 1180px);
+            margin: 0 auto;
+        }
+
+        #<?= $componentId ?> .cpe-head {
+            display: grid;
+            gap: 16px;
+            margin-bottom: 34px;
+            max-width: 760px;
+        }
+
+        #<?= $componentId ?> .cpe-kicker {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            width: fit-content;
+            padding: 10px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,0.14);
+            background: rgba(255,255,255,0.08);
+            color: #8ef3ff;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+
+        #<?= $componentId ?> .cpe-kicker b {
+            color: #fff0af;
+            font-size: 16px;
+        }
+
+        #<?= $componentId ?> .cpe-head h2 {
+            margin: 0;
+            color: <?= htmlspecialchars($titleColor) ?>;
+            font: 800 clamp(<?= $titleFontSizeMobile ?>px, 5vw, <?= $titleFontSize ?>px) / 1.02 "Palatino Linotype", "Book Antiqua", Georgia, serif;
+            letter-spacing: -0.03em;
+            max-width: 11ch;
+            text-wrap: balance;
+        }
+
+        #<?= $componentId ?> .cpe-intro {
+            margin: 0;
+            max-width: 60ch;
+            color: <?= htmlspecialchars($answerColor) ?>;
+            font-size: 15px;
+            line-height: 1.82;
+        }
+
+        #<?= $componentId ?> .cpe-list {
+            display: grid;
+            grid-template-columns: repeat(20, minmax(0, 1fr));
+            gap: <?= $itemGap ?>px;
+            align-items: start;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        #<?= $componentId ?> .cpe-list li {
+            min-width: 0;
+        }
+
+        #<?= $componentId ?> .cpe-list li:nth-child(4n + 1),
+        #<?= $componentId ?> .cpe-list li:nth-child(4n + 4) {
+            grid-column: span 11;
+        }
+
+        #<?= $componentId ?> .cpe-list li:nth-child(4n + 2),
+        #<?= $componentId ?> .cpe-list li:nth-child(4n + 3) {
+            grid-column: span 9;
+        }
+
+        #<?= $componentId ?> .cpe-list li:nth-child(4n + 2) {
+            margin-top: 28px;
+        }
+
+        #<?= $componentId ?> .cpe-list li:nth-child(4n + 3) {
+            margin-top: -12px;
+        }
+
+        #<?= $componentId ?> .cpe-list li:nth-child(4n + 4) {
+            margin-top: 20px;
+        }
+
+        #<?= $componentId ?> .cpe-item {
+            position: relative;
+            border-radius: <?= $itemBorderRadius ?>px;
+            border: 1px solid rgba(255,255,255,0.16);
+            background:
+                linear-gradient(160deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0.04) 100%),
+                rgba(8, 18, 30, 0.96);
+            box-shadow: 0 26px 56px rgba(0,0,0,0.24);
+            overflow: hidden;
+            backdrop-filter: blur(8px);
+        }
+
+        #<?= $componentId ?> .cpe-item::before {
+            content: "";
+            position: absolute;
+            top: 16px;
+            left: -18px;
+            width: 112px;
+            height: 8px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(142,243,255,0.96), rgba(255,214,132,0.7));
+            transform: rotate(-18deg);
+            opacity: 0.92;
+        }
+
+        #<?= $componentId ?> .cpe-item[open] {
+            box-shadow: 0 30px 64px rgba(0,0,0,0.28);
+            background:
+                linear-gradient(160deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.05) 100%),
+                rgba(8, 18, 30, 0.98);
+        }
+
+        #<?= $componentId ?> .cpe-item[open]::before {
+            width: 134px;
+        }
+
+        #<?= $componentId ?> .cpe-summary {
+            list-style: none;
+            cursor: pointer;
+            display: grid;
+            gap: 16px;
+            padding: <?= $questionPadding ?>px;
+        }
+
+        #<?= $componentId ?> .cpe-summary::-webkit-details-marker {
+            display: none;
+        }
+
+        #<?= $componentId ?> .cpe-item:hover .cpe-summary {
+            background: linear-gradient(160deg, <?= htmlspecialchars($questionHoverBg) ?> 0%, rgba(255,255,255,0.02) 100%);
+        }
+
+        #<?= $componentId ?> .cpe-summary-head {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 14px;
+        }
+
+        #<?= $componentId ?> .cpe-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 58px;
+            height: 40px;
+            padding: 0 12px;
+            border-radius: 14px;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.14);
+            color: #8ef3ff;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+        }
+
+        #<?= $componentId ?> .cpe-toggle {
+            width: <?= $iconSize + 18 ?>px;
+            height: <?= $iconSize + 18 ?>px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            border: 1px solid rgba(255,255,255,0.14);
+            color: <?= htmlspecialchars($iconColor) ?>;
+            font-size: <?= $iconSize ?>px;
+            line-height: 1;
+            transition: transform 0.24s ease, background 0.24s ease;
+            background: rgba(255,255,255,0.06);
+        }
+
+        #<?= $componentId ?> .cpe-item[open] .cpe-toggle {
+            transform: rotate(45deg);
+            background: rgba(255,255,255,0.1);
+        }
+
+        #<?= $componentId ?> .cpe-question {
+            margin: 0;
+            color: <?= htmlspecialchars($questionColor) ?>;
+            font-size: <?= $questionFontSize ?>px;
+            font-weight: 800;
+            line-height: 1.58;
+            text-wrap: balance;
+        }
+
+        #<?= $componentId ?> .cpe-answer-wrap {
+            padding: 0 <?= $answerPadding ?>px <?= $answerPadding ?>px;
+        }
+
+        #<?= $componentId ?> .cpe-answer {
+            margin: 0;
+            color: <?= htmlspecialchars($answerColor) ?>;
+            font-size: <?= $answerFontSize ?>px;
+            line-height: 1.88;
+            white-space: pre-line;
+        }
+
+        @media (max-width: 991px) {
+            #<?= $componentId ?> .cpe-list {
+                grid-template-columns: 1fr;
+            }
+
+            #<?= $componentId ?> .cpe-list li:nth-child(n) {
+                grid-column: auto;
+                margin-top: 0;
+            }
+
+            #<?= $componentId ?> .cpe-question {
+                max-width: none;
+            }
+        }
+
+        @media (max-width: 767px) {
+            #<?= $componentId ?> {
+                padding: <?= $sectionPaddingMobile ?>px 0;
+            }
+
+            #<?= $componentId ?> .cpe-wrap {
+                width: min(100% - 24px, 1180px);
+            }
+
+            #<?= $componentId ?> .cpe-head {
+                margin-bottom: 24px;
+            }
+
+            #<?= $componentId ?> .cpe-list {
+                gap: 14px;
+            }
+
+            #<?= $componentId ?> .cpe-list li:nth-child(odd) .cpe-item {
+                transform: rotate(-1.1deg);
+            }
+
+            #<?= $componentId ?> .cpe-list li:nth-child(even) .cpe-item {
+                transform: rotate(1deg);
+            }
+
+            #<?= $componentId ?> .cpe-list li:nth-child(odd) .cpe-item::before {
+                left: -18px;
+                right: auto;
+                transform: rotate(-20deg);
+            }
+
+            #<?= $componentId ?> .cpe-list li:nth-child(even) .cpe-item::before {
+                left: auto;
+                right: -18px;
+                background: linear-gradient(90deg, rgba(255,214,132,0.84), rgba(142,243,255,0.96));
+                transform: rotate(20deg);
+            }
+
+            #<?= $componentId ?> .cpe-summary {
+                gap: 14px;
+                padding: 18px 16px;
+            }
+
+            #<?= $componentId ?> .cpe-answer-wrap {
+                padding: 0 16px 18px;
+            }
+
+            #<?= $componentId ?> .cpe-question {
+                font-size: <?= $questionFontSizeMobile ?>px;
+            }
+
+            #<?= $componentId ?> .cpe-answer {
+                font-size: 14px;
+                line-height: 1.82;
+            }
+        }
+    </style>
+
+    <div class="cpe-wrap">
+        <header class="cpe-head">
+            <span class="cpe-kicker"><b>♣</b> FAQ table</span>
+            <?php if ($showTitle): ?>
+            <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+            <?php if ($intro !== ''): ?>
+            <p class="cpe-intro"><?= htmlspecialchars($intro) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <ol class="cpe-list" aria-label="Court Piece FAQs">
+            <?php foreach ($faqs as $index => $faq): ?>
+            <?php $number = str_pad((string) ($index + 1), 2, '0', STR_PAD_LEFT); ?>
+            <li>
+                <details class="cpe-item"<?= $firstOpen && $index === 0 ? ' open' : '' ?>>
+                    <summary class="cpe-summary">
+                        <div class="cpe-summary-head">
+                            <span class="cpe-number">Q<?= htmlspecialchars($number) ?></span>
+                            <span class="cpe-toggle" aria-hidden="true">+</span>
+                        </div>
+                        <h3 class="cpe-question"><?= htmlspecialchars($faq['q']) ?></h3>
+                    </summary>
+                    <div class="cpe-answer-wrap">
+                        <p class="cpe-answer"><?= nl2br(htmlspecialchars($faq['a'])) ?></p>
+                    </div>
+                </details>
+            </li>
+            <?php endforeach; ?>
+        </ol>
+    </div>
+</section>

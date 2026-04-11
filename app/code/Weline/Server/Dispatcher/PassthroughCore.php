@@ -629,33 +629,33 @@ class PassthroughCore
                     $this->stats['failover_routed']++;
                     return $this->registerConnection($connId, $clientSocket, $workerSocket['socket'], $workerSocket['port'], $clientIp, $sni);
                 }
+                $maintenanceSocket = $this->connectToMaintenanceWorkerCandidate();
+                if ($maintenanceSocket !== false) {
+                    return $this->registerConnection(
+                        $connId,
+                        $clientSocket,
+                        $maintenanceSocket['socket'],
+                        $maintenanceSocket['port'],
+                        $clientIp,
+                        $sni
+                    );
+                }
                 SchedulerSystem::usleep((int)($this->spinWaitIntervalMs * 1000));
             }
         }
         
         // 9. 业务 Worker 池为空（未就绪）或全部失败后，检测是否有维护 Worker 备选
         //    （维护模式或启动阶段）→ 尝试转接到维护 Worker 池以提供友好页面
-        if (!empty($this->maintenanceWorkerPorts)) {
-            foreach ($this->maintenanceWorkerPorts as $maintenancePort) {
-                $maintenanceSocket = $this->connectToWorker($maintenancePort);
-                if ($maintenanceSocket !== false) {
-                    $this->recordWorkerSuccess($maintenancePort);
-                    $this->stats['maintenance_routed']++;
-                    $this->logMaintenanceDecision(
-                        'maintenance_route_success:' . $maintenancePort,
-                        "维护候选接管成功：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
-                        'INFO',
-                        0.0
-                    );
-                    return $this->registerConnection($connId, $clientSocket, $maintenanceSocket, $maintenancePort, $clientIp, $sni);
-                }
-                $this->recordWorkerFailure($maintenancePort);
-                $this->logMaintenanceDecision(
-                    'maintenance_route_failed:' . $maintenancePort,
-                    "维护候选接管失败：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
-                    'WARN'
-                );
-            }
+        $maintenanceSocket = $this->connectToMaintenanceWorkerCandidate();
+        if ($maintenanceSocket !== false) {
+            return $this->registerConnection(
+                $connId,
+                $clientSocket,
+                $maintenanceSocket['socket'],
+                $maintenanceSocket['port'],
+                $clientIp,
+                $sni
+            );
         }
 
         $this->stats['all_workers_down']++;
@@ -664,6 +664,41 @@ class PassthroughCore
             '业务 Worker 与维护 Worker 均不可用，' . $this->formatMaintenanceLogContext(),
             'WARN'
         );
+        return false;
+    }
+
+    /**
+     * @return array{socket: resource, port: int}|false
+     */
+    private function connectToMaintenanceWorkerCandidate(): array|false
+    {
+        if ($this->maintenanceWorkerPorts === []) {
+            return false;
+        }
+
+        foreach ($this->maintenanceWorkerPorts as $maintenancePort) {
+            $maintenanceSocket = $this->connectToWorker($maintenancePort);
+            if ($maintenanceSocket !== false) {
+                $this->recordWorkerSuccess($maintenancePort);
+                $this->stats['maintenance_routed']++;
+                $this->logMaintenanceDecision(
+                    'maintenance_route_success:' . $maintenancePort,
+                    "维护候选接管成功：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
+                    'INFO',
+                    0.0
+                );
+
+                return ['socket' => $maintenanceSocket, 'port' => $maintenancePort];
+            }
+
+            $this->recordWorkerFailure($maintenancePort);
+            $this->logMaintenanceDecision(
+                'maintenance_route_failed:' . $maintenancePort,
+                "维护候选接管失败：port={$maintenancePort}，" . $this->formatMaintenanceLogContext(),
+                'WARN'
+            );
+        }
+
         return false;
     }
 
@@ -695,7 +730,7 @@ class PassthroughCore
         if ($this->spinWaitMaxSeconds <= 0.0) {
             return 0.0;
         }
-        if ($this->workerPorts === []) {
+        if ($this->workerPorts === [] && $this->maintenanceWorkerPorts === []) {
             return 0.0;
         }
 

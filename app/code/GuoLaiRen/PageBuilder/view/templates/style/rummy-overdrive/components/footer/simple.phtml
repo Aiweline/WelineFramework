@@ -1,0 +1,36 @@
+<?php
+/**
+ * Rummy Overdrive - Simple Footer
+ *
+ * @component_start
+ * code: footer-simple
+ * name: 简洁底部
+ * name_en: Simple Footer
+ * description: 简洁底部封装，复用主题页脚组件
+ * category: footer
+ * region: footer
+ * @component_end
+ *
+ * @fields_start
+ * content.copyright_text => 版权信息:text:© 2026 Rummy Overdrive. All rights reserved.
+ * style.bg_color => 背景颜色:color:#05070e
+ * style.padding => 区域内边距:responsive:28/40|px
+ * style.text_align => 文本对齐:select:center|left,center,right
+ * style.text_color => 文字颜色:color:#b6c2d9
+ * @fields_end
+ */
+
+$componentConfig = $this->getData('component_config') ?: [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+if (!isset($componentConfig['style.background_color']) && isset($componentConfig['style.bg_color']) && $componentConfig['style.bg_color'] !== '') {
+    $componentConfig['style.background_color'] = $componentConfig['style.bg_color'];
+}
+if (!isset($componentConfig['layout.padding_vertical']) && isset($componentConfig['style.padding']) && $componentConfig['style.padding'] !== '') {
+    $componentConfig['layout.padding_vertical'] = $componentConfig['style.padding'];
+}
+
+$this->assign('component_config', $componentConfig);
+$this->assign('__rov_shell_managed', true);
+$this->assign('__pagebuilder_shell_managed', true);
+?>
+<?= $this->fetchTemplate('GuoLaiRen_PageBuilder::style/rummy-overdrive/components/footer/links.phtml') ?>

@@ -1,0 +1,34 @@
+<svg width="1600" height="360" viewBox="0 0 1600 360" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wave-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1b0a3b"/>
+      <stop offset="55%" stop-color="#3a0f6d"/>
+      <stop offset="100%" stop-color="#0b1a3a"/>
+    </linearGradient>
+    <radialGradient id="glow-purple" cx="22%" cy="28%" r="60%">
+      <stop offset="0%" stop-color="#a15bff" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#a15bff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glow-pink" cx="82%" cy="36%" r="55%">
+      <stop offset="0%" stop-color="#ff8bd8" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#ff8bd8" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <path d="M0 0H1600V220C1420 120 1180 160 980 220C780 280 520 300 320 240C180 200 80 160 0 170Z" fill="url(#wave-bg)"/>
+  <circle cx="260" cy="120" r="180" fill="url(#glow-purple)"/>
+  <circle cx="1320" cy="160" r="150" fill="url(#glow-pink)"/>
+
+  <g opacity="0.2" stroke="#ffd36b" stroke-width="3" fill="none">
+    <circle cx="220" cy="70" r="36"/>
+    <circle cx="220" cy="70" r="22"/>
+    <circle cx="1360" cy="80" r="30"/>
+    <circle cx="1360" cy="80" r="18"/>
+  </g>
+
+  <g opacity="0.18" stroke="#ffffff" stroke-width="2" fill="none">
+    <rect x="520" y="40" width="52" height="74" rx="8" transform="rotate(-8 520 40)"/>
+    <rect x="585" y="50" width="52" height="74" rx="8" transform="rotate(6 585 50)"/>
+    <rect x="980" y="35" width="52" height="74" rx="8" transform="rotate(-6 980 35)"/>
+  </g>
+</svg>

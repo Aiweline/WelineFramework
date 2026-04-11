@@ -1,0 +1,536 @@
+<?php
+/**
+ * Roulette Supernova - Legal Content Component
+ *
+ * @component_start
+ * code: legal-content
+ * name: 法律文档内容
+ * name_en: Legal Content
+ * description: Roulette Supernova legal page with dark editorial framing, inline TOC, and policy-safe defaults.
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_toc => 显示目录:select:yes|yes,no
+ * display.show_last_updated => 显示更新时间:select:yes|yes,no
+ * display.show_icon => 显示图标:select:yes|yes,no
+ *
+ * group:layout => 布局设置
+ * layout.content_width => 内容宽度:select:narrow|narrow,medium,wide
+ * layout.header_padding => 头部内边距:number:80|px
+ * layout.content_padding => 内容内边距:number:44|px
+ *
+ * group:header => 头部设置
+ * header.title => 页面标题:text:
+ * header.icon => 自定义图标:text:
+ * header.bg_color => 背景色:color:#09090f
+ * header.bg_gradient_end => 渐变结束色:color:#1b0910
+ * header.title_color => 标题颜色:color:#f7f1e8
+ * header.text_color => 文字颜色:color:#cbbcae
+ *
+ * group:toc => 目录设置
+ * toc.title => 目录标题:text:Policy Sections
+ * toc.bg_color => 目录背景色:color:rgba(255,255,255,0.06)
+ * toc.border_color => 目录边框色:color:rgba(255,255,255,0.10)
+ *
+ * group:content => 内容设置
+ * content.bg_color => 内容区背景色:color:rgba(7,7,11,0.82)
+ * content.text_color => 内容文字颜色:color:#d7cbc1
+ * content.heading_color => 标题颜色:color:#f7f1e8
+ * content.link_color => 链接颜色:color:#4df6ff
+ *
+ * @fields_end
+ */
+
+$componentId = 'rsn-legal-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$config = array_merge($styleSettings, $componentConfig);
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showToc = $getConfig('display.show_toc', 'yes') !== 'no';
+$showLastUpdated = $getConfig('display.show_last_updated', 'yes') !== 'no';
+$showIcon = $getConfig('display.show_icon', 'yes') !== 'no';
+$contentWidth = (string) $getConfig('layout.content_width', 'narrow');
+$headerPadding = max(48, (int) $getConfig('layout.header_padding', 80));
+$contentPadding = max(26, (int) $getConfig('layout.content_padding', 44));
+
+$pageType = $page ? (string) ($page->getData('type') ?? '') : '';
+$pageTitle = $page ? trim((string) ($page->getData('title') ?? '')) : '';
+$pageContentRaw = $page ? (string) ($page->getData('content') ?? '') : '';
+$lastUpdatedRaw = $page ? (string) ($page->getData('updated_at') ?? $page->getData('created_at') ?? '') : '';
+$lastUpdatedTs = $lastUpdatedRaw !== '' ? strtotime($lastUpdatedRaw) : false;
+$lastUpdated = $lastUpdatedTs ? date('F j, Y', $lastUpdatedTs) : trim($lastUpdatedRaw);
+
+$headerTitle = trim((string) $getConfig('header.title', $pageTitle));
+if ($headerTitle === '') {
+    $headerTitle = 'Policy Document';
+}
+
+$typeMarkers = [
+    'privacy_policy' => 'PP',
+    'terms_of_service' => 'TS',
+    'refund_policy' => 'RF',
+    'shipping_policy' => 'DP',
+    'cookie_policy' => 'CK',
+];
+$headerIcon = trim((string) $getConfig('header.icon', $typeMarkers[$pageType] ?? 'LG'));
+$tocTitle = trim((string) $getConfig('toc.title', 'Policy Sections'));
+
+$heroBg = (string) $getConfig('header.bg_color', $colors['hero_bg'] ?? '#09090f');
+$heroBgEnd = (string) $getConfig('header.bg_gradient_end', $colors['faq_bg'] ?? '#1b0910');
+$heroTitleColor = (string) $getConfig('header.title_color', $colors['text_primary'] ?? '#f7f1e8');
+$heroTextColor = (string) $getConfig('header.text_color', $colors['text_secondary'] ?? '#cbbcae');
+$tocBg = (string) $getConfig('toc.bg_color', $colors['card_bg'] ?? 'rgba(255,255,255,0.06)');
+$tocBorder = (string) $getConfig('toc.border_color', $colors['border_light'] ?? 'rgba(255,255,255,0.10)');
+$contentBg = (string) $getConfig('content.bg_color', 'rgba(7,7,11,0.82)');
+$contentText = (string) $getConfig('content.text_color', '#d7cbc1');
+$contentHeading = (string) $getConfig('content.heading_color', $colors['text_primary'] ?? '#f7f1e8');
+$contentLink = (string) $getConfig('content.link_color', $colors['link_color'] ?? '#4df6ff');
+
+$maxWidth = match ($contentWidth) {
+    'wide' => '1180px',
+    'medium' => '980px',
+    default => '820px',
+};
+
+$tocItems = [];
+$pageContent = $pageContentRaw;
+if ($showToc && $pageContentRaw !== '') {
+    $headingIndex = 0;
+    $pageContent = preg_replace_callback('/<h([23])([^>]*)>(.*?)<\/h\1>/is', static function ($matches) use (&$tocItems, &$headingIndex) {
+        $level = (int) $matches[1];
+        $text = trim(strip_tags($matches[3]));
+        if ($text === '') {
+            return $matches[0];
+        }
+
+        $slug = strtolower((string) preg_replace('/[^a-z0-9]+/i', '-', $text));
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'section';
+        }
+        $id = $slug . '-' . (++$headingIndex);
+
+        $tocItems[] = [
+            'id' => $id,
+            'text' => $text,
+            'level' => $level,
+        ];
+
+        return '<h' . $matches[1] . $matches[2] . ' id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">' . $matches[3] . '</h' . $matches[1] . '>';
+    }, $pageContentRaw);
+}
+$hasToc = $showToc && !empty($tocItems);
+?>
+<section
+    id="<?= $componentId ?>"
+    class="rsn-legal"
+    style="--rsn-legal-hero-bg: <?= htmlspecialchars($heroBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-hero-end: <?= htmlspecialchars($heroBgEnd, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-hero-title: <?= htmlspecialchars($heroTitleColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-hero-text: <?= htmlspecialchars($heroTextColor, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-toc-bg: <?= htmlspecialchars($tocBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-toc-border: <?= htmlspecialchars($tocBorder, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-content-bg: <?= htmlspecialchars($contentBg, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-content-text: <?= htmlspecialchars($contentText, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-heading: <?= htmlspecialchars($contentHeading, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-link: <?= htmlspecialchars($contentLink, ENT_QUOTES, 'UTF-8') ?>; --rsn-legal-header-padding: <?= (int) $headerPadding ?>px; --rsn-legal-content-padding: <?= (int) $contentPadding ?>px; --rsn-legal-max-width: <?= htmlspecialchars($maxWidth, ENT_QUOTES, 'UTF-8') ?>;"
+>
+    <div class="legal-shell">
+        <header class="legal-hero">
+            <div class="hero-lights" aria-hidden="true">
+                <span class="light light-1"></span>
+                <span class="light light-2"></span>
+                <span class="light light-3"></span>
+            </div>
+            <div class="hero-copy">
+                <?php if ($showIcon && $headerIcon !== ''): ?>
+                    <span class="hero-marker"><?= htmlspecialchars($headerIcon) ?></span>
+                <?php endif; ?>
+                <span class="hero-kicker">Rulebook</span>
+                <h1><?= htmlspecialchars($headerTitle) ?></h1>
+                <?php if ($showLastUpdated && $lastUpdated !== ''): ?>
+                    <p class="hero-meta"><?= __('Last Updated') ?> <strong><?= htmlspecialchars($lastUpdated) ?></strong></p>
+                <?php endif; ?>
+            </div>
+        </header>
+
+        <div class="legal-stage<?= $hasToc ? ' has-toc' : '' ?>">
+            <?php if ($hasToc): ?>
+                <aside class="legal-toc" aria-label="<?= htmlspecialchars((string) __('Table of contents')) ?>">
+                    <div class="toc-card">
+                        <strong class="toc-title"><?= htmlspecialchars($tocTitle) ?></strong>
+                        <nav class="toc-links">
+                            <?php foreach ($tocItems as $item): ?>
+                                <a href="#<?= htmlspecialchars($item['id']) ?>" class="toc-link level-<?= (int) $item['level'] ?>">
+                                    <span><?= str_pad((string) array_search($item, $tocItems, true) + 1, 2, '0', STR_PAD_LEFT) ?></span>
+                                    <em><?= htmlspecialchars($item['text']) ?></em>
+                                </a>
+                            <?php endforeach; ?>
+                        </nav>
+                    </div>
+                </aside>
+            <?php endif; ?>
+
+            <article class="legal-article<?= !$hasToc ? ' no-toc' : '' ?>">
+                <div class="article-frame">
+                    <div class="article-content">
+                        <?php if ($pageContent !== ''): ?>
+                            <?= $pageContent ?>
+                        <?php else: ?>
+                            <p><?= __('Add policy content here to publish the current rules, terms, or privacy details for this roulette site.') ?></p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: clamp(4.5rem, 8vw, 6rem) 0;
+    background:
+        radial-gradient(880px 420px at 8% 0%, rgba(255,91,69,0.16), transparent 72%),
+        radial-gradient(760px 420px at 92% 6%, rgba(77,246,255,0.12), transparent 74%),
+        linear-gradient(180deg, var(--rsn-legal-hero-bg) 0%, var(--rsn-legal-hero-end) 48%, #07070b 100%);
+    color: var(--rsn-legal-content-text);
+    overflow: clip;
+}
+#<?= $componentId ?> .legal-shell {
+    width: min(1260px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+#<?= $componentId ?> .legal-hero {
+    position: relative;
+    margin-bottom: 1.25rem;
+    padding: var(--rsn-legal-header-padding) clamp(1rem, 2vw, 1.35rem) 1.2rem;
+    border-radius: 32px;
+    background:
+        linear-gradient(140deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.01) 100%),
+        linear-gradient(180deg, rgba(11,11,18,0.96) 0%, rgba(17,10,18,0.92) 100%);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 32px 80px rgba(0,0,0,0.34);
+    overflow: hidden;
+}
+#<?= $componentId ?> .hero-lights {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+#<?= $componentId ?> .light {
+    position: absolute;
+    border-radius: 999px;
+    filter: blur(10px);
+    opacity: 0.7;
+}
+#<?= $componentId ?> .light-1 {
+    top: 18%;
+    left: -2%;
+    width: 220px;
+    height: 20px;
+    background: linear-gradient(90deg, rgba(255,91,69,0), rgba(255,91,69,0.88), rgba(255,191,71,0));
+    transform: rotate(-8deg);
+}
+#<?= $componentId ?> .light-2 {
+    top: 32%;
+    right: 6%;
+    width: 180px;
+    height: 14px;
+    background: linear-gradient(90deg, rgba(77,246,255,0), rgba(77,246,255,0.78), rgba(77,246,255,0));
+    transform: rotate(18deg);
+}
+#<?= $componentId ?> .light-3 {
+    bottom: 14%;
+    left: 22%;
+    width: 260px;
+    height: 16px;
+    background: linear-gradient(90deg, rgba(223,255,90,0), rgba(223,255,90,0.84), rgba(223,255,90,0));
+    transform: rotate(6deg);
+}
+#<?= $componentId ?> .hero-copy {
+    position: relative;
+    z-index: 1;
+    max-width: 46rem;
+    display: grid;
+    justify-items: start;
+}
+#<?= $componentId ?> .hero-marker,
+#<?= $componentId ?> .hero-kicker {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: max-content;
+    min-height: 36px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+#<?= $componentId ?> .hero-marker {
+    min-width: 36px;
+    padding: 0.42rem 0.7rem;
+    margin-right: 0.55rem;
+    background: linear-gradient(135deg, rgba(255,91,69,0.18) 0%, rgba(223,255,90,0.14) 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: #f7f1e8;
+}
+#<?= $componentId ?> .hero-kicker {
+    padding: 0.42rem 0.88rem;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: #f7f1e8;
+}
+#<?= $componentId ?> .hero-kicker::before {
+    content: '';
+    width: 0.42rem;
+    height: 0.42rem;
+    margin-right: 0.52rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff5b45 0%, #4df6ff 100%);
+    box-shadow: 0 0 14px rgba(255,91,69,0.42);
+}
+#<?= $componentId ?> .legal-hero h1 {
+    margin-top: 1rem;
+    color: var(--rsn-legal-hero-title);
+    font-size: clamp(2.4rem, 4.6vw, 4.6rem);
+    line-height: 0.94;
+    letter-spacing: -0.05em;
+}
+#<?= $componentId ?> .legal-hero h1 {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    padding-bottom: 1rem;
+}
+#<?= $componentId ?> .legal-hero h1::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: min(180px, 72%);
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff5b45 0%, #ffbf47 44%, #dfff5a 74%, rgba(77,246,255,0.18) 100%);
+    box-shadow: 0 0 24px rgba(255,91,69,0.18);
+}
+#<?= $componentId ?> .hero-meta {
+    margin-top: 1rem;
+    color: var(--rsn-legal-hero-text);
+    font-size: 0.98rem;
+}
+#<?= $componentId ?> .hero-meta strong {
+    color: #f7f1e8;
+    font-weight: 700;
+}
+#<?= $componentId ?> .legal-stage {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    align-items: start;
+}
+#<?= $componentId ?> .legal-stage.has-toc {
+    grid-template-columns: minmax(240px, 0.32fr) minmax(0, 0.68fr);
+}
+#<?= $componentId ?> .legal-toc {
+    position: sticky;
+    top: 104px;
+}
+#<?= $componentId ?> .toc-card,
+#<?= $componentId ?> .article-frame {
+    border-radius: 28px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background:
+        linear-gradient(155deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.01) 100%),
+        var(--rsn-legal-toc-bg);
+    box-shadow: 0 24px 64px rgba(0,0,0,0.28);
+}
+#<?= $componentId ?> .toc-card {
+    padding: 1rem;
+    border-color: var(--rsn-legal-toc-border);
+}
+#<?= $componentId ?> .toc-title {
+    display: block;
+    color: #f7f1e8;
+    font-size: 0.82rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+#<?= $componentId ?> .toc-links {
+    display: grid;
+    gap: 0.5rem;
+    margin-top: 0.9rem;
+}
+#<?= $componentId ?> .toc-link {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 0.72rem;
+    align-items: start;
+    padding: 0.85rem 0.9rem;
+    border-radius: 18px;
+    color: #d8ccc2;
+    text-decoration: none;
+    transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease, color 0.22s ease;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.03);
+}
+#<?= $componentId ?> .toc-link:hover {
+    transform: translateX(4px);
+    color: #ffffff;
+    border-color: rgba(77,246,255,0.22);
+    background: rgba(77,246,255,0.08);
+}
+#<?= $componentId ?> .toc-link span {
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    color: #dfff5a;
+}
+#<?= $componentId ?> .toc-link em {
+    font-style: normal;
+    line-height: 1.45;
+}
+#<?= $componentId ?> .toc-link.level-3 {
+    margin-left: 0.7rem;
+}
+#<?= $componentId ?> .article-frame {
+    position: relative;
+    padding: 1px;
+    overflow: hidden;
+}
+#<?= $componentId ?> .article-frame::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,91,69,0.18) 0%, rgba(77,246,255,0.12) 45%, rgba(223,255,90,0.14) 100%);
+    opacity: 0.6;
+    pointer-events: none;
+}
+#<?= $componentId ?> .article-content {
+    position: relative;
+    z-index: 1;
+    padding: var(--rsn-legal-content-padding);
+    border-radius: 27px;
+    background:
+        linear-gradient(180deg, rgba(11,11,18,0.96) 0%, rgba(7,7,11,0.98) 100%),
+        var(--rsn-legal-content-bg);
+    max-width: var(--rsn-legal-max-width);
+    margin: 0 auto;
+}
+#<?= $componentId ?> .article-content > :first-child {
+    margin-top: 0;
+}
+#<?= $componentId ?> .article-content > :last-child {
+    margin-bottom: 0;
+}
+#<?= $componentId ?> .article-content p,
+#<?= $componentId ?> .article-content li,
+#<?= $componentId ?> .article-content td {
+    color: var(--rsn-legal-content-text);
+    line-height: 1.9;
+}
+#<?= $componentId ?> .article-content h2,
+#<?= $componentId ?> .article-content h3,
+#<?= $componentId ?> .article-content h4 {
+    color: var(--rsn-legal-heading);
+    letter-spacing: -0.03em;
+}
+#<?= $componentId ?> .article-content h2 {
+    margin: 2.3rem 0 1rem;
+    font-size: clamp(1.55rem, 3vw, 2.3rem);
+}
+#<?= $componentId ?> .article-content h3 {
+    margin: 1.8rem 0 0.8rem;
+    font-size: clamp(1.2rem, 2.2vw, 1.55rem);
+}
+#<?= $componentId ?> .article-content a {
+    color: var(--rsn-legal-link);
+    text-decoration: underline;
+    text-decoration-color: rgba(77,246,255,0.34);
+    text-underline-offset: 0.18em;
+}
+#<?= $componentId ?> .article-content blockquote {
+    margin: 1.5rem 0;
+    padding: 1rem 1.1rem;
+    border-left: 3px solid rgba(255,91,69,0.6);
+    border-radius: 0 18px 18px 0;
+    background: rgba(255,255,255,0.04);
+}
+#<?= $componentId ?> .article-content ul,
+#<?= $componentId ?> .article-content ol {
+    padding-left: 1.25rem;
+}
+#<?= $componentId ?> .article-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.4rem 0;
+    overflow: hidden;
+    border-radius: 16px;
+}
+#<?= $componentId ?> .article-content th,
+#<?= $componentId ?> .article-content td {
+    padding: 0.85rem 0.95rem;
+    border: 1px solid rgba(255,255,255,0.08);
+}
+#<?= $componentId ?> .article-content th {
+    color: #f7f1e8;
+    background: rgba(255,255,255,0.06);
+}
+@media (max-width: 1024px) {
+    #<?= $componentId ?> .legal-stage.has-toc {
+        grid-template-columns: 1fr;
+    }
+    #<?= $componentId ?> .legal-toc {
+        position: static;
+    }
+}
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 4rem 0;
+    }
+    #<?= $componentId ?> .legal-shell {
+        width: min(100%, calc(100% - 0.8rem));
+    }
+    #<?= $componentId ?> .legal-hero {
+        padding: 3.4rem 0.95rem 1rem;
+        border-radius: 26px;
+    }
+    #<?= $componentId ?> .hero-marker {
+        margin-right: 0.4rem;
+        min-width: 32px;
+        min-height: 32px;
+    }
+    #<?= $componentId ?> .legal-hero h1 {
+        font-size: clamp(2rem, 10vw, 3rem);
+    }
+    #<?= $componentId ?> .light-1 {
+        width: 140px;
+    }
+    #<?= $componentId ?> .light-2 {
+        top: 20%;
+        width: 120px;
+    }
+    #<?= $componentId ?> .light-3 {
+        width: 160px;
+        left: 8%;
+    }
+    #<?= $componentId ?> .toc-card,
+    #<?= $componentId ?> .article-frame,
+    #<?= $componentId ?> .article-content {
+        border-radius: 22px;
+    }
+    #<?= $componentId ?> .article-content {
+        padding: 1.15rem;
+    }
+    #<?= $componentId ?> .toc-link.level-3 {
+        margin-left: 0;
+    }
+    #<?= $componentId ?> .article-content table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+    }
+}
+</style>

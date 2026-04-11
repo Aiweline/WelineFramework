@@ -1,0 +1,389 @@
+<?php
+/**
+ * Three Patti Mela Pop - Testimonials Component
+ *
+ * @component_start
+ * code: testimonials
+ * name: 用户评价
+ * name_en: Testimonials
+ * description: 用户评价展示模块，采用亮色口碑墙布局
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_rating => 显示评分:select:yes|yes,no
+ * display.show_avatar => 显示头像:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#ffe1f1
+ * style.title_color => 标题颜色:color:#2d170b
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.76)
+ * style.card_border_radius => 卡片圆角:number:20|px
+ * style.card_border_left_color => 卡片高亮色:color:#ff5a36
+ * style.card_border_left_width => 卡片高亮宽度:number:4|px
+ * style.card_padding => 卡片内边距:number:25|px
+ * style.name_color => 姓名颜色:color:#2d170b
+ * style.name_font_size => 姓名字号:number:16|px
+ * style.rating_color => 评分颜色:color:#00c2a8
+ * style.content_color => 评价内容颜色:color:#6b4b34
+ * style.content_font_size => 评价内容字号:number:14|px
+ * style.avatar_size => 头像尺寸:number:60|px
+ * style.avatar_border_radius => 头像圆角:number:50|%
+ * style.section_padding => 区域内边距(PC端):number:60|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:40|px
+ * style.card_gap => 卡片间距:number:20|px
+ *
+ * group:avatars => 头像配置
+ * avatars.avatar_1 => 评价1头像:textarea:|默认使用本地头像
+ * avatars.avatar_2 => 评价2头像:textarea:|默认使用本地头像
+ * avatars.avatar_3 => 评价3头像:textarea:|默认使用本地头像
+ *
+ * group:texts => 文本内容
+ * texts.title => 区域标题:text:Testimonials
+ * texts.testimonial_1_name => 评价1姓名:text:Rajesh Kumar (Mumbai)
+ * texts.testimonial_1_rating => 评价1评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_1_content => 评价1内容:textarea:The bright layout makes it easy to jump from the hero straight into the section I need.
+ * texts.testimonial_2_name => 评价2姓名:text:Priya Sharma (Delhi)
+ * texts.testimonial_2_rating => 评价2评分:text:⭐⭐⭐⭐⭐
+ * texts.testimonial_2_content => 评价2内容:textarea:The mobile cards feel lively without getting cluttered, and the FAQ is much easier to scan.
+ * texts.testimonial_3_name => 评价3姓名:text:Amit Patel (Ahmedabad)
+ * texts.testimonial_3_rating => 评价3评分:text:⭐⭐⭐⭐☆
+ * texts.testimonial_3_content => 评价3内容:textarea:The poster-style game section stands out right away and still keeps the content readable.
+ *
+ * @fields_end
+ */
+
+$componentId = 'mela-testimonials-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge(is_array($styleSettings) ? $styleSettings : [], is_array($componentConfig) ? $componentConfig : []);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$display = $getConfig('display.show_section', $getConfig('testimonials.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showRating = $getConfig('display.show_rating', 'yes') !== 'no';
+$showAvatar = $getConfig('display.show_avatar', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('testimonials.bg_color', $colors['testimonials_bg'] ?? '#ffe1f1'));
+$titleColor = $getConfig('style.title_color', $colors['heading_color'] ?? '#2d170b');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$cardBgColor = $getConfig('style.card_bg_color', $colors['card_bg'] ?? 'rgba(255,255,255,0.76)');
+$cardBorderRadius = $getConfig('style.card_border_radius', '20');
+$cardBorderLeftColor = $getConfig('style.card_border_left_color', $colors['accent_primary'] ?? '#ff5a36');
+$cardBorderLeftWidth = $getConfig('style.card_border_left_width', '4');
+$cardPadding = $getConfig('style.card_padding', '25');
+$nameColor = $getConfig('style.name_color', $colors['heading_color'] ?? '#2d170b');
+$nameFontSize = $getConfig('style.name_font_size', '16');
+$ratingColor = $getConfig('style.rating_color', $colors['accent_secondary'] ?? '#00c2a8');
+$contentColor = $getConfig('style.content_color', $colors['text_secondary'] ?? '#6b4b34');
+$contentFontSize = $getConfig('style.content_font_size', '14');
+$avatarSize = $getConfig('style.avatar_size', '60');
+$avatarBorderRadius = $getConfig('style.avatar_border_radius', '50');
+$sectionPadding = $getConfig('style.section_padding', '60');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '40');
+$cardGap = $getConfig('style.card_gap', '20');
+
+$defaultAvatar1 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/user/Rajesh-Kumar-1.avif');
+$defaultAvatar2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/user/Priya-Sharma-2.avif');
+$defaultAvatar3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/three-patti-mela-pop/asset/img/user/Amit-Patel-3.avif');
+
+$title = $getConfig('texts.title', $getConfig('testimonials.title', $getConfig('texts.testimonials_title', 'Testimonials')));
+$cards = [
+    [
+        'avatar' => $getConfig('avatars.avatar_1', $getConfig('testimonials.avatar_1', '')) ?: $defaultAvatar1,
+        'name' => $getConfig('texts.testimonial_1_name', 'Rajesh Kumar (Mumbai)'),
+        'rating' => $getConfig('texts.testimonial_1_rating', '⭐⭐⭐⭐⭐'),
+        'content' => $getConfig('texts.testimonial_1_content', 'The bright layout makes it easy to jump from the hero straight into the section I need.'),
+    ],
+    [
+        'avatar' => $getConfig('avatars.avatar_2', $getConfig('testimonials.avatar_2', '')) ?: $defaultAvatar2,
+        'name' => $getConfig('texts.testimonial_2_name', 'Priya Sharma (Delhi)'),
+        'rating' => $getConfig('texts.testimonial_2_rating', '⭐⭐⭐⭐⭐'),
+        'content' => $getConfig('texts.testimonial_2_content', 'The mobile cards feel lively without getting cluttered, and the FAQ is much easier to scan.'),
+    ],
+    [
+        'avatar' => $getConfig('avatars.avatar_3', $getConfig('testimonials.avatar_3', '')) ?: $defaultAvatar3,
+        'name' => $getConfig('texts.testimonial_3_name', 'Amit Patel (Ahmedabad)'),
+        'rating' => $getConfig('texts.testimonial_3_rating', '⭐⭐⭐⭐☆'),
+        'content' => $getConfig('texts.testimonial_3_content', 'The poster-style game section stands out right away and still keeps the content readable.'),
+    ],
+];
+?>
+<section id="<?= $componentId ?>" class="mela-testimonials" aria-labelledby="<?= $componentId ?>-title">
+    <span class="testimonials-glow glow-left" aria-hidden="true" data-mela-parallax data-mela-speed="0.04"></span>
+    <span class="testimonials-glow glow-right" aria-hidden="true" data-mela-parallax data-mela-speed="0.06"></span>
+
+    <div class="testimonials-shell">
+        <header class="testimonials-header">
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title" class="testimonials-title wow animate__fadeInUp"><span><?= htmlspecialchars($title) ?></span></h2>
+            <?php endif; ?>
+        </header>
+
+        <div class="testimonials-wall">
+            <?php foreach ($cards as $index => $card): ?>
+                <article class="quote-card quote-card-<?= $index + 1 ?> wow animate__fadeInUp" data-wow-delay="<?= htmlspecialchars(number_format(0.08 * ($index + 1), 2)) ?>s">
+                    <div class="quote-card-top">
+                        <?php if ($showAvatar): ?>
+                            <img class="quote-avatar" src="<?= htmlspecialchars($card['avatar']) ?>" alt="<?= htmlspecialchars($card['name']) ?>" loading="lazy" decoding="async">
+                        <?php endif; ?>
+                        <div class="quote-person">
+                            <h3><?= htmlspecialchars($card['name']) ?></h3>
+                            <?php if ($showRating): ?>
+                                <p class="quote-rating"><?= htmlspecialchars($card['rating']) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <p class="quote-body"><?= nl2br(htmlspecialchars($card['content'])) ?></p>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: <?= htmlspecialchars($sectionPadding) ?>px 0;
+    background:
+        radial-gradient(520px 220px at 10% 10%, rgba(255,255,255,0.54), transparent 70%),
+        radial-gradient(380px 220px at 88% 0%, rgba(255,79,123,0.16), transparent 70%),
+        <?= htmlspecialchars($bgColor) ?>;
+    overflow: clip;
+}
+
+#<?= $componentId ?> .testimonials-shell {
+    width: var(--mela-shell, min(1280px, calc(100% - 1.2rem)));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .testimonials-header {
+    margin-bottom: clamp(1.4rem, 4vw, 2rem);
+}
+
+#<?= $componentId ?> .testimonials-title {
+    margin: 0;
+    font-size: clamp(<?= htmlspecialchars($titleFontSizeMobile) ?>px, 4.8vw, <?= htmlspecialchars($titleFontSize) ?>px);
+    line-height: 0.96;
+    color: <?= htmlspecialchars($titleColor) ?>;
+}
+
+#<?= $componentId ?> .testimonials-title span {
+    position: relative;
+    display: inline-block;
+    padding: 0.18rem 0 0.82rem 2rem;
+}
+
+#<?= $componentId ?> .testimonials-title span::before {
+    content: '"';
+    position: absolute;
+    left: 0;
+    top: -0.08rem;
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-size: clamp(2.4rem, 4vw, 3.3rem);
+    line-height: 1;
+    color: rgba(255, 90, 54, 0.8);
+    text-shadow: 0 10px 18px rgba(255, 90, 54, 0.12);
+}
+
+#<?= $componentId ?> .testimonials-title span::after {
+    content: '';
+    position: absolute;
+    left: 2rem;
+    bottom: 0.08rem;
+    width: min(6.6rem, 58%);
+    height: 0.42rem;
+    border-radius: 999px;
+    background:
+        linear-gradient(90deg, rgba(255, 90, 54, 0.9), rgba(255, 183, 3, 0.84) 56%, rgba(255, 255, 255, 0));
+}
+
+#<?= $componentId ?> .testimonials-wall {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: <?= htmlspecialchars($cardGap) ?>px;
+    align-items: start;
+}
+
+#<?= $componentId ?> .quote-card {
+    position: relative;
+    padding: <?= htmlspecialchars($cardPadding) ?>px;
+    border-radius: <?= htmlspecialchars($cardBorderRadius) ?>px;
+    background: <?= htmlspecialchars($cardBgColor) ?>;
+    border: 1px solid rgba(45,23,11,0.1);
+    box-shadow: 0 20px 36px rgba(255, 79, 123, 0.12);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .quote-card::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 1.4rem;
+    bottom: 1.4rem;
+    width: <?= htmlspecialchars($cardBorderLeftWidth) ?>px;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($cardBorderLeftColor) ?>;
+}
+
+#<?= $componentId ?> .quote-card::after {
+    content: '"';
+    position: absolute;
+    right: 1rem;
+    top: 0.45rem;
+    font-family: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
+    font-size: 5rem;
+    line-height: 1;
+    color: rgba(45,23,11,0.08);
+}
+
+#<?= $componentId ?> .quote-card-1 {
+    transform: rotate(-2deg);
+}
+
+#<?= $componentId ?> .quote-card-2 {
+    transform: translateY(1.4rem) rotate(1.3deg);
+}
+
+#<?= $componentId ?> .quote-card-3 {
+    transform: rotate(-1deg);
+}
+
+#<?= $componentId ?> .quote-card-top {
+    display: flex;
+    align-items: center;
+    gap: 0.95rem;
+    margin-bottom: 1rem;
+}
+
+#<?= $componentId ?> .quote-avatar {
+    width: <?= htmlspecialchars($avatarSize) ?>px;
+    height: <?= htmlspecialchars($avatarSize) ?>px;
+    border-radius: <?= htmlspecialchars($avatarBorderRadius) ?>%;
+    object-fit: cover;
+    border: 4px solid rgba(255,255,255,0.72);
+    box-shadow: 0 12px 22px rgba(45,23,11,0.12);
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .quote-person h3 {
+    margin: 0;
+    font-size: <?= htmlspecialchars($nameFontSize) ?>px;
+    line-height: 1.15;
+    color: <?= htmlspecialchars($nameColor) ?>;
+}
+
+#<?= $componentId ?> .quote-rating {
+    margin: 0.35rem 0 0;
+    font-size: 0.92rem;
+    color: <?= htmlspecialchars($ratingColor) ?>;
+}
+
+#<?= $componentId ?> .quote-body {
+    margin: 0;
+    font-size: <?= htmlspecialchars($contentFontSize) ?>px;
+    line-height: 1.82;
+    color: <?= htmlspecialchars($contentColor) ?>;
+}
+
+#<?= $componentId ?> .testimonials-glow {
+    position: absolute;
+    pointer-events: none;
+    border-radius: 999px;
+}
+
+#<?= $componentId ?> .glow-left {
+    left: -5rem;
+    top: 5rem;
+    width: 13rem;
+    height: 13rem;
+    background: radial-gradient(circle, rgba(255,255,255,0.52), rgba(255,255,255,0) 72%);
+}
+
+#<?= $componentId ?> .glow-right {
+    right: -3rem;
+    bottom: -1rem;
+    width: 12rem;
+    height: 12rem;
+    background: radial-gradient(circle, rgba(0,194,168,0.18), rgba(0,194,168,0) 72%);
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> .testimonials-wall {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .quote-card,
+    #<?= $componentId ?> .quote-card-1,
+    #<?= $componentId ?> .quote-card-2,
+    #<?= $componentId ?> .quote-card-3 {
+        transform: none;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= htmlspecialchars($sectionPaddingMobile) ?>px 0;
+    }
+
+    #<?= $componentId ?> .testimonials-shell {
+        width: min(100%, calc(100% - 0.85rem));
+    }
+
+    #<?= $componentId ?> .testimonials-title {
+        max-width: 100%;
+    }
+
+    #<?= $componentId ?> .testimonials-title span {
+        padding-left: 1.55rem;
+        padding-bottom: 0.72rem;
+    }
+
+    #<?= $componentId ?> .testimonials-title span::before {
+        font-size: 2rem;
+    }
+
+    #<?= $componentId ?> .testimonials-title span::after {
+        left: 1.55rem;
+        width: min(5rem, 62%);
+        height: 0.36rem;
+    }
+
+    #<?= $componentId ?> .testimonials-wall {
+        gap: 0.85rem;
+    }
+
+    #<?= $componentId ?> .quote-card {
+        padding: 18px;
+        border-radius: 18px;
+    }
+
+    #<?= $componentId ?> .quote-card:nth-child(odd) {
+        margin-right: 1rem;
+    }
+
+    #<?= $componentId ?> .quote-card:nth-child(even) {
+        margin-left: 1rem;
+    }
+}
+</style>

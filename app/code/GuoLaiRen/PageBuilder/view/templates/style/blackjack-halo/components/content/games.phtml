@@ -1,0 +1,466 @@
+<?php
+/**
+ * Blackjack Halo Games Showcase Component
+ *
+ * @component_start
+ * code: games-showcase
+ * name: 游戏介绍
+ * name_en: Games Showcase
+ * description: Blackjack Halo 牌桌展示，遵循 tpmst 游戏字段规范
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示此区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_description => 显示卡片描述:select:yes|yes,no
+ *
+ * group:style => 样式配置
+ * style.bg_color => 背景颜色:color:#f7fbf5
+ * style.title_color => 标题颜色:color:#1e5b46
+ * style.title_font_size => 标题字体大小(PC端):number:36|px
+ * style.title_font_size_mobile => 标题字体大小(移动端):number:24|px
+ * style.card_bg_color => 卡片背景色:color:rgba(255,255,255,0.88)
+ * style.card_border_radius => 卡片圆角:number:26|px
+ * style.card_border_color => 卡片边框色:color:rgba(31,122,91,0.12)
+ * style.card_title_color => 卡片标题颜色:color:#20352d
+ * style.card_title_font_size => 卡片标题字号:number:20|px
+ * style.card_desc_color => 卡片描述颜色:color:#61756d
+ * style.card_desc_font_size => 卡片描述字号:number:14|px
+ * style.section_padding => 区域内边距(PC端):number:76|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:48|px
+ * style.card_gap => 卡片间距:number:22|px
+ * style.card_content_padding => 卡片内容内边距:number:20|px
+ * style.hover_transform => 悬停上移距离:number:5|px
+ *
+ * group:images => 图片配置
+ * images.image_1_desktop => 游戏1桌面端图片:textarea:|默认使用本地 game-blackjack-classic.svg
+ * images.image_1_mobile => 游戏1移动端图片:textarea:|默认使用本地 game-blackjack-classic.svg
+ * images.image_2 => 游戏2图片:textarea:|默认使用本地 game-blackjack-live.svg
+ * images.image_3 => 游戏3图片:textarea:|默认使用本地 game-blackjack-vip.svg
+ *
+ * group:texts => 游戏文本
+ * texts.kicker => 顶部提示:text:Dealer shelf
+ * texts.game_1_badge => 游戏1标签:text:Core table
+ * texts.game_1_meta => 游戏1补充标签:text:Steady pace
+ * texts.title => 区域标题:text:Choose Your Halo Table
+ * texts.game_1_title => 游戏1标题:text:Classic Blackjack
+ * texts.game_1_desc => 游戏1描述:textarea:For players who want the cleanest read of the felt, balanced pacing, and a familiar room flow.
+ * texts.game_2_badge => 游戏2标签:text:Live flow
+ * texts.game_2_meta => 游戏2补充标签:text:Sharper tempo
+ * texts.game_2_title => 游戏2标题:text:Live Dealer Room
+ * texts.game_2_desc => 游戏2描述:textarea:Sharper motion, clearer seat cues, and a more active session pace for players who like live-room energy.
+ * texts.game_3_badge => 游戏3标签:text:Premium route
+ * texts.game_3_meta => 游戏3补充标签:text:Quiet polish
+ * texts.game_3_title => 游戏3标题:text:VIP Halo Salon
+ * texts.game_3_desc => 游戏3描述:textarea:A more curated high-limit feel with polished card presentation and a calmer premium route.
+ *
+ * @fields_end
+ */
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+$componentId = 'bkh-games-' . uniqid();
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('games.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showDescription = $getConfig('display.show_description', 'yes') !== 'no';
+
+$bgColor = $getConfig('style.bg_color', $getConfig('games.bg_color', '#f7fbf5'));
+$titleColor = $getConfig('style.title_color', '#1e5b46');
+$titleFontSize = $getConfig('style.title_font_size', '36');
+$titleFontSizeMobile = $getConfig('style.title_font_size_mobile', '24');
+$cardBgColor = $getConfig('style.card_bg_color', 'rgba(255,255,255,0.88)');
+$cardBorderRadius = $getConfig('style.card_border_radius', '26');
+$cardBorderColor = $getConfig('style.card_border_color', 'rgba(31,122,91,0.12)');
+$cardTitleColor = $getConfig('style.card_title_color', '#20352d');
+$cardTitleFontSize = $getConfig('style.card_title_font_size', '20');
+$cardDescColor = $getConfig('style.card_desc_color', '#61756d');
+$cardDescFontSize = $getConfig('style.card_desc_font_size', '14');
+$sectionPadding = $getConfig('style.section_padding', '76');
+$sectionPaddingMobile = $getConfig('style.section_padding_mobile', '48');
+$cardGap = $getConfig('style.card_gap', '22');
+$cardContentPadding = $getConfig('style.card_content_padding', '20');
+$hoverTransform = $getConfig('style.hover_transform', '5');
+
+$defaultImage1Desktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/game-blackjack-classic.svg');
+$defaultImage1Mobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/game-blackjack-classic.svg');
+$defaultImage2 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/game-blackjack-live.svg');
+$defaultImage3 = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/game-blackjack-vip.svg');
+
+$image1Desktop = $getConfig('images.image_1_desktop', $getConfig('games.image_1_desktop', '')) ?: $defaultImage1Desktop;
+$image1Mobile = $getConfig('images.image_1_mobile', $getConfig('games.image_1_mobile', '')) ?: $defaultImage1Mobile;
+$image2 = $getConfig('images.image_2', $getConfig('games.image_2', '')) ?: $defaultImage2;
+$image3 = $getConfig('images.image_3', $getConfig('games.image_3', '')) ?: $defaultImage3;
+
+$kicker = $getConfig('texts.kicker', 'Dealer shelf');
+$title = $getConfig('texts.title', $getConfig('games.title', 'Choose Your Halo Table'));
+$badge1 = $getConfig('texts.game_1_badge', 'Core table');
+$meta1 = $getConfig('texts.game_1_meta', 'Steady pace');
+$title1 = $getConfig('texts.game_1_title', 'Classic Blackjack');
+$desc1 = $getConfig('texts.game_1_desc', 'For players who want the cleanest read of the felt, balanced pacing, and a familiar room flow.');
+$badge2 = $getConfig('texts.game_2_badge', 'Live flow');
+$meta2 = $getConfig('texts.game_2_meta', 'Sharper tempo');
+$title2 = $getConfig('texts.game_2_title', 'Live Dealer Room');
+$desc2 = $getConfig('texts.game_2_desc', 'Sharper motion, clearer seat cues, and a more active session pace for players who like live-room energy.');
+$badge3 = $getConfig('texts.game_3_badge', 'Premium route');
+$meta3 = $getConfig('texts.game_3_meta', 'Quiet polish');
+$title3 = $getConfig('texts.game_3_title', 'VIP Halo Salon');
+$desc3 = $getConfig('texts.game_3_desc', 'A more curated high-limit feel with polished card presentation and a calmer premium route.');
+
+$items = [
+    [
+        'title' => $title1,
+        'desc' => $desc1,
+        'desktop' => $image1Desktop,
+        'mobile' => $image1Mobile,
+        'tag' => $badge1,
+        'meta' => $meta1,
+    ],
+    [
+        'title' => $title2,
+        'desc' => $desc2,
+        'desktop' => $image2,
+        'mobile' => $image2,
+        'tag' => $badge2,
+        'meta' => $meta2,
+    ],
+    [
+        'title' => $title3,
+        'desc' => $desc3,
+        'desktop' => $image3,
+        'mobile' => $image3,
+        'tag' => $badge3,
+        'meta' => $meta3,
+    ],
+];
+?>
+
+<section id="<?= $componentId ?>" class="bkh-games" aria-labelledby="<?= $componentId ?>-title">
+    <div class="games-shell">
+        <header class="games-head" id="tables">
+            <span class="games-kicker"><?= htmlspecialchars($kicker) ?></span>
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><?= htmlspecialchars($title) ?></h2>
+            <?php endif; ?>
+        </header>
+
+        <div class="games-track" role="list">
+            <?php foreach ($items as $index => $item): ?>
+                <article class="game-card game-card-<?= (int)$index ?>" role="listitem">
+                    <div class="game-media">
+                        <picture>
+                            <source media="(max-width: 767px)" srcset="<?= htmlspecialchars($item['mobile']) ?>">
+                            <img src="<?= htmlspecialchars($item['desktop']) ?>" alt="<?= htmlspecialchars($item['title']) ?>" loading="lazy">
+                        </picture>
+                    </div>
+
+                    <div class="game-body">
+                        <div class="game-topline">
+                            <span class="game-tag"><?= htmlspecialchars($item['tag']) ?></span>
+                            <span class="game-meta"><?= htmlspecialchars($item['meta']) ?></span>
+                        </div>
+                        <h3><?= htmlspecialchars($item['title']) ?></h3>
+                        <?php if ($showDescription): ?>
+                            <p><?= htmlspecialchars($item['desc']) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: <?= (int)$sectionPadding ?>px 0;
+    background:
+        radial-gradient(980px 420px at 50% -14%, rgba(211,160,58,0.24), transparent 62%),
+        radial-gradient(720px 320px at 8% 100%, rgba(31,122,91,0.14), transparent 70%),
+        radial-gradient(760px 340px at 94% 18%, rgba(211,160,58,0.14), transparent 74%),
+        linear-gradient(180deg, rgba(255,249,236,0.94) 0%, rgba(248, 238, 214, 0.72) 52%, rgba(255,255,255,0.2) 100%),
+        <?= htmlspecialchars($bgColor) ?>;
+    overflow: hidden;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(520px 180px at 18% 20%, rgba(255,255,255,0.28) 0%, rgba(255,255,255,0) 70%),
+        radial-gradient(460px 160px at 84% 18%, rgba(211,160,58,0.16) 0%, rgba(211,160,58,0) 72%),
+        conic-gradient(from 210deg at 50% 105%, rgba(31,122,91,0.08), rgba(255,255,255,0) 22%, rgba(211,160,58,0.1) 46%, rgba(255,255,255,0) 72%, rgba(31,122,91,0.08));
+    opacity: 0.72;
+    filter: blur(2px);
+}
+
+#<?= $componentId ?> .games-shell {
+    width: min(1240px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .games-head {
+    max-width: 720px;
+    margin: 0 auto 1.4rem;
+    text-align: center;
+}
+
+#<?= $componentId ?> .games-kicker {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.44rem 0.86rem;
+    border-radius: 999px;
+    background: rgba(211, 160, 58, 0.12);
+    border: 1px solid rgba(211, 160, 58, 0.22);
+    color: #996718;
+    font-size: 0.76rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .games-head h2 {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($titleColor) ?>;
+    font-size: clamp(<?= (int)$titleFontSizeMobile ?>px, 5vw, <?= (int)$titleFontSize ?>px);
+    line-height: 1.02;
+}
+
+#<?= $componentId ?> .games-track {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.08fr) minmax(0, 1fr);
+    gap: <?= (int)$cardGap ?>px;
+    align-items: center;
+}
+
+#<?= $componentId ?> .game-card {
+    --game-card-shift: 0px;
+    --game-card-tilt: 0deg;
+    position: relative;
+    border-radius: <?= (int)$cardBorderRadius ?>px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, <?= htmlspecialchars($cardBgColor) ?> 100%);
+    border: 1px solid <?= htmlspecialchars($cardBorderColor) ?>;
+    overflow: hidden;
+    box-shadow: 0 18px 38px rgba(31, 82, 63, 0.08);
+    transform: translateY(var(--game-card-shift)) rotate(var(--game-card-tilt));
+    transform-origin: center 82%;
+    transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+}
+
+#<?= $componentId ?> .game-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 50% 0%, rgba(255,255,255,0.46) 0%, rgba(255,255,255,0) 44%),
+        linear-gradient(180deg, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 52%);
+    opacity: 0.82;
+}
+
+#<?= $componentId ?> .game-card > * {
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .game-card:hover {
+    transform: translateY(calc(var(--game-card-shift) - <?= (int)$hoverTransform ?>px)) rotate(var(--game-card-tilt));
+    box-shadow: 0 24px 44px rgba(31, 82, 63, 0.12);
+    border-color: rgba(211,160,58,0.28);
+}
+
+#<?= $componentId ?> .game-card-0 {
+    --game-card-shift: -14px;
+    --game-card-tilt: 3.2deg;
+}
+
+#<?= $componentId ?> .game-card-1 {
+    --game-card-shift: 20px;
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, rgba(255, 246, 224, 0.96) 48%, rgba(244, 251, 247, 0.94) 100%);
+    border-color: rgba(211,160,58,0.22);
+    box-shadow: 0 24px 48px rgba(173, 126, 20, 0.14);
+}
+
+#<?= $componentId ?> .game-card-1::before {
+    background:
+        radial-gradient(circle at 50% -4%, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.1) 44%, transparent 62%),
+        linear-gradient(145deg, rgba(211,160,58,0.16) 0%, rgba(255,255,255,0) 36%, rgba(31,122,91,0.12) 100%),
+        repeating-linear-gradient(135deg, rgba(211,160,58,0.05) 0 1px, transparent 1px 18px);
+    opacity: 1;
+}
+
+#<?= $componentId ?> .game-card-2 {
+    --game-card-shift: -14px;
+    --game-card-tilt: -3.2deg;
+}
+
+#<?= $componentId ?> .game-media {
+    position: relative;
+    padding: 0.8rem;
+}
+
+#<?= $componentId ?> .game-media::after {
+    content: '';
+    position: absolute;
+    left: 1rem;
+    right: 1rem;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(31,122,91,0) 0%, rgba(31,122,91,0.18) 48%, rgba(31,122,91,0) 100%);
+}
+
+#<?= $componentId ?> .game-media img {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: calc(<?= (int)$cardBorderRadius ?>px - 8px);
+}
+
+#<?= $componentId ?> .game-body {
+    padding: <?= (int)$cardContentPadding ?>px;
+}
+
+#<?= $componentId ?> .game-topline {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+#<?= $componentId ?> .game-tag,
+#<?= $componentId ?> .game-meta {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.36rem 0.68rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .game-tag {
+    background: rgba(31,122,91,0.08);
+    color: #1c624b;
+}
+
+#<?= $componentId ?> .game-meta {
+    background: rgba(211,160,58,0.12);
+    color: #9c6a1b;
+}
+
+#<?= $componentId ?> .game-body h3 {
+    margin-top: 0.95rem;
+    color: <?= htmlspecialchars($cardTitleColor) ?>;
+    font-size: <?= (int)$cardTitleFontSize ?>px;
+    line-height: 1.24;
+}
+
+#<?= $componentId ?> .game-body p {
+    margin-top: 0.72rem;
+    color: <?= htmlspecialchars($cardDescColor) ?>;
+    font-size: <?= (int)$cardDescFontSize ?>px;
+    line-height: 1.82;
+}
+
+@media (max-width: 960px) {
+    #<?= $componentId ?> .games-track {
+        display: flex;
+        gap: 1rem;
+        overflow-x: auto;
+        padding: 1.15rem 0.35rem 1.2rem;
+        scroll-snap-type: x mandatory;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        scroll-padding-inline: 0.35rem;
+    }
+
+    #<?= $componentId ?> .games-track::-webkit-scrollbar {
+        display: none;
+    }
+
+    #<?= $componentId ?> .game-card,
+    #<?= $componentId ?> .game-card-0,
+    #<?= $componentId ?> .game-card-1,
+    #<?= $componentId ?> .game-card-2 {
+        flex: 0 0 min(78vw, 360px);
+        scroll-snap-align: center;
+    }
+
+    #<?= $componentId ?> .game-card:hover {
+        transform: translateY(calc(var(--game-card-shift) - <?= (int)$hoverTransform ?>px)) rotate(var(--game-card-tilt));
+    }
+
+    #<?= $componentId ?> .game-topline {
+        gap: 0.55rem;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int)$sectionPaddingMobile ?>px 0;
+    }
+
+    #<?= $componentId ?> .games-shell {
+        width: min(1240px, calc(100% - 0.9rem));
+    }
+
+    #<?= $componentId ?> .games-track {
+        gap: 0.9rem;
+        padding: 1rem 0.2rem 1.1rem;
+    }
+
+    #<?= $componentId ?> .game-card,
+    #<?= $componentId ?> .game-card-0,
+    #<?= $componentId ?> .game-card-1,
+    #<?= $componentId ?> .game-card-2 {
+        flex-basis: min(88vw, 320px);
+        border-radius: 24px;
+    }
+
+    #<?= $componentId ?> .game-media {
+        padding: 0.7rem;
+    }
+
+    #<?= $componentId ?> .game-body {
+        padding: 16px;
+    }
+
+    #<?= $componentId ?> .game-topline {
+        justify-content: flex-start;
+    }
+
+    #<?= $componentId ?> .game-tag,
+    #<?= $componentId ?> .game-meta {
+        font-size: 0.7rem;
+        padding: 0.32rem 0.6rem;
+    }
+
+    #<?= $componentId ?> .game-body h3 {
+        margin-top: 0.82rem;
+        font-size: clamp(1.02rem, 4vw, <?= (int)$cardTitleFontSize ?>px);
+    }
+
+    #<?= $componentId ?> .game-body p {
+        margin-top: 0.62rem;
+        line-height: 1.68;
+    }
+}
+</style>

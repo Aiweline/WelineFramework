@@ -513,8 +513,8 @@ class Login extends \Weline\Framework\App\Controller\BackendController
             return '/' . \trim($areaRoute, '/') . '/' . \ltrim($path, '/');
         }
         if ($backendPrefix !== null && $backendPrefix !== '') {
-            $currency = $this->request->getServer('WELINE_USER_CURRENCY') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
-            $language = $this->request->getServer('WELINE_USER_LANG') ?? $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            $currency = (string) (\w_env('user.currency', 'CNY') ?? 'CNY');
+            $language = (string) (\w_env('user.lang', 'zh_Hans_CN') ?? 'zh_Hans_CN');
             return '/' . $backendPrefix . '/' . $currency . '/' . $language . '/' . \ltrim($path, '/');
         }
         return $this->_url->getBackendUrlPath($path);

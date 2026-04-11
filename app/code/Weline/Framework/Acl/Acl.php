@@ -184,7 +184,7 @@ use Weline\Framework\Manager\ObjectManager;
         // 检测参数
         /**@var Request $request */
         $request = ObjectManager::getInstance(Request::class);
-        $this->setType($request->getData('router/class/area'))
+        $this->setType((string)($request->getData('router/class/area') ?? ''))
             ->setModule($request->getModuleName())
             ->setRouter($request->getData('router/router'))
             ->setMethod($request->getMethod())

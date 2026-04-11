@@ -607,6 +607,11 @@ class Taglib
     {
         $this->cache?->flush();
         $this->tagRegistry?->clearCache();
+        self::clearStaticCaches();
+    }
+
+    public static function clearStaticCaches(): void
+    {
         self::$varParserCache = [];
         self::$hookCheckCache = [];
         self::$compiledRegexCache = [];

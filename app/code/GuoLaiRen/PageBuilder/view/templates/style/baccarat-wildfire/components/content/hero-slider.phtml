@@ -1,0 +1,737 @@
+<?php
+/**
+ * Baccarat Wildfire - Hero Slider Component
+ *
+ * @component_start
+ * code: hero-slider
+ * name: Hero首屏
+ * name_en: Hero Slider
+ * description: 炽焰舞台首屏，强调对比、速度和百家乐牌桌氛围
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:banner => Banner设置（TPMST兼容）
+ * banner.display => 显示Banner:select:yes|yes,no
+ * banner.image_mobile => 移动端Banner图片:textarea:|默认使用本地图
+ * banner.image_desktop => PC端Banner图片:textarea:|默认使用本地图
+ * banner.alt => Banner图片描述:text:Baccarat Wildfire hero
+ * banner.bg_color => Banner背景基础色:color:#11070d
+ *
+ * group:hero => Hero设置
+ * hero.display => 显示Hero:select:yes|yes,no
+ * hero.title => 主标题:text:|留空使用页面标题
+ * hero.subtitle => 副标题:textarea:|留空使用页面描述
+ * hero.cta_text => 主按钮文字:text:Enter Table
+ * hero.cta_url => 主按钮链接:text:#download
+ * hero.secondary_cta_text => 次按钮文字:text:Browse Rooms
+ * hero.secondary_cta_url => 次按钮链接:text:#tables
+ * hero.image => 桌面端Hero图片:textarea:|默认使用本地图
+ * hero.image_mobile => 移动端Hero图片:textarea:|默认使用本地图
+ * hero.alt => Hero图片描述:text:Baccarat Wildfire hero
+ * hero.bg_color => Hero背景基础色:color:#11070d
+ * hero.bg_image => 背景图片:textarea:|留空使用默认图
+ *
+ * group:download_btn => 下载按钮
+ * download_btn.display => 显示下载按钮:select:yes|yes,no
+ * download_btn.image => 下载按钮图片:textarea:
+ * download_btn.alt => 下载按钮描述:text:Enter Table
+ * download_btn.url => 下载链接:text:#download
+ *
+ * group:layout => 布局设置
+ * layout.slider_classes => 区域附加类名:textarea:
+ * layout.margin_top => 区域顶部偏移:number:0|px
+ * layout.img_margin_top => 图片顶部偏移:number:0|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'bwf-hero-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$sanitizeTitle = static function ($value) {
+    $value = trim((string) $value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$getExplicitConfig = static function (array $source, string $key, $default = '') {
+    return array_key_exists($key, $source) && $source[$key] !== '' ? $source[$key] : $default;
+};
+
+$heroDisplayRaw = $getExplicitConfig(is_array($componentConfig) ? $componentConfig : [], 'hero.display', '');
+if ($heroDisplayRaw === '') {
+    $heroDisplayRaw = $getExplicitConfig(is_array($styleSettings) ? $styleSettings : [], 'hero.display', '');
+}
+if ($heroDisplayRaw === '') {
+    $heroDisplayRaw = $getExplicitConfig(is_array($componentConfig) ? $componentConfig : [], 'banner.display', '');
+}
+$display = $normalizeToggle($heroDisplayRaw, 'yes') === 'yes';
+if (!$display) {
+    return;
+}
+
+$page = $this->getData('page');
+$pageTitle = $page ? $sanitizeTitle((string) ($page->getData('meta_title') ?: $page->getData('title') ?: '')) : '';
+$title = $sanitizeTitle((string) $getConfig('hero.title', $pageTitle));
+if ($title === '') {
+    $title = 'Step Into Baccarat Wildfire';
+}
+$subtitle = trim((string) $getConfig('hero.subtitle', $page ? (string) ($page->getData('meta_description') ?: '') : ''));
+if ($subtitle === '') {
+    $subtitle = 'Baccarat Wildfire sharpens how players spot live tables, compare banker or player routes, and enter the right room fast on every screen.';
+}
+$ctaDisplay = $normalizeToggle($getConfig('download_btn.display', 'yes')) === 'yes';
+$downloadImage = trim((string) $getConfig('download_btn.image', ''));
+$ctaText = $getConfigAny(['hero.cta_text', 'download_btn.alt'], 'Enter Table');
+$ctaUrl = $getConfigAny(['hero.cta_url', 'download_btn.url'], '#download');
+$ctaHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string) $ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaHref, 'url');
+$secondaryText = $getConfig('hero.secondary_cta_text', 'Browse Rooms');
+$secondaryUrl = $getConfig('hero.secondary_cta_url', '#tables');
+$heroImage = trim((string)$getConfigAny(['hero.image', 'banner.image_desktop'], ''));
+$heroImage = $heroImage ?: $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/baccarat-wildfire/asset/img/hero-info-graphic.svg');
+$heroImageMobile = trim((string)$getConfigAny(['hero.image_mobile', 'banner.image_mobile'], ''));
+$heroImageMobile = $heroImageMobile !== '' ? $heroImageMobile : $heroImage;
+$bgImage = trim((string)$getConfig('hero.bg_image', ''));
+$bgImage = $bgImage ?: $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/baccarat-wildfire/asset/img/poker-header-bg.svg');
+$heroAlt = trim((string) $getConfigAny(['hero.alt', 'banner.alt'], $title));
+$heroBgColor = (string) $getConfig('hero.bg_color', $getConfig('banner.bg_color', '#11070d'));
+$sliderClasses = trim((string) $getConfig('layout.slider_classes', ''));
+$marginTop = (int) $getConfig('layout.margin_top', '0');
+$imgMarginTop = (int) $getConfig('layout.img_margin_top', '0');
+
+$suits = ['♠', '♦', '♣', '♥', '♠', '♦', '♣'];
+?>
+
+<section id="<?= $componentId ?>" class="bwf-hero<?= $sliderClasses !== '' ? ' ' . htmlspecialchars($sliderClasses) : '' ?>" style="margin-top: <?= $marginTop ?>px;">
+    <div class="hero-backdrop" style="background-image:url('<?= htmlspecialchars($bgImage) ?>');"></div>
+    <span class="hero-beam beam-left" aria-hidden="true"></span>
+    <span class="hero-beam beam-right" aria-hidden="true"></span>
+    <span class="hero-trail trail-one" aria-hidden="true"></span>
+    <span class="hero-trail trail-two" aria-hidden="true"></span>
+    <span class="hero-trail trail-three" aria-hidden="true"></span>
+
+    <div class="hero-shell">
+        <header class="hero-copy">
+            <span class="hero-knot" aria-hidden="true"></span>
+            <span class="copy-suit copy-suit-1" aria-hidden="true">♠</span>
+            <span class="copy-suit copy-suit-2" aria-hidden="true">♥</span>
+            <span class="copy-suit copy-suit-3" aria-hidden="true">♦</span>
+            <span class="copy-suit copy-suit-4" aria-hidden="true">♣</span>
+            <h1><span><?= htmlspecialchars($title) ?></span></h1>
+            <p class="hero-subtitle"><?= htmlspecialchars($subtitle) ?></p>
+
+            <div class="hero-actions">
+                <?php if ($ctaDisplay && $ctaText !== ''): ?>
+                    <a class="hero-primary" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>">
+                        <?php if ($downloadImage !== ''): ?>
+                            <img src="<?= htmlspecialchars($downloadImage) ?>" alt="" aria-hidden="true" class="hero-primary-icon">
+                        <?php else: ?>
+                            <span class="hero-cta-icon" aria-hidden="true">
+                                <svg viewBox="0 0 20 20" fill="none">
+                                    <path d="M10 3.5V11.5" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                                    <path d="M6.75 8.75L10 12.25L13.25 8.75" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M4 14.5H16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                                </svg>
+                            </span>
+                        <?php endif; ?>
+                        <span><?= htmlspecialchars($ctaText) ?></span>
+                    </a>
+                <?php endif; ?>
+                <?php if ($secondaryText !== ''): ?>
+                    <a class="hero-secondary" href="<?= htmlspecialchars($secondaryUrl) ?>">
+                        <span><?= htmlspecialchars($secondaryText) ?></span>
+                    </a>
+                <?php endif; ?>
+            </div>
+        </header>
+
+        <div class="hero-runway" aria-hidden="true">
+            <div class="runway-orbit orbit-one"></div>
+            <div class="runway-orbit orbit-two"></div>
+            <div class="runway-glow glow-one"></div>
+            <div class="runway-glow glow-two"></div>
+            <div class="runway-platform"></div>
+            <div class="runway-shadow"></div>
+
+            <?php foreach ($suits as $index => $suit): ?>
+                <span class="hero-suit suit-<?= (int)($index + 1) ?>"><?= htmlspecialchars($suit) ?></span>
+            <?php endforeach; ?>
+
+            <div class="hero-card-shell">
+                <span class="card-layer layer-back"></span>
+                <span class="card-layer layer-mid"></span>
+                <div class="hero-card-frame" style="margin-top: <?= $imgMarginTop ?>px;">
+                    <span class="card-sheen"></span>
+                    <picture>
+                        <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($heroImageMobile) ?>">
+                        <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($heroImage) ?>">
+                        <img src="<?= htmlspecialchars($heroImage) ?>" alt="<?= htmlspecialchars($heroAlt) ?>">
+                    </picture>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    min-height: 100vh;
+    padding: clamp(6.6rem, 10vw, 8.8rem) 0 clamp(4.5rem, 7vw, 6.2rem);
+    overflow: hidden;
+    isolation: isolate;
+    background:
+        radial-gradient(820px 480px at 50% 6%, rgba(255, 95, 58, 0.26), transparent 58%),
+        radial-gradient(620px 340px at 14% 18%, rgba(199, 255, 65, 0.12), transparent 62%),
+        radial-gradient(620px 360px at 86% 24%, rgba(8, 231, 216, 0.14), transparent 60%),
+        linear-gradient(180deg, #17080d 0%, <?= htmlspecialchars($heroBgColor) ?> 52%, #0b1417 100%);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(118deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 34%),
+        repeating-linear-gradient(135deg, rgba(255,255,255,0.024) 0 14px, rgba(255,255,255,0) 14px 42px);
+    opacity: 0.48;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .hero-backdrop {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    opacity: 0.07;
+    mix-blend-mode: screen;
+    filter: saturate(0.8) contrast(1.08);
+}
+
+#<?= $componentId ?> .hero-beam,
+#<?= $componentId ?> .hero-trail,
+#<?= $componentId ?> .runway-orbit,
+#<?= $componentId ?> .runway-glow,
+#<?= $componentId ?> .hero-suit,
+#<?= $componentId ?> .card-layer,
+#<?= $componentId ?> .card-sheen,
+#<?= $componentId ?> .runway-platform,
+#<?= $componentId ?> .runway-shadow {
+    position: absolute;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .hero-beam {
+    width: 34rem;
+    height: 34rem;
+    border-radius: 43% 57% 52% 48% / 49% 45% 55% 51%;
+    filter: blur(24px);
+    opacity: 0.38;
+    animation: <?= $componentId ?>-beam 15s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .beam-left {
+    left: -9rem;
+    top: 6rem;
+    background: radial-gradient(circle, rgba(255,95,58,0.46) 0%, rgba(255,95,58,0.08) 58%, transparent 74%);
+}
+
+#<?= $componentId ?> .beam-right {
+    right: -10rem;
+    bottom: 2rem;
+    background: radial-gradient(circle, rgba(8,231,216,0.3) 0%, rgba(199,255,65,0.08) 52%, transparent 72%);
+    animation-delay: -5s;
+}
+
+#<?= $componentId ?> .hero-trail {
+    width: 24rem;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0), rgba(199,255,65,0.9), rgba(8,231,216,0.76), rgba(255,255,255,0));
+    filter: drop-shadow(0 0 10px rgba(199,255,65,0.32));
+    opacity: 0.54;
+    transform: rotate(-18deg);
+    animation: <?= $componentId ?>-trail 9.5s linear infinite;
+}
+
+#<?= $componentId ?> .trail-one { top: 18%; left: -18%; }
+#<?= $componentId ?> .trail-two { top: 42%; left: -30%; animation-delay: -3s; }
+#<?= $componentId ?> .trail-three { top: 68%; left: -24%; animation-delay: -6.2s; }
+
+#<?= $componentId ?> .hero-shell {
+    width: min(1260px, calc(100% - 1.2rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .hero-copy {
+    max-width: 860px;
+    margin: 0 auto;
+    text-align: center;
+    position: relative;
+    isolation: isolate;
+}
+
+#<?= $componentId ?> .hero-knot {
+    display: inline-flex;
+    width: 132px;
+    height: 12px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff5f3a 0%, #ffb347 38%, #c7ff41 68%, #08e7d8 100%);
+    box-shadow: 0 0 26px rgba(199, 255, 65, 0.2);
+}
+
+#<?= $componentId ?> h1 {
+    margin-top: 1.4rem;
+    font-family: 'Outfit', 'Manrope', sans-serif;
+    font-size: clamp(3.2rem, 8vw, 7rem);
+    line-height: 0.9;
+    letter-spacing: -0.07em;
+    text-wrap: balance;
+    position: relative;
+}
+
+#<?= $componentId ?> h1 span {
+    display: inline-block;
+    background: linear-gradient(94deg, #fff8f2 0%, #fff8f2 24%, #ffd39b 46%, #c7ff41 68%, #7ff9f0 82%, #fff8f2 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    text-shadow:
+        0 0 12px rgba(255, 95, 58, 0.18),
+        0 0 26px rgba(199, 255, 65, 0.06),
+        0 10px 34px rgba(0, 0, 0, 0.3);
+}
+
+#<?= $componentId ?> .hero-subtitle {
+    margin: 1.2rem auto 0;
+    max-width: 42rem;
+    color: rgba(255, 243, 236, 0.84);
+    font-size: clamp(1rem, 1.8vw, 1.16rem);
+    line-height: 1.9;
+}
+
+#<?= $componentId ?> .hero-actions {
+    margin-top: 1.8rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.9rem;
+}
+
+#<?= $componentId ?> .hero-primary,
+#<?= $componentId ?> .hero-secondary {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 46px;
+    padding: 0.72rem 1.18rem;
+    border-radius: 999px;
+    text-decoration: none;
+    font-size: 0.88rem;
+    font-weight: 900;
+    letter-spacing: 0.02em;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    gap: 0.58rem;
+}
+
+#<?= $componentId ?> .hero-primary {
+    color: #14080d;
+    background: linear-gradient(92deg, #ff5f3a 0%, #ffb347 40%, #c7ff41 70%, #08e7d8 100%);
+    box-shadow: 0 18px 34px rgba(255, 95, 58, 0.22);
+}
+
+#<?= $componentId ?> .hero-secondary {
+    color: #fff8f2;
+    border: 1px solid rgba(255,255,255,0.16);
+    background: rgba(255,255,255,0.06);
+    backdrop-filter: blur(12px);
+}
+
+#<?= $componentId ?> .hero-primary:hover,
+#<?= $componentId ?> .hero-secondary:hover {
+    transform: translateY(-2px);
+}
+
+#<?= $componentId ?> .hero-cta-icon {
+    width: 1.22rem;
+    height: 1.22rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: rgba(18, 9, 13, 0.12);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.34);
+    flex-shrink: 0;
+}
+
+#<?= $componentId ?> .hero-cta-icon svg {
+    width: 0.82rem;
+    height: 0.82rem;
+    display: block;
+}
+
+#<?= $componentId ?> .hero-primary-icon {
+    width: auto;
+    height: 1.32rem;
+    display: block;
+    flex-shrink: 0;
+    object-fit: contain;
+}
+
+#<?= $componentId ?> .hero-runway {
+    position: relative;
+    min-height: 640px;
+    margin-top: clamp(2rem, 5vw, 3.4rem);
+}
+
+#<?= $componentId ?> .runway-platform {
+    left: 50%;
+    bottom: 3.5rem;
+    width: min(820px, 90%);
+    height: 180px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background:
+        radial-gradient(circle at 50% 42%, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 52%),
+        radial-gradient(circle at 50% 50%, rgba(255,95,58,0.24) 0%, rgba(255,95,58,0.08) 44%, rgba(8,231,216,0.06) 72%, rgba(255,255,255,0) 86%);
+    filter: blur(4px);
+}
+
+#<?= $componentId ?> .runway-shadow {
+    left: 50%;
+    bottom: 1.8rem;
+    width: min(620px, 76%);
+    height: 56px;
+    transform: translateX(-50%);
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.44);
+    filter: blur(24px);
+}
+
+#<?= $componentId ?> .runway-orbit {
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 44% 56% 52% 48% / 48% 42% 58% 52%;
+    animation: <?= $componentId ?>-spin 18s linear infinite;
+}
+
+#<?= $componentId ?> .orbit-one {
+    width: min(760px, 92%);
+    height: min(520px, 72vw);
+    border: 1px solid rgba(255,255,255,0.08);
+}
+
+#<?= $componentId ?> .orbit-two {
+    width: min(620px, 78%);
+    height: min(430px, 62vw);
+    border: 1px solid rgba(199,255,65,0.16);
+    animation-direction: reverse;
+    animation-duration: 24s;
+}
+
+#<?= $componentId ?> .runway-glow {
+    border-radius: 50%;
+    filter: blur(18px);
+    opacity: 0.6;
+}
+
+#<?= $componentId ?> .glow-one {
+    width: 260px;
+    height: 260px;
+    left: 22%;
+    top: 18%;
+    background: radial-gradient(circle, rgba(255,95,58,0.38) 0%, rgba(255,95,58,0.04) 62%, transparent 76%);
+}
+
+#<?= $componentId ?> .glow-two {
+    width: 220px;
+    height: 220px;
+    right: 22%;
+    bottom: 18%;
+    background: radial-gradient(circle, rgba(8,231,216,0.24) 0%, rgba(8,231,216,0.03) 60%, transparent 76%);
+}
+
+#<?= $componentId ?> .hero-card-shell {
+    position: relative;
+    width: min(470px, 76vw);
+    aspect-ratio: 0.82;
+    margin: 0 auto;
+    display: grid;
+    place-items: center;
+    transform: rotate(-6deg);
+    animation: <?= $componentId ?>-float 6.8s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .card-layer {
+    inset: 0;
+    border-radius: 40px;
+}
+
+#<?= $componentId ?> .layer-back {
+    transform: translate(-28px, 22px) rotate(-8deg);
+    background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.02) 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+#<?= $componentId ?> .layer-mid {
+    transform: translate(28px, -16px) rotate(10deg);
+    background: linear-gradient(145deg, rgba(8,231,216,0.14) 0%, rgba(255,255,255,0.02) 100%);
+    border: 1px solid rgba(8,231,216,0.18);
+}
+
+#<?= $componentId ?> .hero-card-frame {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 44px;
+    background:
+        linear-gradient(145deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.03) 100%);
+    border: 1px solid rgba(255,255,255,0.16);
+    box-shadow:
+        0 34px 80px rgba(0, 0, 0, 0.44),
+        0 0 0 1px rgba(255,255,255,0.04) inset;
+    backdrop-filter: blur(18px);
+}
+
+#<?= $componentId ?> .card-sheen {
+    inset: 0;
+    background: linear-gradient(118deg, rgba(255,255,255,0) 24%, rgba(255,255,255,0.34) 48%, rgba(255,255,255,0) 72%);
+    transform: translateX(-150%) skewX(-14deg);
+    animation: <?= $componentId ?>-sheen 8s ease-in-out infinite;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .hero-card-frame img {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .hero-suit {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 3.1rem;
+    height: 3.1rem;
+    border-radius: 20px;
+    font-size: 1.18rem;
+    font-weight: 900;
+    color: #fff8f2;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 16px 28px rgba(0, 0, 0, 0.2);
+    animation: <?= $componentId ?>-sway 7s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .copy-suit {
+    position: absolute;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 2.3rem;
+    height: 2.3rem;
+    border-radius: 18px;
+    color: #fff8f2;
+    font-size: 0.98rem;
+    font-weight: 900;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.1);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 14px 24px rgba(0, 0, 0, 0.18);
+    animation: <?= $componentId ?>-copy-sway 5.8s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .copy-suit-1 { left: 3%; top: 3.7rem; color: #ff7e67; }
+#<?= $componentId ?> .copy-suit-2 { right: 7%; top: 4.2rem; color: #c7ff41; animation-delay: -1.2s; }
+#<?= $componentId ?> .copy-suit-3 { left: 9%; top: 8.6rem; color: #08e7d8; animation-delay: -2.4s; }
+#<?= $componentId ?> .copy-suit-4 { right: 2%; top: 9.2rem; color: #ffb347; animation-delay: -3.4s; }
+
+#<?= $componentId ?> .suit-1 { top: 10%; left: 14%; color: #ff7e67; }
+#<?= $componentId ?> .suit-2 { top: 20%; right: 14%; color: #c7ff41; animation-delay: -1.5s; }
+#<?= $componentId ?> .suit-3 { top: 52%; left: 8%; color: #08e7d8; animation-delay: -2.6s; }
+#<?= $componentId ?> .suit-4 { top: 58%; right: 10%; color: #ffb347; animation-delay: -3.2s; }
+#<?= $componentId ?> .suit-5 { bottom: 16%; left: 18%; color: #fff8f2; animation-delay: -4.1s; }
+#<?= $componentId ?> .suit-6 { bottom: 22%; right: 20%; color: #ff7e67; animation-delay: -5.4s; }
+#<?= $componentId ?> .suit-7 { top: 34%; left: 50%; margin-left: -1.55rem; color: #c7ff41; animation-delay: -6.1s; }
+
+@keyframes <?= $componentId ?>-float {
+    0%, 100% { transform: rotate(-6deg) translateY(0); }
+    50% { transform: rotate(-4deg) translateY(-14px); }
+}
+
+@keyframes <?= $componentId ?>-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+@keyframes <?= $componentId ?>-sheen {
+    0%, 56% { transform: translateX(-150%) skewX(-14deg); }
+    72%, 100% { transform: translateX(150%) skewX(-14deg); }
+}
+
+@keyframes <?= $componentId ?>-trail {
+    0% { transform: translateX(0) rotate(-18deg); opacity: 0; }
+    12% { opacity: 0.8; }
+    100% { transform: translateX(150vw) rotate(-18deg); opacity: 0; }
+}
+
+@keyframes <?= $componentId ?>-beam {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(18px) scale(1.08); }
+}
+
+@keyframes <?= $componentId ?>-sway {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-10px) rotate(6deg); }
+}
+
+@keyframes <?= $componentId ?>-copy-sway {
+    0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+    50% { transform: translateY(-8px) rotate(7deg) scale(1.04); }
+}
+
+@media (max-width: 980px) {
+    #<?= $componentId ?> {
+        padding-top: 6.2rem;
+    }
+
+    #<?= $componentId ?> .hero-runway {
+        min-height: 520px;
+    }
+
+    #<?= $componentId ?> .orbit-one {
+        width: min(620px, 100%);
+        height: min(460px, 86vw);
+    }
+
+    #<?= $componentId ?> .orbit-two {
+        width: min(500px, 86%);
+        height: min(360px, 70vw);
+    }
+
+    #<?= $componentId ?> .hero-suit {
+        width: 2.7rem;
+        height: 2.7rem;
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 640px) {
+    #<?= $componentId ?> {
+        padding: 5.8rem 0 4rem;
+    }
+
+    #<?= $componentId ?> .hero-shell {
+        width: min(100% - 1rem, 100%);
+    }
+
+    #<?= $componentId ?> .hero-copy {
+        max-width: none;
+    }
+
+    #<?= $componentId ?> h1 {
+        font-size: clamp(2.5rem, 14vw, 4rem);
+    }
+
+    #<?= $componentId ?> .hero-subtitle {
+        font-size: 0.95rem;
+        line-height: 1.78;
+    }
+
+    #<?= $componentId ?> .hero-actions {
+        gap: 0.72rem;
+    }
+
+    #<?= $componentId ?> .hero-primary,
+    #<?= $componentId ?> .hero-secondary {
+        width: 100%;
+    }
+
+    #<?= $componentId ?> .hero-runway {
+        min-height: 430px;
+        margin-top: 1.8rem;
+    }
+
+    #<?= $componentId ?> .hero-card-shell {
+        width: min(320px, 86vw);
+    }
+
+    #<?= $componentId ?> .copy-suit {
+        display: inline-flex;
+    }
+
+    #<?= $componentId ?> .runway-platform {
+        bottom: 1.6rem;
+        height: 130px;
+    }
+
+    #<?= $componentId ?> .runway-shadow {
+        bottom: 0.6rem;
+        width: min(260px, 66vw);
+    }
+
+    #<?= $componentId ?> .hero-suit {
+        width: 2.32rem;
+        height: 2.32rem;
+        font-size: 0.9rem;
+        border-radius: 16px;
+    }
+
+    #<?= $componentId ?> .suit-1 { top: 16%; left: 6%; }
+    #<?= $componentId ?> .suit-2 { top: 10%; right: 6%; }
+    #<?= $componentId ?> .suit-3 { top: 52%; left: 2%; }
+    #<?= $componentId ?> .suit-4 { top: 58%; right: 4%; }
+    #<?= $componentId ?> .suit-5 { bottom: 12%; left: 12%; }
+    #<?= $componentId ?> .suit-6 { bottom: 15%; right: 10%; }
+    #<?= $componentId ?> .suit-7 { top: 28%; }
+
+    #<?= $componentId ?> .copy-suit-1 { left: 0; top: 3.9rem; }
+    #<?= $componentId ?> .copy-suit-2 { right: 0; top: 4.1rem; }
+    #<?= $componentId ?> .copy-suit-3 { left: 10%; top: 8.8rem; }
+    #<?= $componentId ?> .copy-suit-4 { right: 8%; top: 8.9rem; }
+}
+</style>

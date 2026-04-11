@@ -13,6 +13,7 @@ namespace Weline\Framework\Http;
 
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -671,7 +672,10 @@ class Url implements UrlInterface
 
     public function getCurrentUrl(array $params = [], bool $merge_url_params = true): string
     {
-        $url = self::removeExtraDoubleSlashes($this->getUrlOrigin($_SERVER, false) . '/' . ($_SERVER['WELINE_ORIGIN_REQUEST_URI'] ?? $_SERVER['REQUEST_URI']));
+        $server = self::currentServer();
+        $url = self::removeExtraDoubleSlashes(
+            $this->getUrlOrigin($server, false) . '/' . ((string)($server['WELINE_ORIGIN_REQUEST_URI'] ?? $server['REQUEST_URI'] ?? '/'))
+        );
         return $this->extractedUrl($params, $merge_url_params, $url);
     }
 
@@ -741,21 +745,21 @@ class Url implements UrlInterface
         
         // 防止重入：如果正在解析中，直接返回URL，避免无限循环
         if (self::$parsingInProgress) {
-            return $parse_url ?: $_SERVER['REQUEST_URI'] ?? '/';
+            return $parse_url ?: (string)(self::currentServer()['REQUEST_URI'] ?? '/');
         }
         
         # 静态文件不用再分析店铺（只读 WELINE_IS_STATIC_FILE 或对给定 URL 用统一判断）
         if ($parse_url && weline_is_static_file_path($parse_url)) {
             return $parse_url;
         }
-        if (!$parse_url && !empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
-            return $_SERVER['REQUEST_URI'] ?? '/';
+        if (!$parse_url && !empty(self::currentServer()['WELINE_IS_STATIC_FILE'])) {
+            return (string)(self::currentServer()['REQUEST_URI'] ?? '/');
         }
 
         $url = $parse_url;
         # 初始化server
         if (empty(self::$parserServer)) {
-            self::$parserServer = $_SERVER;
+            self::$parserServer = self::currentServer();
             self::$parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
             
             // 使用新的 area_routes 分组配置获取区域前缀
@@ -779,9 +783,9 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_AREA'] = 'frontend';
             self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
             self::$parserServer['WELINE_USER_LANG'] = State::getLang();
-            self::$parserServer['WELINE_WEBSITE_ID'] = $_SERVER['WELINE_WEBSITE_ID'] ?? '';
-            self::$parserServer['WELINE_WEBSITE_CODE'] = $_SERVER['WELINE_WEBSITE_CODE'] ?? '';
-            self::$parserServer['WELINE_WEBSITE_URL'] = $_SERVER['WELINE_WEBSITE_URL'] ?? '';
+            self::$parserServer['WELINE_WEBSITE_ID'] = self::$parserServer['WELINE_WEBSITE_ID'] ?? '';
+            self::$parserServer['WELINE_WEBSITE_CODE'] = self::$parserServer['WELINE_WEBSITE_CODE'] ?? '';
+            self::$parserServer['WELINE_WEBSITE_URL'] = self::$parserServer['WELINE_WEBSITE_URL'] ?? '';
         }
         
         if ($url) {
@@ -790,19 +794,20 @@ class Url implements UrlInterface
             $uri = $path . $query;
         } else {
             // 1) 百分号解码：REQUEST_URI 先 rawurldecode（%2F→/ 等），便于后续网站匹配与重写查找
-            $request_uri = $_SERVER['REQUEST_URI'] ?? '/';
+            $currentServer = self::currentServer();
+            $request_uri = (string)($currentServer['REQUEST_URI'] ?? '/');
             $request_uri = rawurldecode($request_uri);
             $uri = $request_uri;
             if (!str_starts_with($request_uri, '/')) {
                 $request_uri = '/' . $request_uri;
             }
-            $url = ($_SERVER['REQUEST_SCHEME'] ?? 'http') . '://' . $_SERVER['HTTP_HOST'] . $request_uri;
+            $url = ((string)($currentServer['REQUEST_SCHEME'] ?? 'http')) . '://' . (string)($currentServer['HTTP_HOST'] ?? 'localhost') . $request_uri;
             // 后续必须执行：2) 网站信息解码（匹配 self::$parserSites，设置 WELINE_WEBSITE_ID 等）
             // 3) 重写路由解码（decode_url → seo_decode 事件，查找 UrlRewrite 并改写为真实 path）
             // 缺一会导致路由或网站上下文错误
         }
         # 静态文件不用再分析店铺（只读请求入口写入的 WELINE_IS_STATIC_FILE）
-        if (!empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
+        if (!empty(self::currentServer()['WELINE_IS_STATIC_FILE'])) {
             return $url;
         }
         // 如果 self::$parserSites 已经初始化，直接使用，避免重复事件分发
@@ -1213,10 +1218,10 @@ class Url implements UrlInterface
         }
         // 重写路由解码前，把已解析的网站信息写入 $_SERVER，供 seo_decode 观察者（如 RouterRewrite）getCurrentWebsiteId() 使用
         if (isset(self::$parserServer['WELINE_WEBSITE_ID'])) {
-            $_SERVER['WELINE_WEBSITE_ID'] = self::$parserServer['WELINE_WEBSITE_ID'];
+            self::updateCurrentServerVar('WELINE_WEBSITE_ID', self::$parserServer['WELINE_WEBSITE_ID']);
         }
         if (isset(self::$parserServer['WELINE_WEBSITE_CODE'])) {
-            $_SERVER['WELINE_WEBSITE_CODE'] = self::$parserServer['WELINE_WEBSITE_CODE'];
+            self::updateCurrentServerVar('WELINE_WEBSITE_CODE', self::$parserServer['WELINE_WEBSITE_CODE']);
         }
         $decode_url = self::decode_url($url);
         if($url !== $decode_url){
@@ -1256,6 +1261,7 @@ class Url implements UrlInterface
         if (!empty($data['currency'])) {
             self::$parserServer['WELINE_USER_CURRENCY'] = $data['currency'];
         }
+        self::syncParserServerToCurrentContext();
         $data['server'] = self::$parserServer;
         
         # 解析缓存（必须在更新 $parserServer 后缓存，确保 server 字段包含正确的语言/货币）
@@ -1315,6 +1321,57 @@ class Url implements UrlInterface
         self::$parserServer = [];
         self::$parserCache = [];
         self::$parsingInProgress = false;
+    }
+
+    private static function currentServer(): array
+    {
+        $context = Context::getCurrent();
+        $server = $context?->server();
+        if (\is_array($server) && $server !== []) {
+            return $server;
+        }
+
+        return \is_array($_SERVER ?? null) ? $_SERVER : [];
+    }
+
+    private static function updateCurrentServerVar(string $key, mixed $value): void
+    {
+        $_SERVER[$key] = $value;
+
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return;
+        }
+
+        $server = $context->server();
+        if (!\is_array($server)) {
+            $server = [];
+        }
+        $server[$key] = $value;
+        $context->set('input.server', $server);
+    }
+
+    private static function syncParserServerToCurrentContext(): void
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return;
+        }
+
+        $server = $context->server();
+        if (!\is_array($server)) {
+            $server = [];
+        }
+        $server = \array_merge($server, self::$parserServer);
+        $context->set('input.server', $server);
+        $context->set('input.uri', (string)(self::$parserServer['REQUEST_URI'] ?? $context->get('input.uri', '/')));
+        $context->set('route.area', (string)(self::$parserServer['WELINE_AREA'] ?? $context->get('route.area', 'frontend')));
+        $context->set('route.area_route', (string)(self::$parserServer['WELINE_AREA_ROUTE'] ?? $context->get('route.area_route', '')));
+        $context->set('route.website_id', (int)(self::$parserServer['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)));
+        $context->set('route.website_code', (string)(self::$parserServer['WELINE_WEBSITE_CODE'] ?? $context->get('route.website_code', '')));
+        $context->set('route.website_url', (string)(self::$parserServer['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', '')));
+        $context->set('route.language', (string)(self::$parserServer['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')));
+        $context->set('route.currency', (string)(self::$parserServer['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')));
     }
 
     /**
