@@ -22,6 +22,8 @@ class AiSiteScopeCompatibilityService
     /** AI 占位回退日志去重：同一进程只记录一次，避免 402 刷屏。 */
     private static bool $workspacePlaceholderFallbackLogged = false;
     private const REQUEST_KEY_PLACEHOLDER_FORCE_STATIC = 'pagebuilder.workspace.placeholder.force_static';
+    /** 测试/调试可开启：占位块必须走 AI 生成，禁止静态回退。 */
+    public const REQUEST_KEY_PLACEHOLDER_REQUIRE_AI = 'pagebuilder.workspace.placeholder.require_ai';
 
     public function __construct(
         private readonly LayoutConfigNormalizer $layoutConfigNormalizer,
@@ -342,7 +344,7 @@ class AiSiteScopeCompatibilityService
      * @param array<string, mixed> $scope
      * @return array<string, array<string, mixed>>
      */
-    public function buildVirtualPagesByType(array $pageTypes, array $scope = []): array
+    public function buildVirtualPagesByType(array $pageTypes, array $scope = [], bool $allowAiPlaceholderGeneration = true): array
     {
         $existing = $this->normalizeVirtualPagesByType($scope['virtual_pages_by_type'] ?? [], $pageTypes);
         $layouts = $this->normalizePageTypeLayouts($scope['page_type_layouts'] ?? [], $pageTypes);
@@ -370,8 +372,11 @@ class AiSiteScopeCompatibilityService
             if (!\is_array($record['style_settings'] ?? null)) {
                 $record['style_settings'] = [];
             }
-            $placeholderBlocks = $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope);
-            if ($this->shouldHydrateLegacyBlocks($record, $layouts[$pageType] ?? [], $pageType)) {
+            $shouldHydrateLegacyBlocks = $this->shouldHydrateLegacyBlocks($record, $layouts[$pageType] ?? [], $pageType);
+            $placeholderBlocks = ($shouldHydrateLegacyBlocks && $allowAiPlaceholderGeneration)
+                ? $this->buildWorkspacePlaceholderBlocks($blocksBuilder, $pageType, $websiteProfile, $scope)
+                : $blocksBuilder->buildStaticPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
+            if ($shouldHydrateLegacyBlocks) {
                 $record['blocks'] = $placeholderBlocks;
             } else {
                 $record['blocks'] = $this->hydrateEditableBlockMetadata(
@@ -386,8 +391,8 @@ class AiSiteScopeCompatibilityService
     }
 
     /**
-     * 工作台初始化时允许在 AI 账户不可用的情况下回退到静态占位块，
-     * 避免旧会话或查看页因为实时 AI 生成失败而直接 500。
+     * 工作台初始化时允许在 AI 占位生成不可用时回退到静态占位块，
+     * 避免旧会话或查看页因为实时 AI 生成/校验失败而直接 500。
      *
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $scope
@@ -406,6 +411,9 @@ class AiSiteScopeCompatibilityService
         try {
             return $blocksBuilder->buildPlaceholderBlocksForPageType($pageType, $websiteProfile, $scope);
         } catch (\Throwable $throwable) {
+            if ((bool)RequestContext::get(self::REQUEST_KEY_PLACEHOLDER_REQUIRE_AI, false)) {
+                throw $throwable;
+            }
             if (!$this->shouldFallbackToStaticBlocks($throwable)) {
                 throw $throwable;
             }
@@ -426,6 +434,9 @@ class AiSiteScopeCompatibilityService
         for ($cursor = $throwable; $cursor !== null; $cursor = $cursor->getPrevious()) {
             $message = \strtolower(\trim(\strip_tags($cursor->getMessage())));
             if ($message === '') {
+                if ($this->isRecoverableWorkspacePlaceholderThrowable($cursor)) {
+                    return true;
+                }
                 continue;
             }
 
@@ -438,12 +449,61 @@ class AiSiteScopeCompatibilityService
                 || \str_contains($message, 'api密钥')
                 || \str_contains($message, '供应商账户')
                 || \str_contains($message, 'provider account')
+                || \str_contains($message, '组件 json')
+                || \str_contains($message, 'component json')
+                || \str_contains($message, '校验失败')
+                || \str_contains($message, 'validation failed')
+                || \str_contains($message, '语法校验')
+                || \str_contains($message, '预览渲染失败')
+                || \str_contains($message, 'preview render')
+                || \str_contains($message, '反引号')
+                || \str_contains($message, '#<?= $componentid ?>')
             ) {
+                return true;
+            }
+
+            if ($this->isRecoverableWorkspacePlaceholderThrowable($cursor)) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function isRecoverableWorkspacePlaceholderThrowable(\Throwable $throwable): bool
+    {
+        if ($this->isRecoverableWorkspacePlaceholderFile($throwable->getFile())) {
+            return true;
+        }
+
+        foreach ($throwable->getTrace() as $frame) {
+            $class = (string)($frame['class'] ?? '');
+            if (
+                $class === AiSitePageComponentGenerationService::class
+                || \str_starts_with($class, 'GuoLaiRen\\PageBuilder\\Service\\AI\\')
+            ) {
+                return true;
+            }
+
+            $file = (string)($frame['file'] ?? '');
+            if ($this->isRecoverableWorkspacePlaceholderFile($file)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isRecoverableWorkspacePlaceholderFile(string $file): bool
+    {
+        if ($file === '') {
+            return false;
+        }
+
+        $normalized = \str_replace(['/', '\\'], \DIRECTORY_SEPARATOR, $file);
+
+        return \str_contains($normalized, 'GuoLaiRen' . \DIRECTORY_SEPARATOR . 'PageBuilder' . \DIRECTORY_SEPARATOR . 'Service' . \DIRECTORY_SEPARATOR . 'AiSitePageComponentGenerationService.php')
+            || \str_contains($normalized, 'GuoLaiRen' . \DIRECTORY_SEPARATOR . 'PageBuilder' . \DIRECTORY_SEPARATOR . 'Service' . \DIRECTORY_SEPARATOR . 'AI' . \DIRECTORY_SEPARATOR);
     }
 
     /**

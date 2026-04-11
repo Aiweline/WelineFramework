@@ -17,6 +17,7 @@ use Weline\Framework\Runtime\RequestContext;
 final class AiSitePageComponentGenerationService
 {
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
+    public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
     private const JSON_REPAIR_MAX_ATTEMPTS = 3;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
 
@@ -397,7 +398,7 @@ final class AiSitePageComponentGenerationService
 
         // 第 3 轮：对 AI 数据中各字段逐一修复后重新组装
         $fixedAiData = $aiData;
-        $fieldsToPatch = ['php_variables', 'html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'];
+        $fieldsToPatch = ['php_variables', 'css_extra', 'css_content', 'css_responsive', 'html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'];
         $patched = false;
         foreach ($fieldsToPatch as $field) {
             if (!isset($fixedAiData[$field]) || !\is_string($fixedAiData[$field]) || $fixedAiData[$field] === '') {
@@ -406,6 +407,8 @@ final class AiSitePageComponentGenerationService
             $original = $fixedAiData[$field];
             if ($field === 'php_variables') {
                 $fixedAiData[$field] = $codeFixer->fixPhpVariables($fixedAiData[$field]);
+            } elseif (\str_starts_with($field, 'css_')) {
+                $fixedAiData[$field] = $codeFixer->fixCss($fixedAiData[$field]);
             } else {
                 $fixedAiData[$field] = $codeFixer->fixHtmlContent($fixedAiData[$field]);
             }
@@ -615,7 +618,8 @@ final class AiSitePageComponentGenerationService
      */
     private function runAiGeneration(string $region, string $prompt): array
     {
-        if ($this->isTestEnvironment()) {
+        $forceRealAiInTest = (bool)RequestContext::get(self::REQUEST_KEY_FORCE_REAL_AI_IN_TEST, false);
+        if ($this->isTestEnvironment() && !$forceRealAiInTest) {
             return $this->buildStubAiPayload($region, $prompt);
         }
 
@@ -764,36 +768,86 @@ final class AiSitePageComponentGenerationService
     private function decodeComponentPayloadWithRepair(string $content, string $region): ?array
     {
         $parser = $this->getResponseJsonParser();
+
+        $this->emitJsonRepairChunk(
+            $region,
+            (string)__('正在对组件 JSON 进行本地解析与修复（提取 JSON、控制字符、尾逗号、截断补全等）…')
+        );
         $decoded = $parser->extractAndDecode($content);
         if (\is_array($decoded)) {
+            $this->emitJsonRepairChunk(
+                $region,
+                (string)__('本地解析与修复成功，已得到有效组件 JSON。')
+            );
             return $decoded;
         }
 
+        $this->emitJsonRepairChunk(
+            $region,
+            (string)__(
+                '本地解析与修复仍未得到有效 JSON，将按轮次调用 AI 进行结构修复（共 %{1} 轮）',
+                [self::JSON_REPAIR_MAX_ATTEMPTS]
+            )
+        );
+
         $currentContent = $content;
         for ($attempt = 1; $attempt <= self::JSON_REPAIR_MAX_ATTEMPTS; $attempt++) {
-            $this->emitJsonRepairNotice($region, $attempt, self::JSON_REPAIR_MAX_ATTEMPTS);
+            $this->emitJsonRepairChunk(
+                $region,
+                (string)__(
+                    '第 %{1}/%{2} 轮：正在请求 AI 修复 JSON 结构…',
+                    [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
+                )
+            );
             $retryContent = $this->requestJsonRepair(
                 $region,
                 (string)__('AI 未返回有效的组件 JSON 结果'),
                 $currentContent
             );
             if ($retryContent === null || \trim($retryContent) === '') {
+                $this->emitJsonRepairChunk(
+                    $region,
+                    (string)__(
+                        '第 %{1}/%{2} 轮：AI 未返回可用内容，将尝试下一轮（若仍有）。',
+                        [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
+                    )
+                );
                 continue;
             }
 
             $currentContent = $retryContent;
+            $this->emitJsonRepairChunk(
+                $region,
+                (string)__(
+                    '第 %{1}/%{2} 轮：AI 已返回，正在解析校验…',
+                    [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
+                )
+            );
             $decoded = $parser->extractAndDecode($currentContent);
             if (\is_array($decoded)) {
+                $this->emitJsonRepairChunk(
+                    $region,
+                    (string)__(
+                        '第 %{1}/%{2} 轮：AI 修复后解析成功。',
+                        [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
+                    )
+                );
                 return $decoded;
             }
+            $this->emitJsonRepairChunk(
+                $region,
+                (string)__(
+                    '第 %{1}/%{2} 轮：解析仍失败，将继续下一轮（若仍有）。',
+                    [$attempt, self::JSON_REPAIR_MAX_ATTEMPTS]
+                )
+            );
         }
 
         return null;
     }
 
-    private function emitJsonRepairNotice(string $region, int $attempt, int $maxAttempts): void
+    private function emitJsonRepairChunk(string $region, string $message): void
     {
-        $message = (string)__('AI 返回的组件 JSON 结构无效，正在进行第 %{1}/%{2} 轮修复', [$attempt, $maxAttempts]);
         $chunkForwarder = RequestContext::get(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
         if (\is_callable($chunkForwarder)) {
             try {
@@ -814,11 +868,14 @@ final class AiSitePageComponentGenerationService
             'footer' => 'extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content',
             default => 'extra_fields, php_variables, css_extra, css_responsive, html_content, js_content',
         };
+        $safety = $this->buildComponentJsonPhpSafetyRulesEn();
         $prompt = "You are repairing a malformed PageBuilder {$region} component JSON.\n"
             . "The previous output failed because: {$validationError}\n"
             . "Return ONLY one corrected JSON object. No markdown. No explanation.\n"
             . "Keep valid content when possible, but fix the JSON structure first.\n"
             . "Expected JSON fields: {$expectedFields}\n"
+            . "After JSON is valid, ensure php_variables / html_* / css_* / js_content will not cause PHP parse errors when merged into a .phtml template (especially complete array syntax and no => outside valid PHP arrays).\n"
+            . $safety
             . "Previous invalid output:\n{$previousSnippet}";
 
         $response = $this->getAiService()->generate(
@@ -1081,7 +1138,8 @@ final class AiSitePageComponentGenerationService
             . "5. Keep the structure practical: logo area, navigation, optional CTA, mobile-friendly behavior.\n"
             . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
             . "7. Return pure JSON only. No markdown. No explanation.\n"
-            . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.";
+            . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.\n"
+            . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
     private function buildFooterGenerationPrompt(array $websiteProfile, array $scope, string $siteDisplayName, array $footerConfig): string
@@ -1109,7 +1167,8 @@ final class AiSitePageComponentGenerationService
             . "5. Footer links should be compatible with real page nav logic and the fallback link groups.\n"
             . "6. Style should follow the reference theme direction without naming the theme in visible text.\n"
             . "7. Return pure JSON only. No markdown. No explanation.\n"
-            . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.";
+            . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.\n"
+            . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
     private function buildSectionGenerationPrompt(string $pageType, array $section, array $blueprint, array $websiteProfile, array $scope): string
@@ -1146,7 +1205,23 @@ final class AiSitePageComponentGenerationService
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
             . "5. Return pure JSON only. No markdown. No explanation.\n"
             . "6. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
-            . "7. If real blog data variables are provided, prefer them over invented articles or categories.";
+            . "7. If real blog data variables are provided, prefer them over invented articles or categories.\n"
+            . $this->buildComponentJsonPhpSafetyRulesEn();
+    }
+
+    /**
+     * 英文硬约束：降低合并进 .phtml 后的 PHP 语法错误（如 unexpected "=>"）
+     */
+    private function buildComponentJsonPhpSafetyRulesEn(): string
+    {
+        return "PHP / HTML / CSS / JSON safety (critical — invalid output breaks the site build):\n"
+            . "- Output one JSON object only. Every value must be a valid JSON string: escape double quotes as \\\", represent newlines inside strings as \\n. Do not truncate strings mid-escape.\n"
+            . "- Field php_variables: ONLY raw PHP statements that will be injected inside an existing try { } block in a .phtml template. No <?php, no ?>, no opening/closing PHP tags. Prefer an empty string if you do not need extra logic.\n"
+            . "- In php_variables, every array literal must be complete: e.g. \$x = ['k' => 'v']; with all [, ], (, ), quotes, and semicolons balanced. Never paste JavaScript object literals or JSON blobs here. The PHP token => must appear only inside valid PHP array syntax, never loose in HTML/CSS.\n"
+            . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
+            . "- html_extra, html_extra_column, html_content: use <?= expression ?> for output. Never write <?php = (invalid). Each <?= must wrap one valid PHP expression; use htmlspecialchars(\$var, ENT_QUOTES, 'UTF-8') for text.\n"
+            . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. No unclosed /* comments.\n"
+            . "- js_content: JavaScript only; avoid embedding PHP unless trivial and syntactically valid.\n";
     }
 
     private function resolvePromptStyleCode(array $scope, string $pageType): string
