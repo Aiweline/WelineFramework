@@ -1,0 +1,595 @@
+<?php
+/**
+ * Contact content component
+ *
+ * @component_start
+ * code: contact-content
+ * name: 联系我们内容
+ * name_en: Contact Content
+ * description: 联系方式和表单展示组件，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示设置
+ * display.show_map => 显示地图:select:yes|yes,no
+ * display.show_form => 显示表单:select:yes|yes,no
+ * display.show_social => 显示社交链接:select:yes|yes,no
+ * display.show_info => 显示联系信息:select:yes|yes,no
+ *
+ * group:hero => 首屏设置
+ * hero.kicker => 顶部提示:text:Contact
+ * hero.title => 页面标题:text:Contact Teen Patti Octane
+ * hero.subtitle => 页面副标题:textarea:Need support or business help? Reach us through the channels below.
+ * hero.bg_color => 背景颜色:color:#1b0f08
+ * hero.bg_gradient_end => 渐变结束色:color:#34190c
+ * hero.title_color => 标题颜色:color:#ffd6a8
+ *
+ * group:contact_info => 联系信息
+ * contact_info.title => 联系区标题:text:Contact Info
+ * contact_info.address_label => 地址标签:text:Address
+ * contact_info.address => 地址内容:textarea:Mumbai Operations Hub, Andheri East, Maharashtra, India
+ * contact_info.phone_label => 电话标签:text:Phone
+ * contact_info.phone => 电话内容:text:+91 98765 43210
+ * contact_info.email_label => 邮箱标签:text:Email
+ * contact_info.email => 邮箱内容:text:support@teenpattioctane.com
+ * contact_info.work_hours_label => 工作时间标签:text:Support Hours
+ * contact_info.work_hours => 工作时间内容:text:24/7 Player Support
+ *
+ * group:social => 社交链接
+ * social.wechat => 微信:text:
+ * social.weibo => 微博:text:
+ * social.facebook => Facebook链接:text:https://facebook.com
+ * social.twitter => Twitter链接:text:https://x.com
+ * social.linkedin => LinkedIn链接:text:https://linkedin.com
+ *
+ * group:form => 表单设置
+ * form.title => 表单标题:text:Send A Support Message
+ * form.name_label => 姓名标签:text:Name
+ * form.name_placeholder => 姓名占位:text:Your name
+ * form.email_label => 邮箱标签:text:Email
+ * form.email_placeholder => 邮箱占位:text:you@example.com
+ * form.subject_label => 主题标签:text:Topic
+ * form.subject_placeholder => 主题占位:text:How can we help?
+ * form.message_label => 留言标签:text:Message
+ * form.message_placeholder => 留言占位:text:Share your request
+ * form.submit_text => 提交按钮文本:text:Send Message
+ * form.success_message => 成功提示:text:Thanks. Our team will reply soon.
+ *
+ * group:map => 地图设置
+ * map.title => 地图标题:text:Address
+ * map.embed_url => 地图嵌入地址:textarea:
+ * map.height => 地图高度:number:400|px
+ *
+ * @fields_end
+ */
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $component_config ?? $this->getData('component_config') ?? [];
+$config = array_merge(
+    is_array($styleSettings) ? $styleSettings : [],
+    is_array($componentConfig) ? $componentConfig : []
+);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showMap = $getConfig('display.show_map', 'yes') !== 'no';
+$showForm = $getConfig('display.show_form', 'yes') !== 'no';
+$showSocial = $getConfig('display.show_social', 'yes') !== 'no';
+$showInfo = $getConfig('display.show_info', 'yes') !== 'no';
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroBg = $getConfig('hero.bg_color', $colors['hero_bg'] ?? '#1b0f08');
+$heroGradientEnd = $getConfig('hero.bg_gradient_end', $colors['hero_bg_gradient_end'] ?? '#34190c');
+$heroTitleColor = $getConfig('hero.title_color', $colors['heading_color'] ?? '#ffd6a8');
+
+$textPrimary = $colors['text_primary'] ?? '#fff5ea';
+$textSecondary = $colors['text_secondary'] ?? '#f2ddca';
+$textMuted = $colors['text_muted'] ?? '#c5ad95';
+$sectionBg1 = $colors['section_bg_1'] ?? '#16100b';
+$sectionBg2 = $colors['section_bg_2'] ?? '#27170f';
+$cardBg = $colors['card_bg'] ?? 'rgba(255,245,232,0.08)';
+$borderLight = $colors['border_light'] ?? 'rgba(255,233,207,0.16)';
+$buttonBg = $colors['button_primary_bg'] ?? 'linear-gradient(100deg, #ff9f4d 0%, #ff4d4d 100%)';
+$buttonText = $colors['button_primary_text'] ?? '#2b140d';
+
+$page = $this->getData('page');
+$pageTitle = $page ? (string)($page->getData('title') ?: 'Contact Teen Patti Octane') : 'Contact Teen Patti Octane';
+
+$heroKicker = $getConfig('hero.kicker', 'Contact');
+$heroTitle = $getConfig('hero.title', $pageTitle);
+$heroSubtitle = $getConfig('hero.subtitle', 'Need support or business help? Reach us through the channels below.');
+
+$contactInfoTitle = $getConfig('contact_info.title', 'Contact Info');
+$addressLabel = $getConfig('contact_info.address_label', 'Address');
+$contactAddress = $getConfig('contact_info.address', 'Mumbai Operations Hub, Andheri East, Maharashtra, India');
+$phoneLabel = $getConfig('contact_info.phone_label', 'Phone');
+$contactPhone = $getConfig('contact_info.phone', '+91 98765 43210');
+$emailLabel = $getConfig('contact_info.email_label', 'Email');
+$contactEmail = $getConfig('contact_info.email', 'support@teenpattioctane.com');
+$workHoursLabel = $getConfig('contact_info.work_hours_label', 'Support Hours');
+$contactWorkHours = $getConfig('contact_info.work_hours', '24/7 Player Support');
+
+$formTitle = $getConfig('form.title', 'Send A Support Message');
+$formNameLabel = $getConfig('form.name_label', 'Name');
+$formNamePlaceholder = $getConfig('form.name_placeholder', 'Your name');
+$formEmailLabel = $getConfig('form.email_label', 'Email');
+$formEmailPlaceholder = $getConfig('form.email_placeholder', 'you@example.com');
+$formSubjectLabel = $getConfig('form.subject_label', 'Topic');
+$formSubjectPlaceholder = $getConfig('form.subject_placeholder', 'How can we help?');
+$formMessageLabel = $getConfig('form.message_label', 'Message');
+$formMessagePlaceholder = $getConfig('form.message_placeholder', 'Share your request');
+$formSubmitText = $getConfig('form.submit_text', 'Send Message');
+$formSuccessMessage = $getConfig('form.success_message', 'Thanks. Our team will reply soon.');
+
+$mapTitle = $getConfig('map.title', 'Address');
+$mapEmbedUrl = trim((string)$getConfig('map.embed_url', ''));
+$mapHeight = (int)$getConfig('map.height', '400');
+
+$socialLinks = [
+    ['name' => 'Facebook', 'url' => trim((string)$getConfig('social.facebook', '')), 'label' => 'FB'],
+    ['name' => 'Twitter', 'url' => trim((string)$getConfig('social.twitter', '')), 'label' => 'X'],
+    ['name' => 'LinkedIn', 'url' => trim((string)$getConfig('social.linkedin', '')), 'label' => 'IN'],
+    ['name' => 'WeChat', 'url' => trim((string)$getConfig('social.wechat', '')), 'label' => 'WC'],
+    ['name' => 'Weibo', 'url' => trim((string)$getConfig('social.weibo', '')), 'label' => 'WB'],
+];
+$socialLinks = array_values(array_filter($socialLinks, function ($item) {
+    return $item['url'] !== '';
+}));
+
+$instanceId = $component_instance_id ?? 'contact-content-' . uniqid();
+?>
+
+<section id="<?= $instanceId ?>" class="oct-contact-content">
+    <div class="contact-hero">
+        <div class="section-inner">
+            <p class="hero-kicker"><?= htmlspecialchars($heroKicker) ?></p>
+            <h1><?= htmlspecialchars($heroTitle) ?></h1>
+            <p><?= htmlspecialchars($heroSubtitle) ?></p>
+            <div class="hero-actions">
+                <a href="tel:<?= htmlspecialchars(preg_replace('/\s+/', '', $contactPhone)) ?>">
+                    <strong><?= htmlspecialchars($contactPhone) ?></strong>
+                    <span><?= htmlspecialchars($phoneLabel) ?></span>
+                </a>
+                <a href="mailto:<?= htmlspecialchars($contactEmail) ?>">
+                    <strong><?= htmlspecialchars($contactEmail) ?></strong>
+                    <span><?= htmlspecialchars($emailLabel) ?></span>
+                </a>
+                <div>
+                    <strong><?= htmlspecialchars($contactWorkHours) ?></strong>
+                    <span><?= htmlspecialchars($workHoursLabel) ?></span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="contact-main">
+        <div class="section-inner contact-grid<?= $showForm ? '' : ' no-form' ?>">
+            <?php if ($showInfo): ?>
+                <aside class="contact-info">
+                    <h2><?= htmlspecialchars($contactInfoTitle) ?></h2>
+
+                    <div class="info-list">
+                        <article class="info-card">
+                            <h3><?= htmlspecialchars($addressLabel) ?></h3>
+                            <p><?= nl2br(htmlspecialchars($contactAddress)) ?></p>
+                        </article>
+                        <article class="info-card">
+                            <h3><?= htmlspecialchars($phoneLabel) ?></h3>
+                            <p><a href="tel:<?= htmlspecialchars(preg_replace('/\s+/', '', $contactPhone)) ?>"><?= htmlspecialchars($contactPhone) ?></a></p>
+                        </article>
+                        <article class="info-card">
+                            <h3><?= htmlspecialchars($emailLabel) ?></h3>
+                            <p><a href="mailto:<?= htmlspecialchars($contactEmail) ?>"><?= htmlspecialchars($contactEmail) ?></a></p>
+                        </article>
+                        <article class="info-card">
+                            <h3><?= htmlspecialchars($workHoursLabel) ?></h3>
+                            <p><?= htmlspecialchars($contactWorkHours) ?></p>
+                        </article>
+                    </div>
+
+                    <?php if ($showSocial && !empty($socialLinks)): ?>
+                        <div class="social-row">
+                            <?php foreach ($socialLinks as $link): ?>
+                                <a href="<?= htmlspecialchars($link['url']) ?>" target="_blank" rel="noopener" aria-label="<?= htmlspecialchars($link['name']) ?>">
+                                    <span><?= htmlspecialchars($link['label']) ?></span>
+                                </a>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+                </aside>
+            <?php endif; ?>
+
+            <?php if ($showForm): ?>
+                <div class="contact-form-wrap">
+                    <h2><?= htmlspecialchars($formTitle) ?></h2>
+                    <form class="contact-form" onsubmit="return false;" aria-label="contact form">
+                        <div class="form-row">
+                            <label>
+                                <?= htmlspecialchars($formNameLabel) ?>
+                                <input type="text" name="name" placeholder="<?= htmlspecialchars($formNamePlaceholder) ?>" required>
+                            </label>
+                            <label>
+                                <?= htmlspecialchars($formEmailLabel) ?>
+                                <input type="email" name="email" placeholder="<?= htmlspecialchars($formEmailPlaceholder) ?>" required>
+                            </label>
+                        </div>
+
+                        <label>
+                            <?= htmlspecialchars($formSubjectLabel) ?>
+                            <input type="text" name="topic" placeholder="<?= htmlspecialchars($formSubjectPlaceholder) ?>">
+                        </label>
+
+                        <label>
+                            <?= htmlspecialchars($formMessageLabel) ?>
+                            <textarea name="message" rows="5" placeholder="<?= htmlspecialchars($formMessagePlaceholder) ?>" required></textarea>
+                        </label>
+
+                        <button type="submit" class="submit-btn"><?= htmlspecialchars($formSubmitText) ?></button>
+                        <p class="form-note"><?= htmlspecialchars($formSuccessMessage) ?></p>
+                    </form>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php if ($showMap): ?>
+        <div class="contact-map" style="--map-h: <?= $mapHeight ?>px;">
+            <div class="section-inner">
+                <?php if ($mapEmbedUrl !== ''): ?>
+                    <div class="map-frame">
+                        <iframe src="<?= htmlspecialchars($mapEmbedUrl) ?>" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="Map"></iframe>
+                    </div>
+                <?php else: ?>
+                    <div class="map-placeholder">
+                        <?php if ($contactAddress !== ''): ?>
+                            <h3><?= htmlspecialchars($mapTitle) ?></h3>
+                            <p><?= nl2br(htmlspecialchars($contactAddress)) ?></p>
+                        <?php endif; ?>
+                        <?php if ($contactWorkHours !== ''): ?>
+                            <p class="map-meta"><?= htmlspecialchars($contactWorkHours) ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+</section>
+
+<style>
+#<?= $instanceId ?> {
+    --hero-bg: <?= htmlspecialchars($heroBg) ?>;
+    --hero-bg-end: <?= htmlspecialchars($heroGradientEnd) ?>;
+    --hero-title: <?= htmlspecialchars($heroTitleColor) ?>;
+    --text-primary: <?= htmlspecialchars($textPrimary) ?>;
+    --text-secondary: <?= htmlspecialchars($textSecondary) ?>;
+    --text-muted: <?= htmlspecialchars($textMuted) ?>;
+    --section-bg-1: <?= htmlspecialchars($sectionBg1) ?>;
+    --section-bg-2: <?= htmlspecialchars($sectionBg2) ?>;
+    --card-bg: <?= htmlspecialchars($cardBg) ?>;
+    --border-light: <?= htmlspecialchars($borderLight) ?>;
+    --button-bg: <?= htmlspecialchars($buttonBg) ?>;
+    --button-text: <?= htmlspecialchars($buttonText) ?>;
+}
+
+#<?= $instanceId ?> .section-inner {
+    width: min(1180px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+#<?= $instanceId ?> .contact-hero {
+    padding: 72px 0;
+    text-align: center;
+    background: linear-gradient(145deg, var(--hero-bg), var(--hero-bg-end));
+    position: relative;
+}
+
+#<?= $instanceId ?> .contact-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        radial-gradient(620px 220px at 8% 0%, rgba(83, 224, 197, 0.2), transparent 68%),
+        radial-gradient(680px 240px at 90% 100%, rgba(255, 122, 74, 0.2), transparent 70%);
+}
+
+#<?= $instanceId ?> .contact-hero .section-inner {
+    position: relative;
+    z-index: 1;
+    text-align: left;
+}
+
+#<?= $instanceId ?> .hero-kicker {
+    margin: 0 0 0.75rem;
+    width: fit-content;
+    color: #53e0c5;
+    border: 1px solid rgba(83, 224, 197, 0.36);
+    background: rgba(83, 224, 197, 0.1);
+    border-radius: 999px;
+    padding: 0.3rem 0.72rem;
+    letter-spacing: 0.09em;
+    font-size: 0.74rem;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .contact-hero h1 {
+    margin: 0;
+    color: var(--hero-title);
+    font-size: clamp(2rem, 5vw, 3rem);
+}
+
+#<?= $instanceId ?> .contact-hero p {
+    margin: 0.95rem 0 0;
+    max-width: 760px;
+    color: var(--text-secondary);
+    line-height: 1.78;
+}
+
+#<?= $instanceId ?> .hero-actions {
+    margin-top: 1.1rem;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.65rem;
+    max-width: 920px;
+}
+
+#<?= $instanceId ?> .hero-actions a,
+#<?= $instanceId ?> .hero-actions div {
+    border: 1px solid rgba(159, 239, 255, 0.3);
+    border-radius: 12px;
+    background: rgba(8, 29, 43, 0.55);
+    padding: 0.6rem 0.7rem;
+    display: grid;
+    gap: 0.22rem;
+    text-decoration: none;
+}
+
+#<?= $instanceId ?> .hero-actions strong {
+    color: #fff5ea;
+    font-size: 0.82rem;
+    line-height: 1.3;
+    word-break: break-word;
+}
+
+#<?= $instanceId ?> .hero-actions span {
+    color: #9ef1df;
+    font-size: 0.66rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+}
+
+#<?= $instanceId ?> .contact-main {
+    background: var(--section-bg-1);
+    padding: 54px 0;
+}
+
+#<?= $instanceId ?> .contact-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 18px;
+}
+
+#<?= $instanceId ?> .contact-grid.no-form {
+    grid-template-columns: 1fr;
+}
+
+#<?= $instanceId ?> .contact-info,
+#<?= $instanceId ?> .contact-form-wrap {
+    border: 1px solid var(--border-light);
+    border-radius: 18px;
+    background: var(--card-bg);
+    padding: 18px;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.2);
+}
+
+#<?= $instanceId ?> h2 {
+    margin: 0;
+    color: var(--hero-title);
+    font-size: clamp(1.25rem, 3vw, 1.65rem);
+}
+
+#<?= $instanceId ?> .info-list {
+    margin-top: 0.95rem;
+    display: grid;
+    gap: 10px;
+}
+
+#<?= $instanceId ?> .info-card {
+    border: 1px solid var(--border-light);
+    border-radius: 12px;
+    padding: 12px;
+    background: rgba(18, 11, 8, 0.58);
+}
+
+#<?= $instanceId ?> .info-card h3 {
+    margin: 0;
+    color: var(--text-primary);
+    font-size: 0.94rem;
+}
+
+#<?= $instanceId ?> .info-card p {
+    margin: 0.45rem 0 0;
+    color: var(--text-secondary);
+    line-height: 1.65;
+    font-size: 0.92rem;
+}
+
+#<?= $instanceId ?> .info-card a {
+    color: #53e0c5;
+    text-decoration: none;
+}
+
+#<?= $instanceId ?> .social-row {
+    margin-top: 0.95rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $instanceId ?> .social-row a {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid var(--border-light);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-primary);
+    text-decoration: none;
+    background: rgba(18, 11, 8, 0.54);
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+#<?= $instanceId ?> .contact-form-wrap h2 {
+    margin-bottom: 0.9rem;
+}
+
+#<?= $instanceId ?> .contact-form {
+    display: grid;
+    gap: 0.8rem;
+}
+
+#<?= $instanceId ?> .form-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem;
+}
+
+#<?= $instanceId ?> label {
+    display: grid;
+    gap: 0.35rem;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-weight: 700;
+}
+
+#<?= $instanceId ?> input,
+#<?= $instanceId ?> select,
+#<?= $instanceId ?> textarea {
+    width: 100%;
+    border: 1px solid var(--border-light);
+    border-radius: 10px;
+    background: rgba(18, 11, 8, 0.6);
+    color: var(--text-primary);
+    padding: 10px 11px;
+    font-size: 0.9rem;
+    font-family: inherit;
+}
+
+#<?= $instanceId ?> textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+#<?= $instanceId ?> .submit-btn {
+    border: 0;
+    border-radius: 999px;
+    background: var(--button-bg);
+    color: var(--button-text);
+    padding: 10px 18px;
+    width: fit-content;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+}
+
+#<?= $instanceId ?> .form-note {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+}
+
+#<?= $instanceId ?> .contact-map {
+    background: var(--section-bg-2);
+    padding: 0 0 56px;
+}
+
+#<?= $instanceId ?> .map-frame,
+#<?= $instanceId ?> .map-placeholder {
+    border: 1px solid var(--border-light);
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(18, 11, 8, 0.64);
+    min-height: var(--map-h);
+}
+
+#<?= $instanceId ?> iframe {
+    width: 100%;
+    height: var(--map-h);
+    border: 0;
+}
+
+#<?= $instanceId ?> .map-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 18px;
+}
+
+#<?= $instanceId ?> .map-placeholder h3 {
+    margin: 0;
+    color: var(--hero-title);
+}
+
+#<?= $instanceId ?> .map-placeholder p {
+    margin: 0.65rem 0 0;
+    color: var(--text-muted);
+}
+
+#<?= $instanceId ?> .map-meta {
+    font-size: 0.82rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+@media (max-width: 1024px) {
+    #<?= $instanceId ?> .hero-actions {
+        grid-template-columns: 1fr;
+        max-width: 560px;
+    }
+
+    #<?= $instanceId ?> .contact-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $instanceId ?> .section-inner {
+        width: calc(100% - 1rem);
+    }
+
+    #<?= $instanceId ?> .contact-hero {
+        padding: 58px 0;
+    }
+
+    #<?= $instanceId ?> .hero-actions {
+        margin-top: 0.95rem;
+    }
+
+    #<?= $instanceId ?> .contact-main {
+        padding: 40px 0;
+    }
+
+    #<?= $instanceId ?> .form-row {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $instanceId ?> .contact-map {
+        padding-bottom: 42px;
+    }
+}
+</style>

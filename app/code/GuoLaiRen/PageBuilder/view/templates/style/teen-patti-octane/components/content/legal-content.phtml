@@ -1,0 +1,535 @@
+<?php
+/**
+ * 通用法律内容组件
+ *
+ * @component_start
+ * code: legal-content
+ * name: 法律文档内容
+ * name_en: Legal Content
+ * description: 法律文档内容展示组件，支持目录、更新时间显示，继承主题配色
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_toc => 显示目录:select:yes|yes,no
+ * display.show_last_updated => 显示更新时间:select:yes|yes,no
+ * display.show_icon => 显示图标:select:yes|yes,no
+ *
+ * group:layout => 布局设置
+ * layout.content_width => 内容宽度:select:narrow|narrow,medium,wide
+ * layout.header_padding => 头部内边距:number:80|px
+ * layout.content_padding => 内容内边距:number:60|px
+ *
+ * group:header => 头部设置
+ * header.kicker => 顶部提示:text:Legal Center
+ * header.title => 页面标题:text:|留空使用页面标题
+ * header.icon => 自定义图标:text:|如:🔒 📜 💰
+ * header.updated_label => 更新时间标签:text:Last Updated
+ * header.bg_color => 背景色:color:#0c0060
+ * header.bg_gradient_end => 渐变结束色:color:#1d1850
+ * header.title_color => 标题颜色:color:#ffd700
+ * header.text_color => 文字颜色:color:#cccccc
+ *
+ * group:toc => 目录设置
+ * toc.title => 目录标题:text:On This Page
+ * toc.items => 自定义目录项:textarea:|留空时自动从正文标题提取，一行一个，格式：标题=>#锚点
+ * toc.bg_color => 目录背景色:color:rgba(255,255,255,0.05)
+ * toc.border_color => 目录边框色:color:rgba(255,255,255,0.1)
+ *
+ * group:content => 内容设置
+ * content.body => 正文HTML:textarea:|留空使用页面正文
+ * content.empty_text => 空内容提示:text:Content will appear here soon.
+ * content.bg_color => 内容区背景色:color:#0d0e13
+ * content.text_color => 内容文字颜色:color:#cccccc
+ * content.heading_color => 标题颜色:color:#ffd700
+ * content.link_color => 链接颜色:color:#ffd700
+ *
+ * @fields_end
+ */
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $component_config ?? $this->getData('component_config') ?? [];
+$config = array_merge(
+    is_array($styleSettings) ? $styleSettings : [],
+    is_array($componentConfig) ? $componentConfig : []
+);
+
+$getConfig = function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$showToc = $getConfig('display.show_toc', 'yes') !== 'no';
+$showLastUpdated = $getConfig('display.show_last_updated', 'yes') !== 'no';
+$showIcon = $getConfig('display.show_icon', 'yes') !== 'no';
+
+$contentWidth = (string)$getConfig('layout.content_width', 'narrow');
+$headerPadding = max(36, (int)$getConfig('layout.header_padding', '80'));
+$contentPadding = max(24, (int)$getConfig('layout.content_padding', '60'));
+
+$headerTitle = trim((string)$getConfig('header.title', ''));
+$headerKicker = trim((string)$getConfig('header.kicker', 'Legal Center'));
+$headerIcon = trim((string)$getConfig('header.icon', ''));
+$updatedLabel = trim((string)$getConfig('header.updated_label', 'Last Updated'));
+$headerBgColorConfig = $getConfig('header.bg_color', '');
+$headerGradientEndConfig = $getConfig('header.bg_gradient_end', '');
+$headerTitleColorConfig = $getConfig('header.title_color', '');
+$headerTextColorConfig = $getConfig('header.text_color', '');
+
+$tocTitle = $getConfig('toc.title', 'On This Page');
+$tocItemsConfig = trim((string)$getConfig('toc.items', ''));
+$tocBgColorConfig = $getConfig('toc.bg_color', '');
+$tocBorderColorConfig = $getConfig('toc.border_color', '');
+
+$contentBodyConfig = trim((string)$getConfig('content.body', ''));
+$emptyText = trim((string)$getConfig('content.empty_text', 'Content will appear here soon.'));
+$contentBgColorConfig = $getConfig('content.bg_color', '');
+$contentTextColorConfig = $getConfig('content.text_color', '');
+$contentHeadingColorConfig = $getConfig('content.heading_color', '');
+$contentLinkColorConfig = $getConfig('content.link_color', '');
+
+$page = $this->getData('page');
+$pageTitle = $headerTitle ?: ($page ? (string)($page->getData('title') ?? '') : '');
+$pageTitle = trim($pageTitle) !== '' ? trim($pageTitle) : 'Legal Document';
+$pageContentRaw = $contentBodyConfig !== '' ? $contentBodyConfig : ($page ? (string)($page->getData('content') ?? '') : '');
+$lastUpdated = $page ? (string)($page->getData('updated_at') ?? $page->getData('created_at') ?? '') : '';
+$pageType = $page ? (string)($page->getData('type') ?? '') : '';
+
+if (!isset($colors) || !is_array($colors)) {
+    $colors = [];
+}
+
+$heroBg = $headerBgColorConfig ?: ($colors['hero_bg'] ?? '#0c0060');
+$heroGradientEnd = $headerGradientEndConfig ?: ($colors['hero_bg_gradient_end'] ?? '#1d1850');
+$sectionBg1 = $contentBgColorConfig ?: ($colors['section_bg_1'] ?? '#0d0e13');
+$sectionBg2 = $colors['section_bg_2'] ?? '#1d1850';
+$textPrimary = $colors['text_primary'] ?? '#ffffff';
+$textSecondary = $contentTextColorConfig ?: ($colors['text_secondary'] ?? '#cccccc');
+$textMuted = $headerTextColorConfig ?: ($colors['text_muted'] ?? '#8b8b8b');
+$accentPrimary = $headerTitleColorConfig ?: ($colors['accent_primary'] ?? '#ffd700');
+$accentPrimaryLight = $colors['accent_primary_light'] ?? '#ffed4e';
+$buttonPrimaryBg = $colors['button_primary_bg'] ?? 'linear-gradient(90deg, #ffd700 0%, #ffa500 100%)';
+$cardBg = $tocBgColorConfig ?: ($colors['card_bg'] ?? 'rgba(255,255,255,0.05)');
+$borderLight = $tocBorderColorConfig ?: ($colors['border_light'] ?? 'rgba(255,255,255,0.1)');
+$contentHeadingColor = $contentHeadingColorConfig ?: $accentPrimary;
+$contentLinkColor = $contentLinkColorConfig ?: $accentPrimary;
+
+$typeIcons = [
+    'privacy_policy' => '🔒',
+    'terms_of_service' => '📜',
+    'refund_policy' => '💰',
+    'shipping_policy' => '🚚',
+    'cookie_policy' => '🍪',
+];
+$currentIcon = $headerIcon ?: ($typeIcons[$pageType] ?? '📄');
+
+$maxWidth = match ($contentWidth) {
+    'wide' => '1200px',
+    'medium' => '1000px',
+    default => '800px',
+};
+
+$tocItems = [];
+$pageContent = $pageContentRaw;
+if ($showToc && $tocItemsConfig !== '') {
+    foreach (preg_split('/\r?\n/', $tocItemsConfig) as $line) {
+        $line = trim((string)$line);
+        if ($line === '' || strpos($line, '=>') === false) {
+            continue;
+        }
+        $parts = explode('=>', $line, 2);
+        $title = trim((string)($parts[0] ?? ''));
+        $target = trim((string)($parts[1] ?? ''));
+        if ($title === '' || $target === '') {
+            continue;
+        }
+        $tocItems[] = [
+            'id' => ltrim($target, '#'),
+            'title' => $title,
+            'level' => 2,
+        ];
+    }
+} elseif ($showToc && $pageContentRaw !== '') {
+    $headingIndex = 0;
+    $pageContent = preg_replace_callback('/<h([23])([^>]*)>(.*?)<\/h\1>/is', static function ($matches) use (&$tocItems, &$headingIndex) {
+        $text = trim(strip_tags((string)$matches[3]));
+        if ($text === '') {
+            return $matches[0];
+        }
+
+        $slug = strtolower((string)preg_replace('/[^a-z0-9]+/i', '-', $text));
+        $slug = trim($slug, '-');
+        if ($slug === '') {
+            $slug = 'section';
+        }
+
+        $id = $slug . '-' . (++$headingIndex);
+        $tocItems[] = [
+            'id' => $id,
+            'title' => $text,
+            'level' => (int)$matches[1],
+        ];
+
+        return '<h' . $matches[1] . $matches[2] . ' id="' . htmlspecialchars($id, ENT_QUOTES, 'UTF-8') . '">' . $matches[3] . '</h' . $matches[1] . '>';
+    }, $pageContentRaw);
+}
+
+if (trim($pageContent) === '') {
+    $pageContent = '<p>' . nl2br(htmlspecialchars($emptyText, ENT_QUOTES, 'UTF-8')) . '</p>';
+}
+
+$hasToc = $showToc && !empty($tocItems);
+$formattedUpdated = '';
+if ($showLastUpdated && $lastUpdated !== '') {
+    $timestamp = strtotime($lastUpdated);
+    if ($timestamp) {
+        $formattedUpdated = date('M j, Y', $timestamp);
+    }
+}
+
+$instanceId = $component_instance_id ?? 'legal-content-' . uniqid();
+?>
+
+<section class="tpmst-section legal-content-component" id="<?= $instanceId ?>">
+    <style>
+        #<?= $instanceId ?> {
+            padding: 44px 0 62px;
+            background:
+                radial-gradient(720px 240px at 6% 0%, rgba(83, 224, 197, 0.14), transparent 72%),
+                radial-gradient(860px 300px at 95% 100%, rgba(255, 142, 84, 0.12), transparent 72%),
+                <?= $sectionBg1 ?>;
+            min-height: 60vh;
+            width: 100%;
+        }
+
+        #<?= $instanceId ?> .tpmst-section-inner {
+            max-width: <?= $maxWidth ?>;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+
+        #<?= $instanceId ?> .legal-wrapper {
+            border: 1px solid <?= $borderLight ?>;
+            border-radius: 20px;
+            overflow: hidden;
+            background: linear-gradient(180deg, rgba(17, 13, 10, 0.74), rgba(13, 9, 7, 0.78));
+            box-shadow: 0 22px 42px rgba(0, 0, 0, 0.34);
+        }
+
+        #<?= $instanceId ?> .legal-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: <?= $headerPadding ?>px clamp(14px, 3vw, 24px) clamp(14px, 3vw, 24px);
+            border-bottom: 1px solid <?= $borderLight ?>;
+            background:
+                linear-gradient(132deg, rgba(83, 224, 197, 0.14), rgba(83, 224, 197, 0) 44%),
+                linear-gradient(160deg, rgba(255, 156, 106, 0.16), rgba(255, 156, 106, 0) 58%),
+                linear-gradient(135deg, <?= $heroBg ?> 0%, <?= $heroGradientEnd ?> 100%);
+        }
+
+        #<?= $instanceId ?> .legal-head-main {
+            display: grid;
+            gap: 0.45rem;
+        }
+
+        #<?= $instanceId ?> .legal-kicker {
+            margin: 0;
+            width: fit-content;
+            padding: 0.26rem 0.68rem;
+            border-radius: 999px;
+            color: #9ef1df;
+            border: 1px solid rgba(83, 224, 197, 0.36);
+            background: rgba(83, 224, 197, 0.12);
+            font-size: 0.7rem;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            font-weight: 800;
+        }
+
+        #<?= $instanceId ?> .legal-title {
+            margin: 0;
+            font-size: clamp(1.55rem, 4vw, 2.1rem);
+            line-height: 1.12;
+            font-weight: 700;
+            color: <?= $contentHeadingColor ?>;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        #<?= $instanceId ?> .legal-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.15rem;
+            background: <?= $buttonPrimaryBg ?>;
+        }
+
+        #<?= $instanceId ?> .legal-updated {
+            margin: 0;
+            align-self: center;
+            white-space: nowrap;
+            color: <?= $textMuted ?>;
+            font-size: 0.82rem;
+        }
+
+        #<?= $instanceId ?> .legal-updated time {
+            color: <?= $textSecondary ?>;
+            font-weight: 500;
+        }
+
+        #<?= $instanceId ?> .legal-main {
+            display: grid;
+            grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+            gap: 0;
+        }
+
+        #<?= $instanceId ?> .legal-main.no-toc {
+            grid-template-columns: 1fr;
+        }
+
+        #<?= $instanceId ?> .legal-toc {
+            border-right: 1px solid <?= $borderLight ?>;
+            background: <?= $cardBg ?>;
+            padding: 1.05rem 0.95rem;
+        }
+
+        #<?= $instanceId ?> .legal-toc-inner {
+            position: sticky;
+            top: 96px;
+        }
+
+        #<?= $instanceId ?> .legal-toc h4 {
+            margin: 0 0 0.76rem;
+            color: <?= $accentPrimaryLight ?>;
+            font-size: 0.84rem;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+        }
+
+        #<?= $instanceId ?> .legal-toc ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: grid;
+            gap: 0.42rem;
+        }
+
+        #<?= $instanceId ?> .legal-toc a {
+            display: flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.38rem 0.46rem;
+            border-radius: 9px;
+            border: 1px solid transparent;
+            color: <?= $textSecondary ?>;
+            text-decoration: none;
+            font-size: 0.8rem;
+            line-height: 1.35;
+            transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+        }
+
+        #<?= $instanceId ?> .legal-toc a::before {
+            content: '↘';
+            color: <?= $accentPrimaryLight ?>;
+            font-weight: 700;
+        }
+
+        #<?= $instanceId ?> .legal-toc a.level-2 {
+            font-weight: 600;
+        }
+
+        #<?= $instanceId ?> .legal-toc a.level-3 {
+            padding-left: 1.15rem;
+            opacity: 0.92;
+            font-size: 0.76rem;
+        }
+
+        #<?= $instanceId ?> .legal-toc a:hover {
+            color: <?= $textPrimary ?>;
+            border-color: <?= $borderLight ?>;
+            background: rgba(83, 224, 197, 0.08);
+        }
+
+        #<?= $instanceId ?> .legal-article {
+            padding: <?= $contentPadding ?>px clamp(14px, 3vw, 24px);
+        }
+
+        #<?= $instanceId ?> .legal-body {
+            color: <?= $textSecondary ?>;
+            font-size: 1rem;
+            line-height: 1.86;
+        }
+
+        #<?= $instanceId ?> .legal-body h2 {
+            margin-top: 2.1rem;
+            margin-bottom: 0.95rem;
+            padding-bottom: 0.48rem;
+            border-bottom: 1px dashed <?= $borderLight ?>;
+            color: <?= $contentHeadingColor ?>;
+            font-size: clamp(1.2rem, 2.3vw, 1.5rem);
+            scroll-margin-top: 110px;
+        }
+
+        #<?= $instanceId ?> .legal-body h2:first-child {
+            margin-top: 0;
+        }
+
+        #<?= $instanceId ?> .legal-body h3 {
+            margin-top: 1.6rem;
+            margin-bottom: 0.65rem;
+            color: <?= $textPrimary ?>;
+            font-size: 1.08rem;
+        }
+
+        #<?= $instanceId ?> .legal-body p {
+            margin-bottom: 0.95rem;
+        }
+
+        #<?= $instanceId ?> .legal-body ul,
+        #<?= $instanceId ?> .legal-body ol {
+            margin-bottom: 1rem;
+            padding-left: 1.2rem;
+        }
+
+        #<?= $instanceId ?> .legal-body li {
+            margin-bottom: 0.52rem;
+        }
+
+        #<?= $instanceId ?> .legal-body strong {
+            color: <?= $textPrimary ?>;
+        }
+
+        #<?= $instanceId ?> .legal-body a {
+            color: <?= $contentLinkColor ?>;
+            text-decoration: underline;
+        }
+
+        #<?= $instanceId ?> .legal-body blockquote {
+            margin: 1rem 0;
+            padding: 0.82rem 0.95rem;
+            border-left: 3px solid <?= $accentPrimary ?>;
+            border-radius: 0 10px 10px 0;
+            background: rgba(83, 224, 197, 0.09);
+        }
+
+        #<?= $instanceId ?> .legal-body table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.05rem 0;
+        }
+
+        #<?= $instanceId ?> .legal-body th,
+        #<?= $instanceId ?> .legal-body td {
+            border: 1px solid <?= $borderLight ?>;
+            padding: 0.62rem 0.72rem;
+            text-align: left;
+        }
+
+        #<?= $instanceId ?> .legal-body th {
+            color: <?= $textPrimary ?>;
+            font-weight: 600;
+            background: rgba(83, 224, 197, 0.1);
+        }
+
+        @media (max-width: 980px) {
+            #<?= $instanceId ?> {
+                padding: 34px 0 46px;
+            }
+
+            #<?= $instanceId ?> .tpmst-section-inner {
+                padding: 0 15px;
+            }
+
+            #<?= $instanceId ?> .legal-main {
+                grid-template-columns: 1fr;
+            }
+
+            #<?= $instanceId ?> .legal-toc {
+                border-right: 0;
+                border-bottom: 1px solid <?= $borderLight ?>;
+                padding: 0.9rem;
+            }
+
+            #<?= $instanceId ?> .legal-toc-inner {
+                position: static;
+            }
+        }
+
+        @media (max-width: 768px) {
+            #<?= $instanceId ?> .legal-header {
+                padding-top: 24px;
+            }
+
+            #<?= $instanceId ?> .legal-title {
+                font-size: 1.38rem;
+            }
+
+            #<?= $instanceId ?> .legal-updated {
+                white-space: normal;
+            }
+
+            #<?= $instanceId ?> .legal-article {
+                padding-top: 20px;
+            }
+        }
+    </style>
+
+    <div class="tpmst-section-inner">
+        <div class="legal-wrapper">
+            <header class="legal-header">
+                <div class="legal-head-main">
+                    <p class="legal-kicker"><?= htmlspecialchars($headerKicker) ?></p>
+                    <h1 class="legal-title">
+                        <?php if ($showIcon): ?>
+                            <span class="legal-icon"><?= $currentIcon ?></span>
+                        <?php endif; ?>
+                        <?= htmlspecialchars($pageTitle) ?>
+                    </h1>
+                </div>
+                <?php if ($formattedUpdated !== ''): ?>
+                    <p class="legal-updated">
+                        <?= htmlspecialchars($updatedLabel) ?>:
+                        <time datetime="<?= date('Y-m-d', strtotime($lastUpdated)) ?>"><?= htmlspecialchars($formattedUpdated) ?></time>
+                    </p>
+                <?php endif; ?>
+            </header>
+
+            <div class="legal-main<?= $hasToc ? '' : ' no-toc' ?>">
+                <?php if ($hasToc): ?>
+                    <nav class="legal-toc">
+                        <div class="legal-toc-inner">
+                            <h4>📑 <?= htmlspecialchars((string)$tocTitle) ?></h4>
+                            <ul>
+                                <?php foreach ($tocItems as $item): ?>
+                                    <li>
+                                        <a
+                                            href="#<?= htmlspecialchars($item['id']) ?>"
+                                            class="level-<?= (int)($item['level'] ?? 2) ?>"
+                                        ><?= htmlspecialchars($item['title']) ?></a>
+                                    </li>
+                                <?php endforeach; ?>
+                            </ul>
+                        </div>
+                    </nav>
+                <?php endif; ?>
+
+                <article class="legal-article">
+                    <div class="legal-body">
+                        <?= $pageContent ?>
+                    </div>
+                </article>
+            </div>
+        </div>
+    </div>
+</section>

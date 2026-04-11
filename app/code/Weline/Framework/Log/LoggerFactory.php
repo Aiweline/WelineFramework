@@ -37,6 +37,7 @@ class LoggerFactory
      * 是否已注册 StateManager 重置
      */
     private static bool $stateManagerRegistered = false;
+    private static bool $resolvingRuntime = false;
 
     /**
      * 创建或获取日志实例
@@ -122,17 +123,32 @@ class LoggerFactory
         $runtime = $config['runtime'] ?? 'fpm';
         $data = ['runtime' => $runtime];
 
+        // WLS 进程内优先走直接判定，避免为了解析日志 runtime 再触发事件系统，
+        // 造成 LoggerFactory -> EventsManager -> EventRegistry 的递归放大。
+        if (\class_exists(\Weline\Server\Log\Error\ErrorBootstrap::class, false)
+            && \Weline\Server\Log\Error\ErrorBootstrap::isInitialized()
+        ) {
+            return 'wls';
+        }
+
+        if (self::$resolvingRuntime) {
+            return $runtime === 'wls' ? 'wls' : 'fpm';
+        }
+
         if (
             \class_exists(\Weline\Framework\Manager\ObjectManager::class, false)
             && \class_exists(\Weline\Framework\Event\EventsManager::class, false)
         ) {
             try {
+                self::$resolvingRuntime = true;
                 $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(
                     \Weline\Framework\Event\EventsManager::class
                 );
                 $eventsManager->dispatch('Weline_Framework_Log::resolve_runtime', $data);
             } catch (\Throwable) {
                 // 事件不可用时沿用配置默认
+            } finally {
+                self::$resolvingRuntime = false;
             }
         }
 

@@ -190,6 +190,8 @@ $dispatcher->configure([
     'sni_routing_enabled' => true,
     'learning_mode_enabled' => true,
     'connection_timeout' => 300,
+    'main_loop_unblocked_log_every' => \Weline\Server\Service\MainLoopUnblockedLogConfig::resolve($wlsConfig, ['dispatcher']),
+    'main_loop_unblocked_log_interval_sec' => \Weline\Server\Service\MainLoopUnblockedLogConfig::resolveInterval($wlsConfig, ['dispatcher']),
     'startup_protection_enabled' => (bool)($startupProtectionConfig['enabled'] ?? true),
     'startup_protection_window_sec' => (float)($startupProtectionConfig['window_sec'] ?? 45.0),
     'startup_protection_ready_ratio' => (float)($startupProtectionConfig['ready_ratio'] ?? 0.0),

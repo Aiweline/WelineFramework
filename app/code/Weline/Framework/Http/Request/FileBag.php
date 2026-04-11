@@ -10,6 +10,8 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http\Request;
 
+use Weline\Framework\Env\WelineEnv;
+
 /**
  * FileBag - 上传文件管理类
  * 
@@ -51,7 +53,7 @@ class FileBag
             return $this;
         }
         
-        $this->files = $this->normalizeFiles($_FILES);
+        $this->files = $this->normalizeFiles(WelineEnv::getFiles() ?? []);
         $this->initialized = true;
         
         return $this;

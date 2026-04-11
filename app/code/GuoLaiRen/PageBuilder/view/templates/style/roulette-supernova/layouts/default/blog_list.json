@@ -1,0 +1,23 @@
+{
+    "page_type": "blog_list",
+    "name": "Roulette Supernova Blog List",
+    "description": "Roulette Supernova blog archive layout.",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "blog-list",
+                "enabled": true,
+                "instance_id": "blog-list-default",
+                "config": {}
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Header and footer inherit from home_page."
+}

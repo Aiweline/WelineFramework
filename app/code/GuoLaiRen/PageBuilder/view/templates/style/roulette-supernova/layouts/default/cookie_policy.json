@@ -1,0 +1,23 @@
+{
+    "page_type": "cookie_policy",
+    "name": "Roulette Supernova Cookie Policy",
+    "description": "Roulette Supernova cookie policy layout.",
+    "version": "1.0.0",
+    "inherit_regions": {
+        "header": "home_page",
+        "footer": "home_page"
+    },
+    "layout_config": {
+        "header": [],
+        "content": [
+            {
+                "code": "legal-content",
+                "enabled": true,
+                "instance_id": "cookie-policy-default",
+                "config": {}
+            }
+        ],
+        "footer": []
+    },
+    "notes": "Header and footer inherit from home_page."
+}

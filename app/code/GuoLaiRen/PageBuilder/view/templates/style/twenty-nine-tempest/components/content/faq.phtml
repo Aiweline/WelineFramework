@@ -1,0 +1,478 @@
+<?php
+/**
+ * @component_start
+ * code: faq
+ * name: FAQ
+ * name_en: FAQ
+ * description: Question rail with dynamic answer stage
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:display => 显示控制
+ * display.show_section => 显示区域:select:yes|yes,no
+ * display.show_title => 显示标题:select:yes|yes,no
+ * display.show_intro => 显示引导文案:select:yes|yes,no
+ * display.first_open => 默认展开首个问题:select:no|yes,no
+ *
+ * group:style => 样式设置
+ * style.bg_color => 背景颜色:color:#0c1728
+ * style.accent_color => 强调色:color:#ff6b2c
+ * style.title_color => 标题颜色:color:#f5fbff
+ * style.title_font_size => 标题字号:number:68|px
+ * style.title_font_size_mobile => 标题字号(移动端):number:34|px
+ * style.item_bg_color => 条目背景色:color:#ffffff
+ * style.item_border_color => 条目边框色:color:#2d4b69
+ * style.item_border_radius => 条目圆角:number:24|px
+ * style.item_gap => 条目间距:number:12|px
+ * style.question_color => 问题文字颜色:color:#09203e
+ * style.question_font_size => 问题字号:number:18|px
+ * style.question_font_size_mobile => 问题字号(移动端):number:16|px
+ * style.question_padding => 问题内边距:number:16|px
+ * style.question_hover_bg => 问题悬停背景色:color:#f7fbff
+ * style.icon_color => 图标颜色:color:#6e2e4c
+ * style.icon_size => 图标尺寸:number:24|px
+ * style.answer_color => 答案文字颜色:color:#3f5879
+ * style.answer_font_size => 答案字号:number:16|px
+ * style.answer_padding => 答案内边距:number:16|px
+ * style.section_padding => 区域内边距(PC端):number:80|px
+ * style.section_padding_mobile => 区域内边距(移动端):number:52|px
+ *
+ * group:texts => 文案设置
+ * texts.badge => 徽标文案:text:Quick Answers
+ * texts.title => 区域标题:text:Frequently Asked Questions
+ * texts.intro => 引导文案:textarea:Players usually want the same core answers first: how room flow changes, what can be edited later, and how the layout behaves on mobile.
+ * texts.tag_1 => 标签1:text:Room Access
+ * texts.tag_2 => 标签2:text:Gameplay Rhythm
+ * texts.tag_3 => 标签3:text:Mobile UX
+ * texts.faq_1_question => 问题1:text:What changes from one 29 Card room to another?
+ * texts.faq_1_answer => 答案1:textarea:Core rules stay consistent, but room tempo, visual density, and queue speed can vary. That helps players choose a format matching their reaction style.
+ * texts.faq_2_question => 问题2:text:Can these titles and descriptions be edited later?
+ * texts.faq_2_answer => 答案2:textarea:Yes. Section title, intro, tags, room list, and every question-answer pair all follow component configuration values.
+ * texts.faq_3_question => 问题3:text:Is the homepage still responsive on small screens?
+ * texts.faq_3_answer => 答案3:textarea:Yes. The layout reorders for touch-first reading. Controls scale up, and room selectors remain horizontally scrollable where needed.
+ * texts.faq_4_question => 问题4:text:Why are module backgrounds more contrasted in this theme?
+ * texts.faq_4_answer => 答案4:textarea:Contrast improves scan speed. It makes each section feel intentional and prevents the page from becoming one long surface.
+ * texts.faq_5_question => 问题5:text:
+ * texts.faq_5_answer => 答案5:textarea:
+ * texts.faq_6_question => 问题6:text:
+ * texts.faq_6_answer => 答案6:textarea:
+ *
+ * @fields_end
+ */
+
+$componentId = 'tnt-faq-' . uniqid();
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = static function ($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = static function (array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$display = $getConfig('display.show_section', $getConfig('faq.display', 'yes')) !== 'no';
+if (!$display) {
+    return;
+}
+
+$showTitle = $getConfig('display.show_title', 'yes') !== 'no';
+$showIntro = $getConfig('display.show_intro', 'yes') !== 'no';
+$firstOpen = $getConfig('display.first_open', 'no') === 'yes';
+
+$bgColor = (string) $getConfig('style.bg_color', $getConfig('faq.bg_color', '#0c1728'));
+$accentColor = (string) $getConfig('style.accent_color', '#ff6b2c');
+$titleColor = (string) $getConfig('style.title_color', '#f5fbff');
+$titleFontSize = max(28, (int) $getConfig('style.title_font_size', '68'));
+$titleFontSizeMobile = max(24, (int) $getConfig('style.title_font_size_mobile', '34'));
+$itemBgColor = (string) $getConfig('style.item_bg_color', '#ffffff');
+$itemBorderColor = (string) $getConfig('style.item_border_color', '#2d4b69');
+$itemBorderRadius = max(16, (int) $getConfig('style.item_border_radius', '24'));
+$itemGap = max(8, (int) $getConfig('style.item_gap', '12'));
+$questionColor = (string) $getConfig('style.question_color', '#09203e');
+$questionFontSize = max(14, (int) $getConfig('style.question_font_size', '18'));
+$questionFontSizeMobile = max(14, (int) $getConfig('style.question_font_size_mobile', '16'));
+$questionPadding = max(12, (int) $getConfig('style.question_padding', '16'));
+$questionHoverBg = (string) $getConfig('style.question_hover_bg', '#f7fbff');
+$iconColor = (string) $getConfig('style.icon_color', '#6e2e4c');
+$iconSize = max(16, (int) $getConfig('style.icon_size', '24'));
+$answerColor = (string) $getConfig('style.answer_color', '#3f5879');
+$answerFontSize = max(13, (int) $getConfig('style.answer_font_size', '16'));
+$answerPadding = max(12, (int) $getConfig('style.answer_padding', '16'));
+$sectionPadding = max(48, (int) $getConfig('style.section_padding', '80'));
+$sectionPaddingMobile = max(36, (int) $getConfig('style.section_padding_mobile', '52'));
+
+$badgeText = (string) $getConfigAny(['texts.badge', 'texts.faq_badge'], 'Quick Answers');
+$title = (string) $getConfigAny(['texts.title', 'faq.title', 'texts.faq_title'], 'Frequently Asked Questions');
+$intro = (string) $getConfigAny(['texts.intro', 'texts.faq_intro'], 'Players usually want the same core answers first: how room flow changes, what can be edited later, and how the layout behaves on mobile.');
+
+$tags = [];
+for ($i = 1; $i <= 3; $i++) {
+    $tag = trim((string) $getConfig("texts.tag_{$i}", ''));
+    if ($tag !== '') {
+        $tags[] = $tag;
+    }
+}
+
+$defaults = [
+    1 => ['question' => 'What changes from one 29 Card room to another?', 'answer' => 'Core rules stay consistent, but room tempo, visual density, and queue speed can vary. That helps players choose a format matching their reaction style.'],
+    2 => ['question' => 'Can these titles and descriptions be edited later?', 'answer' => 'Yes. Section title, intro, tags, room list, and every question-answer pair all follow component configuration values.'],
+    3 => ['question' => 'Is the homepage still responsive on small screens?', 'answer' => 'Yes. The layout reorders for touch-first reading. Controls scale up, and room selectors remain horizontally scrollable where needed.'],
+    4 => ['question' => 'Why are module backgrounds more contrasted in this theme?', 'answer' => 'Contrast improves scan speed. It makes each section feel intentional and prevents the page from becoming one long surface.'],
+    5 => ['question' => '', 'answer' => ''],
+    6 => ['question' => '', 'answer' => ''],
+];
+
+$faqs = [];
+for ($i = 1; $i <= 6; $i++) {
+    $default = $defaults[$i];
+    $question = trim((string) $getConfig("texts.faq_{$i}_question", $default['question']));
+    $answer = trim((string) $getConfig("texts.faq_{$i}_answer", $default['answer']));
+    if ($question === '' || $answer === '') {
+        continue;
+    }
+    $faqs[] = ['question' => $question, 'answer' => $answer];
+}
+
+if (empty($faqs)) {
+    return;
+}
+
+$activeIndex = $firstOpen ? 0 : -1;
+$faqSplit = (int) ceil(count($faqs) / 2);
+$faqColumns = array_chunk($faqs, max(1, $faqSplit), true);
+?>
+<section id="<?= $componentId ?>" class="tnt-faq" aria-labelledby="<?= $componentId ?>-title">
+    <div class="faq-shell" id="faq">
+        <header class="faq-head wow animate__fadeInRight" data-wow-duration="0.82s">
+            <span class="faq-badge"><?= htmlspecialchars($badgeText, ENT_QUOTES, 'UTF-8') ?></span>
+            <?php if ($showTitle): ?>
+                <h2 id="<?= $componentId ?>-title"><span><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></span></h2>
+            <?php endif; ?>
+            <?php if ($showIntro && $intro !== ''): ?>
+                <p><?= htmlspecialchars($intro, ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+
+            <?php if (!empty($tags)): ?>
+                <div class="faq-tags" aria-label="FAQ topics">
+                    <?php foreach ($tags as $index => $tag): ?>
+                        <span class="wow animate__zoomIn" data-wow-delay="<?= htmlspecialchars(number_format(0.1 + ($index * 0.05), 2), ENT_QUOTES, 'UTF-8') ?>s" data-wow-duration="0.72s"><?= htmlspecialchars($tag, ENT_QUOTES, 'UTF-8') ?></span>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </header>
+
+        <div class="faq-grid" role="list">
+            <?php foreach ($faqColumns as $columnIndex => $column): ?>
+                <div class="faq-column">
+                    <?php foreach ($column as $index => $faq): ?>
+                        <?php $isOpen = $index === $activeIndex; ?>
+                        <article class="faq-item wow <?= $columnIndex % 2 === 0 ? 'animate__fadeInLeft' : 'animate__fadeInRight' ?><?= $isOpen ? ' is-open' : '' ?>" role="listitem" data-wow-delay="<?= htmlspecialchars(number_format(0.14 + ($index * 0.06), 2), ENT_QUOTES, 'UTF-8') ?>s" data-wow-duration="<?= htmlspecialchars(number_format(0.8 + (($index % 3) * 0.04), 2), ENT_QUOTES, 'UTF-8') ?>s">
+                            <button type="button" class="faq-trigger" data-faq-index="<?= (int) $index ?>" aria-expanded="<?= $isOpen ? 'true' : 'false' ?>" aria-controls="<?= $componentId ?>-answer-<?= (int) $index ?>" id="<?= $componentId ?>-trigger-<?= (int) $index ?>">
+                                <span class="faq-no"><?= sprintf('%02d', $index + 1) ?></span>
+                                <span class="faq-question"><?= htmlspecialchars($faq['question'], ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="faq-icon" aria-hidden="true">+</span>
+                            </button>
+                            <div class="faq-answer<?= $isOpen ? ' is-open' : '' ?>" id="<?= $componentId ?>-answer-<?= (int) $index ?>" role="region" aria-labelledby="<?= $componentId ?>-trigger-<?= (int) $index ?>" aria-hidden="<?= $isOpen ? 'false' : 'true' ?>">
+                                <p><?= nl2br(htmlspecialchars($faq['answer'], ENT_QUOTES, 'UTF-8')) ?></p>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    overflow: hidden;
+    padding: <?= (int) $sectionPadding ?>px 0;
+    background:
+        radial-gradient(900px 340px at 6% 0%, rgba(0, 239, 255, 0.2), transparent 66%),
+        radial-gradient(860px 340px at 94% 12%, rgba(255, 88, 146, 0.22), transparent 62%),
+        linear-gradient(142deg, #070d1d 0%, <?= htmlspecialchars($bgColor, ENT_QUOTES, 'UTF-8') ?> 46%, #10243f 100%);
+}
+#<?= $componentId ?>::before,
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+#<?= $componentId ?>::before {
+    background:
+        linear-gradient(180deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 24%),
+        repeating-linear-gradient(122deg, rgba(255,255,255,0.04) 0 1px, transparent 1px 28px);
+    opacity: 0.24;
+}
+#<?= $componentId ?>::after {
+    inset: auto -6% 4% auto;
+    width: 52%;
+    height: 46%;
+    background:
+        conic-gradient(from 210deg at 54% 52%, rgba(0,239,255,0.2), rgba(255,88,146,0.18), rgba(0,239,255,0.2)),
+        repeating-linear-gradient(152deg, rgba(255,255,255,0.14) 0 1px, transparent 1px 20px);
+    clip-path: polygon(12% 0%, 100% 14%, 88% 100%, 0% 80%);
+    opacity: 0.44;
+}
+#<?= $componentId ?> .faq-shell {
+    width: min(1260px, calc(100% - 1rem));
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+}
+#<?= $componentId ?> .faq-badge,
+#<?= $componentId ?> .faq-tags span,
+#<?= $componentId ?> .faq-no {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0.42rem 0.84rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+#<?= $componentId ?> .faq-badge {
+    color: #a7faff;
+    background: rgba(0, 239, 255, 0.14);
+    border: 1px solid rgba(0, 239, 255, 0.24);
+}
+#<?= $componentId ?> .faq-head h2 {
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .faq-head h2 span {
+    position: relative;
+    display: inline-block;
+    color: <?= htmlspecialchars($titleColor, ENT_QUOTES, 'UTF-8') ?>;
+    font-size: clamp(<?= (int) $titleFontSizeMobile ?>px, 4.9vw, <?= (int) $titleFontSize ?>px);
+    line-height: 0.95;
+    letter-spacing: -0.05em;
+    padding: 0.08rem 0 0.24rem 1.48rem;
+}
+#<?= $componentId ?> .faq-head h2 span::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.34em;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    transform: rotate(45deg);
+    background: linear-gradient(130deg, rgba(0,239,255,0.94) 0%, <?= htmlspecialchars($accentColor, ENT_QUOTES, 'UTF-8') ?> 100%);
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.22);
+}
+#<?= $componentId ?> .faq-head p {
+    margin-top: 0.86rem;
+    color: #c1d1e0;
+    line-height: 1.84;
+    max-width: 56rem;
+}
+#<?= $componentId ?> .faq-tags {
+    margin-top: 0.86rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.52rem;
+}
+#<?= $componentId ?> .faq-tags span {
+    color: #ffd8ea;
+    background: rgba(255, 88, 146, 0.14);
+    border: 1px solid rgba(255, 88, 146, 0.28);
+}
+#<?= $componentId ?> .faq-grid {
+    margin-top: 1.2rem;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: <?= (int) $itemGap ?>px;
+    align-items: start;
+}
+#<?= $componentId ?> .faq-column {
+    display: grid;
+    gap: <?= (int) $itemGap ?>px;
+    align-content: start;
+}
+#<?= $componentId ?> .faq-item {
+    width: 100%;
+    border-radius: <?= (int) $itemBorderRadius ?>px;
+    border: 1px solid <?= htmlspecialchars($itemBorderColor, ENT_QUOTES, 'UTF-8') ?>;
+    background:
+        radial-gradient(240px 120px at 100% 0%, rgba(255, 88, 146, 0.18), transparent 72%),
+        linear-gradient(180deg, rgba(255,255,255,0.98) 0%, <?= htmlspecialchars($itemBgColor, ENT_QUOTES, 'UTF-8') ?> 100%);
+    box-shadow: 0 24px 46px rgba(3, 11, 25, 0.24);
+    overflow: hidden;
+    transition: box-shadow 0.24s ease, border-color 0.24s ease;
+}
+#<?= $componentId ?> .faq-item.is-open,
+#<?= $componentId ?> .faq-item:hover {
+    box-shadow: 0 30px 52px rgba(3, 11, 25, 0.28);
+    border-color: rgba(255, 88, 146, 0.34);
+}
+#<?= $componentId ?> .faq-trigger {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    padding: <?= (int) $questionPadding ?>px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.62rem;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+}
+#<?= $componentId ?> .faq-item:hover .faq-trigger,
+#<?= $componentId ?> .faq-item.is-open .faq-trigger {
+    background: <?= htmlspecialchars($questionHoverBg, ENT_QUOTES, 'UTF-8') ?>;
+}
+#<?= $componentId ?> .faq-no {
+    color: rgba(23, 51, 81, 0.58);
+    min-width: 0;
+    min-height: 0;
+    padding: 0;
+}
+#<?= $componentId ?> .faq-question {
+    color: <?= htmlspecialchars($questionColor, ENT_QUOTES, 'UTF-8') ?>;
+    font-size: clamp(<?= (int) $questionFontSizeMobile ?>px, 2vw, <?= (int) $questionFontSize ?>px);
+    font-weight: 740;
+    line-height: 1.58;
+}
+#<?= $componentId ?> .faq-icon {
+    width: <?= (int) max($iconSize, 24) ?>px;
+    height: <?= (int) max($iconSize, 24) ?>px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: <?= htmlspecialchars($iconColor, ENT_QUOTES, 'UTF-8') ?>;
+    font-size: <?= (int) $iconSize ?>px;
+    font-weight: 800;
+    background: rgba(255, 88, 146, 0.1);
+    transition: transform 0.22s ease;
+}
+#<?= $componentId ?> .faq-item.is-open .faq-icon {
+    transform: rotate(45deg);
+    background: rgba(255, 88, 146, 0.16);
+}
+#<?= $componentId ?> .faq-answer {
+    display: none;
+    padding: 0 <?= (int) $answerPadding ?>px <?= (int) $answerPadding ?>px;
+    border-top: 1px solid rgba(8, 34, 65, 0.1);
+}
+#<?= $componentId ?> .faq-answer.is-open {
+    display: block;
+}
+#<?= $componentId ?> .faq-answer p {
+    margin-top: 0.62rem;
+    color: <?= htmlspecialchars($answerColor, ENT_QUOTES, 'UTF-8') ?>;
+    font-size: <?= (int) $answerFontSize ?>px;
+    line-height: 1.84;
+}
+@media (max-width: 900px) {
+    #<?= $componentId ?> .faq-grid {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: <?= (int) $sectionPaddingMobile ?>px 0;
+    }
+    #<?= $componentId ?> .faq-shell {
+        width: min(100%, calc(100% - 0.78rem));
+    }
+    #<?= $componentId ?> .faq-head h2 span {
+        padding: 0.14rem 0 0.3rem 1.24rem;
+    }
+    #<?= $componentId ?> .faq-head h2 span::before {
+        width: 12px;
+        height: 12px;
+    }
+    #<?= $componentId ?> .faq-item {
+        border-radius: 20px;
+    }
+}
+</style>
+<script>
+(function() {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var items = Array.prototype.slice.call(root.querySelectorAll('.faq-item'));
+    var triggers = Array.prototype.slice.call(root.querySelectorAll('.faq-trigger[data-faq-index]'));
+    if (!items.length || !triggers.length) {
+        return;
+    }
+
+    var syncState = function(item, active) {
+        var trigger = item.querySelector('.faq-trigger');
+        var answer = item.querySelector('.faq-answer');
+        item.classList.toggle('is-open', active);
+        if (trigger) {
+            trigger.setAttribute('aria-expanded', active ? 'true' : 'false');
+        }
+        if (answer) {
+            answer.classList.toggle('is-open', active);
+            answer.setAttribute('aria-hidden', active ? 'false' : 'true');
+        }
+    };
+
+    var openItem = function(index) {
+        items.forEach(function(item, i) {
+            syncState(item, i === index);
+        });
+
+        if (window.matchMedia && window.matchMedia('(max-width: 767px)').matches && items[index]) {
+            setTimeout(function() {
+                items[index].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 60);
+        }
+    };
+
+    var closeAll = function() {
+        items.forEach(function(item) {
+            syncState(item, false);
+        });
+    };
+
+    triggers.forEach(function(trigger) {
+        var index = parseInt(trigger.getAttribute('data-faq-index'), 10);
+        if (Number.isNaN(index)) {
+            return;
+        }
+
+        trigger.addEventListener('click', function(event) {
+            event.preventDefault();
+            var expanded = trigger.getAttribute('aria-expanded') === 'true';
+            if (expanded) {
+                closeAll();
+                return;
+            }
+            openItem(index);
+        });
+    });
+
+    var initialIndex = <?= (int) $activeIndex ?>;
+    if (initialIndex >= 0) {
+        openItem(initialIndex);
+    } else {
+        closeAll();
+    }
+})();
+</script>

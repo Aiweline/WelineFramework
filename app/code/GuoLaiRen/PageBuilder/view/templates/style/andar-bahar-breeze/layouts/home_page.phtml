@@ -1,0 +1,29 @@
+<?php
+/**
+ * Generic home page layout for PageBuilder themes.
+ */
+
+$layoutConfig = $layout_config ?? [];
+$headerComponents = $layoutConfig['header'] ?? [];
+$contentComponents = $layoutConfig['content'] ?? [];
+$footerComponents = $layoutConfig['footer'] ?? [];
+$isVisualMode = ($mode ?? 'live') === 'visual';
+?>
+<!DOCTYPE html>
+<html lang="<?= $lang ?? 'en' ?>">
+<head>
+    <?php $this->renderHead($page, $style_setting); ?>
+</head>
+<body class="page-home">
+    <header class="site-header" data-region="header"<?= $isVisualMode ? ' data-slot-name="Header"' : '' ?>>
+        <?php $this->renderRegionComponents('header', $headerComponents, $page); ?>
+    </header>
+    <main class="site-content" data-region="content"<?= $isVisualMode ? ' data-slot-name="Content"' : '' ?>>
+        <?php $this->renderRegionComponents('content', $contentComponents, $page); ?>
+    </main>
+    <footer class="site-footer" data-region="footer"<?= $isVisualMode ? ' data-slot-name="Footer"' : '' ?>>
+        <?php $this->renderRegionComponents('footer', $footerComponents, $page); ?>
+    </footer>
+    <?php $this->renderFooterScripts($page, $style_setting); ?>
+</body>
+</html>

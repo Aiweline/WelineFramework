@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="210" height="54" viewBox="0 0 210 54">
+  <defs>
+    <linearGradient id="btn" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#1eb980"/>
+      <stop offset="100%" stop-color="#0f7f61"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="208" height="52" rx="26" fill="url(#btn)" stroke="#f2a93b" stroke-width="2"/>
+  <text x="105" y="34" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#0b1525">DOWNLOAD APP</text>
+</svg>

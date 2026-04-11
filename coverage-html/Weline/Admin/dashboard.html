@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Admin</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Api/Rest/V1/Index.php.html#14">Weline\Admin\Api\Rest\V1\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#25">Weline\Admin\Block\Backend\Page\Topbar</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#20">Weline\Admin\Block\Backend\Page\Topnav</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Total.php.html#16">Weline\Admin\Block\Backend\Total</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/LeftSiderbarMenu.php.html#19">Weline\Admin\Block\LeftSiderbarMenu</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/System/Notification.php.html#17">Weline\Admin\Block\System\Notification</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#22">Weline\Admin\Controller\Backend\User</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/BaseController.php.html#16">Weline\Admin\Controller\BaseController</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Dashboard.php.html#20">Weline\Admin\Controller\Dashboard</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Index.php.html#12">Weline\Admin\Controller\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#33">Weline\Admin\Controller\Login</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Maintenance.php.html#18">Weline\Admin\Controller\Maintenance</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Cms.php.html#14">Weline\Admin\Controller\System\Cms</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Events.php.html#17">Weline\Admin\Controller\System\Events</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#21">Weline\Admin\Controller\System\Menus</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Modules.php.html#19">Weline\Admin\Controller\System\Modules</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Plugins.php.html#17">Weline\Admin\Controller\System\Plugins</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Data.php.html#17">Weline\Admin\Helper\Data</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#19">Weline\Admin\Helper\MenuUrlValidator</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#20">Weline\Admin\Model\MenuAccessLog</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#13">Weline\Admin\Model\System\SystemNotification</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AclController.php.html#17">Weline\Admin\Observer\AclController</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#19">Weline\Admin\Observer\BackendControllerInitAfter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendNoLoginRedirectUrl.php.html#18">Weline\Admin\Observer\BackendNoLoginRedirectUrl</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendWhitelistUrl.php.html#20">Weline\Admin\Observer\BackendWhitelistUrl</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/Maintenance.php.html#18">Weline\Admin\Observer\Maintenance</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/MenuAccessLogObserver.php.html#23">Weline\Admin\Observer\MenuAccessLogObserver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#18">Weline\Admin\Observer\NoAccessRedirectBefore</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ResponseRedirectBefore.php.html#13">Weline\Admin\Observer\ResponseRedirectBefore</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/RoleChecker.php.html#18">Weline\Admin\Observer\RoleChecker</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#19">Weline\Admin\Observer\SystemNotificationObserver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/BackendVerificationCodeGate.php.html#7">Weline\Admin\Service\BackendVerificationCodeGate</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#32">Weline\Admin\Service\MenuRenderService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#23">Weline\Admin\Setup\Install</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Login.php.html#33">Weline\Admin\Controller\Login</a></td><td class="text-right">17030</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#32">Weline\Admin\Service\MenuRenderService</a></td><td class="text-right">7656</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#22">Weline\Admin\Controller\Backend\User</a></td><td class="text-right">5550</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#21">Weline\Admin\Controller\System\Menus</a></td><td class="text-right">2162</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#20">Weline\Admin\Model\MenuAccessLog</a></td><td class="text-right">1806</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#19">Weline\Admin\Observer\SystemNotificationObserver</a></td><td class="text-right">1260</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#25">Weline\Admin\Block\Backend\Page\Topbar</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#19">Weline\Admin\Observer\BackendControllerInitAfter</a></td><td class="text-right">462</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#18">Weline\Admin\Observer\NoAccessRedirectBefore</a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Block/Backend/Total.php.html#16">Weline\Admin\Block\Backend\Total</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#19">Weline\Admin\Helper\MenuUrlValidator</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#20">Weline\Admin\Block\Backend\Page\Topnav</a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Observer/ResponseRedirectBefore.php.html#13">Weline\Admin\Observer\ResponseRedirectBefore</a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Observer/MenuAccessLogObserver.php.html#23">Weline\Admin\Observer\MenuAccessLogObserver</a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Controller/BaseController.php.html#16">Weline\Admin\Controller\BaseController</a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/BackendVerificationCodeGate.php.html#7">Weline\Admin\Service\BackendVerificationCodeGate</a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Maintenance.php.html#18">Weline\Admin\Controller\Maintenance</a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Helper/Data.php.html#17">Weline\Admin\Helper\Data</a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Observer/Maintenance.php.html#18">Weline\Admin\Observer\Maintenance</a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Block/LeftSiderbarMenu.php.html#19">Weline\Admin\Block\LeftSiderbarMenu</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/System/Modules.php.html#19">Weline\Admin\Controller\System\Modules</a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Observer/RoleChecker.php.html#18">Weline\Admin\Observer\RoleChecker</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Observer/BackendWhitelistUrl.php.html#20">Weline\Admin\Observer\BackendWhitelistUrl</a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/System/Events.php.html#17">Weline\Admin\Controller\System\Events</a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/System/Plugins.php.html#17">Weline\Admin\Controller\System\Plugins</a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Setup/Install.php.html#23">Weline\Admin\Setup\Install</a></td><td class="text-right">12</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Api/Rest/V1/Index.php.html#16"><abbr title="Weline\Admin\Api\Rest\V1\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#32"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#40"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::__init">__init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#78"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::getI18n">getI18n</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#83"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::getAvatar">getAvatar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#117"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::generateLetterAvatar">generateLetterAvatar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#161"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::getUser">getUser</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#26"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#37"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::getResourceTreeService">getResourceTreeService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#45"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::__init">__init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#56"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::render">render</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#67"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::processMenu">processMenu</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/Backend/Total.php.html#21"><abbr title="Weline\Admin\Block\Backend\Total::__init">__init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/LeftSiderbarMenu.php.html#23"><abbr title="Weline\Admin\Block\LeftSiderbarMenu::getMenuTree">getMenuTree</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Block/System/Notification.php.html#30"><abbr title="Weline\Admin\Block\System\Notification::getNotices">getNotices</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#25"><abbr title="Weline\Admin\Controller\Backend\User::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#32"><abbr title="Weline\Admin\Controller\Backend\User::listing">listing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#47"><abbr title="Weline\Admin\Controller\Backend\User::getAdd">getAdd</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#55"><abbr title="Weline\Admin\Controller\Backend\User::getEdit">getEdit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#75"><abbr title="Weline\Admin\Controller\Backend\User::postEdit">postEdit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#99"><abbr title="Weline\Admin\Controller\Backend\User::postAdd">postAdd</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#117"><abbr title="Weline\Admin\Controller\Backend\User::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#160"><abbr title="Weline\Admin\Controller\Backend\User::postActive">postActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#177"><abbr title="Weline\Admin\Controller\Backend\User::postInActive">postInActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#196"><abbr title="Weline\Admin\Controller\Backend\User::postApiSave">postApiSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#278"><abbr title="Weline\Admin\Controller\Backend\User::postApiDelete">postApiDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#329"><abbr title="Weline\Admin\Controller\Backend\User::postApiToggle">postApiToggle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#393"><abbr title="Weline\Admin\Controller\Backend\User::getAssignRole">getAssignRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#415"><abbr title="Weline\Admin\Controller\Backend\User::postAssignRole">postAssignRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#451"><abbr title="Weline\Admin\Controller\Backend\User::postApiAssignRole">postApiAssignRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/BaseController.php.html#18"><abbr title="Weline\Admin\Controller\BaseController::__init">__init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/BaseController.php.html#25"><abbr title="Weline\Admin\Controller\BaseController::fetchBase">fetchBase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Dashboard.php.html#22"><abbr title="Weline\Admin\Controller\Dashboard::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Index.php.html#14"><abbr title="Weline\Admin\Controller\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#49"><abbr title="Weline\Admin\Controller\Login::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#65"><abbr title="Weline\Admin\Controller\Login::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#158"><abbr title="Weline\Admin\Controller\Login::getNoAccessMessageByReason">getNoAccessMessageByReason</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#178"><abbr title="Weline\Admin\Controller\Login::postPost">postPost</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#403"><abbr title="Weline\Admin\Controller\Login::redirectReferer">redirectReferer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#437"><abbr title="Weline\Admin\Controller\Login::loadCurrentBackendUser">loadCurrentBackendUser</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#451"><abbr title="Weline\Admin\Controller\Login::getSessionDataForLog">getSessionDataForLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#465"><abbr title="Weline\Admin\Controller\Login::userHasRoutePermission">userHasRoutePermission</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#477"><abbr title="Weline\Admin\Controller\Login::resolveDefaultRedirectTarget">resolveDefaultRedirectTarget</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#495"><abbr title="Weline\Admin\Controller\Login::getBackendUrlSameOrigin">getBackendUrlSameOrigin</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#507"><abbr title="Weline\Admin\Controller\Login::getBackendPathWithPrefix">getBackendPathWithPrefix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#526"><abbr title="Weline\Admin\Controller\Login::ensureSameOrigin">ensureSameOrigin</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#536"><abbr title="Weline\Admin\Controller\Login::logout">logout</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#596"><abbr title="Weline\Admin\Controller\Login::syncSandboxCookie">syncSandboxCookie</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#612"><abbr title="Weline\Admin\Controller\Login::verificationCode">verificationCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Login.php.html#693"><abbr title="Weline\Admin\Controller\Login::clearBackendVerificationCodeState">clearBackendVerificationCodeState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Maintenance.php.html#20"><abbr title="Weline\Admin\Controller\Maintenance::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Maintenance.php.html#26"><abbr title="Weline\Admin\Controller\Maintenance::assignMaintenanceLogo">assignMaintenanceLogo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Cms.php.html#16"><abbr title="Weline\Admin\Controller\System\Cms::getIndex">getIndex</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Events.php.html#21"><abbr title="Weline\Admin\Controller\System\Events::getIndex">getIndex</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Events.php.html#28"><abbr title="Weline\Admin\Controller\System\Events::getReader">getReader</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#28"><abbr title="Weline\Admin\Controller\System\Menus::getResourceTreeService">getResourceTreeService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#36"><abbr title="Weline\Admin\Controller\System\Menus::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#65"><abbr title="Weline\Admin\Controller\System\Menus::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#94"><abbr title="Weline\Admin\Controller\System\Menus::postSave">postSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#129"><abbr title="Weline\Admin\Controller\System\Menus::mapMenuDataToAcl">mapMenuDataToAcl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#199"><abbr title="Weline\Admin\Controller\System\Menus::postUpdateOrder">postUpdateOrder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#228"><abbr title="Weline\Admin\Controller\System\Menus::getDetail">getDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Modules.php.html#21"><abbr title="Weline\Admin\Controller\System\Modules::getIndex">getIndex</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Modules.php.html#27"><abbr title="Weline\Admin\Controller\System\Modules::router">router</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Plugins.php.html#19"><abbr title="Weline\Admin\Controller\System\Plugins::getIndex">getIndex</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/System/Plugins.php.html#27"><abbr title="Weline\Admin\Controller\System\Plugins::getReader">getReader</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Data.php.html#22"><abbr title="Weline\Admin\Helper\Data::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Data.php.html#40"><abbr title="Weline\Admin\Helper\Data::getRequestBackendUser">getRequestBackendUser</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Data.php.html#64"><abbr title="Weline\Admin\Helper\Data::getSessionUser">getSessionUser</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/Data.php.html#81"><abbr title="Weline\Admin\Helper\Data::getUser">getUser</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#37"><abbr title="Weline\Admin\Helper\MenuUrlValidator::isMenuUrl">isMenuUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#68"><abbr title="Weline\Admin\Helper\MenuUrlValidator::loadMenuPathsFromAcl">loadMenuPathsFromAcl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#80"><abbr title="Weline\Admin\Helper\MenuUrlValidator::clearCache">clearCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#104"><abbr title="Weline\Admin\Helper\MenuUrlValidator::getWhitelistPaths">getWhitelistPaths</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#142"><abbr title="Weline\Admin\Helper\MenuUrlValidator::isWhitelistPath">isWhitelistPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#158"><abbr title="Weline\Admin\Helper\MenuUrlValidator::isValidLoginRedirectTarget">isValidLoginRedirectTarget</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#47"><abbr title="Weline\Admin\Model\MenuAccessLog::setUserId">setUserId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#55"><abbr title="Weline\Admin\Model\MenuAccessLog::getUserId">getUserId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#63"><abbr title="Weline\Admin\Model\MenuAccessLog::setSourceId">setSourceId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#71"><abbr title="Weline\Admin\Model\MenuAccessLog::getSourceId">getSourceId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#79"><abbr title="Weline\Admin\Model\MenuAccessLog::setRoute">setRoute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#87"><abbr title="Weline\Admin\Model\MenuAccessLog::getRoute">getRoute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#95"><abbr title="Weline\Admin\Model\MenuAccessLog::setMethod">setMethod</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#103"><abbr title="Weline\Admin\Model\MenuAccessLog::getMethod">getMethod</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#111"><abbr title="Weline\Admin\Model\MenuAccessLog::setAccessTime">setAccessTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#119"><abbr title="Weline\Admin\Model\MenuAccessLog::getAccessTime">getAccessTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#132"><abbr title="Weline\Admin\Model\MenuAccessLog::getFrequentlyUsedMenus">getFrequentlyUsedMenus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#248"><abbr title="Weline\Admin\Model\MenuAccessLog::getRecentMenus">getRecentMenus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#32"><abbr title="Weline\Admin\Model\System\SystemNotification::getTitle">getTitle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#36"><abbr title="Weline\Admin\Model\System\SystemNotification::setTitle">setTitle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#41"><abbr title="Weline\Admin\Model\System\SystemNotification::getContent">getContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#45"><abbr title="Weline\Admin\Model\System\SystemNotification::setContent">setContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#50"><abbr title="Weline\Admin\Model\System\SystemNotification::isRead">isRead</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#54"><abbr title="Weline\Admin\Model\System\SystemNotification::setIsRead">setIsRead</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#59"><abbr title="Weline\Admin\Model\System\SystemNotification::getIsImg">getIsImg</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#63"><abbr title="Weline\Admin\Model\System\SystemNotification::setIsImg">setIsImg</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#68"><abbr title="Weline\Admin\Model\System\SystemNotification::getIsIcon">getIsIcon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#72"><abbr title="Weline\Admin\Model\System\SystemNotification::setIsIcon">setIsIcon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#77"><abbr title="Weline\Admin\Model\System\SystemNotification::getAvatar">getAvatar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/System/SystemNotification.php.html#81"><abbr title="Weline\Admin\Model\System\SystemNotification::setAvatar">setAvatar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/AclController.php.html#23"><abbr title="Weline\Admin\Observer\AclController::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#23"><abbr title="Weline\Admin\Observer\BackendControllerInitAfter::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#28"><abbr title="Weline\Admin\Observer\BackendControllerInitAfter::getSession">getSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#36"><abbr title="Weline\Admin\Observer\BackendControllerInitAfter::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#103"><abbr title="Weline\Admin\Observer\BackendControllerInitAfter::clearRememberCookie">clearRememberCookie</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#109"><abbr title="Weline\Admin\Observer\BackendControllerInitAfter::invalidateRememberToken">invalidateRememberToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendNoLoginRedirectUrl.php.html#22"><abbr title="Weline\Admin\Observer\BackendNoLoginRedirectUrl::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendNoLoginRedirectUrl.php.html#32"><abbr title="Weline\Admin\Observer\BackendNoLoginRedirectUrl::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendWhitelistUrl.php.html#36"><abbr title="Weline\Admin\Observer\BackendWhitelistUrl::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/BackendWhitelistUrl.php.html#48"><abbr title="Weline\Admin\Observer\BackendWhitelistUrl::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/Maintenance.php.html#23"><abbr title="Weline\Admin\Observer\Maintenance::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/MenuAccessLogObserver.php.html#29"><abbr title="Weline\Admin\Observer\MenuAccessLogObserver::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/MenuAccessLogObserver.php.html#41"><abbr title="Weline\Admin\Observer\MenuAccessLogObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#25"><abbr title="Weline\Admin\Observer\NoAccessRedirectBefore::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#35"><abbr title="Weline\Admin\Observer\NoAccessRedirectBefore::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#67"><abbr title="Weline\Admin\Observer\NoAccessRedirectBefore::getBackendLoginUrlSameOrigin">getBackendLoginUrlSameOrigin</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#78"><abbr title="Weline\Admin\Observer\NoAccessRedirectBefore::getBackendPathWithPrefix">getBackendPathWithPrefix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ResponseRedirectBefore.php.html#20"><abbr title="Weline\Admin\Observer\ResponseRedirectBefore::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/ResponseRedirectBefore.php.html#28"><abbr title="Weline\Admin\Observer\ResponseRedirectBefore::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/RoleChecker.php.html#23"><abbr title="Weline\Admin\Observer\RoleChecker::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#33"><abbr title="Weline\Admin\Observer\SystemNotificationObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#167"><abbr title="Weline\Admin\Observer\SystemNotificationObserver::saveErrorNotification">saveErrorNotification</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#215"><abbr title="Weline\Admin\Observer\SystemNotificationObserver::getSenderInfo">getSenderInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/BackendVerificationCodeGate.php.html#9"><abbr title="Weline\Admin\Service\BackendVerificationCodeGate::shouldDisplayCaptcha">shouldDisplayCaptcha</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/BackendVerificationCodeGate.php.html#14"><abbr title="Weline\Admin\Service\BackendVerificationCodeGate::canAccessCaptcha">canAccessCaptcha</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/BackendVerificationCodeGate.php.html#22"><abbr title="Weline\Admin\Service\BackendVerificationCodeGate::evaluate">evaluate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/BackendVerificationCodeGate.php.html#67"><abbr title="Weline\Admin\Service\BackendVerificationCodeGate::normalizeCode">normalizeCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#49"><abbr title="Weline\Admin\Service\MenuRenderService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#61"><abbr title="Weline\Admin\Service\MenuRenderService::getRequest">getRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#71"><abbr title="Weline\Admin\Service\MenuRenderService::getBackendUrlPrefix">getBackendUrlPrefix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#100"><abbr title="Weline\Admin\Service\MenuRenderService::getFrontendUrlPrefix">getFrontendUrlPrefix</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#110"><abbr title="Weline\Admin\Service\MenuRenderService::getCurrentUser">getCurrentUser</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#120"><abbr title="Weline\Admin\Service\MenuRenderService::getMenuTree">getMenuTree</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#140"><abbr title="Weline\Admin\Service\MenuRenderService::getFrequentMenus">getFrequentMenus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#167"><abbr title="Weline\Admin\Service\MenuRenderService::formatMenuUrl">formatMenuUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#183"><abbr title="Weline\Admin\Service\MenuRenderService::formatMenuUrlCached">formatMenuUrlCached</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#198"><abbr title="Weline\Admin\Service\MenuRenderService::getCurrentUrl">getCurrentUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#216"><abbr title="Weline\Admin\Service\MenuRenderService::isMenuActive">isMenuActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#247"><abbr title="Weline\Admin\Service\MenuRenderService::hasActiveChild">hasActiveChild</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#284"><abbr title="Weline\Admin\Service\MenuRenderService::formatAccessCount">formatAccessCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#311"><abbr title="Weline\Admin\Service\MenuRenderService::renderMenu">renderMenu</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#392"><abbr title="Weline\Admin\Service\MenuRenderService::renderSubMenu">renderSubMenu</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#476"><abbr title="Weline\Admin\Service\MenuRenderService::renderRecentMenus">renderRecentMenus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#519"><abbr title="Weline\Admin\Service\MenuRenderService::renderFrequentMenus">renderFrequentMenus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#572"><abbr title="Weline\Admin\Service\MenuRenderService::renderFrequentTabContent">renderFrequentTabContent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#37"><abbr title="Weline\Admin\Setup\Install::setup">setup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#46"><abbr title="Weline\Admin\Setup\Install::seedDefaultNotifications">seedDefaultNotifications</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Login.php.html#178"><abbr title="Weline\Admin\Controller\Login::postPost">postPost</abbr></a></td><td class="text-right">812</td></tr>
+       <tr><td><a href="Controller/Login.php.html#65"><abbr title="Weline\Admin\Controller\Login::index">index</abbr></a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Block/Backend/Total.php.html#21"><abbr title="Weline\Admin\Block\Backend\Total::__init">__init</abbr></a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#33"><abbr title="Weline\Admin\Observer\SystemNotificationObserver::execute">execute</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#311"><abbr title="Weline\Admin\Service\MenuRenderService::renderMenu">renderMenu</abbr></a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#132"><abbr title="Weline\Admin\Model\MenuAccessLog::getFrequentlyUsedMenus">getFrequentlyUsedMenus</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Model/MenuAccessLog.php.html#248"><abbr title="Weline\Admin\Model\MenuAccessLog::getRecentMenus">getRecentMenus</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#36"><abbr title="Weline\Admin\Observer\BackendControllerInitAfter::execute">execute</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#129"><abbr title="Weline\Admin\Controller\System\Menus::mapMenuDataToAcl">mapMenuDataToAcl</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#392"><abbr title="Weline\Admin\Service\MenuRenderService::renderSubMenu">renderSubMenu</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Observer/ResponseRedirectBefore.php.html#28"><abbr title="Weline\Admin\Observer\ResponseRedirectBefore::execute">execute</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Controller/Login.php.html#536"><abbr title="Weline\Admin\Controller\Login::logout">logout</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#215"><abbr title="Weline\Admin\Observer\SystemNotificationObserver::getSenderInfo">getSenderInfo</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#40"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::__init">__init</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#196"><abbr title="Weline\Admin\Controller\Backend\User::postApiSave">postApiSave</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Observer/MenuAccessLogObserver.php.html#41"><abbr title="Weline\Admin\Observer\MenuAccessLogObserver::execute">execute</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#572"><abbr title="Weline\Admin\Service\MenuRenderService::renderFrequentTabContent">renderFrequentTabContent</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#117"><abbr title="Weline\Admin\Controller\Backend\User::postDelete">postDelete</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#415"><abbr title="Weline\Admin\Controller\Backend\User::postAssignRole">postAssignRole</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Login.php.html#612"><abbr title="Weline\Admin\Controller\Login::verificationCode">verificationCode</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#199"><abbr title="Weline\Admin\Controller\System\Menus::postUpdateOrder">postUpdateOrder</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Login.php.html#403"><abbr title="Weline\Admin\Controller\Login::redirectReferer">redirectReferer</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#247"><abbr title="Weline\Admin\Service\MenuRenderService::hasActiveChild">hasActiveChild</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#329"><abbr title="Weline\Admin\Controller\Backend\User::postApiToggle">postApiToggle</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/BaseController.php.html#25"><abbr title="Weline\Admin\Controller\BaseController::fetchBase">fetchBase</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Login.php.html#158"><abbr title="Weline\Admin\Controller\Login::getNoAccessMessageByReason">getNoAccessMessageByReason</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Controller/Login.php.html#507"><abbr title="Weline\Admin\Controller\Login::getBackendPathWithPrefix">getBackendPathWithPrefix</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#78"><abbr title="Weline\Admin\Observer\NoAccessRedirectBefore::getBackendPathWithPrefix">getBackendPathWithPrefix</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#67"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::processMenu">processMenu</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#451"><abbr title="Weline\Admin\Controller\Backend\User::postApiAssignRole">postApiAssignRole</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Login.php.html#451"><abbr title="Weline\Admin\Controller\Login::getSessionDataForLog">getSessionDataForLog</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Observer/Maintenance.php.html#23"><abbr title="Weline\Admin\Observer\Maintenance::execute">execute</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#216"><abbr title="Weline\Admin\Service\MenuRenderService::isMenuActive">isMenuActive</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#117"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::generateLetterAvatar">generateLetterAvatar</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Block/LeftSiderbarMenu.php.html#23"><abbr title="Weline\Admin\Block\LeftSiderbarMenu::getMenuTree">getMenuTree</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#278"><abbr title="Weline\Admin\Controller\Backend\User::postApiDelete">postApiDelete</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Login.php.html#477"><abbr title="Weline\Admin\Controller\Login::resolveDefaultRedirectTarget">resolveDefaultRedirectTarget</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Login.php.html#526"><abbr title="Weline\Admin\Controller\Login::ensureSameOrigin">ensureSameOrigin</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Maintenance.php.html#26"><abbr title="Weline\Admin\Controller\Maintenance::assignMaintenanceLogo">assignMaintenanceLogo</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#65"><abbr title="Weline\Admin\Controller\System\Menus::postDelete">postDelete</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#35"><abbr title="Weline\Admin\Observer\NoAccessRedirectBefore::execute">execute</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Observer/SystemNotificationObserver.php.html#167"><abbr title="Weline\Admin\Observer\SystemNotificationObserver::saveErrorNotification">saveErrorNotification</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#83"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::getAvatar">getAvatar</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#94"><abbr title="Weline\Admin\Controller\System\Menus::postSave">postSave</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#228"><abbr title="Weline\Admin\Controller\System\Menus::getDetail">getDetail</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/System/Modules.php.html#27"><abbr title="Weline\Admin\Controller\System\Modules::router">router</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#104"><abbr title="Weline\Admin\Helper\MenuUrlValidator::getWhitelistPaths">getWhitelistPaths</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Observer/RoleChecker.php.html#23"><abbr title="Weline\Admin\Observer\RoleChecker::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/BackendVerificationCodeGate.php.html#22"><abbr title="Weline\Admin\Service\BackendVerificationCodeGate::evaluate">evaluate</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#55"><abbr title="Weline\Admin\Controller\Backend\User::getEdit">getEdit</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#75"><abbr title="Weline\Admin\Controller\Backend\User::postEdit">postEdit</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Login.php.html#495"><abbr title="Weline\Admin\Controller\Login::getBackendUrlSameOrigin">getBackendUrlSameOrigin</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Login.php.html#596"><abbr title="Weline\Admin\Controller\Login::syncSandboxCookie">syncSandboxCookie</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#36"><abbr title="Weline\Admin\Controller\System\Menus::index">index</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#37"><abbr title="Weline\Admin\Helper\MenuUrlValidator::isMenuUrl">isMenuUrl</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Observer/NoAccessRedirectBefore.php.html#67"><abbr title="Weline\Admin\Observer\NoAccessRedirectBefore::getBackendLoginUrlSameOrigin">getBackendLoginUrlSameOrigin</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#140"><abbr title="Weline\Admin\Service\MenuRenderService::getFrequentMenus">getFrequentMenus</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#519"><abbr title="Weline\Admin\Service\MenuRenderService::renderFrequentMenus">renderFrequentMenus</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#99"><abbr title="Weline\Admin\Controller\Backend\User::postAdd">postAdd</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#160"><abbr title="Weline\Admin\Controller\Backend\User::postActive">postActive</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#177"><abbr title="Weline\Admin\Controller\Backend\User::postInActive">postInActive</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Login.php.html#437"><abbr title="Weline\Admin\Controller\Login::loadCurrentBackendUser">loadCurrentBackendUser</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Login.php.html#465"><abbr title="Weline\Admin\Controller\Login::userHasRoutePermission">userHasRoutePermission</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Helper/MenuUrlValidator.php.html#158"><abbr title="Weline\Admin\Helper\MenuUrlValidator::isValidLoginRedirectTarget">isValidLoginRedirectTarget</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Observer/BackendWhitelistUrl.php.html#48"><abbr title="Weline\Admin\Observer\BackendWhitelistUrl::execute">execute</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#120"><abbr title="Weline\Admin\Service\MenuRenderService::getMenuTree">getMenuTree</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#284"><abbr title="Weline\Admin\Service\MenuRenderService::formatAccessCount">formatAccessCount</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#476"><abbr title="Weline\Admin\Service\MenuRenderService::renderRecentMenus">renderRecentMenus</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topbar.php.html#161"><abbr title="Weline\Admin\Block\Backend\Page\Topbar::getUser">getUser</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#37"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::getResourceTreeService">getResourceTreeService</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#45"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::__init">__init</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Block/Backend/Page/Topnav.php.html#56"><abbr title="Weline\Admin\Block\Backend\Page\Topnav::render">render</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/User.php.html#32"><abbr title="Weline\Admin\Controller\Backend\User::listing">listing</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/System/Events.php.html#28"><abbr title="Weline\Admin\Controller\System\Events::getReader">getReader</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/System/Menus.php.html#28"><abbr title="Weline\Admin\Controller\System\Menus::getResourceTreeService">getResourceTreeService</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/System/Plugins.php.html#27"><abbr title="Weline\Admin\Controller\System\Plugins::getReader">getReader</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/Data.php.html#40"><abbr title="Weline\Admin\Helper\Data::getRequestBackendUser">getRequestBackendUser</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/Data.php.html#64"><abbr title="Weline\Admin\Helper\Data::getSessionUser">getSessionUser</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Helper/Data.php.html#81"><abbr title="Weline\Admin\Helper\Data::getUser">getUser</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Observer/BackendControllerInitAfter.php.html#109"><abbr title="Weline\Admin\Observer\BackendControllerInitAfter::invalidateRememberToken">invalidateRememberToken</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#71"><abbr title="Weline\Admin\Service\MenuRenderService::getBackendUrlPrefix">getBackendUrlPrefix</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#167"><abbr title="Weline\Admin\Service\MenuRenderService::formatMenuUrl">formatMenuUrl</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#183"><abbr title="Weline\Admin\Service\MenuRenderService::formatMenuUrlCached">formatMenuUrlCached</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/MenuRenderService.php.html#198"><abbr title="Weline\Admin\Service\MenuRenderService::getCurrentUrl">getCurrentUrl</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Setup/Install.php.html#46"><abbr title="Weline\Admin\Setup\Install::seedDefaultNotifications">seedDefaultNotifications</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([34,0,0,0,0,0,0,0,0,0,0,2], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([147,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Api\/Rest\/V1\/Index.php.html#14\">Weline\\Admin\\Api\\Rest\\V1\\Index<\/a>"],[0,26,"<a href=\"Block\/Backend\/Page\/Topbar.php.html#25\">Weline\\Admin\\Block\\Backend\\Page\\Topbar<\/a>"],[0,14,"<a href=\"Block\/Backend\/Page\/Topnav.php.html#20\">Weline\\Admin\\Block\\Backend\\Page\\Topnav<\/a>"],[0,18,"<a href=\"Block\/Backend\/Total.php.html#16\">Weline\\Admin\\Block\\Backend\\Total<\/a>"],[0,6,"<a href=\"Block\/LeftSiderbarMenu.php.html#19\">Weline\\Admin\\Block\\LeftSiderbarMenu<\/a>"],[100,0,"<a href=\"Block\/Menu.php.html#16\">Weline\\Admin\\Block\\Menu<\/a>"],[0,1,"<a href=\"Block\/System\/Notification.php.html#17\">Weline\\Admin\\Block\\System\\Notification<\/a>"],[0,74,"<a href=\"Controller\/Backend\/User.php.html#22\">Weline\\Admin\\Controller\\Backend\\User<\/a>"],[0,9,"<a href=\"Controller\/BaseController.php.html#16\">Weline\\Admin\\Controller\\BaseController<\/a>"],[0,1,"<a href=\"Controller\/Dashboard.php.html#20\">Weline\\Admin\\Controller\\Dashboard<\/a>"],[0,1,"<a href=\"Controller\/Index.php.html#12\">Weline\\Admin\\Controller\\Index<\/a>"],[0,130,"<a href=\"Controller\/Login.php.html#33\">Weline\\Admin\\Controller\\Login<\/a>"],[0,7,"<a href=\"Controller\/Maintenance.php.html#18\">Weline\\Admin\\Controller\\Maintenance<\/a>"],[0,1,"<a href=\"Controller\/System\/Cms.php.html#14\">Weline\\Admin\\Controller\\System\\Cms<\/a>"],[0,3,"<a href=\"Controller\/System\/Events.php.html#17\">Weline\\Admin\\Controller\\System\\Events<\/a>"],[0,46,"<a href=\"Controller\/System\/Menus.php.html#21\">Weline\\Admin\\Controller\\System\\Menus<\/a>"],[0,6,"<a href=\"Controller\/System\/Modules.php.html#19\">Weline\\Admin\\Controller\\System\\Modules<\/a>"],[0,3,"<a href=\"Controller\/System\/Plugins.php.html#17\">Weline\\Admin\\Controller\\System\\Plugins<\/a>"],[100,0,"<a href=\"Controller\/System\/Setting.php.html#7\">Weline\\Admin\\Controller\\System\\Setting<\/a>"],[0,7,"<a href=\"Helper\/Data.php.html#17\">Weline\\Admin\\Helper\\Data<\/a>"],[0,15,"<a href=\"Helper\/MenuUrlValidator.php.html#19\">Weline\\Admin\\Helper\\MenuUrlValidator<\/a>"],[0,42,"<a href=\"Model\/MenuAccessLog.php.html#20\">Weline\\Admin\\Model\\MenuAccessLog<\/a>"],[0,12,"<a href=\"Model\/System\/SystemNotification.php.html#13\">Weline\\Admin\\Model\\System\\SystemNotification<\/a>"],[0,1,"<a href=\"Observer\/AclController.php.html#17\">Weline\\Admin\\Observer\\AclController<\/a>"],[0,21,"<a href=\"Observer\/BackendControllerInitAfter.php.html#19\">Weline\\Admin\\Observer\\BackendControllerInitAfter<\/a>"],[0,2,"<a href=\"Observer\/BackendNoLoginRedirectUrl.php.html#18\">Weline\\Admin\\Observer\\BackendNoLoginRedirectUrl<\/a>"],[0,4,"<a href=\"Observer\/BackendWhitelistUrl.php.html#20\">Weline\\Admin\\Observer\\BackendWhitelistUrl<\/a>"],[0,7,"<a href=\"Observer\/Maintenance.php.html#18\">Weline\\Admin\\Observer\\Maintenance<\/a>"],[0,12,"<a href=\"Observer\/MenuAccessLogObserver.php.html#23\">Weline\\Admin\\Observer\\MenuAccessLogObserver<\/a>"],[0,19,"<a href=\"Observer\/NoAccessRedirectBefore.php.html#18\">Weline\\Admin\\Observer\\NoAccessRedirectBefore<\/a>"],[0,14,"<a href=\"Observer\/ResponseRedirectBefore.php.html#13\">Weline\\Admin\\Observer\\ResponseRedirectBefore<\/a>"],[0,5,"<a href=\"Observer\/RoleChecker.php.html#18\">Weline\\Admin\\Observer\\RoleChecker<\/a>"],[0,35,"<a href=\"Observer\/SystemNotificationObserver.php.html#19\">Weline\\Admin\\Observer\\SystemNotificationObserver<\/a>"],[0,8,"<a href=\"Service\/BackendVerificationCodeGate.php.html#7\">Weline\\Admin\\Service\\BackendVerificationCodeGate<\/a>"],[0,87,"<a href=\"Service\/MenuRenderService.php.html#32\">Weline\\Admin\\Service\\MenuRenderService<\/a>"],[0,3,"<a href=\"Setup\/Install.php.html#23\">Weline\\Admin\\Setup\\Install<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Api\/Rest\/V1\/Index.php.html#16\">Weline\\Admin\\Api\\Rest\\V1\\Index::index<\/a>"],[0,1,"<a href=\"Block\/Backend\/Page\/Topbar.php.html#32\">Weline\\Admin\\Block\\Backend\\Page\\Topbar::__construct<\/a>"],[0,11,"<a href=\"Block\/Backend\/Page\/Topbar.php.html#40\">Weline\\Admin\\Block\\Backend\\Page\\Topbar::__init<\/a>"],[0,1,"<a href=\"Block\/Backend\/Page\/Topbar.php.html#78\">Weline\\Admin\\Block\\Backend\\Page\\Topbar::getI18n<\/a>"],[0,5,"<a href=\"Block\/Backend\/Page\/Topbar.php.html#83\">Weline\\Admin\\Block\\Backend\\Page\\Topbar::getAvatar<\/a>"],[0,6,"<a href=\"Block\/Backend\/Page\/Topbar.php.html#117\">Weline\\Admin\\Block\\Backend\\Page\\Topbar::generateLetterAvatar<\/a>"],[0,2,"<a href=\"Block\/Backend\/Page\/Topbar.php.html#161\">Weline\\Admin\\Block\\Backend\\Page\\Topbar::getUser<\/a>"],[0,1,"<a href=\"Block\/Backend\/Page\/Topnav.php.html#26\">Weline\\Admin\\Block\\Backend\\Page\\Topnav::__construct<\/a>"],[0,2,"<a href=\"Block\/Backend\/Page\/Topnav.php.html#37\">Weline\\Admin\\Block\\Backend\\Page\\Topnav::getResourceTreeService<\/a>"],[0,2,"<a href=\"Block\/Backend\/Page\/Topnav.php.html#45\">Weline\\Admin\\Block\\Backend\\Page\\Topnav::__init<\/a>"],[0,2,"<a href=\"Block\/Backend\/Page\/Topnav.php.html#56\">Weline\\Admin\\Block\\Backend\\Page\\Topnav::render<\/a>"],[0,7,"<a href=\"Block\/Backend\/Page\/Topnav.php.html#67\">Weline\\Admin\\Block\\Backend\\Page\\Topnav::processMenu<\/a>"],[0,18,"<a href=\"Block\/Backend\/Total.php.html#21\">Weline\\Admin\\Block\\Backend\\Total::__init<\/a>"],[0,6,"<a href=\"Block\/LeftSiderbarMenu.php.html#23\">Weline\\Admin\\Block\\LeftSiderbarMenu::getMenuTree<\/a>"],[0,1,"<a href=\"Block\/System\/Notification.php.html#30\">Weline\\Admin\\Block\\System\\Notification::getNotices<\/a>"],[0,1,"<a href=\"Controller\/Backend\/User.php.html#25\">Weline\\Admin\\Controller\\Backend\\User::__construct<\/a>"],[0,2,"<a href=\"Controller\/Backend\/User.php.html#32\">Weline\\Admin\\Controller\\Backend\\User::listing<\/a>"],[0,1,"<a href=\"Controller\/Backend\/User.php.html#47\">Weline\\Admin\\Controller\\Backend\\User::getAdd<\/a>"],[0,4,"<a href=\"Controller\/Backend\/User.php.html#55\">Weline\\Admin\\Controller\\Backend\\User::getEdit<\/a>"],[0,4,"<a href=\"Controller\/Backend\/User.php.html#75\">Weline\\Admin\\Controller\\Backend\\User::postEdit<\/a>"],[0,3,"<a href=\"Controller\/Backend\/User.php.html#99\">Weline\\Admin\\Controller\\Backend\\User::postAdd<\/a>"],[0,10,"<a href=\"Controller\/Backend\/User.php.html#117\">Weline\\Admin\\Controller\\Backend\\User::postDelete<\/a>"],[0,3,"<a href=\"Controller\/Backend\/User.php.html#160\">Weline\\Admin\\Controller\\Backend\\User::postActive<\/a>"],[0,3,"<a href=\"Controller\/Backend\/User.php.html#177\">Weline\\Admin\\Controller\\Backend\\User::postInActive<\/a>"],[0,11,"<a href=\"Controller\/Backend\/User.php.html#196\">Weline\\Admin\\Controller\\Backend\\User::postApiSave<\/a>"],[0,6,"<a href=\"Controller\/Backend\/User.php.html#278\">Weline\\Admin\\Controller\\Backend\\User::postApiDelete<\/a>"],[0,8,"<a href=\"Controller\/Backend\/User.php.html#329\">Weline\\Admin\\Controller\\Backend\\User::postApiToggle<\/a>"],[0,1,"<a href=\"Controller\/Backend\/User.php.html#393\">Weline\\Admin\\Controller\\Backend\\User::getAssignRole<\/a>"],[0,10,"<a href=\"Controller\/Backend\/User.php.html#415\">Weline\\Admin\\Controller\\Backend\\User::postAssignRole<\/a>"],[0,7,"<a href=\"Controller\/Backend\/User.php.html#451\">Weline\\Admin\\Controller\\Backend\\User::postApiAssignRole<\/a>"],[0,1,"<a href=\"Controller\/BaseController.php.html#18\">Weline\\Admin\\Controller\\BaseController::__init<\/a>"],[0,8,"<a href=\"Controller\/BaseController.php.html#25\">Weline\\Admin\\Controller\\BaseController::fetchBase<\/a>"],[0,1,"<a href=\"Controller\/Dashboard.php.html#22\">Weline\\Admin\\Controller\\Dashboard::index<\/a>"],[0,1,"<a href=\"Controller\/Index.php.html#14\">Weline\\Admin\\Controller\\Index::index<\/a>"],[0,1,"<a href=\"Controller\/Login.php.html#49\">Weline\\Admin\\Controller\\Login::__construct<\/a>"],[0,20,"<a href=\"Controller\/Login.php.html#65\">Weline\\Admin\\Controller\\Login::index<\/a>"],[0,8,"<a href=\"Controller\/Login.php.html#158\">Weline\\Admin\\Controller\\Login::getNoAccessMessageByReason<\/a>"],[0,28,"<a href=\"Controller\/Login.php.html#178\">Weline\\Admin\\Controller\\Login::postPost<\/a>"],[0,9,"<a href=\"Controller\/Login.php.html#403\">Weline\\Admin\\Controller\\Login::redirectReferer<\/a>"],[0,3,"<a href=\"Controller\/Login.php.html#437\">Weline\\Admin\\Controller\\Login::loadCurrentBackendUser<\/a>"],[0,7,"<a href=\"Controller\/Login.php.html#451\">Weline\\Admin\\Controller\\Login::getSessionDataForLog<\/a>"],[0,3,"<a href=\"Controller\/Login.php.html#465\">Weline\\Admin\\Controller\\Login::userHasRoutePermission<\/a>"],[0,6,"<a href=\"Controller\/Login.php.html#477\">Weline\\Admin\\Controller\\Login::resolveDefaultRedirectTarget<\/a>"],[0,4,"<a href=\"Controller\/Login.php.html#495\">Weline\\Admin\\Controller\\Login::getBackendUrlSameOrigin<\/a>"],[0,8,"<a href=\"Controller\/Login.php.html#507\">Weline\\Admin\\Controller\\Login::getBackendPathWithPrefix<\/a>"],[0,6,"<a href=\"Controller\/Login.php.html#526\">Weline\\Admin\\Controller\\Login::ensureSameOrigin<\/a>"],[0,12,"<a href=\"Controller\/Login.php.html#536\">Weline\\Admin\\Controller\\Login::logout<\/a>"],[0,4,"<a href=\"Controller\/Login.php.html#596\">Weline\\Admin\\Controller\\Login::syncSandboxCookie<\/a>"],[0,10,"<a href=\"Controller\/Login.php.html#612\">Weline\\Admin\\Controller\\Login::verificationCode<\/a>"],[0,1,"<a href=\"Controller\/Login.php.html#693\">Weline\\Admin\\Controller\\Login::clearBackendVerificationCodeState<\/a>"],[0,1,"<a href=\"Controller\/Maintenance.php.html#20\">Weline\\Admin\\Controller\\Maintenance::index<\/a>"],[0,6,"<a href=\"Controller\/Maintenance.php.html#26\">Weline\\Admin\\Controller\\Maintenance::assignMaintenanceLogo<\/a>"],[0,1,"<a href=\"Controller\/System\/Cms.php.html#16\">Weline\\Admin\\Controller\\System\\Cms::getIndex<\/a>"],[0,1,"<a href=\"Controller\/System\/Events.php.html#21\">Weline\\Admin\\Controller\\System\\Events::getIndex<\/a>"],[0,2,"<a href=\"Controller\/System\/Events.php.html#28\">Weline\\Admin\\Controller\\System\\Events::getReader<\/a>"],[0,2,"<a href=\"Controller\/System\/Menus.php.html#28\">Weline\\Admin\\Controller\\System\\Menus::getResourceTreeService<\/a>"],[0,4,"<a href=\"Controller\/System\/Menus.php.html#36\">Weline\\Admin\\Controller\\System\\Menus::index<\/a>"],[0,6,"<a href=\"Controller\/System\/Menus.php.html#65\">Weline\\Admin\\Controller\\System\\Menus::postDelete<\/a>"],[0,5,"<a href=\"Controller\/System\/Menus.php.html#94\">Weline\\Admin\\Controller\\System\\Menus::postSave<\/a>"],[0,14,"<a href=\"Controller\/System\/Menus.php.html#129\">Weline\\Admin\\Controller\\System\\Menus::mapMenuDataToAcl<\/a>"],[0,10,"<a href=\"Controller\/System\/Menus.php.html#199\">Weline\\Admin\\Controller\\System\\Menus::postUpdateOrder<\/a>"],[0,5,"<a href=\"Controller\/System\/Menus.php.html#228\">Weline\\Admin\\Controller\\System\\Menus::getDetail<\/a>"],[0,1,"<a href=\"Controller\/System\/Modules.php.html#21\">Weline\\Admin\\Controller\\System\\Modules::getIndex<\/a>"],[0,5,"<a href=\"Controller\/System\/Modules.php.html#27\">Weline\\Admin\\Controller\\System\\Modules::router<\/a>"],[0,1,"<a href=\"Controller\/System\/Plugins.php.html#19\">Weline\\Admin\\Controller\\System\\Plugins::getIndex<\/a>"],[0,2,"<a href=\"Controller\/System\/Plugins.php.html#27\">Weline\\Admin\\Controller\\System\\Plugins::getReader<\/a>"],[0,1,"<a href=\"Helper\/Data.php.html#22\">Weline\\Admin\\Helper\\Data::__construct<\/a>"],[0,2,"<a href=\"Helper\/Data.php.html#40\">Weline\\Admin\\Helper\\Data::getRequestBackendUser<\/a>"],[0,2,"<a href=\"Helper\/Data.php.html#64\">Weline\\Admin\\Helper\\Data::getSessionUser<\/a>"],[0,2,"<a href=\"Helper\/Data.php.html#81\">Weline\\Admin\\Helper\\Data::getUser<\/a>"],[0,4,"<a href=\"Helper\/MenuUrlValidator.php.html#37\">Weline\\Admin\\Helper\\MenuUrlValidator::isMenuUrl<\/a>"],[0,1,"<a href=\"Helper\/MenuUrlValidator.php.html#68\">Weline\\Admin\\Helper\\MenuUrlValidator::loadMenuPathsFromAcl<\/a>"],[0,1,"<a href=\"Helper\/MenuUrlValidator.php.html#80\">Weline\\Admin\\Helper\\MenuUrlValidator::clearCache<\/a>"],[0,5,"<a href=\"Helper\/MenuUrlValidator.php.html#104\">Weline\\Admin\\Helper\\MenuUrlValidator::getWhitelistPaths<\/a>"],[0,1,"<a href=\"Helper\/MenuUrlValidator.php.html#142\">Weline\\Admin\\Helper\\MenuUrlValidator::isWhitelistPath<\/a>"],[0,3,"<a href=\"Helper\/MenuUrlValidator.php.html#158\">Weline\\Admin\\Helper\\MenuUrlValidator::isValidLoginRedirectTarget<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#47\">Weline\\Admin\\Model\\MenuAccessLog::setUserId<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#55\">Weline\\Admin\\Model\\MenuAccessLog::getUserId<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#63\">Weline\\Admin\\Model\\MenuAccessLog::setSourceId<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#71\">Weline\\Admin\\Model\\MenuAccessLog::getSourceId<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#79\">Weline\\Admin\\Model\\MenuAccessLog::setRoute<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#87\">Weline\\Admin\\Model\\MenuAccessLog::getRoute<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#95\">Weline\\Admin\\Model\\MenuAccessLog::setMethod<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#103\">Weline\\Admin\\Model\\MenuAccessLog::getMethod<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#111\">Weline\\Admin\\Model\\MenuAccessLog::setAccessTime<\/a>"],[0,1,"<a href=\"Model\/MenuAccessLog.php.html#119\">Weline\\Admin\\Model\\MenuAccessLog::getAccessTime<\/a>"],[0,16,"<a href=\"Model\/MenuAccessLog.php.html#132\">Weline\\Admin\\Model\\MenuAccessLog::getFrequentlyUsedMenus<\/a>"],[0,16,"<a href=\"Model\/MenuAccessLog.php.html#248\">Weline\\Admin\\Model\\MenuAccessLog::getRecentMenus<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#32\">Weline\\Admin\\Model\\System\\SystemNotification::getTitle<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#36\">Weline\\Admin\\Model\\System\\SystemNotification::setTitle<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#41\">Weline\\Admin\\Model\\System\\SystemNotification::getContent<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#45\">Weline\\Admin\\Model\\System\\SystemNotification::setContent<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#50\">Weline\\Admin\\Model\\System\\SystemNotification::isRead<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#54\">Weline\\Admin\\Model\\System\\SystemNotification::setIsRead<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#59\">Weline\\Admin\\Model\\System\\SystemNotification::getIsImg<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#63\">Weline\\Admin\\Model\\System\\SystemNotification::setIsImg<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#68\">Weline\\Admin\\Model\\System\\SystemNotification::getIsIcon<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#72\">Weline\\Admin\\Model\\System\\SystemNotification::setIsIcon<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#77\">Weline\\Admin\\Model\\System\\SystemNotification::getAvatar<\/a>"],[0,1,"<a href=\"Model\/System\/SystemNotification.php.html#81\">Weline\\Admin\\Model\\System\\SystemNotification::setAvatar<\/a>"],[0,1,"<a href=\"Observer\/AclController.php.html#23\">Weline\\Admin\\Observer\\AclController::execute<\/a>"],[0,1,"<a href=\"Observer\/BackendControllerInitAfter.php.html#23\">Weline\\Admin\\Observer\\BackendControllerInitAfter::__construct<\/a>"],[0,1,"<a href=\"Observer\/BackendControllerInitAfter.php.html#28\">Weline\\Admin\\Observer\\BackendControllerInitAfter::getSession<\/a>"],[0,16,"<a href=\"Observer\/BackendControllerInitAfter.php.html#36\">Weline\\Admin\\Observer\\BackendControllerInitAfter::execute<\/a>"],[0,1,"<a href=\"Observer\/BackendControllerInitAfter.php.html#103\">Weline\\Admin\\Observer\\BackendControllerInitAfter::clearRememberCookie<\/a>"],[0,2,"<a href=\"Observer\/BackendControllerInitAfter.php.html#109\">Weline\\Admin\\Observer\\BackendControllerInitAfter::invalidateRememberToken<\/a>"],[0,1,"<a href=\"Observer\/BackendNoLoginRedirectUrl.php.html#22\">Weline\\Admin\\Observer\\BackendNoLoginRedirectUrl::__construct<\/a>"],[0,1,"<a href=\"Observer\/BackendNoLoginRedirectUrl.php.html#32\">Weline\\Admin\\Observer\\BackendNoLoginRedirectUrl::execute<\/a>"],[0,1,"<a href=\"Observer\/BackendWhitelistUrl.php.html#36\">Weline\\Admin\\Observer\\BackendWhitelistUrl::__construct<\/a>"],[0,3,"<a href=\"Observer\/BackendWhitelistUrl.php.html#48\">Weline\\Admin\\Observer\\BackendWhitelistUrl::execute<\/a>"],[0,7,"<a href=\"Observer\/Maintenance.php.html#23\">Weline\\Admin\\Observer\\Maintenance::execute<\/a>"],[0,1,"<a href=\"Observer\/MenuAccessLogObserver.php.html#29\">Weline\\Admin\\Observer\\MenuAccessLogObserver::__construct<\/a>"],[0,11,"<a href=\"Observer\/MenuAccessLogObserver.php.html#41\">Weline\\Admin\\Observer\\MenuAccessLogObserver::execute<\/a>"],[0,1,"<a href=\"Observer\/NoAccessRedirectBefore.php.html#25\">Weline\\Admin\\Observer\\NoAccessRedirectBefore::__construct<\/a>"],[0,6,"<a href=\"Observer\/NoAccessRedirectBefore.php.html#35\">Weline\\Admin\\Observer\\NoAccessRedirectBefore::execute<\/a>"],[0,4,"<a href=\"Observer\/NoAccessRedirectBefore.php.html#67\">Weline\\Admin\\Observer\\NoAccessRedirectBefore::getBackendLoginUrlSameOrigin<\/a>"],[0,8,"<a href=\"Observer\/NoAccessRedirectBefore.php.html#78\">Weline\\Admin\\Observer\\NoAccessRedirectBefore::getBackendPathWithPrefix<\/a>"],[0,1,"<a href=\"Observer\/ResponseRedirectBefore.php.html#20\">Weline\\Admin\\Observer\\ResponseRedirectBefore::__construct<\/a>"],[0,13,"<a href=\"Observer\/ResponseRedirectBefore.php.html#28\">Weline\\Admin\\Observer\\ResponseRedirectBefore::execute<\/a>"],[0,5,"<a href=\"Observer\/RoleChecker.php.html#23\">Weline\\Admin\\Observer\\RoleChecker::execute<\/a>"],[0,17,"<a href=\"Observer\/SystemNotificationObserver.php.html#33\">Weline\\Admin\\Observer\\SystemNotificationObserver::execute<\/a>"],[0,6,"<a href=\"Observer\/SystemNotificationObserver.php.html#167\">Weline\\Admin\\Observer\\SystemNotificationObserver::saveErrorNotification<\/a>"],[0,12,"<a href=\"Observer\/SystemNotificationObserver.php.html#215\">Weline\\Admin\\Observer\\SystemNotificationObserver::getSenderInfo<\/a>"],[0,1,"<a href=\"Service\/BackendVerificationCodeGate.php.html#9\">Weline\\Admin\\Service\\BackendVerificationCodeGate::shouldDisplayCaptcha<\/a>"],[0,1,"<a href=\"Service\/BackendVerificationCodeGate.php.html#14\">Weline\\Admin\\Service\\BackendVerificationCodeGate::canAccessCaptcha<\/a>"],[0,5,"<a href=\"Service\/BackendVerificationCodeGate.php.html#22\">Weline\\Admin\\Service\\BackendVerificationCodeGate::evaluate<\/a>"],[0,1,"<a href=\"Service\/BackendVerificationCodeGate.php.html#67\">Weline\\Admin\\Service\\BackendVerificationCodeGate::normalizeCode<\/a>"],[0,1,"<a href=\"Service\/MenuRenderService.php.html#49\">Weline\\Admin\\Service\\MenuRenderService::__construct<\/a>"],[0,1,"<a href=\"Service\/MenuRenderService.php.html#61\">Weline\\Admin\\Service\\MenuRenderService::getRequest<\/a>"],[0,2,"<a href=\"Service\/MenuRenderService.php.html#71\">Weline\\Admin\\Service\\MenuRenderService::getBackendUrlPrefix<\/a>"],[0,1,"<a href=\"Service\/MenuRenderService.php.html#100\">Weline\\Admin\\Service\\MenuRenderService::getFrontendUrlPrefix<\/a>"],[0,1,"<a href=\"Service\/MenuRenderService.php.html#110\">Weline\\Admin\\Service\\MenuRenderService::getCurrentUser<\/a>"],[0,3,"<a href=\"Service\/MenuRenderService.php.html#120\">Weline\\Admin\\Service\\MenuRenderService::getMenuTree<\/a>"],[0,4,"<a href=\"Service\/MenuRenderService.php.html#140\">Weline\\Admin\\Service\\MenuRenderService::getFrequentMenus<\/a>"],[0,2,"<a href=\"Service\/MenuRenderService.php.html#167\">Weline\\Admin\\Service\\MenuRenderService::formatMenuUrl<\/a>"],[0,2,"<a href=\"Service\/MenuRenderService.php.html#183\">Weline\\Admin\\Service\\MenuRenderService::formatMenuUrlCached<\/a>"],[0,2,"<a href=\"Service\/MenuRenderService.php.html#198\">Weline\\Admin\\Service\\MenuRenderService::getCurrentUrl<\/a>"],[0,7,"<a href=\"Service\/MenuRenderService.php.html#216\">Weline\\Admin\\Service\\MenuRenderService::isMenuActive<\/a>"],[0,9,"<a href=\"Service\/MenuRenderService.php.html#247\">Weline\\Admin\\Service\\MenuRenderService::hasActiveChild<\/a>"],[0,3,"<a href=\"Service\/MenuRenderService.php.html#284\">Weline\\Admin\\Service\\MenuRenderService::formatAccessCount<\/a>"],[0,17,"<a href=\"Service\/MenuRenderService.php.html#311\">Weline\\Admin\\Service\\MenuRenderService::renderMenu<\/a>"],[0,14,"<a href=\"Service\/MenuRenderService.php.html#392\">Weline\\Admin\\Service\\MenuRenderService::renderSubMenu<\/a>"],[0,3,"<a href=\"Service\/MenuRenderService.php.html#476\">Weline\\Admin\\Service\\MenuRenderService::renderRecentMenus<\/a>"],[0,4,"<a href=\"Service\/MenuRenderService.php.html#519\">Weline\\Admin\\Service\\MenuRenderService::renderFrequentMenus<\/a>"],[0,11,"<a href=\"Service\/MenuRenderService.php.html#572\">Weline\\Admin\\Service\\MenuRenderService::renderFrequentTabContent<\/a>"],[0,1,"<a href=\"Setup\/Install.php.html#37\">Weline\\Admin\\Setup\\Install::setup<\/a>"],[0,2,"<a href=\"Setup\/Install.php.html#46\">Weline\\Admin\\Setup\\Install::seedDefaultNotifications<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

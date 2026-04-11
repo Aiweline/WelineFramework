@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Maintenance\Service</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Maintenance</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Service</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="BackupManager.php.html#22">Weline\Maintenance\Service\BackupManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#19">Weline\Maintenance\Service\DatabaseBackupService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FileBackupService.php.html#18">Weline\Maintenance\Service\FileBackupService</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="DatabaseBackupService.php.html#19">Weline\Maintenance\Service\DatabaseBackupService</a></td><td class="text-right">2970</td></tr>
+       <tr><td><a href="FileBackupService.php.html#18">Weline\Maintenance\Service\FileBackupService</a></td><td class="text-right">930</td></tr>
+       <tr><td><a href="BackupManager.php.html#22">Weline\Maintenance\Service\BackupManager</a></td><td class="text-right">812</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="BackupManager.php.html#29"><abbr title="Weline\Maintenance\Service\BackupManager::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#46"><abbr title="Weline\Maintenance\Service\BackupManager::createFullBackup">createFullBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#91"><abbr title="Weline\Maintenance\Service\BackupManager::createDatabaseBackup">createDatabaseBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#132"><abbr title="Weline\Maintenance\Service\BackupManager::createCodeBackup">createCodeBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#173"><abbr title="Weline\Maintenance\Service\BackupManager::createConfigBackup">createConfigBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#214"><abbr title="Weline\Maintenance\Service\BackupManager::createBackup">createBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#231"><abbr title="Weline\Maintenance\Service\BackupManager::deleteBackup">deleteBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#255"><abbr title="Weline\Maintenance\Service\BackupManager::getBackupList">getBackupList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#289"><abbr title="Weline\Maintenance\Service\BackupManager::cleanExpiredBackups">cleanExpiredBackups</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="BackupManager.php.html#337"><abbr title="Weline\Maintenance\Service\BackupManager::getBackupPath">getBackupPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#25"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#39"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupDatabase">backupDatabase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#57"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupTables">backupTables</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#97"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::getAllTables">getAllTables</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#133"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::trySystemCommandBackup">trySystemCommandBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#155"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::mysqlDump">mysqlDump</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#201"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::pgDump">pgDump</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#244"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::programmaticBackup">programmaticBackup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#288"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupTable">backupTable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#315"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupTableData">backupTableData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#358"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::writeBackupHeader">writeBackupHeader</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#382"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::writeBackupFooter">writeBackupFooter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#393"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::findExecutable">findExecutable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FileBackupService.php.html#27"><abbr title="Weline\Maintenance\Service\FileBackupService::backupCode">backupCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FileBackupService.php.html#50"><abbr title="Weline\Maintenance\Service\FileBackupService::backupConfig">backupConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FileBackupService.php.html#105"><abbr title="Weline\Maintenance\Service\FileBackupService::createZipArchive">createZipArchive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FileBackupService.php.html#142"><abbr title="Weline\Maintenance\Service\FileBackupService::addDirectoryToZip">addDirectoryToZip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="FileBackupService.php.html#188"><abbr title="Weline\Maintenance\Service\FileBackupService::getBackupSize">getBackupSize</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="FileBackupService.php.html#142"><abbr title="Weline\Maintenance\Service\FileBackupService::addDirectoryToZip">addDirectoryToZip</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="FileBackupService.php.html#50"><abbr title="Weline\Maintenance\Service\FileBackupService::backupConfig">backupConfig</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#97"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::getAllTables">getAllTables</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#315"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupTableData">backupTableData</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#393"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::findExecutable">findExecutable</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#155"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::mysqlDump">mysqlDump</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#244"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::programmaticBackup">programmaticBackup</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="FileBackupService.php.html#105"><abbr title="Weline\Maintenance\Service\FileBackupService::createZipArchive">createZipArchive</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="BackupManager.php.html#46"><abbr title="Weline\Maintenance\Service\BackupManager::createFullBackup">createFullBackup</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="BackupManager.php.html#255"><abbr title="Weline\Maintenance\Service\BackupManager::getBackupList">getBackupList</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#57"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupTables">backupTables</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="BackupManager.php.html#289"><abbr title="Weline\Maintenance\Service\BackupManager::cleanExpiredBackups">cleanExpiredBackups</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#201"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::pgDump">pgDump</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="BackupManager.php.html#231"><abbr title="Weline\Maintenance\Service\BackupManager::deleteBackup">deleteBackup</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="BackupManager.php.html#337"><abbr title="Weline\Maintenance\Service\BackupManager::getBackupPath">getBackupPath</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#133"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::trySystemCommandBackup">trySystemCommandBackup</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="BackupManager.php.html#91"><abbr title="Weline\Maintenance\Service\BackupManager::createDatabaseBackup">createDatabaseBackup</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="BackupManager.php.html#132"><abbr title="Weline\Maintenance\Service\BackupManager::createCodeBackup">createCodeBackup</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="BackupManager.php.html#173"><abbr title="Weline\Maintenance\Service\BackupManager::createConfigBackup">createConfigBackup</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#39"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupDatabase">backupDatabase</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DatabaseBackupService.php.html#288"><abbr title="Weline\Maintenance\Service\DatabaseBackupService::backupTable">backupTable</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="FileBackupService.php.html#188"><abbr title="Weline\Maintenance\Service\FileBackupService::getBackupSize">getBackupSize</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([3,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([28,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,28,"<a href=\"BackupManager.php.html#22\">Weline\\Maintenance\\Service\\BackupManager<\/a>"],[0,54,"<a href=\"DatabaseBackupService.php.html#19\">Weline\\Maintenance\\Service\\DatabaseBackupService<\/a>"],[0,30,"<a href=\"FileBackupService.php.html#18\">Weline\\Maintenance\\Service\\FileBackupService<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"BackupManager.php.html#29\">Weline\\Maintenance\\Service\\BackupManager::__construct<\/a>"],[0,5,"<a href=\"BackupManager.php.html#46\">Weline\\Maintenance\\Service\\BackupManager::createFullBackup<\/a>"],[0,2,"<a href=\"BackupManager.php.html#91\">Weline\\Maintenance\\Service\\BackupManager::createDatabaseBackup<\/a>"],[0,2,"<a href=\"BackupManager.php.html#132\">Weline\\Maintenance\\Service\\BackupManager::createCodeBackup<\/a>"],[0,2,"<a href=\"BackupManager.php.html#173\">Weline\\Maintenance\\Service\\BackupManager::createConfigBackup<\/a>"],[0,1,"<a href=\"BackupManager.php.html#214\">Weline\\Maintenance\\Service\\BackupManager::createBackup<\/a>"],[0,3,"<a href=\"BackupManager.php.html#231\">Weline\\Maintenance\\Service\\BackupManager::deleteBackup<\/a>"],[0,5,"<a href=\"BackupManager.php.html#255\">Weline\\Maintenance\\Service\\BackupManager::getBackupList<\/a>"],[0,4,"<a href=\"BackupManager.php.html#289\">Weline\\Maintenance\\Service\\BackupManager::cleanExpiredBackups<\/a>"],[0,3,"<a href=\"BackupManager.php.html#337\">Weline\\Maintenance\\Service\\BackupManager::getBackupPath<\/a>"],[0,1,"<a href=\"DatabaseBackupService.php.html#25\">Weline\\Maintenance\\Service\\DatabaseBackupService::__construct<\/a>"],[0,2,"<a href=\"DatabaseBackupService.php.html#39\">Weline\\Maintenance\\Service\\DatabaseBackupService::backupDatabase<\/a>"],[0,5,"<a href=\"DatabaseBackupService.php.html#57\">Weline\\Maintenance\\Service\\DatabaseBackupService::backupTables<\/a>"],[0,8,"<a href=\"DatabaseBackupService.php.html#97\">Weline\\Maintenance\\Service\\DatabaseBackupService::getAllTables<\/a>"],[0,3,"<a href=\"DatabaseBackupService.php.html#133\">Weline\\Maintenance\\Service\\DatabaseBackupService::trySystemCommandBackup<\/a>"],[0,6,"<a href=\"DatabaseBackupService.php.html#155\">Weline\\Maintenance\\Service\\DatabaseBackupService::mysqlDump<\/a>"],[0,4,"<a href=\"DatabaseBackupService.php.html#201\">Weline\\Maintenance\\Service\\DatabaseBackupService::pgDump<\/a>"],[0,6,"<a href=\"DatabaseBackupService.php.html#244\">Weline\\Maintenance\\Service\\DatabaseBackupService::programmaticBackup<\/a>"],[0,2,"<a href=\"DatabaseBackupService.php.html#288\">Weline\\Maintenance\\Service\\DatabaseBackupService::backupTable<\/a>"],[0,8,"<a href=\"DatabaseBackupService.php.html#315\">Weline\\Maintenance\\Service\\DatabaseBackupService::backupTableData<\/a>"],[0,1,"<a href=\"DatabaseBackupService.php.html#358\">Weline\\Maintenance\\Service\\DatabaseBackupService::writeBackupHeader<\/a>"],[0,1,"<a href=\"DatabaseBackupService.php.html#382\">Weline\\Maintenance\\Service\\DatabaseBackupService::writeBackupFooter<\/a>"],[0,7,"<a href=\"DatabaseBackupService.php.html#393\">Weline\\Maintenance\\Service\\DatabaseBackupService::findExecutable<\/a>"],[0,1,"<a href=\"FileBackupService.php.html#27\">Weline\\Maintenance\\Service\\FileBackupService::backupCode<\/a>"],[0,9,"<a href=\"FileBackupService.php.html#50\">Weline\\Maintenance\\Service\\FileBackupService::backupConfig<\/a>"],[0,6,"<a href=\"FileBackupService.php.html#105\">Weline\\Maintenance\\Service\\FileBackupService::createZipArchive<\/a>"],[0,12,"<a href=\"FileBackupService.php.html#142\">Weline\\Maintenance\\Service\\FileBackupService::addDirectoryToZip<\/a>"],[0,2,"<a href=\"FileBackupService.php.html#188\">Weline\\Maintenance\\Service\\FileBackupService::getBackupSize<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>
