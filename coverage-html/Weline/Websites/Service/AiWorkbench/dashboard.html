@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Websites\Service\AiWorkbench</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Websites</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Service</a></li>
+         <li class="breadcrumb-item"><a href="index.html">AiWorkbench</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ArtifactService.php.html#12">Weline\Websites\Service\AiWorkbench\ArtifactService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#9">Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#15">Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#12">Weline\Websites\Service\AiWorkbench\EventStreamService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#9">Weline\Websites\Service\AiWorkbench\ExtensionPointReader</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MessageService.php.html#12">Weline\Websites\Service\AiWorkbench\MessageService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#11">Weline\Websites\Service\AiWorkbench\ProviderRegistry</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#11">Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#15">Weline\Websites\Service\AiWorkbench\SessionService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#11">Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#11">Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#15">Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService</a></td><td class="text-right">23562</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#11">Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService</a></td><td class="text-right">6320</td></tr>
+       <tr><td><a href="SessionService.php.html#15">Weline\Websites\Service\AiWorkbench\SessionService</a></td><td class="text-right">5852</td></tr>
+       <tr><td><a href="EventStreamService.php.html#12">Weline\Websites\Service\AiWorkbench\EventStreamService</a></td><td class="text-right">2970</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#11">Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService</a></td><td class="text-right">2450</td></tr>
+       <tr><td><a href="ArtifactService.php.html#12">Weline\Websites\Service\AiWorkbench\ArtifactService</a></td><td class="text-right">930</td></tr>
+       <tr><td><a href="MessageService.php.html#12">Weline\Websites\Service\AiWorkbench\MessageService</a></td><td class="text-right">552</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#9">Weline\Websites\Service\AiWorkbench\ExtensionPointReader</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#11">Weline\Websites\Service\AiWorkbench\ProviderRegistry</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#11">Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#9">Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService</a></td><td class="text-right">90</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ArtifactService.php.html#14"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ArtifactService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::upsertArtifact">upsertArtifact</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ArtifactService.php.html#93"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::listByType">listByType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ArtifactService.php.html#149"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::getOne">getOne</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ArtifactService.php.html#178"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::isPgsqlAiSiteBuilderArtifactPrimaryKeyBroken">isPgsqlAiSiteBuilderArtifactPrimaryKeyBroken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ArtifactService.php.html#195"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::allocateNextArtifactId">allocateNextArtifactId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#11"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#30"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::buildLifecycleStatus">buildLifecycleStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#54"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::appendLifecycleEvent">appendLifecycleEvent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#74"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::isDomainReadyForBuild">isDomainReadyForBuild</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#86"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::getStageLabel">getStageLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#103"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::getStatusLabel">getStatusLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#115"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::inferStageFromStatus">inferStageFromStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#127"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::createMinimalSession">createMinimalSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#24"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#54"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::buildViewState">buildViewState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#135"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::queuePurchase">queuePurchase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#266"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::completeFakePurchaseImmediately">completeFakePurchaseImmediately</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#316"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::executeQueuedPurchase">executeQueuedPurchase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#416"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::runFakePurchaseFlow">runFakePurchaseFlow</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#502"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::runRealPurchaseFlow">runRealPurchaseFlow</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#728"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::getRuntimeState">getRuntimeState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#734"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::normalizeDomain">normalizeDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#759"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isValidDomain">isValidDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#772"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isStateStale">isStateStale</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#786"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::generateExecutionToken">generateExecutionToken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#795"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::reloadSession">reloadSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#800"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isFakeMode">isFakeMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#812"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::shouldUseSseSimulationMode">shouldUseSseSimulationMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#828"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isLocalDevelopmentDomain">isLocalDevelopmentDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#841"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::now">now</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#846"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::normalizeStatus">normalizeStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#857"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::normalizeStage">normalizeStage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#871"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::getStatusLabels">getStatusLabels</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#885"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::getStageLabels">getStageLabels</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#899"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::parseTimestamp">parseTimestamp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#910"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::buildLifecycleMessage">buildLifecycleMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#934"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::persistRuntime">persistRuntime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#949"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::applyScopeToSession">applyScopeToSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#967"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::buildScopePatchFromRuntime">buildScopePatchFromRuntime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1033"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::appendRuntimeEvent">appendRuntimeEvent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1071"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::failPurchase">failPurchase</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1113"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::emit">emit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1120"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::resolveUsableRegistrarAccountId">resolveUsableRegistrarAccountId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1141"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::getActiveRegistrarAccounts">getActiveRegistrarAccounts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#14"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::appendEvent">appendEvent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#65"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::getLatestEventId">getLatestEventId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#92"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::listEventsAfterId">listEventsAfterId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#122"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::listRecentEvents">listRecentEvents</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#155"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::hydrateEvents">hydrateEvents</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#182"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::isPgsqlAiSiteBuilderEventPrimaryKeyBroken">isPgsqlAiSiteBuilderEventPrimaryKeyBroken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#199"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::repairPgsqlAiSiteBuilderEventPrimaryKey">repairPgsqlAiSiteBuilderEventPrimaryKey</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="EventStreamService.php.html#304"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::allocateNextEventId">allocateNextEventId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#11"><abbr title="Weline\Websites\Service\AiWorkbench\ExtensionPointReader::hasExtensionPoint">hasExtensionPoint</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#17"><abbr title="Weline\Websites\Service\AiWorkbench\ExtensionPointReader::getExtensionEntries">getExtensionEntries</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#43"><abbr title="Weline\Websites\Service\AiWorkbench\ExtensionPointReader::getRegistryFileMtime">getRegistryFileMtime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#48"><abbr title="Weline\Websites\Service\AiWorkbench\ExtensionPointReader::resolveClassName">resolveClassName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MessageService.php.html#14"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MessageService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::appendMessage">appendMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MessageService.php.html#73"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::listForSession">listForSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MessageService.php.html#114"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::isPgsqlAiSiteBuilderMessagePrimaryKeyBroken">isPgsqlAiSiteBuilderMessagePrimaryKeyBroken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MessageService.php.html#131"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::allocateNextMessageId">allocateNextMessageId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#17"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::getProviders">getProviders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#37"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::getProvider">getProvider</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#43"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::clearCache">clearCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#52"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::loadProviders">loadProviders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#99"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::sortProviders">sortProviders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#13"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#67"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildWorkbenchConfig">buildWorkbenchConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#162"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildWorkbenchConfigForSession">buildWorkbenchConfigForSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#187"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildSessionState">buildSessionState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#247"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildBaseProviderConfig">buildBaseProviderConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#322"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildMissingProviderConfig">buildMissingProviderConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#350"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::resolveString">resolveString</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#360"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::resolveInitialStage">resolveInitialStage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#399"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeStageGuides">normalizeStageGuides</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#465"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildDefaultStageGuides">buildDefaultStageGuides</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#539"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::resolveStageGuideString">resolveStageGuideString</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#549"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeStringList">normalizeStringList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#570"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeStageCode">normalizeStageCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#601"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeTools">normalizeTools</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#17"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#25"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::generatePublicId">generatePublicId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#34"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::createSession">createSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#95"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::loadByPublicId">loadByPublicId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#112"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::loadById">loadById</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#128"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::deleteSessionByPublicId">deleteSessionByPublicId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#138"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::deleteSessionById">deleteSessionById</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#168"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::saveScope">saveScope</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#184"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::replaceScope">replaceScope</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#192"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::mergeScope">mergeScope</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#209"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::saveProviderState">saveProviderState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#222"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::setStage">setStage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#235"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::bindWebsite">bindWebsite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#248"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::bindDomain">bindDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#262"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::setPreviewUrl">setPreviewUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#288"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::listRecentSessionsForAdmin">listRecentSessionsForAdmin</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#335"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::getMessageModel">getMessageModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#340"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::getArtifactModel">getArtifactModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#345"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::getEventModel">getEventModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#350"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::isPgsqlAiSiteBuilderSessionPrimaryKeyBroken">isPgsqlAiSiteBuilderSessionPrimaryKeyBroken</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="SessionService.php.html#370"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::repairPgsqlAiSiteBuilderSessionPrimaryKey">repairPgsqlAiSiteBuilderSessionPrimaryKey</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#17"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::getSources">getSources</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#37"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::getSource">getSource</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#43"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::clearCache">clearCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#52"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::loadSources">loadSources</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#99"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::sortSources">sortSources</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#13"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::saveVirtualThemeByPublicId">saveVirtualThemeByPublicId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#96"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::savePageTypeLayoutByPublicId">savePageTypeLayoutByPublicId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#165"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::saveVirtualComponentByPublicId">saveVirtualComponentByPublicId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#230"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::loadOrCreateTheme">loadOrCreateTheme</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#259"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::appendEvent">appendEvent</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#271"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::normalizePageType">normalizePageType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#281"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::slugify">slugify</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#291"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::normalizeArray">normalizeArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#310"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::normalizeStringList">normalizeStringList</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ProviderWorkbenchService.php.html#601"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeTools">normalizeTools</abbr></a></td><td class="text-right">1406</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#502"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::runRealPurchaseFlow">runRealPurchaseFlow</abbr></a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="EventStreamService.php.html#199"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::repairPgsqlAiSiteBuilderEventPrimaryKey">repairPgsqlAiSiteBuilderEventPrimaryKey</abbr></a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="SessionService.php.html#370"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::repairPgsqlAiSiteBuilderSessionPrimaryKey">repairPgsqlAiSiteBuilderSessionPrimaryKey</abbr></a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#54"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::buildViewState">buildViewState</abbr></a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#967"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::buildScopePatchFromRuntime">buildScopePatchFromRuntime</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#135"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::queuePurchase">queuePurchase</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#52"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::loadProviders">loadProviders</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#52"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::loadSources">loadSources</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#399"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeStageGuides">normalizeStageGuides</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#96"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::savePageTypeLayoutByPublicId">savePageTypeLayoutByPublicId</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#316"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::executeQueuedPurchase">executeQueuedPurchase</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#48"><abbr title="Weline\Websites\Service\AiWorkbench\ExtensionPointReader::resolveClassName">resolveClassName</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="ArtifactService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::upsertArtifact">upsertArtifact</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#310"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::normalizeStringList">normalizeStringList</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="ArtifactService.php.html#178"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::isPgsqlAiSiteBuilderArtifactPrimaryKeyBroken">isPgsqlAiSiteBuilderArtifactPrimaryKeyBroken</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#734"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::normalizeDomain">normalizeDomain</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1141"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::getActiveRegistrarAccounts">getActiveRegistrarAccounts</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="EventStreamService.php.html#182"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::isPgsqlAiSiteBuilderEventPrimaryKeyBroken">isPgsqlAiSiteBuilderEventPrimaryKeyBroken</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="MessageService.php.html#114"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::isPgsqlAiSiteBuilderMessagePrimaryKeyBroken">isPgsqlAiSiteBuilderMessagePrimaryKeyBroken</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#67"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildWorkbenchConfig">buildWorkbenchConfig</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="SessionService.php.html#34"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::createSession">createSession</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="SessionService.php.html#350"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::isPgsqlAiSiteBuilderSessionPrimaryKeyBroken">isPgsqlAiSiteBuilderSessionPrimaryKeyBroken</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ArtifactService.php.html#93"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::listByType">listByType</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1120"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::resolveUsableRegistrarAccountId">resolveUsableRegistrarAccountId</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="EventStreamService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::appendEvent">appendEvent</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="ExtensionPointReader.php.html#17"><abbr title="Weline\Websites\Service\AiWorkbench\ExtensionPointReader::getExtensionEntries">getExtensionEntries</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="MessageService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::appendMessage">appendMessage</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="SessionService.php.html#288"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::listRecentSessionsForAdmin">listRecentSessionsForAdmin</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#230"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::loadOrCreateTheme">loadOrCreateTheme</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#291"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::normalizeArray">normalizeArray</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#812"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::shouldUseSseSimulationMode">shouldUseSseSimulationMode</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="MessageService.php.html#73"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::listForSession">listForSession</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#549"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeStringList">normalizeStringList</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::saveVirtualThemeByPublicId">saveVirtualThemeByPublicId</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#165"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::saveVirtualComponentByPublicId">saveVirtualComponentByPublicId</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ArtifactService.php.html#195"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::allocateNextArtifactId">allocateNextArtifactId</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#416"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::runFakePurchaseFlow">runFakePurchaseFlow</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#828"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isLocalDevelopmentDomain">isLocalDevelopmentDomain</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#910"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::buildLifecycleMessage">buildLifecycleMessage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="EventStreamService.php.html#155"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::hydrateEvents">hydrateEvents</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="EventStreamService.php.html#304"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::allocateNextEventId">allocateNextEventId</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MessageService.php.html#131"><abbr title="Weline\Websites\Service\AiWorkbench\MessageService::allocateNextMessageId">allocateNextMessageId</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#350"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::resolveString">resolveString</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#539"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::resolveStageGuideString">resolveStageGuideString</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="SessionService.php.html#95"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::loadByPublicId">loadByPublicId</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="SessionService.php.html#112"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::loadById">loadById</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ArtifactService.php.html#149"><abbr title="Weline\Websites\Service\AiWorkbench\ArtifactService::getOne">getOne</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#266"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::completeFakePurchaseImmediately">completeFakePurchaseImmediately</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#772"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isStateStale">isStateStale</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#899"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::parseTimestamp">parseTimestamp</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#949"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::applyScopeToSession">applyScopeToSession</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="EventStreamService.php.html#92"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::listEventsAfterId">listEventsAfterId</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="EventStreamService.php.html#122"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::listRecentEvents">listRecentEvents</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DomainLifecycleBridgeService.php.html#74"><abbr title="Weline\Websites\Service\AiWorkbench\DomainLifecycleBridgeService::isDomainReadyForBuild">isDomainReadyForBuild</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#728"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::getRuntimeState">getRuntimeState</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#759"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isValidDomain">isValidDomain</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#786"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::generateExecutionToken">generateExecutionToken</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#800"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::isFakeMode">isFakeMode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1033"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::appendRuntimeEvent">appendRuntimeEvent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1071"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::failPurchase">failPurchase</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DomainPurchaseWorkbenchService.php.html#1113"><abbr title="Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService::emit">emit</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="EventStreamService.php.html#65"><abbr title="Weline\Websites\Service\AiWorkbench\EventStreamService::getLatestEventId">getLatestEventId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ProviderRegistry.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderRegistry::getProviders">getProviders</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#322"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::buildMissingProviderConfig">buildMissingProviderConfig</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#360"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::resolveInitialStage">resolveInitialStage</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ProviderWorkbenchService.php.html#570"><abbr title="Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService::normalizeStageCode">normalizeStageCode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#128"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::deleteSessionByPublicId">deleteSessionByPublicId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#138"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::deleteSessionById">deleteSessionById</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#168"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::saveScope">saveScope</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#192"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::mergeScope">mergeScope</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#209"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::saveProviderState">saveProviderState</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#222"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::setStage">setStage</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#235"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::bindWebsite">bindWebsite</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#248"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::bindDomain">bindDomain</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="SessionService.php.html#262"><abbr title="Weline\Websites\Service\AiWorkbench\SessionService::setPreviewUrl">setPreviewUrl</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ThemeSourceRegistry.php.html#23"><abbr title="Weline\Websites\Service\AiWorkbench\ThemeSourceRegistry::getSources">getSources</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#259"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::appendEvent">appendEvent</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#271"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::normalizePageType">normalizePageType</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="VirtualThemeWorkbenchService.php.html#281"><abbr title="Weline\Websites\Service\AiWorkbench\VirtualThemeWorkbenchService::slugify">slugify</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([11,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([120,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,30,"<a href=\"ArtifactService.php.html#12\">Weline\\Websites\\Service\\AiWorkbench\\ArtifactService<\/a>"],[0,9,"<a href=\"DomainLifecycleBridgeService.php.html#9\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService<\/a>"],[0,153,"<a href=\"DomainPurchaseWorkbenchService.php.html#15\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService<\/a>"],[0,54,"<a href=\"EventStreamService.php.html#12\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService<\/a>"],[0,18,"<a href=\"ExtensionPointReader.php.html#9\">Weline\\Websites\\Service\\AiWorkbench\\ExtensionPointReader<\/a>"],[0,23,"<a href=\"MessageService.php.html#12\">Weline\\Websites\\Service\\AiWorkbench\\MessageService<\/a>"],[0,18,"<a href=\"ProviderRegistry.php.html#11\">Weline\\Websites\\Service\\AiWorkbench\\ProviderRegistry<\/a>"],[0,79,"<a href=\"ProviderWorkbenchService.php.html#11\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService<\/a>"],[0,76,"<a href=\"SessionService.php.html#15\">Weline\\Websites\\Service\\AiWorkbench\\SessionService<\/a>"],[0,18,"<a href=\"ThemeSourceRegistry.php.html#11\">Weline\\Websites\\Service\\AiWorkbench\\ThemeSourceRegistry<\/a>"],[0,49,"<a href=\"VirtualThemeWorkbenchService.php.html#11\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"ArtifactService.php.html#14\">Weline\\Websites\\Service\\AiWorkbench\\ArtifactService::__construct<\/a>"],[0,9,"<a href=\"ArtifactService.php.html#23\">Weline\\Websites\\Service\\AiWorkbench\\ArtifactService::upsertArtifact<\/a>"],[0,6,"<a href=\"ArtifactService.php.html#93\">Weline\\Websites\\Service\\AiWorkbench\\ArtifactService::listByType<\/a>"],[0,3,"<a href=\"ArtifactService.php.html#149\">Weline\\Websites\\Service\\AiWorkbench\\ArtifactService::getOne<\/a>"],[0,7,"<a href=\"ArtifactService.php.html#178\">Weline\\Websites\\Service\\AiWorkbench\\ArtifactService::isPgsqlAiSiteBuilderArtifactPrimaryKeyBroken<\/a>"],[0,4,"<a href=\"ArtifactService.php.html#195\">Weline\\Websites\\Service\\AiWorkbench\\ArtifactService::allocateNextArtifactId<\/a>"],[0,1,"<a href=\"DomainLifecycleBridgeService.php.html#11\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::__construct<\/a>"],[0,1,"<a href=\"DomainLifecycleBridgeService.php.html#30\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::buildLifecycleStatus<\/a>"],[0,1,"<a href=\"DomainLifecycleBridgeService.php.html#54\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::appendLifecycleEvent<\/a>"],[0,2,"<a href=\"DomainLifecycleBridgeService.php.html#74\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::isDomainReadyForBuild<\/a>"],[0,1,"<a href=\"DomainLifecycleBridgeService.php.html#86\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::getStageLabel<\/a>"],[0,1,"<a href=\"DomainLifecycleBridgeService.php.html#103\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::getStatusLabel<\/a>"],[0,1,"<a href=\"DomainLifecycleBridgeService.php.html#115\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::inferStageFromStatus<\/a>"],[0,1,"<a href=\"DomainLifecycleBridgeService.php.html#127\">Weline\\Websites\\Service\\AiWorkbench\\DomainLifecycleBridgeService::createMinimalSession<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#24\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::__construct<\/a>"],[0,18,"<a href=\"DomainPurchaseWorkbenchService.php.html#54\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::buildViewState<\/a>"],[0,12,"<a href=\"DomainPurchaseWorkbenchService.php.html#135\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::queuePurchase<\/a>"],[0,3,"<a href=\"DomainPurchaseWorkbenchService.php.html#266\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::completeFakePurchaseImmediately<\/a>"],[0,10,"<a href=\"DomainPurchaseWorkbenchService.php.html#316\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::executeQueuedPurchase<\/a>"],[0,4,"<a href=\"DomainPurchaseWorkbenchService.php.html#416\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::runFakePurchaseFlow<\/a>"],[0,26,"<a href=\"DomainPurchaseWorkbenchService.php.html#502\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::runRealPurchaseFlow<\/a>"],[0,2,"<a href=\"DomainPurchaseWorkbenchService.php.html#728\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::getRuntimeState<\/a>"],[0,7,"<a href=\"DomainPurchaseWorkbenchService.php.html#734\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::normalizeDomain<\/a>"],[0,2,"<a href=\"DomainPurchaseWorkbenchService.php.html#759\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::isValidDomain<\/a>"],[0,3,"<a href=\"DomainPurchaseWorkbenchService.php.html#772\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::isStateStale<\/a>"],[0,2,"<a href=\"DomainPurchaseWorkbenchService.php.html#786\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::generateExecutionToken<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#795\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::reloadSession<\/a>"],[0,2,"<a href=\"DomainPurchaseWorkbenchService.php.html#800\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::isFakeMode<\/a>"],[0,5,"<a href=\"DomainPurchaseWorkbenchService.php.html#812\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::shouldUseSseSimulationMode<\/a>"],[0,4,"<a href=\"DomainPurchaseWorkbenchService.php.html#828\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::isLocalDevelopmentDomain<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#841\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::now<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#846\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::normalizeStatus<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#857\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::normalizeStage<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#871\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::getStatusLabels<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#885\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::getStageLabels<\/a>"],[0,3,"<a href=\"DomainPurchaseWorkbenchService.php.html#899\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::parseTimestamp<\/a>"],[0,4,"<a href=\"DomainPurchaseWorkbenchService.php.html#910\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::buildLifecycleMessage<\/a>"],[0,1,"<a href=\"DomainPurchaseWorkbenchService.php.html#934\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::persistRuntime<\/a>"],[0,3,"<a href=\"DomainPurchaseWorkbenchService.php.html#949\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::applyScopeToSession<\/a>"],[0,16,"<a href=\"DomainPurchaseWorkbenchService.php.html#967\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::buildScopePatchFromRuntime<\/a>"],[0,2,"<a href=\"DomainPurchaseWorkbenchService.php.html#1033\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::appendRuntimeEvent<\/a>"],[0,2,"<a href=\"DomainPurchaseWorkbenchService.php.html#1071\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::failPurchase<\/a>"],[0,2,"<a href=\"DomainPurchaseWorkbenchService.php.html#1113\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::emit<\/a>"],[0,6,"<a href=\"DomainPurchaseWorkbenchService.php.html#1120\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::resolveUsableRegistrarAccountId<\/a>"],[0,7,"<a href=\"DomainPurchaseWorkbenchService.php.html#1141\">Weline\\Websites\\Service\\AiWorkbench\\DomainPurchaseWorkbenchService::getActiveRegistrarAccounts<\/a>"],[0,1,"<a href=\"EventStreamService.php.html#14\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::__construct<\/a>"],[0,6,"<a href=\"EventStreamService.php.html#23\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::appendEvent<\/a>"],[0,2,"<a href=\"EventStreamService.php.html#65\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::getLatestEventId<\/a>"],[0,3,"<a href=\"EventStreamService.php.html#92\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::listEventsAfterId<\/a>"],[0,3,"<a href=\"EventStreamService.php.html#122\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::listRecentEvents<\/a>"],[0,4,"<a href=\"EventStreamService.php.html#155\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::hydrateEvents<\/a>"],[0,7,"<a href=\"EventStreamService.php.html#182\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::isPgsqlAiSiteBuilderEventPrimaryKeyBroken<\/a>"],[0,24,"<a href=\"EventStreamService.php.html#199\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::repairPgsqlAiSiteBuilderEventPrimaryKey<\/a>"],[0,4,"<a href=\"EventStreamService.php.html#304\">Weline\\Websites\\Service\\AiWorkbench\\EventStreamService::allocateNextEventId<\/a>"],[0,1,"<a href=\"ExtensionPointReader.php.html#11\">Weline\\Websites\\Service\\AiWorkbench\\ExtensionPointReader::hasExtensionPoint<\/a>"],[0,6,"<a href=\"ExtensionPointReader.php.html#17\">Weline\\Websites\\Service\\AiWorkbench\\ExtensionPointReader::getExtensionEntries<\/a>"],[0,1,"<a href=\"ExtensionPointReader.php.html#43\">Weline\\Websites\\Service\\AiWorkbench\\ExtensionPointReader::getRegistryFileMtime<\/a>"],[0,10,"<a href=\"ExtensionPointReader.php.html#48\">Weline\\Websites\\Service\\AiWorkbench\\ExtensionPointReader::resolveClassName<\/a>"],[0,1,"<a href=\"MessageService.php.html#14\">Weline\\Websites\\Service\\AiWorkbench\\MessageService::__construct<\/a>"],[0,6,"<a href=\"MessageService.php.html#23\">Weline\\Websites\\Service\\AiWorkbench\\MessageService::appendMessage<\/a>"],[0,5,"<a href=\"MessageService.php.html#73\">Weline\\Websites\\Service\\AiWorkbench\\MessageService::listForSession<\/a>"],[0,7,"<a href=\"MessageService.php.html#114\">Weline\\Websites\\Service\\AiWorkbench\\MessageService::isPgsqlAiSiteBuilderMessagePrimaryKeyBroken<\/a>"],[0,4,"<a href=\"MessageService.php.html#131\">Weline\\Websites\\Service\\AiWorkbench\\MessageService::allocateNextMessageId<\/a>"],[0,1,"<a href=\"ProviderRegistry.php.html#17\">Weline\\Websites\\Service\\AiWorkbench\\ProviderRegistry::__construct<\/a>"],[0,2,"<a href=\"ProviderRegistry.php.html#23\">Weline\\Websites\\Service\\AiWorkbench\\ProviderRegistry::getProviders<\/a>"],[0,1,"<a href=\"ProviderRegistry.php.html#37\">Weline\\Websites\\Service\\AiWorkbench\\ProviderRegistry::getProvider<\/a>"],[0,1,"<a href=\"ProviderRegistry.php.html#43\">Weline\\Websites\\Service\\AiWorkbench\\ProviderRegistry::clearCache<\/a>"],[0,12,"<a href=\"ProviderRegistry.php.html#52\">Weline\\Websites\\Service\\AiWorkbench\\ProviderRegistry::loadProviders<\/a>"],[0,1,"<a href=\"ProviderRegistry.php.html#99\">Weline\\Websites\\Service\\AiWorkbench\\ProviderRegistry::sortProviders<\/a>"],[0,1,"<a href=\"ProviderWorkbenchService.php.html#13\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::__construct<\/a>"],[0,7,"<a href=\"ProviderWorkbenchService.php.html#67\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::buildWorkbenchConfig<\/a>"],[0,1,"<a href=\"ProviderWorkbenchService.php.html#162\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::buildWorkbenchConfigForSession<\/a>"],[0,1,"<a href=\"ProviderWorkbenchService.php.html#187\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::buildSessionState<\/a>"],[0,1,"<a href=\"ProviderWorkbenchService.php.html#247\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::buildBaseProviderConfig<\/a>"],[0,2,"<a href=\"ProviderWorkbenchService.php.html#322\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::buildMissingProviderConfig<\/a>"],[0,4,"<a href=\"ProviderWorkbenchService.php.html#350\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::resolveString<\/a>"],[0,2,"<a href=\"ProviderWorkbenchService.php.html#360\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::resolveInitialStage<\/a>"],[0,11,"<a href=\"ProviderWorkbenchService.php.html#399\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::normalizeStageGuides<\/a>"],[0,1,"<a href=\"ProviderWorkbenchService.php.html#465\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::buildDefaultStageGuides<\/a>"],[0,4,"<a href=\"ProviderWorkbenchService.php.html#539\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::resolveStageGuideString<\/a>"],[0,5,"<a href=\"ProviderWorkbenchService.php.html#549\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::normalizeStringList<\/a>"],[0,2,"<a href=\"ProviderWorkbenchService.php.html#570\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::normalizeStageCode<\/a>"],[0,37,"<a href=\"ProviderWorkbenchService.php.html#601\">Weline\\Websites\\Service\\AiWorkbench\\ProviderWorkbenchService::normalizeTools<\/a>"],[0,1,"<a href=\"SessionService.php.html#17\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::__construct<\/a>"],[0,1,"<a href=\"SessionService.php.html#25\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::generatePublicId<\/a>"],[0,7,"<a href=\"SessionService.php.html#34\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::createSession<\/a>"],[0,4,"<a href=\"SessionService.php.html#95\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::loadByPublicId<\/a>"],[0,4,"<a href=\"SessionService.php.html#112\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::loadById<\/a>"],[0,2,"<a href=\"SessionService.php.html#128\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::deleteSessionByPublicId<\/a>"],[0,2,"<a href=\"SessionService.php.html#138\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::deleteSessionById<\/a>"],[0,2,"<a href=\"SessionService.php.html#168\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::saveScope<\/a>"],[0,1,"<a href=\"SessionService.php.html#184\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::replaceScope<\/a>"],[0,2,"<a href=\"SessionService.php.html#192\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::mergeScope<\/a>"],[0,2,"<a href=\"SessionService.php.html#209\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::saveProviderState<\/a>"],[0,2,"<a href=\"SessionService.php.html#222\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::setStage<\/a>"],[0,2,"<a href=\"SessionService.php.html#235\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::bindWebsite<\/a>"],[0,2,"<a href=\"SessionService.php.html#248\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::bindDomain<\/a>"],[0,2,"<a href=\"SessionService.php.html#262\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::setPreviewUrl<\/a>"],[0,6,"<a href=\"SessionService.php.html#288\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::listRecentSessionsForAdmin<\/a>"],[0,1,"<a href=\"SessionService.php.html#335\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::getMessageModel<\/a>"],[0,1,"<a href=\"SessionService.php.html#340\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::getArtifactModel<\/a>"],[0,1,"<a href=\"SessionService.php.html#345\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::getEventModel<\/a>"],[0,7,"<a href=\"SessionService.php.html#350\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::isPgsqlAiSiteBuilderSessionPrimaryKeyBroken<\/a>"],[0,24,"<a href=\"SessionService.php.html#370\">Weline\\Websites\\Service\\AiWorkbench\\SessionService::repairPgsqlAiSiteBuilderSessionPrimaryKey<\/a>"],[0,1,"<a href=\"ThemeSourceRegistry.php.html#17\">Weline\\Websites\\Service\\AiWorkbench\\ThemeSourceRegistry::__construct<\/a>"],[0,2,"<a href=\"ThemeSourceRegistry.php.html#23\">Weline\\Websites\\Service\\AiWorkbench\\ThemeSourceRegistry::getSources<\/a>"],[0,1,"<a href=\"ThemeSourceRegistry.php.html#37\">Weline\\Websites\\Service\\AiWorkbench\\ThemeSourceRegistry::getSource<\/a>"],[0,1,"<a href=\"ThemeSourceRegistry.php.html#43\">Weline\\Websites\\Service\\AiWorkbench\\ThemeSourceRegistry::clearCache<\/a>"],[0,12,"<a href=\"ThemeSourceRegistry.php.html#52\">Weline\\Websites\\Service\\AiWorkbench\\ThemeSourceRegistry::loadSources<\/a>"],[0,1,"<a href=\"ThemeSourceRegistry.php.html#99\">Weline\\Websites\\Service\\AiWorkbench\\ThemeSourceRegistry::sortSources<\/a>"],[0,1,"<a href=\"VirtualThemeWorkbenchService.php.html#13\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::__construct<\/a>"],[0,5,"<a href=\"VirtualThemeWorkbenchService.php.html#23\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::saveVirtualThemeByPublicId<\/a>"],[0,11,"<a href=\"VirtualThemeWorkbenchService.php.html#96\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::savePageTypeLayoutByPublicId<\/a>"],[0,5,"<a href=\"VirtualThemeWorkbenchService.php.html#165\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::saveVirtualComponentByPublicId<\/a>"],[0,6,"<a href=\"VirtualThemeWorkbenchService.php.html#230\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::loadOrCreateTheme<\/a>"],[0,2,"<a href=\"VirtualThemeWorkbenchService.php.html#259\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::appendEvent<\/a>"],[0,2,"<a href=\"VirtualThemeWorkbenchService.php.html#271\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::normalizePageType<\/a>"],[0,2,"<a href=\"VirtualThemeWorkbenchService.php.html#281\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::slugify<\/a>"],[0,6,"<a href=\"VirtualThemeWorkbenchService.php.html#291\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::normalizeArray<\/a>"],[0,9,"<a href=\"VirtualThemeWorkbenchService.php.html#310\">Weline\\Websites\\Service\\AiWorkbench\\VirtualThemeWorkbenchService::normalizeStringList<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

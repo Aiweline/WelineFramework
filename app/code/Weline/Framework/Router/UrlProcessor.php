@@ -201,7 +201,6 @@ class UrlProcessor
         foreach ($params as $key => $value) {
             if (\w_env_get($key) === null) {
                 \w_env_set("get.{$key}", $value);
-                $_GET[$key] = $value;
             }
         }
     }

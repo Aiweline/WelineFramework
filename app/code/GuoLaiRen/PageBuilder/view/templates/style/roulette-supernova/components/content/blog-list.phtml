@@ -1,0 +1,547 @@
+<?php
+/**
+ * Roulette Supernova - Blog List Component
+ *
+ * @component_start
+ * code: blog-list
+ * name: 博客列表
+ * name_en: Blog List
+ * description: Roulette Supernova journal list with a lead story deck, signal rail, and responsive post grid.
+ * category: content
+ * region: content
+ * @component_end
+ *
+ * @fields_start
+ * blog.title|博客列表标题|text|Roulette Journal
+ * blog.subtitle|副标题|text|Guides, table notes, feature updates, and roulette reading for fast-scanning landing pages.
+ * blog.posts_per_page|每页显示数量|number|9
+ * blog.show_sidebar|显示侧边栏|select:yes=Yes,no=No|yes
+ * blog.show_category|显示分类|select:yes=Yes,no=No|yes
+ * blog.show_date|显示日期|select:yes=Yes,no=No|yes
+ * blog.show_author|显示作者|select:yes=Yes,no=No|yes
+ * blog.card_style|卡片样式|select:default=Default,minimal=Minimal,featured=Featured|default
+ * @fields_end
+ */
+
+$componentId = 'rsn-blog-list-' . uniqid();
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$blogPosts = $this->getData('blog_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+$colors = isset($colors) && is_array($colors) ? $colors : [];
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$title = trim((string) $getConfig('blog.title', 'Roulette Journal'));
+$subtitle = trim((string) $getConfig('blog.subtitle', 'Guides, table notes, feature updates, and roulette reading for fast-scanning landing pages.'));
+$postsPerPage = max(1, (int) $getConfig('blog.posts_per_page', 9));
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCategory = $getConfig('blog.show_category', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$cardStyle = (string) $getConfig('blog.card_style', 'default');
+
+$visiblePosts = array_slice($blogPosts, 0, $postsPerPage);
+$featuredPost = $visiblePosts[0] ?? null;
+$gridPosts = array_slice($visiblePosts, 1);
+$cardClass = 'style-' . preg_replace('/[^a-z0-9-]+/i', '', $cardStyle);
+$blogBackground = (string) ($colors['blog_bg'] ?? 'linear-gradient(180deg, #07070b 0%, #13070d 100%)');
+?>
+<section id="<?= $componentId ?>" class="rsn-blog-list">
+    <div class="blog-shell">
+        <header class="blog-masthead">
+            <span class="masthead-kicker">Roulette journal</span>
+            <h1><?= htmlspecialchars($title !== '' ? $title : 'Roulette Journal') ?></h1>
+            <?php if ($subtitle !== ''): ?>
+                <p><?= htmlspecialchars($subtitle) ?></p>
+            <?php endif; ?>
+        </header>
+
+        <?php if (empty($visiblePosts)): ?>
+            <section class="blog-empty" aria-label="<?= htmlspecialchars((string) __('Blog')) ?>">
+                <span class="empty-mark">00</span>
+                <h2><?= __('No articles published yet') ?></h2>
+                <p><?= __('New roulette guides and updates will appear here once posts are available.') ?></p>
+            </section>
+        <?php else: ?>
+            <div class="blog-stage<?= $showSidebar ? ' has-rail' : '' ?>">
+                <div class="blog-main">
+                    <?php if ($featuredPost): ?>
+                        <article class="lead-story">
+                            <?php if (!empty($featuredPost['cover_image'])): ?>
+                                <a href="<?= htmlspecialchars($featuredPost['url']) ?>" class="lead-media">
+                                    <img src="<?= htmlspecialchars($featuredPost['cover_image']) ?>" alt="<?= htmlspecialchars($featuredPost['title']) ?>" loading="lazy">
+                                </a>
+                            <?php endif; ?>
+
+                            <div class="lead-copy">
+                                <div class="lead-meta">
+                                    <?php if ($showCategory && !empty($featuredPost['category_name'])): ?>
+                                        <span class="story-chip"><?= htmlspecialchars($featuredPost['category_name']) ?></span>
+                                    <?php endif; ?>
+                                    <?php if ($showDate && !empty($featuredPost['published_at'])): ?>
+                                        <span class="story-date"><?= date('M d, Y', strtotime($featuredPost['published_at'])) ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <h2>
+                                    <a href="<?= htmlspecialchars($featuredPost['url']) ?>"><?= htmlspecialchars($featuredPost['title']) ?></a>
+                                </h2>
+                                <?php if (!empty($featuredPost['summary'])): ?>
+                                    <p><?= htmlspecialchars(mb_strimwidth((string) $featuredPost['summary'], 0, 260, '...')) ?></p>
+                                <?php endif; ?>
+                                <div class="lead-foot">
+                                    <?php if ($showAuthor && !empty($featuredPost['author'])): ?>
+                                        <span class="story-author"><?= htmlspecialchars($featuredPost['author']) ?></span>
+                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($featuredPost['url']) ?>" class="story-link"><?= __('Read Article') ?></a>
+                                </div>
+                            </div>
+                        </article>
+                    <?php endif; ?>
+
+                    <?php if (!empty($gridPosts)): ?>
+                        <section class="story-grid <?= htmlspecialchars($cardClass) ?>" aria-label="<?= htmlspecialchars((string) __('Blog posts')) ?>">
+                            <?php foreach ($gridPosts as $index => $post): ?>
+                                <article class="story-card<?= $cardStyle === 'featured' && $index === 0 ? ' card-wide' : '' ?>">
+                                    <?php if (!empty($post['cover_image'])): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="story-cover">
+                                            <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                        </a>
+                                    <?php endif; ?>
+                                    <div class="story-body">
+                                        <div class="story-topline">
+                                            <?php if ($showCategory && !empty($post['category_name'])): ?>
+                                                <span class="story-chip"><?= htmlspecialchars($post['category_name']) ?></span>
+                                            <?php endif; ?>
+                                            <?php if ($showDate && !empty($post['published_at'])): ?>
+                                                <span class="story-date"><?= date('M d, Y', strtotime($post['published_at'])) ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                        <h3><a href="<?= htmlspecialchars($post['url']) ?>"><?= htmlspecialchars($post['title']) ?></a></h3>
+                                        <?php if ($cardStyle !== 'minimal' && !empty($post['summary'])): ?>
+                                            <p><?= htmlspecialchars(mb_strimwidth((string) $post['summary'], 0, 150, '...')) ?></p>
+                                        <?php endif; ?>
+                                        <div class="story-foot">
+                                            <?php if ($showAuthor && !empty($post['author'])): ?>
+                                                <span class="story-author"><?= htmlspecialchars($post['author']) ?></span>
+                                            <?php endif; ?>
+                                            <a href="<?= htmlspecialchars($post['url']) ?>" class="story-link"><?= __('Open') ?></a>
+                                        </div>
+                                    </div>
+                                </article>
+                            <?php endforeach; ?>
+                        </section>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="signal-rail">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card" aria-label="<?= htmlspecialchars((string) __('Categories')) ?>">
+                                <div class="rail-head">
+                                    <span class="rail-kicker">Filters</span>
+                                    <h2><?= __('Categories') ?></h2>
+                                </div>
+                                <div class="category-cloud">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <a href="<?= htmlspecialchars($category['url']) ?>" class="category-pill"><?= htmlspecialchars($category['name']) ?></a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recentPosts)): ?>
+                            <section class="rail-card" aria-label="<?= htmlspecialchars((string) __('Recent posts')) ?>">
+                                <div class="rail-head">
+                                    <span class="rail-kicker">Signal</span>
+                                    <h2><?= __('Recent Posts') ?></h2>
+                                </div>
+                                <div class="recent-stack">
+                                    <?php foreach (array_slice($recentPosts, 0, 4) as $post): ?>
+                                        <a href="<?= htmlspecialchars($post['url']) ?>" class="recent-link">
+                                            <?php if (!empty($post['cover_image'])): ?>
+                                                <img src="<?= htmlspecialchars($post['cover_image']) ?>" alt="<?= htmlspecialchars($post['title']) ?>" loading="lazy">
+                                            <?php endif; ?>
+                                            <span>
+                                                <strong><?= htmlspecialchars($post['title']) ?></strong>
+                                                <?php if (!empty($post['published_at'])): ?>
+                                                    <small><?= date('M d, Y', strtotime($post['published_at'])) ?></small>
+                                                <?php endif; ?>
+                                            </span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    position: relative;
+    padding: clamp(4.5rem, 8vw, 6rem) 0;
+    background:
+        radial-gradient(900px 420px at 12% 0%, rgba(255,91,69,0.18), transparent 70%),
+        radial-gradient(760px 460px at 88% 10%, rgba(77,246,255,0.12), transparent 74%),
+        <?= htmlspecialchars($blogBackground, ENT_QUOTES, 'UTF-8') ?>;
+    color: <?= htmlspecialchars($colors['text_secondary'] ?? '#cbbcae') ?>;
+    overflow: clip;
+}
+#<?= $componentId ?> .blog-shell {
+    width: min(1280px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+#<?= $componentId ?> .blog-masthead {
+    display: grid;
+    justify-items: start;
+    max-width: 48rem;
+    margin-bottom: 1.25rem;
+}
+#<?= $componentId ?> .rail-head {
+    display: grid;
+    justify-items: start;
+}
+#<?= $componentId ?> .masthead-kicker,
+#<?= $componentId ?> .rail-kicker,
+#<?= $componentId ?> .story-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.48rem;
+    min-height: 34px;
+    padding: 0.42rem 0.84rem;
+    border-radius: 999px;
+    font-size: 0.74rem;
+    font-weight: 800;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+#<?= $componentId ?> .masthead-kicker,
+#<?= $componentId ?> .rail-kicker {
+    width: max-content;
+    color: #f7f1e8;
+    border: 1px solid rgba(255,255,255,0.09);
+    background: rgba(255,255,255,0.05);
+}
+#<?= $componentId ?> .masthead-kicker::before,
+#<?= $componentId ?> .rail-kicker::before {
+    content: '';
+    width: 0.42rem;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, #ff5b45 0%, #dfff5a 50%, #4df6ff 100%);
+    box-shadow: 0 0 14px rgba(255,91,69,0.34);
+}
+#<?= $componentId ?> .blog-masthead h1 {
+    margin-top: 1rem;
+    color: <?= htmlspecialchars($colors['text_primary'] ?? '#f7f1e8') ?>;
+    font-size: clamp(2.4rem, 5vw, 4.6rem);
+    line-height: 0.94;
+    letter-spacing: -0.05em;
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    padding-bottom: 1rem;
+}
+#<?= $componentId ?> .blog-masthead h1::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: min(180px, 72%);
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #ff5b45 0%, #ffbf47 44%, #dfff5a 74%, rgba(77,246,255,0.18) 100%);
+    box-shadow: 0 0 24px rgba(255,91,69,0.18);
+}
+#<?= $componentId ?> .blog-masthead p {
+    margin-top: 0.95rem;
+    max-width: 44rem;
+    line-height: 1.82;
+}
+#<?= $componentId ?> .blog-stage {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+#<?= $componentId ?> .blog-stage.has-rail {
+    grid-template-columns: minmax(0, 0.72fr) minmax(280px, 0.28fr);
+}
+#<?= $componentId ?> .blog-main,
+#<?= $componentId ?> .signal-rail {
+    display: grid;
+    gap: 1rem;
+}
+#<?= $componentId ?> .lead-story,
+#<?= $componentId ?> .story-card,
+#<?= $componentId ?> .rail-card,
+#<?= $componentId ?> .blog-empty {
+    position: relative;
+    border-radius: 28px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: linear-gradient(155deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.015) 100%);
+    box-shadow: 0 30px 72px rgba(0,0,0,0.32);
+    overflow: hidden;
+}
+#<?= $componentId ?> .lead-story {
+    display: grid;
+    grid-template-columns: minmax(0, 0.56fr) minmax(0, 0.44fr);
+}
+#<?= $componentId ?> .lead-story::after,
+#<?= $componentId ?> .story-card::after,
+#<?= $componentId ?> .rail-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,91,69,0.12) 0%, rgba(77,246,255,0.05) 44%, rgba(223,255,90,0.08) 100%);
+    pointer-events: none;
+}
+#<?= $componentId ?> .lead-media,
+#<?= $componentId ?> .story-cover {
+    position: relative;
+    display: block;
+    min-height: 100%;
+    overflow: hidden;
+}
+#<?= $componentId ?> .lead-media img,
+#<?= $componentId ?> .story-cover img,
+#<?= $componentId ?> .recent-link img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.4s ease, filter 0.4s ease;
+}
+#<?= $componentId ?> .lead-story:hover img,
+#<?= $componentId ?> .story-card:hover .story-cover img,
+#<?= $componentId ?> .recent-link:hover img {
+    transform: scale(1.04);
+    filter: saturate(1.08);
+}
+#<?= $componentId ?> .lead-copy,
+#<?= $componentId ?> .story-body,
+#<?= $componentId ?> .rail-card {
+    position: relative;
+    z-index: 1;
+}
+#<?= $componentId ?> .lead-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+    padding: 1.35rem;
+}
+#<?= $componentId ?> .lead-meta,
+#<?= $componentId ?> .story-topline,
+#<?= $componentId ?> .lead-foot,
+#<?= $componentId ?> .story-foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+    align-items: center;
+    justify-content: space-between;
+}
+#<?= $componentId ?> .story-chip {
+    color: #120d08;
+    background: linear-gradient(135deg, #ffbf47 0%, #dfff5a 100%);
+}
+#<?= $componentId ?> .story-date,
+#<?= $componentId ?> .story-author,
+#<?= $componentId ?> .recent-link small {
+    color: #9a8f87;
+    font-size: 0.86rem;
+}
+#<?= $componentId ?> .lead-copy h2,
+#<?= $componentId ?> .story-card h3 {
+    margin: 0;
+    color: #f7f1e8;
+    letter-spacing: -0.04em;
+}
+#<?= $componentId ?> .lead-copy h2 {
+    font-size: clamp(1.85rem, 3vw, 2.7rem);
+    line-height: 1;
+}
+#<?= $componentId ?> .story-card h3 {
+    font-size: 1.28rem;
+    line-height: 1.12;
+}
+#<?= $componentId ?> .lead-copy h2 a,
+#<?= $componentId ?> .story-card h3 a {
+    color: inherit;
+    text-decoration: none;
+}
+#<?= $componentId ?> .lead-copy p,
+#<?= $componentId ?> .story-card p {
+    margin: 0;
+    line-height: 1.78;
+}
+#<?= $componentId ?> .story-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 42px;
+    padding: 0.72rem 1rem;
+    border-radius: 999px;
+    color: #110c08;
+    font-weight: 800;
+    text-decoration: none;
+    background: linear-gradient(135deg, #ff5b45 0%, #ffbf47 46%, #dfff5a 100%);
+    box-shadow: 0 18px 34px rgba(255,91,69,0.22);
+}
+#<?= $componentId ?> .story-link:hover {
+    filter: brightness(1.03);
+}
+#<?= $componentId ?> .story-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+}
+#<?= $componentId ?> .story-card {
+    transform: rotate(-1.1deg);
+}
+#<?= $componentId ?> .story-card:nth-child(even) {
+    transform: rotate(1deg);
+}
+#<?= $componentId ?> .story-grid.style-minimal .story-card,
+#<?= $componentId ?> .story-grid.style-minimal .story-card:nth-child(even) {
+    transform: none;
+}
+#<?= $componentId ?> .story-grid.style-featured .card-wide {
+    grid-column: span 2;
+    display: grid;
+    grid-template-columns: minmax(0, 0.52fr) minmax(0, 0.48fr);
+}
+#<?= $componentId ?> .story-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    padding: 1.15rem;
+}
+#<?= $componentId ?> .story-cover {
+    min-height: 220px;
+}
+#<?= $componentId ?> .rail-card {
+    padding: 1rem;
+}
+#<?= $componentId ?> .rail-head h2 {
+    margin-top: 0.85rem;
+    color: #f7f1e8;
+    font-size: 1.3rem;
+}
+#<?= $componentId ?> .category-cloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .category-pill {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0.62rem 0.9rem;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.10);
+    color: #f7f1e8;
+    text-decoration: none;
+    background: rgba(255,255,255,0.04);
+    transition: transform 0.22s ease, background 0.22s ease, color 0.22s ease;
+}
+#<?= $componentId ?> .category-pill:hover {
+    transform: translateY(-2px);
+    color: #110c08;
+    background: linear-gradient(135deg, #ffbf47 0%, #dfff5a 100%);
+}
+#<?= $componentId ?> .recent-stack {
+    display: grid;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+#<?= $componentId ?> .recent-link {
+    display: grid;
+    grid-template-columns: 82px minmax(0, 1fr);
+    gap: 0.8rem;
+    align-items: center;
+    text-decoration: none;
+    color: inherit;
+}
+#<?= $componentId ?> .recent-link img {
+    height: 82px;
+    border-radius: 18px;
+}
+#<?= $componentId ?> .recent-link strong {
+    display: block;
+    color: #f7f1e8;
+    line-height: 1.4;
+}
+#<?= $componentId ?> .blog-empty {
+    padding: 2.2rem 1.2rem;
+    text-align: center;
+}
+#<?= $componentId ?> .empty-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 76px;
+    height: 76px;
+    border-radius: 999px;
+    color: #110c08;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    background: linear-gradient(135deg, #ff5b45 0%, #dfff5a 100%);
+}
+#<?= $componentId ?> .blog-empty h2 {
+    margin-top: 1rem;
+    color: #f7f1e8;
+    font-size: 1.8rem;
+}
+#<?= $componentId ?> .blog-empty p {
+    margin-top: 0.7rem;
+}
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .blog-stage.has-rail,
+    #<?= $componentId ?> .lead-story,
+    #<?= $componentId ?> .story-grid.style-featured .card-wide {
+        grid-template-columns: 1fr;
+    }
+}
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 4rem 0;
+    }
+    #<?= $componentId ?> .blog-shell {
+        width: min(100%, calc(100% - 0.8rem));
+    }
+    #<?= $componentId ?> .blog-masthead h1 {
+        font-size: clamp(2.1rem, 11vw, 3.2rem);
+    }
+    #<?= $componentId ?> .story-grid {
+        grid-template-columns: 1fr;
+    }
+    #<?= $componentId ?> .story-card,
+    #<?= $componentId ?> .story-card:nth-child(even) {
+        transform: rotate(0deg);
+    }
+    #<?= $componentId ?> .lead-story,
+    #<?= $componentId ?> .story-card,
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .blog-empty {
+        border-radius: 24px;
+    }
+    #<?= $componentId ?> .lead-copy,
+    #<?= $componentId ?> .story-body,
+    #<?= $componentId ?> .rail-card {
+        padding: 1rem;
+    }
+    #<?= $componentId ?> .story-link {
+        width: 100%;
+    }
+}
+</style>

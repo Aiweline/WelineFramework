@@ -1,0 +1,757 @@
+<?php
+/**
+ * Teen Patti Royal Prism - Blog Detail Component
+ *
+ * @fields_start
+ * blog.show_sidebar|显示侧边栏|select:yes=是,no=否|yes
+ * blog.show_cover|显示封面图|select:yes=是,no=否|yes
+ * blog.show_author|显示作者|select:yes=是,no=否|yes
+ * blog.show_date|显示日期|select:yes=是,no=否|yes
+ * blog.show_tags|显示标签|select:yes=是,no=否|yes
+ * blog.show_share|显示分享按钮|select:yes=是,no=否|yes
+ * blog.show_related|显示相关文章|select:yes=是,no=否|yes
+ * blog.related_count|相关文章数量|number|3
+ * @fields_end
+ */
+
+$style = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$currentPost = $this->getData('current_post') ?: [];
+$relatedPosts = $this->getData('related_posts') ?: [];
+$blogCategories = $this->getData('blog_categories') ?: [];
+$recentPosts = $this->getData('recent_posts') ?: [];
+
+$getConfig = function ($key, $default = '') use ($style, $componentConfig) {
+    if (isset($componentConfig[$key]) && $componentConfig[$key] !== '') {
+        return $componentConfig[$key];
+    }
+    return $style[$key] ?? $default;
+};
+
+$showSidebar = $getConfig('blog.show_sidebar', 'yes') === 'yes';
+$showCover = $getConfig('blog.show_cover', 'yes') === 'yes';
+$showAuthor = $getConfig('blog.show_author', 'yes') === 'yes';
+$showDate = $getConfig('blog.show_date', 'yes') === 'yes';
+$showTags = $getConfig('blog.show_tags', 'yes') === 'yes';
+$showShare = $getConfig('blog.show_share', 'yes') === 'yes';
+$showRelated = $getConfig('blog.show_related', 'yes') === 'yes';
+$relatedCount = max(1, (int)$getConfig('blog.related_count', 3));
+
+$primaryColor = $getConfig('color_scheme.primary', '#ff7a45');
+$secondaryColor = $getConfig('color_scheme.secondary', '#00cdb6');
+$bgColor = $getConfig('color_scheme.background', '#fffaf0');
+$textColor = $getConfig('color_scheme.text', '#332016');
+$surfaceColor = $getConfig('color_scheme.surface', 'rgba(255,255,255,0.82)');
+
+$formatDate = static function ($value) {
+    if (!$value) {
+        return '';
+    }
+    $timestamp = strtotime((string)$value);
+    return $timestamp ? date('F d, Y', $timestamp) : (string)$value;
+};
+
+$componentId = $component_instance_id ?? 'blog-detail-' . uniqid();
+$related = array_slice($relatedPosts, 0, $relatedCount);
+$recent = !empty($recentPosts) ? array_slice($recentPosts, 0, 5) : $related;
+?>
+
+<section id="<?= $componentId ?>" class="prism-blog-detail">
+    <div class="section-inner">
+        <?php if (empty($currentPost)): ?>
+            <article class="empty-state" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                <h2><?= __('Article Not Found') ?></h2>
+                <p><?= __('The article you are looking for is unavailable.') ?></p>
+                <a href="/blog"><?= __('Back to Blog') ?></a>
+            </article>
+        <?php else: ?>
+            <?php
+            $postTitle = (string)($currentPost['title'] ?? __('Untitled Post'));
+            $postUrl = (string)($currentPost['url'] ?? ($_SERVER['REQUEST_URI'] ?? '/blog'));
+            $postDate = $formatDate($currentPost['published_at'] ?? '');
+            $postAuthor = (string)($currentPost['author'] ?? '');
+            $postCover = (string)($currentPost['cover_image'] ?? '');
+            $postSummary = (string)($currentPost['summary'] ?? '');
+            $postContent = (string)($currentPost['content'] ?? '');
+            $postCategory = (string)($currentPost['category_name'] ?? '');
+            $postViews = !empty($currentPost['view_count']) ? (int)$currentPost['view_count'] : 0;
+
+            $tags = [];
+            if (!empty($currentPost['tags'])) {
+                $tags = is_array($currentPost['tags']) ? $currentPost['tags'] : explode(',', (string)$currentPost['tags']);
+                $tags = array_values(array_filter(array_map('trim', $tags), function ($tag) {
+                    return $tag !== '';
+                }));
+            }
+            ?>
+
+            <nav class="breadcrumb" aria-label="breadcrumb" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                <a href="/"><?= __('Home') ?></a>
+                <span>/</span>
+                <a href="/blog"><?= __('Blog') ?></a>
+                <span>/</span>
+                <span><?= htmlspecialchars(mb_substr($postTitle, 0, 42)) ?><?= mb_strlen($postTitle) > 42 ? '...' : '' ?></span>
+            </nav>
+
+            <header class="article-stage<?= $showCover && $postCover !== '' ? ' has-cover' : '' ?>" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                <div class="stage-copy">
+                    <div class="stage-meta-top">
+                        <?php if ($postCategory !== ''): ?>
+                            <span class="story-chip"><?= htmlspecialchars($postCategory) ?></span>
+                        <?php endif; ?>
+                        <?php if ($showDate && $postDate !== ''): ?>
+                            <span class="story-date"><?= htmlspecialchars($postDate) ?></span>
+                        <?php endif; ?>
+                    </div>
+
+                    <h1><?= htmlspecialchars($postTitle) ?></h1>
+
+                    <div class="stage-meta">
+                        <?php if ($showAuthor && $postAuthor !== ''): ?>
+                            <span><?= htmlspecialchars($postAuthor) ?></span>
+                        <?php endif; ?>
+                        <?php if ($postViews > 0): ?>
+                            <span><?= number_format($postViews) ?> <?= __('views') ?></span>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($postSummary !== ''): ?>
+                        <p class="stage-summary"><?= htmlspecialchars($postSummary) ?></p>
+                    <?php endif; ?>
+
+                    <?php if ($showShare): ?>
+                        <div class="share-tray">
+                            <button type="button" data-share="facebook" data-url="<?= htmlspecialchars($postUrl) ?>" aria-label="Share on Facebook">FB</button>
+                            <button type="button" data-share="twitter" data-url="<?= htmlspecialchars($postUrl) ?>" data-title="<?= htmlspecialchars($postTitle) ?>" aria-label="Share on X">X</button>
+                            <button type="button" data-share="linkedin" data-url="<?= htmlspecialchars($postUrl) ?>" data-title="<?= htmlspecialchars($postTitle) ?>" aria-label="Share on LinkedIn">IN</button>
+                            <button type="button" data-share="copy" data-url="<?= htmlspecialchars($postUrl) ?>" aria-label="Copy link"><?= __('Copy') ?></button>
+                        </div>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ($showCover && $postCover !== ''): ?>
+                    <figure class="stage-cover">
+                        <img src="<?= htmlspecialchars($postCover) ?>" alt="<?= htmlspecialchars($postTitle) ?>" loading="lazy" decoding="async">
+                    </figure>
+                <?php endif; ?>
+            </header>
+
+            <div class="detail-layout<?= $showSidebar ? ' with-sidebar' : '' ?>">
+                <article class="reader-shell" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="80ms">
+                    <div class="article-content"><?= $postContent ?></div>
+
+                    <footer class="reader-foot">
+                        <?php if ($showTags && !empty($tags)): ?>
+                            <div class="tag-row">
+                                <?php foreach ($tags as $tag): ?>
+                                    <a href="/blog/tag/<?= urlencode($tag) ?>">#<?= htmlspecialchars($tag) ?></a>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="reader-nav">
+                            <a href="/blog"><?= __('Back to Blog') ?></a>
+                        </div>
+                    </footer>
+                </article>
+
+                <?php if ($showSidebar): ?>
+                    <aside class="detail-rail">
+                        <?php if (!empty($blogCategories)): ?>
+                            <section class="rail-card" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                                <h2><?= __('Categories') ?></h2>
+                                <div class="rail-category-list">
+                                    <?php foreach ($blogCategories as $category): ?>
+                                        <?php if (empty($category['name'])) continue; ?>
+                                        <a href="<?= htmlspecialchars((string)($category['url'] ?? '#')) ?>">
+                                            <span><?= htmlspecialchars((string)$category['name']) ?></span>
+                                            <?php if (isset($category['post_count'])): ?>
+                                                <em><?= (int)$category['post_count'] ?></em>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+
+                        <?php if (!empty($recent)): ?>
+                            <section class="rail-card" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="100ms">
+                                <h2><?= __('Recent Posts') ?></h2>
+                                <div class="recent-stack">
+                                    <?php foreach ($recent as $post): ?>
+                                        <?php
+                                        $recentUrl = (string)($post['url'] ?? '#');
+                                        $recentTitle = (string)($post['title'] ?? __('Untitled Post'));
+                                        $recentDate = $formatDate($post['published_at'] ?? '');
+                                        ?>
+                                        <a href="<?= htmlspecialchars($recentUrl) ?>">
+                                            <strong><?= htmlspecialchars($recentTitle) ?></strong>
+                                            <?php if ($recentDate !== ''): ?>
+                                                <span><?= htmlspecialchars($recentDate) ?></span>
+                                            <?php endif; ?>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </aside>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($showRelated && !empty($related)): ?>
+                <section class="related-stage">
+                    <header class="related-head" data-prism-reveal data-prism-effect="animate__fadeInUp">
+                        <p class="section-tag"><?= __('Continue') ?></p>
+                        <h2><?= __('Related Articles') ?></h2>
+                    </header>
+
+                    <div class="related-grid">
+                        <?php foreach ($related as $index => $post): ?>
+                            <?php
+                            $relatedUrl = (string)($post['url'] ?? '#');
+                            $relatedTitle = (string)($post['title'] ?? __('Untitled Post'));
+                            $relatedDate = $formatDate($post['published_at'] ?? '');
+                            $relatedImage = (string)($post['cover_image'] ?? '');
+                            ?>
+                            <article class="related-card" data-prism-reveal data-prism-effect="animate__fadeInUp" data-wow-delay="<?= min($index * 70, 260) ?>ms">
+                                <?php if ($relatedImage !== ''): ?>
+                                    <a class="related-media" href="<?= htmlspecialchars($relatedUrl) ?>">
+                                        <img src="<?= htmlspecialchars($relatedImage) ?>" alt="<?= htmlspecialchars($relatedTitle) ?>" loading="lazy" decoding="async">
+                                    </a>
+                                <?php endif; ?>
+                                <div class="related-body">
+                                    <h3><a href="<?= htmlspecialchars($relatedUrl) ?>"><?= htmlspecialchars($relatedTitle) ?></a></h3>
+                                    <?php if ($relatedDate !== ''): ?>
+                                        <p><?= htmlspecialchars($relatedDate) ?></p>
+                                    <?php endif; ?>
+                                </div>
+                            </article>
+                        <?php endforeach; ?>
+                    </div>
+                </section>
+            <?php endif; ?>
+        <?php endif; ?>
+    </div>
+</section>
+
+<?php if (!empty($currentPost) && $showShare): ?>
+<script>
+(function () {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) {
+        return;
+    }
+
+    var normalizeUrl = function (url) {
+        if (!url) {
+            return window.location.href;
+        }
+        if (/^https?:\/\//i.test(url)) {
+            return url;
+        }
+        if (url.charAt(0) !== '/') {
+            url = '/' + url;
+        }
+        return window.location.origin.replace(/\/$/, '') + url;
+    };
+
+    root.addEventListener('click', function (event) {
+        var button = event.target.closest('[data-share]');
+        if (!button) {
+            return;
+        }
+
+        var type = button.getAttribute('data-share');
+        var url = encodeURIComponent(normalizeUrl(button.getAttribute('data-url') || ''));
+        var title = encodeURIComponent(button.getAttribute('data-title') || document.title || '');
+        var shareUrl = '';
+
+        if (type === 'facebook') {
+            shareUrl = 'https://www.facebook.com/sharer/sharer.php?u=' + url;
+        } else if (type === 'twitter') {
+            shareUrl = 'https://twitter.com/intent/tweet?url=' + url + '&text=' + title;
+        } else if (type === 'linkedin') {
+            shareUrl = 'https://www.linkedin.com/shareArticle?mini=true&url=' + url + '&title=' + title;
+        } else if (type === 'copy') {
+            var plainUrl = decodeURIComponent(url);
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(plainUrl).then(function () {
+                    button.textContent = 'Copied';
+                    setTimeout(function () {
+                        button.textContent = 'Copy';
+                    }, 1600);
+                });
+            }
+            return;
+        }
+
+        if (shareUrl !== '') {
+            window.open(shareUrl, '_blank', 'noopener,noreferrer,width=640,height=720');
+        }
+    });
+})();
+</script>
+<?php endif; ?>
+
+<style>
+#<?= $componentId ?> {
+    --primary: <?= htmlspecialchars($primaryColor) ?>;
+    --secondary: <?= htmlspecialchars($secondaryColor) ?>;
+    --bg: <?= htmlspecialchars($bgColor) ?>;
+    --text: <?= htmlspecialchars($textColor) ?>;
+    --surface: <?= htmlspecialchars($surfaceColor) ?>;
+    position: relative;
+    overflow: hidden;
+    padding: clamp(3.1rem, 7vw, 4.8rem) 0;
+    background:
+        radial-gradient(920px 260px at 0% 0%, rgba(255, 122, 69, 0.18), rgba(255, 122, 69, 0) 72%),
+        radial-gradient(760px 240px at 100% 100%, rgba(0, 205, 182, 0.14), rgba(0, 205, 182, 0) 72%),
+        <?= htmlspecialchars($bgColor) ?>;
+    color: var(--text);
+}
+
+#<?= $componentId ?> .section-inner {
+    width: min(1180px, calc(100% - 1.2rem));
+    margin: 0 auto;
+}
+
+#<?= $componentId ?> .section-tag {
+    margin: 0;
+    display: inline-flex;
+    width: fit-content;
+    padding: 0.34rem 0.72rem;
+    border-radius: 999px;
+    border: 1px solid rgba(0, 205, 182, 0.26);
+    background: rgba(0, 205, 182, 0.1);
+    color: #0e9f8d;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> h1,
+#<?= $componentId ?> h2,
+#<?= $componentId ?> h3,
+#<?= $componentId ?> h4 {
+    margin: 0;
+    font-family: 'Syne', 'Manrope', sans-serif;
+    letter-spacing: -0.04em;
+}
+
+#<?= $componentId ?> .breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.42rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    color: rgba(51, 32, 22, 0.58);
+    font-size: 0.82rem;
+}
+
+#<?= $componentId ?> .breadcrumb a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .article-stage {
+    display: grid;
+    gap: 1rem;
+    padding: clamp(1rem, 3vw, 1.35rem);
+    border-radius: 34px;
+    background:
+        radial-gradient(320px 140px at 0% 0%, rgba(255,255,255,0.24), rgba(255,255,255,0) 72%),
+        linear-gradient(135deg, rgba(255, 122, 69, 0.95), rgba(255, 179, 92, 0.94));
+    box-shadow: 0 24px 42px rgba(255, 122, 69, 0.22);
+}
+
+#<?= $componentId ?> .article-stage.has-cover {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
+    align-items: stretch;
+}
+
+#<?= $componentId ?> .stage-copy {
+    display: grid;
+    gap: 0.85rem;
+    align-content: start;
+}
+
+#<?= $componentId ?> .stage-meta-top,
+#<?= $componentId ?> .stage-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .story-chip,
+#<?= $componentId ?> .story-date,
+#<?= $componentId ?> .stage-meta span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.95rem;
+    padding: 0.22rem 0.68rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .story-chip {
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.26);
+}
+
+#<?= $componentId ?> .story-date,
+#<?= $componentId ?> .stage-meta span {
+    color: rgba(255,255,255,0.92);
+}
+
+#<?= $componentId ?> .article-stage h1 {
+    font-size: clamp(2.2rem, 6vw, 4rem);
+    line-height: 0.94;
+}
+
+#<?= $componentId ?> .stage-summary {
+    margin: 0;
+    max-width: 48rem;
+    line-height: 1.85;
+}
+
+#<?= $componentId ?> .share-tray {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .share-tray button {
+    border: 0;
+    min-height: 2.6rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.88);
+    color: #2b140d;
+    font: inherit;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+#<?= $componentId ?> .stage-cover {
+    margin: 0;
+    border-radius: 28px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.18);
+}
+
+#<?= $componentId ?> .stage-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .detail-layout {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .detail-layout.with-sidebar {
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 300px);
+}
+
+#<?= $componentId ?> .reader-shell {
+    padding: clamp(1.2rem, 3vw, 1.6rem);
+    border-radius: 34px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,250,244,0.94));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 24px 42px rgba(156, 133, 114, 0.16);
+}
+
+#<?= $componentId ?> .article-content > :first-child {
+    margin-top: 0;
+}
+
+#<?= $componentId ?> .article-content > :last-child {
+    margin-bottom: 0;
+}
+
+#<?= $componentId ?> .article-content p,
+#<?= $componentId ?> .article-content li,
+#<?= $componentId ?> .article-content td,
+#<?= $componentId ?> .article-content th,
+#<?= $componentId ?> .article-content blockquote {
+    color: rgba(51, 32, 22, 0.78);
+    line-height: 1.9;
+    font-size: 1rem;
+}
+
+#<?= $componentId ?> .article-content h1,
+#<?= $componentId ?> .article-content h2,
+#<?= $componentId ?> .article-content h3,
+#<?= $componentId ?> .article-content h4 {
+    margin: 1.5em 0 0.5em;
+    line-height: 1.08;
+    color: var(--text);
+}
+
+#<?= $componentId ?> .article-content h2 {
+    font-size: clamp(1.8rem, 4vw, 2.6rem);
+}
+
+#<?= $componentId ?> .article-content h3 {
+    font-size: clamp(1.35rem, 3vw, 1.9rem);
+}
+
+#<?= $componentId ?> .article-content a {
+    color: var(--primary);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.18em;
+}
+
+#<?= $componentId ?> .article-content ul,
+#<?= $componentId ?> .article-content ol {
+    padding-left: 1.35rem;
+}
+
+#<?= $componentId ?> .article-content blockquote {
+    margin: 1.4rem 0;
+    padding: 1rem 1.1rem;
+    border-left: 4px solid rgba(0,205,182,0.4);
+    border-radius: 0 18px 18px 0;
+    background: rgba(239,255,251,0.78);
+}
+
+#<?= $componentId ?> .article-content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.4rem 0;
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .article-content th,
+#<?= $componentId ?> .article-content td {
+    padding: 0.85rem 0.9rem;
+    border-bottom: 1px solid rgba(126, 91, 67, 0.1);
+    text-align: left;
+}
+
+#<?= $componentId ?> .article-content thead th {
+    background: rgba(255,243,218,0.9);
+    color: var(--text);
+}
+
+#<?= $componentId ?> .reader-foot {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1.4rem;
+}
+
+#<?= $componentId ?> .tag-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .tag-row a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2.4rem;
+    padding: 0.4rem 0.8rem;
+    border-radius: 999px;
+    background: rgba(239,255,251,0.86);
+    color: var(--text);
+    text-decoration: none;
+    border: 1px solid rgba(0,205,182,0.18);
+    font-weight: 700;
+}
+
+#<?= $componentId ?> .reader-nav a,
+#<?= $componentId ?> .empty-state a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.7rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 999px;
+    background: linear-gradient(135deg, rgba(255, 122, 69, 0.94), rgba(255, 179, 92, 0.94));
+    color: #2b140d;
+    text-decoration: none;
+    font-weight: 800;
+}
+
+#<?= $componentId ?> .detail-rail {
+    display: grid;
+    gap: 1rem;
+    align-content: start;
+}
+
+#<?= $componentId ?> .rail-card {
+    position: sticky;
+    top: 102px;
+    display: grid;
+    gap: 0.85rem;
+    padding: 1rem;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,248,240,0.9));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 18px 30px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $componentId ?> .rail-card + .rail-card {
+    top: 132px;
+}
+
+#<?= $componentId ?> .rail-card h2,
+#<?= $componentId ?> .related-head h2,
+#<?= $componentId ?> .empty-state h2 {
+    font-size: clamp(1.6rem, 4vw, 2.3rem);
+}
+
+#<?= $componentId ?> .rail-category-list,
+#<?= $componentId ?> .recent-stack {
+    display: grid;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .rail-category-list a,
+#<?= $componentId ?> .recent-stack a {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.8rem;
+    align-items: center;
+    padding: 0.78rem 0.85rem;
+    border-radius: 18px;
+    text-decoration: none;
+    color: rgba(51, 32, 22, 0.82);
+    background: rgba(255,255,255,0.74);
+    border: 1px solid rgba(126, 91, 67, 0.08);
+}
+
+#<?= $componentId ?> .rail-category-list em,
+#<?= $componentId ?> .recent-stack span {
+    font-style: normal;
+    color: rgba(51, 32, 22, 0.58);
+    font-size: 0.78rem;
+}
+
+#<?= $componentId ?> .recent-stack a {
+    display: grid;
+    justify-content: start;
+}
+
+#<?= $componentId ?> .recent-stack strong {
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+#<?= $componentId ?> .related-stage {
+    display: grid;
+    gap: 1rem;
+    margin-top: 1rem;
+}
+
+#<?= $componentId ?> .related-head {
+    display: grid;
+    gap: 0.72rem;
+}
+
+#<?= $componentId ?> .related-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+#<?= $componentId ?> .related-card {
+    display: grid;
+    gap: 0.8rem;
+    padding: 0.9rem;
+    border-radius: 28px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,248,240,0.9));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 18px 30px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $componentId ?> .related-media {
+    display: block;
+    border-radius: 22px;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .related-media img {
+    width: 100%;
+    height: 12rem;
+    object-fit: cover;
+    display: block;
+}
+
+#<?= $componentId ?> .related-body {
+    display: grid;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .related-body h3 {
+    font-size: 1.35rem;
+    line-height: 1.02;
+}
+
+#<?= $componentId ?> .related-body h3 a {
+    color: inherit;
+    text-decoration: none;
+}
+
+#<?= $componentId ?> .related-body p,
+#<?= $componentId ?> .empty-state p {
+    margin: 0;
+    color: rgba(51, 32, 22, 0.72);
+    line-height: 1.78;
+}
+
+#<?= $componentId ?> .empty-state {
+    padding: clamp(1.4rem, 4vw, 2rem);
+    border-radius: 30px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(255,248,240,0.9));
+    border: 1px solid rgba(126, 91, 67, 0.12);
+    box-shadow: 0 18px 30px rgba(156, 133, 114, 0.14);
+}
+
+#<?= $componentId ?> .empty-state p {
+    margin: 0.75rem 0 1rem;
+}
+
+@media (max-width: 1100px) {
+    #<?= $componentId ?> .article-stage.has-cover,
+    #<?= $componentId ?> .detail-layout.with-sidebar,
+    #<?= $componentId ?> .related-grid {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .rail-card + .rail-card {
+        position: static;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> .article-stage,
+    #<?= $componentId ?> .reader-shell,
+    #<?= $componentId ?> .rail-card,
+    #<?= $componentId ?> .related-card,
+    #<?= $componentId ?> .empty-state {
+        border-radius: 28px;
+    }
+
+    #<?= $componentId ?> .share-tray {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #<?= $componentId ?> .share-tray button {
+        justify-content: center;
+    }
+}
+</style>

@@ -1,0 +1,700 @@
+<?php
+/**
+ * Blackjack Halo - Navigation
+ *
+ * @component_start
+ * code: header-nav
+ * name: 导航栏
+ * name_en: Navigation Bar
+ * description: Blackjack Halo 浅色悬浮导航，支持移动端菜单与底部流光效果
+ * category: header
+ * region: header
+ * @component_end
+ *
+ * @fields_start
+ * group:logo => Logo设置
+ * logo.display => 显示Logo:select:yes|yes,no
+ * logo.text => Logo文字:text:Blackjack Halo
+ * logo.subline => Logo副标题:text:Light blackjack route
+ * logo.url => Logo图片地址:textarea:|留空使用默认图标
+ * logo.width => Logo宽度:responsive:48/48|px
+ * logo.height => Logo高度:responsive:|px[可选，默认跟随宽度]
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 导航背景色:color:rgba(249,248,242,0.82)
+ * navigation.bg_color_scrolled => 滚动后导航背景色:color:rgba(249,248,242,0.94)
+ * navigation.text_color => 导航文字颜色:color:#1f312d
+ * navigation.link_color => 链接颜色:color:#49665b
+ * navigation.link_hover_color => 链接悬停颜色:color:#14523f
+ * navigation.items => 导航项:textarea:Home=>/\r\nTables=>#tables\r\nWhy Halo=>#advantages\r\nReviews=>#reviews\r\nFAQ=>#faq|配置格式：名字=>url，一行一个
+ * navigation.use_custom_links => 使用自定义导航链接:select:yes|yes,no
+ * group:navigation_labels => 导航菜单显示名称（有对应页面时显示，留空使用页面标题）
+ * navigation.label_home_page => 首页菜单名:text:
+ * navigation.label_about_page => 关于我们菜单名:text:
+ * navigation.label_blog_list => 博客菜单名:text:
+ * navigation.label_contact_page => 联系我们菜单名:text:
+ * navigation.label_terms_of_service => 条款菜单名:text:
+ * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ * navigation.use_subpages => 兼容旧版-使用子页面作为导航:select:no|yes,no
+ * group:download_button => 下载按钮
+ * download_button.display => 显示下载按钮:select:yes|yes,no
+ * download_button.text => 按钮文字:text:Open Table
+ * download_button.url => 按钮链接:text:#download
+ * download_button.bg_color => 按钮背景色:color:#1f7a5b
+ * download_button.bg_hover_color => 按钮悬停背景色:color:#15523e
+ * download_button.text_color => 按钮文字颜色:color:#f7f4ea
+ * @fields_end
+ */
+
+$componentId = 'bkh-nav-' . uniqid();
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+$config = array_merge($styleSettings, $componentConfig);
+$standaloneShell = !($this->getData('__pagebuilder_shell_managed'));
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$getConfigAny = function(array $keys, $default = '') use ($config) {
+    foreach ($keys as $key) {
+        if (isset($config[$key]) && $config[$key] !== '') {
+            return $config[$key];
+        }
+    }
+    return $default;
+};
+
+$normalizeToggle = static function($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    return ($value === 'no' || $value === false || $value === 'false') ? 'no' : 'yes';
+};
+
+$parseResponsive = static function($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string)$value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim((string)($parts[0] ?? '')),
+        'desktop' => trim((string)($parts[1] ?? ($parts[0] ?? ''))),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = static function($parsed) {
+    $mobile = (float)$parsed['mobile'];
+    $desktop = (float)$parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$sanitizeTitle = static function($value) {
+    $value = trim((string)$value);
+    if ($value === '') {
+        return $value;
+    }
+    $value = preg_replace('/^样式模板预览\s*[-–—]*\s*/u', '', $value);
+    $value = str_replace('样式模板预览', '', $value);
+    return trim($value);
+};
+
+$metaTitleRaw = $page ? ($page->getData('meta_title') ?: $page->getData('title')) : 'Blackjack Halo';
+$metaTitle = $sanitizeTitle($metaTitleRaw);
+if ($metaTitle === '') {
+    $metaTitle = 'Blackjack Halo';
+}
+$metaDescription = $page ? (string)($page->getData('meta_description') ?: '') : '';
+$metaKeywords = $page ? (string)($page->getData('meta_keywords') ?: '') : '';
+
+$logoDisplay = $normalizeToggle($getConfigAny(['logo.display', 'header.logo.display'], 'yes')) !== 'no';
+$logoText = $sanitizeTitle($getConfigAny(['logo.text', 'header.logo.text'], 'Blackjack Halo'));
+if ($logoText === '') {
+    $logoText = 'Blackjack Halo';
+}
+$logoSubline = trim((string)$getConfigAny(['logo.subline', 'header.logo.subline'], 'Light blackjack route'));
+$logoIconUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/blackjack-halo/asset/img/halo-logo-icon.svg');
+$logoUrl = $getConfigAny(['logo.url', 'header.logo.url'], '') ?: ($page && $page->getData('logo') ? $page->getData('logo') : $logoIconUrl);
+$logoWidth = $genResponsiveCSS($parseResponsive($getConfigAny(['logo.width', 'header.logo.width'], '48/48') . 'px'));
+$logoHeightConfig = trim((string)$getConfigAny(['logo.height', 'header.logo.height'], ''));
+$logoHeight = $logoHeightConfig !== '' ? $genResponsiveCSS($parseResponsive($logoHeightConfig . 'px')) : $logoWidth;
+
+$navDisplay = $normalizeToggle($getConfigAny(['navigation.display', 'header.navigation.display'], 'yes')) !== 'no';
+$navBgColor = (string)$getConfigAny(['navigation.bg_color', 'header.navigation.bg_color'], 'rgba(249,248,242,0.82)');
+$navBgColorScrolled = (string)$getConfig('navigation.bg_color_scrolled', 'rgba(249,248,242,0.94)');
+$navTextColor = (string)$getConfigAny(['navigation.text_color', 'header.navigation.text_color'], '#1f312d');
+$navLinkColor = (string)$getConfigAny(['navigation.link_color', 'header.navigation.link_color'], '#49665b');
+$navLinkHoverColor = (string)$getConfigAny(['navigation.link_hover_color', 'header.navigation.link_hover_color'], '#14523f');
+$navItemsConfig = (string)$getConfigAny(['navigation.items', 'header.navigation.items'], "Home=>/\nTables=>#tables\nWhy Halo=>#advantages\nReviews=>#reviews\nFAQ=>#faq");
+$useCustomLinksRaw = (string)$getConfig('navigation.use_custom_links', '');
+$useCustomLinks = $useCustomLinksRaw !== ''
+    ? $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes'
+    : $normalizeToggle($getConfig('navigation.use_subpages', 'no'), 'no') !== 'yes';
+
+$showCta = $normalizeToggle($getConfigAny(['download_button.display', 'header.download_button.display'], 'yes')) !== 'no';
+$ctaText = trim((string)$getConfigAny(['download_button.text', 'header.download_button.text', 'navigation.cta_text'], 'Open Table'));
+$ctaUrl = (string)$getConfigAny(['download_button.url', 'header.download_button.url', 'navigation.cta_url'], '#download');
+$ctaBgColor = (string)$getConfigAny(['download_button.bg_color', 'header.download_button.bg_color'], '#1f7a5b');
+$ctaBgHoverColor = (string)$getConfigAny(['download_button.bg_hover_color', 'header.download_button.hover_bg_color'], '#15523e');
+$ctaTextColor = (string)$getConfigAny(['download_button.text_color', 'header.download_button.text_color'], '#f7f4ea');
+$ctaUrl = \GuoLaiRen\PageBuilder\Helper\PageHelper::normalizeAnchorUrl($ctaUrl);
+$ctaResolvedHref = \GuoLaiRen\PageBuilder\Helper\PageHelper::resolveAppDownloadUrl((string)$ctaUrl);
+$ctaRef = \GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::register($ctaResolvedHref, 'nav');
+
+$navItems = [];
+if (!$useCustomLinks && $page) {
+    $navigationPages = method_exists($page, 'getHeaderNavigationPages')
+        ? $page->getHeaderNavigationPages(10)
+        : (method_exists($page, 'getNavigationPages') ? $page->getNavigationPages([], 10) : []);
+    foreach ($navigationPages as $navPage) {
+        $text = trim((string)($navPage['title'] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        $type = (string)($navPage['type'] ?? '');
+        $configuredLabel = trim((string)$getConfigAny([
+            'navigation_labels.navigation.label_' . $type,
+            'navigation.label_' . $type,
+            'header.navigation.label_' . $type,
+        ], ''));
+        $navItems[] = [
+            'text' => $configuredLabel !== '' ? $configuredLabel : $text,
+            'href' => (string)($navPage['url'] ?? '#'),
+        ];
+    }
+}
+
+if (empty($navItems)) {
+    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+    }
+    foreach (preg_split('/\r?\n/', $navItemsConfig) as $line) {
+        $line = trim((string)$line);
+        if ($line === '') {
+            continue;
+        }
+        if (strpos($line, '=>') !== false) {
+            $parts = array_map('trim', explode('=>', $line, 2));
+        } elseif (strpos($line, '|') !== false) {
+            $parts = array_map('trim', explode('|', $line, 2));
+        } else {
+            $parts = [$line, '#'];
+        }
+        if (($parts[0] ?? '') === '') {
+            continue;
+        }
+        $navItems[] = [
+            'text' => $parts[0],
+            'href' => ($parts[1] ?? '') !== '' ? $parts[1] : '#',
+        ];
+    }
+}
+
+if (empty($navItems)) {
+    $navItems = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQ', 'href' => '/faq'],
+    ];
+}
+?>
+<?php if ($standaloneShell): ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($metaTitle) ?></title>
+    <?php if ($metaDescription !== ''): ?>
+    <meta name="description" content="<?= htmlspecialchars($metaDescription) ?>">
+    <?php endif; ?>
+    <?php if ($metaKeywords !== ''): ?>
+    <meta name="keywords" content="<?= htmlspecialchars($metaKeywords) ?>">
+    <?php endif; ?>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    window.tailwind = window.tailwind || {};
+    window.tailwind.config = {
+        theme: {
+            extend: {
+                colors: {
+                    'bkh-felt': '#1f7a5b',
+                    'bkh-gold': '#d0a03f',
+                    'bkh-ink': '#1f312d',
+                    'bkh-ivory': '#f5f3ea'
+                }
+            }
+        }
+    }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background:
+                radial-gradient(740px 360px at 12% 8%, rgba(208, 160, 63, 0.14), transparent 62%),
+                radial-gradient(660px 320px at 88% 12%, rgba(31, 122, 91, 0.14), transparent 58%),
+                linear-gradient(180deg, #fcfbf7 0%, #f5f3ea 46%, #eef4e8 100%);
+            color: #1f312d;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 0%, rgba(255,255,255,0.6), transparent 32%),
+                repeating-linear-gradient(135deg, rgba(22, 53, 45, 0.03) 0 1px, transparent 1px 20px);
+            opacity: 0.8;
+            z-index: -1;
+        }
+        a { color: inherit; }
+    </style>
+</head>
+<body>
+<?php endif; ?>
+<?php if ($navDisplay): ?>
+<nav id="<?= $componentId ?>" class="bkh-nav sticky top-0 z-[90] w-full" aria-label="Main navigation" data-mobile-open="false">
+    <div class="nav-shell mx-auto w-full">
+        <div class="brand-block min-w-0">
+            <?php if ($logoDisplay): ?>
+                <a href="/" class="brand-link" aria-label="<?= htmlspecialchars($logoText) ?> home">
+                    <span class="brand-mark">
+                        <img class="brand-icon" src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($logoText) ?>">
+                    </span>
+                    <span class="brand-copy">
+                        <strong><?= htmlspecialchars($logoText) ?></strong>
+                        <?php if ($logoSubline !== ''): ?>
+                            <em><?= htmlspecialchars($logoSubline) ?></em>
+                        <?php endif; ?>
+                    </span>
+                </a>
+            <?php endif; ?>
+        </div>
+
+        <div class="nav-center" role="list">
+            <?php foreach ($navItems as $item): ?>
+                <a class="nav-link" href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="nav-tools shrink-0">
+            <?php if ($showCta && $ctaText !== ''): ?>
+                <a role="button" tabindex="0" class="nav-cta" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>">
+                    <span><?= htmlspecialchars($ctaText) ?></span>
+                </a>
+            <?php endif; ?>
+            <button class="nav-toggle lg:hidden" type="button" aria-expanded="false" aria-controls="<?= $componentId ?>-mobile" aria-label="Toggle navigation">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+        </div>
+    </div>
+
+    <div class="mobile-panel w-full" id="<?= $componentId ?>-mobile">
+        <div class="mobile-links">
+            <?php foreach ($navItems as $item): ?>
+                <a class="mobile-link" href="<?= htmlspecialchars($item['href']) ?>"><?= htmlspecialchars($item['text']) ?></a>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($showCta && $ctaText !== ''): ?>
+            <a role="button" tabindex="0" class="mobile-cta" href="<?= htmlspecialchars(\GuoLaiRen\PageBuilder\Helper\GlrDownloadRegistry::codeHref($ctaRef)) ?>" data-glr-ref="<?= htmlspecialchars($ctaRef) ?>"><?= htmlspecialchars($ctaText) ?></a>
+        <?php endif; ?>
+    </div>
+</nav>
+<?php endif; ?>
+
+<style>
+#<?= $componentId ?> {
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 90;
+    width: 100%;
+    padding: 0.78rem clamp(0.75rem, 2vw, 1rem) 0.92rem;
+    background: <?= htmlspecialchars($navBgColor) ?>;
+    backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(31, 49, 45, 0.08);
+    box-shadow: 0 18px 42px rgba(17, 48, 37, 0.06);
+    overflow: hidden;
+}
+
+#<?= $componentId ?>.is-scrolled {
+    background: <?= htmlspecialchars($navBgColorScrolled) ?>;
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        linear-gradient(90deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 28%),
+        radial-gradient(420px 120px at 10% 0%, rgba(208,160,63,0.12), transparent 72%),
+        radial-gradient(420px 140px at 90% 0%, rgba(31,122,91,0.12), transparent 74%);
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    left: -20%;
+    bottom: 0;
+    width: 220px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(31,122,91,0) 0%, rgba(31,122,91,0.26) 18%, rgba(255,255,255,1) 50%, rgba(208,160,63,0.82) 74%, rgba(208,160,63,0) 100%);
+    box-shadow: 0 0 10px rgba(255,255,255,0.28), 0 0 18px rgba(208,160,63,0.22);
+    animation: bkh-nav-streak 7.6s linear infinite;
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .nav-shell,
+#<?= $componentId ?> .mobile-panel {
+    width: min(1240px, 100%);
+    margin: 0 auto;
+    max-width: 100%;
+    position: relative;
+    z-index: 1;
+}
+
+#<?= $componentId ?> .nav-shell {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.9rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .brand-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.78rem;
+    text-decoration: none;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .brand-mark {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: <?= $logoWidth ?>;
+    height: <?= $logoHeight ?>;
+    border-radius: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.86) 0%, rgba(236,242,232,0.86) 100%);
+    border: 1px solid rgba(31,122,91,0.12);
+    box-shadow: 0 14px 30px rgba(17, 48, 37, 0.08);
+}
+
+#<?= $componentId ?> .brand-mark::after {
+    content: '';
+    position: absolute;
+    inset: 5px;
+    border-radius: 14px;
+    border: 1px solid rgba(208,160,63,0.22);
+}
+
+#<?= $componentId ?> .brand-icon {
+    width: calc(<?= $logoWidth ?> * 0.62);
+    height: calc(<?= $logoHeight ?> * 0.62);
+}
+
+#<?= $componentId ?> .brand-copy {
+    display: grid;
+    gap: 0.08rem;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .brand-copy strong {
+    color: <?= htmlspecialchars($navTextColor) ?>;
+    font-family: 'Sora', 'Manrope', sans-serif;
+    font-size: 0.98rem;
+    font-weight: 800;
+    line-height: 1.02;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+#<?= $componentId ?> .brand-copy em {
+    color: <?= htmlspecialchars($navLinkColor) ?>;
+    font-style: normal;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .nav-center {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .nav-link,
+#<?= $componentId ?> .mobile-link {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.52rem 0.78rem;
+    border-radius: 999px;
+    color: <?= htmlspecialchars($navLinkColor) ?>;
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 800;
+    transition: color 0.22s ease, background 0.22s ease, transform 0.22s ease;
+}
+
+#<?= $componentId ?> .nav-link:hover,
+#<?= $componentId ?> .mobile-link:hover {
+    color: <?= htmlspecialchars($navLinkHoverColor) ?>;
+    background: rgba(31, 122, 91, 0.08);
+    transform: translateY(-1px);
+}
+
+#<?= $componentId ?> .nav-tools {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.7rem;
+}
+
+#<?= $componentId ?> .nav-cta,
+#<?= $componentId ?> .mobile-cta {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0.62rem 1.02rem;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($ctaBgColor) ?>;
+    color: <?= htmlspecialchars($ctaTextColor) ?>;
+    text-decoration: none;
+    font-size: 0.82rem;
+    font-weight: 800;
+    box-shadow: 0 16px 24px rgba(31, 122, 91, 0.18);
+    transition: transform 0.22s ease, box-shadow 0.22s ease, background 0.22s ease;
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .nav-cta::after,
+#<?= $componentId ?> .mobile-cta::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(112deg, rgba(255,255,255,0) 18%, rgba(255,255,255,0.34) 50%, rgba(255,255,255,0) 82%);
+    transform: translateX(-140%);
+    animation: bkh-cta-sheen 4.4s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .nav-cta:hover,
+#<?= $componentId ?> .mobile-cta:hover {
+    transform: translateY(-1px);
+    background: <?= htmlspecialchars($ctaBgHoverColor) ?>;
+    box-shadow: 0 20px 28px rgba(31, 122, 91, 0.24);
+}
+
+#<?= $componentId ?> .nav-toggle {
+    display: none;
+    width: 42px;
+    height: 42px;
+    border: 1px solid rgba(31, 49, 45, 0.1);
+    border-radius: 14px;
+    background: rgba(255,255,255,0.72);
+    align-items: center;
+    justify-content: center;
+    gap: 0.24rem;
+    flex-direction: column;
+    cursor: pointer;
+    box-shadow: 0 10px 20px rgba(17, 48, 37, 0.06);
+}
+
+#<?= $componentId ?> .nav-toggle span {
+    display: block;
+    width: 16px;
+    height: 2px;
+    border-radius: 999px;
+    background: <?= htmlspecialchars($navTextColor) ?>;
+    transition: transform 0.24s ease, opacity 0.24s ease;
+}
+
+#<?= $componentId ?>[data-mobile-open="true"] .nav-toggle span:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+}
+
+#<?= $componentId ?>[data-mobile-open="true"] .nav-toggle span:nth-child(2) {
+    opacity: 0;
+}
+
+#<?= $componentId ?>[data-mobile-open="true"] .nav-toggle span:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+}
+
+#<?= $componentId ?> .mobile-panel {
+    display: grid;
+    gap: 0.9rem;
+    padding-top: 0.9rem;
+    max-height: 0;
+    opacity: 0;
+    overflow: hidden;
+    transition: max-height 0.24s ease, opacity 0.24s ease, padding-top 0.24s ease;
+}
+
+#<?= $componentId ?>[data-mobile-open="true"] .mobile-panel {
+    max-height: 320px;
+    opacity: 1;
+}
+
+#<?= $componentId ?> .mobile-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+}
+
+#<?= $componentId ?> .mobile-link {
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(31,122,91,0.08);
+}
+
+@keyframes bkh-nav-streak {
+    0% { transform: translateX(0); opacity: 0; }
+    8% { opacity: 1; }
+    46% { opacity: 1; }
+    58% { opacity: 0.35; }
+    100% { transform: translateX(150vw); opacity: 0; }
+}
+
+@keyframes bkh-cta-sheen {
+    0%, 70%, 100% { transform: translateX(-140%); }
+    18%, 34% { transform: translateX(140%); }
+}
+
+@media (max-width: 1023px) {
+    #<?= $componentId ?> .nav-center,
+    #<?= $componentId ?> .nav-cta {
+        display: none;
+    }
+
+    #<?= $componentId ?> .nav-toggle {
+        display: inline-flex;
+    }
+
+    #<?= $componentId ?> .nav-shell {
+        grid-template-columns: minmax(0, 1fr) auto;
+    }
+}
+
+@media (max-width: 767px) {
+    #<?= $componentId ?> {
+        padding: 0.72rem 0.78rem 0.84rem;
+    }
+
+    #<?= $componentId ?> .brand-copy em {
+        display: none;
+    }
+
+    #<?= $componentId ?> .brand-copy strong {
+        font-size: 0.92rem;
+    }
+
+    #<?= $componentId ?> .brand-mark {
+        width: calc(<?= $logoWidth ?> * 0.92);
+        height: calc(<?= $logoHeight ?> * 0.92);
+    }
+
+    #<?= $componentId ?> .brand-icon {
+        width: calc(<?= $logoWidth ?> * 0.58);
+        height: calc(<?= $logoHeight ?> * 0.58);
+    }
+
+    #<?= $componentId ?> .mobile-links {
+        gap: 0.5rem;
+    }
+
+    #<?= $componentId ?> .mobile-link {
+        padding: 0.56rem 0.82rem;
+        font-size: 0.8rem;
+    }
+
+    #<?= $componentId ?> .mobile-cta {
+        width: 100%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?>::after,
+    #<?= $componentId ?> .nav-cta::after,
+    #<?= $componentId ?> .mobile-cta::after {
+        animation: none;
+    }
+}
+</style>
+
+<?php if ($navDisplay): ?>
+<script>
+(() => {
+    const root = document.getElementById('<?= $componentId ?>');
+    if (!root) return;
+
+    const toggle = root.querySelector('.nav-toggle');
+    const links = root.querySelectorAll('.mobile-link, .mobile-cta');
+    const setOpen = (open) => {
+        root.dataset.mobileOpen = open ? 'true' : 'false';
+        if (toggle) {
+            toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        }
+    };
+
+    const syncScroll = () => {
+        root.classList.toggle('is-scrolled', window.scrollY > 12);
+    };
+
+    if (toggle) {
+        toggle.addEventListener('click', () => {
+            setOpen(root.dataset.mobileOpen !== 'true');
+        });
+    }
+
+    links.forEach((link) => {
+        link.addEventListener('click', () => setOpen(false));
+    });
+
+    syncScroll();
+    window.addEventListener('scroll', syncScroll, { passive: true });
+})();
+</script>
+<?php endif; ?>
+<?php if ($standaloneShell): ?>
+</body>
+</html>
+<?php endif; ?>

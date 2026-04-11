@@ -1,0 +1,26 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="breezeCore" x1="22" y1="20" x2="106" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#71D7C5"/>
+      <stop offset="0.52" stop-color="#8FD2FF"/>
+      <stop offset="1" stop-color="#FFD486"/>
+    </linearGradient>
+    <linearGradient id="breezeRing" x1="16" y1="18" x2="108" y2="110" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4CBAB7"/>
+      <stop offset="0.54" stop-color="#6BAEF4"/>
+      <stop offset="1" stop-color="#FFB679"/>
+    </linearGradient>
+    <radialGradient id="breezeGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(64 64) rotate(90) scale(58)">
+      <stop stop-color="#FFFFFF" stop-opacity="0.92"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect x="12" y="12" width="104" height="104" rx="30" fill="#F7FFFC"/>
+  <rect x="12" y="12" width="104" height="104" rx="30" stroke="url(#breezeRing)" stroke-width="4"/>
+  <circle cx="64" cy="60" r="22" fill="url(#breezeCore)"/>
+  <circle cx="64" cy="60" r="22" fill="url(#breezeGlow)"/>
+  <path d="M28 77C37 67 48 62 61 62C74 62 86 67 96 77" stroke="#2E8F9D" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M33 84C42 76 52 72 64 72C76 72 86 76 95 84" stroke="#69CFC2" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.92"/>
+  <path d="M39 42C47 36 54 33 62 33" stroke="#FFFFFF" stroke-width="4" stroke-linecap="round" stroke-opacity="0.82"/>
+  <path d="M66 32C75 33 83 37 89 44" stroke="#FFF3DA" stroke-width="4" stroke-linecap="round" stroke-opacity="0.9"/>
+</svg>

@@ -1,0 +1,39 @@
+<svg width="860" height="760" viewBox="0 0 860 760" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Aviator Afterburn flight console">
+  <defs>
+    <linearGradient id="consoleBg" x1="145" y1="92" x2="707" y2="668" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#11213B"/>
+      <stop offset="1" stop-color="#09111E"/>
+    </linearGradient>
+    <linearGradient id="consoleGlow" x1="216" y1="164" x2="654" y2="595" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFBF3F" stop-opacity="0.24"/>
+      <stop offset="0.58" stop-color="#FF6B2C" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#29D0FF" stop-opacity="0.16"/>
+    </linearGradient>
+    <linearGradient id="lineWarm" x1="240" y1="525" x2="618" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF6B2C"/>
+      <stop offset="0.55" stop-color="#FFBF3F"/>
+      <stop offset="1" stop-color="#29D0FF"/>
+    </linearGradient>
+  </defs>
+  <rect x="118" y="82" width="624" height="596" rx="42" fill="url(#consoleBg)"/>
+  <rect x="150" y="114" width="560" height="532" rx="30" fill="#0D192D" stroke="#294B73" stroke-opacity="0.56"/>
+  <rect x="182" y="146" width="496" height="468" rx="24" fill="url(#consoleGlow)"/>
+  <path d="M238 528C295 520 345 470 390 414C445 346 510 305 620 280" stroke="url(#lineWarm)" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="390" cy="414" r="16" fill="#FFBF3F"/>
+  <circle cx="390" cy="414" r="34" stroke="#FFBF3F" stroke-opacity="0.24" stroke-width="4"/>
+  <circle cx="620" cy="280" r="14" fill="#B5F4FF"/>
+  <circle cx="620" cy="280" r="30" stroke="#29D0FF" stroke-opacity="0.28" stroke-width="3"/>
+  <rect x="230" y="202" width="152" height="108" rx="18" fill="#132643" stroke="#315882" stroke-opacity="0.6"/>
+  <rect x="478" y="194" width="160" height="120" rx="22" fill="#132643" stroke="#315882" stroke-opacity="0.6"/>
+  <rect x="232" y="470" width="176" height="94" rx="18" fill="#132643" stroke="#315882" stroke-opacity="0.6"/>
+  <path d="M260 278H322" stroke="#29D0FF" stroke-width="8" stroke-linecap="round"/>
+  <path d="M260 248H340" stroke="#B5F4FF" stroke-width="8" stroke-linecap="round" stroke-opacity="0.78"/>
+  <path d="M260 496H358" stroke="#FFBF3F" stroke-width="8" stroke-linecap="round"/>
+  <path d="M260 526H336" stroke="#FF7D45" stroke-width="8" stroke-linecap="round"/>
+  <path d="M504 232H592" stroke="#B5F4FF" stroke-width="9" stroke-linecap="round"/>
+  <path d="M504 270H620" stroke="#29D0FF" stroke-width="9" stroke-linecap="round" stroke-opacity="0.7"/>
+  <circle cx="560" cy="456" r="92" stroke="#29D0FF" stroke-opacity="0.22" stroke-width="2" stroke-dasharray="6 8"/>
+  <circle cx="560" cy="456" r="52" fill="#132643" stroke="#315882" stroke-opacity="0.6"/>
+  <path d="M524 470C542 462 560 444 584 410L570 480L552 470L524 470Z" fill="#FF6B2C"/>
+  <path d="M480 610L560 678L630 610" stroke="#243957" stroke-width="18" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Ai\Controller\Backend</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Ai</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Controller</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Backend</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Adapter.php.html#33">Weline\Ai\Controller\Backend\Adapter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#34">Weline\Ai\Controller\Backend\DefaultModel</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Index.php.html#15">Weline\Ai\Controller\Backend\Index</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Manager.php.html#16">Weline\Ai\Controller\Backend\Manager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#39">Weline\Ai\Controller\Backend\Model</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#20">Weline\Ai\Controller\Backend\Provider</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Statistics.php.html#17">Weline\Ai\Controller\Backend\Statistics</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Model.php.html#39">Weline\Ai\Controller\Backend\Model</a></td><td class="text-right">109892</td></tr>
+       <tr><td><a href="Provider.php.html#20">Weline\Ai\Controller\Backend\Provider</a></td><td class="text-right">13806</td></tr>
+       <tr><td><a href="DefaultModel.php.html#34">Weline\Ai\Controller\Backend\DefaultModel</a></td><td class="text-right">6162</td></tr>
+       <tr><td><a href="Adapter.php.html#33">Weline\Ai\Controller\Backend\Adapter</a></td><td class="text-right">4970</td></tr>
+       <tr><td><a href="Statistics.php.html#17">Weline\Ai\Controller\Backend\Statistics</a></td><td class="text-right">30</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Adapter.php.html#39"><abbr title="Weline\Ai\Controller\Backend\Adapter::getScenarioAdapter">getScenarioAdapter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#47"><abbr title="Weline\Ai\Controller\Backend\Adapter::getAdapterScanner">getAdapterScanner</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#57"><abbr title="Weline\Ai\Controller\Backend\Adapter::enrichAdapterList">enrichAdapterList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#100"><abbr title="Weline\Ai\Controller\Backend\Adapter::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#133"><abbr title="Weline\Ai\Controller\Backend\Adapter::detailOffcanvas">detailOffcanvas</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#169"><abbr title="Weline\Ai\Controller\Backend\Adapter::detail">detail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#205"><abbr title="Weline\Ai\Controller\Backend\Adapter::scan">scan</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#243"><abbr title="Weline\Ai\Controller\Backend\Adapter::toggleStatus">toggleStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#287"><abbr title="Weline\Ai\Controller\Backend\Adapter::getModelOptions">getModelOptions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#324"><abbr title="Weline\Ai\Controller\Backend\Adapter::postBatchSaveDefaultModel">postBatchSaveDefaultModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#376"><abbr title="Weline\Ai\Controller\Backend\Adapter::getAdapterInfo">getAdapterInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#416"><abbr title="Weline\Ai\Controller\Backend\Adapter::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#437"><abbr title="Weline\Ai\Controller\Backend\Adapter::getStats">getStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#460"><abbr title="Weline\Ai\Controller\Backend\Adapter::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#501"><abbr title="Weline\Ai\Controller\Backend\Adapter::postBatchDelete">postBatchDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#544"><abbr title="Weline\Ai\Controller\Backend\Adapter::postBatchToggle">postBatchToggle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter.php.html#591"><abbr title="Weline\Ai\Controller\Backend\Adapter::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#56"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getAiModel">getAiModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#64"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getDefaultModelManager">getDefaultModelManager</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#72"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getAdapterScanner">getAdapterScanner</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#82"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#209"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postSetDefault">postSetDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#262"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postRemoveDefault">postRemoveDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#301"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getProtectionStatus">getProtectionStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#332"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postInitialize">postInitialize</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#356"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#388"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getDefaultModel">getDefaultModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#425"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postClearCache">postClearCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#448"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getProtected">getProtected</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#504"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postBatchSet">postBatchSet</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="DefaultModel.php.html#636"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Index.php.html#20"><abbr title="Weline\Ai\Controller\Backend\Index::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Manager.php.html#22"><abbr title="Weline\Ai\Controller\Backend\Manager::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#47"><abbr title="Weline\Ai\Controller\Backend\Model::getAiModel">getAiModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#55"><abbr title="Weline\Ai\Controller\Backend\Model::getModelCollector">getModelCollector</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#63"><abbr title="Weline\Ai\Controller\Backend\Model::getModelSyncService">getModelSyncService</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#68"><abbr title="Weline\Ai\Controller\Backend\Model::getTestRequestData">getTestRequestData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#86"><abbr title="Weline\Ai\Controller\Backend\Model::isTestOnlyRequest">isTestOnlyRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#100"><abbr title="Weline\Ai\Controller\Backend\Model::buildTestModel">buildTestModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#107"><abbr title="Weline\Ai\Controller\Backend\Model::applyTestRequestToModel">applyTestRequestToModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#136"><abbr title="Weline\Ai\Controller\Backend\Model::hasSelfConfig">hasSelfConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#141"><abbr title="Weline\Ai\Controller\Backend\Model::hasApiCredential">hasApiCredential</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#146"><abbr title="Weline\Ai\Controller\Backend\Model::getRequestedProviderAccountId">getRequestedProviderAccountId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#152"><abbr title="Weline\Ai\Controller\Backend\Model::normalizeBooleanValue">normalizeBooleanValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#169"><abbr title="Weline\Ai\Controller\Backend\Model::filterConfigValues">filterConfigValues</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#179"><abbr title="Weline\Ai\Controller\Backend\Model::buildIncomingConfigData">buildIncomingConfigData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#211"><abbr title="Weline\Ai\Controller\Backend\Model::buildIncomingProviderConfigData">buildIncomingProviderConfigData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#261"><abbr title="Weline\Ai\Controller\Backend\Model::encodeJsonConfig">encodeJsonConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#266"><abbr title="Weline\Ai\Controller\Backend\Model::normalizeApiKeyValue">normalizeApiKeyValue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#278"><abbr title="Weline\Ai\Controller\Backend\Model::decodeJsonConfig">decodeJsonConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#293"><abbr title="Weline\Ai\Controller\Backend\Model::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#453"><abbr title="Weline\Ai\Controller\Backend\Model::indexJson">indexJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#484"><abbr title="Weline\Ai\Controller\Backend\Model::detail">detail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#514"><abbr title="Weline\Ai\Controller\Backend\Model::detailOffcanvas">detailOffcanvas</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#552"><abbr title="Weline\Ai\Controller\Backend\Model::collect">collect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#594"><abbr title="Weline\Ai\Controller\Backend\Model::toggleStatus">toggleStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#681"><abbr title="Weline\Ai\Controller\Backend\Model::setDefault">setDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#730"><abbr title="Weline\Ai\Controller\Backend\Model::getConfigTemplate">getConfigTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#746"><abbr title="Weline\Ai\Controller\Backend\Model::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#974"><abbr title="Weline\Ai\Controller\Backend\Model::testModelSelfConfig">testModelSelfConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1017"><abbr title="Weline\Ai\Controller\Backend\Model::testSelfConfig">testSelfConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1109"><abbr title="Weline\Ai\Controller\Backend\Model::edit">edit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1136"><abbr title="Weline\Ai\Controller\Backend\Model::editOffcanvas">editOffcanvas</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1191"><abbr title="Weline\Ai\Controller\Backend\Model::postSave">postSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1427"><abbr title="Weline\Ai\Controller\Backend\Model::copyForm">copyForm</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1448"><abbr title="Weline\Ai\Controller\Backend\Model::copy">copy</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1580"><abbr title="Weline\Ai\Controller\Backend\Model::delete">delete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1640"><abbr title="Weline\Ai\Controller\Backend\Model::deleteAction">deleteAction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1688"><abbr title="Weline\Ai\Controller\Backend\Model::bulkActivate">bulkActivate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1731"><abbr title="Weline\Ai\Controller\Backend\Model::bulkDeactivate">bulkDeactivate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1774"><abbr title="Weline\Ai\Controller\Backend\Model::bulkDelete">bulkDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1832"><abbr title="Weline\Ai\Controller\Backend\Model::clearAll">clearAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1871"><abbr title="Weline\Ai\Controller\Backend\Model::batchTestConnection">batchTestConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#1985"><abbr title="Weline\Ai\Controller\Backend\Model::getProviders">getProviders</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#2008"><abbr title="Weline\Ai\Controller\Backend\Model::getProviderModels">getProviderModels</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#2058"><abbr title="Weline\Ai\Controller\Backend\Model::jsonResponse">jsonResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#2068"><abbr title="Weline\Ai\Controller\Backend\Model::collectAllVendorsForFilter">collectAllVendorsForFilter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model.php.html#2110"><abbr title="Weline\Ai\Controller\Backend\Model::ensureVendorModelsAvailable">ensureVendorModelsAvailable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#31"><abbr title="Weline\Ai\Controller\Backend\Provider::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#40"><abbr title="Weline\Ai\Controller\Backend\Provider::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#56"><abbr title="Weline\Ai\Controller\Backend\Provider::getList">getList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#146"><abbr title="Weline\Ai\Controller\Backend\Provider::getAccountsForSelect">getAccountsForSelect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#188"><abbr title="Weline\Ai\Controller\Backend\Provider::getProviderInfo">getProviderInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#217"><abbr title="Weline\Ai\Controller\Backend\Provider::editOffcanvas">editOffcanvas</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#238"><abbr title="Weline\Ai\Controller\Backend\Provider::add">add</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#248"><abbr title="Weline\Ai\Controller\Backend\Provider::edit">edit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#275"><abbr title="Weline\Ai\Controller\Backend\Provider::save">save</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#382"><abbr title="Weline\Ai\Controller\Backend\Provider::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#422"><abbr title="Weline\Ai\Controller\Backend\Provider::testConnection">testConnection</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#480"><abbr title="Weline\Ai\Controller\Backend\Provider::testConnectionOnly">testConnectionOnly</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#525"><abbr title="Weline\Ai\Controller\Backend\Provider::toggleActive">toggleActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#566"><abbr title="Weline\Ai\Controller\Backend\Provider::usage">usage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#586"><abbr title="Weline\Ai\Controller\Backend\Provider::getConnectionStatusText">getConnectionStatusText</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#601"><abbr title="Weline\Ai\Controller\Backend\Provider::postAccount">postAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#663"><abbr title="Weline\Ai\Controller\Backend\Provider::getAccount">getAccount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#720"><abbr title="Weline\Ai\Controller\Backend\Provider::getUsageList">getUsageList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Provider.php.html#783"><abbr title="Weline\Ai\Controller\Backend\Provider::calculateUsageStats">calculateUsageStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Statistics.php.html#23"><abbr title="Weline\Ai\Controller\Backend\Statistics::index">index</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Statistics.php.html#50"><abbr title="Weline\Ai\Controller\Backend\Statistics::getStats">getStats</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Model.php.html#1191"><abbr title="Weline\Ai\Controller\Backend\Model::postSave">postSave</abbr></a></td><td class="text-right">2652</td></tr>
+       <tr><td><a href="Model.php.html#746"><abbr title="Weline\Ai\Controller\Backend\Model::testConnection">testConnection</abbr></a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Model.php.html#293"><abbr title="Weline\Ai\Controller\Backend\Model::index">index</abbr></a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="Model.php.html#594"><abbr title="Weline\Ai\Controller\Backend\Model::toggleStatus">toggleStatus</abbr></a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="DefaultModel.php.html#82"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::index">index</abbr></a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="DefaultModel.php.html#504"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postBatchSet">postBatchSet</abbr></a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Provider.php.html#275"><abbr title="Weline\Ai\Controller\Backend\Provider::save">save</abbr></a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Model.php.html#1448"><abbr title="Weline\Ai\Controller\Backend\Model::copy">copy</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Adapter.php.html#57"><abbr title="Weline\Ai\Controller\Backend\Adapter::enrichAdapterList">enrichAdapterList</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Model.php.html#211"><abbr title="Weline\Ai\Controller\Backend\Model::buildIncomingProviderConfigData">buildIncomingProviderConfigData</abbr></a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Model.php.html#1774"><abbr title="Weline\Ai\Controller\Backend\Model::bulkDelete">bulkDelete</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Provider.php.html#56"><abbr title="Weline\Ai\Controller\Backend\Provider::getList">getList</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="DefaultModel.php.html#448"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getProtected">getProtected</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Provider.php.html#422"><abbr title="Weline\Ai\Controller\Backend\Provider::testConnection">testConnection</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Model.php.html#107"><abbr title="Weline\Ai\Controller\Backend\Model::applyTestRequestToModel">applyTestRequestToModel</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Model.php.html#2068"><abbr title="Weline\Ai\Controller\Backend\Model::collectAllVendorsForFilter">collectAllVendorsForFilter</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Provider.php.html#720"><abbr title="Weline\Ai\Controller\Backend\Provider::getUsageList">getUsageList</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Model.php.html#1017"><abbr title="Weline\Ai\Controller\Backend\Model::testSelfConfig">testSelfConfig</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Model.php.html#1136"><abbr title="Weline\Ai\Controller\Backend\Model::editOffcanvas">editOffcanvas</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Model.php.html#1640"><abbr title="Weline\Ai\Controller\Backend\Model::deleteAction">deleteAction</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Model.php.html#2110"><abbr title="Weline\Ai\Controller\Backend\Model::ensureVendorModelsAvailable">ensureVendorModelsAvailable</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Provider.php.html#601"><abbr title="Weline\Ai\Controller\Backend\Provider::postAccount">postAccount</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Model.php.html#179"><abbr title="Weline\Ai\Controller\Backend\Model::buildIncomingConfigData">buildIncomingConfigData</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Model.php.html#1580"><abbr title="Weline\Ai\Controller\Backend\Model::delete">delete</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Model.php.html#1871"><abbr title="Weline\Ai\Controller\Backend\Model::batchTestConnection">batchTestConnection</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Provider.php.html#525"><abbr title="Weline\Ai\Controller\Backend\Provider::toggleActive">toggleActive</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Provider.php.html#663"><abbr title="Weline\Ai\Controller\Backend\Provider::getAccount">getAccount</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Adapter.php.html#324"><abbr title="Weline\Ai\Controller\Backend\Adapter::postBatchSaveDefaultModel">postBatchSaveDefaultModel</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Adapter.php.html#544"><abbr title="Weline\Ai\Controller\Backend\Adapter::postBatchToggle">postBatchToggle</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="DefaultModel.php.html#209"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postSetDefault">postSetDefault</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Model.php.html#1688"><abbr title="Weline\Ai\Controller\Backend\Model::bulkActivate">bulkActivate</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Model.php.html#1731"><abbr title="Weline\Ai\Controller\Backend\Model::bulkDeactivate">bulkDeactivate</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Provider.php.html#783"><abbr title="Weline\Ai\Controller\Backend\Provider::calculateUsageStats">calculateUsageStats</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Adapter.php.html#205"><abbr title="Weline\Ai\Controller\Backend\Adapter::scan">scan</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Adapter.php.html#501"><abbr title="Weline\Ai\Controller\Backend\Adapter::postBatchDelete">postBatchDelete</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Model.php.html#68"><abbr title="Weline\Ai\Controller\Backend\Model::getTestRequestData">getTestRequestData</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Model.php.html#514"><abbr title="Weline\Ai\Controller\Backend\Model::detailOffcanvas">detailOffcanvas</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Adapter.php.html#243"><abbr title="Weline\Ai\Controller\Backend\Adapter::toggleStatus">toggleStatus</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Model.php.html#152"><abbr title="Weline\Ai\Controller\Backend\Model::normalizeBooleanValue">normalizeBooleanValue</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Model.php.html#974"><abbr title="Weline\Ai\Controller\Backend\Model::testModelSelfConfig">testModelSelfConfig</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Provider.php.html#146"><abbr title="Weline\Ai\Controller\Backend\Provider::getAccountsForSelect">getAccountsForSelect</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Provider.php.html#382"><abbr title="Weline\Ai\Controller\Backend\Provider::postDelete">postDelete</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Provider.php.html#480"><abbr title="Weline\Ai\Controller\Backend\Provider::testConnectionOnly">testConnectionOnly</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Adapter.php.html#460"><abbr title="Weline\Ai\Controller\Backend\Adapter::postDelete">postDelete</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="DefaultModel.php.html#262"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postRemoveDefault">postRemoveDefault</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model.php.html#86"><abbr title="Weline\Ai\Controller\Backend\Model::isTestOnlyRequest">isTestOnlyRequest</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model.php.html#552"><abbr title="Weline\Ai\Controller\Backend\Model::collect">collect</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model.php.html#681"><abbr title="Weline\Ai\Controller\Backend\Model::setDefault">setDefault</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model.php.html#1832"><abbr title="Weline\Ai\Controller\Backend\Model::clearAll">clearAll</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model.php.html#2008"><abbr title="Weline\Ai\Controller\Backend\Model::getProviderModels">getProviderModels</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Provider.php.html#248"><abbr title="Weline\Ai\Controller\Backend\Provider::edit">edit</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Adapter.php.html#100"><abbr title="Weline\Ai\Controller\Backend\Adapter::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter.php.html#133"><abbr title="Weline\Ai\Controller\Backend\Adapter::detailOffcanvas">detailOffcanvas</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter.php.html#169"><abbr title="Weline\Ai\Controller\Backend\Adapter::detail">detail</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter.php.html#287"><abbr title="Weline\Ai\Controller\Backend\Adapter::getModelOptions">getModelOptions</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter.php.html#376"><abbr title="Weline\Ai\Controller\Backend\Adapter::getAdapterInfo">getAdapterInfo</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DefaultModel.php.html#301"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getProtectionStatus">getProtectionStatus</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DefaultModel.php.html#332"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postInitialize">postInitialize</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DefaultModel.php.html#356"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::validate">validate</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="DefaultModel.php.html#388"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::getDefaultModel">getDefaultModel</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model.php.html#169"><abbr title="Weline\Ai\Controller\Backend\Model::filterConfigValues">filterConfigValues</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model.php.html#484"><abbr title="Weline\Ai\Controller\Backend\Model::detail">detail</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model.php.html#1109"><abbr title="Weline\Ai\Controller\Backend\Model::edit">edit</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Provider.php.html#40"><abbr title="Weline\Ai\Controller\Backend\Provider::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Provider.php.html#188"><abbr title="Weline\Ai\Controller\Backend\Provider::getProviderInfo">getProviderInfo</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Provider.php.html#217"><abbr title="Weline\Ai\Controller\Backend\Provider::editOffcanvas">editOffcanvas</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Provider.php.html#566"><abbr title="Weline\Ai\Controller\Backend\Provider::usage">usage</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Statistics.php.html#23"><abbr title="Weline\Ai\Controller\Backend\Statistics::index">index</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter.php.html#416"><abbr title="Weline\Ai\Controller\Backend\Adapter::cleanup">cleanup</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Adapter.php.html#437"><abbr title="Weline\Ai\Controller\Backend\Adapter::getStats">getStats</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="DefaultModel.php.html#425"><abbr title="Weline\Ai\Controller\Backend\DefaultModel::postClearCache">postClearCache</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#136"><abbr title="Weline\Ai\Controller\Backend\Model::hasSelfConfig">hasSelfConfig</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#141"><abbr title="Weline\Ai\Controller\Backend\Model::hasApiCredential">hasApiCredential</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#146"><abbr title="Weline\Ai\Controller\Backend\Model::getRequestedProviderAccountId">getRequestedProviderAccountId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#261"><abbr title="Weline\Ai\Controller\Backend\Model::encodeJsonConfig">encodeJsonConfig</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#266"><abbr title="Weline\Ai\Controller\Backend\Model::normalizeApiKeyValue">normalizeApiKeyValue</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#278"><abbr title="Weline\Ai\Controller\Backend\Model::decodeJsonConfig">decodeJsonConfig</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#453"><abbr title="Weline\Ai\Controller\Backend\Model::indexJson">indexJson</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#1427"><abbr title="Weline\Ai\Controller\Backend\Model::copyForm">copyForm</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model.php.html#1985"><abbr title="Weline\Ai\Controller\Backend\Model::getProviders">getProviders</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Statistics.php.html#50"><abbr title="Weline\Ai\Controller\Backend\Statistics::getStats">getStats</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([7,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([99,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,70,"<a href=\"Adapter.php.html#33\">Weline\\Ai\\Controller\\Backend\\Adapter<\/a>"],[0,78,"<a href=\"DefaultModel.php.html#34\">Weline\\Ai\\Controller\\Backend\\DefaultModel<\/a>"],[0,1,"<a href=\"Index.php.html#15\">Weline\\Ai\\Controller\\Backend\\Index<\/a>"],[0,1,"<a href=\"Manager.php.html#16\">Weline\\Ai\\Controller\\Backend\\Manager<\/a>"],[0,331,"<a href=\"Model.php.html#39\">Weline\\Ai\\Controller\\Backend\\Model<\/a>"],[0,117,"<a href=\"Provider.php.html#20\">Weline\\Ai\\Controller\\Backend\\Provider<\/a>"],[0,5,"<a href=\"Statistics.php.html#17\">Weline\\Ai\\Controller\\Backend\\Statistics<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Adapter.php.html#39\">Weline\\Ai\\Controller\\Backend\\Adapter::getScenarioAdapter<\/a>"],[0,1,"<a href=\"Adapter.php.html#47\">Weline\\Ai\\Controller\\Backend\\Adapter::getAdapterScanner<\/a>"],[0,13,"<a href=\"Adapter.php.html#57\">Weline\\Ai\\Controller\\Backend\\Adapter::enrichAdapterList<\/a>"],[0,3,"<a href=\"Adapter.php.html#100\">Weline\\Ai\\Controller\\Backend\\Adapter::index<\/a>"],[0,3,"<a href=\"Adapter.php.html#133\">Weline\\Ai\\Controller\\Backend\\Adapter::detailOffcanvas<\/a>"],[0,3,"<a href=\"Adapter.php.html#169\">Weline\\Ai\\Controller\\Backend\\Adapter::detail<\/a>"],[0,6,"<a href=\"Adapter.php.html#205\">Weline\\Ai\\Controller\\Backend\\Adapter::scan<\/a>"],[0,5,"<a href=\"Adapter.php.html#243\">Weline\\Ai\\Controller\\Backend\\Adapter::toggleStatus<\/a>"],[0,3,"<a href=\"Adapter.php.html#287\">Weline\\Ai\\Controller\\Backend\\Adapter::getModelOptions<\/a>"],[0,7,"<a href=\"Adapter.php.html#324\">Weline\\Ai\\Controller\\Backend\\Adapter::postBatchSaveDefaultModel<\/a>"],[0,3,"<a href=\"Adapter.php.html#376\">Weline\\Ai\\Controller\\Backend\\Adapter::getAdapterInfo<\/a>"],[0,2,"<a href=\"Adapter.php.html#416\">Weline\\Ai\\Controller\\Backend\\Adapter::cleanup<\/a>"],[0,2,"<a href=\"Adapter.php.html#437\">Weline\\Ai\\Controller\\Backend\\Adapter::getStats<\/a>"],[0,4,"<a href=\"Adapter.php.html#460\">Weline\\Ai\\Controller\\Backend\\Adapter::postDelete<\/a>"],[0,6,"<a href=\"Adapter.php.html#501\">Weline\\Ai\\Controller\\Backend\\Adapter::postBatchDelete<\/a>"],[0,7,"<a href=\"Adapter.php.html#544\">Weline\\Ai\\Controller\\Backend\\Adapter::postBatchToggle<\/a>"],[0,1,"<a href=\"Adapter.php.html#591\">Weline\\Ai\\Controller\\Backend\\Adapter::jsonResponse<\/a>"],[0,1,"<a href=\"DefaultModel.php.html#56\">Weline\\Ai\\Controller\\Backend\\DefaultModel::getAiModel<\/a>"],[0,1,"<a href=\"DefaultModel.php.html#64\">Weline\\Ai\\Controller\\Backend\\DefaultModel::getDefaultModelManager<\/a>"],[0,1,"<a href=\"DefaultModel.php.html#72\">Weline\\Ai\\Controller\\Backend\\DefaultModel::getAdapterScanner<\/a>"],[0,19,"<a href=\"DefaultModel.php.html#82\">Weline\\Ai\\Controller\\Backend\\DefaultModel::index<\/a>"],[0,7,"<a href=\"DefaultModel.php.html#209\">Weline\\Ai\\Controller\\Backend\\DefaultModel::postSetDefault<\/a>"],[0,4,"<a href=\"DefaultModel.php.html#262\">Weline\\Ai\\Controller\\Backend\\DefaultModel::postRemoveDefault<\/a>"],[0,3,"<a href=\"DefaultModel.php.html#301\">Weline\\Ai\\Controller\\Backend\\DefaultModel::getProtectionStatus<\/a>"],[0,3,"<a href=\"DefaultModel.php.html#332\">Weline\\Ai\\Controller\\Backend\\DefaultModel::postInitialize<\/a>"],[0,3,"<a href=\"DefaultModel.php.html#356\">Weline\\Ai\\Controller\\Backend\\DefaultModel::validate<\/a>"],[0,3,"<a href=\"DefaultModel.php.html#388\">Weline\\Ai\\Controller\\Backend\\DefaultModel::getDefaultModel<\/a>"],[0,2,"<a href=\"DefaultModel.php.html#425\">Weline\\Ai\\Controller\\Backend\\DefaultModel::postClearCache<\/a>"],[0,11,"<a href=\"DefaultModel.php.html#448\">Weline\\Ai\\Controller\\Backend\\DefaultModel::getProtected<\/a>"],[0,19,"<a href=\"DefaultModel.php.html#504\">Weline\\Ai\\Controller\\Backend\\DefaultModel::postBatchSet<\/a>"],[0,1,"<a href=\"DefaultModel.php.html#636\">Weline\\Ai\\Controller\\Backend\\DefaultModel::jsonResponse<\/a>"],[0,1,"<a href=\"Index.php.html#20\">Weline\\Ai\\Controller\\Backend\\Index::index<\/a>"],[0,1,"<a href=\"Manager.php.html#22\">Weline\\Ai\\Controller\\Backend\\Manager::index<\/a>"],[0,1,"<a href=\"Model.php.html#47\">Weline\\Ai\\Controller\\Backend\\Model::getAiModel<\/a>"],[0,1,"<a href=\"Model.php.html#55\">Weline\\Ai\\Controller\\Backend\\Model::getModelCollector<\/a>"],[0,1,"<a href=\"Model.php.html#63\">Weline\\Ai\\Controller\\Backend\\Model::getModelSyncService<\/a>"],[0,6,"<a href=\"Model.php.html#68\">Weline\\Ai\\Controller\\Backend\\Model::getTestRequestData<\/a>"],[0,4,"<a href=\"Model.php.html#86\">Weline\\Ai\\Controller\\Backend\\Model::isTestOnlyRequest<\/a>"],[0,1,"<a href=\"Model.php.html#100\">Weline\\Ai\\Controller\\Backend\\Model::buildTestModel<\/a>"],[0,10,"<a href=\"Model.php.html#107\">Weline\\Ai\\Controller\\Backend\\Model::applyTestRequestToModel<\/a>"],[0,2,"<a href=\"Model.php.html#136\">Weline\\Ai\\Controller\\Backend\\Model::hasSelfConfig<\/a>"],[0,2,"<a href=\"Model.php.html#141\">Weline\\Ai\\Controller\\Backend\\Model::hasApiCredential<\/a>"],[0,2,"<a href=\"Model.php.html#146\">Weline\\Ai\\Controller\\Backend\\Model::getRequestedProviderAccountId<\/a>"],[0,5,"<a href=\"Model.php.html#152\">Weline\\Ai\\Controller\\Backend\\Model::normalizeBooleanValue<\/a>"],[0,3,"<a href=\"Model.php.html#169\">Weline\\Ai\\Controller\\Backend\\Model::filterConfigValues<\/a>"],[0,8,"<a href=\"Model.php.html#179\">Weline\\Ai\\Controller\\Backend\\Model::buildIncomingConfigData<\/a>"],[0,13,"<a href=\"Model.php.html#211\">Weline\\Ai\\Controller\\Backend\\Model::buildIncomingProviderConfigData<\/a>"],[0,2,"<a href=\"Model.php.html#261\">Weline\\Ai\\Controller\\Backend\\Model::encodeJsonConfig<\/a>"],[0,2,"<a href=\"Model.php.html#266\">Weline\\Ai\\Controller\\Backend\\Model::normalizeApiKeyValue<\/a>"],[0,2,"<a href=\"Model.php.html#278\">Weline\\Ai\\Controller\\Backend\\Model::decodeJsonConfig<\/a>"],[0,24,"<a href=\"Model.php.html#293\">Weline\\Ai\\Controller\\Backend\\Model::index<\/a>"],[0,2,"<a href=\"Model.php.html#453\">Weline\\Ai\\Controller\\Backend\\Model::indexJson<\/a>"],[0,3,"<a href=\"Model.php.html#484\">Weline\\Ai\\Controller\\Backend\\Model::detail<\/a>"],[0,6,"<a href=\"Model.php.html#514\">Weline\\Ai\\Controller\\Backend\\Model::detailOffcanvas<\/a>"],[0,4,"<a href=\"Model.php.html#552\">Weline\\Ai\\Controller\\Backend\\Model::collect<\/a>"],[0,20,"<a href=\"Model.php.html#594\">Weline\\Ai\\Controller\\Backend\\Model::toggleStatus<\/a>"],[0,4,"<a href=\"Model.php.html#681\">Weline\\Ai\\Controller\\Backend\\Model::setDefault<\/a>"],[0,1,"<a href=\"Model.php.html#730\">Weline\\Ai\\Controller\\Backend\\Model::getConfigTemplate<\/a>"],[0,26,"<a href=\"Model.php.html#746\">Weline\\Ai\\Controller\\Backend\\Model::testConnection<\/a>"],[0,5,"<a href=\"Model.php.html#974\">Weline\\Ai\\Controller\\Backend\\Model::testModelSelfConfig<\/a>"],[0,9,"<a href=\"Model.php.html#1017\">Weline\\Ai\\Controller\\Backend\\Model::testSelfConfig<\/a>"],[0,3,"<a href=\"Model.php.html#1109\">Weline\\Ai\\Controller\\Backend\\Model::edit<\/a>"],[0,9,"<a href=\"Model.php.html#1136\">Weline\\Ai\\Controller\\Backend\\Model::editOffcanvas<\/a>"],[0,51,"<a href=\"Model.php.html#1191\">Weline\\Ai\\Controller\\Backend\\Model::postSave<\/a>"],[0,2,"<a href=\"Model.php.html#1427\">Weline\\Ai\\Controller\\Backend\\Model::copyForm<\/a>"],[0,16,"<a href=\"Model.php.html#1448\">Weline\\Ai\\Controller\\Backend\\Model::copy<\/a>"],[0,8,"<a href=\"Model.php.html#1580\">Weline\\Ai\\Controller\\Backend\\Model::delete<\/a>"],[0,9,"<a href=\"Model.php.html#1640\">Weline\\Ai\\Controller\\Backend\\Model::deleteAction<\/a>"],[0,7,"<a href=\"Model.php.html#1688\">Weline\\Ai\\Controller\\Backend\\Model::bulkActivate<\/a>"],[0,7,"<a href=\"Model.php.html#1731\">Weline\\Ai\\Controller\\Backend\\Model::bulkDeactivate<\/a>"],[0,12,"<a href=\"Model.php.html#1774\">Weline\\Ai\\Controller\\Backend\\Model::bulkDelete<\/a>"],[0,4,"<a href=\"Model.php.html#1832\">Weline\\Ai\\Controller\\Backend\\Model::clearAll<\/a>"],[0,8,"<a href=\"Model.php.html#1871\">Weline\\Ai\\Controller\\Backend\\Model::batchTestConnection<\/a>"],[0,2,"<a href=\"Model.php.html#1985\">Weline\\Ai\\Controller\\Backend\\Model::getProviders<\/a>"],[0,4,"<a href=\"Model.php.html#2008\">Weline\\Ai\\Controller\\Backend\\Model::getProviderModels<\/a>"],[0,1,"<a href=\"Model.php.html#2058\">Weline\\Ai\\Controller\\Backend\\Model::jsonResponse<\/a>"],[0,10,"<a href=\"Model.php.html#2068\">Weline\\Ai\\Controller\\Backend\\Model::collectAllVendorsForFilter<\/a>"],[0,9,"<a href=\"Model.php.html#2110\">Weline\\Ai\\Controller\\Backend\\Model::ensureVendorModelsAvailable<\/a>"],[0,1,"<a href=\"Provider.php.html#31\">Weline\\Ai\\Controller\\Backend\\Provider::__construct<\/a>"],[0,3,"<a href=\"Provider.php.html#40\">Weline\\Ai\\Controller\\Backend\\Provider::index<\/a>"],[0,12,"<a href=\"Provider.php.html#56\">Weline\\Ai\\Controller\\Backend\\Provider::getList<\/a>"],[0,5,"<a href=\"Provider.php.html#146\">Weline\\Ai\\Controller\\Backend\\Provider::getAccountsForSelect<\/a>"],[0,3,"<a href=\"Provider.php.html#188\">Weline\\Ai\\Controller\\Backend\\Provider::getProviderInfo<\/a>"],[0,3,"<a href=\"Provider.php.html#217\">Weline\\Ai\\Controller\\Backend\\Provider::editOffcanvas<\/a>"],[0,1,"<a href=\"Provider.php.html#238\">Weline\\Ai\\Controller\\Backend\\Provider::add<\/a>"],[0,4,"<a href=\"Provider.php.html#248\">Weline\\Ai\\Controller\\Backend\\Provider::edit<\/a>"],[0,18,"<a href=\"Provider.php.html#275\">Weline\\Ai\\Controller\\Backend\\Provider::save<\/a>"],[0,5,"<a href=\"Provider.php.html#382\">Weline\\Ai\\Controller\\Backend\\Provider::postDelete<\/a>"],[0,11,"<a href=\"Provider.php.html#422\">Weline\\Ai\\Controller\\Backend\\Provider::testConnection<\/a>"],[0,5,"<a href=\"Provider.php.html#480\">Weline\\Ai\\Controller\\Backend\\Provider::testConnectionOnly<\/a>"],[0,8,"<a href=\"Provider.php.html#525\">Weline\\Ai\\Controller\\Backend\\Provider::toggleActive<\/a>"],[0,3,"<a href=\"Provider.php.html#566\">Weline\\Ai\\Controller\\Backend\\Provider::usage<\/a>"],[0,1,"<a href=\"Provider.php.html#586\">Weline\\Ai\\Controller\\Backend\\Provider::getConnectionStatusText<\/a>"],[0,9,"<a href=\"Provider.php.html#601\">Weline\\Ai\\Controller\\Backend\\Provider::postAccount<\/a>"],[0,8,"<a href=\"Provider.php.html#663\">Weline\\Ai\\Controller\\Backend\\Provider::getAccount<\/a>"],[0,10,"<a href=\"Provider.php.html#720\">Weline\\Ai\\Controller\\Backend\\Provider::getUsageList<\/a>"],[0,7,"<a href=\"Provider.php.html#783\">Weline\\Ai\\Controller\\Backend\\Provider::calculateUsageStats<\/a>"],[0,3,"<a href=\"Statistics.php.html#23\">Weline\\Ai\\Controller\\Backend\\Statistics::index<\/a>"],[0,2,"<a href=\"Statistics.php.html#50\">Weline\\Ai\\Controller\\Backend\\Statistics::getStats<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

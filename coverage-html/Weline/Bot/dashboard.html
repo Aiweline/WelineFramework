@@ -1,0 +1,999 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Bot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Bot</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#11">Weline\Bot\Adapter\BotAgentAdapter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#11">Weline\Bot\Adapter\ITOpsAdapter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#11">Weline\Bot\Adapter\SEOAdapter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#16">Weline\Bot\Controller\Api\V1\Chat</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Chat.php.html#14">Weline\Bot\Controller\Backend\Chat</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Memory.php.html#14">Weline\Bot\Controller\Backend\Memory</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#16">Weline\Bot\Controller\Backend\Role</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#14">Weline\Bot\Controller\Backend\Schedule</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#14">Weline\Bot\Controller\Backend\Session</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#14">Weline\Bot\Controller\Backend\Skill</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#14">Weline\Bot\Cron\MemoryCleanup</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#17">Weline\Bot\Cron\ScheduleRunner</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#16">Weline\Bot\Model\BotChatMessage</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#16">Weline\Bot\Model\BotChatSession</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#16">Weline\Bot\Model\BotMemoryEdge</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#17">Weline\Bot\Model\BotMemoryNode</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#21">Weline\Bot\Model\BotRole</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#16">Weline\Bot\Model\BotSchedule</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#14">Weline\Bot\Model\BotScheduleLog</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#16">Weline\Bot\Model\BotSkill</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#16">Weline\Bot\Model\BotToolCall</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#23">Weline\Bot\Query\BotQueryProvider</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#16">Weline\Bot\Service\AgentEngine</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#15">Weline\Bot\Service\ChatSessionManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#14">Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\GrepTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#11">Weline\Bot\Service\CodingAgent\Tool\ListDirTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\ReadFileTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#17">Weline\Bot\Service\ContextBuilder</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#21">Weline\Bot\Service\MemoryService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#11">Weline\Bot\Service\NaturalTimeParser</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#13">Weline\Bot\Service\PermissionValidator</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#15">Weline\Bot\Service\RoleConfigAssistant</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#14">Weline\Bot\Service\SkillContext</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#10">Weline\Bot\Service\SkillPackageManager</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#9">Weline\Bot\Service\SkillResult</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#13">Weline\Bot\Setup\Install</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#16">Weline\Bot\Skill\DatabaseSkill</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#15">Weline\Bot\Skill\FilesystemSkill</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#17">Weline\Bot\Skill\HttpSkill</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#16">Weline\Bot\Skill\ShellSkill</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#25">Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#15">Weline\Bot\Service\RoleConfigAssistant</a></td><td class="text-right">11772</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#16">Weline\Bot\Controller\Backend\Role</a></td><td class="text-right">10100</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#16">Weline\Bot\Service\AgentEngine</a></td><td class="text-right">3540</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#11">Weline\Bot\Service\NaturalTimeParser</a></td><td class="text-right">2652</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#13">Weline\Bot\Service\PermissionValidator</a></td><td class="text-right">1892</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#21">Weline\Bot\Model\BotRole</a></td><td class="text-right">1560</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#15">Weline\Bot\Skill\FilesystemSkill</a></td><td class="text-right">1190</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#11">Weline\Bot\Adapter\BotAgentAdapter</a></td><td class="text-right">1122</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#23">Weline\Bot\Query\BotQueryProvider</a></td><td class="text-right">1056</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#21">Weline\Bot\Service\MemoryService</a></td><td class="text-right">812</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool</a></td><td class="text-right">756</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\GrepTool</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#10">Weline\Bot\Service\SkillPackageManager</a></td><td class="text-right">702</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#16">Weline\Bot\Controller\Api\V1\Chat</a></td><td class="text-right">650</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#25">Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent</a></td><td class="text-right">650</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\ReadFileTool</a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#16">Weline\Bot\Skill\ShellSkill</a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool</a></td><td class="text-right">506</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#16">Weline\Bot\Model\BotSchedule</a></td><td class="text-right">462</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#14">Weline\Bot\Controller\Backend\Schedule</a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#16">Weline\Bot\Model\BotToolCall</a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#15">Weline\Bot\Service\ChatSessionManager</a></td><td class="text-right">420</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#11">Weline\Bot\Adapter\SEOAdapter</a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#16">Weline\Bot\Model\BotSkill</a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#16">Weline\Bot\Skill\DatabaseSkill</a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#17">Weline\Bot\Skill\HttpSkill</a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#13">Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#11">Weline\Bot\Service\CodingAgent\Tool\ListDirTool</a></td><td class="text-right">342</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#11">Weline\Bot\Adapter\ITOpsAdapter</a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#17">Weline\Bot\Model\BotMemoryNode</a></td><td class="text-right">306</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#16">Weline\Bot\Model\BotChatMessage</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#17">Weline\Bot\Service\ContextBuilder</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#16">Weline\Bot\Model\BotChatSession</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#14">Weline\Bot\Model\BotScheduleLog</a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Setup/Install.php.html#13">Weline\Bot\Setup\Install</a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#14">Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#14">Weline\Bot\Controller\Backend\Session</a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#17">Weline\Bot\Cron\ScheduleRunner</a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#14">Weline\Bot\Controller\Backend\Skill</a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#16">Weline\Bot\Model\BotMemoryEdge</a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#9">Weline\Bot\Service\SkillResult</a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#14">Weline\Bot\Service\SkillContext</a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Memory.php.html#14">Weline\Bot\Controller\Backend\Memory</a></td><td class="text-right">30</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#13"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#18"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#23"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#28"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#33"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::getSupportedModelTypes">getSupportedModelTypes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#38"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#100"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::processResponse">processResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#105"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::validateParams">validateParams</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#122"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::getParamTemplate">getParamTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#154"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::getExamples">getExamples</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#178"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::supportsModel">supportsModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#183"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::redactSensitiveInfo">redactSensitiveInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#13"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#18"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#23"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#28"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#33"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::getSupportedModelTypes">getSupportedModelTypes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#38"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#65"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::processResponse">processResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#70"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::validateParams">validateParams</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#82"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::getParamTemplate">getParamTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#98"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::getExamples">getExamples</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#114"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::supportsModel">supportsModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#13"><abbr title="Weline\Bot\Adapter\SEOAdapter::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#18"><abbr title="Weline\Bot\Adapter\SEOAdapter::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#23"><abbr title="Weline\Bot\Adapter\SEOAdapter::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#28"><abbr title="Weline\Bot\Adapter\SEOAdapter::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#33"><abbr title="Weline\Bot\Adapter\SEOAdapter::getSupportedModelTypes">getSupportedModelTypes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#38"><abbr title="Weline\Bot\Adapter\SEOAdapter::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#68"><abbr title="Weline\Bot\Adapter\SEOAdapter::processResponse">processResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#73"><abbr title="Weline\Bot\Adapter\SEOAdapter::validateParams">validateParams</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#88"><abbr title="Weline\Bot\Adapter\SEOAdapter::getParamTemplate">getParamTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#110"><abbr title="Weline\Bot\Adapter\SEOAdapter::getExamples">getExamples</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#126"><abbr title="Weline\Bot\Adapter\SEOAdapter::supportsModel">supportsModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#18"><abbr title="Weline\Bot\Controller\Api\V1\Chat::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#28"><abbr title="Weline\Bot\Controller\Api\V1\Chat::postSend">postSend</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#99"><abbr title="Weline\Bot\Controller\Api\V1\Chat::postStream">postStream</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#170"><abbr title="Weline\Bot\Controller\Api\V1\Chat::getHistory">getHistory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#204"><abbr title="Weline\Bot\Controller\Api\V1\Chat::postClear">postClear</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#234"><abbr title="Weline\Bot\Controller\Api\V1\Chat::getSessions">getSessions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#257"><abbr title="Weline\Bot\Controller\Api\V1\Chat::generateContextId">generateContextId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Chat.php.html#17"><abbr title="Weline\Bot\Controller\Backend\Chat::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Chat.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Chat::getIndex">getIndex</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Memory.php.html#17"><abbr title="Weline\Bot\Controller\Backend\Memory::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Memory.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Memory::getList">getList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Memory.php.html#67"><abbr title="Weline\Bot\Controller\Backend\Memory::listing">listing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#19"><abbr title="Weline\Bot\Controller\Backend\Role::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#25"><abbr title="Weline\Bot\Controller\Backend\Role::getList">getList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#55"><abbr title="Weline\Bot\Controller\Backend\Role::listing">listing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#61"><abbr title="Weline\Bot\Controller\Backend\Role::getAdd">getAdd</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#67"><abbr title="Weline\Bot\Controller\Backend\Role::getEdit">getEdit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#81"><abbr title="Weline\Bot\Controller\Backend\Role::postSave">postSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#147"><abbr title="Weline\Bot\Controller\Backend\Role::postSuggest">postSuggest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#181"><abbr title="Weline\Bot\Controller\Backend\Role::getSuggest">getSuggest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#187"><abbr title="Weline\Bot\Controller\Backend\Role::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#215"><abbr title="Weline\Bot\Controller\Backend\Role::postToggle">postToggle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#239"><abbr title="Weline\Bot\Controller\Backend\Role::getModels">getModels</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#247"><abbr title="Weline\Bot\Controller\Backend\Role::getAdapters">getAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#255"><abbr title="Weline\Bot\Controller\Backend\Role::renderForm">renderForm</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#324"><abbr title="Weline\Bot\Controller\Backend\Role::applyTemplatePrefill">applyTemplatePrefill</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#350"><abbr title="Weline\Bot\Controller\Backend\Role::findTemplateByCode">findTemplateByCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#365"><abbr title="Weline\Bot\Controller\Backend\Role::buildInitialGuide">buildInitialGuide</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#385"><abbr title="Weline\Bot\Controller\Backend\Role::normalizeGuideProfiles">normalizeGuideProfiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#418"><abbr title="Weline\Bot\Controller\Backend\Role::getAvailableModels">getAvailableModels</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#456"><abbr title="Weline\Bot\Controller\Backend\Role::getAvailableAdapters">getAvailableAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#488"><abbr title="Weline\Bot\Controller\Backend\Role::getAvailableSkills">getAvailableSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#515"><abbr title="Weline\Bot\Controller\Backend\Role::getRequestPayload">getRequestPayload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#531"><abbr title="Weline\Bot\Controller\Backend\Role::parseStringList">parseStringList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#565"><abbr title="Weline\Bot\Controller\Backend\Role::parseJsonArray">parseJsonArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#589"><abbr title="Weline\Bot\Controller\Backend\Role::getGuideConfig">getGuideConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#624"><abbr title="Weline\Bot\Controller\Backend\Role::clampProjectCount">clampProjectCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#630"><abbr title="Weline\Bot\Controller\Backend\Role::isGuideEnabled">isGuideEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#17"><abbr title="Weline\Bot\Controller\Backend\Schedule::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Schedule::getList">getList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#43"><abbr title="Weline\Bot\Controller\Backend\Schedule::listing">listing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#49"><abbr title="Weline\Bot\Controller\Backend\Schedule::getAdd">getAdd</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#62"><abbr title="Weline\Bot\Controller\Backend\Schedule::getEdit">getEdit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#83"><abbr title="Weline\Bot\Controller\Backend\Schedule::postSave">postSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#130"><abbr title="Weline\Bot\Controller\Backend\Schedule::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#151"><abbr title="Weline\Bot\Controller\Backend\Schedule::postToggle">postToggle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#175"><abbr title="Weline\Bot\Controller\Backend\Schedule::postRun">postRun</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#17"><abbr title="Weline\Bot\Controller\Backend\Session::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Session::getList">getList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#49"><abbr title="Weline\Bot\Controller\Backend\Session::listing">listing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#55"><abbr title="Weline\Bot\Controller\Backend\Session::getView">getView</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#73"><abbr title="Weline\Bot\Controller\Backend\Session::postArchive">postArchive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#94"><abbr title="Weline\Bot\Controller\Backend\Session::postDelete">postDelete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#17"><abbr title="Weline\Bot\Controller\Backend\Skill::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Skill::getList">getList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#45"><abbr title="Weline\Bot\Controller\Backend\Skill::listing">listing</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#51"><abbr title="Weline\Bot\Controller\Backend\Skill::getView">getView</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#66"><abbr title="Weline\Bot\Controller\Backend\Skill::postToggle">postToggle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#93"><abbr title="Weline\Bot\Controller\Backend\Skill::getCategories">getCategories</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#16"><abbr title="Weline\Bot\Cron\MemoryCleanup::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#20"><abbr title="Weline\Bot\Cron\MemoryCleanup::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#25"><abbr title="Weline\Bot\Cron\MemoryCleanup::execute_name">execute_name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#30"><abbr title="Weline\Bot\Cron\MemoryCleanup::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#35"><abbr title="Weline\Bot\Cron\MemoryCleanup::cron_time">cron_time</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#40"><abbr title="Weline\Bot\Cron\MemoryCleanup::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/MemoryCleanup.php.html#46"><abbr title="Weline\Bot\Cron\MemoryCleanup::unlock_timeout">unlock_timeout</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#19"><abbr title="Weline\Bot\Cron\ScheduleRunner::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#26"><abbr title="Weline\Bot\Cron\ScheduleRunner::name">name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#31"><abbr title="Weline\Bot\Cron\ScheduleRunner::execute_name">execute_name</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#36"><abbr title="Weline\Bot\Cron\ScheduleRunner::tip">tip</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#41"><abbr title="Weline\Bot\Cron\ScheduleRunner::cron_time">cron_time</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#46"><abbr title="Weline\Bot\Cron\ScheduleRunner::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#112"><abbr title="Weline\Bot\Cron\ScheduleRunner::unlock_timeout">unlock_timeout</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#64"><abbr title="Weline\Bot\Model\BotChatMessage::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#69"><abbr title="Weline\Bot\Model\BotChatMessage::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#77"><abbr title="Weline\Bot\Model\BotChatMessage::getToolCalls">getToolCalls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#90"><abbr title="Weline\Bot\Model\BotChatMessage::setToolCalls">setToolCalls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#98"><abbr title="Weline\Bot\Model\BotChatMessage::getSession">getSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#109"><abbr title="Weline\Bot\Model\BotChatMessage::toOpenAIMessage">toOpenAIMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#130"><abbr title="Weline\Bot\Model\BotChatMessage::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#73"><abbr title="Weline\Bot\Model\BotChatSession::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#78"><abbr title="Weline\Bot\Model\BotChatSession::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#86"><abbr title="Weline\Bot\Model\BotChatSession::getMetadata">getMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#99"><abbr title="Weline\Bot\Model\BotChatSession::setMetadata">setMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#107"><abbr title="Weline\Bot\Model\BotChatSession::getRole">getRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#118"><abbr title="Weline\Bot\Model\BotChatSession::isActive">isActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#126"><abbr title="Weline\Bot\Model\BotChatSession::incrementMessageCount">incrementMessageCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#136"><abbr title="Weline\Bot\Model\BotChatSession::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#59"><abbr title="Weline\Bot\Model\BotMemoryEdge::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#64"><abbr title="Weline\Bot\Model\BotMemoryEdge::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#72"><abbr title="Weline\Bot\Model\BotMemoryEdge::getMetadata">getMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#85"><abbr title="Weline\Bot\Model\BotMemoryEdge::setMetadata">setMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#90"><abbr title="Weline\Bot\Model\BotMemoryEdge::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#81"><abbr title="Weline\Bot\Model\BotMemoryNode::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#86"><abbr title="Weline\Bot\Model\BotMemoryNode::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#94"><abbr title="Weline\Bot\Model\BotMemoryNode::getMetadata">getMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#107"><abbr title="Weline\Bot\Model\BotMemoryNode::setMetadata">setMetadata</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#115"><abbr title="Weline\Bot\Model\BotMemoryNode::incrementAccess">incrementAccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#127"><abbr title="Weline\Bot\Model\BotMemoryNode::getDecayScore">getDecayScore</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#146"><abbr title="Weline\Bot\Model\BotMemoryNode::isExpired">isExpired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#155"><abbr title="Weline\Bot\Model\BotMemoryNode::shouldForget">shouldForget</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#160"><abbr title="Weline\Bot\Model\BotMemoryNode::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#81"><abbr title="Weline\Bot\Model\BotRole::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#86"><abbr title="Weline\Bot\Model\BotRole::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#94"><abbr title="Weline\Bot\Model\BotRole::getPermissions">getPermissions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#107"><abbr title="Weline\Bot\Model\BotRole::setPermissions">setPermissions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#115"><abbr title="Weline\Bot\Model\BotRole::getSkills">getSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#128"><abbr title="Weline\Bot\Model\BotRole::setSkills">setSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#136"><abbr title="Weline\Bot\Model\BotRole::getModelConfig">getModelConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#149"><abbr title="Weline\Bot\Model\BotRole::setModelConfig">setModelConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#157"><abbr title="Weline\Bot\Model\BotRole::getAiModel">getAiModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#176"><abbr title="Weline\Bot\Model\BotRole::getScenarioAdapter">getScenarioAdapter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#195"><abbr title="Weline\Bot\Model\BotRole::hasSkill">hasSkill</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#203"><abbr title="Weline\Bot\Model\BotRole::hasPermission">hasPermission</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#218"><abbr title="Weline\Bot\Model\BotRole::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#226"><abbr title="Weline\Bot\Model\BotRole::isDefault">isDefault</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#234"><abbr title="Weline\Bot\Model\BotRole::getAvailableModels">getAvailableModels</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#246"><abbr title="Weline\Bot\Model\BotRole::getAvailableAdapters">getAvailableAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#255"><abbr title="Weline\Bot\Model\BotRole::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#89"><abbr title="Weline\Bot\Model\BotSchedule::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#94"><abbr title="Weline\Bot\Model\BotSchedule::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#102"><abbr title="Weline\Bot\Model\BotSchedule::getContext">getContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#115"><abbr title="Weline\Bot\Model\BotSchedule::setContext">setContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#123"><abbr title="Weline\Bot\Model\BotSchedule::getRole">getRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#134"><abbr title="Weline\Bot\Model\BotSchedule::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#142"><abbr title="Weline\Bot\Model\BotSchedule::isDue">isDue</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#151"><abbr title="Weline\Bot\Model\BotSchedule::calculateNextRun">calculateNextRun</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#164"><abbr title="Weline\Bot\Model\BotSchedule::parseCronToTimestamp">parseCronToTimestamp</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#174"><abbr title="Weline\Bot\Model\BotSchedule::recordRun">recordRun</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#191"><abbr title="Weline\Bot\Model\BotSchedule::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#61"><abbr title="Weline\Bot\Model\BotScheduleLog::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#66"><abbr title="Weline\Bot\Model\BotScheduleLog::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#74"><abbr title="Weline\Bot\Model\BotScheduleLog::getContextSnapshot">getContextSnapshot</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#87"><abbr title="Weline\Bot\Model\BotScheduleLog::calculateDuration">calculateDuration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#100"><abbr title="Weline\Bot\Model\BotScheduleLog::markSuccess">markSuccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#112"><abbr title="Weline\Bot\Model\BotScheduleLog::markFailed">markFailed</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#121"><abbr title="Weline\Bot\Model\BotScheduleLog::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#84"><abbr title="Weline\Bot\Model\BotSkill::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#89"><abbr title="Weline\Bot\Model\BotSkill::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#97"><abbr title="Weline\Bot\Model\BotSkill::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#110"><abbr title="Weline\Bot\Model\BotSkill::setParameters">setParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#118"><abbr title="Weline\Bot\Model\BotSkill::getPermissionRequired">getPermissionRequired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#131"><abbr title="Weline\Bot\Model\BotSkill::setPermissionRequired">setPermissionRequired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#139"><abbr title="Weline\Bot\Model\BotSkill::isDangerous">isDangerous</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#147"><abbr title="Weline\Bot\Model\BotSkill::requiresConfirmation">requiresConfirmation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#155"><abbr title="Weline\Bot\Model\BotSkill::isActive">isActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#160"><abbr title="Weline\Bot\Model\BotSkill::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#80"><abbr title="Weline\Bot\Model\BotToolCall::_init">_init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#85"><abbr title="Weline\Bot\Model\BotToolCall::getIdFieldName">getIdFieldName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#93"><abbr title="Weline\Bot\Model\BotToolCall::getArguments">getArguments</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#106"><abbr title="Weline\Bot\Model\BotToolCall::setArguments">setArguments</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#114"><abbr title="Weline\Bot\Model\BotToolCall::markRunning">markRunning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#124"><abbr title="Weline\Bot\Model\BotToolCall::markSuccess">markSuccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#136"><abbr title="Weline\Bot\Model\BotToolCall::markFailed">markFailed</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#148"><abbr title="Weline\Bot\Model\BotToolCall::calculateDuration">calculateDuration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#160"><abbr title="Weline\Bot\Model\BotToolCall::isPending">isPending</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#168"><abbr title="Weline\Bot\Model\BotToolCall::needsConfirmation">needsConfirmation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#174"><abbr title="Weline\Bot\Model\BotToolCall::beforeSave">beforeSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#25"><abbr title="Weline\Bot\Query\BotQueryProvider::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#32"><abbr title="Weline\Bot\Query\BotQueryProvider::getProviderName">getProviderName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#37"><abbr title="Weline\Bot\Query\BotQueryProvider::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#55"><abbr title="Weline\Bot\Query\BotQueryProvider::getDescriptor">getDescriptor</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#141"><abbr title="Weline\Bot\Query\BotQueryProvider::getRole">getRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#159"><abbr title="Weline\Bot\Query\BotQueryProvider::getRoleById">getRoleById</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#173"><abbr title="Weline\Bot\Query\BotQueryProvider::getActiveRoles">getActiveRoles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#189"><abbr title="Weline\Bot\Query\BotQueryProvider::getDefaultRole">getDefaultRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#203"><abbr title="Weline\Bot\Query\BotQueryProvider::getSkills">getSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#224"><abbr title="Weline\Bot\Query\BotQueryProvider::getSkill">getSkill</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#242"><abbr title="Weline\Bot\Query\BotQueryProvider::getSession">getSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#256"><abbr title="Weline\Bot\Query\BotQueryProvider::getActiveSessions">getActiveSessions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#283"><abbr title="Weline\Bot\Query\BotQueryProvider::getSchedules">getSchedules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#304"><abbr title="Weline\Bot\Query\BotQueryProvider::getDueSchedules">getDueSchedules</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#322"><abbr title="Weline\Bot\Query\BotQueryProvider::introspect">introspect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#337"><abbr title="Weline\Bot\Query\BotQueryProvider::getOperationDetail">getOperationDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#18"><abbr title="Weline\Bot\Service\AgentEngine::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#29"><abbr title="Weline\Bot\Service\AgentEngine::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#102"><abbr title="Weline\Bot\Service\AgentEngine::executeStream">executeStream</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#127"><abbr title="Weline\Bot\Service\AgentEngine::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#163"><abbr title="Weline\Bot\Service\AgentEngine::requestAgentResponse">requestAgentResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#184"><abbr title="Weline\Bot\Service\AgentEngine::buildProviderParams">buildProviderParams</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#198"><abbr title="Weline\Bot\Service\AgentEngine::withCurrentPrompt">withCurrentPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#215"><abbr title="Weline\Bot\Service\AgentEngine::persistAssistantToolRequest">persistAssistantToolRequest</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#235"><abbr title="Weline\Bot\Service\AgentEngine::resolveModelCode">resolveModelCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#252"><abbr title="Weline\Bot\Service\AgentEngine::resolveScenarioCode">resolveScenarioCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#258"><abbr title="Weline\Bot\Service\AgentEngine::hasSuccessfulToolResult">hasSuccessfulToolResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#269"><abbr title="Weline\Bot\Service\AgentEngine::formatExecutionError">formatExecutionError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#283"><abbr title="Weline\Bot\Service\AgentEngine::processToolCalls">processToolCalls</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#364"><abbr title="Weline\Bot\Service\AgentEngine::submitToolResults">submitToolResults</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#17"><abbr title="Weline\Bot\Service\ChatSessionManager::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#25"><abbr title="Weline\Bot\Service\ChatSessionManager::createSession">createSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#45"><abbr title="Weline\Bot\Service\ChatSessionManager::getOrCreateSession">getOrCreateSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#69"><abbr title="Weline\Bot\Service\ChatSessionManager::getSession">getSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#78"><abbr title="Weline\Bot\Service\ChatSessionManager::addMessage">addMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#120"><abbr title="Weline\Bot\Service\ChatSessionManager::getMessageHistory">getMessageHistory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#137"><abbr title="Weline\Bot\Service\ChatSessionManager::getMessagesForOpenAI">getMessagesForOpenAI</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#152"><abbr title="Weline\Bot\Service\ChatSessionManager::clearHistory">clearHistory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#168"><abbr title="Weline\Bot\Service\ChatSessionManager::archiveSession">archiveSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#177"><abbr title="Weline\Bot\Service\ChatSessionManager::deleteSession">deleteSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#187"><abbr title="Weline\Bot\Service\ChatSessionManager::getActiveSessions">getActiveSessions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#207"><abbr title="Weline\Bot\Service\ChatSessionManager::generateContextId">generateContextId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#16"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#21"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#26"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#54"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#73"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#83"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::vectorSearchViaQuery">vectorSearchViaQuery</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#108"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::fallbackGrepSearch">fallbackGrepSearch</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#15"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#20"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#25"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#48"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#90"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#95"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#111"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::matchGlob">matchGlob</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#15"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#20"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#25"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#52"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#107"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#112"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#129"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::buildIterator">buildIterator</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#13"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#18"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#23"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#37"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#80"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#85"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#15"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#20"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#25"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#47"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#88"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#93"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#21"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#26"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#31"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#54"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#99"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#104"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::isAllowed">isAllowed</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#121"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::checkChainedCommand">checkChainedCommand</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#15"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#20"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#25"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#47"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#91"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#96"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#19"><abbr title="Weline\Bot\Service\ContextBuilder::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#33"><abbr title="Weline\Bot\Service\ContextBuilder::build">build</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#80"><abbr title="Weline\Bot\Service\ContextBuilder::buildSystemPrompt">buildSystemPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#115"><abbr title="Weline\Bot\Service\ContextBuilder::formatMemories">formatMemories</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#140"><abbr title="Weline\Bot\Service\ContextBuilder::buildCompact">buildCompact</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#173"><abbr title="Weline\Bot\Service\ContextBuilder::buildCompactSystemPrompt">buildCompactSystemPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#29"><abbr title="Weline\Bot\Service\MemoryService::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#38"><abbr title="Weline\Bot\Service\MemoryService::extractAndSave">extractAndSave</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#79"><abbr title="Weline\Bot\Service\MemoryService::getRelevantMemories">getRelevantMemories</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#113"><abbr title="Weline\Bot\Service\MemoryService::search">search</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#138"><abbr title="Weline\Bot\Service\MemoryService::saveMemoryNode">saveMemoryNode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#181"><abbr title="Weline\Bot\Service\MemoryService::createEdge">createEdge</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#200"><abbr title="Weline\Bot\Service\MemoryService::cleanup">cleanup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#225"><abbr title="Weline\Bot\Service\MemoryService::getUserPreferences">getUserPreferences</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#248"><abbr title="Weline\Bot\Service\MemoryService::buildConversationText">buildConversationText</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#262"><abbr title="Weline\Bot\Service\MemoryService::buildExtractionPrompt">buildExtractionPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#289"><abbr title="Weline\Bot\Service\MemoryService::parseExtractionResult">parseExtractionResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#48"><abbr title="Weline\Bot\Service\NaturalTimeParser::parse">parse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#59"><abbr title="Weline\Bot\Service\NaturalTimeParser::tryParsePatterns">tryParsePatterns</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#104"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseDaily">parseDaily</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#136"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseWeekly">parseWeekly</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#162"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseMonthly">parseMonthly</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#190"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseChineseNumber">parseChineseNumber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#217"><abbr title="Weline\Bot\Service\NaturalTimeParser::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#240"><abbr title="Weline\Bot\Service\NaturalTimeParser::toHumanReadable">toHumanReadable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#15"><abbr title="Weline\Bot\Service\PermissionValidator::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#27"><abbr title="Weline\Bot\Service\PermissionValidator::validate">validate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#61"><abbr title="Weline\Bot\Service\PermissionValidator::checkPermission">checkPermission</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#102"><abbr title="Weline\Bot\Service\PermissionValidator::matchPermissionSpec">matchPermissionSpec</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#139"><abbr title="Weline\Bot\Service\PermissionValidator::matchFsSpec">matchFsSpec</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#162"><abbr title="Weline\Bot\Service\PermissionValidator::matchHttpSpec">matchHttpSpec</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#188"><abbr title="Weline\Bot\Service\PermissionValidator::matchShellSpec">matchShellSpec</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#208"><abbr title="Weline\Bot\Service\PermissionValidator::matchDbSpec">matchDbSpec</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#229"><abbr title="Weline\Bot\Service\PermissionValidator::matchPattern">matchPattern</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#247"><abbr title="Weline\Bot\Service\PermissionValidator::matchPath">matchPath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#261"><abbr title="Weline\Bot\Service\PermissionValidator::normalizePath">normalizePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#17"><abbr title="Weline\Bot\Service\RoleConfigAssistant::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#25"><abbr title="Weline\Bot\Service\RoleConfigAssistant::getTemplates">getTemplates</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#89"><abbr title="Weline\Bot\Service\RoleConfigAssistant::buildSuggestion">buildSuggestion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#136"><abbr title="Weline\Bot\Service\RoleConfigAssistant::buildTemplateDraft">buildTemplateDraft</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#202"><abbr title="Weline\Bot\Service\RoleConfigAssistant::applyInputStrategy">applyInputStrategy</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#307"><abbr title="Weline\Bot\Service\RoleConfigAssistant::buildAiDraft">buildAiDraft</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#363"><abbr title="Weline\Bot\Service\RoleConfigAssistant::mergeDraft">mergeDraft</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#404"><abbr title="Weline\Bot\Service\RoleConfigAssistant::sanitizeDraft">sanitizeDraft</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#477"><abbr title="Weline\Bot\Service\RoleConfigAssistant::resolvePreferredModel">resolvePreferredModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#501"><abbr title="Weline\Bot\Service\RoleConfigAssistant::findTemplate">findTemplate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#517"><abbr title="Weline\Bot\Service\RoleConfigAssistant::filterSkills">filterSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#536"><abbr title="Weline\Bot\Service\RoleConfigAssistant::sanitizePermissions">sanitizePermissions</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#555"><abbr title="Weline\Bot\Service\RoleConfigAssistant::inferPermissionsBySkills">inferPermissionsBySkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#585"><abbr title="Weline\Bot\Service\RoleConfigAssistant::sanitizeModelConfig">sanitizeModelConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#604"><abbr title="Weline\Bot\Service\RoleConfigAssistant::normalizeProfile">normalizeProfile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#612"><abbr title="Weline\Bot\Service\RoleConfigAssistant::normalizeWorkflowStyle">normalizeWorkflowStyle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#620"><abbr title="Weline\Bot\Service\RoleConfigAssistant::normalizeRiskLevel">normalizeRiskLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#631"><abbr title="Weline\Bot\Service\RoleConfigAssistant::getProfileMeta">getProfileMeta</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#664"><abbr title="Weline\Bot\Service\RoleConfigAssistant::containsModel">containsModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#682"><abbr title="Weline\Bot\Service\RoleConfigAssistant::containsAdapter">containsAdapter</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#697"><abbr title="Weline\Bot\Service\RoleConfigAssistant::slugify">slugify</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#723"><abbr title="Weline\Bot\Service\RoleConfigAssistant::extractJsonObject">extractJsonObject</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#16"><abbr title="Weline\Bot\Service\SkillContext::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#25"><abbr title="Weline\Bot\Service\SkillContext::getRole">getRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#33"><abbr title="Weline\Bot\Service\SkillContext::getSession">getSession</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#41"><abbr title="Weline\Bot\Service\SkillContext::getContextId">getContextId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#49"><abbr title="Weline\Bot\Service\SkillContext::getChannel">getChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#57"><abbr title="Weline\Bot\Service\SkillContext::getExtra">getExtra</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#12"><abbr title="Weline\Bot\Service\SkillPackageManager::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#16"><abbr title="Weline\Bot\Service\SkillPackageManager::getSkill">getSkill</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#27"><abbr title="Weline\Bot\Service\SkillPackageManager::getAllSkills">getAllSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#37"><abbr title="Weline\Bot\Service\SkillPackageManager::getSkillsForRole">getSkillsForRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#53"><abbr title="Weline\Bot\Service\SkillPackageManager::getToolsForRole">getToolsForRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#77"><abbr title="Weline\Bot\Service\SkillPackageManager::install">install</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#105"><abbr title="Weline\Bot\Service\SkillPackageManager::uninstall">uninstall</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#120"><abbr title="Weline\Bot\Service\SkillPackageManager::disable">disable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#132"><abbr title="Weline\Bot\Service\SkillPackageManager::enable">enable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#148"><abbr title="Weline\Bot\Service\SkillPackageManager::getSkillsByCategory">getSkillsByCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#11"><abbr title="Weline\Bot\Service\SkillResult::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#21"><abbr title="Weline\Bot\Service\SkillResult::success">success</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#33"><abbr title="Weline\Bot\Service\SkillResult::error">error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#45"><abbr title="Weline\Bot\Service\SkillResult::cancelled">cancelled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#56"><abbr title="Weline\Bot\Service\SkillResult::getData">getData</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#64"><abbr title="Weline\Bot\Service\SkillResult::isSuccess">isSuccess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#72"><abbr title="Weline\Bot\Service\SkillResult::toArray">toArray</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#85"><abbr title="Weline\Bot\Service\SkillResult::toJson">toJson</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#18"><abbr title="Weline\Bot\Setup\Install::setup">setup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#29"><abbr title="Weline\Bot\Setup\Install::createDefaultRole">createDefaultRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#87"><abbr title="Weline\Bot\Setup\Install::createBuiltinSkills">createBuiltinSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#267"><abbr title="Weline\Bot\Setup\Install::registerBotAdapters">registerBotAdapters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#18"><abbr title="Weline\Bot\Skill\DatabaseSkill::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#20"><abbr title="Weline\Bot\Skill\DatabaseSkill::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#25"><abbr title="Weline\Bot\Skill\DatabaseSkill::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#30"><abbr title="Weline\Bot\Skill\DatabaseSkill::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#35"><abbr title="Weline\Bot\Skill\DatabaseSkill::getCategory">getCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#40"><abbr title="Weline\Bot\Skill\DatabaseSkill::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#64"><abbr title="Weline\Bot\Skill\DatabaseSkill::getPermissionRequired">getPermissionRequired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#69"><abbr title="Weline\Bot\Skill\DatabaseSkill::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#134"><abbr title="Weline\Bot\Skill\DatabaseSkill::isDangerous">isDangerous</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#139"><abbr title="Weline\Bot\Skill\DatabaseSkill::requiresConfirmation">requiresConfirmation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#144"><abbr title="Weline\Bot\Skill\DatabaseSkill::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#17"><abbr title="Weline\Bot\Skill\FilesystemSkill::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#25"><abbr title="Weline\Bot\Skill\FilesystemSkill::getSubSkills">getSubSkills</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#36"><abbr title="Weline\Bot\Skill\FilesystemSkill::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#41"><abbr title="Weline\Bot\Skill\FilesystemSkill::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#46"><abbr title="Weline\Bot\Skill\FilesystemSkill::getCategory">getCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#51"><abbr title="Weline\Bot\Skill\FilesystemSkill::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#85"><abbr title="Weline\Bot\Skill\FilesystemSkill::getPermissionRequired">getPermissionRequired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#90"><abbr title="Weline\Bot\Skill\FilesystemSkill::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#112"><abbr title="Weline\Bot\Skill\FilesystemSkill::isDangerous">isDangerous</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#117"><abbr title="Weline\Bot\Skill\FilesystemSkill::requiresConfirmation">requiresConfirmation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#122"><abbr title="Weline\Bot\Skill\FilesystemSkill::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#130"><abbr title="Weline\Bot\Skill\FilesystemSkill::readFile">readFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#160"><abbr title="Weline\Bot\Skill\FilesystemSkill::writeFile">writeFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#186"><abbr title="Weline\Bot\Skill\FilesystemSkill::listFiles">listFiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#221"><abbr title="Weline\Bot\Skill\FilesystemSkill::deleteFile">deleteFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#244"><abbr title="Weline\Bot\Skill\FilesystemSkill::fileExists">fileExists</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#257"><abbr title="Weline\Bot\Skill\FilesystemSkill::sanitizePath">sanitizePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#21"><abbr title="Weline\Bot\Skill\HttpSkill::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#26"><abbr title="Weline\Bot\Skill\HttpSkill::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#31"><abbr title="Weline\Bot\Skill\HttpSkill::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#36"><abbr title="Weline\Bot\Skill\HttpSkill::getCategory">getCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#41"><abbr title="Weline\Bot\Skill\HttpSkill::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#79"><abbr title="Weline\Bot\Skill\HttpSkill::getPermissionRequired">getPermissionRequired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#84"><abbr title="Weline\Bot\Skill\HttpSkill::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#149"><abbr title="Weline\Bot\Skill\HttpSkill::isDangerous">isDangerous</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#154"><abbr title="Weline\Bot\Skill\HttpSkill::requiresConfirmation">requiresConfirmation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#159"><abbr title="Weline\Bot\Skill\HttpSkill::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#167"><abbr title="Weline\Bot\Skill\HttpSkill::getClient">getClient</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#27"><abbr title="Weline\Bot\Skill\ShellSkill::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#32"><abbr title="Weline\Bot\Skill\ShellSkill::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#37"><abbr title="Weline\Bot\Skill\ShellSkill::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#42"><abbr title="Weline\Bot\Skill\ShellSkill::getCategory">getCategory</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#47"><abbr title="Weline\Bot\Skill\ShellSkill::getParameters">getParameters</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#70"><abbr title="Weline\Bot\Skill\ShellSkill::getPermissionRequired">getPermissionRequired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#75"><abbr title="Weline\Bot\Skill\ShellSkill::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#108"><abbr title="Weline\Bot\Skill\ShellSkill::isDangerous">isDangerous</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#113"><abbr title="Weline\Bot\Skill\ShellSkill::requiresConfirmation">requiresConfirmation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#118"><abbr title="Weline\Bot\Skill\ShellSkill::isEnabled">isEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#126"><abbr title="Weline\Bot\Skill\ShellSkill::checkCommandSecurity">checkCommandSecurity</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#185"><abbr title="Weline\Bot\Skill\ShellSkill::extractCommandName">extractCommandName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#202"><abbr title="Weline\Bot\Skill\ShellSkill::executeCommand">executeCommand</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#242"><abbr title="Weline\Bot\Skill\ShellSkill::getWhitelist">getWhitelist</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#32"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getCode">getCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#37"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#42"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#47"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#52"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getScenarios">getScenarios</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#57"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getTools">getTools</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#73"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getSystemPrompt">getSystemPrompt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#97"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#221"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::supportsModel">supportsModel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#226"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getMaxIterations">getMaxIterations</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#202"><abbr title="Weline\Bot\Service\RoleConfigAssistant::applyInputStrategy">applyInputStrategy</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#38"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#97"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::execute">execute</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#52"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::execute">execute</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#240"><abbr title="Weline\Bot\Service\NaturalTimeParser::toHumanReadable">toHumanReadable</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#404"><abbr title="Weline\Bot\Service\RoleConfigAssistant::sanitizeDraft">sanitizeDraft</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#255"><abbr title="Weline\Bot\Controller\Backend\Role::renderForm">renderForm</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#531"><abbr title="Weline\Bot\Controller\Backend\Role::parseStringList">parseStringList</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#47"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::execute">execute</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#363"><abbr title="Weline\Bot\Service\RoleConfigAssistant::mergeDraft">mergeDraft</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#589"><abbr title="Weline\Bot\Controller\Backend\Role::getGuideConfig">getGuideConfig</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#136"><abbr title="Weline\Bot\Service\RoleConfigAssistant::buildTemplateDraft">buildTemplateDraft</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#81"><abbr title="Weline\Bot\Controller\Backend\Role::postSave">postSave</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#29"><abbr title="Weline\Bot\Service\AgentEngine::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#37"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ReadFileTool.php.html#93"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ReadFileTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#54"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#47"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/SearchReplaceTool.php.html#96"><abbr title="Weline\Bot\Service\CodingAgent\Tool\SearchReplaceTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#102"><abbr title="Weline\Bot\Service\PermissionValidator::matchPermissionSpec">matchPermissionSpec</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Skill/DatabaseSkill.php.html#69"><abbr title="Weline\Bot\Skill\DatabaseSkill::execute">execute</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#28"><abbr title="Weline\Bot\Controller\Api\V1\Chat::postSend">postSend</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#283"><abbr title="Weline\Bot\Service\AgentEngine::processToolCalls">processToolCalls</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#48"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::execute">execute</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#112"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#59"><abbr title="Weline\Bot\Service\NaturalTimeParser::tryParsePatterns">tryParsePatterns</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#217"><abbr title="Weline\Bot\Service\NaturalTimeParser::validate">validate</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#77"><abbr title="Weline\Bot\Service\SkillPackageManager::install">install</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#84"><abbr title="Weline\Bot\Skill\HttpSkill::execute">execute</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#105"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::validateParams">validateParams</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#73"><abbr title="Weline\Bot\Adapter\SEOAdapter::validateParams">validateParams</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#99"><abbr title="Weline\Bot\Controller\Api\V1\Chat::postStream">postStream</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#418"><abbr title="Weline\Bot\Controller\Backend\Role::getAvailableModels">getAvailableModels</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#565"><abbr title="Weline\Bot\Controller\Backend\Role::parseJsonArray">parseJsonArray</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#127"><abbr title="Weline\Bot\Service\AgentEngine::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#104"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::isAllowed">isAllowed</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/RunTerminalTool.php.html#121"><abbr title="Weline\Bot\Service\CodingAgent\Tool\RunTerminalTool::checkChainedCommand">checkChainedCommand</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#104"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseDaily">parseDaily</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#61"><abbr title="Weline\Bot\Service\PermissionValidator::checkPermission">checkPermission</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#555"><abbr title="Weline\Bot\Service\RoleConfigAssistant::inferPermissionsBySkills">inferPermissionsBySkills</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#126"><abbr title="Weline\Bot\Skill\ShellSkill::checkCommandSecurity">checkCommandSecurity</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#324"><abbr title="Weline\Bot\Controller\Backend\Role::applyTemplatePrefill">applyTemplatePrefill</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#385"><abbr title="Weline\Bot\Controller\Backend\Role::normalizeGuideProfiles">normalizeGuideProfiles</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#83"><abbr title="Weline\Bot\Controller\Backend\Schedule::postSave">postSave</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#102"><abbr title="Weline\Bot\Service\AgentEngine::executeStream">executeStream</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#477"><abbr title="Weline\Bot\Service\RoleConfigAssistant::resolvePreferredModel">resolvePreferredModel</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#186"><abbr title="Weline\Bot\Skill\FilesystemSkill::listFiles">listFiles</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#70"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::validateParams">validateParams</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#456"><abbr title="Weline\Bot\Controller\Backend\Role::getAvailableAdapters">getAvailableAdapters</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Cron/ScheduleRunner.php.html#46"><abbr title="Weline\Bot\Cron\ScheduleRunner::execute">execute</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#255"><abbr title="Weline\Bot\Model\BotRole::beforeSave">beforeSave</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#269"><abbr title="Weline\Bot\Service\AgentEngine::formatExecutionError">formatExecutionError</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#78"><abbr title="Weline\Bot\Service\ChatSessionManager::addMessage">addMessage</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GlobFileSearchTool.php.html#95"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GlobFileSearchTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/ListDirTool.php.html#85"><abbr title="Weline\Bot\Service\CodingAgent\Tool\ListDirTool::resolvePath">resolvePath</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#80"><abbr title="Weline\Bot\Service\ContextBuilder::buildSystemPrompt">buildSystemPrompt</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#38"><abbr title="Weline\Bot\Service\MemoryService::extractAndSave">extractAndSave</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#79"><abbr title="Weline\Bot\Service\MemoryService::getRelevantMemories">getRelevantMemories</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#136"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseWeekly">parseWeekly</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#162"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseMonthly">parseMonthly</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/NaturalTimeParser.php.html#190"><abbr title="Weline\Bot\Service\NaturalTimeParser::parseChineseNumber">parseChineseNumber</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#27"><abbr title="Weline\Bot\Service\PermissionValidator::validate">validate</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#162"><abbr title="Weline\Bot\Service\PermissionValidator::matchHttpSpec">matchHttpSpec</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#697"><abbr title="Weline\Bot\Service\RoleConfigAssistant::slugify">slugify</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#723"><abbr title="Weline\Bot\Service\RoleConfigAssistant::extractJsonObject">extractJsonObject</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Setup/Install.php.html#29"><abbr title="Weline\Bot\Setup\Install::createDefaultRole">createDefaultRole</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Setup/Install.php.html#267"><abbr title="Weline\Bot\Setup\Install::registerBotAdapters">registerBotAdapters</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#130"><abbr title="Weline\Bot\Skill\FilesystemSkill::readFile">readFile</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#160"><abbr title="Weline\Bot\Skill\FilesystemSkill::writeFile">writeFile</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#515"><abbr title="Weline\Bot\Controller\Backend\Role::getRequestPayload">getRequestPayload</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#77"><abbr title="Weline\Bot\Model\BotChatMessage::getToolCalls">getToolCalls</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#86"><abbr title="Weline\Bot\Model\BotChatSession::getMetadata">getMetadata</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#72"><abbr title="Weline\Bot\Model\BotMemoryEdge::getMetadata">getMetadata</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#94"><abbr title="Weline\Bot\Model\BotMemoryNode::getMetadata">getMetadata</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#160"><abbr title="Weline\Bot\Model\BotMemoryNode::beforeSave">beforeSave</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#94"><abbr title="Weline\Bot\Model\BotRole::getPermissions">getPermissions</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#115"><abbr title="Weline\Bot\Model\BotRole::getSkills">getSkills</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#136"><abbr title="Weline\Bot\Model\BotRole::getModelConfig">getModelConfig</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#203"><abbr title="Weline\Bot\Model\BotRole::hasPermission">hasPermission</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#102"><abbr title="Weline\Bot\Model\BotSchedule::getContext">getContext</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#74"><abbr title="Weline\Bot\Model\BotScheduleLog::getContextSnapshot">getContextSnapshot</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#97"><abbr title="Weline\Bot\Model\BotSkill::getParameters">getParameters</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#118"><abbr title="Weline\Bot\Model\BotSkill::getPermissionRequired">getPermissionRequired</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotSkill.php.html#160"><abbr title="Weline\Bot\Model\BotSkill::beforeSave">beforeSave</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#93"><abbr title="Weline\Bot\Model\BotToolCall::getArguments">getArguments</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#174"><abbr title="Weline\Bot\Model\BotToolCall::beforeSave">beforeSave</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#215"><abbr title="Weline\Bot\Service\AgentEngine::persistAssistantToolRequest">persistAssistantToolRequest</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#364"><abbr title="Weline\Bot\Service\AgentEngine::submitToolResults">submitToolResults</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#83"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::vectorSearchViaQuery">vectorSearchViaQuery</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#188"><abbr title="Weline\Bot\Service\PermissionValidator::matchShellSpec">matchShellSpec</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#517"><abbr title="Weline\Bot\Service\RoleConfigAssistant::filterSkills">filterSkills</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#536"><abbr title="Weline\Bot\Service\RoleConfigAssistant::sanitizePermissions">sanitizePermissions</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#664"><abbr title="Weline\Bot\Service\RoleConfigAssistant::containsModel">containsModel</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#682"><abbr title="Weline\Bot\Service\RoleConfigAssistant::containsAdapter">containsAdapter</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#53"><abbr title="Weline\Bot\Service\SkillPackageManager::getToolsForRole">getToolsForRole</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#221"><abbr title="Weline\Bot\Skill\FilesystemSkill::deleteFile">deleteFile</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#75"><abbr title="Weline\Bot\Skill\ShellSkill::execute">execute</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Adapter/ITOpsAdapter.php.html#38"><abbr title="Weline\Bot\Adapter\ITOpsAdapter::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/SEOAdapter.php.html#38"><abbr title="Weline\Bot\Adapter\SEOAdapter::adaptPrompt">adaptPrompt</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#170"><abbr title="Weline\Bot\Controller\Api\V1\Chat::getHistory">getHistory</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#204"><abbr title="Weline\Bot\Controller\Api\V1\Chat::postClear">postClear</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Memory.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Memory::getList">getList</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#187"><abbr title="Weline\Bot\Controller\Backend\Role::postDelete">postDelete</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#215"><abbr title="Weline\Bot\Controller\Backend\Role::postToggle">postToggle</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#350"><abbr title="Weline\Bot\Controller\Backend\Role::findTemplateByCode">findTemplateByCode</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#151"><abbr title="Weline\Bot\Controller\Backend\Schedule::postToggle">postToggle</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Session::getList">getList</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#66"><abbr title="Weline\Bot\Controller\Backend\Skill::postToggle">postToggle</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#98"><abbr title="Weline\Bot\Model\BotChatMessage::getSession">getSession</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#109"><abbr title="Weline\Bot\Model\BotChatMessage::toOpenAIMessage">toOpenAIMessage</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotChatMessage.php.html#130"><abbr title="Weline\Bot\Model\BotChatMessage::beforeSave">beforeSave</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#107"><abbr title="Weline\Bot\Model\BotChatSession::getRole">getRole</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotChatSession.php.html#136"><abbr title="Weline\Bot\Model\BotChatSession::beforeSave">beforeSave</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotMemoryEdge.php.html#90"><abbr title="Weline\Bot\Model\BotMemoryEdge::beforeSave">beforeSave</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#157"><abbr title="Weline\Bot\Model\BotRole::getAiModel">getAiModel</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#176"><abbr title="Weline\Bot\Model\BotRole::getScenarioAdapter">getScenarioAdapter</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#123"><abbr title="Weline\Bot\Model\BotSchedule::getRole">getRole</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#191"><abbr title="Weline\Bot\Model\BotSchedule::beforeSave">beforeSave</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#87"><abbr title="Weline\Bot\Model\BotScheduleLog::calculateDuration">calculateDuration</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotScheduleLog.php.html#121"><abbr title="Weline\Bot\Model\BotScheduleLog::beforeSave">beforeSave</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#148"><abbr title="Weline\Bot\Model\BotToolCall::calculateDuration">calculateDuration</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#141"><abbr title="Weline\Bot\Query\BotQueryProvider::getRole">getRole</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#159"><abbr title="Weline\Bot\Query\BotQueryProvider::getRoleById">getRoleById</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#203"><abbr title="Weline\Bot\Query\BotQueryProvider::getSkills">getSkills</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#224"><abbr title="Weline\Bot\Query\BotQueryProvider::getSkill">getSkill</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#242"><abbr title="Weline\Bot\Query\BotQueryProvider::getSession">getSession</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#256"><abbr title="Weline\Bot\Query\BotQueryProvider::getActiveSessions">getActiveSessions</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#337"><abbr title="Weline\Bot\Query\BotQueryProvider::getOperationDetail">getOperationDetail</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#198"><abbr title="Weline\Bot\Service\AgentEngine::withCurrentPrompt">withCurrentPrompt</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#235"><abbr title="Weline\Bot\Service\AgentEngine::resolveModelCode">resolveModelCode</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#258"><abbr title="Weline\Bot\Service\AgentEngine::hasSuccessfulToolResult">hasSuccessfulToolResult</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#54"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::execute">execute</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#33"><abbr title="Weline\Bot\Service\ContextBuilder::build">build</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#140"><abbr title="Weline\Bot\Service\ContextBuilder::buildCompact">buildCompact</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#138"><abbr title="Weline\Bot\Service\MemoryService::saveMemoryNode">saveMemoryNode</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#200"><abbr title="Weline\Bot\Service\MemoryService::cleanup">cleanup</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#289"><abbr title="Weline\Bot\Service\MemoryService::parseExtractionResult">parseExtractionResult</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#139"><abbr title="Weline\Bot\Service\PermissionValidator::matchFsSpec">matchFsSpec</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#208"><abbr title="Weline\Bot\Service\PermissionValidator::matchDbSpec">matchDbSpec</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#229"><abbr title="Weline\Bot\Service\PermissionValidator::matchPattern">matchPattern</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#89"><abbr title="Weline\Bot\Service\RoleConfigAssistant::buildSuggestion">buildSuggestion</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#307"><abbr title="Weline\Bot\Service\RoleConfigAssistant::buildAiDraft">buildAiDraft</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#501"><abbr title="Weline\Bot\Service\RoleConfigAssistant::findTemplate">findTemplate</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#105"><abbr title="Weline\Bot\Service\SkillPackageManager::uninstall">uninstall</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Setup/Install.php.html#87"><abbr title="Weline\Bot\Setup\Install::createBuiltinSkills">createBuiltinSkills</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Adapter/BotAgentAdapter.php.html#183"><abbr title="Weline\Bot\Adapter\BotAgentAdapter::redactSensitiveInfo">redactSensitiveInfo</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Api/V1/Chat.php.html#234"><abbr title="Weline\Bot\Controller\Api\V1\Chat::getSessions">getSessions</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#67"><abbr title="Weline\Bot\Controller\Backend\Role::getEdit">getEdit</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Role.php.html#488"><abbr title="Weline\Bot\Controller\Backend\Role::getAvailableSkills">getAvailableSkills</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Schedule::getList">getList</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#62"><abbr title="Weline\Bot\Controller\Backend\Schedule::getEdit">getEdit</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#130"><abbr title="Weline\Bot\Controller\Backend\Schedule::postDelete">postDelete</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Schedule.php.html#175"><abbr title="Weline\Bot\Controller\Backend\Schedule::postRun">postRun</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#55"><abbr title="Weline\Bot\Controller\Backend\Session::getView">getView</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#73"><abbr title="Weline\Bot\Controller\Backend\Session::postArchive">postArchive</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Session.php.html#94"><abbr title="Weline\Bot\Controller\Backend\Session::postDelete">postDelete</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#22"><abbr title="Weline\Bot\Controller\Backend\Skill::getList">getList</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Controller/Backend/Skill.php.html#51"><abbr title="Weline\Bot\Controller\Backend\Skill::getView">getView</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#146"><abbr title="Weline\Bot\Model\BotMemoryNode::isExpired">isExpired</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotMemoryNode.php.html#155"><abbr title="Weline\Bot\Model\BotMemoryNode::shouldForget">shouldForget</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#234"><abbr title="Weline\Bot\Model\BotRole::getAvailableModels">getAvailableModels</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotRole.php.html#246"><abbr title="Weline\Bot\Model\BotRole::getAvailableAdapters">getAvailableAdapters</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#142"><abbr title="Weline\Bot\Model\BotSchedule::isDue">isDue</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#151"><abbr title="Weline\Bot\Model\BotSchedule::calculateNextRun">calculateNextRun</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotSchedule.php.html#174"><abbr title="Weline\Bot\Model\BotSchedule::recordRun">recordRun</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/BotToolCall.php.html#168"><abbr title="Weline\Bot\Model\BotToolCall::needsConfirmation">needsConfirmation</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#189"><abbr title="Weline\Bot\Query\BotQueryProvider::getDefaultRole">getDefaultRole</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Query/BotQueryProvider.php.html#283"><abbr title="Weline\Bot\Query\BotQueryProvider::getSchedules">getSchedules</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#163"><abbr title="Weline\Bot\Service\AgentEngine::requestAgentResponse">requestAgentResponse</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#184"><abbr title="Weline\Bot\Service\AgentEngine::buildProviderParams">buildProviderParams</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/AgentEngine.php.html#252"><abbr title="Weline\Bot\Service\AgentEngine::resolveScenarioCode">resolveScenarioCode</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#25"><abbr title="Weline\Bot\Service\ChatSessionManager::createSession">createSession</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#45"><abbr title="Weline\Bot\Service\ChatSessionManager::getOrCreateSession">getOrCreateSession</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#69"><abbr title="Weline\Bot\Service\ChatSessionManager::getSession">getSession</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/ChatSessionManager.php.html#137"><abbr title="Weline\Bot\Service\ChatSessionManager::getMessagesForOpenAI">getMessagesForOpenAI</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/CodebaseSearchTool.php.html#108"><abbr title="Weline\Bot\Service\CodingAgent\Tool\CodebaseSearchTool::fallbackGrepSearch">fallbackGrepSearch</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/CodingAgent/Tool/GrepTool.php.html#129"><abbr title="Weline\Bot\Service\CodingAgent\Tool\GrepTool::buildIterator">buildIterator</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#115"><abbr title="Weline\Bot\Service\ContextBuilder::formatMemories">formatMemories</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/ContextBuilder.php.html#173"><abbr title="Weline\Bot\Service\ContextBuilder::buildCompactSystemPrompt">buildCompactSystemPrompt</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#113"><abbr title="Weline\Bot\Service\MemoryService::search">search</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#225"><abbr title="Weline\Bot\Service\MemoryService::getUserPreferences">getUserPreferences</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/MemoryService.php.html#248"><abbr title="Weline\Bot\Service\MemoryService::buildConversationText">buildConversationText</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/PermissionValidator.php.html#247"><abbr title="Weline\Bot\Service\PermissionValidator::matchPath">matchPath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#25"><abbr title="Weline\Bot\Service\RoleConfigAssistant::getTemplates">getTemplates</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#604"><abbr title="Weline\Bot\Service\RoleConfigAssistant::normalizeProfile">normalizeProfile</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#612"><abbr title="Weline\Bot\Service\RoleConfigAssistant::normalizeWorkflowStyle">normalizeWorkflowStyle</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/RoleConfigAssistant.php.html#620"><abbr title="Weline\Bot\Service\RoleConfigAssistant::normalizeRiskLevel">normalizeRiskLevel</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/SkillContext.php.html#57"><abbr title="Weline\Bot\Service\SkillContext::getExtra">getExtra</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#16"><abbr title="Weline\Bot\Service\SkillPackageManager::getSkill">getSkill</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#37"><abbr title="Weline\Bot\Service\SkillPackageManager::getSkillsForRole">getSkillsForRole</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#120"><abbr title="Weline\Bot\Service\SkillPackageManager::disable">disable</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/SkillPackageManager.php.html#132"><abbr title="Weline\Bot\Service\SkillPackageManager::enable">enable</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/SkillResult.php.html#45"><abbr title="Weline\Bot\Service\SkillResult::cancelled">cancelled</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Skill/FilesystemSkill.php.html#90"><abbr title="Weline\Bot\Skill\FilesystemSkill::execute">execute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Skill/HttpSkill.php.html#167"><abbr title="Weline\Bot\Skill\HttpSkill::getClient">getClient</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Skill/ShellSkill.php.html#202"><abbr title="Weline\Bot\Skill\ShellSkill::executeCommand">executeCommand</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="extends/module/Weline_Ai/Agent/CodingAgent.php.html#57"><abbr title="Weline\Bot\Extends\Module\Weline_Ai\Agent\CodingAgent::getTools">getTools</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([45,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([429,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,33,"<a href=\"Adapter\/BotAgentAdapter.php.html#11\">Weline\\Bot\\Adapter\\BotAgentAdapter<\/a>"],[0,17,"<a href=\"Adapter\/ITOpsAdapter.php.html#11\">Weline\\Bot\\Adapter\\ITOpsAdapter<\/a>"],[0,19,"<a href=\"Adapter\/SEOAdapter.php.html#11\">Weline\\Bot\\Adapter\\SEOAdapter<\/a>"],[0,25,"<a href=\"Controller\/Api\/V1\/Chat.php.html#16\">Weline\\Bot\\Controller\\Api\\V1\\Chat<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Chat.php.html#14\">Weline\\Bot\\Controller\\Backend\\Chat<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Memory.php.html#14\">Weline\\Bot\\Controller\\Backend\\Memory<\/a>"],[0,100,"<a href=\"Controller\/Backend\/Role.php.html#16\">Weline\\Bot\\Controller\\Backend\\Role<\/a>"],[0,20,"<a href=\"Controller\/Backend\/Schedule.php.html#14\">Weline\\Bot\\Controller\\Backend\\Schedule<\/a>"],[0,11,"<a href=\"Controller\/Backend\/Session.php.html#14\">Weline\\Bot\\Controller\\Backend\\Session<\/a>"],[0,10,"<a href=\"Controller\/Backend\/Skill.php.html#14\">Weline\\Bot\\Controller\\Backend\\Skill<\/a>"],[0,7,"<a href=\"Cron\/MemoryCleanup.php.html#14\">Weline\\Bot\\Cron\\MemoryCleanup<\/a>"],[0,11,"<a href=\"Cron\/ScheduleRunner.php.html#17\">Weline\\Bot\\Cron\\ScheduleRunner<\/a>"],[0,16,"<a href=\"Model\/BotChatMessage.php.html#16\">Weline\\Bot\\Model\\BotChatMessage<\/a>"],[0,15,"<a href=\"Model\/BotChatSession.php.html#16\">Weline\\Bot\\Model\\BotChatSession<\/a>"],[0,10,"<a href=\"Model\/BotMemoryEdge.php.html#16\">Weline\\Bot\\Model\\BotMemoryEdge<\/a>"],[0,17,"<a href=\"Model\/BotMemoryNode.php.html#17\">Weline\\Bot\\Model\\BotMemoryNode<\/a>"],[0,39,"<a href=\"Model\/BotRole.php.html#21\">Weline\\Bot\\Model\\BotRole<\/a>"],[0,21,"<a href=\"Model\/BotSchedule.php.html#16\">Weline\\Bot\\Model\\BotSchedule<\/a>"],[0,14,"<a href=\"Model\/BotScheduleLog.php.html#14\">Weline\\Bot\\Model\\BotScheduleLog<\/a>"],[0,19,"<a href=\"Model\/BotSkill.php.html#16\">Weline\\Bot\\Model\\BotSkill<\/a>"],[0,20,"<a href=\"Model\/BotToolCall.php.html#16\">Weline\\Bot\\Model\\BotToolCall<\/a>"],[0,32,"<a href=\"Query\/BotQueryProvider.php.html#23\">Weline\\Bot\\Query\\BotQueryProvider<\/a>"],[0,59,"<a href=\"Service\/AgentEngine.php.html#16\">Weline\\Bot\\Service\\AgentEngine<\/a>"],[0,20,"<a href=\"Service\/ChatSessionManager.php.html#15\">Weline\\Bot\\Service\\ChatSessionManager<\/a>"],[0,13,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#14\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool<\/a>"],[0,18,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#13\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool<\/a>"],[0,26,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#13\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool<\/a>"],[0,18,"<a href=\"Service\/CodingAgent\/Tool\/ListDirTool.php.html#11\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ListDirTool<\/a>"],[0,24,"<a href=\"Service\/CodingAgent\/Tool\/ReadFileTool.php.html#13\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ReadFileTool<\/a>"],[0,27,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#13\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool<\/a>"],[0,22,"<a href=\"Service\/CodingAgent\/Tool\/SearchReplaceTool.php.html#13\">Weline\\Bot\\Service\\CodingAgent\\Tool\\SearchReplaceTool<\/a>"],[0,16,"<a href=\"Service\/ContextBuilder.php.html#17\">Weline\\Bot\\Service\\ContextBuilder<\/a>"],[0,28,"<a href=\"Service\/MemoryService.php.html#21\">Weline\\Bot\\Service\\MemoryService<\/a>"],[0,51,"<a href=\"Service\/NaturalTimeParser.php.html#11\">Weline\\Bot\\Service\\NaturalTimeParser<\/a>"],[0,43,"<a href=\"Service\/PermissionValidator.php.html#13\">Weline\\Bot\\Service\\PermissionValidator<\/a>"],[0,108,"<a href=\"Service\/RoleConfigAssistant.php.html#15\">Weline\\Bot\\Service\\RoleConfigAssistant<\/a>"],[0,7,"<a href=\"Service\/SkillContext.php.html#14\">Weline\\Bot\\Service\\SkillContext<\/a>"],[0,26,"<a href=\"Service\/SkillPackageManager.php.html#10\">Weline\\Bot\\Service\\SkillPackageManager<\/a>"],[0,9,"<a href=\"Service\/SkillResult.php.html#9\">Weline\\Bot\\Service\\SkillResult<\/a>"],[0,14,"<a href=\"Setup\/Install.php.html#13\">Weline\\Bot\\Setup\\Install<\/a>"],[0,19,"<a href=\"Skill\/DatabaseSkill.php.html#16\">Weline\\Bot\\Skill\\DatabaseSkill<\/a>"],[0,34,"<a href=\"Skill\/FilesystemSkill.php.html#15\">Weline\\Bot\\Skill\\FilesystemSkill<\/a>"],[0,19,"<a href=\"Skill\/HttpSkill.php.html#17\">Weline\\Bot\\Skill\\HttpSkill<\/a>"],[0,24,"<a href=\"Skill\/ShellSkill.php.html#16\">Weline\\Bot\\Skill\\ShellSkill<\/a>"],[0,25,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#25\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#13\">Weline\\Bot\\Adapter\\BotAgentAdapter::getCode<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#18\">Weline\\Bot\\Adapter\\BotAgentAdapter::getName<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#23\">Weline\\Bot\\Adapter\\BotAgentAdapter::getDescription<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#28\">Weline\\Bot\\Adapter\\BotAgentAdapter::getVersion<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#33\">Weline\\Bot\\Adapter\\BotAgentAdapter::getSupportedModelTypes<\/a>"],[0,15,"<a href=\"Adapter\/BotAgentAdapter.php.html#38\">Weline\\Bot\\Adapter\\BotAgentAdapter::adaptPrompt<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#100\">Weline\\Bot\\Adapter\\BotAgentAdapter::processResponse<\/a>"],[0,7,"<a href=\"Adapter\/BotAgentAdapter.php.html#105\">Weline\\Bot\\Adapter\\BotAgentAdapter::validateParams<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#122\">Weline\\Bot\\Adapter\\BotAgentAdapter::getParamTemplate<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#154\">Weline\\Bot\\Adapter\\BotAgentAdapter::getExamples<\/a>"],[0,1,"<a href=\"Adapter\/BotAgentAdapter.php.html#178\">Weline\\Bot\\Adapter\\BotAgentAdapter::supportsModel<\/a>"],[0,2,"<a href=\"Adapter\/BotAgentAdapter.php.html#183\">Weline\\Bot\\Adapter\\BotAgentAdapter::redactSensitiveInfo<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#13\">Weline\\Bot\\Adapter\\ITOpsAdapter::getCode<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#18\">Weline\\Bot\\Adapter\\ITOpsAdapter::getName<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#23\">Weline\\Bot\\Adapter\\ITOpsAdapter::getDescription<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#28\">Weline\\Bot\\Adapter\\ITOpsAdapter::getVersion<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#33\">Weline\\Bot\\Adapter\\ITOpsAdapter::getSupportedModelTypes<\/a>"],[0,3,"<a href=\"Adapter\/ITOpsAdapter.php.html#38\">Weline\\Bot\\Adapter\\ITOpsAdapter::adaptPrompt<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#65\">Weline\\Bot\\Adapter\\ITOpsAdapter::processResponse<\/a>"],[0,5,"<a href=\"Adapter\/ITOpsAdapter.php.html#70\">Weline\\Bot\\Adapter\\ITOpsAdapter::validateParams<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#82\">Weline\\Bot\\Adapter\\ITOpsAdapter::getParamTemplate<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#98\">Weline\\Bot\\Adapter\\ITOpsAdapter::getExamples<\/a>"],[0,1,"<a href=\"Adapter\/ITOpsAdapter.php.html#114\">Weline\\Bot\\Adapter\\ITOpsAdapter::supportsModel<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#13\">Weline\\Bot\\Adapter\\SEOAdapter::getCode<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#18\">Weline\\Bot\\Adapter\\SEOAdapter::getName<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#23\">Weline\\Bot\\Adapter\\SEOAdapter::getDescription<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#28\">Weline\\Bot\\Adapter\\SEOAdapter::getVersion<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#33\">Weline\\Bot\\Adapter\\SEOAdapter::getSupportedModelTypes<\/a>"],[0,3,"<a href=\"Adapter\/SEOAdapter.php.html#38\">Weline\\Bot\\Adapter\\SEOAdapter::adaptPrompt<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#68\">Weline\\Bot\\Adapter\\SEOAdapter::processResponse<\/a>"],[0,7,"<a href=\"Adapter\/SEOAdapter.php.html#73\">Weline\\Bot\\Adapter\\SEOAdapter::validateParams<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#88\">Weline\\Bot\\Adapter\\SEOAdapter::getParamTemplate<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#110\">Weline\\Bot\\Adapter\\SEOAdapter::getExamples<\/a>"],[0,1,"<a href=\"Adapter\/SEOAdapter.php.html#126\">Weline\\Bot\\Adapter\\SEOAdapter::supportsModel<\/a>"],[0,1,"<a href=\"Controller\/Api\/V1\/Chat.php.html#18\">Weline\\Bot\\Controller\\Api\\V1\\Chat::__construct<\/a>"],[0,8,"<a href=\"Controller\/Api\/V1\/Chat.php.html#28\">Weline\\Bot\\Controller\\Api\\V1\\Chat::postSend<\/a>"],[0,7,"<a href=\"Controller\/Api\/V1\/Chat.php.html#99\">Weline\\Bot\\Controller\\Api\\V1\\Chat::postStream<\/a>"],[0,3,"<a href=\"Controller\/Api\/V1\/Chat.php.html#170\">Weline\\Bot\\Controller\\Api\\V1\\Chat::getHistory<\/a>"],[0,3,"<a href=\"Controller\/Api\/V1\/Chat.php.html#204\">Weline\\Bot\\Controller\\Api\\V1\\Chat::postClear<\/a>"],[0,2,"<a href=\"Controller\/Api\/V1\/Chat.php.html#234\">Weline\\Bot\\Controller\\Api\\V1\\Chat::getSessions<\/a>"],[0,1,"<a href=\"Controller\/Api\/V1\/Chat.php.html#257\">Weline\\Bot\\Controller\\Api\\V1\\Chat::generateContextId<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Chat.php.html#17\">Weline\\Bot\\Controller\\Backend\\Chat::__construct<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Chat.php.html#22\">Weline\\Bot\\Controller\\Backend\\Chat::getIndex<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Memory.php.html#17\">Weline\\Bot\\Controller\\Backend\\Memory::__construct<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Memory.php.html#22\">Weline\\Bot\\Controller\\Backend\\Memory::getList<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Memory.php.html#67\">Weline\\Bot\\Controller\\Backend\\Memory::listing<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#19\">Weline\\Bot\\Controller\\Backend\\Role::__construct<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#25\">Weline\\Bot\\Controller\\Backend\\Role::getList<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#55\">Weline\\Bot\\Controller\\Backend\\Role::listing<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#61\">Weline\\Bot\\Controller\\Backend\\Role::getAdd<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Role.php.html#67\">Weline\\Bot\\Controller\\Backend\\Role::getEdit<\/a>"],[0,9,"<a href=\"Controller\/Backend\/Role.php.html#81\">Weline\\Bot\\Controller\\Backend\\Role::postSave<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#147\">Weline\\Bot\\Controller\\Backend\\Role::postSuggest<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#181\">Weline\\Bot\\Controller\\Backend\\Role::getSuggest<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Role.php.html#187\">Weline\\Bot\\Controller\\Backend\\Role::postDelete<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Role.php.html#215\">Weline\\Bot\\Controller\\Backend\\Role::postToggle<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#239\">Weline\\Bot\\Controller\\Backend\\Role::getModels<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#247\">Weline\\Bot\\Controller\\Backend\\Role::getAdapters<\/a>"],[0,11,"<a href=\"Controller\/Backend\/Role.php.html#255\">Weline\\Bot\\Controller\\Backend\\Role::renderForm<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Role.php.html#324\">Weline\\Bot\\Controller\\Backend\\Role::applyTemplatePrefill<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Role.php.html#350\">Weline\\Bot\\Controller\\Backend\\Role::findTemplateByCode<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#365\">Weline\\Bot\\Controller\\Backend\\Role::buildInitialGuide<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Role.php.html#385\">Weline\\Bot\\Controller\\Backend\\Role::normalizeGuideProfiles<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Role.php.html#418\">Weline\\Bot\\Controller\\Backend\\Role::getAvailableModels<\/a>"],[0,5,"<a href=\"Controller\/Backend\/Role.php.html#456\">Weline\\Bot\\Controller\\Backend\\Role::getAvailableAdapters<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Role.php.html#488\">Weline\\Bot\\Controller\\Backend\\Role::getAvailableSkills<\/a>"],[0,4,"<a href=\"Controller\/Backend\/Role.php.html#515\">Weline\\Bot\\Controller\\Backend\\Role::getRequestPayload<\/a>"],[0,11,"<a href=\"Controller\/Backend\/Role.php.html#531\">Weline\\Bot\\Controller\\Backend\\Role::parseStringList<\/a>"],[0,7,"<a href=\"Controller\/Backend\/Role.php.html#565\">Weline\\Bot\\Controller\\Backend\\Role::parseJsonArray<\/a>"],[0,10,"<a href=\"Controller\/Backend\/Role.php.html#589\">Weline\\Bot\\Controller\\Backend\\Role::getGuideConfig<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#624\">Weline\\Bot\\Controller\\Backend\\Role::clampProjectCount<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Role.php.html#630\">Weline\\Bot\\Controller\\Backend\\Role::isGuideEnabled<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Schedule.php.html#17\">Weline\\Bot\\Controller\\Backend\\Schedule::__construct<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Schedule.php.html#22\">Weline\\Bot\\Controller\\Backend\\Schedule::getList<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Schedule.php.html#43\">Weline\\Bot\\Controller\\Backend\\Schedule::listing<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Schedule.php.html#49\">Weline\\Bot\\Controller\\Backend\\Schedule::getAdd<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Schedule.php.html#62\">Weline\\Bot\\Controller\\Backend\\Schedule::getEdit<\/a>"],[0,6,"<a href=\"Controller\/Backend\/Schedule.php.html#83\">Weline\\Bot\\Controller\\Backend\\Schedule::postSave<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Schedule.php.html#130\">Weline\\Bot\\Controller\\Backend\\Schedule::postDelete<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Schedule.php.html#151\">Weline\\Bot\\Controller\\Backend\\Schedule::postToggle<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Schedule.php.html#175\">Weline\\Bot\\Controller\\Backend\\Schedule::postRun<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Session.php.html#17\">Weline\\Bot\\Controller\\Backend\\Session::__construct<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Session.php.html#22\">Weline\\Bot\\Controller\\Backend\\Session::getList<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Session.php.html#49\">Weline\\Bot\\Controller\\Backend\\Session::listing<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Session.php.html#55\">Weline\\Bot\\Controller\\Backend\\Session::getView<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Session.php.html#73\">Weline\\Bot\\Controller\\Backend\\Session::postArchive<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Session.php.html#94\">Weline\\Bot\\Controller\\Backend\\Session::postDelete<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Skill.php.html#17\">Weline\\Bot\\Controller\\Backend\\Skill::__construct<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Skill.php.html#22\">Weline\\Bot\\Controller\\Backend\\Skill::getList<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Skill.php.html#45\">Weline\\Bot\\Controller\\Backend\\Skill::listing<\/a>"],[0,2,"<a href=\"Controller\/Backend\/Skill.php.html#51\">Weline\\Bot\\Controller\\Backend\\Skill::getView<\/a>"],[0,3,"<a href=\"Controller\/Backend\/Skill.php.html#66\">Weline\\Bot\\Controller\\Backend\\Skill::postToggle<\/a>"],[0,1,"<a href=\"Controller\/Backend\/Skill.php.html#93\">Weline\\Bot\\Controller\\Backend\\Skill::getCategories<\/a>"],[0,1,"<a href=\"Cron\/MemoryCleanup.php.html#16\">Weline\\Bot\\Cron\\MemoryCleanup::__construct<\/a>"],[0,1,"<a href=\"Cron\/MemoryCleanup.php.html#20\">Weline\\Bot\\Cron\\MemoryCleanup::name<\/a>"],[0,1,"<a href=\"Cron\/MemoryCleanup.php.html#25\">Weline\\Bot\\Cron\\MemoryCleanup::execute_name<\/a>"],[0,1,"<a href=\"Cron\/MemoryCleanup.php.html#30\">Weline\\Bot\\Cron\\MemoryCleanup::tip<\/a>"],[0,1,"<a href=\"Cron\/MemoryCleanup.php.html#35\">Weline\\Bot\\Cron\\MemoryCleanup::cron_time<\/a>"],[0,1,"<a href=\"Cron\/MemoryCleanup.php.html#40\">Weline\\Bot\\Cron\\MemoryCleanup::execute<\/a>"],[0,1,"<a href=\"Cron\/MemoryCleanup.php.html#46\">Weline\\Bot\\Cron\\MemoryCleanup::unlock_timeout<\/a>"],[0,1,"<a href=\"Cron\/ScheduleRunner.php.html#19\">Weline\\Bot\\Cron\\ScheduleRunner::__construct<\/a>"],[0,1,"<a href=\"Cron\/ScheduleRunner.php.html#26\">Weline\\Bot\\Cron\\ScheduleRunner::name<\/a>"],[0,1,"<a href=\"Cron\/ScheduleRunner.php.html#31\">Weline\\Bot\\Cron\\ScheduleRunner::execute_name<\/a>"],[0,1,"<a href=\"Cron\/ScheduleRunner.php.html#36\">Weline\\Bot\\Cron\\ScheduleRunner::tip<\/a>"],[0,1,"<a href=\"Cron\/ScheduleRunner.php.html#41\">Weline\\Bot\\Cron\\ScheduleRunner::cron_time<\/a>"],[0,5,"<a href=\"Cron\/ScheduleRunner.php.html#46\">Weline\\Bot\\Cron\\ScheduleRunner::execute<\/a>"],[0,1,"<a href=\"Cron\/ScheduleRunner.php.html#112\">Weline\\Bot\\Cron\\ScheduleRunner::unlock_timeout<\/a>"],[0,1,"<a href=\"Model\/BotChatMessage.php.html#64\">Weline\\Bot\\Model\\BotChatMessage::_init<\/a>"],[0,1,"<a href=\"Model\/BotChatMessage.php.html#69\">Weline\\Bot\\Model\\BotChatMessage::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotChatMessage.php.html#77\">Weline\\Bot\\Model\\BotChatMessage::getToolCalls<\/a>"],[0,1,"<a href=\"Model\/BotChatMessage.php.html#90\">Weline\\Bot\\Model\\BotChatMessage::setToolCalls<\/a>"],[0,3,"<a href=\"Model\/BotChatMessage.php.html#98\">Weline\\Bot\\Model\\BotChatMessage::getSession<\/a>"],[0,3,"<a href=\"Model\/BotChatMessage.php.html#109\">Weline\\Bot\\Model\\BotChatMessage::toOpenAIMessage<\/a>"],[0,3,"<a href=\"Model\/BotChatMessage.php.html#130\">Weline\\Bot\\Model\\BotChatMessage::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotChatSession.php.html#73\">Weline\\Bot\\Model\\BotChatSession::_init<\/a>"],[0,1,"<a href=\"Model\/BotChatSession.php.html#78\">Weline\\Bot\\Model\\BotChatSession::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotChatSession.php.html#86\">Weline\\Bot\\Model\\BotChatSession::getMetadata<\/a>"],[0,1,"<a href=\"Model\/BotChatSession.php.html#99\">Weline\\Bot\\Model\\BotChatSession::setMetadata<\/a>"],[0,3,"<a href=\"Model\/BotChatSession.php.html#107\">Weline\\Bot\\Model\\BotChatSession::getRole<\/a>"],[0,1,"<a href=\"Model\/BotChatSession.php.html#118\">Weline\\Bot\\Model\\BotChatSession::isActive<\/a>"],[0,1,"<a href=\"Model\/BotChatSession.php.html#126\">Weline\\Bot\\Model\\BotChatSession::incrementMessageCount<\/a>"],[0,3,"<a href=\"Model\/BotChatSession.php.html#136\">Weline\\Bot\\Model\\BotChatSession::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotMemoryEdge.php.html#59\">Weline\\Bot\\Model\\BotMemoryEdge::_init<\/a>"],[0,1,"<a href=\"Model\/BotMemoryEdge.php.html#64\">Weline\\Bot\\Model\\BotMemoryEdge::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotMemoryEdge.php.html#72\">Weline\\Bot\\Model\\BotMemoryEdge::getMetadata<\/a>"],[0,1,"<a href=\"Model\/BotMemoryEdge.php.html#85\">Weline\\Bot\\Model\\BotMemoryEdge::setMetadata<\/a>"],[0,3,"<a href=\"Model\/BotMemoryEdge.php.html#90\">Weline\\Bot\\Model\\BotMemoryEdge::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotMemoryNode.php.html#81\">Weline\\Bot\\Model\\BotMemoryNode::_init<\/a>"],[0,1,"<a href=\"Model\/BotMemoryNode.php.html#86\">Weline\\Bot\\Model\\BotMemoryNode::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotMemoryNode.php.html#94\">Weline\\Bot\\Model\\BotMemoryNode::getMetadata<\/a>"],[0,1,"<a href=\"Model\/BotMemoryNode.php.html#107\">Weline\\Bot\\Model\\BotMemoryNode::setMetadata<\/a>"],[0,1,"<a href=\"Model\/BotMemoryNode.php.html#115\">Weline\\Bot\\Model\\BotMemoryNode::incrementAccess<\/a>"],[0,1,"<a href=\"Model\/BotMemoryNode.php.html#127\">Weline\\Bot\\Model\\BotMemoryNode::getDecayScore<\/a>"],[0,2,"<a href=\"Model\/BotMemoryNode.php.html#146\">Weline\\Bot\\Model\\BotMemoryNode::isExpired<\/a>"],[0,2,"<a href=\"Model\/BotMemoryNode.php.html#155\">Weline\\Bot\\Model\\BotMemoryNode::shouldForget<\/a>"],[0,4,"<a href=\"Model\/BotMemoryNode.php.html#160\">Weline\\Bot\\Model\\BotMemoryNode::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#81\">Weline\\Bot\\Model\\BotRole::_init<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#86\">Weline\\Bot\\Model\\BotRole::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotRole.php.html#94\">Weline\\Bot\\Model\\BotRole::getPermissions<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#107\">Weline\\Bot\\Model\\BotRole::setPermissions<\/a>"],[0,4,"<a href=\"Model\/BotRole.php.html#115\">Weline\\Bot\\Model\\BotRole::getSkills<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#128\">Weline\\Bot\\Model\\BotRole::setSkills<\/a>"],[0,4,"<a href=\"Model\/BotRole.php.html#136\">Weline\\Bot\\Model\\BotRole::getModelConfig<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#149\">Weline\\Bot\\Model\\BotRole::setModelConfig<\/a>"],[0,3,"<a href=\"Model\/BotRole.php.html#157\">Weline\\Bot\\Model\\BotRole::getAiModel<\/a>"],[0,3,"<a href=\"Model\/BotRole.php.html#176\">Weline\\Bot\\Model\\BotRole::getScenarioAdapter<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#195\">Weline\\Bot\\Model\\BotRole::hasSkill<\/a>"],[0,4,"<a href=\"Model\/BotRole.php.html#203\">Weline\\Bot\\Model\\BotRole::hasPermission<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#218\">Weline\\Bot\\Model\\BotRole::isEnabled<\/a>"],[0,1,"<a href=\"Model\/BotRole.php.html#226\">Weline\\Bot\\Model\\BotRole::isDefault<\/a>"],[0,2,"<a href=\"Model\/BotRole.php.html#234\">Weline\\Bot\\Model\\BotRole::getAvailableModels<\/a>"],[0,2,"<a href=\"Model\/BotRole.php.html#246\">Weline\\Bot\\Model\\BotRole::getAvailableAdapters<\/a>"],[0,5,"<a href=\"Model\/BotRole.php.html#255\">Weline\\Bot\\Model\\BotRole::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotSchedule.php.html#89\">Weline\\Bot\\Model\\BotSchedule::_init<\/a>"],[0,1,"<a href=\"Model\/BotSchedule.php.html#94\">Weline\\Bot\\Model\\BotSchedule::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotSchedule.php.html#102\">Weline\\Bot\\Model\\BotSchedule::getContext<\/a>"],[0,1,"<a href=\"Model\/BotSchedule.php.html#115\">Weline\\Bot\\Model\\BotSchedule::setContext<\/a>"],[0,3,"<a href=\"Model\/BotSchedule.php.html#123\">Weline\\Bot\\Model\\BotSchedule::getRole<\/a>"],[0,1,"<a href=\"Model\/BotSchedule.php.html#134\">Weline\\Bot\\Model\\BotSchedule::isEnabled<\/a>"],[0,2,"<a href=\"Model\/BotSchedule.php.html#142\">Weline\\Bot\\Model\\BotSchedule::isDue<\/a>"],[0,2,"<a href=\"Model\/BotSchedule.php.html#151\">Weline\\Bot\\Model\\BotSchedule::calculateNextRun<\/a>"],[0,1,"<a href=\"Model\/BotSchedule.php.html#164\">Weline\\Bot\\Model\\BotSchedule::parseCronToTimestamp<\/a>"],[0,2,"<a href=\"Model\/BotSchedule.php.html#174\">Weline\\Bot\\Model\\BotSchedule::recordRun<\/a>"],[0,3,"<a href=\"Model\/BotSchedule.php.html#191\">Weline\\Bot\\Model\\BotSchedule::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotScheduleLog.php.html#61\">Weline\\Bot\\Model\\BotScheduleLog::_init<\/a>"],[0,1,"<a href=\"Model\/BotScheduleLog.php.html#66\">Weline\\Bot\\Model\\BotScheduleLog::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotScheduleLog.php.html#74\">Weline\\Bot\\Model\\BotScheduleLog::getContextSnapshot<\/a>"],[0,3,"<a href=\"Model\/BotScheduleLog.php.html#87\">Weline\\Bot\\Model\\BotScheduleLog::calculateDuration<\/a>"],[0,1,"<a href=\"Model\/BotScheduleLog.php.html#100\">Weline\\Bot\\Model\\BotScheduleLog::markSuccess<\/a>"],[0,1,"<a href=\"Model\/BotScheduleLog.php.html#112\">Weline\\Bot\\Model\\BotScheduleLog::markFailed<\/a>"],[0,3,"<a href=\"Model\/BotScheduleLog.php.html#121\">Weline\\Bot\\Model\\BotScheduleLog::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotSkill.php.html#84\">Weline\\Bot\\Model\\BotSkill::_init<\/a>"],[0,1,"<a href=\"Model\/BotSkill.php.html#89\">Weline\\Bot\\Model\\BotSkill::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotSkill.php.html#97\">Weline\\Bot\\Model\\BotSkill::getParameters<\/a>"],[0,1,"<a href=\"Model\/BotSkill.php.html#110\">Weline\\Bot\\Model\\BotSkill::setParameters<\/a>"],[0,4,"<a href=\"Model\/BotSkill.php.html#118\">Weline\\Bot\\Model\\BotSkill::getPermissionRequired<\/a>"],[0,1,"<a href=\"Model\/BotSkill.php.html#131\">Weline\\Bot\\Model\\BotSkill::setPermissionRequired<\/a>"],[0,1,"<a href=\"Model\/BotSkill.php.html#139\">Weline\\Bot\\Model\\BotSkill::isDangerous<\/a>"],[0,1,"<a href=\"Model\/BotSkill.php.html#147\">Weline\\Bot\\Model\\BotSkill::requiresConfirmation<\/a>"],[0,1,"<a href=\"Model\/BotSkill.php.html#155\">Weline\\Bot\\Model\\BotSkill::isActive<\/a>"],[0,4,"<a href=\"Model\/BotSkill.php.html#160\">Weline\\Bot\\Model\\BotSkill::beforeSave<\/a>"],[0,1,"<a href=\"Model\/BotToolCall.php.html#80\">Weline\\Bot\\Model\\BotToolCall::_init<\/a>"],[0,1,"<a href=\"Model\/BotToolCall.php.html#85\">Weline\\Bot\\Model\\BotToolCall::getIdFieldName<\/a>"],[0,4,"<a href=\"Model\/BotToolCall.php.html#93\">Weline\\Bot\\Model\\BotToolCall::getArguments<\/a>"],[0,1,"<a href=\"Model\/BotToolCall.php.html#106\">Weline\\Bot\\Model\\BotToolCall::setArguments<\/a>"],[0,1,"<a href=\"Model\/BotToolCall.php.html#114\">Weline\\Bot\\Model\\BotToolCall::markRunning<\/a>"],[0,1,"<a href=\"Model\/BotToolCall.php.html#124\">Weline\\Bot\\Model\\BotToolCall::markSuccess<\/a>"],[0,1,"<a href=\"Model\/BotToolCall.php.html#136\">Weline\\Bot\\Model\\BotToolCall::markFailed<\/a>"],[0,3,"<a href=\"Model\/BotToolCall.php.html#148\">Weline\\Bot\\Model\\BotToolCall::calculateDuration<\/a>"],[0,1,"<a href=\"Model\/BotToolCall.php.html#160\">Weline\\Bot\\Model\\BotToolCall::isPending<\/a>"],[0,2,"<a href=\"Model\/BotToolCall.php.html#168\">Weline\\Bot\\Model\\BotToolCall::needsConfirmation<\/a>"],[0,4,"<a href=\"Model\/BotToolCall.php.html#174\">Weline\\Bot\\Model\\BotToolCall::beforeSave<\/a>"],[0,1,"<a href=\"Query\/BotQueryProvider.php.html#25\">Weline\\Bot\\Query\\BotQueryProvider::__construct<\/a>"],[0,1,"<a href=\"Query\/BotQueryProvider.php.html#32\">Weline\\Bot\\Query\\BotQueryProvider::getProviderName<\/a>"],[0,1,"<a href=\"Query\/BotQueryProvider.php.html#37\">Weline\\Bot\\Query\\BotQueryProvider::execute<\/a>"],[0,1,"<a href=\"Query\/BotQueryProvider.php.html#55\">Weline\\Bot\\Query\\BotQueryProvider::getDescriptor<\/a>"],[0,3,"<a href=\"Query\/BotQueryProvider.php.html#141\">Weline\\Bot\\Query\\BotQueryProvider::getRole<\/a>"],[0,3,"<a href=\"Query\/BotQueryProvider.php.html#159\">Weline\\Bot\\Query\\BotQueryProvider::getRoleById<\/a>"],[0,1,"<a href=\"Query\/BotQueryProvider.php.html#173\">Weline\\Bot\\Query\\BotQueryProvider::getActiveRoles<\/a>"],[0,2,"<a href=\"Query\/BotQueryProvider.php.html#189\">Weline\\Bot\\Query\\BotQueryProvider::getDefaultRole<\/a>"],[0,3,"<a href=\"Query\/BotQueryProvider.php.html#203\">Weline\\Bot\\Query\\BotQueryProvider::getSkills<\/a>"],[0,3,"<a href=\"Query\/BotQueryProvider.php.html#224\">Weline\\Bot\\Query\\BotQueryProvider::getSkill<\/a>"],[0,3,"<a href=\"Query\/BotQueryProvider.php.html#242\">Weline\\Bot\\Query\\BotQueryProvider::getSession<\/a>"],[0,3,"<a href=\"Query\/BotQueryProvider.php.html#256\">Weline\\Bot\\Query\\BotQueryProvider::getActiveSessions<\/a>"],[0,2,"<a href=\"Query\/BotQueryProvider.php.html#283\">Weline\\Bot\\Query\\BotQueryProvider::getSchedules<\/a>"],[0,1,"<a href=\"Query\/BotQueryProvider.php.html#304\">Weline\\Bot\\Query\\BotQueryProvider::getDueSchedules<\/a>"],[0,1,"<a href=\"Query\/BotQueryProvider.php.html#322\">Weline\\Bot\\Query\\BotQueryProvider::introspect<\/a>"],[0,3,"<a href=\"Query\/BotQueryProvider.php.html#337\">Weline\\Bot\\Query\\BotQueryProvider::getOperationDetail<\/a>"],[0,1,"<a href=\"Service\/AgentEngine.php.html#18\">Weline\\Bot\\Service\\AgentEngine::__construct<\/a>"],[0,9,"<a href=\"Service\/AgentEngine.php.html#29\">Weline\\Bot\\Service\\AgentEngine::execute<\/a>"],[0,6,"<a href=\"Service\/AgentEngine.php.html#102\">Weline\\Bot\\Service\\AgentEngine::executeStream<\/a>"],[0,7,"<a href=\"Service\/AgentEngine.php.html#127\">Weline\\Bot\\Service\\AgentEngine::adaptPrompt<\/a>"],[0,2,"<a href=\"Service\/AgentEngine.php.html#163\">Weline\\Bot\\Service\\AgentEngine::requestAgentResponse<\/a>"],[0,2,"<a href=\"Service\/AgentEngine.php.html#184\">Weline\\Bot\\Service\\AgentEngine::buildProviderParams<\/a>"],[0,3,"<a href=\"Service\/AgentEngine.php.html#198\">Weline\\Bot\\Service\\AgentEngine::withCurrentPrompt<\/a>"],[0,4,"<a href=\"Service\/AgentEngine.php.html#215\">Weline\\Bot\\Service\\AgentEngine::persistAssistantToolRequest<\/a>"],[0,3,"<a href=\"Service\/AgentEngine.php.html#235\">Weline\\Bot\\Service\\AgentEngine::resolveModelCode<\/a>"],[0,2,"<a href=\"Service\/AgentEngine.php.html#252\">Weline\\Bot\\Service\\AgentEngine::resolveScenarioCode<\/a>"],[0,3,"<a href=\"Service\/AgentEngine.php.html#258\">Weline\\Bot\\Service\\AgentEngine::hasSuccessfulToolResult<\/a>"],[0,5,"<a href=\"Service\/AgentEngine.php.html#269\">Weline\\Bot\\Service\\AgentEngine::formatExecutionError<\/a>"],[0,8,"<a href=\"Service\/AgentEngine.php.html#283\">Weline\\Bot\\Service\\AgentEngine::processToolCalls<\/a>"],[0,4,"<a href=\"Service\/AgentEngine.php.html#364\">Weline\\Bot\\Service\\AgentEngine::submitToolResults<\/a>"],[0,1,"<a href=\"Service\/ChatSessionManager.php.html#17\">Weline\\Bot\\Service\\ChatSessionManager::__construct<\/a>"],[0,2,"<a href=\"Service\/ChatSessionManager.php.html#25\">Weline\\Bot\\Service\\ChatSessionManager::createSession<\/a>"],[0,2,"<a href=\"Service\/ChatSessionManager.php.html#45\">Weline\\Bot\\Service\\ChatSessionManager::getOrCreateSession<\/a>"],[0,2,"<a href=\"Service\/ChatSessionManager.php.html#69\">Weline\\Bot\\Service\\ChatSessionManager::getSession<\/a>"],[0,5,"<a href=\"Service\/ChatSessionManager.php.html#78\">Weline\\Bot\\Service\\ChatSessionManager::addMessage<\/a>"],[0,1,"<a href=\"Service\/ChatSessionManager.php.html#120\">Weline\\Bot\\Service\\ChatSessionManager::getMessageHistory<\/a>"],[0,2,"<a href=\"Service\/ChatSessionManager.php.html#137\">Weline\\Bot\\Service\\ChatSessionManager::getMessagesForOpenAI<\/a>"],[0,1,"<a href=\"Service\/ChatSessionManager.php.html#152\">Weline\\Bot\\Service\\ChatSessionManager::clearHistory<\/a>"],[0,1,"<a href=\"Service\/ChatSessionManager.php.html#168\">Weline\\Bot\\Service\\ChatSessionManager::archiveSession<\/a>"],[0,1,"<a href=\"Service\/ChatSessionManager.php.html#177\">Weline\\Bot\\Service\\ChatSessionManager::deleteSession<\/a>"],[0,1,"<a href=\"Service\/ChatSessionManager.php.html#187\">Weline\\Bot\\Service\\ChatSessionManager::getActiveSessions<\/a>"],[0,1,"<a href=\"Service\/ChatSessionManager.php.html#207\">Weline\\Bot\\Service\\ChatSessionManager::generateContextId<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#16\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool::getName<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#21\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool::getDescription<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#26\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool::getParameters<\/a>"],[0,3,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#54\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool::execute<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#73\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool::isEnabled<\/a>"],[0,4,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#83\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool::vectorSearchViaQuery<\/a>"],[0,2,"<a href=\"Service\/CodingAgent\/Tool\/CodebaseSearchTool.php.html#108\">Weline\\Bot\\Service\\CodingAgent\\Tool\\CodebaseSearchTool::fallbackGrepSearch<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#15\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool::getName<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#20\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool::getDescription<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#25\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool::getParameters<\/a>"],[0,8,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#48\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool::execute<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#90\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool::isEnabled<\/a>"],[0,5,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#95\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool::resolvePath<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GlobFileSearchTool.php.html#111\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GlobFileSearchTool::matchGlob<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#15\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool::getName<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#20\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool::getDescription<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#25\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool::getParameters<\/a>"],[0,12,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#52\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool::execute<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#107\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool::isEnabled<\/a>"],[0,8,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#112\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool::resolvePath<\/a>"],[0,2,"<a href=\"Service\/CodingAgent\/Tool\/GrepTool.php.html#129\">Weline\\Bot\\Service\\CodingAgent\\Tool\\GrepTool::buildIterator<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ListDirTool.php.html#13\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ListDirTool::getName<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ListDirTool.php.html#18\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ListDirTool::getDescription<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ListDirTool.php.html#23\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ListDirTool::getParameters<\/a>"],[0,9,"<a href=\"Service\/CodingAgent\/Tool\/ListDirTool.php.html#37\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ListDirTool::execute<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ListDirTool.php.html#80\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ListDirTool::isEnabled<\/a>"],[0,5,"<a href=\"Service\/CodingAgent\/Tool\/ListDirTool.php.html#85\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ListDirTool::resolvePath<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ReadFileTool.php.html#15\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ReadFileTool::getName<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ReadFileTool.php.html#20\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ReadFileTool::getDescription<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ReadFileTool.php.html#25\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ReadFileTool::getParameters<\/a>"],[0,11,"<a href=\"Service\/CodingAgent\/Tool\/ReadFileTool.php.html#47\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ReadFileTool::execute<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/ReadFileTool.php.html#88\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ReadFileTool::isEnabled<\/a>"],[0,9,"<a href=\"Service\/CodingAgent\/Tool\/ReadFileTool.php.html#93\">Weline\\Bot\\Service\\CodingAgent\\Tool\\ReadFileTool::resolvePath<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#21\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool::getName<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#26\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool::getDescription<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#31\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool::getParameters<\/a>"],[0,9,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#54\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool::execute<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#99\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool::isEnabled<\/a>"],[0,7,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#104\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool::isAllowed<\/a>"],[0,7,"<a href=\"Service\/CodingAgent\/Tool\/RunTerminalTool.php.html#121\">Weline\\Bot\\Service\\CodingAgent\\Tool\\RunTerminalTool::checkChainedCommand<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/SearchReplaceTool.php.html#15\">Weline\\Bot\\Service\\CodingAgent\\Tool\\SearchReplaceTool::getName<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/SearchReplaceTool.php.html#20\">Weline\\Bot\\Service\\CodingAgent\\Tool\\SearchReplaceTool::getDescription<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/SearchReplaceTool.php.html#25\">Weline\\Bot\\Service\\CodingAgent\\Tool\\SearchReplaceTool::getParameters<\/a>"],[0,9,"<a href=\"Service\/CodingAgent\/Tool\/SearchReplaceTool.php.html#47\">Weline\\Bot\\Service\\CodingAgent\\Tool\\SearchReplaceTool::execute<\/a>"],[0,1,"<a href=\"Service\/CodingAgent\/Tool\/SearchReplaceTool.php.html#91\">Weline\\Bot\\Service\\CodingAgent\\Tool\\SearchReplaceTool::isEnabled<\/a>"],[0,9,"<a href=\"Service\/CodingAgent\/Tool\/SearchReplaceTool.php.html#96\">Weline\\Bot\\Service\\CodingAgent\\Tool\\SearchReplaceTool::resolvePath<\/a>"],[0,1,"<a href=\"Service\/ContextBuilder.php.html#19\">Weline\\Bot\\Service\\ContextBuilder::__construct<\/a>"],[0,3,"<a href=\"Service\/ContextBuilder.php.html#33\">Weline\\Bot\\Service\\ContextBuilder::build<\/a>"],[0,5,"<a href=\"Service\/ContextBuilder.php.html#80\">Weline\\Bot\\Service\\ContextBuilder::buildSystemPrompt<\/a>"],[0,2,"<a href=\"Service\/ContextBuilder.php.html#115\">Weline\\Bot\\Service\\ContextBuilder::formatMemories<\/a>"],[0,3,"<a href=\"Service\/ContextBuilder.php.html#140\">Weline\\Bot\\Service\\ContextBuilder::buildCompact<\/a>"],[0,2,"<a href=\"Service\/ContextBuilder.php.html#173\">Weline\\Bot\\Service\\ContextBuilder::buildCompactSystemPrompt<\/a>"],[0,1,"<a href=\"Service\/MemoryService.php.html#29\">Weline\\Bot\\Service\\MemoryService::__construct<\/a>"],[0,5,"<a href=\"Service\/MemoryService.php.html#38\">Weline\\Bot\\Service\\MemoryService::extractAndSave<\/a>"],[0,5,"<a href=\"Service\/MemoryService.php.html#79\">Weline\\Bot\\Service\\MemoryService::getRelevantMemories<\/a>"],[0,2,"<a href=\"Service\/MemoryService.php.html#113\">Weline\\Bot\\Service\\MemoryService::search<\/a>"],[0,3,"<a href=\"Service\/MemoryService.php.html#138\">Weline\\Bot\\Service\\MemoryService::saveMemoryNode<\/a>"],[0,1,"<a href=\"Service\/MemoryService.php.html#181\">Weline\\Bot\\Service\\MemoryService::createEdge<\/a>"],[0,3,"<a href=\"Service\/MemoryService.php.html#200\">Weline\\Bot\\Service\\MemoryService::cleanup<\/a>"],[0,2,"<a href=\"Service\/MemoryService.php.html#225\">Weline\\Bot\\Service\\MemoryService::getUserPreferences<\/a>"],[0,2,"<a href=\"Service\/MemoryService.php.html#248\">Weline\\Bot\\Service\\MemoryService::buildConversationText<\/a>"],[0,1,"<a href=\"Service\/MemoryService.php.html#262\">Weline\\Bot\\Service\\MemoryService::buildExtractionPrompt<\/a>"],[0,3,"<a href=\"Service\/MemoryService.php.html#289\">Weline\\Bot\\Service\\MemoryService::parseExtractionResult<\/a>"],[0,1,"<a href=\"Service\/NaturalTimeParser.php.html#48\">Weline\\Bot\\Service\\NaturalTimeParser::parse<\/a>"],[0,8,"<a href=\"Service\/NaturalTimeParser.php.html#59\">Weline\\Bot\\Service\\NaturalTimeParser::tryParsePatterns<\/a>"],[0,7,"<a href=\"Service\/NaturalTimeParser.php.html#104\">Weline\\Bot\\Service\\NaturalTimeParser::parseDaily<\/a>"],[0,5,"<a href=\"Service\/NaturalTimeParser.php.html#136\">Weline\\Bot\\Service\\NaturalTimeParser::parseWeekly<\/a>"],[0,5,"<a href=\"Service\/NaturalTimeParser.php.html#162\">Weline\\Bot\\Service\\NaturalTimeParser::parseMonthly<\/a>"],[0,5,"<a href=\"Service\/NaturalTimeParser.php.html#190\">Weline\\Bot\\Service\\NaturalTimeParser::parseChineseNumber<\/a>"],[0,8,"<a href=\"Service\/NaturalTimeParser.php.html#217\">Weline\\Bot\\Service\\NaturalTimeParser::validate<\/a>"],[0,12,"<a href=\"Service\/NaturalTimeParser.php.html#240\">Weline\\Bot\\Service\\NaturalTimeParser::toHumanReadable<\/a>"],[0,1,"<a href=\"Service\/PermissionValidator.php.html#15\">Weline\\Bot\\Service\\PermissionValidator::__construct<\/a>"],[0,5,"<a href=\"Service\/PermissionValidator.php.html#27\">Weline\\Bot\\Service\\PermissionValidator::validate<\/a>"],[0,7,"<a href=\"Service\/PermissionValidator.php.html#61\">Weline\\Bot\\Service\\PermissionValidator::checkPermission<\/a>"],[0,9,"<a href=\"Service\/PermissionValidator.php.html#102\">Weline\\Bot\\Service\\PermissionValidator::matchPermissionSpec<\/a>"],[0,3,"<a href=\"Service\/PermissionValidator.php.html#139\">Weline\\Bot\\Service\\PermissionValidator::matchFsSpec<\/a>"],[0,5,"<a href=\"Service\/PermissionValidator.php.html#162\">Weline\\Bot\\Service\\PermissionValidator::matchHttpSpec<\/a>"],[0,4,"<a href=\"Service\/PermissionValidator.php.html#188\">Weline\\Bot\\Service\\PermissionValidator::matchShellSpec<\/a>"],[0,3,"<a href=\"Service\/PermissionValidator.php.html#208\">Weline\\Bot\\Service\\PermissionValidator::matchDbSpec<\/a>"],[0,3,"<a href=\"Service\/PermissionValidator.php.html#229\">Weline\\Bot\\Service\\PermissionValidator::matchPattern<\/a>"],[0,2,"<a href=\"Service\/PermissionValidator.php.html#247\">Weline\\Bot\\Service\\PermissionValidator::matchPath<\/a>"],[0,1,"<a href=\"Service\/PermissionValidator.php.html#261\">Weline\\Bot\\Service\\PermissionValidator::normalizePath<\/a>"],[0,1,"<a href=\"Service\/RoleConfigAssistant.php.html#17\">Weline\\Bot\\Service\\RoleConfigAssistant::__construct<\/a>"],[0,2,"<a href=\"Service\/RoleConfigAssistant.php.html#25\">Weline\\Bot\\Service\\RoleConfigAssistant::getTemplates<\/a>"],[0,3,"<a href=\"Service\/RoleConfigAssistant.php.html#89\">Weline\\Bot\\Service\\RoleConfigAssistant::buildSuggestion<\/a>"],[0,10,"<a href=\"Service\/RoleConfigAssistant.php.html#136\">Weline\\Bot\\Service\\RoleConfigAssistant::buildTemplateDraft<\/a>"],[0,16,"<a href=\"Service\/RoleConfigAssistant.php.html#202\">Weline\\Bot\\Service\\RoleConfigAssistant::applyInputStrategy<\/a>"],[0,3,"<a href=\"Service\/RoleConfigAssistant.php.html#307\">Weline\\Bot\\Service\\RoleConfigAssistant::buildAiDraft<\/a>"],[0,11,"<a href=\"Service\/RoleConfigAssistant.php.html#363\">Weline\\Bot\\Service\\RoleConfigAssistant::mergeDraft<\/a>"],[0,12,"<a href=\"Service\/RoleConfigAssistant.php.html#404\">Weline\\Bot\\Service\\RoleConfigAssistant::sanitizeDraft<\/a>"],[0,6,"<a href=\"Service\/RoleConfigAssistant.php.html#477\">Weline\\Bot\\Service\\RoleConfigAssistant::resolvePreferredModel<\/a>"],[0,3,"<a href=\"Service\/RoleConfigAssistant.php.html#501\">Weline\\Bot\\Service\\RoleConfigAssistant::findTemplate<\/a>"],[0,4,"<a href=\"Service\/RoleConfigAssistant.php.html#517\">Weline\\Bot\\Service\\RoleConfigAssistant::filterSkills<\/a>"],[0,4,"<a href=\"Service\/RoleConfigAssistant.php.html#536\">Weline\\Bot\\Service\\RoleConfigAssistant::sanitizePermissions<\/a>"],[0,7,"<a href=\"Service\/RoleConfigAssistant.php.html#555\">Weline\\Bot\\Service\\RoleConfigAssistant::inferPermissionsBySkills<\/a>"],[0,1,"<a href=\"Service\/RoleConfigAssistant.php.html#585\">Weline\\Bot\\Service\\RoleConfigAssistant::sanitizeModelConfig<\/a>"],[0,2,"<a href=\"Service\/RoleConfigAssistant.php.html#604\">Weline\\Bot\\Service\\RoleConfigAssistant::normalizeProfile<\/a>"],[0,2,"<a href=\"Service\/RoleConfigAssistant.php.html#612\">Weline\\Bot\\Service\\RoleConfigAssistant::normalizeWorkflowStyle<\/a>"],[0,2,"<a href=\"Service\/RoleConfigAssistant.php.html#620\">Weline\\Bot\\Service\\RoleConfigAssistant::normalizeRiskLevel<\/a>"],[0,1,"<a href=\"Service\/RoleConfigAssistant.php.html#631\">Weline\\Bot\\Service\\RoleConfigAssistant::getProfileMeta<\/a>"],[0,4,"<a href=\"Service\/RoleConfigAssistant.php.html#664\">Weline\\Bot\\Service\\RoleConfigAssistant::containsModel<\/a>"],[0,4,"<a href=\"Service\/RoleConfigAssistant.php.html#682\">Weline\\Bot\\Service\\RoleConfigAssistant::containsAdapter<\/a>"],[0,5,"<a href=\"Service\/RoleConfigAssistant.php.html#697\">Weline\\Bot\\Service\\RoleConfigAssistant::slugify<\/a>"],[0,5,"<a href=\"Service\/RoleConfigAssistant.php.html#723\">Weline\\Bot\\Service\\RoleConfigAssistant::extractJsonObject<\/a>"],[0,1,"<a href=\"Service\/SkillContext.php.html#16\">Weline\\Bot\\Service\\SkillContext::__construct<\/a>"],[0,1,"<a href=\"Service\/SkillContext.php.html#25\">Weline\\Bot\\Service\\SkillContext::getRole<\/a>"],[0,1,"<a href=\"Service\/SkillContext.php.html#33\">Weline\\Bot\\Service\\SkillContext::getSession<\/a>"],[0,1,"<a href=\"Service\/SkillContext.php.html#41\">Weline\\Bot\\Service\\SkillContext::getContextId<\/a>"],[0,1,"<a href=\"Service\/SkillContext.php.html#49\">Weline\\Bot\\Service\\SkillContext::getChannel<\/a>"],[0,2,"<a href=\"Service\/SkillContext.php.html#57\">Weline\\Bot\\Service\\SkillContext::getExtra<\/a>"],[0,1,"<a href=\"Service\/SkillPackageManager.php.html#12\">Weline\\Bot\\Service\\SkillPackageManager::__construct<\/a>"],[0,2,"<a href=\"Service\/SkillPackageManager.php.html#16\">Weline\\Bot\\Service\\SkillPackageManager::getSkill<\/a>"],[0,1,"<a href=\"Service\/SkillPackageManager.php.html#27\">Weline\\Bot\\Service\\SkillPackageManager::getAllSkills<\/a>"],[0,2,"<a href=\"Service\/SkillPackageManager.php.html#37\">Weline\\Bot\\Service\\SkillPackageManager::getSkillsForRole<\/a>"],[0,4,"<a href=\"Service\/SkillPackageManager.php.html#53\">Weline\\Bot\\Service\\SkillPackageManager::getToolsForRole<\/a>"],[0,8,"<a href=\"Service\/SkillPackageManager.php.html#77\">Weline\\Bot\\Service\\SkillPackageManager::install<\/a>"],[0,3,"<a href=\"Service\/SkillPackageManager.php.html#105\">Weline\\Bot\\Service\\SkillPackageManager::uninstall<\/a>"],[0,2,"<a href=\"Service\/SkillPackageManager.php.html#120\">Weline\\Bot\\Service\\SkillPackageManager::disable<\/a>"],[0,2,"<a href=\"Service\/SkillPackageManager.php.html#132\">Weline\\Bot\\Service\\SkillPackageManager::enable<\/a>"],[0,1,"<a href=\"Service\/SkillPackageManager.php.html#148\">Weline\\Bot\\Service\\SkillPackageManager::getSkillsByCategory<\/a>"],[0,1,"<a href=\"Service\/SkillResult.php.html#11\">Weline\\Bot\\Service\\SkillResult::__construct<\/a>"],[0,1,"<a href=\"Service\/SkillResult.php.html#21\">Weline\\Bot\\Service\\SkillResult::success<\/a>"],[0,1,"<a href=\"Service\/SkillResult.php.html#33\">Weline\\Bot\\Service\\SkillResult::error<\/a>"],[0,2,"<a href=\"Service\/SkillResult.php.html#45\">Weline\\Bot\\Service\\SkillResult::cancelled<\/a>"],[0,1,"<a href=\"Service\/SkillResult.php.html#56\">Weline\\Bot\\Service\\SkillResult::getData<\/a>"],[0,1,"<a href=\"Service\/SkillResult.php.html#64\">Weline\\Bot\\Service\\SkillResult::isSuccess<\/a>"],[0,1,"<a href=\"Service\/SkillResult.php.html#72\">Weline\\Bot\\Service\\SkillResult::toArray<\/a>"],[0,1,"<a href=\"Service\/SkillResult.php.html#85\">Weline\\Bot\\Service\\SkillResult::toJson<\/a>"],[0,1,"<a href=\"Setup\/Install.php.html#18\">Weline\\Bot\\Setup\\Install::setup<\/a>"],[0,5,"<a href=\"Setup\/Install.php.html#29\">Weline\\Bot\\Setup\\Install::createDefaultRole<\/a>"],[0,3,"<a href=\"Setup\/Install.php.html#87\">Weline\\Bot\\Setup\\Install::createBuiltinSkills<\/a>"],[0,5,"<a href=\"Setup\/Install.php.html#267\">Weline\\Bot\\Setup\\Install::registerBotAdapters<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#18\">Weline\\Bot\\Skill\\DatabaseSkill::__construct<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#20\">Weline\\Bot\\Skill\\DatabaseSkill::getCode<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#25\">Weline\\Bot\\Skill\\DatabaseSkill::getName<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#30\">Weline\\Bot\\Skill\\DatabaseSkill::getDescription<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#35\">Weline\\Bot\\Skill\\DatabaseSkill::getCategory<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#40\">Weline\\Bot\\Skill\\DatabaseSkill::getParameters<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#64\">Weline\\Bot\\Skill\\DatabaseSkill::getPermissionRequired<\/a>"],[0,9,"<a href=\"Skill\/DatabaseSkill.php.html#69\">Weline\\Bot\\Skill\\DatabaseSkill::execute<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#134\">Weline\\Bot\\Skill\\DatabaseSkill::isDangerous<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#139\">Weline\\Bot\\Skill\\DatabaseSkill::requiresConfirmation<\/a>"],[0,1,"<a href=\"Skill\/DatabaseSkill.php.html#144\">Weline\\Bot\\Skill\\DatabaseSkill::isEnabled<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#17\">Weline\\Bot\\Skill\\FilesystemSkill::getCode<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#25\">Weline\\Bot\\Skill\\FilesystemSkill::getSubSkills<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#36\">Weline\\Bot\\Skill\\FilesystemSkill::getName<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#41\">Weline\\Bot\\Skill\\FilesystemSkill::getDescription<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#46\">Weline\\Bot\\Skill\\FilesystemSkill::getCategory<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#51\">Weline\\Bot\\Skill\\FilesystemSkill::getParameters<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#85\">Weline\\Bot\\Skill\\FilesystemSkill::getPermissionRequired<\/a>"],[0,2,"<a href=\"Skill\/FilesystemSkill.php.html#90\">Weline\\Bot\\Skill\\FilesystemSkill::execute<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#112\">Weline\\Bot\\Skill\\FilesystemSkill::isDangerous<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#117\">Weline\\Bot\\Skill\\FilesystemSkill::requiresConfirmation<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#122\">Weline\\Bot\\Skill\\FilesystemSkill::isEnabled<\/a>"],[0,5,"<a href=\"Skill\/FilesystemSkill.php.html#130\">Weline\\Bot\\Skill\\FilesystemSkill::readFile<\/a>"],[0,5,"<a href=\"Skill\/FilesystemSkill.php.html#160\">Weline\\Bot\\Skill\\FilesystemSkill::writeFile<\/a>"],[0,6,"<a href=\"Skill\/FilesystemSkill.php.html#186\">Weline\\Bot\\Skill\\FilesystemSkill::listFiles<\/a>"],[0,4,"<a href=\"Skill\/FilesystemSkill.php.html#221\">Weline\\Bot\\Skill\\FilesystemSkill::deleteFile<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#244\">Weline\\Bot\\Skill\\FilesystemSkill::fileExists<\/a>"],[0,1,"<a href=\"Skill\/FilesystemSkill.php.html#257\">Weline\\Bot\\Skill\\FilesystemSkill::sanitizePath<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#21\">Weline\\Bot\\Skill\\HttpSkill::getCode<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#26\">Weline\\Bot\\Skill\\HttpSkill::getName<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#31\">Weline\\Bot\\Skill\\HttpSkill::getDescription<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#36\">Weline\\Bot\\Skill\\HttpSkill::getCategory<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#41\">Weline\\Bot\\Skill\\HttpSkill::getParameters<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#79\">Weline\\Bot\\Skill\\HttpSkill::getPermissionRequired<\/a>"],[0,8,"<a href=\"Skill\/HttpSkill.php.html#84\">Weline\\Bot\\Skill\\HttpSkill::execute<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#149\">Weline\\Bot\\Skill\\HttpSkill::isDangerous<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#154\">Weline\\Bot\\Skill\\HttpSkill::requiresConfirmation<\/a>"],[0,1,"<a href=\"Skill\/HttpSkill.php.html#159\">Weline\\Bot\\Skill\\HttpSkill::isEnabled<\/a>"],[0,2,"<a href=\"Skill\/HttpSkill.php.html#167\">Weline\\Bot\\Skill\\HttpSkill::getClient<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#27\">Weline\\Bot\\Skill\\ShellSkill::getCode<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#32\">Weline\\Bot\\Skill\\ShellSkill::getName<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#37\">Weline\\Bot\\Skill\\ShellSkill::getDescription<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#42\">Weline\\Bot\\Skill\\ShellSkill::getCategory<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#47\">Weline\\Bot\\Skill\\ShellSkill::getParameters<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#70\">Weline\\Bot\\Skill\\ShellSkill::getPermissionRequired<\/a>"],[0,4,"<a href=\"Skill\/ShellSkill.php.html#75\">Weline\\Bot\\Skill\\ShellSkill::execute<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#108\">Weline\\Bot\\Skill\\ShellSkill::isDangerous<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#113\">Weline\\Bot\\Skill\\ShellSkill::requiresConfirmation<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#118\">Weline\\Bot\\Skill\\ShellSkill::isEnabled<\/a>"],[0,7,"<a href=\"Skill\/ShellSkill.php.html#126\">Weline\\Bot\\Skill\\ShellSkill::checkCommandSecurity<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#185\">Weline\\Bot\\Skill\\ShellSkill::extractCommandName<\/a>"],[0,2,"<a href=\"Skill\/ShellSkill.php.html#202\">Weline\\Bot\\Skill\\ShellSkill::executeCommand<\/a>"],[0,1,"<a href=\"Skill\/ShellSkill.php.html#242\">Weline\\Bot\\Skill\\ShellSkill::getWhitelist<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#32\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getCode<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#37\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getName<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#42\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getDescription<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#47\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getVersion<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#52\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getScenarios<\/a>"],[0,2,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#57\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getTools<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#73\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getSystemPrompt<\/a>"],[0,15,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#97\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::execute<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#221\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::supportsModel<\/a>"],[0,1,"<a href=\"extends\/module\/Weline_Ai\/Agent\/CodingAgent.php.html#226\">Weline\\Bot\\Extends\\Module\\Weline_Ai\\Agent\\CodingAgent::getMaxIterations<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

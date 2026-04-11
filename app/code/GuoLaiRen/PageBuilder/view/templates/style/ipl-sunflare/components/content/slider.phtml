@@ -1,0 +1,378 @@
+<?php
+/**
+ * IPL Sunflare Slider Component
+ *
+ * @component_start
+ * code: slider
+ * name: 轮播横幅
+ * name_en: Banner Slider
+ * description: 首屏轮播Banner，支持多图轮播和自动播放
+ * category: content
+ * region: content
+ * thumbnail: asset/img/banner-03.svg
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:slider => 轮播设置
+ * slider.display => 显示轮播:select:yes|yes,no
+ * slider.autoplay => 自动播放:select:yes|yes,no
+ * slider.autoplay_interval => 播放间隔:number:5000|毫秒
+ * slider.bg_color => 背景颜色:color:#120a14
+ * slider.banner_image_mobile => 移动端图片:textarea:|默认使用本地banner-2.svg
+ * slider.banner_image_desktop => PC端图片:textarea:|默认使用本地banner-03.svg
+ * slider.download_btn_image => 下载按钮图片:textarea:|默认使用download-btn.svg
+ * slider.download_alt => 下载按钮描述:text:Download app
+ * slider.alt => 图片描述:text:IPL Sunflare banner
+ * slider.stack_left_1 => 左侧标签1:text:Live Tables
+ * slider.stack_left_2 => 左侧标签2:text:Fast Match
+ * slider.frame_chip_1 => 中间标签1:text:Broadcast Deck
+ * slider.frame_chip_2 => 中间标签2:text:Mobile + Desktop
+ * slider.stack_right_1 => 右侧标签1:text:Precision Bid
+ * slider.stack_right_2 => 右侧标签2:text:Ranked Ready
+ *
+ * @fields_end
+ */
+
+$componentId = 'dts-slider-' . uniqid();
+
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: [];
+$config = array_merge($styleSettings, $componentConfig);
+
+$getConfig = function($key, $default = '') use ($config) {
+    return isset($config[$key]) && $config[$key] !== '' ? $config[$key] : $default;
+};
+
+$sliderDisplay = $getConfig('slider.display', 'yes') !== 'no';
+if (!$sliderDisplay) {
+    return;
+}
+
+$sliderAutoplay = $getConfig('slider.autoplay', 'yes') !== 'no';
+$sliderInterval = max(2200, intval($getConfig('slider.autoplay_interval', '5000')));
+$sliderBgColor = $getConfig('slider.bg_color', '#120a14');
+$sliderBgGradientEnd = '#2b1832';
+$pokerBg = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/ipl-sunflare/asset/img/poker-header-bg.svg');
+
+$defaultBannerMobile = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/ipl-sunflare/asset/img/banner-2.svg');
+$defaultBannerDesktop = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/ipl-sunflare/asset/img/banner-03.svg');
+$defaultDownloadBtn = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/ipl-sunflare/asset/img/download-btn.svg');
+
+$bannerMobile = $getConfig('slider.banner_image_mobile', '') ?: $defaultBannerMobile;
+$bannerDesktop = $getConfig('slider.banner_image_desktop', '') ?: $defaultBannerDesktop;
+$downloadBtnImg = $getConfig('slider.download_btn_image', '') ?: $defaultDownloadBtn;
+$downloadAlt = $getConfig('slider.download_alt', 'Download app');
+$bannerAlt = $getConfig('slider.alt', 'IPL Sunflare banner');
+$stackLeft1 = $getConfig('slider.stack_left_1', 'Live Tables');
+$stackLeft2 = $getConfig('slider.stack_left_2', 'Fast Match');
+$frameChip1 = $getConfig('slider.frame_chip_1', 'Broadcast Deck');
+$frameChip2 = $getConfig('slider.frame_chip_2', 'Mobile + Desktop');
+$stackRight1 = $getConfig('slider.stack_right_1', 'Precision Bid');
+$stackRight2 = $getConfig('slider.stack_right_2', 'Ranked Ready');
+$autoplayClass = $sliderAutoplay ? 'is-autoplay' : '';
+?>
+
+<section id="<?= $componentId ?>" class="dts-slider-stage <?= $autoplayClass ?>">
+    <div class="slider-shell">
+        <div class="signal-stack signal-stack-left" aria-hidden="true">
+            <span><?= htmlspecialchars($stackLeft1) ?></span>
+            <span><?= htmlspecialchars($stackLeft2) ?></span>
+        </div>
+
+        <div class="slider-frame">
+            <div class="frame-head">
+                <span class="frame-chip"><?= htmlspecialchars($frameChip1) ?></span>
+                <span class="frame-chip muted"><?= htmlspecialchars($frameChip2) ?></span>
+            </div>
+
+            <div class="frame-screen">
+                <picture>
+                    <source media="(max-width: 768px)" srcset="<?= htmlspecialchars($bannerMobile) ?>">
+                    <source media="(min-width: 769px)" srcset="<?= htmlspecialchars($bannerDesktop) ?>">
+                    <img class="slider-image"
+                         src="<?= htmlspecialchars($bannerMobile) ?>"
+                         alt="<?= htmlspecialchars($bannerAlt) ?>"
+                         fetchpriority="high"
+                         decoding="async">
+                </picture>
+            </div>
+
+            <?php if ($downloadBtnImg): ?>
+                <div class="download-dock" aria-label="Download app">
+                    <img src="<?= htmlspecialchars($downloadBtnImg) ?>"
+                         alt="<?= htmlspecialchars($downloadAlt) ?>"
+                         width="210"
+                         height="54">
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="signal-stack signal-stack-right" aria-hidden="true">
+            <span><?= htmlspecialchars($stackRight1) ?></span>
+            <span><?= htmlspecialchars($stackRight2) ?></span>
+        </div>
+    </div>
+</section>
+
+<style>
+#<?= $componentId ?> {
+    --slider-cycle: <?= (int)$sliderInterval ?>ms;
+    position: relative;
+    overflow: hidden;
+    padding: clamp(54px, 9vw, 110px) 0;
+    background:
+        radial-gradient(520px 240px at 12% 16%, rgba(242, 107, 79, 0.12), transparent 72%),
+        radial-gradient(540px 260px at 88% 24%, rgba(242, 169, 59, 0.12), transparent 72%),
+        linear-gradient(180deg, <?= htmlspecialchars($sliderBgColor) ?> 0%, <?= htmlspecialchars($sliderBgGradientEnd) ?> 100%);
+}
+
+#<?= $componentId ?>::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: url('<?= $pokerBg ?>') center top/cover no-repeat;
+    opacity: 0.12;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 46px 46px;
+    mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.22), rgba(0, 0, 0, 0.55));
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .slider-shell {
+    max-width: 1240px;
+    margin: 0 auto;
+    padding: 0 20px;
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 140px minmax(0, 1fr) 140px;
+    gap: 1rem;
+    align-items: center;
+}
+
+#<?= $componentId ?> .signal-stack {
+    display: grid;
+    gap: 0.7rem;
+}
+
+#<?= $componentId ?> .signal-stack span {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.72rem 0.9rem;
+    border-radius: 16px;
+    border: 1px solid rgba(122, 161, 192, 0.18);
+    background: linear-gradient(160deg, rgba(45, 28, 40, 0.86) 0%, rgba(58, 36, 50, 0.84) 100%);
+    color: rgba(111, 75, 55, 0.82);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 0 18px 40px rgba(194, 130, 94, 0.14);
+}
+
+#<?= $componentId ?> .slider-frame {
+    position: relative;
+    padding: 1rem;
+    border-radius: 30px;
+    border: 1px solid rgba(122, 161, 192, 0.2);
+    background: linear-gradient(160deg, rgba(45, 28, 40, 0.94) 0%, rgba(58, 36, 50, 0.9) 100%);
+    box-shadow: 0 32px 72px rgba(194, 130, 94, 0.24);
+    overflow: hidden;
+}
+
+#<?= $componentId ?> .slider-frame::before {
+    content: '';
+    position: absolute;
+    top: -18%;
+    left: -18%;
+    width: 160px;
+    height: 160px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(242, 107, 79, 0.16), transparent 72%);
+    pointer-events: none;
+}
+
+#<?= $componentId ?> .slider-frame::after {
+    content: '';
+    position: absolute;
+    top: -12%;
+    left: -24%;
+    width: 26%;
+    height: 132%;
+    background: linear-gradient(115deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.08) 40%,
+        rgba(255, 255, 255, 0.38) 50%,
+        rgba(255, 255, 255, 0) 60%);
+    transform: translateX(-260%) skewX(-20deg);
+    opacity: 0;
+    pointer-events: none;
+}
+
+#<?= $componentId ?>.is-autoplay .slider-frame::after {
+    animation: <?= $componentId ?>-sheen var(--slider-cycle) ease-in-out infinite;
+}
+
+@keyframes <?= $componentId ?>-sheen {
+    0%, 58% {
+        transform: translateX(-260%) skewX(-20deg);
+        opacity: 0;
+    }
+    68% {
+        opacity: 1;
+    }
+    92%, 100% {
+        transform: translateX(560%) skewX(-20deg);
+        opacity: 0;
+    }
+}
+
+#<?= $componentId ?> .frame-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem;
+    align-items: center;
+    margin-bottom: 0.9rem;
+}
+
+#<?= $componentId ?> .frame-chip {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.34rem 0.76rem;
+    border-radius: 999px;
+    background: rgba(242, 107, 79, 0.08);
+    border: 1px solid rgba(242, 107, 79, 0.2);
+    color: #b5482a;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+#<?= $componentId ?> .frame-chip.muted {
+    color: rgba(111, 75, 55, 0.76);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(122, 161, 192, 0.18);
+}
+
+#<?= $componentId ?> .frame-screen {
+    position: relative;
+    border-radius: 24px;
+    overflow: hidden;
+    border: 1px solid rgba(242, 169, 59, 0.16);
+    box-shadow: 0 24px 54px rgba(194, 130, 94, 0.14);
+}
+
+#<?= $componentId ?> .slider-image {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+}
+
+#<?= $componentId ?>.is-autoplay .slider-image {
+    animation: <?= $componentId ?>-float calc(var(--slider-cycle) * 1.25) ease-in-out infinite;
+}
+
+@keyframes <?= $componentId ?>-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+}
+
+#<?= $componentId ?> .download-dock {
+    position: absolute;
+    right: clamp(20px, 4vw, 34px);
+    bottom: clamp(18px, 4vw, 28px);
+    padding: 0.55rem;
+    border-radius: 18px;
+    background: rgba(45, 28, 40, 0.92);
+    border: 1px solid rgba(242, 169, 59, 0.22);
+    box-shadow: 0 18px 34px rgba(194, 130, 94, 0.16);
+    backdrop-filter: blur(10px);
+}
+
+#<?= $componentId ?> .download-dock img {
+    display: block;
+    filter: drop-shadow(0 12px 20px rgba(194, 130, 94, 0.2));
+}
+
+#<?= $componentId ?>.is-autoplay .download-dock img {
+    animation: <?= $componentId ?>-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes <?= $componentId ?>-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(0.95); }
+}
+
+@media (max-width: 1080px) {
+    #<?= $componentId ?> .slider-shell {
+        grid-template-columns: 1fr;
+    }
+
+    #<?= $componentId ?> .signal-stack {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    #<?= $componentId ?> .signal-stack-left {
+        order: 1;
+    }
+
+    #<?= $componentId ?> .slider-frame {
+        order: 2;
+    }
+
+    #<?= $componentId ?> .signal-stack-right {
+        order: 3;
+    }
+}
+
+@media (max-width: 768px) {
+    #<?= $componentId ?> {
+        padding: 42px 0 56px;
+    }
+
+    #<?= $componentId ?> .slider-shell {
+        padding: 0 15px;
+    }
+
+    #<?= $componentId ?> .slider-frame {
+        padding: 0.8rem;
+        border-radius: 22px;
+    }
+
+    #<?= $componentId ?> .frame-screen {
+        border-radius: 18px;
+    }
+
+    #<?= $componentId ?> .download-dock {
+        right: 50%;
+        transform: translateX(50%);
+        bottom: 14px;
+    }
+
+    #<?= $componentId ?> .signal-stack {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.55rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #<?= $componentId ?> .slider-frame::after,
+    #<?= $componentId ?> .slider-image,
+    #<?= $componentId ?> .download-dock img {
+        animation: none;
+    }
+}
+</style>

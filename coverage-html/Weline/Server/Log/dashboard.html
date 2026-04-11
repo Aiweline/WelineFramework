@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Server\Log</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Server</a></li>
+         <li class="breadcrumb-item"><a href="index.html">Log</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#26">Weline\Server\Log\Error\ErrorBootstrap</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#10">Weline\Server\Log\Error\ErrorCollector</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#25">Weline\Server\Log\Error\ErrorHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#25">Weline\Server\Log\Error\ExceptionHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#26">Weline\Server\Log\Error\ShutdownHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#19">Weline\Server\Log\Master\LogAggregator</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#18">Weline\Server\Log\Master\PipeCapture</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#19">Weline\Server\Log\Master\ProcessMonitor</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/LoggerResolveRuntimeObserver.php.html#18">Weline\Server\Log\Observer\LoggerResolveRuntimeObserver</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#16">Weline\Server\Log\WlsLoggerAdapter</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#14">Weline\Server\Log\Error\ErrorContext</a></td><td class="text-right">8%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#9">Weline\Server\Log\WlsLogger</a></td><td class="text-right">25%</td></tr>
+       <tr><td><a href="LogConfig.php.html#8">Weline\Server\Log\LogConfig</a></td><td class="text-right">57%</td></tr>
+       <tr><td><a href="LogLevel.php.html#14">Weline\Server\Log\LogLevel</a></td><td class="text-right">60%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="WlsLogger.php.html#9">Weline\Server\Log\WlsLogger</a></td><td class="text-right">17274</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#18">Weline\Server\Log\Master\PipeCapture</a></td><td class="text-right">2256</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#19">Weline\Server\Log\Master\LogAggregator</a></td><td class="text-right">1332</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#10">Weline\Server\Log\Error\ErrorCollector</a></td><td class="text-right">992</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#19">Weline\Server\Log\Master\ProcessMonitor</a></td><td class="text-right">930</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#16">Weline\Server\Log\WlsLoggerAdapter</a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#26">Weline\Server\Log\Error\ErrorBootstrap</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#25">Weline\Server\Log\Error\ErrorHandler</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#25">Weline\Server\Log\Error\ExceptionHandler</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#14">Weline\Server\Log\Error\ErrorContext</a></td><td class="text-right">144</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#26">Weline\Server\Log\Error\ShutdownHandler</a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="LogConfig.php.html#8">Weline\Server\Log\LogConfig</a></td><td class="text-right">68</td></tr>
+       <tr><td><a href="LogLevel.php.html#14">Weline\Server\Log\LogLevel</a></td><td class="text-right">60</td></tr>
+       <tr><td><a href="Observer/LoggerResolveRuntimeObserver.php.html#18">Weline\Server\Log\Observer\LoggerResolveRuntimeObserver</a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#41"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::init">init</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#76"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::configureLogger">configureLogger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#102"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::configureErrorReporting">configureErrorReporting</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#119"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::isInitialized">isInitialized</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#127"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#146"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::initFrontend">initFrontend</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#157"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::initProduction">initProduction</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#168"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::updateRequestContext">updateRequestContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#179"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::clearRequestContext">clearRequestContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#30"><abbr title="Weline\Server\Log\Error\ErrorCollector::collect">collect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#44"><abbr title="Weline\Server\Log\Error\ErrorCollector::format">format</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#88"><abbr title="Weline\Server\Log\Error\ErrorCollector::writeStderr">writeStderr</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#97"><abbr title="Weline\Server\Log\Error\ErrorCollector::writeToLogger">writeToLogger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#121"><abbr title="Weline\Server\Log\Error\ErrorCollector::writeCrashLog">writeCrashLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#164"><abbr title="Weline\Server\Log\Error\ErrorCollector::fallbackWrite">fallbackWrite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#184"><abbr title="Weline\Server\Log\Error\ErrorCollector::getErrorTypeName">getErrorTypeName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#25"><abbr title="Weline\Server\Log\Error\ErrorContext::setProcessTag">setProcessTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#41"><abbr title="Weline\Server\Log\Error\ErrorContext::setContext">setContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#49"><abbr title="Weline\Server\Log\Error\ErrorContext::addContext">addContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#57"><abbr title="Weline\Server\Log\Error\ErrorContext::getContext">getContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#73"><abbr title="Weline\Server\Log\Error\ErrorContext::updateRequestContext">updateRequestContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#92"><abbr title="Weline\Server\Log\Error\ErrorContext::clearRequestContext">clearRequestContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#104"><abbr title="Weline\Server\Log\Error\ErrorContext::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#113"><abbr title="Weline\Server\Log\Error\ErrorContext::getFullContext">getFullContext</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#49"><abbr title="Weline\Server\Log\Error\ErrorHandler::register">register</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#62"><abbr title="Weline\Server\Log\Error\ErrorHandler::unregister">unregister</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#78"><abbr title="Weline\Server\Log\Error\ErrorHandler::handle">handle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#117"><abbr title="Weline\Server\Log\Error\ErrorHandler::shouldSuppressDeprecatedNotice">shouldSuppressDeprecatedNotice</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#140"><abbr title="Weline\Server\Log\Error\ErrorHandler::isRegistered">isRegistered</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#41"><abbr title="Weline\Server\Log\Error\ExceptionHandler::register">register</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#55"><abbr title="Weline\Server\Log\Error\ExceptionHandler::unregister">unregister</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#69"><abbr title="Weline\Server\Log\Error\ExceptionHandler::handle">handle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#116"><abbr title="Weline\Server\Log\Error\ExceptionHandler::isRegistered">isRegistered</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#124"><abbr title="Weline\Server\Log\Error\ExceptionHandler::setExitOnException">setExitOnException</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#60"><abbr title="Weline\Server\Log\Error\ShutdownHandler::register">register</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#73"><abbr title="Weline\Server\Log\Error\ShutdownHandler::handle">handle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#103"><abbr title="Weline\Server\Log\Error\ShutdownHandler::isRegistered">isRegistered</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#111"><abbr title="Weline\Server\Log\Error\ShutdownHandler::isFatalError">isFatalError</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#121"><abbr title="Weline\Server\Log\Error\ShutdownHandler::getFatalErrorTypes">getFatalErrorTypes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogConfig.php.html#49"><abbr title="Weline\Server\Log\LogConfig::getMainLogFile">getMainLogFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogConfig.php.html#54"><abbr title="Weline\Server\Log\LogConfig::getErrorLogFile">getErrorLogFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogConfig.php.html#59"><abbr title="Weline\Server\Log\LogConfig::getCrashLogFile">getCrashLogFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogConfig.php.html#89"><abbr title="Weline\Server\Log\LogConfig::isStdoutEnabled">isStdoutEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogConfig.php.html#114"><abbr title="Weline\Server\Log\LogConfig::clearCache">clearCache</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#90"><abbr title="Weline\Server\Log\LogLevel::getDim">getDim</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#186"><abbr title="Weline\Server\Log\LogLevel::getReset">getReset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="LogLevel.php.html#205"><abbr title="Weline\Server\Log\LogLevel::all">all</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#64"><abbr title="Weline\Server\Log\Master\LogAggregator::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#72"><abbr title="Weline\Server\Log\Master\LogAggregator::setProcessTag">setProcessTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#80"><abbr title="Weline\Server\Log\Master\LogAggregator::getProcessTag">getProcessTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#88"><abbr title="Weline\Server\Log\Master\LogAggregator::removeProcessTag">removeProcessTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#96"><abbr title="Weline\Server\Log\Master\LogAggregator::setStdoutEnabled">setStdoutEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#108"><abbr title="Weline\Server\Log\Master\LogAggregator::collect">collect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#145"><abbr title="Weline\Server\Log\Master\LogAggregator::collectDeath">collectDeath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#182"><abbr title="Weline\Server\Log\Master\LogAggregator::detectLevel">detectLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#207"><abbr title="Weline\Server\Log\Master\LogAggregator::formatLine">formatLine</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#215"><abbr title="Weline\Server\Log\Master\LogAggregator::formatDeathDetails">formatDeathDetails</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#235"><abbr title="Weline\Server\Log\Master\LogAggregator::writeStdout">writeStdout</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#248"><abbr title="Weline\Server\Log\Master\LogAggregator::writeToLogger">writeToLogger</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#269"><abbr title="Weline\Server\Log\Master\LogAggregator::fallbackWrite">fallbackWrite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#285"><abbr title="Weline\Server\Log\Master\LogAggregator::clear">clear</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#43"><abbr title="Weline\Server\Log\Master\PipeCapture::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#55"><abbr title="Weline\Server\Log\Master\PipeCapture::startProcess">startProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#105"><abbr title="Weline\Server\Log\Master\PipeCapture::pollAll">pollAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#129"><abbr title="Weline\Server\Log\Master\PipeCapture::poll">poll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#148"><abbr title="Weline\Server\Log\Master\PipeCapture::checkProcesses">checkProcesses</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#179"><abbr title="Weline\Server\Log\Master\PipeCapture::isRunning">isRunning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#192"><abbr title="Weline\Server\Log\Master\PipeCapture::getPid">getPid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#200"><abbr title="Weline\Server\Log\Master\PipeCapture::write">write</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#213"><abbr title="Weline\Server\Log\Master\PipeCapture::closeProcess">closeProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#237"><abbr title="Weline\Server\Log\Master\PipeCapture::terminateProcess">terminateProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#250"><abbr title="Weline\Server\Log\Master\PipeCapture::closeAll">closeAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#262"><abbr title="Weline\Server\Log\Master\PipeCapture::getProcessIds">getProcessIds</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#270"><abbr title="Weline\Server\Log\Master\PipeCapture::count">count</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#278"><abbr title="Weline\Server\Log\Master\PipeCapture::readPipe">readPipe</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#296"><abbr title="Weline\Server\Log\Master\PipeCapture::getDeathReason">getDeathReason</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#336"><abbr title="Weline\Server\Log\Master\PipeCapture::__destruct">__destruct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#39"><abbr title="Weline\Server\Log\Master\ProcessMonitor::addProcess">addProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#52"><abbr title="Weline\Server\Log\Master\ProcessMonitor::removeProcess">removeProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#60"><abbr title="Weline\Server\Log\Master\ProcessMonitor::updatePid">updatePid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#74"><abbr title="Weline\Server\Log\Master\ProcessMonitor::onDeath">onDeath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#84"><abbr title="Weline\Server\Log\Master\ProcessMonitor::checkAll">checkAll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#124"><abbr title="Weline\Server\Log\Master\ProcessMonitor::check">check</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#153"><abbr title="Weline\Server\Log\Master\ProcessMonitor::isProcessRunning">isProcessRunning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#179"><abbr title="Weline\Server\Log\Master\ProcessMonitor::getExitInfo">getExitInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#218"><abbr title="Weline\Server\Log\Master\ProcessMonitor::getExitCodeReason">getExitCodeReason</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#239"><abbr title="Weline\Server\Log\Master\ProcessMonitor::getSignalReason">getSignalReason</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#258"><abbr title="Weline\Server\Log\Master\ProcessMonitor::logDeath">logDeath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#283"><abbr title="Weline\Server\Log\Master\ProcessMonitor::getProcesses">getProcesses</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#291"><abbr title="Weline\Server\Log\Master\ProcessMonitor::count">count</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#299"><abbr title="Weline\Server\Log\Master\ProcessMonitor::clear">clear</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Observer/LoggerResolveRuntimeObserver.php.html#20"><abbr title="Weline\Server\Log\Observer\LoggerResolveRuntimeObserver::execute">execute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#82"><abbr title="Weline\Server\Log\WlsLogger::setProcessTag">setProcessTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#90"><abbr title="Weline\Server\Log\WlsLogger::getProcessTag">getProcessTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#96"><abbr title="Weline\Server\Log\WlsLogger::setInstanceName">setInstanceName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#110"><abbr title="Weline\Server\Log\WlsLogger::getInstanceName">getInstanceName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#115"><abbr title="Weline\Server\Log\WlsLogger::setMinLevel">setMinLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#121"><abbr title="Weline\Server\Log\WlsLogger::setStdoutEnabled">setStdoutEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#127"><abbr title="Weline\Server\Log\WlsLogger::setFileEnabled">setFileEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#133"><abbr title="Weline\Server\Log\WlsLogger::setProcessLogFile">setProcessLogFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#153"><abbr title="Weline\Server\Log\WlsLogger::getProcessLogFile">getProcessLogFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#161"><abbr title="Weline\Server\Log\WlsLogger::setIpcLogSink">setIpcLogSink</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#209"><abbr title="Weline\Server\Log\WlsLogger::appendImmediateToMainLog">appendImmediateToMainLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#232"><abbr title="Weline\Server\Log\WlsLogger::getBatchSpoolDir">getBatchSpoolDir</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#237"><abbr title="Weline\Server\Log\WlsLogger::ensureBatchSpoolDir">ensureBatchSpoolDir</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#247"><abbr title="Weline\Server\Log\WlsLogger::warnBottleneck">warnBottleneck</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#258"><abbr title="Weline\Server\Log\WlsLogger::spillBufferToBatchFile">spillBufferToBatchFile</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#308"><abbr title="Weline\Server\Log\WlsLogger::flushPendingBatchFiles">flushPendingBatchFiles</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#455"><abbr title="Weline\Server\Log\WlsLogger::debug">debug</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#460"><abbr title="Weline\Server\Log\WlsLogger::info">info</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#465"><abbr title="Weline\Server\Log\WlsLogger::notice">notice</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#470"><abbr title="Weline\Server\Log\WlsLogger::warning">warning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#475"><abbr title="Weline\Server\Log\WlsLogger::error">error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#480"><abbr title="Weline\Server\Log\WlsLogger::fatal">fatal</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#490"><abbr title="Weline\Server\Log\WlsLogger::debug_">debug_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#495"><abbr title="Weline\Server\Log\WlsLogger::info_">info_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#500"><abbr title="Weline\Server\Log\WlsLogger::notice_">notice_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#505"><abbr title="Weline\Server\Log\WlsLogger::warning_">warning_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#510"><abbr title="Weline\Server\Log\WlsLogger::error_">error_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#515"><abbr title="Weline\Server\Log\WlsLogger::fatal_">fatal_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#520"><abbr title="Weline\Server\Log\WlsLogger::flush_">flush_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#533"><abbr title="Weline\Server\Log\WlsLogger::tick_">tick_</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#538"><abbr title="Weline\Server\Log\WlsLogger::tick">tick</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#553"><abbr title="Weline\Server\Log\WlsLogger::flush">flush</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#603"><abbr title="Weline\Server\Log\WlsLogger::writeProcessLogMirror">writeProcessLogMirror</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#617"><abbr title="Weline\Server\Log\WlsLogger::writeErrorLog">writeErrorLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#632"><abbr title="Weline\Server\Log\WlsLogger::writeCrashLog">writeCrashLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#689"><abbr title="Weline\Server\Log\WlsLogger::appendLineForMaster">appendLineForMaster</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#774"><abbr title="Weline\Server\Log\WlsLogger::rotateOldLogs">rotateOldLogs</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#810"><abbr title="Weline\Server\Log\WlsLogger::reset">reset</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#929"><abbr title="Weline\Server\Log\WlsLogger::findFirstCliCommand">findFirstCliCommand</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#34"><abbr title="Weline\Server\Log\WlsLoggerAdapter::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#42"><abbr title="Weline\Server\Log\WlsLoggerAdapter::mapLevel">mapLevel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#51"><abbr title="Weline\Server\Log\WlsLoggerAdapter::messageWithChannel">messageWithChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#61"><abbr title="Weline\Server\Log\WlsLoggerAdapter::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#68"><abbr title="Weline\Server\Log\WlsLoggerAdapter::emergency">emergency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#73"><abbr title="Weline\Server\Log\WlsLoggerAdapter::alert">alert</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#78"><abbr title="Weline\Server\Log\WlsLoggerAdapter::critical">critical</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#83"><abbr title="Weline\Server\Log\WlsLoggerAdapter::error">error</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#88"><abbr title="Weline\Server\Log\WlsLoggerAdapter::warning">warning</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#93"><abbr title="Weline\Server\Log\WlsLoggerAdapter::notice">notice</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#98"><abbr title="Weline\Server\Log\WlsLoggerAdapter::info">info</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#103"><abbr title="Weline\Server\Log\WlsLoggerAdapter::debug">debug</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#108"><abbr title="Weline\Server\Log\WlsLoggerAdapter::getChannel">getChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#113"><abbr title="Weline\Server\Log\WlsLoggerAdapter::withChannel">withChannel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#121"><abbr title="Weline\Server\Log\WlsLoggerAdapter::flush">flush</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#173"><abbr title="Weline\Server\Log\WlsLogger::evaluateIpcSink">evaluateIpcSink</abbr></a></td><td class="text-right">11%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#339"><abbr title="Weline\Server\Log\WlsLogger::log">log</abbr></a></td><td class="text-right">32%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#737"><abbr title="Weline\Server\Log\WlsLogger::getMemoryLimit">getMemoryLimit</abbr></a></td><td class="text-right">33%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#825"><abbr title="Weline\Server\Log\WlsLogger::ensureProcessTagResolved">ensureProcessTagResolved</abbr></a></td><td class="text-right">33%</td></tr>
+       <tr><td><a href="LogConfig.php.html#64"><abbr title="Weline\Server\Log\LogConfig::getMinLevel">getMinLevel</abbr></a></td><td class="text-right">37%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#885"><abbr title="Weline\Server\Log\WlsLogger::getProcessTagFromCli">getProcessTagFromCli</abbr></a></td><td class="text-right">43%</td></tr>
+       <tr><td><a href="LogConfig.php.html#100"><abbr title="Weline\Server\Log\LogConfig::isDevMode">isDevMode</abbr></a></td><td class="text-right">50%</td></tr>
+       <tr><td><a href="LogLevel.php.html#102"><abbr title="Weline\Server\Log\LogLevel::colorLine">colorLine</abbr></a></td><td class="text-right">52%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#661"><abbr title="Weline\Server\Log\WlsLogger::writeBuffer">writeBuffer</abbr></a></td><td class="text-right">53%</td></tr>
+       <tr><td><a href="LogLevel.php.html#72"><abbr title="Weline\Server\Log\LogLevel::getProcessColor">getProcessColor</abbr></a></td><td class="text-right">57%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#589"><abbr title="Weline\Server\Log\WlsLogger::writeDevDebugMirror">writeDevDebugMirror</abbr></a></td><td class="text-right">66%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#648"><abbr title="Weline\Server\Log\WlsLogger::writeStdout">writeStdout</abbr></a></td><td class="text-right">66%</td></tr>
+       <tr><td><a href="LogConfig.php.html#127"><abbr title="Weline\Server\Log\LogConfig::loadRawEnvConfig">loadRawEnvConfig</abbr></a></td><td class="text-right">70%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#858"><abbr title="Weline\Server\Log\WlsLogger::getProcessTagFromErrorContext">getProcessTagFromErrorContext</abbr></a></td><td class="text-right">75%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#981"><abbr title="Weline\Server\Log\WlsLogger::isUnknownProcessTag">isUnknownProcessTag</abbr></a></td><td class="text-right">75%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#947"><abbr title="Weline\Server\Log\WlsLogger::getProcessTagFromSapi">getProcessTagFromSapi</abbr></a></td><td class="text-right">80%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#970"><abbr title="Weline\Server\Log\WlsLogger::sanitizeCliProcessSegment">sanitizeCliProcessSegment</abbr></a></td><td class="text-right">80%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#719"><abbr title="Weline\Server\Log\WlsLogger::ensureShutdownRegistered">ensureShutdownRegistered</abbr></a></td><td class="text-right">83%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#956"><abbr title="Weline\Server\Log\WlsLogger::normalizeProcessTag">normalizeProcessTag</abbr></a></td><td class="text-right">83%</td></tr>
+       <tr><td><a href="WlsLogger.php.html#868"><abbr title="Weline\Server\Log\WlsLogger::getProcessTagFromEnvironment">getProcessTagFromEnvironment</abbr></a></td><td class="text-right">88%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="WlsLogger.php.html#339"><abbr title="Weline\Server\Log\WlsLogger::log">log</abbr></a></td><td class="text-right">247</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#44"><abbr title="Weline\Server\Log\Error\ErrorCollector::format">format</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#296"><abbr title="Weline\Server\Log\Master\PipeCapture::getDeathReason">getDeathReason</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="WlsLogger.php.html#774"><abbr title="Weline\Server\Log\WlsLogger::rotateOldLogs">rotateOldLogs</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="WlsLogger.php.html#553"><abbr title="Weline\Server\Log\WlsLogger::flush">flush</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="WlsLogger.php.html#689"><abbr title="Weline\Server\Log\WlsLogger::appendLineForMaster">appendLineForMaster</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#69"><abbr title="Weline\Server\Log\Error\ExceptionHandler::handle">handle</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#215"><abbr title="Weline\Server\Log\Master\LogAggregator::formatDeathDetails">formatDeathDetails</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="WlsLogger.php.html#258"><abbr title="Weline\Server\Log\WlsLogger::spillBufferToBatchFile">spillBufferToBatchFile</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="WlsLogger.php.html#308"><abbr title="Weline\Server\Log\WlsLogger::flushPendingBatchFiles">flushPendingBatchFiles</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="WlsLogger.php.html#885"><abbr title="Weline\Server\Log\WlsLogger::getProcessTagFromCli">getProcessTagFromCli</abbr></a></td><td class="text-right">55</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#121"><abbr title="Weline\Server\Log\Error\ErrorCollector::writeCrashLog">writeCrashLog</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#182"><abbr title="Weline\Server\Log\Master\LogAggregator::detectLevel">detectLevel</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="WlsLogger.php.html#209"><abbr title="Weline\Server\Log\WlsLogger::appendImmediateToMainLog">appendImmediateToMainLog</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="WlsLogger.php.html#173"><abbr title="Weline\Server\Log\WlsLogger::evaluateIpcSink">evaluateIpcSink</abbr></a></td><td class="text-right">41</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#97"><abbr title="Weline\Server\Log\Error\ErrorCollector::writeToLogger">writeToLogger</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#108"><abbr title="Weline\Server\Log\Master\LogAggregator::collect">collect</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#213"><abbr title="Weline\Server\Log\Master\PipeCapture::closeProcess">closeProcess</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#153"><abbr title="Weline\Server\Log\Master\ProcessMonitor::isProcessRunning">isProcessRunning</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#179"><abbr title="Weline\Server\Log\Master\ProcessMonitor::getExitInfo">getExitInfo</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="WlsLogger.php.html#133"><abbr title="Weline\Server\Log\WlsLogger::setProcessLogFile">setProcessLogFile</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="WlsLogger.php.html#929"><abbr title="Weline\Server\Log\WlsLogger::findFirstCliCommand">findFirstCliCommand</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="WlsLogger.php.html#737"><abbr title="Weline\Server\Log\WlsLogger::getMemoryLimit">getMemoryLimit</abbr></a></td><td class="text-right">26</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#76"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::configureLogger">configureLogger</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#164"><abbr title="Weline\Server\Log\Error\ErrorCollector::fallbackWrite">fallbackWrite</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Error/ErrorContext.php.html#73"><abbr title="Weline\Server\Log\Error\ErrorContext::updateRequestContext">updateRequestContext</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#78"><abbr title="Weline\Server\Log\Error\ErrorHandler::handle">handle</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#117"><abbr title="Weline\Server\Log\Error\ErrorHandler::shouldSuppressDeprecatedNotice">shouldSuppressDeprecatedNotice</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#145"><abbr title="Weline\Server\Log\Master\LogAggregator::collectDeath">collectDeath</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#105"><abbr title="Weline\Server\Log\Master\PipeCapture::pollAll">pollAll</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#148"><abbr title="Weline\Server\Log\Master\PipeCapture::checkProcesses">checkProcesses</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#278"><abbr title="Weline\Server\Log\Master\PipeCapture::readPipe">readPipe</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#84"><abbr title="Weline\Server\Log\Master\ProcessMonitor::checkAll">checkAll</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="WlsLogger.php.html#603"><abbr title="Weline\Server\Log\WlsLogger::writeProcessLogMirror">writeProcessLogMirror</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="WlsLogger.php.html#810"><abbr title="Weline\Server\Log\WlsLogger::reset">reset</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="LogLevel.php.html#102"><abbr title="Weline\Server\Log\LogLevel::colorLine">colorLine</abbr></a></td><td class="text-right">14</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#88"><abbr title="Weline\Server\Log\Error\ErrorCollector::writeStderr">writeStderr</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#73"><abbr title="Weline\Server\Log\Error\ShutdownHandler::handle">handle</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="LogConfig.php.html#89"><abbr title="Weline\Server\Log\LogConfig::isStdoutEnabled">isStdoutEnabled</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#235"><abbr title="Weline\Server\Log\Master\LogAggregator::writeStdout">writeStdout</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#55"><abbr title="Weline\Server\Log\Master\PipeCapture::startProcess">startProcess</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#200"><abbr title="Weline\Server\Log\Master\PipeCapture::write">write</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#124"><abbr title="Weline\Server\Log\Master\ProcessMonitor::check">check</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsLogger.php.html#161"><abbr title="Weline\Server\Log\WlsLogger::setIpcLogSink">setIpcLogSink</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsLogger.php.html#538"><abbr title="Weline\Server\Log\WlsLogger::tick">tick</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsLogger.php.html#617"><abbr title="Weline\Server\Log\WlsLogger::writeErrorLog">writeErrorLog</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsLogger.php.html#632"><abbr title="Weline\Server\Log\WlsLogger::writeCrashLog">writeCrashLog</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="WlsLogger.php.html#661"><abbr title="Weline\Server\Log\WlsLogger::writeBuffer">writeBuffer</abbr></a></td><td class="text-right">9</td></tr>
+       <tr><td><a href="LogLevel.php.html#72"><abbr title="Weline\Server\Log\LogLevel::getProcessColor">getProcessColor</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#41"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::init">init</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#102"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::configureErrorReporting">configureErrorReporting</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ErrorBootstrap.php.html#127"><abbr title="Weline\Server\Log\Error\ErrorBootstrap::reset">reset</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ErrorCollector.php.html#30"><abbr title="Weline\Server\Log\Error\ErrorCollector::collect">collect</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#49"><abbr title="Weline\Server\Log\Error\ErrorHandler::register">register</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ErrorHandler.php.html#62"><abbr title="Weline\Server\Log\Error\ErrorHandler::unregister">unregister</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#41"><abbr title="Weline\Server\Log\Error\ExceptionHandler::register">register</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ExceptionHandler.php.html#55"><abbr title="Weline\Server\Log\Error\ExceptionHandler::unregister">unregister</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Error/ShutdownHandler.php.html#60"><abbr title="Weline\Server\Log\Error\ShutdownHandler::register">register</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#248"><abbr title="Weline\Server\Log\Master\LogAggregator::writeToLogger">writeToLogger</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/LogAggregator.php.html#269"><abbr title="Weline\Server\Log\Master\LogAggregator::fallbackWrite">fallbackWrite</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#43"><abbr title="Weline\Server\Log\Master\PipeCapture::__construct">__construct</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#129"><abbr title="Weline\Server\Log\Master\PipeCapture::poll">poll</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#179"><abbr title="Weline\Server\Log\Master\PipeCapture::isRunning">isRunning</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#237"><abbr title="Weline\Server\Log\Master\PipeCapture::terminateProcess">terminateProcess</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/PipeCapture.php.html#250"><abbr title="Weline\Server\Log\Master\PipeCapture::closeAll">closeAll</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#39"><abbr title="Weline\Server\Log\Master\ProcessMonitor::addProcess">addProcess</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#60"><abbr title="Weline\Server\Log\Master\ProcessMonitor::updatePid">updatePid</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Master/ProcessMonitor.php.html#258"><abbr title="Weline\Server\Log\Master\ProcessMonitor::logDeath">logDeath</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Observer/LoggerResolveRuntimeObserver.php.html#20"><abbr title="Weline\Server\Log\Observer\LoggerResolveRuntimeObserver::execute">execute</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsLogger.php.html#96"><abbr title="Weline\Server\Log\WlsLogger::setInstanceName">setInstanceName</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsLogger.php.html#237"><abbr title="Weline\Server\Log\WlsLogger::ensureBatchSpoolDir">ensureBatchSpoolDir</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsLogger.php.html#247"><abbr title="Weline\Server\Log\WlsLogger::warnBottleneck">warnBottleneck</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsLogger.php.html#520"><abbr title="Weline\Server\Log\WlsLogger::flush_">flush_</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsLoggerAdapter.php.html#51"><abbr title="Weline\Server\Log\WlsLoggerAdapter::messageWithChannel">messageWithChannel</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="WlsLogger.php.html#825"><abbr title="Weline\Server\Log\WlsLogger::ensureProcessTagResolved">ensureProcessTagResolved</abbr></a></td><td class="text-right">5</td></tr>
+       <tr><td><a href="LogConfig.php.html#64"><abbr title="Weline\Server\Log\LogConfig::getMinLevel">getMinLevel</abbr></a></td><td class="text-right">5</td></tr>
+       <tr><td><a href="WlsLogger.php.html#589"><abbr title="Weline\Server\Log\WlsLogger::writeDevDebugMirror">writeDevDebugMirror</abbr></a></td><td class="text-right">4</td></tr>
+       <tr><td><a href="LogConfig.php.html#127"><abbr title="Weline\Server\Log\LogConfig::loadRawEnvConfig">loadRawEnvConfig</abbr></a></td><td class="text-right">4</td></tr>
+       <tr><td><a href="LogConfig.php.html#100"><abbr title="Weline\Server\Log\LogConfig::isDevMode">isDevMode</abbr></a></td><td class="text-right">4</td></tr>
+       <tr><td><a href="WlsLogger.php.html#868"><abbr title="Weline\Server\Log\WlsLogger::getProcessTagFromEnvironment">getProcessTagFromEnvironment</abbr></a></td><td class="text-right">4</td></tr>
+       <tr><td><a href="WlsLogger.php.html#648"><abbr title="Weline\Server\Log\WlsLogger::writeStdout">writeStdout</abbr></a></td><td class="text-right">3</td></tr>
+       <tr><td><a href="WlsLogger.php.html#858"><abbr title="Weline\Server\Log\WlsLogger::getProcessTagFromErrorContext">getProcessTagFromErrorContext</abbr></a></td><td class="text-right">3</td></tr>
+       <tr><td><a href="WlsLogger.php.html#981"><abbr title="Weline\Server\Log\WlsLogger::isUnknownProcessTag">isUnknownProcessTag</abbr></a></td><td class="text-right">3</td></tr>
+       <tr><td><a href="WlsLogger.php.html#956"><abbr title="Weline\Server\Log\WlsLogger::normalizeProcessTag">normalizeProcessTag</abbr></a></td><td class="text-right">3</td></tr>
+       <tr><td><a href="WlsLogger.php.html#970"><abbr title="Weline\Server\Log\WlsLogger::sanitizeCliProcessSegment">sanitizeCliProcessSegment</abbr></a></td><td class="text-right">2</td></tr>
+       <tr><td><a href="WlsLogger.php.html#719"><abbr title="Weline\Server\Log\WlsLogger::ensureShutdownRegistered">ensureShutdownRegistered</abbr></a></td><td class="text-right">2</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([10,1,0,1,0,0,1,1,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([146,0,1,0,4,1,4,2,3,5,1,16], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,15,"<a href=\"Error\/ErrorBootstrap.php.html#26\">Weline\\Server\\Log\\Error\\ErrorBootstrap<\/a>"],[0,31,"<a href=\"Error\/ErrorCollector.php.html#10\">Weline\\Server\\Log\\Error\\ErrorCollector<\/a>"],[8,13,"<a href=\"Error\/ErrorContext.php.html#14\">Weline\\Server\\Log\\Error\\ErrorContext<\/a>"],[0,13,"<a href=\"Error\/ErrorHandler.php.html#25\">Weline\\Server\\Log\\Error\\ErrorHandler<\/a>"],[0,13,"<a href=\"Error\/ExceptionHandler.php.html#25\">Weline\\Server\\Log\\Error\\ExceptionHandler<\/a>"],[0,8,"<a href=\"Error\/ShutdownHandler.php.html#26\">Weline\\Server\\Log\\Error\\ShutdownHandler<\/a>"],[57.446808510638306,24,"<a href=\"LogConfig.php.html#8\">Weline\\Server\\Log\\LogConfig<\/a>"],[60,24,"<a href=\"LogLevel.php.html#14\">Weline\\Server\\Log\\LogLevel<\/a>"],[0,36,"<a href=\"Master\/LogAggregator.php.html#19\">Weline\\Server\\Log\\Master\\LogAggregator<\/a>"],[0,47,"<a href=\"Master\/PipeCapture.php.html#18\">Weline\\Server\\Log\\Master\\PipeCapture<\/a>"],[0,30,"<a href=\"Master\/ProcessMonitor.php.html#19\">Weline\\Server\\Log\\Master\\ProcessMonitor<\/a>"],[0,2,"<a href=\"Observer\/LoggerResolveRuntimeObserver.php.html#18\">Weline\\Server\\Log\\Observer\\LoggerResolveRuntimeObserver<\/a>"],[25.942350332594234,205,"<a href=\"WlsLogger.php.html#9\">Weline\\Server\\Log\\WlsLogger<\/a>"],[0,16,"<a href=\"WlsLoggerAdapter.php.html#16\">Weline\\Server\\Log\\WlsLoggerAdapter<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,2,"<a href=\"Error\/ErrorBootstrap.php.html#41\">Weline\\Server\\Log\\Error\\ErrorBootstrap::init<\/a>"],[0,4,"<a href=\"Error\/ErrorBootstrap.php.html#76\">Weline\\Server\\Log\\Error\\ErrorBootstrap::configureLogger<\/a>"],[0,2,"<a href=\"Error\/ErrorBootstrap.php.html#102\">Weline\\Server\\Log\\Error\\ErrorBootstrap::configureErrorReporting<\/a>"],[0,1,"<a href=\"Error\/ErrorBootstrap.php.html#119\">Weline\\Server\\Log\\Error\\ErrorBootstrap::isInitialized<\/a>"],[0,2,"<a href=\"Error\/ErrorBootstrap.php.html#127\">Weline\\Server\\Log\\Error\\ErrorBootstrap::reset<\/a>"],[0,1,"<a href=\"Error\/ErrorBootstrap.php.html#146\">Weline\\Server\\Log\\Error\\ErrorBootstrap::initFrontend<\/a>"],[0,1,"<a href=\"Error\/ErrorBootstrap.php.html#157\">Weline\\Server\\Log\\Error\\ErrorBootstrap::initProduction<\/a>"],[0,1,"<a href=\"Error\/ErrorBootstrap.php.html#168\">Weline\\Server\\Log\\Error\\ErrorBootstrap::updateRequestContext<\/a>"],[0,1,"<a href=\"Error\/ErrorBootstrap.php.html#179\">Weline\\Server\\Log\\Error\\ErrorBootstrap::clearRequestContext<\/a>"],[0,2,"<a href=\"Error\/ErrorCollector.php.html#30\">Weline\\Server\\Log\\Error\\ErrorCollector::collect<\/a>"],[0,10,"<a href=\"Error\/ErrorCollector.php.html#44\">Weline\\Server\\Log\\Error\\ErrorCollector::format<\/a>"],[0,3,"<a href=\"Error\/ErrorCollector.php.html#88\">Weline\\Server\\Log\\Error\\ErrorCollector::writeStderr<\/a>"],[0,5,"<a href=\"Error\/ErrorCollector.php.html#97\">Weline\\Server\\Log\\Error\\ErrorCollector::writeToLogger<\/a>"],[0,6,"<a href=\"Error\/ErrorCollector.php.html#121\">Weline\\Server\\Log\\Error\\ErrorCollector::writeCrashLog<\/a>"],[0,4,"<a href=\"Error\/ErrorCollector.php.html#164\">Weline\\Server\\Log\\Error\\ErrorCollector::fallbackWrite<\/a>"],[0,1,"<a href=\"Error\/ErrorCollector.php.html#184\">Weline\\Server\\Log\\Error\\ErrorCollector::getErrorTypeName<\/a>"],[0,1,"<a href=\"Error\/ErrorContext.php.html#25\">Weline\\Server\\Log\\Error\\ErrorContext::setProcessTag<\/a>"],[100,1,"<a href=\"Error\/ErrorContext.php.html#33\">Weline\\Server\\Log\\Error\\ErrorContext::getProcessTag<\/a>"],[0,1,"<a href=\"Error\/ErrorContext.php.html#41\">Weline\\Server\\Log\\Error\\ErrorContext::setContext<\/a>"],[0,1,"<a href=\"Error\/ErrorContext.php.html#49\">Weline\\Server\\Log\\Error\\ErrorContext::addContext<\/a>"],[0,1,"<a href=\"Error\/ErrorContext.php.html#57\">Weline\\Server\\Log\\Error\\ErrorContext::getContext<\/a>"],[100,1,"<a href=\"Error\/ErrorContext.php.html#65\">Weline\\Server\\Log\\Error\\ErrorContext::get<\/a>"],[0,4,"<a href=\"Error\/ErrorContext.php.html#73\">Weline\\Server\\Log\\Error\\ErrorContext::updateRequestContext<\/a>"],[0,1,"<a href=\"Error\/ErrorContext.php.html#92\">Weline\\Server\\Log\\Error\\ErrorContext::clearRequestContext<\/a>"],[0,1,"<a href=\"Error\/ErrorContext.php.html#104\">Weline\\Server\\Log\\Error\\ErrorContext::reset<\/a>"],[0,1,"<a href=\"Error\/ErrorContext.php.html#113\">Weline\\Server\\Log\\Error\\ErrorContext::getFullContext<\/a>"],[0,2,"<a href=\"Error\/ErrorHandler.php.html#49\">Weline\\Server\\Log\\Error\\ErrorHandler::register<\/a>"],[0,2,"<a href=\"Error\/ErrorHandler.php.html#62\">Weline\\Server\\Log\\Error\\ErrorHandler::unregister<\/a>"],[0,4,"<a href=\"Error\/ErrorHandler.php.html#78\">Weline\\Server\\Log\\Error\\ErrorHandler::handle<\/a>"],[0,4,"<a href=\"Error\/ErrorHandler.php.html#117\">Weline\\Server\\Log\\Error\\ErrorHandler::shouldSuppressDeprecatedNotice<\/a>"],[0,1,"<a href=\"Error\/ErrorHandler.php.html#140\">Weline\\Server\\Log\\Error\\ErrorHandler::isRegistered<\/a>"],[0,2,"<a href=\"Error\/ExceptionHandler.php.html#41\">Weline\\Server\\Log\\Error\\ExceptionHandler::register<\/a>"],[0,2,"<a href=\"Error\/ExceptionHandler.php.html#55\">Weline\\Server\\Log\\Error\\ExceptionHandler::unregister<\/a>"],[0,7,"<a href=\"Error\/ExceptionHandler.php.html#69\">Weline\\Server\\Log\\Error\\ExceptionHandler::handle<\/a>"],[0,1,"<a href=\"Error\/ExceptionHandler.php.html#116\">Weline\\Server\\Log\\Error\\ExceptionHandler::isRegistered<\/a>"],[0,1,"<a href=\"Error\/ExceptionHandler.php.html#124\">Weline\\Server\\Log\\Error\\ExceptionHandler::setExitOnException<\/a>"],[0,2,"<a href=\"Error\/ShutdownHandler.php.html#60\">Weline\\Server\\Log\\Error\\ShutdownHandler::register<\/a>"],[0,3,"<a href=\"Error\/ShutdownHandler.php.html#73\">Weline\\Server\\Log\\Error\\ShutdownHandler::handle<\/a>"],[0,1,"<a href=\"Error\/ShutdownHandler.php.html#103\">Weline\\Server\\Log\\Error\\ShutdownHandler::isRegistered<\/a>"],[0,1,"<a href=\"Error\/ShutdownHandler.php.html#111\">Weline\\Server\\Log\\Error\\ShutdownHandler::isFatalError<\/a>"],[0,1,"<a href=\"Error\/ShutdownHandler.php.html#121\">Weline\\Server\\Log\\Error\\ShutdownHandler::getFatalErrorTypes<\/a>"],[100,2,"<a href=\"LogConfig.php.html#24\">Weline\\Server\\Log\\LogConfig::get<\/a>"],[100,1,"<a href=\"LogConfig.php.html#37\">Weline\\Server\\Log\\LogConfig::getValue<\/a>"],[100,1,"<a href=\"LogConfig.php.html#43\">Weline\\Server\\Log\\LogConfig::getLogDir<\/a>"],[0,1,"<a href=\"LogConfig.php.html#49\">Weline\\Server\\Log\\LogConfig::getMainLogFile<\/a>"],[0,1,"<a href=\"LogConfig.php.html#54\">Weline\\Server\\Log\\LogConfig::getErrorLogFile<\/a>"],[0,1,"<a href=\"LogConfig.php.html#59\">Weline\\Server\\Log\\LogConfig::getCrashLogFile<\/a>"],[37.5,3,"<a href=\"LogConfig.php.html#64\">Weline\\Server\\Log\\LogConfig::getMinLevel<\/a>"],[100,1,"<a href=\"LogConfig.php.html#84\">Weline\\Server\\Log\\LogConfig::isEnabled<\/a>"],[0,3,"<a href=\"LogConfig.php.html#89\">Weline\\Server\\Log\\LogConfig::isStdoutEnabled<\/a>"],[50,3,"<a href=\"LogConfig.php.html#100\">Weline\\Server\\Log\\LogConfig::isDevMode<\/a>"],[0,1,"<a href=\"LogConfig.php.html#114\">Weline\\Server\\Log\\LogConfig::clearCache<\/a>"],[100,2,"<a href=\"LogConfig.php.html#120\">Weline\\Server\\Log\\LogConfig::loadEnvConfig<\/a>"],[70,4,"<a href=\"LogConfig.php.html#127\">Weline\\Server\\Log\\LogConfig::loadRawEnvConfig<\/a>"],[57.14285714285714,5,"<a href=\"LogLevel.php.html#72\">Weline\\Server\\Log\\LogLevel::getProcessColor<\/a>"],[0,1,"<a href=\"LogLevel.php.html#90\">Weline\\Server\\Log\\LogLevel::getDim<\/a>"],[52.38095238095239,8,"<a href=\"LogLevel.php.html#102\">Weline\\Server\\Log\\LogLevel::colorLine<\/a>"],[100,2,"<a href=\"LogLevel.php.html#142\">Weline\\Server\\Log\\LogLevel::isSharedServiceMessage<\/a>"],[100,1,"<a href=\"LogLevel.php.html#150\">Weline\\Server\\Log\\LogLevel::getPriority<\/a>"],[100,1,"<a href=\"LogLevel.php.html#160\">Weline\\Server\\Log\\LogLevel::compare<\/a>"],[100,1,"<a href=\"LogLevel.php.html#170\">Weline\\Server\\Log\\LogLevel::isAtLeast<\/a>"],[100,1,"<a href=\"LogLevel.php.html#178\">Weline\\Server\\Log\\LogLevel::getColor<\/a>"],[0,1,"<a href=\"LogLevel.php.html#186\">Weline\\Server\\Log\\LogLevel::getReset<\/a>"],[100,2,"<a href=\"LogLevel.php.html#194\">Weline\\Server\\Log\\LogLevel::normalize<\/a>"],[0,1,"<a href=\"LogLevel.php.html#205\">Weline\\Server\\Log\\LogLevel::all<\/a>"],[0,1,"<a href=\"Master\/LogAggregator.php.html#64\">Weline\\Server\\Log\\Master\\LogAggregator::__construct<\/a>"],[0,1,"<a href=\"Master\/LogAggregator.php.html#72\">Weline\\Server\\Log\\Master\\LogAggregator::setProcessTag<\/a>"],[0,1,"<a href=\"Master\/LogAggregator.php.html#80\">Weline\\Server\\Log\\Master\\LogAggregator::getProcessTag<\/a>"],[0,1,"<a href=\"Master\/LogAggregator.php.html#88\">Weline\\Server\\Log\\Master\\LogAggregator::removeProcessTag<\/a>"],[0,1,"<a href=\"Master\/LogAggregator.php.html#96\">Weline\\Server\\Log\\Master\\LogAggregator::setStdoutEnabled<\/a>"],[0,5,"<a href=\"Master\/LogAggregator.php.html#108\">Weline\\Server\\Log\\Master\\LogAggregator::collect<\/a>"],[0,4,"<a href=\"Master\/LogAggregator.php.html#145\">Weline\\Server\\Log\\Master\\LogAggregator::collectDeath<\/a>"],[0,6,"<a href=\"Master\/LogAggregator.php.html#182\">Weline\\Server\\Log\\Master\\LogAggregator::detectLevel<\/a>"],[0,1,"<a href=\"Master\/LogAggregator.php.html#207\">Weline\\Server\\Log\\Master\\LogAggregator::formatLine<\/a>"],[0,7,"<a href=\"Master\/LogAggregator.php.html#215\">Weline\\Server\\Log\\Master\\LogAggregator::formatDeathDetails<\/a>"],[0,3,"<a href=\"Master\/LogAggregator.php.html#235\">Weline\\Server\\Log\\Master\\LogAggregator::writeStdout<\/a>"],[0,2,"<a href=\"Master\/LogAggregator.php.html#248\">Weline\\Server\\Log\\Master\\LogAggregator::writeToLogger<\/a>"],[0,2,"<a href=\"Master\/LogAggregator.php.html#269\">Weline\\Server\\Log\\Master\\LogAggregator::fallbackWrite<\/a>"],[0,1,"<a href=\"Master\/LogAggregator.php.html#285\">Weline\\Server\\Log\\Master\\LogAggregator::clear<\/a>"],[0,2,"<a href=\"Master\/PipeCapture.php.html#43\">Weline\\Server\\Log\\Master\\PipeCapture::__construct<\/a>"],[0,3,"<a href=\"Master\/PipeCapture.php.html#55\">Weline\\Server\\Log\\Master\\PipeCapture::startProcess<\/a>"],[0,4,"<a href=\"Master\/PipeCapture.php.html#105\">Weline\\Server\\Log\\Master\\PipeCapture::pollAll<\/a>"],[0,2,"<a href=\"Master\/PipeCapture.php.html#129\">Weline\\Server\\Log\\Master\\PipeCapture::poll<\/a>"],[0,4,"<a href=\"Master\/PipeCapture.php.html#148\">Weline\\Server\\Log\\Master\\PipeCapture::checkProcesses<\/a>"],[0,2,"<a href=\"Master\/PipeCapture.php.html#179\">Weline\\Server\\Log\\Master\\PipeCapture::isRunning<\/a>"],[0,1,"<a href=\"Master\/PipeCapture.php.html#192\">Weline\\Server\\Log\\Master\\PipeCapture::getPid<\/a>"],[0,3,"<a href=\"Master\/PipeCapture.php.html#200\">Weline\\Server\\Log\\Master\\PipeCapture::write<\/a>"],[0,5,"<a href=\"Master\/PipeCapture.php.html#213\">Weline\\Server\\Log\\Master\\PipeCapture::closeProcess<\/a>"],[0,2,"<a href=\"Master\/PipeCapture.php.html#237\">Weline\\Server\\Log\\Master\\PipeCapture::terminateProcess<\/a>"],[0,2,"<a href=\"Master\/PipeCapture.php.html#250\">Weline\\Server\\Log\\Master\\PipeCapture::closeAll<\/a>"],[0,1,"<a href=\"Master\/PipeCapture.php.html#262\">Weline\\Server\\Log\\Master\\PipeCapture::getProcessIds<\/a>"],[0,1,"<a href=\"Master\/PipeCapture.php.html#270\">Weline\\Server\\Log\\Master\\PipeCapture::count<\/a>"],[0,4,"<a href=\"Master\/PipeCapture.php.html#278\">Weline\\Server\\Log\\Master\\PipeCapture::readPipe<\/a>"],[0,10,"<a href=\"Master\/PipeCapture.php.html#296\">Weline\\Server\\Log\\Master\\PipeCapture::getDeathReason<\/a>"],[0,1,"<a href=\"Master\/PipeCapture.php.html#336\">Weline\\Server\\Log\\Master\\PipeCapture::__destruct<\/a>"],[0,2,"<a href=\"Master\/ProcessMonitor.php.html#39\">Weline\\Server\\Log\\Master\\ProcessMonitor::addProcess<\/a>"],[0,1,"<a href=\"Master\/ProcessMonitor.php.html#52\">Weline\\Server\\Log\\Master\\ProcessMonitor::removeProcess<\/a>"],[0,2,"<a href=\"Master\/ProcessMonitor.php.html#60\">Weline\\Server\\Log\\Master\\ProcessMonitor::updatePid<\/a>"],[0,1,"<a href=\"Master\/ProcessMonitor.php.html#74\">Weline\\Server\\Log\\Master\\ProcessMonitor::onDeath<\/a>"],[0,4,"<a href=\"Master\/ProcessMonitor.php.html#84\">Weline\\Server\\Log\\Master\\ProcessMonitor::checkAll<\/a>"],[0,3,"<a href=\"Master\/ProcessMonitor.php.html#124\">Weline\\Server\\Log\\Master\\ProcessMonitor::check<\/a>"],[0,5,"<a href=\"Master\/ProcessMonitor.php.html#153\">Weline\\Server\\Log\\Master\\ProcessMonitor::isProcessRunning<\/a>"],[0,5,"<a href=\"Master\/ProcessMonitor.php.html#179\">Weline\\Server\\Log\\Master\\ProcessMonitor::getExitInfo<\/a>"],[0,1,"<a href=\"Master\/ProcessMonitor.php.html#218\">Weline\\Server\\Log\\Master\\ProcessMonitor::getExitCodeReason<\/a>"],[0,1,"<a href=\"Master\/ProcessMonitor.php.html#239\">Weline\\Server\\Log\\Master\\ProcessMonitor::getSignalReason<\/a>"],[0,2,"<a href=\"Master\/ProcessMonitor.php.html#258\">Weline\\Server\\Log\\Master\\ProcessMonitor::logDeath<\/a>"],[0,1,"<a href=\"Master\/ProcessMonitor.php.html#283\">Weline\\Server\\Log\\Master\\ProcessMonitor::getProcesses<\/a>"],[0,1,"<a href=\"Master\/ProcessMonitor.php.html#291\">Weline\\Server\\Log\\Master\\ProcessMonitor::count<\/a>"],[0,1,"<a href=\"Master\/ProcessMonitor.php.html#299\">Weline\\Server\\Log\\Master\\ProcessMonitor::clear<\/a>"],[0,2,"<a href=\"Observer\/LoggerResolveRuntimeObserver.php.html#20\">Weline\\Server\\Log\\Observer\\LoggerResolveRuntimeObserver::execute<\/a>"],[100,3,"<a href=\"WlsLogger.php.html#53\">Weline\\Server\\Log\\WlsLogger::__construct<\/a>"],[100,2,"<a href=\"WlsLogger.php.html#73\">Weline\\Server\\Log\\WlsLogger::getInstance<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#82\">Weline\\Server\\Log\\WlsLogger::setProcessTag<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#90\">Weline\\Server\\Log\\WlsLogger::getProcessTag<\/a>"],[0,2,"<a href=\"WlsLogger.php.html#96\">Weline\\Server\\Log\\WlsLogger::setInstanceName<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#110\">Weline\\Server\\Log\\WlsLogger::getInstanceName<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#115\">Weline\\Server\\Log\\WlsLogger::setMinLevel<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#121\">Weline\\Server\\Log\\WlsLogger::setStdoutEnabled<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#127\">Weline\\Server\\Log\\WlsLogger::setFileEnabled<\/a>"],[0,5,"<a href=\"WlsLogger.php.html#133\">Weline\\Server\\Log\\WlsLogger::setProcessLogFile<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#153\">Weline\\Server\\Log\\WlsLogger::getProcessLogFile<\/a>"],[0,3,"<a href=\"WlsLogger.php.html#161\">Weline\\Server\\Log\\WlsLogger::setIpcLogSink<\/a>"],[11.11111111111111,7,"<a href=\"WlsLogger.php.html#173\">Weline\\Server\\Log\\WlsLogger::evaluateIpcSink<\/a>"],[0,6,"<a href=\"WlsLogger.php.html#209\">Weline\\Server\\Log\\WlsLogger::appendImmediateToMainLog<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#232\">Weline\\Server\\Log\\WlsLogger::getBatchSpoolDir<\/a>"],[0,2,"<a href=\"WlsLogger.php.html#237\">Weline\\Server\\Log\\WlsLogger::ensureBatchSpoolDir<\/a>"],[0,2,"<a href=\"WlsLogger.php.html#247\">Weline\\Server\\Log\\WlsLogger::warnBottleneck<\/a>"],[0,7,"<a href=\"WlsLogger.php.html#258\">Weline\\Server\\Log\\WlsLogger::spillBufferToBatchFile<\/a>"],[0,7,"<a href=\"WlsLogger.php.html#308\">Weline\\Server\\Log\\WlsLogger::flushPendingBatchFiles<\/a>"],[32.83582089552239,27,"<a href=\"WlsLogger.php.html#339\">Weline\\Server\\Log\\WlsLogger::log<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#455\">Weline\\Server\\Log\\WlsLogger::debug<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#460\">Weline\\Server\\Log\\WlsLogger::info<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#465\">Weline\\Server\\Log\\WlsLogger::notice<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#470\">Weline\\Server\\Log\\WlsLogger::warning<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#475\">Weline\\Server\\Log\\WlsLogger::error<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#480\">Weline\\Server\\Log\\WlsLogger::fatal<\/a>"],[100,1,"<a href=\"WlsLogger.php.html#485\">Weline\\Server\\Log\\WlsLogger::log_<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#490\">Weline\\Server\\Log\\WlsLogger::debug_<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#495\">Weline\\Server\\Log\\WlsLogger::info_<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#500\">Weline\\Server\\Log\\WlsLogger::notice_<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#505\">Weline\\Server\\Log\\WlsLogger::warning_<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#510\">Weline\\Server\\Log\\WlsLogger::error_<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#515\">Weline\\Server\\Log\\WlsLogger::fatal_<\/a>"],[0,2,"<a href=\"WlsLogger.php.html#520\">Weline\\Server\\Log\\WlsLogger::flush_<\/a>"],[0,1,"<a href=\"WlsLogger.php.html#533\">Weline\\Server\\Log\\WlsLogger::tick_<\/a>"],[0,3,"<a href=\"WlsLogger.php.html#538\">Weline\\Server\\Log\\WlsLogger::tick<\/a>"],[0,8,"<a href=\"WlsLogger.php.html#553\">Weline\\Server\\Log\\WlsLogger::flush<\/a>"],[66.66666666666666,4,"<a href=\"WlsLogger.php.html#589\">Weline\\Server\\Log\\WlsLogger::writeDevDebugMirror<\/a>"],[0,4,"<a href=\"WlsLogger.php.html#603\">Weline\\Server\\Log\\WlsLogger::writeProcessLogMirror<\/a>"],[0,3,"<a href=\"WlsLogger.php.html#617\">Weline\\Server\\Log\\WlsLogger::writeErrorLog<\/a>"],[0,3,"<a href=\"WlsLogger.php.html#632\">Weline\\Server\\Log\\WlsLogger::writeCrashLog<\/a>"],[66.66666666666666,3,"<a href=\"WlsLogger.php.html#648\">Weline\\Server\\Log\\WlsLogger::writeStdout<\/a>"],[53.333333333333336,6,"<a href=\"WlsLogger.php.html#661\">Weline\\Server\\Log\\WlsLogger::writeBuffer<\/a>"],[0,8,"<a href=\"WlsLogger.php.html#689\">Weline\\Server\\Log\\WlsLogger::appendLineForMaster<\/a>"],[83.33333333333334,2,"<a href=\"WlsLogger.php.html#719\">Weline\\Server\\Log\\WlsLogger::ensureShutdownRegistered<\/a>"],[33.33333333333333,8,"<a href=\"WlsLogger.php.html#737\">Weline\\Server\\Log\\WlsLogger::getMemoryLimit<\/a>"],[0,9,"<a href=\"WlsLogger.php.html#774\">Weline\\Server\\Log\\WlsLogger::rotateOldLogs<\/a>"],[0,4,"<a href=\"WlsLogger.php.html#810\">Weline\\Server\\Log\\WlsLogger::reset<\/a>"],[33.33333333333333,3,"<a href=\"WlsLogger.php.html#825\">Weline\\Server\\Log\\WlsLogger::ensureProcessTagResolved<\/a>"],[90.9090909090909,4,"<a href=\"WlsLogger.php.html#839\">Weline\\Server\\Log\\WlsLogger::resolveFallbackProcessTag<\/a>"],[75,3,"<a href=\"WlsLogger.php.html#858\">Weline\\Server\\Log\\WlsLogger::getProcessTagFromErrorContext<\/a>"],[88.88888888888889,4,"<a href=\"WlsLogger.php.html#868\">Weline\\Server\\Log\\WlsLogger::getProcessTagFromEnvironment<\/a>"],[43.47826086956522,15,"<a href=\"WlsLogger.php.html#885\">Weline\\Server\\Log\\WlsLogger::getProcessTagFromCli<\/a>"],[0,5,"<a href=\"WlsLogger.php.html#929\">Weline\\Server\\Log\\WlsLogger::findFirstCliCommand<\/a>"],[80,1,"<a href=\"WlsLogger.php.html#947\">Weline\\Server\\Log\\WlsLogger::getProcessTagFromSapi<\/a>"],[83.33333333333334,3,"<a href=\"WlsLogger.php.html#956\">Weline\\Server\\Log\\WlsLogger::normalizeProcessTag<\/a>"],[80,2,"<a href=\"WlsLogger.php.html#970\">Weline\\Server\\Log\\WlsLogger::sanitizeCliProcessSegment<\/a>"],[75,3,"<a href=\"WlsLogger.php.html#981\">Weline\\Server\\Log\\WlsLogger::isUnknownProcessTag<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#34\">Weline\\Server\\Log\\WlsLoggerAdapter::__construct<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#42\">Weline\\Server\\Log\\WlsLoggerAdapter::mapLevel<\/a>"],[0,2,"<a href=\"WlsLoggerAdapter.php.html#51\">Weline\\Server\\Log\\WlsLoggerAdapter::messageWithChannel<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#61\">Weline\\Server\\Log\\WlsLoggerAdapter::log<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#68\">Weline\\Server\\Log\\WlsLoggerAdapter::emergency<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#73\">Weline\\Server\\Log\\WlsLoggerAdapter::alert<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#78\">Weline\\Server\\Log\\WlsLoggerAdapter::critical<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#83\">Weline\\Server\\Log\\WlsLoggerAdapter::error<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#88\">Weline\\Server\\Log\\WlsLoggerAdapter::warning<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#93\">Weline\\Server\\Log\\WlsLoggerAdapter::notice<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#98\">Weline\\Server\\Log\\WlsLoggerAdapter::info<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#103\">Weline\\Server\\Log\\WlsLoggerAdapter::debug<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#108\">Weline\\Server\\Log\\WlsLoggerAdapter::getChannel<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#113\">Weline\\Server\\Log\\WlsLoggerAdapter::withChannel<\/a>"],[0,1,"<a href=\"WlsLoggerAdapter.php.html#121\">Weline\\Server\\Log\\WlsLoggerAdapter::flush<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

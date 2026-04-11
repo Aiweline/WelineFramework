@@ -82,7 +82,7 @@ class Runtime
      */
     public static function isCli(): bool
     {
-        return PHP_SAPI === 'cli' && !self::isWls();
+        return \in_array(PHP_SAPI, ['cli', 'phpdbg'], true) && !self::isWls();
     }
     
     /**
@@ -111,7 +111,7 @@ class Runtime
         }
         
         // CLI 模式
-        if (PHP_SAPI === 'cli') {
+        if (\in_array(PHP_SAPI, ['cli', 'phpdbg'], true)) {
             return RuntimeInterface::MODE_CLI;
         }
         

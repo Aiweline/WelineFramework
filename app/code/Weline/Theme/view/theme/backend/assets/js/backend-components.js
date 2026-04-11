@@ -18,7 +18,11 @@
      * 规范：JS 内不直接写词，词写到 CSV，详见 theme-development / i18n-internationalization 技能
      */
     const __ = (typeof window.__ === 'function') ? window.__ : function(text, params) {
-        if (window.Weline?.i18n?.translate) {
+        if (
+            window.Weline
+            && window.Weline.i18n
+            && typeof window.Weline.i18n.translate === 'function'
+        ) {
             return window.Weline.i18n.translate(text, params || {});
         }
         return text;
@@ -275,7 +279,7 @@
         showInput(options = {}) {
             return new Promise((resolve) => {
                 const {
-                    title = t('input', '输入'),
+                    title = __('输入'),
                     message = '',
                     placeholder = '',
                     defaultValue = '',

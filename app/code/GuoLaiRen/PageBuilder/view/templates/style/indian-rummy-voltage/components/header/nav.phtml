@@ -1,0 +1,1148 @@
+<?php
+/**
+ * Indian Rummy Voltage Header Navigation Component
+ *
+ * @component_start
+ * code: header-nav
+ * name: 导航头部（Voltage Ribbon）
+ * name_en: Voltage Ribbon Navigation Header
+ * description: 通栏导航，桌面端分栏导航与移动端全宽弹层
+ * category: header
+ * region: header
+ * thumbnail: asset/img/logo-icon-128.avif
+ * @component_end
+ *
+ * @fields_start
+ *
+ * group:logo => 品牌标识设置
+ * logo.display => 显示品牌标识:select:yes|yes,no
+ * logo.text => 品牌旁文本:text:Indian Rummy Voltage
+ * logo.subline => 品牌副标题:text:
+ * logo.url => 品牌标识地址:textarea:|默认使用本地logo-icon-128.avif
+ * logo.width => 品牌标识宽度:responsive:70/70|px
+ * logo.height => 品牌标识高度:responsive:|px[可选，默认使用width值]
+ *
+ * group:navigation => 导航设置
+ * navigation.display => 显示导航:select:yes|yes,no
+ * navigation.bg_color => 导航背景色:color:#0f2c34
+ * navigation.bg_color_scrolled => 滚动后背景色:color:rgba(15, 44, 52, 0.96)
+ * navigation.text_color => 导航文字颜色:color:#f9ecd7
+ * navigation.link_color => 链接颜色:color:#ebdcc4
+ * navigation.link_hover_color => 链接悬停颜色:color:#f4be52
+ * navigation.link_font_size => 链接字号:number:14|px
+ * navigation.link_font_weight => 链接字重:number:600
+ * navigation.link_gap => 链接间距:number:30|px
+ * navigation.padding_x => 水平内边距:number:24|px
+ * navigation.padding_y => 垂直内边距:number:12|px
+ * navigation.min_height => 最小高度:number:74|px
+ * navigation.box_shadow => 阴影:text:0 10px 26px rgba(7, 16, 19, 0.28)
+ * navigation.backdrop_blur => 背景模糊:number:8|px
+ * navigation.items => 导航项配置:textarea:Home=>/\r\nAbout=>/about\r\nBlog=>/blog\r\nFAQs=>/faqs|配置格式：名字=>url，一行一个
+ * navigation.use_custom_links => 使用自定义导航:select:yes|yes,no
+ * navigation.mobile_title => 移动端菜单标题:text:Quick Route
+ * navigation.label_home_page => 首页菜单名:text:
+ * navigation.label_about_page => 关于我们菜单名:text:
+ * navigation.label_blog_list => 博客菜单名:text:
+ * navigation.label_contact_page => 联系我们菜单名:text:
+ * navigation.label_terms_of_service => 条款菜单名:text:
+ * navigation.label_privacy_policy => 隐私政策菜单名:text:
+ *
+ * group:download_button => 下载按钮
+ * download_button.display => 显示下载按钮:select:yes|yes,no
+ * download_button.text => 按钮文本:text:DOWNLOAD APP
+ * download_button.url => 按钮链接:text:#download
+ * download_button.bg_color => 按钮背景色:color:#c9472d
+ * download_button.bg_hover_color => 按钮悬停背景色:color:#de6648
+ * download_button.text_color => 按钮文字颜色:color:#fff5e6
+ * download_button.font_size => 按钮字号:number:12|px
+ * download_button.font_weight => 按钮字重:number:700
+ * download_button.border_radius => 按钮圆角:number:999|px
+ * download_button.padding_x => 按钮水平内边距:number:18|px
+ * download_button.padding_y => 按钮垂直内边距:number:10|px
+ *
+ * @fields_end
+ */
+
+$componentId = 'rv-header-nav-' . uniqid();
+
+$page = $this->getData('page');
+$styleSettings = $this->getData('style') ?: $this->getData('style_settings') ?: [];
+$componentConfig = $this->getData('component_config') ?: ($component_config ?? []);
+$styleSettings = is_array($styleSettings) ? $styleSettings : [];
+$componentConfig = is_array($componentConfig) ? $componentConfig : [];
+
+$getConfigAny = static function (array $keys, $default = '') use ($styleSettings, $componentConfig) {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $componentConfig) && $componentConfig[$key] !== '') {
+            return $componentConfig[$key];
+        }
+    }
+
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $styleSettings) && $styleSettings[$key] !== '') {
+            return $styleSettings[$key];
+        }
+    }
+
+    return $default;
+};
+
+$getConfig = static function ($key, $default = '') use ($getConfigAny) {
+    return $getConfigAny([$key], $default);
+};
+
+$resolveHeaderValue = static function ($componentKey, $rootKey, $default = '') use ($componentConfig, $styleSettings) {
+    $componentValue = array_key_exists($componentKey, $componentConfig) ? $componentConfig[$componentKey] : null;
+    $rootValue = array_key_exists($rootKey, $styleSettings) ? $styleSettings[$rootKey] : null;
+
+    if ($rootValue !== null && $rootValue !== '' && ($componentValue === null || $componentValue === '' || $componentValue === $default)) {
+        return $rootValue;
+    }
+    if ($componentValue !== null && $componentValue !== '') {
+        return $componentValue;
+    }
+    if ($rootValue !== null && $rootValue !== '') {
+        return $rootValue;
+    }
+
+    return $default;
+};
+
+$normalizeToggle = static function ($value, $default = 'yes') {
+    if ($value === '' || $value === null) {
+        return $default;
+    }
+    if ($value === 0 || $value === '0') {
+        return 'yes';
+    }
+    if ($value === 1 || $value === '1') {
+        return 'no';
+    }
+    if ($value === true || $value === 'true' || $value === 'yes') {
+        return 'yes';
+    }
+    if ($value === false || $value === 'false' || $value === 'no') {
+        return 'no';
+    }
+    return $default;
+};
+
+$parseResponsive = function ($value) {
+    if (empty($value)) {
+        return ['mobile' => '', 'desktop' => '', 'unit' => 'px'];
+    }
+    $value = trim((string)$value);
+    $unit = 'px';
+    if (preg_match('/([a-z%]+)$/i', $value, $matches)) {
+        $unit = $matches[1];
+        $value = preg_replace('/[a-z%]+$/i', '', $value);
+    }
+    $parts = explode('/', trim($value));
+    return [
+        'mobile' => trim($parts[0] ?? ''),
+        'desktop' => trim($parts[1] ?? ($parts[0] ?? '')),
+        'unit' => $unit,
+    ];
+};
+
+$genResponsiveCSS = function ($parsed) {
+    $mobile = (float)$parsed['mobile'];
+    $desktop = (float)$parsed['desktop'];
+    $unit = $parsed['unit'];
+    if ($mobile === $desktop) {
+        return $mobile . $unit;
+    }
+    $diff = $desktop - $mobile;
+    return "clamp({$mobile}{$unit}, calc({$mobile}{$unit} + {$diff} * ((100vw - 375px) / 905)), {$desktop}{$unit})";
+};
+
+$logoDisplay = $normalizeToggle($getConfigAny(['logo.display', 'header.logo.display'], 'yes')) !== 'no';
+$defaultLogoUrl = $this->fetchTemplateStatic('GuoLaiRen_PageBuilder::style/indian-rummy-voltage/asset/img/logo-icon-128.avif');
+$logoUrl = $getConfigAny(['logo.url', 'header.logo.url'], '') ?: ($page && $page->getData('logo') ? $page->getData('logo') : $defaultLogoUrl);
+$logoWidth = $genResponsiveCSS($parseResponsive($getConfigAny(['logo.width', 'header.logo.width'], '70/70') . 'px'));
+$logoHeightConfig = $getConfigAny(['logo.height', 'header.logo.height'], '');
+$logoHeight = empty($logoHeightConfig) ? $logoWidth : $genResponsiveCSS($parseResponsive($logoHeightConfig . 'px'));
+$brandName = trim((string) $resolveHeaderValue('logo.text', 'header.logo.text', 'Indian Rummy Voltage'));
+if ($brandName === '') {
+    $brandName = trim((string) $getConfigAny(['texts.app_name', 'app_info.app_name'], ''));
+}
+if ($brandName === '') {
+    $brandName = 'Indian Rummy Voltage';
+}
+$brandSubline = trim((string) $resolveHeaderValue('logo.subline', 'header.logo.subline', ''));
+
+$navDisplay = $normalizeToggle($getConfigAny(['navigation.display', 'header.navigation.display'], 'yes')) !== 'no';
+$navBgColor = $getConfigAny(['navigation.bg_color', 'header.navigation.bg_color'], '#0f2c34');
+$navBgColorScrolled = $getConfig('navigation.bg_color_scrolled', 'rgba(15, 44, 52, 0.96)');
+$navTextColor = $getConfigAny(['navigation.text_color', 'header.navigation.text_color'], '#f9ecd7');
+$linkColor = $getConfigAny(['navigation.link_color', 'header.navigation.link_color'], '#ebdcc4');
+$linkHoverColor = $getConfigAny(['navigation.link_hover_color', 'header.navigation.link_hover_color'], '#f4be52');
+$linkFontSize = $getConfig('navigation.link_font_size', '14');
+$linkFontWeight = $getConfig('navigation.link_font_weight', '600');
+$linkGap = $getConfig('navigation.link_gap', '30');
+$navPaddingX = $getConfig('navigation.padding_x', '24');
+$navPaddingY = $getConfig('navigation.padding_y', '12');
+$navMinHeight = $getConfig('navigation.min_height', '74');
+$navBoxShadow = $getConfig('navigation.box_shadow', '0 10px 26px rgba(7, 16, 19, 0.28)');
+$navBackdropBlur = $getConfig('navigation.backdrop_blur', '8');
+$mobileMenuTitle = trim((string) $getConfig('navigation.mobile_title', 'Quick Route'));
+$useCustomLinksRaw = $getConfig('navigation.use_custom_links', '');
+if ($useCustomLinksRaw !== '') {
+    $useCustomLinks = $normalizeToggle($useCustomLinksRaw, 'yes') === 'yes';
+} else {
+    $useCustomLinks = $normalizeToggle($getConfig('navigation.use_subpages', 'no'), 'no') !== 'yes';
+}
+
+$navItems = [];
+if (!$useCustomLinks && $page) {
+    if (method_exists($page, 'getHeaderNavigationPages')) {
+        $navigationPages = $page->getHeaderNavigationPages(12);
+    } else {
+        $navigationPages = $page->getNavigationPages([], 12);
+    }
+    foreach ($navigationPages as $navPage) {
+        $pageType = trim((string) ($navPage['type'] ?? ''));
+        $label = trim((string) $getConfigAny([
+            'navigation.label_' . $pageType,
+            'header.navigation.label_' . $pageType,
+        ], ''));
+        $navItems[] = [
+            'text' => $label !== '' ? $label : ($navPage['title'] ?? ''),
+            'href' => $navPage['url'] ?? '#',
+        ];
+    }
+}
+if (empty($navItems)) {
+    $navItemsConfig = $getConfigAny(['navigation.items', 'header.navigation.items'], "Home=>/\nAbout=>/about\nBlog=>/blog\nFAQs=>/faqs");
+    if (strpos($navItemsConfig, '\\n') !== false && strpos($navItemsConfig, "\n") === false) {
+        $navItemsConfig = str_replace('\\n', "\n", $navItemsConfig);
+    }
+    foreach (preg_split('/\r?\n/', $navItemsConfig) as $line) {
+        $line = trim((string)$line);
+        if ($line === '' || strpos($line, '=>') === false) {
+            continue;
+        }
+        $parts = explode('=>', $line, 2);
+        $text = trim((string)($parts[0] ?? ''));
+        $href = trim((string)($parts[1] ?? ''));
+        if ($text === '') {
+            continue;
+        }
+        if ($href === '') {
+            $href = '#';
+        }
+        $navItems[] = ['text' => $text, 'href' => $href];
+    }
+}
+if (empty($navItems)) {
+    $navItems = [
+        ['text' => 'Home', 'href' => '/'],
+        ['text' => 'About', 'href' => '/about'],
+        ['text' => 'Blog', 'href' => '/blog'],
+        ['text' => 'FAQs', 'href' => '/faqs'],
+    ];
+}
+
+$normalizePath = function ($path) {
+    $path = trim((string)$path);
+    if ($path === '') {
+        return '/';
+    }
+    $path = '/' . ltrim($path, '/');
+    if (strlen($path) > 1) {
+        $path = rtrim($path, '/');
+    }
+    return $path;
+};
+
+$requestPath = '/';
+if (!empty($_SERVER['REQUEST_URI'])) {
+    $parsedRequestPath = parse_url((string)$_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    if (is_string($parsedRequestPath) && $parsedRequestPath !== '') {
+        $requestPath = $parsedRequestPath;
+    }
+}
+$currentPath = $normalizePath($requestPath);
+
+$hasActiveNav = false;
+foreach ($navItems as $navIndex => $navItem) {
+    $href = isset($navItem['href']) ? (string)$navItem['href'] : '';
+    $path = parse_url($href, PHP_URL_PATH);
+    $targetPath = is_string($path) && $path !== '' ? $normalizePath($path) : '';
+    $isAnchor = strpos($href, '#') === 0;
+    $isActive = !$isAnchor && $targetPath !== '' && $targetPath === $currentPath;
+    $navItems[$navIndex]['is_active'] = $isActive;
+    if ($isActive) {
+        $hasActiveNav = true;
+    }
+}
+if (!$hasActiveNav && !empty($navItems)) {
+    $navItems[0]['is_active'] = true;
+}
+
+$leftCount = count($navItems) > 1 ? (int)ceil(count($navItems) / 2) : count($navItems);
+$leftNavItems = array_slice($navItems, 0, $leftCount);
+$rightNavItems = array_slice($navItems, $leftCount);
+if (empty($rightNavItems) && count($leftNavItems) > 1) {
+    $rightNavItems[] = array_pop($leftNavItems);
+}
+
+$downloadBtnDisplay = $getConfig('download_button.display', 'yes') !== 'no';
+$downloadBtnText = $getConfig('download_button.text', 'DOWNLOAD APP');
+$downloadBtnUrl = $getConfig('download_button.url', '#download');
+$downloadBtnBgColor = $getConfig('download_button.bg_color', '#c9472d');
+$downloadBtnBgHoverColor = $getConfig('download_button.bg_hover_color', '#de6648');
+$downloadBtnTextColor = $getConfig('download_button.text_color', '#fff5e6');
+$downloadBtnFontSize = $getConfig('download_button.font_size', '12');
+$downloadBtnFontWeight = $getConfig('download_button.font_weight', '700');
+$downloadBtnRadius = $getConfig('download_button.border_radius', '999');
+$downloadBtnPaddingX = $getConfig('download_button.padding_x', '18');
+$downloadBtnPaddingY = $getConfig('download_button.padding_y', '10');
+
+$standaloneShell = !$this->getData('__rv_shell_managed');
+$pageTitle = $page ? (string)($page->getData('meta_title') ?: $page->getData('title') ?: $brandName) : $brandName;
+?>
+<?php if ($standaloneShell): ?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><?= htmlspecialchars($pageTitle) ?></title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+<?php endif; ?>
+
+<header id="<?= $componentId ?>" class="rvnav-root" data-rvnav>
+    <div class="rvnav-bar">
+        <div class="rvnav-wing rvnav-wing-left">
+            <?php if ($navDisplay && !empty($leftNavItems)): ?>
+                <nav class="rvnav-links rvnav-links-left" aria-label="Main Navigation Left">
+                    <?php foreach ($leftNavItems as $item): ?>
+                        <?php $isActive = !empty($item['is_active']); ?>
+                        <a href="<?= htmlspecialchars($item['href']) ?>" class="<?= $isActive ? 'is-active' : '' ?>"<?= $isActive ? ' aria-current="page"' : '' ?>><?= htmlspecialchars($item['text']) ?></a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
+        </div>
+
+        <a class="rvnav-brand" href="/" aria-label="<?= htmlspecialchars($brandName) ?>">
+            <?php if ($logoDisplay): ?>
+                <img src="<?= htmlspecialchars($logoUrl) ?>" alt="<?= htmlspecialchars($brandName) ?>" loading="lazy">
+            <?php endif; ?>
+            <span class="rvnav-brand-copy">
+                <strong><?= htmlspecialchars($brandName) ?></strong>
+                <?php if ($brandSubline !== ''): ?>
+                    <small><?= htmlspecialchars($brandSubline) ?></small>
+                <?php endif; ?>
+            </span>
+        </a>
+
+        <div class="rvnav-wing rvnav-wing-right">
+            <?php if ($navDisplay && !empty($rightNavItems)): ?>
+                <nav class="rvnav-links rvnav-links-right" aria-label="Main Navigation Right">
+                    <?php foreach ($rightNavItems as $item): ?>
+                        <?php $isActive = !empty($item['is_active']); ?>
+                        <a href="<?= htmlspecialchars($item['href']) ?>" class="<?= $isActive ? 'is-active' : '' ?>"<?= $isActive ? ' aria-current="page"' : '' ?>><?= htmlspecialchars($item['text']) ?></a>
+                    <?php endforeach; ?>
+                </nav>
+            <?php endif; ?>
+
+            <div class="rvnav-actions">
+                <?php if ($downloadBtnDisplay): ?>
+                    <a class="rvnav-cta" href="<?= htmlspecialchars($downloadBtnUrl) ?>" aria-label="<?= htmlspecialchars($downloadBtnText) ?>">
+                        <span class="rvnav-cta-icon" aria-hidden="true">⇩</span>
+                        <span><?= htmlspecialchars($downloadBtnText) ?></span>
+                    </a>
+                    <a class="rvnav-mini" href="<?= htmlspecialchars($downloadBtnUrl) ?>" aria-label="<?= htmlspecialchars($downloadBtnText) ?>">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v8.2l2.8-2.8a1 1 0 1 1 1.4 1.4l-4.5 4.5a1 1 0 0 1-1.4 0l-4.5-4.5a1 1 0 1 1 1.4-1.4l2.8 2.8V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1 1v2h12v-2a1 1 0 1 1 2 0v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1z"/></svg>
+                        <span>APP</span>
+                    </a>
+                <?php endif; ?>
+                <button class="rvnav-toggle" type="button" aria-label="Toggle menu" aria-expanded="false">
+                    <span></span><span></span><span></span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <button class="rvnav-backdrop is-hidden" type="button" aria-hidden="true" aria-label="Close menu"></button>
+    <div class="rvnav-mobile-panel is-hidden" role="dialog" aria-modal="true" aria-hidden="true" aria-label="<?= htmlspecialchars($brandName) ?> menu">
+        <div class="rvnav-mobile-head">
+            <p><?= htmlspecialchars($mobileMenuTitle) ?></p>
+        </div>
+
+        <?php if ($navDisplay): ?>
+            <nav class="rvnav-mobile-links" aria-label="Mobile Navigation">
+                <?php foreach ($navItems as $item): ?>
+                    <?php $isActive = !empty($item['is_active']); ?>
+                    <a href="<?= htmlspecialchars($item['href']) ?>" class="<?= $isActive ? 'is-active' : '' ?>"<?= $isActive ? ' aria-current="page"' : '' ?>><?= htmlspecialchars($item['text']) ?></a>
+                <?php endforeach; ?>
+            </nav>
+        <?php endif; ?>
+
+        <?php if ($downloadBtnDisplay): ?>
+            <a class="rvnav-mobile-cta" href="<?= htmlspecialchars($downloadBtnUrl) ?>">
+                <span class="rvnav-mobile-cta-icon" aria-hidden="true">⬇</span>
+                <span><?= htmlspecialchars($downloadBtnText) ?></span>
+            </a>
+        <?php endif; ?>
+    </div>
+</header>
+
+<style>
+#<?= $componentId ?> {
+    --rvnav-bg: <?= htmlspecialchars($navBgColor) ?>;
+    --rvnav-bg-scrolled: <?= htmlspecialchars($navBgColorScrolled) ?>;
+    --rvnav-text: <?= htmlspecialchars($navTextColor) ?>;
+    --rvnav-link: <?= htmlspecialchars($linkColor) ?>;
+    --rvnav-link-hover: <?= htmlspecialchars($linkHoverColor) ?>;
+    --rvnav-cta-bg: <?= htmlspecialchars($downloadBtnBgColor) ?>;
+    --rvnav-cta-bg-hover: <?= htmlspecialchars($downloadBtnBgHoverColor) ?>;
+    --rvnav-cta-text: <?= htmlspecialchars($downloadBtnTextColor) ?>;
+    position: sticky;
+    top: 0;
+    z-index: 90;
+    transition: background-color .24s ease, background-image .24s ease;
+}
+
+#<?= $componentId ?>.is-scrolled {
+    background: transparent;
+}
+
+#<?= $componentId ?> .rvnav-bar {
+    position: relative;
+    z-index: 82;
+    min-height: <?= (int)$navMinHeight ?>px;
+    padding: <?= (int)$navPaddingY ?>px <?= (int)$navPaddingX ?>px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 1rem;
+    color: var(--rvnav-text);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 38%),
+        var(--rvnav-bg);
+    box-shadow: <?= htmlspecialchars($navBoxShadow) ?>;
+    backdrop-filter: blur(<?= (int)$navBackdropBlur ?>px);
+    -webkit-backdrop-filter: blur(<?= (int)$navBackdropBlur ?>px);
+    transition: background-color .24s ease, box-shadow .24s ease;
+}
+
+#<?= $componentId ?>.is-scrolled .rvnav-bar {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 36%),
+        var(--rvnav-bg-scrolled);
+}
+
+#<?= $componentId ?> .rvnav-bar::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 2px;
+    background: linear-gradient(90deg, rgba(244, 190, 82, 0), rgba(244, 190, 82, 0.68), rgba(244, 190, 82, 0));
+    opacity: 0.75;
+}
+
+#<?= $componentId ?> .rvnav-brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.64rem;
+    min-width: 0;
+    text-decoration: none;
+    color: #fff5e6;
+}
+
+#<?= $componentId ?> .rvnav-brand img {
+    width: <?= $logoWidth ?>;
+    height: <?= $logoHeight ?>;
+    object-fit: cover;
+    border-radius: 7px;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+}
+
+#<?= $componentId ?> .rvnav-brand span {
+    white-space: nowrap;
+}
+
+#<?= $componentId ?> .rvnav-brand-copy {
+    display: grid;
+    min-width: 0;
+}
+
+#<?= $componentId ?> .rvnav-brand-copy strong {
+    font-size: 0.74rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    font-weight: 800;
+    color: inherit;
+}
+
+#<?= $componentId ?> .rvnav-brand-copy small {
+    font-size: 0.56rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(255, 245, 230, 0.72);
+}
+
+#<?= $componentId ?> .rvnav-wing {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+}
+
+#<?= $componentId ?> .rvnav-wing-left {
+    justify-content: flex-end;
+}
+
+#<?= $componentId ?> .rvnav-wing-right {
+    justify-content: space-between;
+    gap: .42rem;
+}
+
+#<?= $componentId ?> .rvnav-links {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: <?= (int)$linkGap ?>px;
+    min-width: 0;
+    flex-wrap: nowrap;
+}
+
+#<?= $componentId ?> .rvnav-links a {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--rvnav-link);
+    text-decoration: none;
+    font-size: <?= (int)$linkFontSize ?>px;
+    font-weight: <?= (int)$linkFontWeight ?>;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    transition: color .2s ease;
+}
+
+#<?= $componentId ?> .rvnav-links a::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -9px;
+    height: 2px;
+    border-radius: 99px;
+    background: var(--rvnav-link-hover);
+    transform: scaleX(0);
+    transform-origin: center;
+    transition: transform .2s ease;
+}
+
+#<?= $componentId ?> .rvnav-links a:hover,
+#<?= $componentId ?> .rvnav-links a.is-active,
+#<?= $componentId ?> .rvnav-links a[aria-current="page"] {
+    color: var(--rvnav-link-hover);
+}
+
+#<?= $componentId ?> .rvnav-links a:hover::after,
+#<?= $componentId ?> .rvnav-links a.is-active::after,
+#<?= $componentId ?> .rvnav-links a[aria-current="page"]::after {
+    transform: scaleX(1);
+}
+
+#<?= $componentId ?> .rvnav-actions {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+#<?= $componentId ?> .rvnav-cta,
+#<?= $componentId ?> .rvnav-mobile-cta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem;
+    text-decoration: none;
+    padding: <?= (int)$downloadBtnPaddingY ?>px <?= (int)$downloadBtnPaddingX ?>px;
+    border-radius: <?= (int)$downloadBtnRadius ?>px;
+    font-size: <?= (int)$downloadBtnFontSize ?>px;
+    font-weight: <?= (int)$downloadBtnFontWeight ?>;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--rvnav-cta-text);
+    background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0) 45%),
+        var(--rvnav-cta-bg);
+    box-shadow: 0 10px 18px rgba(201, 71, 45, 0.28);
+    transition: transform .2s ease, background-color .2s ease, box-shadow .2s ease;
+}
+
+#<?= $componentId ?> .rvnav-cta:hover,
+#<?= $componentId ?> .rvnav-mobile-cta:hover {
+    transform: translateY(-1px);
+    background:
+        linear-gradient(115deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0) 46%),
+        var(--rvnav-cta-bg-hover);
+    box-shadow: 0 12px 20px rgba(201, 71, 45, 0.36);
+}
+
+#<?= $componentId ?> .rvnav-cta-icon {
+    display: inline-flex;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 99px;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.22);
+    animation: rvnav-bounce 1.3s ease-in-out infinite;
+}
+
+#<?= $componentId ?> .rvnav-mini,
+#<?= $componentId ?> .rvnav-toggle {
+    display: none;
+}
+
+#<?= $componentId ?> .rvnav-mini {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    text-decoration: none;
+    color: #ffeed8;
+    background: #d14c31;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 16px rgba(209, 76, 49, 0.35);
+}
+
+#<?= $componentId ?> .rvnav-mini svg {
+    width: 18px;
+    height: 18px;
+    fill: currentColor;
+}
+
+#<?= $componentId ?> .rvnav-mini span {
+    position: absolute;
+    right: -8px;
+    top: -8px;
+    min-width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    background: #f4be52;
+    color: #2a1a06;
+    font-size: 9px;
+    font-weight: 900;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 0 0 4px rgba(15, 44, 52, 0.4);
+}
+
+#<?= $componentId ?> .rvnav-toggle {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: rgba(255, 255, 255, 0.08);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 5px;
+}
+
+#<?= $componentId ?> .rvnav-toggle span {
+    width: 18px;
+    height: 2px;
+    border-radius: 99px;
+    background: #f9ecd7;
+    transition: transform .2s ease, opacity .2s ease;
+}
+
+#<?= $componentId ?> .rvnav-toggle.is-open span:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+}
+
+#<?= $componentId ?> .rvnav-toggle.is-open span:nth-child(2) {
+    opacity: 0;
+}
+
+#<?= $componentId ?> .rvnav-toggle.is-open span:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+}
+
+#<?= $componentId ?> .rvnav-backdrop {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--rvnav-sheet-top, 0px);
+    bottom: 0;
+    border: 0;
+    padding: 0;
+    background: rgba(6, 14, 17, 0.48);
+    z-index: 80;
+}
+
+#<?= $componentId ?> .rvnav-backdrop.is-hidden,
+#<?= $componentId ?> .rvnav-mobile-panel.is-hidden {
+    display: none;
+}
+
+#<?= $componentId ?> .rvnav-mobile-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    top: var(--rvnav-sheet-top, 0px);
+    z-index: 81;
+    padding: .9rem .9rem calc(env(safe-area-inset-bottom, 0px) + .9rem);
+    max-height: calc(100dvh - var(--rvnav-sheet-top, 0px));
+    overflow-y: auto;
+    background:
+        linear-gradient(180deg, rgba(15, 44, 52, 0.98) 0%, rgba(10, 32, 39, 0.98) 100%);
+    transform: translateY(-102%);
+    transition: transform .26s ease;
+    box-shadow: 0 20px 34px rgba(0, 0, 0, 0.28);
+}
+
+#<?= $componentId ?>.is-mobile-open .rvnav-mobile-panel {
+    transform: translateY(0);
+}
+
+#<?= $componentId ?> .rvnav-mobile-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: .8rem;
+}
+
+#<?= $componentId ?> .rvnav-mobile-head p {
+    margin: 0;
+    color: #f7e8cc;
+    font-size: 0.74rem;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    font-weight: 800;
+}
+
+
+
+#<?= $componentId ?> .rvnav-mobile-links {
+    display: grid;
+    gap: .45rem;
+}
+
+#<?= $componentId ?> .rvnav-mobile-links a {
+    display: block;
+    text-decoration: none;
+    padding: .72rem .78rem;
+    border-radius: 11px;
+    color: #f4e4c7;
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 14px;
+    font-weight: 600;
+    border-left: 3px solid transparent;
+}
+
+#<?= $componentId ?> .rvnav-mobile-links a.is-active,
+#<?= $componentId ?> .rvnav-mobile-links a[aria-current="page"] {
+    color: #2f1c08;
+    background: linear-gradient(110deg, #f4be52, #d97b3e);
+    border-left-color: rgba(255, 255, 255, 0.7);
+}
+
+#<?= $componentId ?> .rvnav-mobile-cta {
+    margin-top: .82rem;
+    width: 100%;
+}
+
+#<?= $componentId ?> .rvnav-mobile-cta-icon {
+    width: 1.2rem;
+    height: 1.2rem;
+    border-radius: 99px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.24);
+}
+body{background-color:rgba(14, 40, 47, 0.96)}
+body.rvnav-mobile-lock {
+    overflow: hidden;
+}
+
+@keyframes rvnav-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(1px); }
+}
+
+@keyframes rvnav-cta-icon-shift {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(2px); }
+}
+
+@media (max-width: 1023px) {
+    #<?= $componentId ?> {
+        padding: 8px 0 0;
+        background:
+            linear-gradient(180deg, rgba(14, 40, 47, 0.96) 0%, rgb(85 80 66) 100%);
+    }
+
+    #<?= $componentId ?> .rvnav-bar {
+        width: calc(100% - 1rem);
+        margin: 0 auto;
+        min-height: 58px;
+        grid-template-columns: minmax(0, 1fr) auto;
+        padding: 6px 10px;
+        gap: .42rem;
+        border-radius: 999px;
+        background:
+            radial-gradient(320px 96px at 0% 0%, rgba(244, 190, 82, 0.14), transparent 72%),
+            radial-gradient(280px 92px at 100% 0%, rgba(66, 207, 255, 0.14), transparent 70%),
+            linear-gradient(180deg, rgba(18, 50, 58, 0.9) 0%, rgba(12, 35, 42, 0.92) 100%);
+        border: 1px solid rgba(79, 196, 225, 0.2);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 16px 32px rgba(7, 16, 19, 0.26);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #<?= $componentId ?> .rvnav-bar::before {
+        content: '';
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        top: 50%;
+        height: 1px;
+        transform: translateY(-50%);
+        background: linear-gradient(90deg, rgba(244, 190, 82, 0.2), rgba(244, 190, 82, 0.64) 34%, rgba(66, 207, 255, 0.66) 66%, rgba(66, 207, 255, 0.18));
+        opacity: .34;
+        pointer-events: none;
+    }
+
+    #<?= $componentId ?> .rvnav-links,
+    #<?= $componentId ?> .rvnav-cta {
+        display: none;
+    }
+
+    #<?= $componentId ?> .rvnav-brand-copy {
+        display: block;
+    }
+
+    #<?= $componentId ?> .rvnav-brand-copy strong {
+        font-size: .52rem;
+        letter-spacing: .06em;
+        max-width: 34vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #<?= $componentId ?> .rvnav-brand-copy small {
+        display: none;
+    }
+
+    #<?= $componentId ?> .rvnav-brand img {
+        width: clamp(32px, 8vw, 38px);
+        height: clamp(32px, 8vw, 38px);
+        border-radius: 6px;
+    }
+
+    #<?= $componentId ?> .rvnav-brand {
+        grid-column: 1;
+        justify-self: start;
+        gap: .34rem;
+        max-width: 64vw;
+    }
+
+    #<?= $componentId ?> .rvnav-wing-left {
+        display: none;
+    }
+
+    #<?= $componentId ?> .rvnav-wing-right {
+        grid-column: 2;
+        justify-self: end;
+        justify-content: flex-end;
+    }
+
+    #<?= $componentId ?> .rvnav-actions {
+        justify-content: flex-end;
+        gap: .34rem;
+    }
+
+    #<?= $componentId ?> .rvnav-mini,
+    #<?= $componentId ?> .rvnav-toggle {
+        width: 38px;
+        height: 38px;
+    }
+
+    #<?= $componentId ?> .rvnav-mini,
+    #<?= $componentId ?> .rvnav-toggle {
+        display: inline-flex;
+    }
+}
+
+@media (min-width: 1024px) {
+    #<?= $componentId ?> {
+        padding: 12px 0 0;
+        background:
+            linear-gradient(180deg, rgba(14, 40, 47, 0.96) 0%, rgb(85 80 66) 100%)
+    }
+
+    #<?= $componentId ?> .rvnav-bar {
+        width: min(1240px, calc(100% - 2.8rem));
+        margin: 0 auto;
+        min-height: 64px;
+        padding: 6px 10px;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        border-radius: 999px;
+        gap: .56rem;
+        background:
+            radial-gradient(320px 96px at 0% 0%, rgba(244, 190, 82, 0.14), transparent 72%),
+            radial-gradient(280px 92px at 100% 0%, rgba(66, 207, 255, 0.14), transparent 70%),
+            linear-gradient(180deg, rgba(18, 50, 58, 0.9) 0%, rgba(12, 35, 42, 0.92) 100%);
+        border: 1px solid rgba(79, 196, 225, 0.2);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 16px 32px rgba(7, 16, 19, 0.26);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+
+    #<?= $componentId ?> .rvnav-bar::before {
+        content: '';
+        position: absolute;
+        left: 8%;
+        right: 8%;
+        top: 50%;
+        height: 1px;
+        transform: translateY(-50%);
+        background: linear-gradient(90deg, rgba(244, 190, 82, 0.2), rgba(244, 190, 82, 0.64) 34%, rgba(66, 207, 255, 0.66) 66%, rgba(66, 207, 255, 0.18));
+        opacity: .34;
+        pointer-events: none;
+    }
+
+    #<?= $componentId ?> .rvnav-backdrop,
+    #<?= $componentId ?> .rvnav-mobile-panel {
+        display: none !important;
+    }
+
+    #<?= $componentId ?> .rvnav-brand {
+        position: relative;
+        z-index: 2;
+        grid-column: 2;
+        justify-self: center;
+        padding: 2px 4px;
+        border-radius: 999px;
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+    }
+
+    #<?= $componentId ?> .rvnav-brand img {
+        width: 36px;
+        height: 36px;
+        border-radius: 6px;
+        border: 0;
+        box-shadow: none;
+    }
+
+    #<?= $componentId ?> .rvnav-brand-copy strong {
+        font-size: 0.62rem;
+        letter-spacing: .1em;
+    }
+
+    #<?= $componentId ?> .rvnav-brand-copy small {
+        display: none;
+    }
+
+    #<?= $componentId ?> .rvnav-links {
+        min-width: 0;
+        gap: 6px;
+        overflow: visible;
+        scrollbar-width: auto;
+        -ms-overflow-style: auto;
+    }
+
+    #<?= $componentId ?> .rvnav-links-left {
+        justify-content: flex-end;
+    }
+
+    #<?= $componentId ?> .rvnav-links-right {
+        justify-content: flex-start;
+    }
+
+    #<?= $componentId ?> .rvnav-wing-left {
+        grid-column: 1;
+    }
+
+    #<?= $componentId ?> .rvnav-wing-right {
+        grid-column: 3;
+        justify-content: space-between;
+        gap: .42rem;
+    }
+
+    #<?= $componentId ?> .rvnav-links a {
+        min-height: 34px;
+        padding: .42rem .7rem;
+        border-radius: 10px;
+        clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+        color: #d8e8eb;
+        transform: none;
+        transition: color .22s ease, transform .22s ease;
+        font-size: 13px;
+    }
+
+    #<?= $componentId ?> .rvnav-links a::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        background: linear-gradient(145deg, rgba(255,255,255,0.08) 0%, rgba(66, 207, 255, 0.08) 56%, rgba(201, 71, 45, 0.08) 100%);
+        border: 1px solid rgba(255,255,255,0.1);
+        z-index: 0;
+    }
+
+    #<?= $componentId ?> .rvnav-links a::after {
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: auto;
+        width: auto;
+        height: 100%;
+        border-radius: 0;
+        background: linear-gradient(100deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.18) 46%, rgba(255,255,255,0) 72%);
+        transform: none;
+        opacity: 0;
+        transition: opacity .22s ease;
+    }
+
+    #<?= $componentId ?> .rvnav-links a:hover,
+    #<?= $componentId ?> .rvnav-links a.is-active,
+    #<?= $componentId ?> .rvnav-links a[aria-current="page"] {
+        color: #ffffff;
+        transform: translateY(-1px);
+    }
+
+    #<?= $componentId ?> .rvnav-links a:hover::before,
+    #<?= $componentId ?> .rvnav-links a.is-active::before,
+    #<?= $componentId ?> .rvnav-links a[aria-current="page"]::before {
+        background: linear-gradient(145deg, rgba(244, 190, 82, 0.2) 0%, rgba(66, 207, 255, 0.18) 58%, rgba(201, 71, 45, 0.18) 100%);
+        border-color: rgba(255,255,255,0.2);
+    }
+
+    #<?= $componentId ?> .rvnav-links a:hover::after,
+    #<?= $componentId ?> .rvnav-links a.is-active::after,
+    #<?= $componentId ?> .rvnav-links a[aria-current="page"]::after {
+        opacity: .56;
+    }
+
+    #<?= $componentId ?> .rvnav-actions {
+        justify-content: flex-end;
+        gap: .42rem;
+    }
+
+    #<?= $componentId ?> .rvnav-cta {
+        min-height: 34px;
+        padding: 6px 10px;
+        font-size: 10px;
+        clip-path: polygon(10px 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+    }
+
+    #<?= $componentId ?> .rvnav-cta-icon {
+        animation: rvnav-cta-icon-shift 1.5s ease-in-out infinite;
+    }
+}
+
+@media (min-width: 1024px) and (max-width: 1320px) {
+    #<?= $componentId ?> .rvnav-brand-copy {
+        display: block;
+        max-width: 118px;
+    }
+
+    #<?= $componentId ?> .rvnav-brand-copy strong {
+        display: block;
+        max-width: 118px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    #<?= $componentId ?> .rvnav-brand-copy small {
+        display: none;
+    }
+}
+</style>
+
+<script>
+(function() {
+    var root = document.getElementById('<?= $componentId ?>');
+    if (!root) return;
+
+    var toggle = root.querySelector('.rvnav-toggle');
+    var sheet = root.querySelector('.rvnav-mobile-panel');
+    var backdrop = root.querySelector('.rvnav-backdrop');
+    var bar = root.querySelector('.rvnav-bar');
+    var mobileLinks = root.querySelectorAll('.rvnav-mobile-links a');
+
+    function syncMobileOverlayPosition() {
+        if (!sheet || !backdrop || !bar) return;
+        if (window.innerWidth >= 1024) {
+            root.style.removeProperty('--rvnav-sheet-top');
+            return;
+        }
+        var barRect = bar.getBoundingClientRect();
+        var topOffset = Math.max(0, Math.round(barRect.bottom + 8));
+        root.style.setProperty('--rvnav-sheet-top', topOffset + 'px');
+    }
+
+    function setOpen(open) {
+        if (!toggle || !sheet || !backdrop) return;
+        if (open) {
+            syncMobileOverlayPosition();
+            requestAnimationFrame(syncMobileOverlayPosition);
+        }
+        toggle.classList.toggle('is-open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        root.classList.toggle('is-mobile-open', open);
+        sheet.classList.toggle('is-hidden', !open);
+        backdrop.classList.toggle('is-hidden', !open);
+        sheet.setAttribute('aria-hidden', open ? 'false' : 'true');
+        backdrop.setAttribute('aria-hidden', open ? 'false' : 'true');
+        document.body.classList.toggle('rvnav-mobile-lock', open);
+    }
+
+    if (toggle) {
+        toggle.addEventListener('click', function() {
+            setOpen(!root.classList.contains('is-mobile-open'));
+        });
+    }
+
+ 
+    if (backdrop) backdrop.addEventListener('click', function() { setOpen(false); });
+    mobileLinks.forEach(function(link) {
+        link.addEventListener('click', function() { setOpen(false); });
+    });
+
+    var handleScroll = function() {
+        root.classList.toggle('is-scrolled', (window.scrollY || window.pageYOffset || 0) > 10);
+        if (root.classList.contains('is-mobile-open')) {
+            syncMobileOverlayPosition();
+        }
+    };
+    handleScroll();
+    syncMobileOverlayPosition();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    window.addEventListener('resize', function() {
+        if (window.innerWidth >= 1024) setOpen(false);
+        syncMobileOverlayPosition();
+    });
+})();
+</script>
+
+<?php if ($standaloneShell): ?>
+</body>
+</html>
+<?php endif; ?>

@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\Server\IPC</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Server</a></li>
+         <li class="breadcrumb-item"><a href="index.html">IPC</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ChildControl/ChildLoopHooks.php.html#10">Weline\Server\IPC\ChildControl\ChildLoopHooks</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/ChildProcessIdentity.php.html#17">Weline\Server\IPC\ChildControl\ChildProcessIdentity</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/DispatcherControlHandler.php.html#10">Weline\Server\IPC\ChildControl\Handler\DispatcherControlHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/RedirectControlHandler.php.html#12">Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/SessionServerControlHandler.php.html#12">Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/WorkerControlHandler.php.html#12">Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#21">Weline\Server\IPC\ChildControl\InstanceInfoGateway</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/MasterOrphanGuard.php.html#18">Weline\Server\IPC\ChildControl\MasterOrphanGuard</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#11">Weline\Server\IPC\ChildControl\SubprocessControlKernel</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#20">Weline\Server\IPC\ControlClient</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#18">Weline\Server\IPC\ControlMessage</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#22">Weline\Server\IPC\MasterControlServer</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#15">Weline\Server\IPC\MasterControlServerSocket</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#28">Weline\Server\IPC\MasterResurrector</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="MasterControlServer.php.html#22">Weline\Server\IPC\MasterControlServer</a></td><td class="text-right">50850</td></tr>
+       <tr><td><a href="ControlClient.php.html#20">Weline\Server\IPC\ControlClient</a></td><td class="text-right">13340</td></tr>
+       <tr><td><a href="ControlMessage.php.html#18">Weline\Server\IPC\ControlMessage</a></td><td class="text-right">5112</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#11">Weline\Server\IPC\ChildControl\SubprocessControlKernel</a></td><td class="text-right">4692</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#28">Weline\Server\IPC\MasterResurrector</a></td><td class="text-right">1640</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#21">Weline\Server\IPC\ChildControl\InstanceInfoGateway</a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#15">Weline\Server\IPC\MasterControlServerSocket</a></td><td class="text-right">182</td></tr>
+       <tr><td><a href="ChildControl/Handler/SessionServerControlHandler.php.html#12">Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler</a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="ChildControl/Handler/RedirectControlHandler.php.html#12">Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler</a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ChildControl/Handler/WorkerControlHandler.php.html#12">Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler</a></td><td class="text-right">30</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="ChildControl/ChildLoopHooks.php.html#16"><abbr title="Weline\Server\IPC\ChildControl\ChildLoopHooks::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/ChildProcessIdentity.php.html#24"><abbr title="Weline\Server\IPC\ChildControl\ChildProcessIdentity::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/ChildProcessIdentity.php.html#38"><abbr title="Weline\Server\IPC\ChildControl\ChildProcessIdentity::isFrameworkProcess">isFrameworkProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/ChildProcessIdentity.php.html#43"><abbr title="Weline\Server\IPC\ChildControl\ChildProcessIdentity::isModuleProcess">isModuleProcess</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/DispatcherControlHandler.php.html#16"><abbr title="Weline\Server\IPC\ChildControl\Handler\DispatcherControlHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/DispatcherControlHandler.php.html#22"><abbr title="Weline\Server\IPC\ChildControl\Handler\DispatcherControlHandler::onMessage">onMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/DispatcherControlHandler.php.html#27"><abbr title="Weline\Server\IPC\ChildControl\Handler\DispatcherControlHandler::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/RedirectControlHandler.php.html#17"><abbr title="Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/RedirectControlHandler.php.html#22"><abbr title="Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler::onMessage">onMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/RedirectControlHandler.php.html#29"><abbr title="Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/SessionServerControlHandler.php.html#20"><abbr title="Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/SessionServerControlHandler.php.html#28"><abbr title="Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler::onMessage">onMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/SessionServerControlHandler.php.html#53"><abbr title="Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/WorkerControlHandler.php.html#18"><abbr title="Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/WorkerControlHandler.php.html#24"><abbr title="Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler::onMessage">onMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/Handler/WorkerControlHandler.php.html#29"><abbr title="Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#43"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#60"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::readLatestInfo">readLatestInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#90"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::getLatestControlPort">getLatestControlPort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#109"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::hasControlPortChanged">hasControlPortChanged</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#131"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::isControlPortChanged">isControlPortChanged</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#142"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::getCachedInfo">getCachedInfo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#154"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::get">get</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/MasterOrphanGuard.php.html#20"><abbr title="Weline\Server\IPC\ChildControl\MasterOrphanGuard::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#17"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#44"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort">resolveControlPort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#114"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort">resolveServicePort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#145"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveReadyDelayMilliseconds">resolveReadyDelayMilliseconds</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#170"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::connectAndRegister">connectAndRegister</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#292"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::applyE2EReadyDelayIfNeeded">applyE2EReadyDelayIfNeeded</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#303"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::tick">tick</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#310"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::flushWrites">flushWrites</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#317"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::hasPendingWrites">hasPendingWrites</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#322"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::reconnect">reconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#330"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::isConnected">isConnected</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#335"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::hasReceivedShutdown">hasReceivedShutdown</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#340"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::getSocket">getSocket</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#345"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::getClient">getClient</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#350"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::sendExited">sendExited</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#364"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::sendExitReason">sendExitReason</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#372"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::sendDrainingComplete">sendDrainingComplete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#380"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::close">close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#387"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::log">log</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#97"><abbr title="Weline\Server\IPC\ControlClient::connect">connect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#130"><abbr title="Weline\Server\IPC\ControlClient::isConnected">isConnected</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#140"><abbr title="Weline\Server\IPC\ControlClient::getSocket">getSocket</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#145"><abbr title="Weline\Server\IPC\ControlClient::hasPendingWrites">hasPendingWrites</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#153"><abbr title="Weline\Server\IPC\ControlClient::hasReceivedShutdown">hasReceivedShutdown</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#161"><abbr title="Weline\Server\IPC\ControlClient::getResurrectionPriority">getResurrectionPriority</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#171"><abbr title="Weline\Server\IPC\ControlClient::onMessage">onMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#181"><abbr title="Weline\Server\IPC\ControlClient::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#192"><abbr title="Weline\Server\IPC\ControlClient::setVerboseLog">setVerboseLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#202"><abbr title="Weline\Server\IPC\ControlClient::setSelfTag">setSelfTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#210"><abbr title="Weline\Server\IPC\ControlClient::ipcLog">ipcLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#218"><abbr title="Weline\Server\IPC\ControlClient::ipcVerboseLog">ipcVerboseLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#228"><abbr title="Weline\Server\IPC\ControlClient::formatMsgPayload">formatMsgPayload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#275"><abbr title="Weline\Server\IPC\ControlClient::getMemoryLimit">getMemoryLimit</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#307"><abbr title="Weline\Server\IPC\ControlClient::register">register</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#335"><abbr title="Weline\Server\IPC\ControlClient::rememberRegistration">rememberRegistration</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#359"><abbr title="Weline\Server\IPC\ControlClient::markReadyState">markReadyState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#367"><abbr title="Weline\Server\IPC\ControlClient::sendReady">sendReady</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#390"><abbr title="Weline\Server\IPC\ControlClient::sendWorkerLoopStarted">sendWorkerLoopStarted</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#395"><abbr title="Weline\Server\IPC\ControlClient::sendDrainingComplete">sendDrainingComplete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#408"><abbr title="Weline\Server\IPC\ControlClient::sendStatusReport">sendStatusReport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#416"><abbr title="Weline\Server\IPC\ControlClient::sendLogLine">sendLogLine</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#429"><abbr title="Weline\Server\IPC\ControlClient::send">send</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#456"><abbr title="Weline\Server\IPC\ControlClient::handleWritable">handleWritable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#464"><abbr title="Weline\Server\IPC\ControlClient::flushPendingWrites">flushPendingWrites</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#489"><abbr title="Weline\Server\IPC\ControlClient::enqueueWrite">enqueueWrite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#509"><abbr title="Weline\Server\IPC\ControlClient::flushWriteBufferChunk">flushWriteBufferChunk</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#568"><abbr title="Weline\Server\IPC\ControlClient::handleReadable">handleReadable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#606"><abbr title="Weline\Server\IPC\ControlClient::flushBufferedControlMessages">flushBufferedControlMessages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#626"><abbr title="Weline\Server\IPC\ControlClient::dispatchMasterDownstreamMessage">dispatchMasterDownstreamMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#654"><abbr title="Weline\Server\IPC\ControlClient::handleDisconnect">handleDisconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#681"><abbr title="Weline\Server\IPC\ControlClient::tryReconnect">tryReconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#749"><abbr title="Weline\Server\IPC\ControlClient::isReconnectAbandoned">isReconnectAbandoned</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#757"><abbr title="Weline\Server\IPC\ControlClient::close">close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlClient.php.html#773"><abbr title="Weline\Server\IPC\ControlClient::__destruct">__destruct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#287"><abbr title="Weline\Server\IPC\ControlMessage::encode">encode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#298"><abbr title="Weline\Server\IPC\ControlMessage::decode">decode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#312"><abbr title="Weline\Server\IPC\ControlMessage::extractMessages">extractMessages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#332"><abbr title="Weline\Server\IPC\ControlMessage::register">register</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#372"><abbr title="Weline\Server\IPC\ControlMessage::ack">ack</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#383"><abbr title="Weline\Server\IPC\ControlMessage::ready">ready</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#409"><abbr title="Weline\Server\IPC\ControlMessage::workerLoopStarted">workerLoopStarted</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#422"><abbr title="Weline\Server\IPC\ControlMessage::shutdown">shutdown</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#433"><abbr title="Weline\Server\IPC\ControlMessage::reload">reload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#449"><abbr title="Weline\Server\IPC\ControlMessage::setWorkerPool">setWorkerPool</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#461"><abbr title="Weline\Server\IPC\ControlMessage::cacheClear">cacheClear</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#471"><abbr title="Weline\Server\IPC\ControlMessage::pageBuilderPageInvalidate">pageBuilderPageInvalidate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#488"><abbr title="Weline\Server\IPC\ControlMessage::sslCertReload">sslCertReload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#502"><abbr title="Weline\Server\IPC\ControlMessage::routingPolicy">routingPolicy</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#513"><abbr title="Weline\Server\IPC\ControlMessage::setMaintenanceMode">setMaintenanceMode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#526"><abbr title="Weline\Server\IPC\ControlMessage::drain">drain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#537"><abbr title="Weline\Server\IPC\ControlMessage::undrain">undrain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#548"><abbr title="Weline\Server\IPC\ControlMessage::addWorker">addWorker</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#559"><abbr title="Weline\Server\IPC\ControlMessage::removeWorker">removeWorker</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#570"><abbr title="Weline\Server\IPC\ControlMessage::setRedirectPort">setRedirectPort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#581"><abbr title="Weline\Server\IPC\ControlMessage::drainingComplete">drainingComplete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#593"><abbr title="Weline\Server\IPC\ControlMessage::statusReport">statusReport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#606"><abbr title="Weline\Server\IPC\ControlMessage::telemetry">telemetry</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#632"><abbr title="Weline\Server\IPC\ControlMessage::command">command</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#653"><abbr title="Weline\Server\IPC\ControlMessage::securityUnblock">securityUnblock</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#667"><abbr title="Weline\Server\IPC\ControlMessage::ping">ping</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#684"><abbr title="Weline\Server\IPC\ControlMessage::pong">pong</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#700"><abbr title="Weline\Server\IPC\ControlMessage::commandResult">commandResult</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#716"><abbr title="Weline\Server\IPC\ControlMessage::exitReason">exitReason</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#728"><abbr title="Weline\Server\IPC\ControlMessage::exited">exited</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#745"><abbr title="Weline\Server\IPC\ControlMessage::ackReady">ackReady</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#760"><abbr title="Weline\Server\IPC\ControlMessage::reloadCompleted">reloadCompleted</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#776"><abbr title="Weline\Server\IPC\ControlMessage::reloadFailed">reloadFailed</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#794"><abbr title="Weline\Server\IPC\ControlMessage::reloadProgress">reloadProgress</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#813"><abbr title="Weline\Server\IPC\ControlMessage::logLine">logLine</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#829"><abbr title="Weline\Server\IPC\ControlMessage::fiberSetConfig">fiberSetConfig</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#841"><abbr title="Weline\Server\IPC\ControlMessage::fiberReleaseIdle">fiberReleaseIdle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#851"><abbr title="Weline\Server\IPC\ControlMessage::fiberPoolQuery">fiberPoolQuery</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#869"><abbr title="Weline\Server\IPC\ControlMessage::fiberPoolStats">fiberPoolStats</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#901"><abbr title="Weline\Server\IPC\ControlMessage::workerSaturation">workerSaturation</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#923"><abbr title="Weline\Server\IPC\ControlMessage::workerSaturationCleared">workerSaturationCleared</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#949"><abbr title="Weline\Server\IPC\ControlMessage::batchBroadcast">batchBroadcast</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#972"><abbr title="Weline\Server\IPC\ControlMessage::batchResponse">batchResponse</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#986"><abbr title="Weline\Server\IPC\ControlMessage::batchAck">batchAck</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#999"><abbr title="Weline\Server\IPC\ControlMessage::batchCancel">batchCancel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1014"><abbr title="Weline\Server\IPC\ControlMessage::batchStop">batchStop</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1032"><abbr title="Weline\Server\IPC\ControlMessage::batchReload">batchReload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1055"><abbr title="Weline\Server\IPC\ControlMessage::scaleWorkers">scaleWorkers</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1074"><abbr title="Weline\Server\IPC\ControlMessage::workerScaled">workerScaled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1103"><abbr title="Weline\Server\IPC\ControlMessage::loadReport">loadReport</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1128"><abbr title="Weline\Server\IPC\ControlMessage::gracefulShutdown">gracefulShutdown</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1147"><abbr title="Weline\Server\IPC\ControlMessage::proxyAddRoute">proxyAddRoute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1169"><abbr title="Weline\Server\IPC\ControlMessage::proxyRemoveRoute">proxyRemoveRoute</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="ControlMessage.php.html#1182"><abbr title="Weline\Server\IPC\ControlMessage::proxyReload">proxyReload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#108"><abbr title="Weline\Server\IPC\MasterControlServer::setLogToConsole">setLogToConsole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#116"><abbr title="Weline\Server\IPC\MasterControlServer::setExpectedInstanceCode">setExpectedInstanceCode</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#121"><abbr title="Weline\Server\IPC\MasterControlServer::setWindowsNativeSocketBridgeEnabled">setWindowsNativeSocketBridgeEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#126"><abbr title="Weline\Server\IPC\MasterControlServer::isWindowsNativeSocketBridgeEnabled">isWindowsNativeSocketBridgeEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#131"><abbr title="Weline\Server\IPC\MasterControlServer::isUsingWindowsNativeSocketBridge">isUsingWindowsNativeSocketBridge</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#143"><abbr title="Weline\Server\IPC\MasterControlServer::start">start</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#193"><abbr title="Weline\Server\IPC\MasterControlServer::shouldUseWindowsNativeSocketBridge">shouldUseWindowsNativeSocketBridge</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#209"><abbr title="Weline\Server\IPC\MasterControlServer::startWithWindowsNativeSocketBridge">startWithWindowsNativeSocketBridge</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#278"><abbr title="Weline\Server\IPC\MasterControlServer::getServerSocket">getServerSocket</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#286"><abbr title="Weline\Server\IPC\MasterControlServer::getPort">getPort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#296"><abbr title="Weline\Server\IPC\MasterControlServer::getClientSockets">getClientSockets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#312"><abbr title="Weline\Server\IPC\MasterControlServer::onMessage">onMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#322"><abbr title="Weline\Server\IPC\MasterControlServer::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#333"><abbr title="Weline\Server\IPC\MasterControlServer::setVerboseLog">setVerboseLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#341"><abbr title="Weline\Server\IPC\MasterControlServer::ipcLog">ipcLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#349"><abbr title="Weline\Server\IPC\MasterControlServer::ipcVerboseLog">ipcVerboseLog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#359"><abbr title="Weline\Server\IPC\MasterControlServer::formatClientTag">formatClientTag</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#390"><abbr title="Weline\Server\IPC\MasterControlServer::formatRoleLabel">formatRoleLabel</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#398"><abbr title="Weline\Server\IPC\MasterControlServer::classifyClientFromMessage">classifyClientFromMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#416"><abbr title="Weline\Server\IPC\MasterControlServer::formatMsgPayload">formatMsgPayload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#439"><abbr title="Weline\Server\IPC\MasterControlServer::acceptClient">acceptClient</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#486"><abbr title="Weline\Server\IPC\MasterControlServer::acceptPendingClients">acceptPendingClients</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#528"><abbr title="Weline\Server\IPC\MasterControlServer::handleReadable">handleReadable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#566"><abbr title="Weline\Server\IPC\MasterControlServer::flushBufferedNdjsonForClient">flushBufferedNdjsonForClient</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#593"><abbr title="Weline\Server\IPC\MasterControlServer::dispatchDecodedControlMessage">dispatchDecodedControlMessage</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#656"><abbr title="Weline\Server\IPC\MasterControlServer::handleRegister">handleRegister</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#715"><abbr title="Weline\Server\IPC\MasterControlServer::closeClient">closeClient</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#720"><abbr title="Weline\Server\IPC\MasterControlServer::clientExists">clientExists</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#728"><abbr title="Weline\Server\IPC\MasterControlServer::removeClient">removeClient</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#758"><abbr title="Weline\Server\IPC\MasterControlServer::sendTo">sendTo</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#788"><abbr title="Weline\Server\IPC\MasterControlServer::getWritableClientSockets">getWritableClientSockets</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#803"><abbr title="Weline\Server\IPC\MasterControlServer::enqueueWrite">enqueueWrite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#826"><abbr title="Weline\Server\IPC\MasterControlServer::handleWritable">handleWritable</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#847"><abbr title="Weline\Server\IPC\MasterControlServer::flushClientWriteBuffer">flushClientWriteBuffer</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#914"><abbr title="Weline\Server\IPC\MasterControlServer::broadcast">broadcast</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#943"><abbr title="Weline\Server\IPC\MasterControlServer::sendToRole">sendToRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#951"><abbr title="Weline\Server\IPC\MasterControlServer::sendToWorker">sendToWorker</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#964"><abbr title="Weline\Server\IPC\MasterControlServer::sendToWorkerByPort">sendToWorkerByPort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#979"><abbr title="Weline\Server\IPC\MasterControlServer::sendToInstance">sendToInstance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#992"><abbr title="Weline\Server\IPC\MasterControlServer::getLastPongTime">getLastPongTime</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1007"><abbr title="Weline\Server\IPC\MasterControlServer::getConnectedClients">getConnectedClients</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1030"><abbr title="Weline\Server\IPC\MasterControlServer::getClientsByRole">getClientsByRole</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1046"><abbr title="Weline\Server\IPC\MasterControlServer::getReadyWorkerPorts">getReadyWorkerPorts</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1062"><abbr title="Weline\Server\IPC\MasterControlServer::setWorkerState">setWorkerState</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1072"><abbr title="Weline\Server\IPC\MasterControlServer::findClientByWorkerId">findClientByWorkerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1085"><abbr title="Weline\Server\IPC\MasterControlServer::findClientByPort">findClientByPort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1098"><abbr title="Weline\Server\IPC\MasterControlServer::getClientCount">getClientCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1108"><abbr title="Weline\Server\IPC\MasterControlServer::countServiceClients">countServiceClients</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1125"><abbr title="Weline\Server\IPC\MasterControlServer::hasPendingWrites">hasPendingWrites</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1139"><abbr title="Weline\Server\IPC\MasterControlServer::flushPendingWrites">flushPendingWrites</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1160"><abbr title="Weline\Server\IPC\MasterControlServer::poll">poll</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1235"><abbr title="Weline\Server\IPC\MasterControlServer::close">close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1255"><abbr title="Weline\Server\IPC\MasterControlServer::__destruct">__destruct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#25"><abbr title="Weline\Server\IPC\MasterControlServerSocket::start">start</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#76"><abbr title="Weline\Server\IPC\MasterControlServerSocket::acceptClient">acceptClient</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#106"><abbr title="Weline\Server\IPC\MasterControlServerSocket::getServerSocket">getServerSocket</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#114"><abbr title="Weline\Server\IPC\MasterControlServerSocket::close">close</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#122"><abbr title="Weline\Server\IPC\MasterControlServerSocket::getPort">getPort</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#59"><abbr title="Weline\Server\IPC\MasterResurrector::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#79"><abbr title="Weline\Server\IPC\MasterResurrector::shouldResurrect">shouldResurrect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#107"><abbr title="Weline\Server\IPC\MasterResurrector::isChildResurrectionEnabled">isChildResurrectionEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#120"><abbr title="Weline\Server\IPC\MasterResurrector::getDelay">getDelay</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#135"><abbr title="Weline\Server\IPC\MasterResurrector::attemptResurrect">attemptResurrect</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#187"><abbr title="Weline\Server\IPC\MasterResurrector::isMasterAlive">isMasterAlive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#215"><abbr title="Weline\Server\IPC\MasterResurrector::startMaster">startMaster</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#255"><abbr title="Weline\Server\IPC\MasterResurrector::canResurrectWithCurrentPrivilege">canResurrectWithCurrentPrivilege</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="MasterControlServer.php.html#1160"><abbr title="Weline\Server\IPC\MasterControlServer::poll">poll</abbr></a></td><td class="text-right">380</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#255"><abbr title="Weline\Server\IPC\MasterResurrector::canResurrectWithCurrentPrivilege">canResurrectWithCurrentPrivilege</abbr></a></td><td class="text-right">272</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#170"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::connectAndRegister">connectAndRegister</abbr></a></td><td class="text-right">240</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#593"><abbr title="Weline\Server\IPC\MasterControlServer::dispatchDecodedControlMessage">dispatchDecodedControlMessage</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#847"><abbr title="Weline\Server\IPC\MasterControlServer::flushClientWriteBuffer">flushClientWriteBuffer</abbr></a></td><td class="text-right">210</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#143"><abbr title="Weline\Server\IPC\MasterControlServer::start">start</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="ControlClient.php.html#509"><abbr title="Weline\Server\IPC\ControlClient::flushWriteBufferChunk">flushWriteBufferChunk</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="ControlClient.php.html#681"><abbr title="Weline\Server\IPC\ControlClient::tryReconnect">tryReconnect</abbr></a></td><td class="text-right">132</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#44"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveControlPort">resolveControlPort</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="ControlClient.php.html#228"><abbr title="Weline\Server\IPC\ControlClient::formatMsgPayload">formatMsgPayload</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#193"><abbr title="Weline\Server\IPC\MasterControlServer::shouldUseWindowsNativeSocketBridge">shouldUseWindowsNativeSocketBridge</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="ControlClient.php.html#464"><abbr title="Weline\Server\IPC\ControlClient::flushPendingWrites">flushPendingWrites</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#209"><abbr title="Weline\Server\IPC\MasterControlServer::startWithWindowsNativeSocketBridge">startWithWindowsNativeSocketBridge</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#656"><abbr title="Weline\Server\IPC\MasterControlServer::handleRegister">handleRegister</abbr></a></td><td class="text-right">90</td></tr>
+       <tr><td><a href="ControlClient.php.html#568"><abbr title="Weline\Server\IPC\ControlClient::handleReadable">handleReadable</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#359"><abbr title="Weline\Server\IPC\MasterControlServer::formatClientTag">formatClientTag</abbr></a></td><td class="text-right">72</td></tr>
+       <tr><td><a href="ChildControl/Handler/SessionServerControlHandler.php.html#28"><abbr title="Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler::onMessage">onMessage</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#114"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort">resolveServicePort</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ControlClient.php.html#275"><abbr title="Weline\Server\IPC\ControlClient::getMemoryLimit">getMemoryLimit</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#528"><abbr title="Weline\Server\IPC\MasterControlServer::handleReadable">handleReadable</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#566"><abbr title="Weline\Server\IPC\MasterControlServer::flushBufferedNdjsonForClient">flushBufferedNdjsonForClient</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="ControlClient.php.html#757"><abbr title="Weline\Server\IPC\ControlClient::close">close</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="ControlMessage.php.html#332"><abbr title="Weline\Server\IPC\ControlMessage::register">register</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#914"><abbr title="Weline\Server\IPC\MasterControlServer::broadcast">broadcast</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1235"><abbr title="Weline\Server\IPC\MasterControlServer::close">close</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#25"><abbr title="Weline\Server\IPC\MasterControlServerSocket::start">start</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#135"><abbr title="Weline\Server\IPC\MasterResurrector::attemptResurrect">attemptResurrect</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#145"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveReadyDelayMilliseconds">resolveReadyDelayMilliseconds</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ControlClient.php.html#429"><abbr title="Weline\Server\IPC\ControlClient::send">send</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ControlClient.php.html#626"><abbr title="Weline\Server\IPC\ControlClient::dispatchMasterDownstreamMessage">dispatchMasterDownstreamMessage</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ControlClient.php.html#654"><abbr title="Weline\Server\IPC\ControlClient::handleDisconnect">handleDisconnect</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#486"><abbr title="Weline\Server\IPC\MasterControlServer::acceptPendingClients">acceptPendingClients</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#758"><abbr title="Weline\Server\IPC\MasterControlServer::sendTo">sendTo</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#964"><abbr title="Weline\Server\IPC\MasterControlServer::sendToWorkerByPort">sendToWorkerByPort</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1108"><abbr title="Weline\Server\IPC\MasterControlServer::countServiceClients">countServiceClients</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#79"><abbr title="Weline\Server\IPC\MasterResurrector::shouldResurrect">shouldResurrect</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#215"><abbr title="Weline\Server\IPC\MasterResurrector::startMaster">startMaster</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#60"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::readLatestInfo">readLatestInfo</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#90"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::getLatestControlPort">getLatestControlPort</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ControlClient.php.html#606"><abbr title="Weline\Server\IPC\ControlClient::flushBufferedControlMessages">flushBufferedControlMessages</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#398"><abbr title="Weline\Server\IPC\MasterControlServer::classifyClientFromMessage">classifyClientFromMessage</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#416"><abbr title="Weline\Server\IPC\MasterControlServer::formatMsgPayload">formatMsgPayload</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#439"><abbr title="Weline\Server\IPC\MasterControlServer::acceptClient">acceptClient</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#728"><abbr title="Weline\Server\IPC\MasterControlServer::removeClient">removeClient</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#788"><abbr title="Weline\Server\IPC\MasterControlServer::getWritableClientSockets">getWritableClientSockets</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#803"><abbr title="Weline\Server\IPC\MasterControlServer::enqueueWrite">enqueueWrite</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#951"><abbr title="Weline\Server\IPC\MasterControlServer::sendToWorker">sendToWorker</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1046"><abbr title="Weline\Server\IPC\MasterControlServer::getReadyWorkerPorts">getReadyWorkerPorts</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1072"><abbr title="Weline\Server\IPC\MasterControlServer::findClientByWorkerId">findClientByWorkerId</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1139"><abbr title="Weline\Server\IPC\MasterControlServer::flushPendingWrites">flushPendingWrites</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="ChildControl/Handler/SessionServerControlHandler.php.html#53"><abbr title="Weline\Server\IPC\ChildControl\Handler\SessionServerControlHandler::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ChildControl/Handler/WorkerControlHandler.php.html#29"><abbr title="Weline\Server\IPC\ChildControl\Handler\WorkerControlHandler::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#303"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::tick">tick</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#310"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::flushWrites">flushWrites</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#350"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::sendExited">sendExited</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#364"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::sendExitReason">sendExitReason</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#372"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::sendDrainingComplete">sendDrainingComplete</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ControlClient.php.html#367"><abbr title="Weline\Server\IPC\ControlClient::sendReady">sendReady</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ControlClient.php.html#395"><abbr title="Weline\Server\IPC\ControlClient::sendDrainingComplete">sendDrainingComplete</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ControlClient.php.html#489"><abbr title="Weline\Server\IPC\ControlClient::enqueueWrite">enqueueWrite</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ControlMessage.php.html#383"><abbr title="Weline\Server\IPC\ControlMessage::ready">ready</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ControlMessage.php.html#632"><abbr title="Weline\Server\IPC\ControlMessage::command">command</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ControlMessage.php.html#653"><abbr title="Weline\Server\IPC\ControlMessage::securityUnblock">securityUnblock</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#296"><abbr title="Weline\Server\IPC\MasterControlServer::getClientSockets">getClientSockets</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#826"><abbr title="Weline\Server\IPC\MasterControlServer::handleWritable">handleWritable</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#979"><abbr title="Weline\Server\IPC\MasterControlServer::sendToInstance">sendToInstance</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#992"><abbr title="Weline\Server\IPC\MasterControlServer::getLastPongTime">getLastPongTime</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1030"><abbr title="Weline\Server\IPC\MasterControlServer::getClientsByRole">getClientsByRole</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1085"><abbr title="Weline\Server\IPC\MasterControlServer::findClientByPort">findClientByPort</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1125"><abbr title="Weline\Server\IPC\MasterControlServer::hasPendingWrites">hasPendingWrites</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#76"><abbr title="Weline\Server\IPC\MasterControlServerSocket::acceptClient">acceptClient</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#107"><abbr title="Weline\Server\IPC\MasterResurrector::isChildResurrectionEnabled">isChildResurrectionEnabled</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="MasterResurrector.php.html#187"><abbr title="Weline\Server\IPC\MasterResurrector::isMasterAlive">isMasterAlive</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="ChildControl/Handler/RedirectControlHandler.php.html#22"><abbr title="Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler::onMessage">onMessage</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/Handler/RedirectControlHandler.php.html#29"><abbr title="Weline\Server\IPC\ChildControl\Handler\RedirectControlHandler::onDisconnect">onDisconnect</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#43"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::__construct">__construct</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/InstanceInfoGateway.php.html#109"><abbr title="Weline\Server\IPC\ChildControl\InstanceInfoGateway::hasControlPortChanged">hasControlPortChanged</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#292"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::applyE2EReadyDelayIfNeeded">applyE2EReadyDelayIfNeeded</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#317"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::hasPendingWrites">hasPendingWrites</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#322"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::reconnect">reconnect</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#330"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::isConnected">isConnected</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#335"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::hasReceivedShutdown">hasReceivedShutdown</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ChildControl/SubprocessControlKernel.php.html#380"><abbr title="Weline\Server\IPC\ChildControl\SubprocessControlKernel::close">close</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlClient.php.html#97"><abbr title="Weline\Server\IPC\ControlClient::connect">connect</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlClient.php.html#130"><abbr title="Weline\Server\IPC\ControlClient::isConnected">isConnected</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlClient.php.html#218"><abbr title="Weline\Server\IPC\ControlClient::ipcVerboseLog">ipcVerboseLog</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlClient.php.html#416"><abbr title="Weline\Server\IPC\ControlClient::sendLogLine">sendLogLine</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlMessage.php.html#433"><abbr title="Weline\Server\IPC\ControlMessage::reload">reload</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlMessage.php.html#488"><abbr title="Weline\Server\IPC\ControlMessage::sslCertReload">sslCertReload</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlMessage.php.html#606"><abbr title="Weline\Server\IPC\ControlMessage::telemetry">telemetry</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlMessage.php.html#667"><abbr title="Weline\Server\IPC\ControlMessage::ping">ping</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlMessage.php.html#684"><abbr title="Weline\Server\IPC\ControlMessage::pong">pong</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="ControlMessage.php.html#716"><abbr title="Weline\Server\IPC\ControlMessage::exitReason">exitReason</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#349"><abbr title="Weline\Server\IPC\MasterControlServer::ipcVerboseLog">ipcVerboseLog</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1007"><abbr title="Weline\Server\IPC\MasterControlServer::getConnectedClients">getConnectedClients</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="MasterControlServer.php.html#1062"><abbr title="Weline\Server\IPC\MasterControlServer::setWorkerState">setWorkerState</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="MasterControlServerSocket.php.html#114"><abbr title="Weline\Server\IPC\MasterControlServerSocket::close">close</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([14,0,0,0,0,0,0,0,0,0,0,1], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([198,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"ChildControl\/ChildLoopHooks.php.html#10\">Weline\\Server\\IPC\\ChildControl\\ChildLoopHooks<\/a>"],[0,3,"<a href=\"ChildControl\/ChildProcessIdentity.php.html#17\">Weline\\Server\\IPC\\ChildControl\\ChildProcessIdentity<\/a>"],[0,3,"<a href=\"ChildControl\/Handler\/DispatcherControlHandler.php.html#10\">Weline\\Server\\IPC\\ChildControl\\Handler\\DispatcherControlHandler<\/a>"],[0,5,"<a href=\"ChildControl\/Handler\/RedirectControlHandler.php.html#12\">Weline\\Server\\IPC\\ChildControl\\Handler\\RedirectControlHandler<\/a>"],[0,11,"<a href=\"ChildControl\/Handler\/SessionServerControlHandler.php.html#12\">Weline\\Server\\IPC\\ChildControl\\Handler\\SessionServerControlHandler<\/a>"],[0,5,"<a href=\"ChildControl\/Handler\/WorkerControlHandler.php.html#12\">Weline\\Server\\IPC\\ChildControl\\Handler\\WorkerControlHandler<\/a>"],[100,0,"<a href=\"ChildControl\/Handler\/WorkerSslControlHandler.php.html#7\">Weline\\Server\\IPC\\ChildControl\\Handler\\WorkerSslControlHandler<\/a>"],[0,15,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#21\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway<\/a>"],[0,1,"<a href=\"ChildControl\/MasterOrphanGuard.php.html#18\">Weline\\Server\\IPC\\ChildControl\\MasterOrphanGuard<\/a>"],[0,68,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#11\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel<\/a>"],[0,115,"<a href=\"ControlClient.php.html#20\">Weline\\Server\\IPC\\ControlClient<\/a>"],[0,71,"<a href=\"ControlMessage.php.html#18\">Weline\\Server\\IPC\\ControlMessage<\/a>"],[0,225,"<a href=\"MasterControlServer.php.html#22\">Weline\\Server\\IPC\\MasterControlServer<\/a>"],[0,13,"<a href=\"MasterControlServerSocket.php.html#15\">Weline\\Server\\IPC\\MasterControlServerSocket<\/a>"],[0,40,"<a href=\"MasterResurrector.php.html#28\">Weline\\Server\\IPC\\MasterResurrector<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"ChildControl\/ChildLoopHooks.php.html#16\">Weline\\Server\\IPC\\ChildControl\\ChildLoopHooks::__construct<\/a>"],[0,1,"<a href=\"ChildControl\/ChildProcessIdentity.php.html#24\">Weline\\Server\\IPC\\ChildControl\\ChildProcessIdentity::__construct<\/a>"],[0,1,"<a href=\"ChildControl\/ChildProcessIdentity.php.html#38\">Weline\\Server\\IPC\\ChildControl\\ChildProcessIdentity::isFrameworkProcess<\/a>"],[0,1,"<a href=\"ChildControl\/ChildProcessIdentity.php.html#43\">Weline\\Server\\IPC\\ChildControl\\ChildProcessIdentity::isModuleProcess<\/a>"],[0,1,"<a href=\"ChildControl\/Handler\/DispatcherControlHandler.php.html#16\">Weline\\Server\\IPC\\ChildControl\\Handler\\DispatcherControlHandler::__construct<\/a>"],[0,1,"<a href=\"ChildControl\/Handler\/DispatcherControlHandler.php.html#22\">Weline\\Server\\IPC\\ChildControl\\Handler\\DispatcherControlHandler::onMessage<\/a>"],[0,1,"<a href=\"ChildControl\/Handler\/DispatcherControlHandler.php.html#27\">Weline\\Server\\IPC\\ChildControl\\Handler\\DispatcherControlHandler::onDisconnect<\/a>"],[0,1,"<a href=\"ChildControl\/Handler\/RedirectControlHandler.php.html#17\">Weline\\Server\\IPC\\ChildControl\\Handler\\RedirectControlHandler::__construct<\/a>"],[0,2,"<a href=\"ChildControl\/Handler\/RedirectControlHandler.php.html#22\">Weline\\Server\\IPC\\ChildControl\\Handler\\RedirectControlHandler::onMessage<\/a>"],[0,2,"<a href=\"ChildControl\/Handler\/RedirectControlHandler.php.html#29\">Weline\\Server\\IPC\\ChildControl\\Handler\\RedirectControlHandler::onDisconnect<\/a>"],[0,1,"<a href=\"ChildControl\/Handler\/SessionServerControlHandler.php.html#20\">Weline\\Server\\IPC\\ChildControl\\Handler\\SessionServerControlHandler::__construct<\/a>"],[0,7,"<a href=\"ChildControl\/Handler\/SessionServerControlHandler.php.html#28\">Weline\\Server\\IPC\\ChildControl\\Handler\\SessionServerControlHandler::onMessage<\/a>"],[0,3,"<a href=\"ChildControl\/Handler\/SessionServerControlHandler.php.html#53\">Weline\\Server\\IPC\\ChildControl\\Handler\\SessionServerControlHandler::onDisconnect<\/a>"],[0,1,"<a href=\"ChildControl\/Handler\/WorkerControlHandler.php.html#18\">Weline\\Server\\IPC\\ChildControl\\Handler\\WorkerControlHandler::__construct<\/a>"],[0,1,"<a href=\"ChildControl\/Handler\/WorkerControlHandler.php.html#24\">Weline\\Server\\IPC\\ChildControl\\Handler\\WorkerControlHandler::onMessage<\/a>"],[0,3,"<a href=\"ChildControl\/Handler\/WorkerControlHandler.php.html#29\">Weline\\Server\\IPC\\ChildControl\\Handler\\WorkerControlHandler::onDisconnect<\/a>"],[0,2,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#43\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway::__construct<\/a>"],[0,4,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#60\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway::readLatestInfo<\/a>"],[0,4,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#90\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway::getLatestControlPort<\/a>"],[0,2,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#109\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway::hasControlPortChanged<\/a>"],[0,1,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#131\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway::isControlPortChanged<\/a>"],[0,1,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#142\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway::getCachedInfo<\/a>"],[0,1,"<a href=\"ChildControl\/InstanceInfoGateway.php.html#154\">Weline\\Server\\IPC\\ChildControl\\InstanceInfoGateway::get<\/a>"],[0,1,"<a href=\"ChildControl\/MasterOrphanGuard.php.html#20\">Weline\\Server\\IPC\\ChildControl\\MasterOrphanGuard::__construct<\/a>"],[0,1,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#17\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::__construct<\/a>"],[0,10,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#44\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::resolveControlPort<\/a>"],[0,7,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#114\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::resolveServicePort<\/a>"],[0,5,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#145\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::resolveReadyDelayMilliseconds<\/a>"],[0,15,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#170\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::connectAndRegister<\/a>"],[0,2,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#292\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::applyE2EReadyDelayIfNeeded<\/a>"],[0,3,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#303\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::tick<\/a>"],[0,3,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#310\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::flushWrites<\/a>"],[0,2,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#317\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::hasPendingWrites<\/a>"],[0,2,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#322\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::reconnect<\/a>"],[0,2,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#330\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::isConnected<\/a>"],[0,2,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#335\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::hasReceivedShutdown<\/a>"],[0,1,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#340\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::getSocket<\/a>"],[0,1,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#345\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::getClient<\/a>"],[0,3,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#350\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::sendExited<\/a>"],[0,3,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#364\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::sendExitReason<\/a>"],[0,3,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#372\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::sendDrainingComplete<\/a>"],[0,2,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#380\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::close<\/a>"],[0,1,"<a href=\"ChildControl\/SubprocessControlKernel.php.html#387\">Weline\\Server\\IPC\\ChildControl\\SubprocessControlKernel::log<\/a>"],[0,2,"<a href=\"ControlClient.php.html#97\">Weline\\Server\\IPC\\ControlClient::connect<\/a>"],[0,2,"<a href=\"ControlClient.php.html#130\">Weline\\Server\\IPC\\ControlClient::isConnected<\/a>"],[0,1,"<a href=\"ControlClient.php.html#140\">Weline\\Server\\IPC\\ControlClient::getSocket<\/a>"],[0,1,"<a href=\"ControlClient.php.html#145\">Weline\\Server\\IPC\\ControlClient::hasPendingWrites<\/a>"],[0,1,"<a href=\"ControlClient.php.html#153\">Weline\\Server\\IPC\\ControlClient::hasReceivedShutdown<\/a>"],[0,1,"<a href=\"ControlClient.php.html#161\">Weline\\Server\\IPC\\ControlClient::getResurrectionPriority<\/a>"],[0,1,"<a href=\"ControlClient.php.html#171\">Weline\\Server\\IPC\\ControlClient::onMessage<\/a>"],[0,1,"<a href=\"ControlClient.php.html#181\">Weline\\Server\\IPC\\ControlClient::onDisconnect<\/a>"],[0,1,"<a href=\"ControlClient.php.html#192\">Weline\\Server\\IPC\\ControlClient::setVerboseLog<\/a>"],[0,1,"<a href=\"ControlClient.php.html#202\">Weline\\Server\\IPC\\ControlClient::setSelfTag<\/a>"],[0,1,"<a href=\"ControlClient.php.html#210\">Weline\\Server\\IPC\\ControlClient::ipcLog<\/a>"],[0,2,"<a href=\"ControlClient.php.html#218\">Weline\\Server\\IPC\\ControlClient::ipcVerboseLog<\/a>"],[0,10,"<a href=\"ControlClient.php.html#228\">Weline\\Server\\IPC\\ControlClient::formatMsgPayload<\/a>"],[0,7,"<a href=\"ControlClient.php.html#275\">Weline\\Server\\IPC\\ControlClient::getMemoryLimit<\/a>"],[0,1,"<a href=\"ControlClient.php.html#307\">Weline\\Server\\IPC\\ControlClient::register<\/a>"],[0,1,"<a href=\"ControlClient.php.html#335\">Weline\\Server\\IPC\\ControlClient::rememberRegistration<\/a>"],[0,1,"<a href=\"ControlClient.php.html#359\">Weline\\Server\\IPC\\ControlClient::markReadyState<\/a>"],[0,3,"<a href=\"ControlClient.php.html#367\">Weline\\Server\\IPC\\ControlClient::sendReady<\/a>"],[0,1,"<a href=\"ControlClient.php.html#390\">Weline\\Server\\IPC\\ControlClient::sendWorkerLoopStarted<\/a>"],[0,3,"<a href=\"ControlClient.php.html#395\">Weline\\Server\\IPC\\ControlClient::sendDrainingComplete<\/a>"],[0,1,"<a href=\"ControlClient.php.html#408\">Weline\\Server\\IPC\\ControlClient::sendStatusReport<\/a>"],[0,2,"<a href=\"ControlClient.php.html#416\">Weline\\Server\\IPC\\ControlClient::sendLogLine<\/a>"],[0,5,"<a href=\"ControlClient.php.html#429\">Weline\\Server\\IPC\\ControlClient::send<\/a>"],[0,1,"<a href=\"ControlClient.php.html#456\">Weline\\Server\\IPC\\ControlClient::handleWritable<\/a>"],[0,9,"<a href=\"ControlClient.php.html#464\">Weline\\Server\\IPC\\ControlClient::flushPendingWrites<\/a>"],[0,3,"<a href=\"ControlClient.php.html#489\">Weline\\Server\\IPC\\ControlClient::enqueueWrite<\/a>"],[0,11,"<a href=\"ControlClient.php.html#509\">Weline\\Server\\IPC\\ControlClient::flushWriteBufferChunk<\/a>"],[0,8,"<a href=\"ControlClient.php.html#568\">Weline\\Server\\IPC\\ControlClient::handleReadable<\/a>"],[0,4,"<a href=\"ControlClient.php.html#606\">Weline\\Server\\IPC\\ControlClient::flushBufferedControlMessages<\/a>"],[0,5,"<a href=\"ControlClient.php.html#626\">Weline\\Server\\IPC\\ControlClient::dispatchMasterDownstreamMessage<\/a>"],[0,5,"<a href=\"ControlClient.php.html#654\">Weline\\Server\\IPC\\ControlClient::handleDisconnect<\/a>"],[0,11,"<a href=\"ControlClient.php.html#681\">Weline\\Server\\IPC\\ControlClient::tryReconnect<\/a>"],[0,1,"<a href=\"ControlClient.php.html#749\">Weline\\Server\\IPC\\ControlClient::isReconnectAbandoned<\/a>"],[0,6,"<a href=\"ControlClient.php.html#757\">Weline\\Server\\IPC\\ControlClient::close<\/a>"],[0,1,"<a href=\"ControlClient.php.html#773\">Weline\\Server\\IPC\\ControlClient::__destruct<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#287\">Weline\\Server\\IPC\\ControlMessage::encode<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#298\">Weline\\Server\\IPC\\ControlMessage::decode<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#312\">Weline\\Server\\IPC\\ControlMessage::extractMessages<\/a>"],[0,6,"<a href=\"ControlMessage.php.html#332\">Weline\\Server\\IPC\\ControlMessage::register<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#372\">Weline\\Server\\IPC\\ControlMessage::ack<\/a>"],[0,3,"<a href=\"ControlMessage.php.html#383\">Weline\\Server\\IPC\\ControlMessage::ready<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#409\">Weline\\Server\\IPC\\ControlMessage::workerLoopStarted<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#422\">Weline\\Server\\IPC\\ControlMessage::shutdown<\/a>"],[0,2,"<a href=\"ControlMessage.php.html#433\">Weline\\Server\\IPC\\ControlMessage::reload<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#449\">Weline\\Server\\IPC\\ControlMessage::setWorkerPool<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#461\">Weline\\Server\\IPC\\ControlMessage::cacheClear<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#471\">Weline\\Server\\IPC\\ControlMessage::pageBuilderPageInvalidate<\/a>"],[0,2,"<a href=\"ControlMessage.php.html#488\">Weline\\Server\\IPC\\ControlMessage::sslCertReload<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#502\">Weline\\Server\\IPC\\ControlMessage::routingPolicy<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#513\">Weline\\Server\\IPC\\ControlMessage::setMaintenanceMode<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#526\">Weline\\Server\\IPC\\ControlMessage::drain<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#537\">Weline\\Server\\IPC\\ControlMessage::undrain<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#548\">Weline\\Server\\IPC\\ControlMessage::addWorker<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#559\">Weline\\Server\\IPC\\ControlMessage::removeWorker<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#570\">Weline\\Server\\IPC\\ControlMessage::setRedirectPort<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#581\">Weline\\Server\\IPC\\ControlMessage::drainingComplete<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#593\">Weline\\Server\\IPC\\ControlMessage::statusReport<\/a>"],[0,2,"<a href=\"ControlMessage.php.html#606\">Weline\\Server\\IPC\\ControlMessage::telemetry<\/a>"],[0,3,"<a href=\"ControlMessage.php.html#632\">Weline\\Server\\IPC\\ControlMessage::command<\/a>"],[0,3,"<a href=\"ControlMessage.php.html#653\">Weline\\Server\\IPC\\ControlMessage::securityUnblock<\/a>"],[0,2,"<a href=\"ControlMessage.php.html#667\">Weline\\Server\\IPC\\ControlMessage::ping<\/a>"],[0,2,"<a href=\"ControlMessage.php.html#684\">Weline\\Server\\IPC\\ControlMessage::pong<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#700\">Weline\\Server\\IPC\\ControlMessage::commandResult<\/a>"],[0,2,"<a href=\"ControlMessage.php.html#716\">Weline\\Server\\IPC\\ControlMessage::exitReason<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#728\">Weline\\Server\\IPC\\ControlMessage::exited<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#745\">Weline\\Server\\IPC\\ControlMessage::ackReady<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#760\">Weline\\Server\\IPC\\ControlMessage::reloadCompleted<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#776\">Weline\\Server\\IPC\\ControlMessage::reloadFailed<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#794\">Weline\\Server\\IPC\\ControlMessage::reloadProgress<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#813\">Weline\\Server\\IPC\\ControlMessage::logLine<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#829\">Weline\\Server\\IPC\\ControlMessage::fiberSetConfig<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#841\">Weline\\Server\\IPC\\ControlMessage::fiberReleaseIdle<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#851\">Weline\\Server\\IPC\\ControlMessage::fiberPoolQuery<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#869\">Weline\\Server\\IPC\\ControlMessage::fiberPoolStats<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#901\">Weline\\Server\\IPC\\ControlMessage::workerSaturation<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#923\">Weline\\Server\\IPC\\ControlMessage::workerSaturationCleared<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#949\">Weline\\Server\\IPC\\ControlMessage::batchBroadcast<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#972\">Weline\\Server\\IPC\\ControlMessage::batchResponse<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#986\">Weline\\Server\\IPC\\ControlMessage::batchAck<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#999\">Weline\\Server\\IPC\\ControlMessage::batchCancel<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1014\">Weline\\Server\\IPC\\ControlMessage::batchStop<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1032\">Weline\\Server\\IPC\\ControlMessage::batchReload<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1055\">Weline\\Server\\IPC\\ControlMessage::scaleWorkers<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1074\">Weline\\Server\\IPC\\ControlMessage::workerScaled<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1103\">Weline\\Server\\IPC\\ControlMessage::loadReport<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1128\">Weline\\Server\\IPC\\ControlMessage::gracefulShutdown<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1147\">Weline\\Server\\IPC\\ControlMessage::proxyAddRoute<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1169\">Weline\\Server\\IPC\\ControlMessage::proxyRemoveRoute<\/a>"],[0,1,"<a href=\"ControlMessage.php.html#1182\">Weline\\Server\\IPC\\ControlMessage::proxyReload<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#108\">Weline\\Server\\IPC\\MasterControlServer::setLogToConsole<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#116\">Weline\\Server\\IPC\\MasterControlServer::setExpectedInstanceCode<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#121\">Weline\\Server\\IPC\\MasterControlServer::setWindowsNativeSocketBridgeEnabled<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#126\">Weline\\Server\\IPC\\MasterControlServer::isWindowsNativeSocketBridgeEnabled<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#131\">Weline\\Server\\IPC\\MasterControlServer::isUsingWindowsNativeSocketBridge<\/a>"],[0,12,"<a href=\"MasterControlServer.php.html#143\">Weline\\Server\\IPC\\MasterControlServer::start<\/a>"],[0,10,"<a href=\"MasterControlServer.php.html#193\">Weline\\Server\\IPC\\MasterControlServer::shouldUseWindowsNativeSocketBridge<\/a>"],[0,9,"<a href=\"MasterControlServer.php.html#209\">Weline\\Server\\IPC\\MasterControlServer::startWithWindowsNativeSocketBridge<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#278\">Weline\\Server\\IPC\\MasterControlServer::getServerSocket<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#286\">Weline\\Server\\IPC\\MasterControlServer::getPort<\/a>"],[0,3,"<a href=\"MasterControlServer.php.html#296\">Weline\\Server\\IPC\\MasterControlServer::getClientSockets<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#312\">Weline\\Server\\IPC\\MasterControlServer::onMessage<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#322\">Weline\\Server\\IPC\\MasterControlServer::onDisconnect<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#333\">Weline\\Server\\IPC\\MasterControlServer::setVerboseLog<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#341\">Weline\\Server\\IPC\\MasterControlServer::ipcLog<\/a>"],[0,2,"<a href=\"MasterControlServer.php.html#349\">Weline\\Server\\IPC\\MasterControlServer::ipcVerboseLog<\/a>"],[0,8,"<a href=\"MasterControlServer.php.html#359\">Weline\\Server\\IPC\\MasterControlServer::formatClientTag<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#390\">Weline\\Server\\IPC\\MasterControlServer::formatRoleLabel<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#398\">Weline\\Server\\IPC\\MasterControlServer::classifyClientFromMessage<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#416\">Weline\\Server\\IPC\\MasterControlServer::formatMsgPayload<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#439\">Weline\\Server\\IPC\\MasterControlServer::acceptClient<\/a>"],[0,5,"<a href=\"MasterControlServer.php.html#486\">Weline\\Server\\IPC\\MasterControlServer::acceptPendingClients<\/a>"],[0,7,"<a href=\"MasterControlServer.php.html#528\">Weline\\Server\\IPC\\MasterControlServer::handleReadable<\/a>"],[0,7,"<a href=\"MasterControlServer.php.html#566\">Weline\\Server\\IPC\\MasterControlServer::flushBufferedNdjsonForClient<\/a>"],[0,14,"<a href=\"MasterControlServer.php.html#593\">Weline\\Server\\IPC\\MasterControlServer::dispatchDecodedControlMessage<\/a>"],[0,9,"<a href=\"MasterControlServer.php.html#656\">Weline\\Server\\IPC\\MasterControlServer::handleRegister<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#715\">Weline\\Server\\IPC\\MasterControlServer::closeClient<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#720\">Weline\\Server\\IPC\\MasterControlServer::clientExists<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#728\">Weline\\Server\\IPC\\MasterControlServer::removeClient<\/a>"],[0,5,"<a href=\"MasterControlServer.php.html#758\">Weline\\Server\\IPC\\MasterControlServer::sendTo<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#788\">Weline\\Server\\IPC\\MasterControlServer::getWritableClientSockets<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#803\">Weline\\Server\\IPC\\MasterControlServer::enqueueWrite<\/a>"],[0,3,"<a href=\"MasterControlServer.php.html#826\">Weline\\Server\\IPC\\MasterControlServer::handleWritable<\/a>"],[0,14,"<a href=\"MasterControlServer.php.html#847\">Weline\\Server\\IPC\\MasterControlServer::flushClientWriteBuffer<\/a>"],[0,6,"<a href=\"MasterControlServer.php.html#914\">Weline\\Server\\IPC\\MasterControlServer::broadcast<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#943\">Weline\\Server\\IPC\\MasterControlServer::sendToRole<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#951\">Weline\\Server\\IPC\\MasterControlServer::sendToWorker<\/a>"],[0,5,"<a href=\"MasterControlServer.php.html#964\">Weline\\Server\\IPC\\MasterControlServer::sendToWorkerByPort<\/a>"],[0,3,"<a href=\"MasterControlServer.php.html#979\">Weline\\Server\\IPC\\MasterControlServer::sendToInstance<\/a>"],[0,3,"<a href=\"MasterControlServer.php.html#992\">Weline\\Server\\IPC\\MasterControlServer::getLastPongTime<\/a>"],[0,2,"<a href=\"MasterControlServer.php.html#1007\">Weline\\Server\\IPC\\MasterControlServer::getConnectedClients<\/a>"],[0,3,"<a href=\"MasterControlServer.php.html#1030\">Weline\\Server\\IPC\\MasterControlServer::getClientsByRole<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#1046\">Weline\\Server\\IPC\\MasterControlServer::getReadyWorkerPorts<\/a>"],[0,2,"<a href=\"MasterControlServer.php.html#1062\">Weline\\Server\\IPC\\MasterControlServer::setWorkerState<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#1072\">Weline\\Server\\IPC\\MasterControlServer::findClientByWorkerId<\/a>"],[0,3,"<a href=\"MasterControlServer.php.html#1085\">Weline\\Server\\IPC\\MasterControlServer::findClientByPort<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#1098\">Weline\\Server\\IPC\\MasterControlServer::getClientCount<\/a>"],[0,5,"<a href=\"MasterControlServer.php.html#1108\">Weline\\Server\\IPC\\MasterControlServer::countServiceClients<\/a>"],[0,3,"<a href=\"MasterControlServer.php.html#1125\">Weline\\Server\\IPC\\MasterControlServer::hasPendingWrites<\/a>"],[0,4,"<a href=\"MasterControlServer.php.html#1139\">Weline\\Server\\IPC\\MasterControlServer::flushPendingWrites<\/a>"],[0,19,"<a href=\"MasterControlServer.php.html#1160\">Weline\\Server\\IPC\\MasterControlServer::poll<\/a>"],[0,6,"<a href=\"MasterControlServer.php.html#1235\">Weline\\Server\\IPC\\MasterControlServer::close<\/a>"],[0,1,"<a href=\"MasterControlServer.php.html#1255\">Weline\\Server\\IPC\\MasterControlServer::__destruct<\/a>"],[0,6,"<a href=\"MasterControlServerSocket.php.html#25\">Weline\\Server\\IPC\\MasterControlServerSocket::start<\/a>"],[0,3,"<a href=\"MasterControlServerSocket.php.html#76\">Weline\\Server\\IPC\\MasterControlServerSocket::acceptClient<\/a>"],[0,1,"<a href=\"MasterControlServerSocket.php.html#106\">Weline\\Server\\IPC\\MasterControlServerSocket::getServerSocket<\/a>"],[0,2,"<a href=\"MasterControlServerSocket.php.html#114\">Weline\\Server\\IPC\\MasterControlServerSocket::close<\/a>"],[0,1,"<a href=\"MasterControlServerSocket.php.html#122\">Weline\\Server\\IPC\\MasterControlServerSocket::getPort<\/a>"],[0,1,"<a href=\"MasterResurrector.php.html#59\">Weline\\Server\\IPC\\MasterResurrector::__construct<\/a>"],[0,5,"<a href=\"MasterResurrector.php.html#79\">Weline\\Server\\IPC\\MasterResurrector::shouldResurrect<\/a>"],[0,3,"<a href=\"MasterResurrector.php.html#107\">Weline\\Server\\IPC\\MasterResurrector::isChildResurrectionEnabled<\/a>"],[0,1,"<a href=\"MasterResurrector.php.html#120\">Weline\\Server\\IPC\\MasterResurrector::getDelay<\/a>"],[0,6,"<a href=\"MasterResurrector.php.html#135\">Weline\\Server\\IPC\\MasterResurrector::attemptResurrect<\/a>"],[0,3,"<a href=\"MasterResurrector.php.html#187\">Weline\\Server\\IPC\\MasterResurrector::isMasterAlive<\/a>"],[0,5,"<a href=\"MasterResurrector.php.html#215\">Weline\\Server\\IPC\\MasterResurrector::startMaster<\/a>"],[0,16,"<a href=\"MasterResurrector.php.html#255\">Weline\\Server\\IPC\\MasterResurrector::canResurrectWithCurrentPrivilege<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

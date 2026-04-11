@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <meta charset="UTF-8">
+  <title>Dashboard for E:\WelineFramework\DEV-workspace\app\code\Weline\PlatformAppStore</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="../../_css/bootstrap.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/nv.d3.min.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/style.css?v=10.1.16" rel="stylesheet" type="text/css">
+  <link href="../../_css/custom.css" rel="stylesheet" type="text/css">
+ </head>
+ <body>
+  <header>
+   <div class="container-fluid">
+    <div class="row">
+     <div class="col-md-12">
+      <nav aria-label="breadcrumb">
+       <ol class="breadcrumb">
+         <li class="breadcrumb-item"><a href="../../index.html">E:\WelineFramework\DEV-workspace\app\code</a></li>
+         <li class="breadcrumb-item"><a href="../index.html">Weline</a></li>
+         <li class="breadcrumb-item"><a href="index.html">PlatformAppStore</a></li>
+         <li class="breadcrumb-item active">(Dashboard)</li>
+
+       </ol>
+      </nav>
+     </div>
+    </div>
+   </div>
+  </header>
+  <div class="container-fluid">
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Classes</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="classCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="classComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Api/License.php.html#15">Weline\PlatformAppStore\Controller\Api\License</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#17">Weline\PlatformAppStore\Controller\Api\Module</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#11">Weline\PlatformAppStore\Model\PlatformDeveloper</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#11">Weline\PlatformAppStore\Model\PlatformModule</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#11">Weline\PlatformAppStore\Model\PlatformModuleCategory</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#11">Weline\PlatformAppStore\Model\PlatformModuleLicense</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#11">Weline\PlatformAppStore\Model\PlatformModuleVersion</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#11">Weline\PlatformAppStore\Model\PlatformOrder</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#16">Weline\PlatformAppStore\Service\LicenseService</a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#10">Weline\PlatformAppStore\Setup\Install</a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Class</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Model/PlatformModule.php.html#11">Weline\PlatformAppStore\Model\PlatformModule</a></td><td class="text-right">2162</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#17">Weline\PlatformAppStore\Controller\Api\Module</a></td><td class="text-right">1482</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#11">Weline\PlatformAppStore\Model\PlatformOrder</a></td><td class="text-right">1260</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#16">Weline\PlatformAppStore\Service\LicenseService</a></td><td class="text-right">1056</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#11">Weline\PlatformAppStore\Model\PlatformModuleLicense</a></td><td class="text-right">756</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#11">Weline\PlatformAppStore\Model\PlatformModuleVersion</a></td><td class="text-right">600</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#15">Weline\PlatformAppStore\Controller\Api\License</a></td><td class="text-right">506</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-12">
+     <h2>Methods</h2>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Coverage Distribution</h3>
+     <div id="methodCoverageDistribution" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Complexity</h3>
+     <div id="methodComplexity" style="height: 300px;">
+       <svg></svg>
+     </div>
+    </div>
+   </div>
+   <div class="row">
+    <div class="col-md-6">
+     <h3>Insufficient Coverage</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right">Coverage</th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Api/License.php.html#19"><abbr title="Weline\PlatformAppStore\Controller\Api\License::__construct">__construct</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#29"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postActivate">postActivate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#59"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postValidate">postValidate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#89"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postCheck">postCheck</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#114"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postList">postList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#144"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postRenew">postRenew</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#23"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postList">postList</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#109"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postDetail">postDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#160"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postCategories">postCategories</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#184"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postCheckUpdate">postCheckUpdate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#238"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postDownload">postDownload</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#338"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::generateDownloadUrl">generateDownloadUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#66"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getDeveloperId">getDeveloperId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#71"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setDeveloperId">setDeveloperId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#77"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getUserId">getUserId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#82"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setUserId">setUserId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#88"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#93"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#99"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getSlug">getSlug</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#104"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setSlug">setSlug</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#110"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#115"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setDescription">setDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#121"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getAvatar">getAvatar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#126"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setAvatar">setAvatar</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#132"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getWebsite">getWebsite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#137"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setWebsite">setWebsite</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#143"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getContactEmail">getContactEmail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#148"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setContactEmail">setContactEmail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#154"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getBalance">getBalance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#159"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setBalance">setBalance</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#165"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getTotalEarnings">getTotalEarnings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#170"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setTotalEarnings">setTotalEarnings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#176"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::addEarnings">addEarnings</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#183"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getModuleCount">getModuleCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#188"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setModuleCount">setModuleCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#194"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#199"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformDeveloper.php.html#205"><abbr title="Weline\PlatformAppStore\Model\PlatformDeveloper::isApproved">isApproved</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#97"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getModuleId">getModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#102"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setModuleId">setModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#108"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#113"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#119"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getDisplayName">getDisplayName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#124"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setDisplayName">setDisplayName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#130"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#135"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setDescription">setDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#141"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getDetail">getDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#146"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setDetail">setDetail</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#152"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getDeveloperId">getDeveloperId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#157"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setDeveloperId">setDeveloperId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#163"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getCategoryId">getCategoryId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#168"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setCategoryId">setCategoryId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#174"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getIcon">getIcon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#179"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setIcon">setIcon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#185"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getImages">getImages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#191"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setImages">setImages</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#197"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getCurrentVersion">getCurrentVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#202"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setCurrentVersion">setCurrentVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#208"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#213"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#219"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getPricingType">getPricingType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#224"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setPricingType">setPricingType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#230"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getPrice">getPrice</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#235"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setPrice">setPrice</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#241"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getSubscriptionCycle">getSubscriptionCycle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#246"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setSubscriptionCycle">setSubscriptionCycle</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#252"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getDownloads">getDownloads</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#257"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setDownloads">setDownloads</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#263"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::incrementDownloads">incrementDownloads</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#269"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getRating">getRating</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#274"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setRating">setRating</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#280"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getRatingCount">getRatingCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#285"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setRatingCount">setRatingCount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#291"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getRepositoryUrl">getRepositoryUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#296"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setRepositoryUrl">setRepositoryUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#302"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getDocumentationUrl">getDocumentationUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#307"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setDocumentationUrl">setDocumentationUrl</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#313"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getTags">getTags</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#319"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::setTags">setTags</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#325"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::isFree">isFree</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#330"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::isPublished">isPublished</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#46"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::getCategoryId">getCategoryId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#51"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::setCategoryId">setCategoryId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#57"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::getName">getName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#62"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::setName">setName</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#68"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::getDescription">getDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#73"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::setDescription">setDescription</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#79"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::getIcon">getIcon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#84"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::setIcon">setIcon</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#90"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::getParentId">getParentId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#95"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::setParentId">setParentId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#101"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::getSortOrder">getSortOrder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#106"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::setSortOrder">setSortOrder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#112"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::getIsEnabled">getIsEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleCategory.php.html#117"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleCategory::setIsEnabled">setIsEnabled</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#61"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getLicenseId">getLicenseId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#66"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setLicenseId">setLicenseId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#72"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getLicenseKey">getLicenseKey</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#77"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setLicenseKey">setLicenseKey</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#83"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getModuleId">getModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#88"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setModuleId">setModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#94"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getOrderId">getOrderId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#99"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setOrderId">setOrderId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#105"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getCustomerId">getCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#110"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setCustomerId">setCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#116"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getDomain">getDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#121"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setDomain">setDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#127"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#132"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#138"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getExpiresAt">getExpiresAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#143"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setExpiresAt">setExpiresAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#149"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::getActivatedAt">getActivatedAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#154"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::setActivatedAt">setActivatedAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#160"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::isActive">isActive</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#175"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::isExpired">isExpired</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#181"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::isActivated">isActivated</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#186"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::activate">activate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#194"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::revoke">revoke</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#61"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getVersionId">getVersionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#66"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setVersionId">setVersionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#72"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getModuleId">getModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#77"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setModuleId">setModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#83"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getVersion">getVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#88"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setVersion">setVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#94"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getChangelog">getChangelog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#99"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setChangelog">setChangelog</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#105"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getFilePath">getFilePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#110"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setFilePath">setFilePath</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#116"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getFileHash">getFileHash</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#121"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setFileHash">setFileHash</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#127"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getFileSize">getFileSize</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#132"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setFileSize">setFileSize</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#138"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getMinFrameworkVersion">getMinFrameworkVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#143"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setMinFrameworkVersion">setMinFrameworkVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#149"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getMaxFrameworkVersion">getMaxFrameworkVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#154"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setMaxFrameworkVersion">setMaxFrameworkVersion</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#160"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getDependencies">getDependencies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#166"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setDependencies">setDependencies</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#172"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#177"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#183"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::isPublished">isPublished</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#82"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getOrderId">getOrderId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#87"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setOrderId">setOrderId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#93"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getOrderNumber">getOrderNumber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#98"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setOrderNumber">setOrderNumber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#104"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getCustomerId">getCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#109"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setCustomerId">setCustomerId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#115"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getModuleId">getModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#120"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setModuleId">setModuleId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#126"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getVersionId">getVersionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#131"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setVersionId">setVersionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#137"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getType">getType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#142"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setType">setType</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#148"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getAmount">getAmount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#153"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setAmount">setAmount</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#159"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getCurrency">getCurrency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#164"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setCurrency">setCurrency</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#170"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getStatus">getStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#175"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setStatus">setStatus</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#181"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getLicenseId">getLicenseId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#186"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setLicenseId">setLicenseId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#192"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getPaymentMethod">getPaymentMethod</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#197"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setPaymentMethod">setPaymentMethod</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#203"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getTransactionId">getTransactionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#208"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setTransactionId">setTransactionId</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#214"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getPaidAt">getPaidAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#219"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setPaidAt">setPaidAt</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#225"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getNotes">getNotes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#230"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::setNotes">setNotes</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#236"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::isPaid">isPaid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#241"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::isCompleted">isCompleted</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#246"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::generateOrderNumber">generateOrderNumber</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#251"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::markAsPaid">markAsPaid</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#260"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::complete">complete</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#42"><abbr title="Weline\PlatformAppStore\Service\LicenseService::generateLicenseKey">generateLicenseKey</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#55"><abbr title="Weline\PlatformAppStore\Service\LicenseService::createLicenseForOrder">createLicenseForOrder</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#81"><abbr title="Weline\PlatformAppStore\Service\LicenseService::calculateExpirationDate">calculateExpirationDate</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#94"><abbr title="Weline\PlatformAppStore\Service\LicenseService::activateLicense">activateLicense</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#156"><abbr title="Weline\PlatformAppStore\Service\LicenseService::validateLicense">validateLicense</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#229"><abbr title="Weline\PlatformAppStore\Service\LicenseService::domainsMatch">domainsMatch</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#257"><abbr title="Weline\PlatformAppStore\Service\LicenseService::normalizeDomain">normalizeDomain</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#276"><abbr title="Weline\PlatformAppStore\Service\LicenseService::revokeLicense">revokeLicense</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#298"><abbr title="Weline\PlatformAppStore\Service\LicenseService::renewLicense">renewLicense</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#337"><abbr title="Weline\PlatformAppStore\Service\LicenseService::getLicenseDetails">getLicenseDetails</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#15"><abbr title="Weline\PlatformAppStore\Setup\Install::setup">setup</abbr></a></td><td class="text-right">0%</td></tr>
+       <tr><td><a href="Setup/Install.php.html#23"><abbr title="Weline\PlatformAppStore\Setup\Install::seedCategories">seedCategories</abbr></a></td><td class="text-right">0%</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+    <div class="col-md-6">
+     <h3>Project Risks</h3>
+     <div class="scrollbox">
+      <table class="table">
+       <thead>
+        <tr>
+         <th>Method</th>
+         <th class="text-right"><abbr title="Change Risk Anti-Patterns (CRAP) Index">CRAP</abbr></th>
+        </tr>
+       </thead>
+       <tbody>
+       <tr><td><a href="Controller/Api/Module.php.html#238"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postDownload">postDownload</abbr></a></td><td class="text-right">156</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#23"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postList">postList</abbr></a></td><td class="text-right">110</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#184"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postCheckUpdate">postCheckUpdate</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#229"><abbr title="Weline\PlatformAppStore\Service\LicenseService::domainsMatch">domainsMatch</abbr></a></td><td class="text-right">56</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#109"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postDetail">postDetail</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#94"><abbr title="Weline\PlatformAppStore\Service\LicenseService::activateLicense">activateLicense</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#156"><abbr title="Weline\PlatformAppStore\Service\LicenseService::validateLicense">validateLicense</abbr></a></td><td class="text-right">42</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#29"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postActivate">postActivate</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#59"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postValidate">postValidate</abbr></a></td><td class="text-right">30</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#89"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postCheck">postCheck</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#144"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postRenew">postRenew</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#160"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::isActive">isActive</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#298"><abbr title="Weline\PlatformAppStore\Service\LicenseService::renewLicense">renewLicense</abbr></a></td><td class="text-right">20</td></tr>
+       <tr><td><a href="Controller/Api/License.php.html#114"><abbr title="Weline\PlatformAppStore\Controller\Api\License::postList">postList</abbr></a></td><td class="text-right">12</td></tr>
+       <tr><td><a href="Controller/Api/Module.php.html#160"><abbr title="Weline\PlatformAppStore\Controller\Api\Module::postCategories">postCategories</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#163"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getCategoryId">getCategoryId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#185"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getImages">getImages</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/PlatformModule.php.html#313"><abbr title="Weline\PlatformAppStore\Model\PlatformModule::getTags">getTags</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/PlatformModuleLicense.php.html#175"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleLicense::isExpired">isExpired</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/PlatformModuleVersion.php.html#160"><abbr title="Weline\PlatformAppStore\Model\PlatformModuleVersion::getDependencies">getDependencies</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#126"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getVersionId">getVersionId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Model/PlatformOrder.php.html#181"><abbr title="Weline\PlatformAppStore\Model\PlatformOrder::getLicenseId">getLicenseId</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#55"><abbr title="Weline\PlatformAppStore\Service\LicenseService::createLicenseForOrder">createLicenseForOrder</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#276"><abbr title="Weline\PlatformAppStore\Service\LicenseService::revokeLicense">revokeLicense</abbr></a></td><td class="text-right">6</td></tr>
+       <tr><td><a href="Service/LicenseService.php.html#337"><abbr title="Weline\PlatformAppStore\Service\LicenseService::getLicenseDetails">getLicenseDetails</abbr></a></td><td class="text-right">6</td></tr>
+
+       </tbody>
+      </table>
+     </div>
+    </div>
+   </div>
+   <footer>
+    <hr/>
+    <p>
+     <small>Generated by <a href="https://github.com/sebastianbergmann/php-code-coverage" target="_top">php-code-coverage 10.1.16</a> using <a href="https://www.php.net/" target="_top">PHP 8.4.16</a> and <a href="https://phpunit.de/">PHPUnit 10.5.36</a> at Sat Apr 11 3:12:07 UTC 2026.</small>
+    </p>
+   </footer>
+  </div>
+  <script src="../../_js/jquery.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script src="../../_js/nv.d3.min.js?v=10.1.16" type="text/javascript"></script>
+  <script type="text/javascript">
+$(document).ready(function() {
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#classCoverageDistribution svg')
+      .datum(getCoverageDistributionData([10,0,0,0,0,0,0,0,0,0,0,0], "Class Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.multiBarChart();
+    chart.tooltips(false)
+      .showControls(false)
+      .showLegend(false)
+      .reduceXTicks(false)
+      .staggerLabels(true)
+      .yAxis.tickFormat(d3.format('d'));
+
+    d3.select('#methodCoverageDistribution svg')
+      .datum(getCoverageDistributionData([186,0,0,0,0,0,0,0,0,0,0,0], "Method Coverage"))
+      .transition().duration(500).call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getCoverageDistributionData(data, label) {
+    var labels = [
+      '0%',
+      '0-10%',
+      '10-20%',
+      '20-30%',
+      '30-40%',
+      '40-50%',
+      '50-60%',
+      '60-70%',
+      '70-80%',
+      '80-90%',
+      '90-100%',
+      '100%'
+    ];
+    var values = [];
+    $.each(labels, function(key) {
+      values.push({x: labels[key], y: data[key]});
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Cyclomatic Complexity');
+
+    d3.select('#classComplexity svg')
+      .datum(getComplexityData([[0,22,"<a href=\"Controller\/Api\/License.php.html#15\">Weline\\PlatformAppStore\\Controller\\Api\\License<\/a>"],[0,38,"<a href=\"Controller\/Api\/Module.php.html#17\">Weline\\PlatformAppStore\\Controller\\Api\\Module<\/a>"],[0,26,"<a href=\"Model\/PlatformDeveloper.php.html#11\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper<\/a>"],[0,46,"<a href=\"Model\/PlatformModule.php.html#11\">Weline\\PlatformAppStore\\Model\\PlatformModule<\/a>"],[0,14,"<a href=\"Model\/PlatformModuleCategory.php.html#11\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory<\/a>"],[0,27,"<a href=\"Model\/PlatformModuleLicense.php.html#11\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense<\/a>"],[0,24,"<a href=\"Model\/PlatformModuleVersion.php.html#11\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion<\/a>"],[0,35,"<a href=\"Model\/PlatformOrder.php.html#11\">Weline\\PlatformAppStore\\Model\\PlatformOrder<\/a>"],[0,32,"<a href=\"Service\/LicenseService.php.html#16\">Weline\\PlatformAppStore\\Service\\LicenseService<\/a>"],[0,2,"<a href=\"Setup\/Install.php.html#10\">Weline\\PlatformAppStore\\Setup\\Install<\/a>"]], 'Class Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  nv.addGraph(function() {
+    var chart = nv.models.scatterChart()
+      .showDistX(true)
+      .showDistY(true)
+      .showLegend(false)
+      .forceX([0, 100]);
+    chart.tooltipContent(function(graph) {
+      return '<p>' + graph.point.class + '</p>';
+    });
+
+    chart.xAxis.axisLabel('Code Coverage (in percent)');
+    chart.yAxis.axisLabel('Method Complexity');
+
+    d3.select('#methodComplexity svg')
+      .datum(getComplexityData([[0,1,"<a href=\"Controller\/Api\/License.php.html#19\">Weline\\PlatformAppStore\\Controller\\Api\\License::__construct<\/a>"],[0,5,"<a href=\"Controller\/Api\/License.php.html#29\">Weline\\PlatformAppStore\\Controller\\Api\\License::postActivate<\/a>"],[0,5,"<a href=\"Controller\/Api\/License.php.html#59\">Weline\\PlatformAppStore\\Controller\\Api\\License::postValidate<\/a>"],[0,4,"<a href=\"Controller\/Api\/License.php.html#89\">Weline\\PlatformAppStore\\Controller\\Api\\License::postCheck<\/a>"],[0,3,"<a href=\"Controller\/Api\/License.php.html#114\">Weline\\PlatformAppStore\\Controller\\Api\\License::postList<\/a>"],[0,4,"<a href=\"Controller\/Api\/License.php.html#144\">Weline\\PlatformAppStore\\Controller\\Api\\License::postRenew<\/a>"],[0,10,"<a href=\"Controller\/Api\/Module.php.html#23\">Weline\\PlatformAppStore\\Controller\\Api\\Module::postList<\/a>"],[0,6,"<a href=\"Controller\/Api\/Module.php.html#109\">Weline\\PlatformAppStore\\Controller\\Api\\Module::postDetail<\/a>"],[0,2,"<a href=\"Controller\/Api\/Module.php.html#160\">Weline\\PlatformAppStore\\Controller\\Api\\Module::postCategories<\/a>"],[0,7,"<a href=\"Controller\/Api\/Module.php.html#184\">Weline\\PlatformAppStore\\Controller\\Api\\Module::postCheckUpdate<\/a>"],[0,12,"<a href=\"Controller\/Api\/Module.php.html#238\">Weline\\PlatformAppStore\\Controller\\Api\\Module::postDownload<\/a>"],[0,1,"<a href=\"Controller\/Api\/Module.php.html#338\">Weline\\PlatformAppStore\\Controller\\Api\\Module::generateDownloadUrl<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#66\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getDeveloperId<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#71\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setDeveloperId<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#77\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getUserId<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#82\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setUserId<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#88\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getName<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#93\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setName<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#99\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getSlug<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#104\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setSlug<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#110\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getDescription<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#115\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setDescription<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#121\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getAvatar<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#126\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setAvatar<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#132\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getWebsite<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#137\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setWebsite<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#143\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getContactEmail<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#148\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setContactEmail<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#154\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getBalance<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#159\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setBalance<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#165\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getTotalEarnings<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#170\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setTotalEarnings<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#176\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::addEarnings<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#183\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getModuleCount<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#188\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setModuleCount<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#194\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::getStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#199\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::setStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformDeveloper.php.html#205\">Weline\\PlatformAppStore\\Model\\PlatformDeveloper::isApproved<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#97\">Weline\\PlatformAppStore\\Model\\PlatformModule::getModuleId<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#102\">Weline\\PlatformAppStore\\Model\\PlatformModule::setModuleId<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#108\">Weline\\PlatformAppStore\\Model\\PlatformModule::getName<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#113\">Weline\\PlatformAppStore\\Model\\PlatformModule::setName<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#119\">Weline\\PlatformAppStore\\Model\\PlatformModule::getDisplayName<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#124\">Weline\\PlatformAppStore\\Model\\PlatformModule::setDisplayName<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#130\">Weline\\PlatformAppStore\\Model\\PlatformModule::getDescription<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#135\">Weline\\PlatformAppStore\\Model\\PlatformModule::setDescription<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#141\">Weline\\PlatformAppStore\\Model\\PlatformModule::getDetail<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#146\">Weline\\PlatformAppStore\\Model\\PlatformModule::setDetail<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#152\">Weline\\PlatformAppStore\\Model\\PlatformModule::getDeveloperId<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#157\">Weline\\PlatformAppStore\\Model\\PlatformModule::setDeveloperId<\/a>"],[0,2,"<a href=\"Model\/PlatformModule.php.html#163\">Weline\\PlatformAppStore\\Model\\PlatformModule::getCategoryId<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#168\">Weline\\PlatformAppStore\\Model\\PlatformModule::setCategoryId<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#174\">Weline\\PlatformAppStore\\Model\\PlatformModule::getIcon<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#179\">Weline\\PlatformAppStore\\Model\\PlatformModule::setIcon<\/a>"],[0,2,"<a href=\"Model\/PlatformModule.php.html#185\">Weline\\PlatformAppStore\\Model\\PlatformModule::getImages<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#191\">Weline\\PlatformAppStore\\Model\\PlatformModule::setImages<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#197\">Weline\\PlatformAppStore\\Model\\PlatformModule::getCurrentVersion<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#202\">Weline\\PlatformAppStore\\Model\\PlatformModule::setCurrentVersion<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#208\">Weline\\PlatformAppStore\\Model\\PlatformModule::getStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#213\">Weline\\PlatformAppStore\\Model\\PlatformModule::setStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#219\">Weline\\PlatformAppStore\\Model\\PlatformModule::getPricingType<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#224\">Weline\\PlatformAppStore\\Model\\PlatformModule::setPricingType<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#230\">Weline\\PlatformAppStore\\Model\\PlatformModule::getPrice<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#235\">Weline\\PlatformAppStore\\Model\\PlatformModule::setPrice<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#241\">Weline\\PlatformAppStore\\Model\\PlatformModule::getSubscriptionCycle<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#246\">Weline\\PlatformAppStore\\Model\\PlatformModule::setSubscriptionCycle<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#252\">Weline\\PlatformAppStore\\Model\\PlatformModule::getDownloads<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#257\">Weline\\PlatformAppStore\\Model\\PlatformModule::setDownloads<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#263\">Weline\\PlatformAppStore\\Model\\PlatformModule::incrementDownloads<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#269\">Weline\\PlatformAppStore\\Model\\PlatformModule::getRating<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#274\">Weline\\PlatformAppStore\\Model\\PlatformModule::setRating<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#280\">Weline\\PlatformAppStore\\Model\\PlatformModule::getRatingCount<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#285\">Weline\\PlatformAppStore\\Model\\PlatformModule::setRatingCount<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#291\">Weline\\PlatformAppStore\\Model\\PlatformModule::getRepositoryUrl<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#296\">Weline\\PlatformAppStore\\Model\\PlatformModule::setRepositoryUrl<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#302\">Weline\\PlatformAppStore\\Model\\PlatformModule::getDocumentationUrl<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#307\">Weline\\PlatformAppStore\\Model\\PlatformModule::setDocumentationUrl<\/a>"],[0,2,"<a href=\"Model\/PlatformModule.php.html#313\">Weline\\PlatformAppStore\\Model\\PlatformModule::getTags<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#319\">Weline\\PlatformAppStore\\Model\\PlatformModule::setTags<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#325\">Weline\\PlatformAppStore\\Model\\PlatformModule::isFree<\/a>"],[0,1,"<a href=\"Model\/PlatformModule.php.html#330\">Weline\\PlatformAppStore\\Model\\PlatformModule::isPublished<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#46\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::getCategoryId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#51\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::setCategoryId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#57\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::getName<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#62\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::setName<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#68\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::getDescription<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#73\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::setDescription<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#79\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::getIcon<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#84\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::setIcon<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#90\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::getParentId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#95\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::setParentId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#101\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::getSortOrder<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#106\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::setSortOrder<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#112\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::getIsEnabled<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleCategory.php.html#117\">Weline\\PlatformAppStore\\Model\\PlatformModuleCategory::setIsEnabled<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#61\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getLicenseId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#66\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setLicenseId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#72\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getLicenseKey<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#77\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setLicenseKey<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#83\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getModuleId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#88\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setModuleId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#94\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getOrderId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#99\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setOrderId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#105\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getCustomerId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#110\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setCustomerId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#116\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getDomain<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#121\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setDomain<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#127\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#132\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#138\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getExpiresAt<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#143\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setExpiresAt<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#149\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::getActivatedAt<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#154\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::setActivatedAt<\/a>"],[0,4,"<a href=\"Model\/PlatformModuleLicense.php.html#160\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::isActive<\/a>"],[0,2,"<a href=\"Model\/PlatformModuleLicense.php.html#175\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::isExpired<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#181\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::isActivated<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#186\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::activate<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleLicense.php.html#194\">Weline\\PlatformAppStore\\Model\\PlatformModuleLicense::revoke<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#61\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getVersionId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#66\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setVersionId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#72\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getModuleId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#77\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setModuleId<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#83\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getVersion<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#88\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setVersion<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#94\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getChangelog<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#99\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setChangelog<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#105\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getFilePath<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#110\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setFilePath<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#116\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getFileHash<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#121\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setFileHash<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#127\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getFileSize<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#132\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setFileSize<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#138\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getMinFrameworkVersion<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#143\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setMinFrameworkVersion<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#149\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getMaxFrameworkVersion<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#154\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setMaxFrameworkVersion<\/a>"],[0,2,"<a href=\"Model\/PlatformModuleVersion.php.html#160\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getDependencies<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#166\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setDependencies<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#172\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::getStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#177\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::setStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformModuleVersion.php.html#183\">Weline\\PlatformAppStore\\Model\\PlatformModuleVersion::isPublished<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#82\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getOrderId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#87\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setOrderId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#93\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getOrderNumber<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#98\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setOrderNumber<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#104\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getCustomerId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#109\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setCustomerId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#115\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getModuleId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#120\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setModuleId<\/a>"],[0,2,"<a href=\"Model\/PlatformOrder.php.html#126\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getVersionId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#131\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setVersionId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#137\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getType<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#142\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setType<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#148\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getAmount<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#153\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setAmount<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#159\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getCurrency<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#164\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setCurrency<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#170\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getStatus<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#175\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setStatus<\/a>"],[0,2,"<a href=\"Model\/PlatformOrder.php.html#181\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getLicenseId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#186\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setLicenseId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#192\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getPaymentMethod<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#197\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setPaymentMethod<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#203\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getTransactionId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#208\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setTransactionId<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#214\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getPaidAt<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#219\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setPaidAt<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#225\">Weline\\PlatformAppStore\\Model\\PlatformOrder::getNotes<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#230\">Weline\\PlatformAppStore\\Model\\PlatformOrder::setNotes<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#236\">Weline\\PlatformAppStore\\Model\\PlatformOrder::isPaid<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#241\">Weline\\PlatformAppStore\\Model\\PlatformOrder::isCompleted<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#246\">Weline\\PlatformAppStore\\Model\\PlatformOrder::generateOrderNumber<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#251\">Weline\\PlatformAppStore\\Model\\PlatformOrder::markAsPaid<\/a>"],[0,1,"<a href=\"Model\/PlatformOrder.php.html#260\">Weline\\PlatformAppStore\\Model\\PlatformOrder::complete<\/a>"],[0,1,"<a href=\"Service\/LicenseService.php.html#42\">Weline\\PlatformAppStore\\Service\\LicenseService::generateLicenseKey<\/a>"],[0,2,"<a href=\"Service\/LicenseService.php.html#55\">Weline\\PlatformAppStore\\Service\\LicenseService::createLicenseForOrder<\/a>"],[0,1,"<a href=\"Service\/LicenseService.php.html#81\">Weline\\PlatformAppStore\\Service\\LicenseService::calculateExpirationDate<\/a>"],[0,6,"<a href=\"Service\/LicenseService.php.html#94\">Weline\\PlatformAppStore\\Service\\LicenseService::activateLicense<\/a>"],[0,6,"<a href=\"Service\/LicenseService.php.html#156\">Weline\\PlatformAppStore\\Service\\LicenseService::validateLicense<\/a>"],[0,7,"<a href=\"Service\/LicenseService.php.html#229\">Weline\\PlatformAppStore\\Service\\LicenseService::domainsMatch<\/a>"],[0,1,"<a href=\"Service\/LicenseService.php.html#257\">Weline\\PlatformAppStore\\Service\\LicenseService::normalizeDomain<\/a>"],[0,2,"<a href=\"Service\/LicenseService.php.html#276\">Weline\\PlatformAppStore\\Service\\LicenseService::revokeLicense<\/a>"],[0,4,"<a href=\"Service\/LicenseService.php.html#298\">Weline\\PlatformAppStore\\Service\\LicenseService::renewLicense<\/a>"],[0,2,"<a href=\"Service\/LicenseService.php.html#337\">Weline\\PlatformAppStore\\Service\\LicenseService::getLicenseDetails<\/a>"],[0,1,"<a href=\"Setup\/Install.php.html#15\">Weline\\PlatformAppStore\\Setup\\Install::setup<\/a>"],[0,1,"<a href=\"Setup\/Install.php.html#23\">Weline\\PlatformAppStore\\Setup\\Install::seedCategories<\/a>"]], 'Method Complexity'))
+      .transition()
+      .duration(500)
+      .call(chart);
+
+    nv.utils.windowResize(chart.update);
+
+    return chart;
+  });
+
+  function getComplexityData(data, label) {
+    var values = [];
+    $.each(data, function(key) {
+      var value = Math.round(data[key][0]*100) / 100;
+      values.push({
+        x: value,
+        y: data[key][1],
+        class: data[key][2],
+        size: 0.05,
+        shape: 'diamond'
+      });
+    });
+
+    return [
+      {
+        key: label,
+        values: values,
+        color: "#4572A7"
+      }
+    ];
+  }
+});
+  </script>
+ </body>
+</html>

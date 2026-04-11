@@ -18,7 +18,7 @@ if (!defined('BP')) {
 }
 
 if (!defined('CLI')) {
-    define('CLI', PHP_SAPI === 'cli');
+    define('CLI', \in_array(PHP_SAPI, ['cli', 'phpdbg'], true));
 }
 
 // 添加颜色支持函数
@@ -31,7 +31,7 @@ if (!function_exists('debug_colorize')) {
      */
     function debug_colorize(string $text, string $type): string
     {
-        $isCli = (PHP_SAPI === 'cli');
+        $isCli = \in_array(PHP_SAPI, ['cli', 'phpdbg'], true);
         
         if ($isCli) {
             // CLI环境使用ANSI颜色
