@@ -23,3 +23,8 @@
 ## 与阶段 3 的边界
 
 - 阶段 3 物化：`html_blocks` → `materializeHtml` + 发布快照消毒；`virtual_theme` → 原 `materialize` + 虚拟主题更新。
+
+## 与实现对账（2026-04-10）
+
+- 工作区实际 UI、嵌入预览与 SSE 前端逻辑以 `GuoLaiRen_PageBuilder` 下 [`view/templates/Backend/AiSiteAgent/workspace.phtml`](../view/templates/Backend/AiSiteAgent/workspace.phtml) 为准；服务端轨切换与构建以 [`Controller/Backend/AiSiteAgent.php`](../Controller/Backend/AiSiteAgent.php)（含 `runBuildOperation`）为准。
+- 若本节「UI 落点」与线上界面有差异，以上述代码为准并回写本节。
