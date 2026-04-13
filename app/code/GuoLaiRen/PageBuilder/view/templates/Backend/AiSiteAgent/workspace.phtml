@@ -470,12 +470,12 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     <div class="mt-4">
                         <?php if ($draftWebsiteId > 0): ?>
                         <button type="button" class="btn btn-primary pb-ai-run-virtual-theme" id="pb-ai-run-virtual-theme">
-                            <i class="mdi mdi-refresh me-1"></i><?= htmlspecialchars((string)__('确认并生成'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-refresh me-1"></i><?= htmlspecialchars((string)__('AI构建方案'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                         <span class="text-muted ms-2" style="font-size:.85rem;"><?= htmlspecialchars((string)__('已有草稿，重新生成会覆盖现有内容'), ENT_QUOTES, 'UTF-8') ?></span>
                         <?php else: ?>
                         <button type="button" class="btn btn-primary btn-lg pb-ai-run-virtual-theme">
-                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('确认并生成'), ENT_QUOTES, 'UTF-8') ?>
+                            <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('AI构建方案'), ENT_QUOTES, 'UTF-8') ?>
                         </button>
                         <?php endif; ?>
                     </div>
@@ -945,9 +945,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
                 <div class="d-flex flex-wrap gap-2 mt-4">
                     <button type="button" class="btn btn-primary pb-ai-run-virtual-theme" id="pb-ai-run-virtual-theme">
-                        <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('确认并生成'), ENT_QUOTES, 'UTF-8') ?>
+                        <i class="mdi mdi-creation-outline me-1"></i><?= htmlspecialchars((string)__('AI构建方案'), ENT_QUOTES, 'UTF-8') ?>
                     </button>
-                    <span class="text-muted small align-self-center"><?= htmlspecialchars((string)__('输入会自动保存；点击“确认并生成”后才会启动生成任务。'), ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="text-muted small align-self-center"><?= htmlspecialchars((string)__('输入会自动保存；点击"确认并生成"后才会启动生成任务。'), ENT_QUOTES, 'UTF-8') ?></span>
                 </div>
             </div>
         </div>
@@ -1183,6 +1183,50 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var blockRefreshState = getSharedBlockRefreshState();
     var pendingBlockSseResult = null;
     var virtualPagesByTypeState = <?= \json_encode($initialVirtualPagesByTypeState, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+
+    function resolveTaskSummaryUpdater() {
+        if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.updateTaskSummaryFromState === 'function') {
+            return window.__pbWorkspaceApi.updateTaskSummaryFromState;
+        }
+        if (typeof window.updateTaskSummaryFromState === 'function') {
+            return window.updateTaskSummaryFromState;
+        }
+        return function () {};
+    }
+    // 防止在函数尚未赋值前被其它脚本直接调用导致 ReferenceError
+    if (typeof window.updateTaskSummaryFromState !== 'function') {
+        window.updateTaskSummaryFromState = function () {};
+    }
+    var updateTaskSummaryFromState = window.updateTaskSummaryFromState;
+
+    function hydrateWorkspaceFromState(workspaceState) {
+        if (!workspaceState || typeof workspaceState !== 'object') {
+            return;
+        }
+        syncWorkspacePageTypeState(workspaceState);
+        resolveTaskSummaryUpdater()(workspaceState);
+        if (typeof previewBridge.syncPreviewMetaFromState === 'function') {
+            previewBridge.syncPreviewMetaFromState(workspaceState);
+        }
+        if (workspaceState.stage && typeof previewBridge.switchWorkspaceStage === 'function') {
+            previewBridge.switchWorkspaceStage(String(workspaceState.stage));
+        }
+        if (typeof previewBridge.bindEmbeddedPreviewFrameBridge === 'function') {
+            previewBridge.bindEmbeddedPreviewFrameBridge();
+        }
+    }
+    // 统一对外 API：跨 script 调用统一走 window.__pbWorkspaceApi
+    var workspaceApi = window.__pbWorkspaceApi;
+    if (!workspaceApi || typeof workspaceApi !== 'object') {
+        workspaceApi = {};
+    }
+    workspaceApi.hydrateWorkspaceFromState = hydrateWorkspaceFromState;
+    window.__pbWorkspaceApi = workspaceApi;
+    // 向后兼容旧调用入口
+    window.hydrateWorkspaceFromState = function (workspaceState) {
+        return window.__pbWorkspaceApi.hydrateWorkspaceFromState(workspaceState);
+    };
+    
     function mergeVirtualPagesByTypeState(pages) {
         if (!pages || typeof pages !== 'object') {
             return;
@@ -1309,14 +1353,14 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     return { success: true };
                 }
                 try {
-                    return JSON.parse(rawText);
+                    var parsed = JSON.parse(rawText);
+                    return parsed && typeof parsed === 'object' ? parsed : { success: true, data: parsed };
                 } catch (error) {
                     var isLikelyHtml = rawText.indexOf('<!DOCTYPE') === 0 || rawText.indexOf('<html') === 0 || rawText.indexOf('<') === 0;
-                    return {
-                        success: false,
-                        message: isLikelyHtml ? '接口返回了 HTML，而不是 JSON。' : '接口返回了非 JSON 响应。',
-                        raw_response: rawText
-                    };
+                    if (isLikelyHtml) {
+                        throw new Error('接口返回了 HTML，而不是 JSON。');
+                    }
+                    throw new Error('接口返回了非 JSON 响应。');
                 }
             });
         }).catch(function (error) {
@@ -2398,21 +2442,29 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     }
 
     var autoSaveScope = debounce(function () {
-        if (!mergeScopeUrl) {
+        if (!mergeScopeUrl || !publicId) {
+            console.warn('Auto-save skipped: missing mergeScopeUrl or publicId', { mergeScopeUrl, publicId });
             return;
         }
-        postForm(mergeScopeUrl, { public_id: publicId, autosave: '1', scope_patch: JSON.stringify(buildVirtualThemePatch()) }).then(function (data) {
-            if (!data || !data.success) {
-                toast('error', (data && data.message) ? String(data.message) : messages.saveFailed);
-                return;
-            }
-            if (data.data && typeof data.data === 'object') {
-                syncWorkspacePageTypeState(data.data);
-                hydrateWorkspaceFromState(data.data);
-            }
-        }).catch(function () {
+        try {
+            var scopePatch = buildVirtualThemePatch();
+            postForm(mergeScopeUrl, { public_id: publicId, autosave: '1', scope_patch: JSON.stringify(scopePatch) }).then(function (data) {
+                if (!data || !data.success) {
+                    toast('error', (data && data.message) ? String(data.message) : messages.saveFailed);
+                    return;
+                }
+                if (data.data && typeof data.data === 'object') {
+                    syncWorkspacePageTypeState(data.data);
+                    hydrateWorkspaceFromState(data.data);
+                }
+            }).catch(function (err) {
+                console.error('Auto-save error:', err);
+                toast('error', typeof err === 'object' && err.message ? String(err.message) : messages.networkError);
+            });
+        } catch (err) {
+            console.error('Auto-save scope construction error:', err);
             toast('error', messages.networkError);
-        });
+        }
     }, 500);
 
     var tabClickLocked = false;
@@ -3896,7 +3948,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             if (selected.length > 0) {
                 queueGenerationStatus(selected);
             }
-            showPageTypeConfirmModal();
             toast('warning', messages.autoGenerateNeeded);
         }, 260);
     }
@@ -3941,7 +3992,16 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 return;
             }
             setTargetDomainFieldInvalid(false);
-            showPageTypeConfirmModal();
+            if (!validateVirtualThemeInputs()) {
+                return;
+            }
+            var triggerBtn = this;
+            ensureTargetDomainOkBeforeBuild().then(function (ok) {
+                if (!ok) {
+                    return;
+                }
+                pbAiConfirmGenerateThemeContinue(triggerBtn, pageTypes);
+            });
         });
     });
 
@@ -3953,8 +4013,10 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         var hasPageType = document.querySelectorAll('.pb-ai-modal-page-type-check:checked').length > 0;
         var hasTitle = !!String((document.getElementById('pb-ai-site-title') && document.getElementById('pb-ai-site-title').value) || '').trim();
         var hasBrief = !!String((document.getElementById('pb-ai-brief-description') && document.getElementById('pb-ai-brief-description').value) || '').trim();
-        var hasDomain = !!getTargetDomainTrimmed();
-        modalConfirmBtn.disabled = !(hasPageType && hasTitle && hasBrief && hasDomain);
+        // 域名为可选，不作为弹窗确认按钮的启用条件
+        var shouldEnable = hasPageType && hasTitle && hasBrief;
+        modalConfirmBtn.disabled = !shouldEnable;
+        console.log('[PageBuilder] 按钮状态检查:', {pageType: hasPageType, title: hasTitle, brief: hasBrief, enable: shouldEnable});
     }
 
     var modalClearPageTypesBtn = document.getElementById('pb-ai-modal-clear-page-types');
@@ -4381,49 +4443,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             console[type === 'error' ? 'error' : 'log'](message);
         };
 
-    function postForm(url, fields) {
-        var formData = new FormData();
-        Object.keys(fields || {}).forEach(function (key) {
-            formData.append(key, fields[key]);
-        });
-        return fetch(url, {
-            method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin',
-            body: formData
-        }).then(function (response) {
-            if (!response.ok) {
-                return response.text().then(function (text) {
-                    var errMsg = '网络错误: ' + response.status + ' ' + response.statusText;
-                    try {
-                        var j = JSON.parse(text);
-                        if (j && (j.message || j.error)) {
-                            errMsg = String(j.message || j.error);
-                        }
-                    } catch (e) {
-                        // 如果不是 JSON，使用原始错误信息
-                    }
-                    throw new Error(errMsg);
-                });
-            }
-            return response.text().then(function (text) {
-                var rawText = String(text || '').trim();
-                if (!rawText) {
-                    return { success: true };
-                }
-                try {
-                    return JSON.parse(rawText);
-                } catch (error) {
-                    var isLikelyHtml = rawText.indexOf('<!DOCTYPE') === 0 || rawText.indexOf('<html') === 0 || rawText.indexOf('<') === 0;
-                    return {
-                        success: false,
-                        message: isLikelyHtml ? '接口返回了 HTML，而不是 JSON。' : '接口返回了非 JSON 响应。',
-                        raw_response: rawText
-                    };
-                }
-            });
-        });
-    }
+
 
     function parsePayload(event) {
         if (!event || typeof event.data !== 'string' || event.data === '') {
@@ -4563,30 +4583,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         }
         if (!data.auto_start_build_after_stream || !runVirtualThemeUrl || !publicId) {
             return false;
-        }
-        var taskSummary = data.build_task_summary && typeof data.build_task_summary === 'object' ? data.build_task_summary : null;
-        var needsConfirm = !!(
-            taskSummary
-            && parseInt(String(taskSummary.done || 0), 10) > 0
-            && parseInt(String(taskSummary.pending || 0), 10) > 0
-        );
-        if (needsConfirm) {
-            if (typeof BackendConfirm === 'undefined' || typeof BackendConfirm.show !== 'function') {
-                console.warn('BackendConfirm is missing');
-                return false;
-            }
-            BackendConfirm.show(<?= \json_encode((string)__('检测到未完成任务，是否继续生成？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>, {
-                title: <?= \json_encode((string)__('提示'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                confirmText: <?= \json_encode((string)__('继续生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                cancelText: <?= \json_encode((string)__('取消'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
-                type: 'info'
-            }).then(function (confirmed) {
-                if (!confirmed) {
-                    return;
-                }
-                executeAutoStartBuildAfterWorkspaceSnapshot(data);
-            });
-            return true;
         }
         return executeAutoStartBuildAfterWorkspaceSnapshot(data);
     }
@@ -4863,23 +4859,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         blockRefreshState.blockId = '';
     }
 
-    function hydrateWorkspaceFromState(workspaceState) {
-        if (!workspaceState || typeof workspaceState !== 'object') {
-            return;
-        }
-        syncWorkspacePageTypeState(workspaceState);
-        updateTaskSummaryFromState(workspaceState);
-        if (typeof previewBridge.syncPreviewMetaFromState === 'function') {
-            previewBridge.syncPreviewMetaFromState(workspaceState);
-        }
-        if (workspaceState.stage && typeof previewBridge.switchWorkspaceStage === 'function') {
-            previewBridge.switchWorkspaceStage(String(workspaceState.stage));
-        }
-        if (typeof previewBridge.bindEmbeddedPreviewFrameBridge === 'function') {
-            previewBridge.bindEmbeddedPreviewFrameBridge();
-        }
-    }
-
     function updateTaskSummaryFromState(workspaceState) {
         var summary = workspaceState && workspaceState.build_task_summary && typeof workspaceState.build_task_summary === 'object'
             ? workspaceState.build_task_summary
@@ -4920,6 +4899,11 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             groupsContainer.appendChild(wrapper);
         });
     }
+
+    workspaceApi = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
+    workspaceApi.updateTaskSummaryFromState = updateTaskSummaryFromState;
+    window.__pbWorkspaceApi = workspaceApi;
+    window.updateTaskSummaryFromState = updateTaskSummaryFromState;
 
     function refreshWorkspaceStateFromServer() {
         if (!stateJsonUrl || typeof fetch !== 'function') {
