@@ -12,6 +12,9 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Http;
 
+use Weline\Framework\App\Env;
+use Weline\Server\Log\LogConfig;
+
 /**
  * WLS 请求对象
  * 
@@ -375,7 +378,7 @@ class WlsRequest extends Request
         $_REQUEST = \array_merge($getParams, $postParams);
         
         // 开发模式下打印 $_SERVER 用于调试（通过 WLS_DEV_MODE 常量控制）
-        if (\defined('WLS_DEV_MODE') && WLS_DEV_MODE) {
+        if (self::shouldWriteDevServerDump(\defined('WLS_DEV_MODE') && WLS_DEV_MODE)) {
             $debugServerVars = [
                 // ===== 核心请求信息 =====
                 'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? '(未设置)',
@@ -1108,5 +1111,17 @@ class WlsRequest extends Request
 
         // 3. 作为原始文本
         return ['post' => ['body' => $body], 'files' => []];
+    }
+    private static function shouldWriteDevServerDump(bool $devMode): bool
+    {
+        if (!$devMode) {
+            return false;
+        }
+
+        if ((bool)Env::get('wls.debug.request_server_dump', false)) {
+            return true;
+        }
+
+        return \class_exists(LogConfig::class) && LogConfig::isVerboseWlsLog();
     }
 }

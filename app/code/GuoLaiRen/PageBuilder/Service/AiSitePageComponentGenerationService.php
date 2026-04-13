@@ -1423,7 +1423,8 @@ final class AiSitePageComponentGenerationService
             . "4. Navigation must be compatible with real page links; when real page nav exists it should win over fallback items.\n"
             . "5. Keep the structure practical: logo area, navigation, optional CTA, mobile-friendly behavior.\n"
             . "6. Style should be inspired by the reference theme, but do not mention the theme name in visible copy.\n"
-            . "7. Return pure JSON only. No markdown. No explanation.\n"
+            . "7. If you add new visitor-visible text, image URLs, button labels, or link labels beyond the framework defaults, expose them through extra_fields and read them from \$getConfig()/\$componentConfig instead of hardcoding them.\n"
+            . "8. Return pure JSON only. No markdown. No explanation.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -1454,7 +1455,8 @@ final class AiSitePageComponentGenerationService
             . "4. Keep footer structure practical: brand area, grouped links, support/legal text, optional extra column or subscription area.\n"
             . "5. Footer links should be compatible with real page nav logic and the fallback link groups.\n"
             . "6. Style should follow the reference theme direction without naming the theme in visible text.\n"
-            . "7. Return pure JSON only. No markdown. No explanation.\n"
+            . "7. If you add new visitor-visible text, image URLs, social links, link groups, or CTA labels beyond the framework defaults, expose them through extra_fields and read them from \$getConfig()/\$componentConfig instead of hardcoding them.\n"
+            . "8. Return pure JSON only. No markdown. No explanation.\n"
             . "JSON fields: extra_fields, php_variables, css_extra, html_extra_column, html_extra, footer_extra_text, js_content.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
@@ -1491,9 +1493,10 @@ final class AiSitePageComponentGenerationService
             . "2. Write finished visitor-facing copy. Do not expose internal prompts, briefs, requirement wording, or phrases such as 'page focus' and 'site summary'.\n"
             . "3. The section must be meaningfully different for its page type and role; home, about, contact, policy, and blog sections should not read the same.\n"
             . "4. Use the style reference as visual/tone inspiration, but do not mention the style name in visible text.\n"
-            . "5. Return pure JSON only. No markdown. No explanation.\n"
-            . "6. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
-            . "7. If real blog data variables are provided, prefer them over invented articles or categories.\n"
+            . "5. If you add cards, stats, FAQ rows, image URLs, buttons, badges, or any other visitor-visible values beyond the framework defaults, expose matching fields via extra_fields and read them from \$getConfig()/\$componentConfig instead of hardcoding them.\n"
+            . "6. Return pure JSON only. No markdown. No explanation.\n"
+            . "7. JSON fields: extra_fields, php_variables, css_extra, css_responsive, html_content, js_content.\n"
+            . "8. If real blog data variables are provided, prefer them over invented articles or categories.\n"
             . $this->buildComponentJsonPhpSafetyRulesEn();
     }
 
