@@ -1,0 +1,187 @@
+<?php
+/**
+ * 增强版workspace.phtml - 包含P0可观测性
+ * 在原始workspace.phtml基础上添加了SSE连接追踪和调试功能
+ */
+
+// 首先包含增强的可观测性组件
+?>
+
+<!-- P0可观测性：引入增强的SSE日志器 -->
+<script src="<?= $this->getViewFileUrl('GuoLaiRen_PageBuilder::backend/ai-site-agent/workspace/enhanced-sse-logger.js') ?>"></script>
+
+<!-- P0可观测性：调试面板 -->
+<div id="pb-ai-sse-debug-panel" style="display: none; position: fixed; top: 10px; right: 10px; width: 400px; max-height: 600px; background: #1e1e2e; border: 1px solid #313244; border-radius: 8px; padding: 15px; z-index: 9999; overflow-y: auto; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; color: #cdd6f4;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #313244; padding-bottom: 10px;">
+        <h4 style="margin: 0; color: #89b4fa;">SSE连接调试面板</h4>
+        <button onclick="document.getElementById('pb-ai-sse-debug-panel').style.display='none'" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">✕</button>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <button onclick="console.log(window.getPbAiSseHealthReport())" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px;">查看健康报告</button>
+        <button onclick="window.exportPbAiSseLogs()" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">导出日志</button>
+    </div>
+    
+    <div id="pb-ai-sse-stats" style="background: #313244; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+        <div>加载中...</div>
+    </div>
+    
+    <div id="pb-ai-sse-logs" style="background: #181825; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">
+        <div>日志将在这里显示...</div>
+    </div>
+</div>
+
+<script>
+// 调试面板控制
+(function () {
+    'use strict';
+
+    var workspaceApi = window.__pbWorkspaceApi;
+    if (!workspaceApi || typeof workspaceApi !== 'object') {
+        workspaceApi = {};
+        window.__pbWorkspaceApi = workspaceApi;
+    }
+    workspaceApi.observability = workspaceApi.observability && typeof workspaceApi.observability === 'object'
+        ? workspaceApi.observability
+        : {};
+
+    workspaceApi.observability.toggleDebugPanel = function () {
+        var panel = document.getElementById('pb-ai-sse-debug-panel');
+        if (!panel) {
+            return;
+        }
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            workspaceApi.observability.updateDebugPanel();
+        } else {
+            panel.style.display = 'none';
+        }
+    };
+
+    workspaceApi.observability.updateDebugPanel = function () {
+        try {
+            var healthReport = workspaceApi.observability.getHealthReport ? workspaceApi.observability.getHealthReport() : null;
+            var statsEl = document.getElementById('pb-ai-sse-stats');
+            var logsEl = document.getElementById('pb-ai-sse-logs');
+
+            if (statsEl && healthReport) {
+                statsEl.innerHTML = `
+                <div><strong>连接状态:</strong> ${healthReport.connectionHealth.isHealthy ? '✅ 健康' : '❌ 异常'}</div>
+                <div><strong>总消息数:</strong> ${healthReport.connectionHealth.totalMessages}</div>
+                <div><strong>重复消息:</strong> ${healthReport.connectionHealth.duplicateMessages} (${healthReport.connectionHealth.duplicateRate})</div>
+                <div><strong>重复连接:</strong> ${healthReport.duplicateConnections.totalDuplicates}</div>
+                <div><strong>连接断开:</strong> ${healthReport.connectionHealth.connectionDrops}</div>
+                <div><strong>最后消息:</strong> ${healthReport.connectionHealth.lastMessageAgo}ms 前</div>
+            `;
+            }
+
+            if (logsEl && workspaceApi.observability.sseLogger && typeof workspaceApi.observability.sseLogger.getRecentLogs === 'function') {
+                var recentLogs = workspaceApi.observability.sseLogger.getRecentLogs(20);
+                logsEl.textContent = JSON.stringify(recentLogs, null, 2);
+            }
+        } catch (e) {
+            console.error('更新调试面板失败:', e);
+        }
+    };
+
+    // 向后兼容旧全局入口
+    window.togglePbAiSseDebugPanel = function () {
+        return workspaceApi.observability.toggleDebugPanel();
+    };
+    window.updatePbAiSseDebugPanel = function () {
+        return workspaceApi.observability.updateDebugPanel();
+    };
+
+    // 快捷键支持
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+            e.preventDefault();
+            workspaceApi.observability.toggleDebugPanel();
+        }
+    });
+
+    console.info('[SSE] 按 Ctrl+Shift+D 打开调试面板');
+})();
+</script>
+
+<!-- 工作区日志区域增强 -->
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-header bg-transparent border-0 pt-4 pb-0">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('工作区日志'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <p class="text-muted mb-0"><?= htmlspecialchars((string)__('这里会持续镜像构建、单页重建和发布过程中的会话日志。'), ENT_QUOTES, 'UTF-8') ?></p>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.togglePbAiSseDebugPanel()" title="Ctrl+Shift+D">
+                    <i class="mdi mdi-bug-outline me-1"></i><?= htmlspecialchars((string)__('SSE调试'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.exportPbAiSseLogs()" title="导出详细日志">
+                    <i class="mdi mdi-download me-1"></i><?= htmlspecialchars((string)__('导出日志'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+    <div class="card-body p-4 pt-3">
+        <w:theme:sse-terminal id="pagebuilder-workspace-terminal" title="@lang{工作区日志}" height="420px" events="start,snapshot,log,done,error,warning,info" show-start-toggle="false" />
+    </div>
+</div>
+
+<script>
+// P0可观测性：初始化增强SSE日志器
+(function() {
+    var workspaceApi = window.__pbWorkspaceApi;
+    if (!workspaceApi || typeof workspaceApi !== 'object') {
+        workspaceApi = {};
+        window.__pbWorkspaceApi = workspaceApi;
+    }
+    workspaceApi.observability = workspaceApi.observability && typeof workspaceApi.observability === 'object'
+        ? workspaceApi.observability
+        : {};
+
+    var sseLogger = null;
+    try {
+        if (window.PbAiSseConnectionManager) {
+            sseLogger = window.PbAiSseConnectionManager.createLogger('pagebuilder-workspace', {
+                publicId: '<?= htmlspecialchars($publicId ?? '', ENT_QUOTES, 'UTF-8') ?>',
+                enableDetailedLogging: true,
+                maxLogEntries: 500
+            });
+            
+            // 统一收敛到 workspace API
+            workspaceApi.observability = workspaceApi.observability && typeof workspaceApi.observability === 'object'
+                ? workspaceApi.observability
+                : {};
+            workspaceApi.observability.sseLogger = sseLogger;
+            // 向后兼容
+            window.pbAiWorkspaceSseLogger = sseLogger;
+            
+            console.info('[SSE] P0可观测性增强已初始化');
+            
+            if (sseLogger) {
+                sseLogger.log('info', 'P0可观测性增强初始化完成', {
+                    event: 'observability_initialized',
+                    publicId: '<?= htmlspecialchars($publicId ?? '', ENT_QUOTES, 'UTF-8') ?>',
+                    stage: '<?= htmlspecialchars($currentStage ?? '', ENT_QUOTES, 'UTF-8') ?>'
+                });
+            }
+        }
+    } catch (e) {
+        console.warn('[SSE] 初始化增强日志器失败:', e);
+    }
+})();
+</script>
+
+<!-- 包含原始的script-stream.phtml，但会在其中集成增强功能 -->
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stream.phtml') ?>
+
+<!-- 继续原始的workspace内容 -->
+<div class="row g-3">
+    <div class="col-xl-5">
+        <div class="card border-0 shadow-sm <?= $currentStage === 'virtual_theme' ? '' : 'd-none' ?>" data-stage-panel="virtual_theme">
+            <div class="card-header bg-transparent border-0 pt-4 pb-0">
+                <h5 class="card-title mb-1"><?= htmlspecialchars((string)__('虚拟主题编排'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <p class="text-muted mb-0"><?= htmlspecialchars((string)__('这里一次性生成网站资料、草稿站点、虚拟主题和所有选中页面。'), ENT_QUOTES, 'UTF-8') ?></p>
+            </div>
+            <div class="card-body p-4">
+                <!-- 原始内容继续... -->
