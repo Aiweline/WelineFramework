@@ -160,7 +160,7 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
     }
 }
 
-final class InMemorySseWriter extends \Weline\Framework\Http\Sse\SseWriter
+class InMemorySseWriter extends \Weline\Framework\Http\Sse\SseWriter
 {
     /** @var list<array{event:string,data:mixed}> */
     private array $events = [];
