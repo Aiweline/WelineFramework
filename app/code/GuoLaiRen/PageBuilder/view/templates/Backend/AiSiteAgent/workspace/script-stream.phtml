@@ -2,9 +2,9 @@
 (function () {
     'use strict';
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
-    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var streamBaseUrl = <?= \json_encode($streamSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
-    var lastEventId = <?= (int)$initialLastEventId ?>;
+    var publicId = <?= \json_encode(($publicId ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var streamBaseUrl = <?= \json_encode(($streamSseUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var lastEventId = <?= (int)($initialLastEventId ?? 0) ?>;
     var seenEventIds = [];
     var seenEventIdMap = Object.create(null);
     var recentSignalMap = Object.create(null);

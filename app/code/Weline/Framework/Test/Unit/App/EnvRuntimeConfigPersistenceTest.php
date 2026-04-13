@@ -6,6 +6,8 @@ namespace Weline\Framework\Test\Unit\App;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeInterface;
 
 final class EnvRuntimeConfigPersistenceTest extends TestCase
 {
@@ -24,6 +26,8 @@ final class EnvRuntimeConfigPersistenceTest extends TestCase
     {
         \file_put_contents($this->envPath, $this->originalEnvContent);
         Env::getInstance()->reload();
+        Env::refreshMaintenanceCache();
+        Runtime::resetModeCache();
     }
 
     public function testRuntimeOverridesDoNotLeakIntoPersistedEnvWrites(): void
@@ -80,5 +84,25 @@ PHP);
         /** @var array<string, mixed> $persisted */
         $persisted = include $this->envPath;
         self::assertFalse((bool) ($persisted['system']['maintenance'] ?? false));
+    }
+
+    public function testRuntimeMaintenanceModeStaysPinnedForCurrentWlsProcess(): void
+    {
+        \file_put_contents($this->envPath, <<<'PHP'
+<?php return [
+    'system' => ['maintenance' => false],
+];
+PHP);
+
+        $env = Env::getInstance()->reload();
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+
+        $env->setRuntimeMaintenanceMode(true);
+        Env::refreshMaintenanceCache();
+        self::assertTrue((bool) $env->getConfig('system.maintenance'));
+
+        $env->setRuntimeMaintenanceMode(false);
+        Env::refreshMaintenanceCache();
+        self::assertFalse((bool) $env->getConfig('system.maintenance'));
     }
 }
