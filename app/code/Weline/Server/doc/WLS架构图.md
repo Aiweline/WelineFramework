@@ -4,6 +4,8 @@
 
 WLS 是 Weline Framework 的高性能常驻内存 HTTP/HTTPS 服务器，支持多种运行模式和攻击防护能力。
 
+**[重要] 最新更新（2026-04-13）**：启动流程和编排器架构升级，参见 [WLS 编排器启动流程优化](WLS-ORCHESTRATOR-BOOTSTRAP-2026-04-13.md) 了解核心改进。
+
 ## 整体架构
 
 ```
