@@ -14,6 +14,7 @@ use Weline\Framework\App\State;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Model\Locale\Dictionary;
 use Weline\Meta\Helper\MetaData;
 use Weline\Meta\Model\MetaConfig;
@@ -54,6 +55,8 @@ class ThemeData
 
     /** @var \WeakMap<\Fiber, ThemeDataRequestState>|null */
     private static ?\WeakMap $fiberStates = null;
+    /** @var array<string, ThemeDataRequestState> */
+    private static array $scopedStates = [];
 
     private static function currentFiber(): ?\Fiber
     {
@@ -70,6 +73,12 @@ class ThemeData
 
     private static function state(): ThemeDataRequestState
     {
+        $scopeKey = self::currentScopeKey();
+        if ($scopeKey !== null) {
+            self::$scopedStates[$scopeKey] ??= new ThemeDataRequestState();
+            return self::$scopedStates[$scopeKey];
+        }
+
         $fiber = self::currentFiber();
         if ($fiber === null) {
             self::$mainState ??= new ThemeDataRequestState();
@@ -86,6 +95,12 @@ class ThemeData
 
     private static function resetCurrentState(): void
     {
+        $scopeKey = self::currentScopeKey();
+        if ($scopeKey !== null) {
+            self::$scopedStates[$scopeKey] = new ThemeDataRequestState();
+            return;
+        }
+
         $fiber = self::currentFiber();
         if ($fiber === null) {
             self::$mainState = new ThemeDataRequestState();
@@ -94,6 +109,17 @@ class ThemeData
 
         self::$fiberStates ??= new \WeakMap();
         self::$fiberStates[$fiber] = new ThemeDataRequestState();
+    }
+
+    private static function currentScopeKey(): ?string
+    {
+        try {
+            $scopeId = RequestContext::getStorageScopeId();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $scopeId === null || $scopeId === '' ? null : 'conn:' . $scopeId;
     }
     
     /**

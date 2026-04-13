@@ -1694,7 +1694,10 @@ class SiteBuilderAgent extends BackendController
         ];
         $hasAiChunkStream = false;
 
-        $mapEvent = static function (string $eventType, array $data) use ($sse, &$hasAiChunkStream): void {
+        $mapEvent = static function (string $eventType, array $data) use ($sse, &$hasAiChunkStream): bool {
+            if (!$sse->isAlive()) {
+                return false;
+            }
             if (($eventType === 'ai_response' || $eventType === 'chunk')
                 && isset($data['content'])
                 && \is_string($data['content'])
@@ -1705,7 +1708,7 @@ class SiteBuilderAgent extends BackendController
                 } elseif (!$hasAiChunkStream) {
                     $sse->sendEvent('chunk', ['content' => (string)$data['content']]);
                 }
-                return;
+                return $sse->isAlive();
             }
 
             $message = $data['message'] ?? null;
@@ -1718,6 +1721,7 @@ class SiteBuilderAgent extends BackendController
             if ($eventType === 'tool_result' && isset($data['name'])) {
                 $sse->sendEvent('info', ['message' => __('Tool completed: %{name}', ['name' => (string)$data['name']])]);
             }
+            return $sse->isAlive();
         };
 
         try {
