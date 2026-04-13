@@ -1,0 +1,8 @@
+# PHPUnit workspace (tests/phpunit): generated config, reports, coverage
+phpunit/coverage-html/
+phpunit/coverage.txt
+phpunit/coverage.xml
+phpunit/test-results.xml
+phpunit/.phpunit.cache/
+phpunit/report/
+phpunit/config.xml
