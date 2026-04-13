@@ -7,7 +7,11 @@ namespace Weline\Framework\App\Controller;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Controller\PcController;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
@@ -37,6 +41,7 @@ class BackendController extends PcController
 
     public function __init()
     {
+        $this->normalizeBackendRuntimeContext();
         $this->getEventManager()->dispatch('Weline_Framework_App::backend_controller_init_before');
         $this->cache = $this->getControllerCache();
         
@@ -54,7 +59,23 @@ class BackendController extends PcController
         $response->setHeader('Expires', '0');
         
         $this->getEventManager()->dispatch('Weline_Framework_App::backend_controller_init_after');
+        // 后置 observer 可能在当前请求内恢复 remember-me 登录态，这里重新对齐到最新 backend session 实例。
+        $this->session = SessionFactory::getInstance()->createBackendSession();
         $this->loginCheck();
+    }
+
+    private function normalizeBackendRuntimeContext(): void
+    {
+        WelineEnv::set('area', 'backend', 'BackendController normalize');
+        WelineEnv::set('is_backend', true, 'BackendController normalize');
+
+        $initializedVars = \get_object_vars($this);
+        if (!isset($initializedVars['request']) || !$initializedVars['request'] instanceof Request) {
+            $this->request = ObjectManager::getInstance(Request::class);
+        }
+
+        $this->request->setServer('WELINE_AREA', 'backend');
+        $this->request->setServer('WELINE_IS_BACKEND', '1');
     }
 
     protected function loginCheck(): void
@@ -82,6 +103,16 @@ class BackendController extends PcController
             $routeUrlPath = $this->request->getRouteUrlPath();
             
             if (!\in_array($routeUrlPath, $whitelist_url, true)) {
+                if ($this->isSseLikeRequest()) {
+                    throw new ResponseTerminateException(
+                        Response::json([
+                            'error' => 'UNAUTHORIZED',
+                            'message' => (string)__('未登录或登录已过期'),
+                            'route' => $routeUrlPath,
+                        ], 401)
+                    );
+                }
+
                 $no_login_url_cache_key = 'no_login_redirect_url';
                 $no_login_redirect_url = $this->cache->get($no_login_url_cache_key);
                 
@@ -101,6 +132,23 @@ class BackendController extends PcController
                 $this->noRouter();
             }
         }
+    }
+
+    private function isSseLikeRequest(): bool
+    {
+        $accept = $this->request->getHeader('Accept');
+        $acceptHeader = \is_array($accept) ? \implode(',', $accept) : (string)$accept;
+        if ($acceptHeader !== '' && \str_contains(\strtolower($acceptHeader), 'text/event-stream')) {
+            return true;
+        }
+
+        $routeUrlPath = \strtolower((string)$this->request->getRouteUrlPath());
+        $requestUri = \strtolower((string)$this->request->getUri());
+
+        return \str_contains($routeUrlPath, 'stream-sse')
+            || \str_contains($routeUrlPath, 'operation-sse')
+            || \str_contains($requestUri, 'stream-sse')
+            || \str_contains($requestUri, 'operation-sse');
     }
 
     /**

@@ -282,6 +282,12 @@ final class AiHtmlRenderService
     private function inferBlockRegion(string $blockType, int $index): string
     {
         $type = \strtolower($blockType);
+        if ($type === 'site_header' || \str_starts_with($type, 'ai_generated_shared_header')) {
+            return 'header';
+        }
+        if ($type === 'site_footer' || \str_starts_with($type, 'ai_generated_shared_footer')) {
+            return 'footer';
+        }
         if (\str_contains($type, 'header') || \str_contains($type, 'hero')) {
             return $index === 0 ? 'header' : 'content';
         }

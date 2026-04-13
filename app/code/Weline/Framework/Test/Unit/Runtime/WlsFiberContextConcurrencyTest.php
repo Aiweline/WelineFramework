@@ -18,8 +18,37 @@ final class WlsFiberContextConcurrencyTest extends TestCase
         HeaderCollector::reset();
         SseContext::reset();
         RequestContext::cleanup();
+        Context::leave();
         Url::resetWlsFiberInterleavedParserScratch();
         parent::tearDown();
+    }
+
+    public function testSyncFromServerOverridesStaleInitializedContextServerSnapshot(): void
+    {
+        Context::enter(new Context([
+            'input' => [
+                'server' => ['WELINE_AREA' => 'frontend'],
+            ],
+            'route' => [
+                'area' => 'frontend',
+            ],
+            'runtime' => [
+                'request_context' => [
+                    'initialized' => true,
+                    'storage' => ['env.area' => 'frontend'],
+                ],
+            ],
+        ]));
+
+        $_SERVER['WELINE_AREA'] = 'backend';
+        $_SERVER['WELINE_USER_LANG'] = 'en_US';
+
+        RequestContext::syncFromServer();
+
+        self::assertSame('backend', Context::current()->get('route.area'));
+        self::assertSame('backend', $_SERVER['WELINE_AREA']);
+        self::assertSame('backend', RequestContext::getWelineArea());
+        self::assertSame('en_US', RequestContext::getWelineUserLang());
     }
 
     public function testRestoreSyncsRequestContextWelineStaticsAfterGlobalCleanup(): void

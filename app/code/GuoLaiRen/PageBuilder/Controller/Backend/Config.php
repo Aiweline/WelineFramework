@@ -27,6 +27,8 @@ class Config extends BackendController
     /** AI 建站工作台（快速模式）调试预填：会话无数据时使用，留空则不生效 */
     private const CONFIG_KEY_AI_SITE_AGENT_DEBUG_SITE_TITLE = 'ai_site_agent_debug_site_title';
     private const CONFIG_KEY_AI_SITE_AGENT_DEBUG_BRIEF = 'ai_site_agent_debug_brief_description';
+    /** 会话未带主语言时预填；与站点名称/描述同区块，未配置时使用内置英语 en_US */
+    private const CONFIG_KEY_AI_SITE_AGENT_DEBUG_DEFAULT_LOCALE = 'ai_site_agent_debug_default_locale';
 
     /**
      * 配置页面
@@ -52,11 +54,16 @@ class Config extends BackendController
         $debugBrief = $rawDebugBrief === null
             ? AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION
             : \trim((string)$rawDebugBrief);
+        $rawDebugLocale = $systemConfig->getConfig(self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_DEFAULT_LOCALE, self::MODULE, self::AREA);
+        $debugDefaultLocale = $rawDebugLocale === null
+            ? AiSiteAgentWorkspaceDebugDefaults::DEFAULT_LOCALE
+            : AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale(\trim((string)$rawDebugLocale));
 
         $this->assign('ai_enabled', $aiEnabled);
         $this->assign('i18n_enabled', $i18nEnabled);
         $this->assign('ai_site_agent_debug_site_title', $debugSiteTitle);
         $this->assign('ai_site_agent_debug_brief_description', $debugBrief);
+        $this->assign('ai_site_agent_debug_default_locale', $debugDefaultLocale);
         $this->assign('page_title', __('页面构建器配置'));
         $this->assign('breadcrumb_parent', __('页面管理'));
         $this->assign('breadcrumb_current', __('配置'));
@@ -81,6 +88,9 @@ class Config extends BackendController
             $i18nEnabled = $this->request->getPost('i18n_enabled', '0');
             $debugSiteTitle = \trim((string)$this->request->getPost('ai_site_agent_debug_site_title', ''));
             $debugBrief = \trim((string)$this->request->getPost('ai_site_agent_debug_brief_description', ''));
+            $debugDefaultLocale = AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale(
+                \trim((string)$this->request->getPost('ai_site_agent_debug_default_locale', ''))
+            );
             
             /** @var SystemConfig $systemConfig */
             $systemConfig = ObjectManager::getInstance(SystemConfig::class);
@@ -110,6 +120,12 @@ class Config extends BackendController
             $systemConfig->setConfig(
                 self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_BRIEF,
                 $debugBrief,
+                self::MODULE,
+                self::AREA
+            );
+            $systemConfig->setConfig(
+                self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_DEFAULT_LOCALE,
+                $debugDefaultLocale,
                 self::MODULE,
                 self::AREA
             );

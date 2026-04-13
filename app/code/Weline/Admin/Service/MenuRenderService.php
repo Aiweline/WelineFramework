@@ -197,16 +197,51 @@ class MenuRenderService
      */
     private function getCurrentUrl(): string
     {
-        // 使用 getUrlBuilder()->getCurrentUrl() 获取完整的当前 URL（包含协议、域名和路径）
+        if ($this->cachedCurrentUrl !== null) {
+            return $this->cachedCurrentUrl;
+        }
+
         $url = $this->getRequest()->getUrlBuilder()->getCurrentUrl();
         if (empty($url)) {
-            return '';
+            $this->cachedCurrentUrl = '';
+            return $this->cachedCurrentUrl;
         }
-        $url = explode('?', $url)[0];
-        $url = explode('#', $url)[0];
-        return rtrim($url, '/');
+        $this->cachedCurrentUrl = $this->normalizeComparableUrl($url);
+        return $this->cachedCurrentUrl;
     }
 
+    private function normalizeComparableUrl(string $url): string
+    {
+        $url = html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $url = explode('?', $url)[0];
+        $url = explode('#', $url)[0];
+        $path = parse_url($url, PHP_URL_PATH);
+        if (is_string($path) && $path !== '') {
+            $url = $path;
+        }
+
+        $url = trim($url, '/');
+        $backendPrefix = trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
+        if ($backendPrefix !== '' && str_starts_with($url, $backendPrefix . '/')) {
+            $url = substr($url, strlen($backendPrefix) + 1);
+        }
+
+        $segments = explode('/', $url);
+        if (count($segments) > 1 && preg_match('/^[A-Za-z0-9]{16,}$/', $segments[0]) === 1) {
+            $segments = array_slice($segments, 1);
+            $url = implode('/', $segments);
+        }
+
+        if (
+            count($segments) > 2
+            && preg_match('/^[A-Z]{3}$/', $segments[0]) === 1
+            && preg_match('/^[a-z]{2}_[A-Za-z]+_[A-Z]{2}$/', $segments[1]) === 1
+        ) {
+            $url = implode('/', array_slice($segments, 2));
+        }
+
+        return rtrim($url, '/');
+    }
     /**
      * 检查菜单 URL 是否匹配当前 URL
      * 
@@ -215,31 +250,42 @@ class MenuRenderService
      */
     private function isMenuActive(string $menuUrl): bool
     {
+        $menuUrl = $this->normalizeComparableUrl($menuUrl);
+        if (isset($this->menuUrlActiveCache[$menuUrl])) {
+            return $this->menuUrlActiveCache[$menuUrl];
+        }
+
         $currentUrl = $this->getCurrentUrl();
         if (empty($currentUrl)) {
             return false;
         }
-        
-        $menuUrl = rtrim($menuUrl, '/');
-        
-        // 精确匹配
+
         if ($menuUrl === $currentUrl) {
+            $this->menuUrlActiveCache[$menuUrl] = true;
             return true;
         }
-        
-        // 路径匹配：当前 URL 以菜单 URL 开头（用于子路由）
+
         if (!empty($menuUrl) && strpos($currentUrl, $menuUrl) === 0) {
             $nextChar = substr($currentUrl, strlen($menuUrl), 1);
             if (empty($nextChar) || $nextChar === '/') {
+                $this->menuUrlActiveCache[$menuUrl] = true;
                 return true;
             }
         }
-        
+
+        if (str_ends_with($menuUrl, '/index')) {
+            $controllerUrl = substr($menuUrl, 0, -strlen('/index'));
+            if ($controllerUrl !== '' && strpos($currentUrl, $controllerUrl . '/') === 0) {
+                $this->menuUrlActiveCache[$menuUrl] = true;
+                return true;
+            }
+        }
+
+        $this->menuUrlActiveCache[$menuUrl] = false;
         return false;
     }
-
     /**
-     * 检查子菜单中是否有激活项（递归）
+     * 检查子菜单中是否有激活项
      * 
      * @param array $nodes 子菜单节点
      * @return bool
@@ -250,29 +296,55 @@ class MenuRenderService
             if (($node['type'] ?? '') !== 'menus') {
                 continue;
             }
-            
-            $childNodes = $node['nodes'] ?? [];
-            $childCount = 0;
-            
-            foreach ($childNodes as $child) {
-                if (isset($child['type']) && $child['type'] === 'menus') {
-                    $childCount++;
-                }
-            }
-            
-            if ($childCount == 0) {
-                $menuUrl = $this->formatMenuUrlCached($node);
-                if ($this->isMenuActive($menuUrl)) {
-                    return true;
-                }
-            } else {
-                if ($this->hasActiveChild($childNodes)) {
-                    return true;
-                }
+
+            if ($this->isMenuNodeActive($node)) {
+                return true;
             }
         }
-        
+
         return false;
+    }
+
+    private function isMenuNodeActive(array $node): bool
+    {
+        $cacheKey = $this->getMenuNodeCacheKey($node);
+        if (isset($this->menuNodeActiveCache[$cacheKey])) {
+            return $this->menuNodeActiveCache[$cacheKey];
+        }
+
+        $childNodes = $node['nodes'] ?? [];
+        $hasChildMenus = false;
+        foreach ($childNodes as $child) {
+            if (($child['type'] ?? '') === 'menus') {
+                $hasChildMenus = true;
+                break;
+            }
+        }
+
+        if (!$hasChildMenus) {
+            $route = $node['route'] ?? '';
+            $active = !empty($route) && $this->isMenuActive($this->formatMenuUrlCached($node));
+            $this->menuNodeActiveCache[$cacheKey] = $active;
+            return $active;
+        }
+
+        $active = $this->hasActiveChild($childNodes);
+        $this->menuNodeActiveCache[$cacheKey] = $active;
+
+        return $active;
+    }
+
+    private function getMenuNodeCacheKey(array $node): string
+    {
+        $sourceId = (string)($node['source_id'] ?? '');
+        if ($sourceId !== '') {
+            return $sourceId;
+        }
+
+        $route = (string)($node['route'] ?? '');
+        $title = (string)($node['source_name'] ?? '');
+
+        return md5($route . '|' . $title);
     }
 
     /**
@@ -301,6 +373,25 @@ class MenuRenderService
      * 渲染时缓存的前端 URL 前缀（确保整个渲染过程中使用一致的值）
      */
     private ?string $cachedFrontendUrlPrefix = null;
+
+    /**
+     * 渲染时缓存的当前 URL，避免菜单激活判断反复读取请求对象
+     */
+    private ?string $cachedCurrentUrl = null;
+
+    /**
+     * 菜单 URL 激活状态缓存
+     *
+     * @var array<string, bool>
+     */
+    private array $menuUrlActiveCache = [];
+
+    /**
+     * 菜单节点激活状态缓存
+     *
+     * @var array<string, bool>
+     */
+    private array $menuNodeActiveCache = [];
     
     /**
      * 渲染主菜单 HTML
@@ -316,6 +407,9 @@ class MenuRenderService
         // 这避免了 WLS 下由于状态变化导致的 URL 不一致问题
         $this->cachedBackendUrlPrefix = $this->getBackendUrlPrefix();
         $this->cachedFrontendUrlPrefix = $this->getFrontendUrlPrefix();
+        $this->cachedCurrentUrl = null;
+        $this->menuUrlActiveCache = [];
+        $this->menuNodeActiveCache = [];
         
         foreach ($menus as $menu) {
             if (!isset($menu['is_enable']) || !$menu['is_enable']) {

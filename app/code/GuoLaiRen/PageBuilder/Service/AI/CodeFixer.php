@@ -136,8 +136,10 @@ class CodeFixer
         }
         
         // 修复html_content
-        if (isset($data['html_content'])) {
-            $data['html_content'] = $this->fixHtmlContent($data['html_content']);
+        foreach (['html_content', 'html_extra', 'html_extra_column', 'footer_extra_text'] as $htmlField) {
+            if (isset($data[$htmlField]) && is_string($data[$htmlField])) {
+                $data[$htmlField] = $this->fixHtmlContent($data[$htmlField], $htmlField);
+            }
         }
         
         // 修复php_variables
@@ -182,21 +184,80 @@ class CodeFixer
      * 修复HTML内容
      * 不转义 PHP 标签，否则模板阶段 PHP 不执行、预览会显示源码（如 &lt;?= ... ?&gt;）
      */
-    public function fixHtmlContent(string $html): string
+    public function fixHtmlContent(string $html, string $context = 'html_content'): string
     {
         // 移除反引号（避免破坏字符串）
         $original = $html;
         $html = str_replace('`', "'", $html);
         if ($html !== $original) {
-            $this->addFix('html_content', '替换了反引号为单引号');
+            $this->addFix($context, '替换了反引号为单引号');
         }
-        $html = $this->normalizePhpEchoTags($html, 'html_content');
+        $html = $this->normalizePhpEchoTags($html, $context);
+        $html = $this->fixEmbeddedPhpBlocks($html, $context);
         return $html;
     }
 
     /**
      * 修复PHP变量代码
      */
+    private function fixEmbeddedPhpBlocks(string $html, string $context): string
+    {
+        $fixed = preg_replace_callback(
+            '/<\?(?:php|=)?[\s\S]*?\?>/i',
+            function (array $matches) use ($context): string {
+                return $this->fixSingleEmbeddedPhpBlock((string)($matches[0] ?? ''), $context);
+            },
+            $html
+        );
+
+        return is_string($fixed) ? $fixed : $html;
+    }
+
+    private function fixSingleEmbeddedPhpBlock(string $block, string $context): string
+    {
+        $trimmed = trim($block);
+        if ($trimmed === '') {
+            return $block;
+        }
+
+        if (preg_match('/^<\?(?:php)?\s*=/', $trimmed)) {
+            $expression = preg_replace('/^<\?(?:php)?\s*=\s*/i', '', $trimmed);
+            $expression = preg_replace('/\s*\?>\s*$/', '', (string)$expression);
+            $expression = $this->fixLooseArrowAssignments((string)$expression, $context);
+
+            return '<?= ' . trim((string)$expression) . ' ?>';
+        }
+
+        $inner = preg_replace('/^<\?(?:php)?\s*/i', '', $trimmed);
+        $inner = preg_replace('/\s*\?>\s*$/', '', (string)$inner);
+        $inner = $this->fixLooseArrowAssignments((string)$inner, $context);
+
+        return '<?php ' . trim((string)$inner) . ' ?>';
+    }
+
+    private function fixLooseArrowAssignments(string $code, string $context): string
+    {
+        $lines = preg_split('/\n/', str_replace(["\r\n", "\r"], "\n", $code)) ?: [];
+        $fixedLines = [];
+        $hasFix = false;
+
+        foreach ($lines as $line) {
+            if (preg_match('/^\s*\$[a-zA-Z_]\w*\s*=>\s*/', $line)) {
+                $fixedLines[] = preg_replace('/^(\s*\$[a-zA-Z_]\w*)\s*=>\s*/', '$1 = ', $line);
+                $hasFix = true;
+                continue;
+            }
+            $fixedLines[] = $line;
+        }
+
+        if ($hasFix) {
+            $this->addFix($context, 'Normalized loose $var => value assignments inside embedded PHP blocks');
+            return implode("\n", $fixedLines);
+        }
+
+        return $code;
+    }
+
     public function fixPhpVariables(string $php): string
     {
         $phpOpen = chr(60) . chr(63) . 'php';
