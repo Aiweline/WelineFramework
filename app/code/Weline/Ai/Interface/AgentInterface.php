@@ -86,7 +86,7 @@ interface AgentInterface
      * @param string $prompt 用户提示词
      * @param AiModel $model AI 模型
      * @param array $params 额外参数
-     * @param callable|null $streamCallback SSE 事件回调，签名：function(string $eventType, array $data): void
+     * @param callable|null $streamCallback SSE 事件回调，签名：function(string $eventType, array $data): bool|void
      *   事件类型：'chunk'（文本片段）、'tool_call'（调用工具）、'tool_result'（工具结果）、'iteration'（循环轮次）
      * @return AgentResult
      */

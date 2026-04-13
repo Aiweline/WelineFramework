@@ -28,14 +28,12 @@ use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
 use Weline\Framework\DataObject\DataObject;
-use Weline\Server\Log\WlsLogger;
 use ReflectionObject;
 
 class PcController extends Core
 {
     private Template $_template;
     private ?string $_templateRequestId = null;
-    private bool $_templateEmptyRetrying = false;
     protected ?Url $_url = null;
 
     private CachePoolInterface $controllerCache;
@@ -452,31 +450,6 @@ class PcController extends Core
      */
     protected function fetchTemplateWithEvents(string $fileName): mixed
     {
-        $originalFileName = $fileName;
-        $content = $this->performTemplateFetchWithEvents($fileName);
-        if (($content === null || $content === '') && !$this->_templateEmptyRetrying && RequestContext::getId() !== null) {
-            $this->_templateEmptyRetrying = true;
-            try {
-                $templateData = $this->snapshotTemplateDataForEmptyRetry();
-                WlsLogger::error_('[PcController::fetchTemplateWithEvents] empty content retry', [
-                    'request_id' => RequestContext::getId(),
-                    'file_name' => $originalFileName,
-                    'resolved_file_name' => $fileName,
-                    'controller' => static::class,
-                    'template_data_count' => \count($templateData),
-                ]);
-                $this->resetTemplateAfterEmptyRetry($templateData);
-                return $this->performTemplateFetchWithEvents($originalFileName);
-            } finally {
-                $this->_templateEmptyRetrying = false;
-            }
-        }
-
-        return $content;
-    }
-
-    protected function performTemplateFetchWithEvents(string $fileName): mixed
-    {
         // 触发Weline_Framework_Controller::fetch_file_before事件
         $eventData = new DataObject([
             'fileName' => $fileName,
@@ -496,22 +469,6 @@ class PcController extends Core
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
         SchedulerSystem::yield();
         return $eventData->getData('content');
-    }
-
-    protected function snapshotTemplateDataForEmptyRetry(): array
-    {
-        $templateData = $this->getTemplate()->getData();
-        return \is_array($templateData) ? $templateData : [];
-    }
-
-    protected function resetTemplateAfterEmptyRetry(array $templateData): void
-    {
-        Template::resetInstance();
-        unset($this->_template);
-        $this->_templateRequestId = null;
-        if ($templateData !== []) {
-            $this->getTemplate()->assign($templateData);
-        }
     }
 
     /**

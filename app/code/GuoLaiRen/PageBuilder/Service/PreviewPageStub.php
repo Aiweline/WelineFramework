@@ -30,6 +30,11 @@ class PreviewPageStub
         return $this->data[$key] ?? null;
     }
 
+    public function getMetaTitle(): string
+    {
+        return (string) ($this->data['meta_title'] ?? $this->data['title'] ?? '');
+    }
+
     /**
      * 页头导航示例数据（与 Page::getHeaderMenuTypes 顺序一致）
      */

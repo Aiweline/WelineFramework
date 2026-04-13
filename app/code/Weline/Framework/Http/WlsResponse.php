@@ -45,17 +45,6 @@ class WlsResponse extends Response
         return self::fromResponse($base);
     }
 
-    public static function redirect(string $url, int $statusCode = 302): self
-    {
-        $response = new self('', $statusCode);
-        $response->setHeader('Location', $url);
-        $response->setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-        $response->setHeader('Pragma', 'no-cache');
-        $response->setHeader('Expires', '0');
-
-        return $response;
-    }
-
     public static function error(string $message, int $statusCode = 500): self
     {
         $base = Response::text($message, $statusCode);

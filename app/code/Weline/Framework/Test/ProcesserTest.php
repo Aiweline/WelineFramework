@@ -255,10 +255,11 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertIsString($script);
-        self::assertStringContainsString("WindowStyle = 'Normal'", $script);
         self::assertStringContainsString("WindowStyle = 'Hidden'", $script);
         self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
-        self::assertStringContainsString('ArgumentList = @(\'/d\',\'/c\',\'"C:\temp\weline-worker-visible.cmd"\')', $script);
+        self::assertStringContainsString('start "weline-worker-visible"', $script);
+        self::assertStringContainsString('cmd.exe /d /c', $script);
+        self::assertStringContainsString('weline-worker-visible.cmd', $script);
         self::assertStringContainsString("FilePath = 'C:\\php\\php.exe'", $script);
         self::assertStringContainsString("ArgumentList = @('worker.php','--name=weline-worker-hidden')", $script);
         self::assertSame(0, \substr_count($script, 'RedirectStandardOutput'));
@@ -288,6 +289,7 @@ class ProcesserTest extends TestCore
         self::assertIsString($script);
         self::assertStringContainsString('$results.Add("worker-foreground`t0")', $script);
         self::assertStringContainsString('Start-Process @startArgs | Out-Null', $script);
+        self::assertStringContainsString('start "weline-worker-visible"', $script);
     }
 
     public function testBuildWindowsBatchCreateScriptUsesExplicitArgumentArrayForBackgroundProcess(): void
@@ -377,22 +379,9 @@ class ProcesserTest extends TestCore
         self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [false, true]));
     }
 
-    public function testWindowsFastDetachedBatchCreateFallbackStaysDisabled(): void
+    public function testWindowsFastDetachedBatchCreateFallbackHelperRemoved(): void
     {
-        $enabled = $this->invokePrivateStatic(Processer::class, 'shouldUseWindowsFastDetachedBatchCreate', [[
-            'worker-1' => [
-                'command' => '"C:\php\php.exe" worker.php --name=weline-worker-1',
-                'block' => false,
-                'foreground' => false,
-            ],
-            'worker-2' => [
-                'command' => '"C:\php\php.exe" worker.php --name=weline-worker-2',
-                'block' => false,
-                'foreground' => false,
-            ],
-        ]]);
-
-        self::assertFalse($enabled);
+        self::assertFalse((new \ReflectionClass(Processer::class))->hasMethod('shouldUseWindowsFastDetachedBatchCreate'));
     }
 
     public function testBuildWindowsForegroundStartCommandUsesCmdStartLauncher(): void

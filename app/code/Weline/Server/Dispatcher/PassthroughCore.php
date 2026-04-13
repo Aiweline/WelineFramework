@@ -464,7 +464,6 @@ class PassthroughCore
             'open_time' => \microtime(true),
             'request_sent_at' => 0.0,
             'worker_responded' => false,
-            'expects_event_stream' => false,
         ];
         
         $this->stats['active_connections']++;
@@ -795,7 +794,6 @@ class PassthroughCore
             'open_time' => \microtime(true),
             'request_sent_at' => 0.0,
             'worker_responded' => false,
-            'expects_event_stream' => false,
         ];
         
         $this->stats['active_connections']++;
@@ -2427,19 +2425,6 @@ class PassthroughCore
         
         $length = \strlen($data);
         $this->stats['bytes_in'] += $length;
-        if (
-            isset($this->connections[$connId])
-            && empty($this->connections[$connId]['expects_event_stream'])
-            && \str_contains($data, "\r\n")
-        ) {
-            $headerProbe = \strtolower(\substr($data, 0, 2048));
-            if (
-                \str_contains($headerProbe, 'accept: text/event-stream')
-                || \str_contains($headerProbe, '/stream-sse')
-            ) {
-                $this->connections[$connId]['expects_event_stream'] = true;
-            }
-        }
         
         // 转发到 Worker（完整写入循环，处理部分写入）
         $totalWritten = 0;
@@ -2628,7 +2613,10 @@ class PassthroughCore
      * actually forwarded upstream. Browser preconnect / idle sockets should not
      * blacklist a healthy worker.
      *
-     * @param array{request_sent_at?: float, expects_event_stream?: bool} $conn
+     * Dispatcher stays protocol-agnostic here; worker-side runtime decides
+     * whether a request is SSE/streaming.
+     *
+     * @param array{request_sent_at?: float} $conn
      */
     private function shouldTreatSilentWorkerAsFailure(array $conn, int $totalBytesForwarded): bool
     {
@@ -2641,12 +2629,7 @@ class PassthroughCore
             return false;
         }
 
-        $timeout = $this->firstByteTimeoutSeconds;
-        if (!empty($conn['expects_event_stream'])) {
-            $timeout = \max($timeout, 15.0);
-        }
-
-        return (\microtime(true) - $requestSentAt) >= $timeout;
+        return (\microtime(true) - $requestSentAt) >= $this->firstByteTimeoutSeconds;
     }
 
     private function markWorkerResponsive(int $connId, int $workerPort): void
