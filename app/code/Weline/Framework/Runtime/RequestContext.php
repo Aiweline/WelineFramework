@@ -24,6 +24,7 @@ class RequestContext
     private const STORAGE_PATH = 'runtime.request_context.storage';
     private const CLEANUP_PATH = 'runtime.request_context.cleanup_callbacks';
     private const REQUEST_ID_PATH = 'runtime.request_context.request_id';
+    private const CONNECTION_ID_PATH = 'runtime.request_context.connection_id';
     private const START_TIME_PATH = 'runtime.request_context.start_time';
     private const INITIALIZED_PATH = 'runtime.request_context.initialized';
 
@@ -32,7 +33,17 @@ class RequestContext
         $context = self::ensureContext(true);
         $context->set(self::STORAGE_PATH, []);
         $context->set(self::CLEANUP_PATH, []);
-        $context->set(self::REQUEST_ID_PATH, self::generateRequestId());
+        $requestId = self::generateRequestId();
+        $connectionId = self::isWlsRequestContext($context)
+            ? self::resolveConnectionId($context, (array)$context->get('input.server', []))
+            : null;
+        if ($connectionId === null) {
+            $connectionId = $requestId;
+        }
+        $context->set(self::CONNECTION_ID_PATH, $connectionId);
+        $context->set('runtime.connection_id', $connectionId ?? '');
+        $context->set('runtime.chain_id', self::buildChainId($context, $connectionId));
+        $context->set(self::REQUEST_ID_PATH, $requestId);
         $context->set(self::START_TIME_PATH, \microtime(true));
         $context->set(self::INITIALIZED_PATH, true);
 
@@ -60,6 +71,51 @@ class RequestContext
         $context = self::ensureContext();
         $context->set(self::REQUEST_ID_PATH, $id);
         $context->set(self::INITIALIZED_PATH, $id !== null);
+    }
+
+    public static function getConnectionId(): ?string
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return null;
+        }
+
+        $id = $context->get(self::CONNECTION_ID_PATH, null);
+        return $id === null || $id === '' ? null : (string)$id;
+    }
+
+    public static function setConnectionId(?string $id): void
+    {
+        $context = self::ensureContext();
+        $normalized = self::normalizeScopeId($id);
+        $context->set(self::CONNECTION_ID_PATH, $normalized);
+        $context->set('runtime.connection_id', $normalized ?? '');
+        $context->set('runtime.chain_id', self::buildChainId($context, $normalized));
+        if ($normalized !== null) {
+            $_SERVER['WELINE_CONNECTION_ID'] = $normalized;
+        } else {
+            unset($_SERVER['WELINE_CONNECTION_ID']);
+        }
+    }
+
+    public static function getChainId(): ?string
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return null;
+        }
+
+        $chainId = $context->get('runtime.chain_id', null);
+        if (\is_string($chainId) && $chainId !== '') {
+            return $chainId;
+        }
+
+        return self::getStorageScopeId();
+    }
+
+    public static function getStorageScopeId(): ?string
+    {
+        return self::getConnectionId();
     }
 
     public static function getStartTime(): float
@@ -162,6 +218,7 @@ class RequestContext
         $context->set(self::STORAGE_PATH, []);
         $context->set(self::CLEANUP_PATH, []);
         $context->set(self::REQUEST_ID_PATH, null);
+        $context->set(self::CONNECTION_ID_PATH, null);
         $context->set(self::START_TIME_PATH, 0.0);
         $context->set(self::INITIALIZED_PATH, false);
         self::resetWelineVars();
@@ -355,12 +412,14 @@ class RequestContext
             $context->set('route.is_static', false);
             $context->set('route.is_media', false);
             $context->set('route.url_parsed', false);
+            $context->set('runtime.connection_id', '');
+            $context->set('runtime.chain_id', '');
         }
 
         $_SERVER['WELINE_AREA'] = self::AREA_FRONTEND;
         $_SERVER['WELINE_AREA_ROUTE'] = '';
         $_SERVER['WELINE_IS_BACKEND'] = false;
-        unset($_SERVER['WELINE_WEBSITE_ID'], $_SERVER['WELINE_WEBSITE_CODE'], $_SERVER['WELINE_WEBSITE_URL'], $_SERVER['WELINE_USER_LANG'], $_SERVER['WELINE_USER_CURRENCY']);
+        unset($_SERVER['WELINE_WEBSITE_ID'], $_SERVER['WELINE_WEBSITE_CODE'], $_SERVER['WELINE_WEBSITE_URL'], $_SERVER['WELINE_USER_LANG'], $_SERVER['WELINE_USER_CURRENCY'], $_SERVER['WELINE_CONNECTION_ID']);
     }
 
     public static function websiteId(?int $websiteId = null): ?int
@@ -526,6 +585,12 @@ class RequestContext
                 ? ($context->get('input.full_request_uri', '') ?: ($server['WELINE_FULL_REQUEST_URI'] ?? ''))
                 : (($server['WELINE_FULL_REQUEST_URI'] ?? $context->get('input.full_request_uri', '')) ?: '')
         );
+        $connectionId = self::isWlsRequestContext($context)
+            ? self::resolveConnectionId($context, $server)
+            : self::normalizeScopeId($context->get(self::CONNECTION_ID_PATH, null));
+        if ($connectionId === null && !self::isWlsRequestContext($context)) {
+            $connectionId = self::normalizeScopeId($context->get(self::REQUEST_ID_PATH, null));
+        }
 
         $server['REQUEST_URI'] = $uri;
         $server['REQUEST_METHOD'] = $method;
@@ -543,6 +608,11 @@ class RequestContext
         $server['WELINE_IS_STATIC_FILE'] = $isStatic;
         $server['WELINE_IS_MEDIA'] = $isMedia;
         $server['WELINE_URL_PARSED'] = $urlParsed;
+        if ($connectionId !== null) {
+            $server['WELINE_CONNECTION_ID'] = $connectionId;
+        } else {
+            unset($server['WELINE_CONNECTION_ID']);
+        }
         if ($host !== '') {
             $server['HTTP_HOST'] = $host;
         }
@@ -570,6 +640,9 @@ class RequestContext
         $context->set('route.is_static', $isStatic);
         $context->set('route.is_media', $isMedia);
         $context->set('route.url_parsed', $urlParsed);
+        $context->set(self::CONNECTION_ID_PATH, $connectionId);
+        $context->set('runtime.connection_id', $connectionId ?? '');
+        $context->set('runtime.chain_id', self::buildChainId($context, $connectionId));
 
         $_SERVER = \array_replace(\is_array($_SERVER ?? null) ? $_SERVER : [], $server);
 
@@ -580,5 +653,50 @@ class RequestContext
         self::set('env.website_url', $websiteUrl);
         self::set('env.user.lang', $userLang);
         self::set('env.user.currency', $userCurrency);
+    }
+
+    private static function resolveConnectionId(Context $context, array $server = []): ?string
+    {
+        $candidates = [
+            $context->get(self::CONNECTION_ID_PATH, null),
+            $context->get('runtime.connection_id', null),
+            $context->getRuntimeAttr('connection_id', null),
+            $server['WELINE_CONNECTION_ID'] ?? null,
+            $_SERVER['WELINE_CONNECTION_ID'] ?? null,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $normalized = self::normalizeScopeId($candidate);
+            if ($normalized !== null) {
+                return $normalized;
+            }
+        }
+
+        return null;
+    }
+
+    private static function normalizeScopeId(mixed $id): ?string
+    {
+        if ($id === null) {
+            return null;
+        }
+
+        $normalized = \trim((string)$id);
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private static function isWlsRequestContext(Context $context): bool
+    {
+        return (string)$context->get('meta.type', '') === 'request'
+            && (string)$context->get('meta.mode', '') === 'wls';
+    }
+
+    private static function buildChainId(Context $context, ?string $connectionId): string
+    {
+        if ($connectionId !== null) {
+            return $connectionId;
+        }
+
+        return (string)($context->get(self::REQUEST_ID_PATH, '') ?? '');
     }
 }

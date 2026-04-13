@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Template;
 
@@ -19,6 +21,10 @@ final class TemplateFiberScopedInstanceTest extends TestCase
     protected function tearDown(): void
     {
         Template::resetInstance();
+        RequestContext::cleanup();
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
         Runtime::resetModeCache();
     }
 
@@ -84,5 +90,25 @@ final class TemplateFiberScopedInstanceTest extends TestCase
         [$instanceA1, $instanceA2] = $fiberA->getReturn();
         self::assertSame($instanceA1, $instanceA2);
         self::assertSame($instanceA, $instanceA1);
+    }
+
+    public function testGetInstanceUsesConnectionScopeWhenAvailable(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::setConnectionId('conn-a');
+        $instanceA1 = Template::getInstance();
+        $instanceA2 = Template::getInstance();
+        self::assertSame($instanceA1, $instanceA2);
+
+        RequestContext::setConnectionId('conn-b');
+        $instanceB1 = Template::getInstance();
+        self::assertNotSame($instanceA1, $instanceB1);
+
+        Template::resetInstance();
+        $instanceB2 = Template::getInstance();
+        self::assertNotSame($instanceB1, $instanceB2);
+
+        RequestContext::setConnectionId('conn-a');
+        self::assertSame($instanceA1, Template::getInstance());
     }
 }
