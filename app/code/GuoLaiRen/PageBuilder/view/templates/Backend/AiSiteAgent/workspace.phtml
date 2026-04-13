@@ -1184,6 +1184,13 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
     var pendingBlockSseResult = null;
     var virtualPagesByTypeState = <?= \json_encode($initialVirtualPagesByTypeState, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
 
+    function resolvePreviewBridge() {
+        return window.PbAiWorkspacePreview && typeof window.PbAiWorkspacePreview === 'object'
+            ? window.PbAiWorkspacePreview
+            : {};
+    }
+    var previewBridge = resolvePreviewBridge();
+
     function resolveTaskSummaryUpdater() {
         if (window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.updateTaskSummaryFromState === 'function') {
             return window.__pbWorkspaceApi.updateTaskSummaryFromState;
@@ -4900,9 +4907,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         });
     }
 
-    workspaceApi = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
-    workspaceApi.updateTaskSummaryFromState = updateTaskSummaryFromState;
-    window.__pbWorkspaceApi = workspaceApi;
+    var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
+    workspaceApiRef.updateTaskSummaryFromState = updateTaskSummaryFromState;
+    window.__pbWorkspaceApi = workspaceApiRef;
     window.updateTaskSummaryFromState = updateTaskSummaryFromState;
 
     function refreshWorkspaceStateFromServer() {
