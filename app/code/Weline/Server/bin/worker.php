@@ -1419,16 +1419,19 @@ while (true) {
     // #endregion
 
     // 调度器 tick：处理到期定时器，resume 前恢复该 Fiber 的请求级上下文
-    $fiberScheduler->tick(function (\Fiber $fiber) use (&$activeFibers) {
-        foreach ($activeFibers as $afData) {
-            if ($afData['fiber'] === $fiber && isset($afData['context'])) {
-                // Fiber resume：直接恢复该 Fiber 的快照（包含 $_SERVER/$_GET 等超全局变量和 Request 对象）
-                // 不调用 reset()，避免清理掉该 Fiber 已建立的 Session 等状态
-                $afData['context']->restore();
-                return;
-            }
+    $fiberScheduler->tick(
+        function (\Fiber $fiber) use (&$activeFibers): void {
+            \Weline\Server\Runtime\WorkerFiberContextTracker::restore($activeFibers, $fiber);
+        },
+        null,
+        function (\Fiber $fiber) use (&$activeFibers): void {
+            $activeFibers = \Weline\Server\Runtime\WorkerFiberContextTracker::capture(
+                $activeFibers,
+                $fiber,
+                static fn () => \Weline\Framework\Runtime\WlsFiberContext::capture()
+            );
         }
-    });
+    );
     
     wlsProcessActiveFibersAfterTick(
         $fiberScheduler,
@@ -1766,9 +1769,6 @@ function wlsProcessActiveFibersAfterTick(
         }
 
         if ($af->isSuspended()) {
-            $afData['context'] = \Weline\Framework\Runtime\WlsFiberContext::capture();
-            $afData['suspended_at'] = \time();
-            $afData['last_activity'] = \time();
             $activeFibers[$afConnId] = $afData;
         }
     }
