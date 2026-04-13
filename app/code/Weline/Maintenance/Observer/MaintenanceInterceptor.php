@@ -26,6 +26,7 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Maintenance\Helper\IpMatcher;
 use Weline\Maintenance\Helper\UrlParser;
 
@@ -80,7 +81,7 @@ class MaintenanceInterceptor implements \Weline\Framework\Event\ObserverInterfac
     public function execute(Event &$event): void
     {
         // CLI 模式不检查维护模式
-        if (PHP_SAPI === 'cli') {
+        if (Runtime::isCli() && !(\defined('WLS_MODE') && WLS_MODE)) {
             return;
         }
 

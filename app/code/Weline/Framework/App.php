@@ -247,22 +247,6 @@ class App
             throw new ResponseTerminateException(200, $result, ['Content-Type' => 'application/json']);
         }
 
-        if (self::isRequestRuntime() && ($result === null || $result === false || $result === '')) {
-            self::logPotentialEmptyOutput($result);
-            if (!self::isExpectedCurrentEmptyOutput()) {
-                $context = Context::getCurrent();
-                $method = (string)($context?->get('input.method', '') ?? '');
-                $uri = (string)($context?->get('input.uri', '') ?? '');
-                $requestId = (string)(RequestContext::getId() ?? '');
-                throw new \RuntimeException(\sprintf(
-                    'Unexpected empty output for request %s %s%s',
-                    $method !== '' ? $method : '(unknown-method)',
-                    $uri !== '' ? $uri : '(unknown-uri)',
-                    $requestId !== '' ? ' [request_id=' . $requestId . ']' : ''
-                ));
-            }
-        }
-
         return (string)$result;
     }
 
@@ -993,71 +977,4 @@ class App
         return $response->getBody();
     }
 
-    private static function logPotentialEmptyOutput(mixed $result): void
-    {
-        try {
-            $context = Context::getCurrent();
-            $response = ObjectManager::getInstance(Response::class);
-            $method = (string)($context?->get('input.method', '') ?? '');
-            $uri = (string)($context?->get('input.uri', '') ?? '');
-            $statusCode = (int)$response->getStatusCode();
-            $contentType = (string)($response->getHeader('Content-Type') ?? '');
-            $location = (string)($response->getHeader('Location') ?? '');
-            $isExpected = self::isExpectedEmptyOutput($method, $statusCode, $contentType, $location);
-
-            $payload = [
-                'expected_empty' => $isExpected ? 1 : 0,
-                'result_type' => \get_debug_type($result),
-                'method' => $method,
-                'uri' => $uri,
-                'status_code' => $statusCode,
-                'content_type' => $contentType,
-                'location' => $location,
-                'request_id' => RequestContext::getId(),
-            ];
-
-            $message = '[PotentialEmptyOutput] ' . \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
-            if ($isExpected) {
-                \w_log_warning($message);
-            } else {
-                \w_log_error($message);
-            }
-        } catch (\Throwable $e) {
-            \w_log_error('[PotentialEmptyOutput][log_failed] ' . $e->getMessage());
-        }
-    }
-
-    private static function isExpectedEmptyOutput(string $method, int $statusCode, string $contentType, string $location): bool
-    {
-        if (\strtoupper($method) === 'HEAD') {
-            return true;
-        }
-
-        if (\in_array($statusCode, [204, 205, 304], true)) {
-            return true;
-        }
-
-        if (\trim($location) !== '') {
-            return true;
-        }
-
-        return \str_contains(\strtolower($contentType), 'text/event-stream');
-    }
-
-    private static function isExpectedCurrentEmptyOutput(): bool
-    {
-        try {
-            $context = Context::getCurrent();
-            $response = ObjectManager::getInstance(Response::class);
-
-            return self::isExpectedEmptyOutput(
-                (string)($context?->get('input.method', '') ?? ''),
-                (int)$response->getStatusCode(),
-                (string)($response->getHeader('Content-Type') ?? ''),
-                (string)($response->getHeader('Location') ?? '')
-            );
-        } catch (\Throwable) {
-            return false;
-        }
-    }
 }
