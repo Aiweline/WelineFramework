@@ -101,15 +101,14 @@ class App
 
         WelineEnv::set('parser_url', true, 'App bootstrapRequestCycle');
         WelineEnv::set('is_media', false, 'App bootstrapRequestCycle');
-
-        $requestUri = (string) WelineEnv::get('request.uri', Context::current()->get('input.uri', '/'));
+        WelineEnv::set('response.from_cache', false, 'App bootstrapRequestCycle');
 
         if (self::isRequestRuntime() && WelineEnv::get('is_static_file', null) === null) {
-            $reqPath = \parse_url($requestUri, \PHP_URL_PATH) ?: '/';
+            $reqPath = \parse_url($this->getCurrentRequestUri(), \PHP_URL_PATH) ?: '/';
             WelineEnv::set('is_static_file', weline_is_static_file_path($reqPath), 'App bootstrapRequestCycle');
         }
 
-        $this->primeRequestRouteHints($requestUri);
+        $this->primeRequestRouteHints($this->getCurrentRequestUri());
         RequestContext::init();
     }
 
@@ -134,7 +133,12 @@ class App
             $parse['server'] = [];
         }
 
-        $area = (string)($parse['area'] ?? $parse['server']['WELINE_AREA'] ?? $_SERVER['WELINE_AREA'] ?? '');
+        $server = Context::current()->server();
+        if (!\is_array($server)) {
+            $server = [];
+        }
+
+        $area = (string)($parse['area'] ?? $parse['server']['WELINE_AREA'] ?? $server['WELINE_AREA'] ?? '');
         $isBackendArea = $area === 'backend' || $area === 'rest_backend';
 
         if (isset($parse['uri'])) {
@@ -148,29 +152,30 @@ class App
         if (!isset($parse['server']['REQUEST_URI']) || $parse['server']['REQUEST_URI'] === '') {
             $parse['server']['REQUEST_URI'] = isset($parse['uri'])
                 ? Url::decode_url((string)$parse['uri'])
-                : (string) WelineEnv::get('request.uri', '/');
+                : $this->getCurrentRequestUri();
         }
 
         foreach ($parse['server'] as $key => $value) {
+            Context::current()->set('input.server.' . $key, $value);
             $_SERVER[$key] = $value;
         }
 
         if ($area !== '') {
-            $_SERVER['WELINE_AREA'] = $area;
+            WelineEnv::set('area', $area, 'App applyParsedUrl');
         }
 
         if (!empty($parse['currency'])) {
-            $_SERVER['WELINE_USER_CURRENCY'] = (string)$parse['currency'];
+            WelineEnv::set('user.currency', (string)$parse['currency'], 'App applyParsedUrl');
         }
         if (!empty($parse['language'])) {
-            $_SERVER['WELINE_USER_LANG'] = (string)$parse['language'];
+            WelineEnv::set('user.lang', (string)$parse['language'], 'App applyParsedUrl');
         }
 
-        $welineArea = (string)($_SERVER['WELINE_AREA'] ?? 'frontend');
-        $_SERVER['WELINE_IS_BACKEND'] = $welineArea === 'backend' || $welineArea === 'rest_backend';
-        $_SERVER['WELINE_URL_PARSED'] = true;
+        $welineArea = (string)WelineEnv::get('area', 'frontend');
+        WelineEnv::set('is_backend', $welineArea === 'backend' || $welineArea === 'rest_backend', 'App applyParsedUrl');
+        WelineEnv::set('url_parsed', true, 'App applyParsedUrl');
 
-        $currentUri = Url::decode_url((string) WelineEnv::get('request.uri', '/'));
+        $currentUri = Url::decode_url((string)WelineEnv::get('request.uri', '/'));
         if ($currentUri === '') {
             $currentUri = '/';
         }
@@ -178,17 +183,17 @@ class App
             $currentUri = '/' . $currentUri;
         }
 
-        $scheme = (string) WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http'));
-        $host = (string) WelineEnv::get('server.http_host', Context::current()->get('input.host', 'localhost'));
-        WelineEnv::set('origin_request_uri', $currentUri, 'App::applyParsedUrl origin');
-        WelineEnv::set('full_request_uri', $scheme . '://' . $host . $currentUri, 'App::applyParsedUrl full');
+        $scheme = (string)WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http'));
+        $host = (string)WelineEnv::get('server.http_host', Context::current()->get('input.host', 'localhost'));
+        WelineEnv::set('origin_request_uri', $currentUri, 'App applyParsedUrl');
+        WelineEnv::set('full_request_uri', $scheme . '://' . $host . $currentUri, 'App applyParsedUrl');
 
         $this->syncCookieRouteStateFromServer();
         self::syncCurrentContextFromGlobals();
-        RequestContext::syncFromServer();
+        RequestContext::syncFromContext();
         $this->invalidateCurrentRequestUriCache();
 
-        if (PROD && !($_SERVER['WELINE_IS_BACKEND'] ?? false)) {
+        if (PROD && !WelineEnv::get('is_backend', false)) {
             $this->resolveEventManager()->dispatch('Weline_Framework::App::url_parsed_after');
         }
     }
@@ -217,7 +222,7 @@ class App
             try {
                 return $router->start();
             } catch (\ReflectionException|App\Exception $e) {
-                throw new Exception(__('系统错误：{1}', $e->getMessage()));
+                throw new Exception(__('绯荤粺閿欒锛歿1}', $e->getMessage()));
             }
         }
 
@@ -240,6 +245,22 @@ class App
         if (\is_array($result)) {
             $result = \json_encode($result);
             throw new ResponseTerminateException(200, $result, ['Content-Type' => 'application/json']);
+        }
+
+        if (self::isRequestRuntime() && ($result === null || $result === false || $result === '')) {
+            self::logPotentialEmptyOutput($result);
+            if (!self::isExpectedCurrentEmptyOutput()) {
+                $context = Context::getCurrent();
+                $method = (string)($context?->get('input.method', '') ?? '');
+                $uri = (string)($context?->get('input.uri', '') ?? '');
+                $requestId = (string)(RequestContext::getId() ?? '');
+                throw new \RuntimeException(\sprintf(
+                    'Unexpected empty output for request %s %s%s',
+                    $method !== '' ? $method : '(unknown-method)',
+                    $uri !== '' ? $uri : '(unknown-uri)',
+                    $requestId !== '' ? ' [request_id=' . $requestId . ']' : ''
+                ));
+            }
         }
 
         return (string)$result;
@@ -296,7 +317,7 @@ class App
         if (!defined('ENV_TEST')) {
             // 检查是否通过参数启用了测试模式
             $enableTest = false;
-            if (\in_array(PHP_SAPI, ['cli', 'phpdbg'], true)) {
+            if (PHP_SAPI === 'cli') {
                 global $argv;
                 if (isset($argv) && is_array($argv)) {
                     foreach ($argv as $arg) {
@@ -320,7 +341,7 @@ class App
         }
         // 运行模式
         if (!defined('CLI')) {
-            define('CLI', \in_array(PHP_SAPI, ['cli', 'phpdbg'], true));
+            define('CLI', PHP_SAPI === 'cli');
         }
         // 系统是否WIN
         if (!defined('IS_WIN')) {
@@ -337,23 +358,37 @@ class App
         }
         // SERVER 整理
         if (self::isRequestRuntime()) {
-            $requestUri = (string) WelineEnv::get('request.uri', Context::getCurrent()?->get('input.uri', '/') ?? '/');
-            WelineEnv::set('origin_request_uri', $requestUri, 'App::init snapshot origin');
+            $requestUri = (string)($_SERVER['REQUEST_URI'] ?? Context::getCurrent()?->get('input.uri', '/') ?? '/');
+            if ($requestUri === '') {
+                $requestUri = '/';
+            }
+            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $requestUri;
             // 完整的地址拼接（包含端口）
-            $scheme = (string) WelineEnv::get('request.scheme', Context::getCurrent()?->get('input.scheme', 'http') ?? 'http');
-            $host = (string) WelineEnv::get('server.http_host', Context::getCurrent()?->get('input.host', '') ?? '');
-            $port = (string) WelineEnv::get('server.server_port', '80');
+            $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? Context::getCurrent()?->get('input.scheme', 'http') ?? 'http');
+            $host = (string)(
+                $_SERVER['HTTP_HOST']
+                ?? $_SERVER['SERVER_NAME']
+                ?? Context::getCurrent()?->get('input.host', '')
+                ?? ''
+            );
+            $port = (string)($_SERVER['SERVER_PORT'] ?? '80');
             // 如果 HTTP_HOST 不包含端口，且端口不是默认端口，则添加端口
             if ($host !== '' && !str_contains($host, ':') && $port != '80' && $port != '443') {
                 $host .= ':' . $port;
             }
-            WelineEnv::set(
-                'full_request_uri',
-                $host === '' ? '' : $scheme . '://' . $host . $requestUri,
-                'App::init snapshot full'
-            );
+            if ($host !== '') {
+                $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $requestUri;
+            } else {
+                // WLS：GlobalsEmulator / processUrlParse 可能已写入完整 URI；避免 host 暂不可见时清空导致 FPC 键回退到 http://localhost/
+                $prior = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+                if ($prior !== '' && str_contains($prior, '://')) {
+                    // 保留
+                } else {
+                    $_SERVER['WELINE_FULL_REQUEST_URI'] = '';
+                }
+            }
         } else {
-            WelineEnv::set('full_request_uri', '', 'App::init cli');
+            $_SERVER['WELINE_FULL_REQUEST_URI'] = '';
         }
 
         // ############################# 应用相关配置 #####################
@@ -555,12 +590,12 @@ class App
         }
     }
 
-    public static function run(): string
+    private function runString(): string
     {
-        return (new self())->runPipeline();
+        return $this->runPipeline();
     }
 
-    private function runPipeline(): string
+    private function runPipeline(): mixed
     {
         $this->bootstrapRequestCycle();
 
@@ -623,16 +658,18 @@ class App
      * @throws Exception
      * @throws \Weline\Framework\Http\ResponseTerminateException 响应终止异常，由 Runtime 层捕获处理
      */
-    private function runString(): string
+    public static function run(): string
     {
         # ----------事件：run之前 开始------------
+        return (new self())->runPipeline();
+
         self::init();
         self::syncCurrentContextFromGlobals();
         $_SERVER['WELINE_PARSER_URL'] = true;  // 是否解析URL
         $_SERVER['WELINE_IS_MEDIA'] = false;  // 是否媒体资源
         // 唯一判断处：静态文件仅按 path 判断，其他处只读 WELINE_IS_STATIC_FILE
         if (!CLI && !isset($_SERVER['WELINE_IS_STATIC_FILE'])) {
-            $reqPath = \parse_url((string) WelineEnv::get('request.uri', '/'), PHP_URL_PATH) ?: '/';
+            $reqPath = \parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
             $_SERVER['WELINE_IS_STATIC_FILE'] = weline_is_static_file_path($reqPath);
             self::syncCurrentContextFromGlobals();
         }
@@ -781,7 +818,7 @@ class App
     }
 
     /**
-     * @DESC         |方法描述
+     * @DESC         | 助手函数
      *
      * 参数区：
      *
@@ -856,16 +893,17 @@ class App
 
         $cookiesToSet = [];
         foreach ($defaultCookies as $key) {
-            if (!isset($_SERVER[$key])) {
-                if (\in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true)) {
-                    $_SERVER[$key] = '';
-                } else {
-                    throw new Exception(__('系统SERVER缺少key：{1}', $key));
-                }
+            $value = $this->getContextServerValue($key, null);
+            if ($value === null) {
+                $value = \in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true) ? '' : null;
+            }
+            if ($value === null) {
+                throw new Exception(__('绯荤粺SERVER缂哄皯key锛歿1}', $key));
             }
 
-            if (Cookie::get($key) !== $_SERVER[$key]) {
-                $cookiesToSet[$key] = $_SERVER[$key];
+            $value = (string)$value;
+            if (Cookie::get($key) !== $value) {
+                $cookiesToSet[$key] = $value;
             }
         }
 
@@ -899,6 +937,10 @@ class App
         return $requestInstance instanceof Request ? $requestInstance : null;
     }
 
+    private function getCurrentRequestUri(): string
+    {
+        return (string)WelineEnv::get('request.uri', Context::current()->get('input.uri', '/'));
+    }
 
     private function getContextServerValue(string $key, mixed $default = null): mixed
     {
@@ -949,5 +991,73 @@ class App
         }
 
         return $response->getBody();
+    }
+
+    private static function logPotentialEmptyOutput(mixed $result): void
+    {
+        try {
+            $context = Context::getCurrent();
+            $response = ObjectManager::getInstance(Response::class);
+            $method = (string)($context?->get('input.method', '') ?? '');
+            $uri = (string)($context?->get('input.uri', '') ?? '');
+            $statusCode = (int)$response->getStatusCode();
+            $contentType = (string)($response->getHeader('Content-Type') ?? '');
+            $location = (string)($response->getHeader('Location') ?? '');
+            $isExpected = self::isExpectedEmptyOutput($method, $statusCode, $contentType, $location);
+
+            $payload = [
+                'expected_empty' => $isExpected ? 1 : 0,
+                'result_type' => \get_debug_type($result),
+                'method' => $method,
+                'uri' => $uri,
+                'status_code' => $statusCode,
+                'content_type' => $contentType,
+                'location' => $location,
+                'request_id' => RequestContext::getId(),
+            ];
+
+            $message = '[PotentialEmptyOutput] ' . \json_encode($payload, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES);
+            if ($isExpected) {
+                \w_log_warning($message);
+            } else {
+                \w_log_error($message);
+            }
+        } catch (\Throwable $e) {
+            \w_log_error('[PotentialEmptyOutput][log_failed] ' . $e->getMessage());
+        }
+    }
+
+    private static function isExpectedEmptyOutput(string $method, int $statusCode, string $contentType, string $location): bool
+    {
+        if (\strtoupper($method) === 'HEAD') {
+            return true;
+        }
+
+        if (\in_array($statusCode, [204, 205, 304], true)) {
+            return true;
+        }
+
+        if (\trim($location) !== '') {
+            return true;
+        }
+
+        return \str_contains(\strtolower($contentType), 'text/event-stream');
+    }
+
+    private static function isExpectedCurrentEmptyOutput(): bool
+    {
+        try {
+            $context = Context::getCurrent();
+            $response = ObjectManager::getInstance(Response::class);
+
+            return self::isExpectedEmptyOutput(
+                (string)($context?->get('input.method', '') ?? ''),
+                (int)$response->getStatusCode(),
+                (string)($response->getHeader('Content-Type') ?? ''),
+                (string)($response->getHeader('Location') ?? '')
+            );
+        } catch (\Throwable) {
+            return false;
+        }
     }
 }

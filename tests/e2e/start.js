@@ -4,6 +4,9 @@
  * 1. Check modules.json
  * 2. Collect tests
  * 3. Run Playwright
+ *
+ * 并行/长耗时 E2E 全文日志建议写入本目录 e2e-parallel-run.log（已加入 .gitignore）。
+ * 从仓库根目录示例：npx playwright test ... 2>&1 | tee tests/e2e/e2e-parallel-run.log
  */
 
 const fs = require('fs');

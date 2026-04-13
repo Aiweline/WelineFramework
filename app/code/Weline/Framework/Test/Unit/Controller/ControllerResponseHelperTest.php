@@ -6,7 +6,10 @@ namespace Weline\Framework\Test\Unit\Controller;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Controller\AbstractRestController;
 use Weline\Framework\Controller\Core;
+use Weline\Framework\Context;
+use Weline\Framework\Controller\PcController;
 use Weline\Framework\Http\Response;
+use Weline\Framework\Http\ResponseTerminateException;
 
 final class ControllerResponseHelperTest extends TestCase
 {
@@ -79,5 +82,52 @@ final class ControllerResponseHelperTest extends TestCase
 
         self::assertSame(201, $response->getStatusCode());
         self::assertSame(['ok' => true], \json_decode($response->getBody(), true));
+    }
+
+    public function testPcControllerFetchJsonReturnsJsonStringOutsideRequestRuntime(): void
+    {
+        $controller = new class extends PcController {
+            public function __construct()
+            {
+            }
+
+            public function jsonResponse(): string
+            {
+                return $this->fetchJson(['ok' => true, 'message' => 'done']);
+            }
+        };
+
+        self::assertSame(['ok' => true, 'message' => 'done'], \json_decode($controller->jsonResponse(), true));
+    }
+
+    public function testPcControllerFetchJsonTerminatesWithJsonResponseInRequestRuntime(): void
+    {
+        $controller = new class extends PcController {
+            public function __construct()
+            {
+            }
+
+            public function jsonResponse(): string
+            {
+                return $this->fetchJson(['ok' => true, 'message' => 'done']);
+            }
+        };
+
+        $previous = Context::getCurrent();
+        Context::enter(new Context(['meta' => ['type' => 'request']]));
+        try {
+            $controller->jsonResponse();
+            self::fail('Expected ResponseTerminateException was not thrown.');
+        } catch (ResponseTerminateException $exception) {
+            $response = $exception->getResponse();
+            self::assertSame(200, $response->getStatusCode());
+            self::assertSame('application/json; charset=utf-8', $response->getHeader('Content-Type'));
+            self::assertSame(['ok' => true, 'message' => 'done'], \json_decode($response->getBody(), true));
+        } finally {
+            Context::leave();
+            if ($previous !== null) {
+                Context::enter($previous);
+            }
+        }
     }
 }

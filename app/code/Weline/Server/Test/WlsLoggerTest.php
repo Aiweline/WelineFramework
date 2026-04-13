@@ -174,6 +174,7 @@ class WlsLoggerTest extends TestCase
         $processLog = $this->testLogDir . 'worker-process.log';
         $logger = WlsLogger::getInstance()
             ->setProcessTag('Worker#1:9981@test-process-log')
+            ->setMinLevel(LogLevel::INFO)
             ->setStdoutEnabled(false)
             ->setFileEnabled(true)
             ->setProcessLogFile($processLog);

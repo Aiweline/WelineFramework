@@ -103,6 +103,17 @@ class Context
             }
         }
 
+        $path = $uri === '' ? '/' : $uri;
+        if ($path !== '' && !\str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+        $fullRequestUri = (string)($server['WELINE_FULL_REQUEST_URI'] ?? '');
+        if ($fullRequestUri === '' || !\str_contains($fullRequestUri, '://')) {
+            if ($host !== '') {
+                $fullRequestUri = $scheme . '://' . $host . $path;
+            }
+        }
+
         return new self([
             'meta' => \array_merge(self::defaultMeta(), $meta),
             'input' => [
@@ -116,7 +127,7 @@ class Context
                 'method' => $method,
                 'uri' => $uri === '' ? '/' : $uri,
                 'origin_request_uri' => (string)($server['WELINE_ORIGIN_REQUEST_URI'] ?? ($uri === '' ? '/' : $uri)),
-                'full_request_uri' => (string)($server['WELINE_FULL_REQUEST_URI'] ?? ''),
+                'full_request_uri' => $fullRequestUri,
                 'scheme' => $scheme,
                 'host' => $host,
                 'ip' => (string)($server['REMOTE_ADDR'] ?? ''),

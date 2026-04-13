@@ -7,6 +7,7 @@ namespace Weline\Framework\Session;
 use Weline\Framework\Session\Auth\AuthenticableInterface;
 use Weline\Framework\Session\Storage\SessionStorageInterface;
 use Weline\Framework\Session\Strategy\SessionStrategyInterface;
+use Weline\Framework\Session\Strategy\WlsStrategy;
 
 /**
  * Session 实现
@@ -20,11 +21,22 @@ use Weline\Framework\Session\Strategy\SessionStrategyInterface;
  */
 class Session implements SessionInterface
 {
+    private const HOT_PATH_LOG_LIMIT_DEFAULT = 64;
+
     /** 本请求内已 start 的 Session 实例（用于 shutdown 时统一 save + writeClose） */
     private static array $instancesForShutdown = [];
 
     /** 是否已注册 shutdown（只注册一次） */
     private static bool $shutdownRegistered = false;
+
+    /** 当前请求已记录的热路径 Session 日志数量 */
+    private static int $requestHotPathLogCount = 0;
+
+    /** 当前请求被抑制的热路径 Session 日志数量 */
+    private static int $requestHotPathLogSuppressedCount = 0;
+
+    /** 是否已提示当前请求的热路径日志被限流 */
+    private static bool $requestHotPathLogSuppressionAnnounced = false;
 
     /** 存储实例 */
     private SessionStorageInterface $storage;
@@ -37,6 +49,15 @@ class Session implements SessionInterface
 
     /** Session 数据 */
     private array $data = [];
+
+    /** 本请求内被显式设置过的键 */
+    private array $dirtySetKeys = [];
+
+    /** 本请求内被显式删除过的键 */
+    private array $dirtyDeletedKeys = [];
+
+    /** 明确要求用当前快照整体覆盖存储 */
+    private bool $replaceAllOnSave = false;
 
     /** 是否已启动 */
     private bool $started = false;
@@ -78,6 +99,9 @@ class Session implements SessionInterface
         $this->sessionId = $this->strategy->initialize($sessionId, $this->data);
         $this->started = true;
         $this->dirty = false;
+        $this->dirtySetKeys = [];
+        $this->dirtyDeletedKeys = [];
+        $this->replaceAllOnSave = false;
 
         self::sessionLog('start', 'sid=' . ($this->sessionId !== '' ? substr($this->sessionId, 0, 8) . '...' : 'new'));
 
@@ -149,6 +173,9 @@ class Session implements SessionInterface
     public static function resetRequestState(): void
     {
         self::$instancesForShutdown = [];
+        self::$requestHotPathLogCount = 0;
+        self::$requestHotPathLogSuppressedCount = 0;
+        self::$requestHotPathLogSuppressionAnnounced = false;
     }
 
     /**
@@ -165,6 +192,9 @@ class Session implements SessionInterface
         $this->sessionId = '';
         $this->started = false;
         $this->dirty = false;
+        $this->dirtySetKeys = [];
+        $this->dirtyDeletedKeys = [];
+        $this->replaceAllOnSave = false;
     }
 
     /**
@@ -183,6 +213,9 @@ class Session implements SessionInterface
         );
         self::sessionLog('regenerate', 'delete_old=' . ($deleteOldSession ? '1' : '0') . ' sid=' . substr($this->sessionId, 0, 8) . '...');
         $this->dirty = false;
+        $this->dirtySetKeys = [];
+        $this->dirtyDeletedKeys = [];
+        $this->replaceAllOnSave = false;
     }
 
     /**
@@ -222,6 +255,8 @@ class Session implements SessionInterface
         $this->ensureStarted();
         $this->data[$key] = $value;
         $this->dirty = true;
+        $this->dirtySetKeys[$key] = true;
+        unset($this->dirtyDeletedKeys[$key]);
         $vType = gettype($value);
         $vLen = is_string($value) ? strlen($value) : (is_array($value) ? count($value) : null);
         self::sessionLog('set', 'key=' . $key . ' value_type=' . $vType . ($vLen !== null ? ' len=' . $vLen : ''));
@@ -243,9 +278,11 @@ class Session implements SessionInterface
     public function delete(string $key): void
     {
         $this->ensureStarted();
-        if (\array_key_exists($key, $this->data)) {
+        if (\array_key_exists($key, $this->data) || !$this->replaceAllOnSave) {
             unset($this->data[$key]);
             $this->dirty = true;
+            $this->dirtyDeletedKeys[$key] = true;
+            unset($this->dirtySetKeys[$key]);
             self::sessionLog('delete', 'key=' . $key);
         }
     }
@@ -269,6 +306,9 @@ class Session implements SessionInterface
         
         $this->data = [];
         $this->dirty = true;
+        $this->dirtySetKeys = [];
+        $this->dirtyDeletedKeys = [];
+        $this->replaceAllOnSave = true;
     }
 
     // ==================== 辅助方法 ====================
@@ -292,10 +332,15 @@ class Session implements SessionInterface
     public function save(): void
     {
         if ($this->dirty && $this->sessionId !== '') {
-            $ok = $this->strategy->persist($this->sessionId, $this->data, $this->defaultTtl);
+            $persistData = $this->buildPersistData();
+            $ok = $this->strategy->persist($this->sessionId, $persistData, $this->defaultTtl);
             self::sessionLog('save', 'sid=' . substr($this->sessionId, 0, 8) . '... dirty=1 ok=' . ($ok ? '1' : '0'));
             if ($ok) {
+                $this->data = $persistData;
                 $this->dirty = false;
+                $this->dirtySetKeys = [];
+                $this->dirtyDeletedKeys = [];
+                $this->replaceAllOnSave = false;
             } else {
                 w_log_warning('[Session] 落库失败，sessionId=' . \substr($this->sessionId, 0, 8) . '...', [], 'session');
             }
@@ -351,17 +396,73 @@ class Session implements SessionInterface
         $this->sessionId = '';
         $this->started = false;
         $this->dirty = false;
+        $this->dirtySetKeys = [];
+        $this->dirtyDeletedKeys = [];
+        $this->replaceAllOnSave = false;
     }
 
     /**
      * 写入 Session 操作日志到 var/log/session.log（开发/线上均记录，便于排查）
      */
+    private function buildPersistData(): array
+    {
+        if ($this->replaceAllOnSave || !$this->shouldMergeConcurrentWrites()) {
+            return $this->data;
+        }
+
+        $persistData = $this->storage->read($this->sessionId);
+        if (!\is_array($persistData)) {
+            $persistData = [];
+        }
+
+        foreach (\array_keys($this->dirtyDeletedKeys) as $key) {
+            unset($persistData[$key]);
+        }
+
+        foreach (\array_keys($this->dirtySetKeys) as $key) {
+            if (\array_key_exists($key, $this->data)) {
+                $persistData[$key] = $this->data[$key];
+            }
+        }
+
+        return $persistData;
+    }
+
+    private function shouldMergeConcurrentWrites(): bool
+    {
+        return $this->strategy instanceof WlsStrategy;
+    }
+
     private static function sessionLog(string $op, string $detail): void
     {
         if (!self::shouldLogSessionOperations()) {
             return;
         }
-        w_log_info('[Session] ' . $op . ' ' . $detail, [], 'session');
+
+        $limit = self::getHotPathLogLimit();
+        if ($limit <= 0) {
+            return;
+        }
+
+        if (self::$requestHotPathLogCount < $limit) {
+            self::$requestHotPathLogCount++;
+            w_log_info('[Session] ' . $op . ' ' . $detail, [], 'session');
+            return;
+        }
+
+        self::$requestHotPathLogSuppressedCount++;
+        if (!self::$requestHotPathLogSuppressionAnnounced && \function_exists('w_log_warning')) {
+            self::$requestHotPathLogSuppressionAnnounced = true;
+            w_log_warning(
+                '[Session] hot-path log limit reached for current request; suppressing further per-operation session logs',
+                [
+                    'limit' => $limit,
+                    'suppressed_count' => self::$requestHotPathLogSuppressedCount,
+                    'last_operation' => $op,
+                ],
+                'session'
+            );
+        }
     }
 
     private static function shouldLogSessionOperations(): bool
@@ -371,6 +472,17 @@ class Session implements SessionInterface
         }
 
         return (bool)\Weline\Framework\App\Env::get('wls.debug.hot_path_logs', false);
+    }
+
+    private static function getHotPathLogLimit(): int
+    {
+        return \max(
+            0,
+            (int)\Weline\Framework\App\Env::get(
+                'wls.debug.hot_path_log_limit',
+                self::HOT_PATH_LOG_LIMIT_DEFAULT
+            )
+        );
     }
 
     // ==================== 兼容方法（过渡期使用） ====================

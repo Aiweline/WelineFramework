@@ -261,9 +261,10 @@ class ProcesserTest extends TestCore
         self::assertStringContainsString('ArgumentList = @(\'/d\',\'/c\',\'"C:\temp\weline-worker-visible.cmd"\')', $script);
         self::assertStringContainsString("FilePath = 'C:\\php\\php.exe'", $script);
         self::assertStringContainsString("ArgumentList = @('worker.php','--name=weline-worker-hidden')", $script);
-        self::assertSame(1, \substr_count($script, 'RedirectStandardOutput'));
-        self::assertSame(1, \substr_count($script, 'RedirectStandardError'));
-        self::assertSame(1, \substr_count($script, 'PassThru = $true'));
+        self::assertSame(0, \substr_count($script, 'RedirectStandardOutput'));
+        self::assertSame(0, \substr_count($script, 'RedirectStandardError'));
+        self::assertSame(0, \substr_count($script, 'PassThru = $true'));
+        self::assertStringContainsString('$results.Add("worker-hidden`t0")', $script);
     }
 
     public function testBuildWindowsBatchCreateScriptMarksForegroundPidForLaterResolution(): void
@@ -314,6 +315,33 @@ class ProcesserTest extends TestCore
         );
     }
 
+    public function testBuildWindowsBatchCreateScriptKeepsPassThruOnlyForBlockingBackgroundProcess(): void
+    {
+        $script = $this->invokePrivateStatic(Processer::class, 'buildWindowsBatchCreateScript', [
+            [[
+                'key' => 'worker-blocking',
+                'command' => '"C:\php\php.exe" worker.php --name=weline-worker-blocking --launch-id=launch-blocking',
+                'php' => 'C:\php\php.exe',
+                'arguments' => 'worker.php --name=weline-worker-blocking --launch-id=launch-blocking',
+                'argument_list' => ['worker.php', '--name=weline-worker-blocking', '--launch-id=launch-blocking'],
+                'process_name' => 'weline-worker-blocking',
+                'cwd' => 'C:\repo',
+                'enable_log' => true,
+                'block' => true,
+                'foreground' => false,
+            ]],
+            'C:\temp\batch-result.txt',
+            'C:\temp\batch-error.txt',
+        ]);
+
+        self::assertIsString($script);
+        self::assertStringContainsString('PassThru = $true', $script);
+        self::assertStringContainsString('RedirectStandardOutput', $script);
+        self::assertStringContainsString('RedirectStandardError', $script);
+        self::assertStringContainsString('$p = Start-Process @startArgs', $script);
+        self::assertStringContainsString('$results.Add("worker-blocking`t" + [string]$p.Id)', $script);
+    }
+
     public function testTokenizeCommandLineArgumentsPreservesQuotedWindowsScriptPathBackslashes(): void
     {
         $tokens = $this->invokePrivateStatic(Processer::class, 'tokenizeCommandLineArguments', [
@@ -347,6 +375,24 @@ class ProcesserTest extends TestCore
         self::assertTrue($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [true, true]));
         self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [false, false]));
         self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [false, true]));
+    }
+
+    public function testWindowsFastDetachedBatchCreateFallbackStaysDisabled(): void
+    {
+        $enabled = $this->invokePrivateStatic(Processer::class, 'shouldUseWindowsFastDetachedBatchCreate', [[
+            'worker-1' => [
+                'command' => '"C:\php\php.exe" worker.php --name=weline-worker-1',
+                'block' => false,
+                'foreground' => false,
+            ],
+            'worker-2' => [
+                'command' => '"C:\php\php.exe" worker.php --name=weline-worker-2',
+                'block' => false,
+                'foreground' => false,
+            ],
+        ]]);
+
+        self::assertFalse($enabled);
     }
 
     public function testBuildWindowsForegroundStartCommandUsesCmdStartLauncher(): void

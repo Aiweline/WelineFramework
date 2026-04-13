@@ -10,6 +10,7 @@
 namespace Weline\Framework\Controller;
 
 use ReflectionException;
+use Weline\Framework\Context;
 use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
@@ -20,16 +21,21 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Manager\ResultManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Security\Token;
+use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Template;
 use Weline\Framework\DataObject\DataObject;
+use Weline\Server\Log\WlsLogger;
 use ReflectionObject;
 
 class PcController extends Core
 {
     private Template $_template;
+    private ?string $_templateRequestId = null;
+    private bool $_templateEmptyRetrying = false;
     protected ?Url $_url = null;
 
     private CachePoolInterface $controllerCache;
@@ -50,7 +56,7 @@ class PcController extends Core
             $this->_url = ObjectManager::getInstance(Url::class);
         }
         $this->isAllowed();
-        $this->assign($this->request->getParams());
+        $this->assignRequestParams($this->request->getParams());
         if (empty($this->controllerCache)) {
             $this->controllerCache = $this->getControllerCache();
         }
@@ -122,14 +128,133 @@ class PcController extends Core
 
     protected function csrf(): string
     {
-        return '';
+        return $this->getDefaultCsrfTokenName();
+    }
+
+    protected function isJsonContentType(?string $contentType): bool
+    {
+        $normalized = \strtolower(\trim((string)\explode(';', (string)$contentType, 2)[0]));
+
+        return $normalized === 'application/json'
+            || $normalized === 'text/json'
+            || ($normalized !== '' && \str_ends_with($normalized, '+json'));
+    }
+
+    protected function getPcControllerCsrfMode(): string
+    {
+        $mode = \strtolower((string)Env::get('security.csrf.pc_controller_mode', 'off'));
+
+        return \in_array($mode, ['off', 'session', 'inherit'], true) ? $mode : 'off';
+    }
+
+    protected function getDefaultCsrfTokenName(): string
+    {
+        return match ($this->getPcControllerCsrfMode()) {
+            'session' => FormKey::key_name,
+            default => '',
+        };
+    }
+
+    protected function shouldValidateCsrfForMethod(?string $method = null): bool
+    {
+        $method = \strtoupper((string)($method ?? $this->request->getMethod()));
+
+        return \in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true);
+    }
+
+    protected function getAssignRequestParamsMode(): string
+    {
+        $mode = \strtolower((string)Env::get('security.view.assign_params_mode', 'all'));
+
+        return \in_array($mode, ['all', 'none', 'prefix'], true) ? $mode : 'all';
+    }
+
+    protected function getAssignRequestParamPrefixes(): array
+    {
+        $prefixes = Env::get('security.view.assign_params_prefixes', []);
+
+        if (\is_string($prefixes)) {
+            $prefixes = \array_map('trim', \explode(',', $prefixes));
+        }
+
+        if (!\is_array($prefixes)) {
+            return [];
+        }
+
+        $prefixes = \array_filter(
+            \array_map(
+                static fn(mixed $prefix): string => \trim((string)$prefix),
+                $prefixes
+            ),
+            static fn(string $prefix): bool => $prefix !== ''
+        );
+
+        return \array_values(\array_unique($prefixes));
+    }
+
+    protected function filterAssignableRequestParams(array $params): array
+    {
+        $mode = $this->getAssignRequestParamsMode();
+        if ($mode === 'none') {
+            return [];
+        }
+
+        $filtered = [];
+        $prefixes = $mode === 'prefix' ? $this->getAssignRequestParamPrefixes() : [];
+
+        foreach ($params as $key => $value) {
+            if (!\is_string($key) || $key === '') {
+                continue;
+            }
+
+            if ($mode === 'prefix') {
+                $matched = false;
+                foreach ($prefixes as $prefix) {
+                    if (\str_starts_with($key, $prefix)) {
+                        $matched = true;
+                        break;
+                    }
+                }
+                if (!$matched) {
+                    continue;
+                }
+            }
+
+            $filtered[$key] = $value;
+        }
+
+        return $filtered;
+    }
+
+    protected function assignRequestParams(array $params): static
+    {
+        $filtered = $this->filterAssignableRequestParams($params);
+        if ($filtered !== []) {
+            $this->assign($filtered);
+        }
+
+        return $this;
+    }
+
+    protected function getExpectedCsrfToken(string $name): ?string
+    {
+        if ($name === FormKey::key_name) {
+            /** @var FormKey $formKey */
+            $formKey = ObjectManager::getInstance(FormKey::class);
+            return $formKey->getKey($this->request->getUrlBuilder()->getCurrentUrl());
+        }
+
+        return Token::get($name);
     }
 
     protected function isAllowed(): void
     {
         if ($name = $this->csrf()) {
+            if (!$this->shouldValidateCsrfForMethod()) {
+                return;
+            }
             # form表单检测
-            if ($token = Token::get($name)) {
+            if ($token = $this->getExpectedCsrfToken($name)) {
                 $request_token = $this->request->getPost($name);
                 # post 请求
                 if ($request_token and ($this->request->getPost($name) !== $token)) {
@@ -137,7 +262,7 @@ class PcController extends Core
                 }
                 if (!$request_token) {
                     # 处理api form-key和token问题
-                    if ($this->request->getServer('Content-Type') === 'application/json') {
+                    if ($this->isJsonContentType($this->request->getContentType())) {
                         $request_token = $this->request->getServer('X-CSRF-TOKEN');
                     }
                     if (empty($request_token)) {
@@ -202,8 +327,16 @@ class PcController extends Core
      */
     protected function getTemplate(): Template
     {
-        if (!isset($this->_template)) {
+        $requestId = RequestContext::getId();
+        if (
+            !isset($this->_template)
+            || ($requestId !== null && $this->_templateRequestId !== $requestId)
+        ) {
+            if ($requestId !== null && $this->_templateRequestId !== $requestId) {
+                Template::resetInstance();
+            }
             $this->_template = Template::getInstance()->init();
+            $this->_templateRequestId = $requestId;
         }
         return $this->_template;
     }
@@ -257,7 +390,31 @@ class PcController extends Core
         $eventData->setData('content', $content);
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
         SchedulerSystem::yield();
-        return $eventData->getData('content');
+        $finalContent = (string)$eventData->getData('content');
+        if ($finalContent === '' && !$this->_templateEmptyRetrying && RequestContext::getId() !== null) {
+            $this->_templateEmptyRetrying = true;
+            try {
+                $templateData = $this->getTemplate()->getData();
+                WlsLogger::error_('[PcController::fetchTemplateWithEvents] empty content retry', [
+                    'request_id' => RequestContext::getId(),
+                    'file_name' => $originalFileName,
+                    'resolved_file_name' => $fileName,
+                    'controller' => static::class,
+                    'template_data_count' => \is_array($templateData) ? \count($templateData) : 0,
+                ]);
+                Template::resetInstance();
+                unset($this->_template);
+                $this->_templateRequestId = null;
+                if (\is_array($templateData) && $templateData !== []) {
+                    $this->getTemplate()->assign($templateData);
+                }
+                return $this->fetchTemplateWithEvents($originalFileName);
+            } finally {
+                $this->_templateEmptyRetrying = false;
+            }
+        }
+
+        return $finalContent;
     }
 
     /**
@@ -346,6 +503,7 @@ class PcController extends Core
      */
     protected function fetchTemplateWithEvents(string $fileName): mixed
     {
+        $originalFileName = $fileName;
         // 触发Weline_Framework_Controller::fetch_file_before事件
         $eventData = new DataObject([
             'fileName' => $fileName,
@@ -396,7 +554,13 @@ class PcController extends Core
      */
     protected function fetchJson(array $data): string
     {
-        return Response::json($data)->getBody();
+        $response = Response::json($data);
+        $context = Context::getCurrent();
+        if ($context !== null && $context->get('meta.type') === 'request') {
+            throw new \Weline\Framework\Http\ResponseTerminateException($response);
+        }
+
+        return $response->getBody();
     }
 
     /**

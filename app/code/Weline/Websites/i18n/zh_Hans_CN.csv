@@ -693,6 +693,26 @@ Cookie政策,Cookie政策
 博客分类,博客分类
 博客文章,博客文章
 自定义页面,自定义页面
+"Login required","Login required"
+"Please provide a site request or reference URL first","Please provide a site request or reference URL first"
+"Invalid draft revision payload","Invalid draft revision payload"
+"Plan draft not found","Plan draft not found"
+"Invalid plan stream parameters","Invalid plan stream parameters"
+"Plan generation started","Plan generation started"
+"Loaded current draft plan","Loaded current draft plan"
+"Plan generation finished","Plan generation finished"
+"Invalid plan confirmation request","Invalid plan confirmation request"
+"Please generate a plan before confirming it","Please generate a plan before confirming it"
+"Plan confirmed","Plan confirmed"
+"Invalid local pool request","Invalid local pool request"
+"Invalid local pool reserve request","Invalid local pool reserve request"
+"Invalid domain selection payload","Invalid domain selection payload"
+"Domain selected: %{domain}","Domain selected: %{domain}"
+"Invalid session creation payload","Invalid session creation payload"
+"Please confirm the plan before creating a workspace session","Please confirm the plan before creating a workspace session"
+"Please select a domain before creating a workspace session","Please select a domain before creating a workspace session"
+"Failed to create workspace session: %{message}","Failed to create workspace session: %{message}"
+"Workspace session created","Workspace session created"
 "[DnsCdnAutoSwitch] 域名 %{1} 注册已完成，已加入待切换队列","[DnsCdnAutoSwitch] 域名 %{1} 注册已完成，已加入待切换队列"
 "[DnsCdnAutoSwitch] 检查延迟切换 %{1} 生命周期失败：%{2}","[DnsCdnAutoSwitch] 检查延迟切换 %{1} 生命周期失败：%{2}"
 "[DnsCdnAutoSwitch] 开始执行，待处理域名数=%{1}","[DnsCdnAutoSwitch] 开始执行，待处理域名数=%{1}"
@@ -1205,6 +1225,15 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 域名购买、解析与证书流程已完成,域名购买、解析与证书流程已完成
 域名接入流程失败,域名接入流程失败
 域名接入流程进行中,域名接入流程进行中
+"admin_user_id must be greater than 0","admin_user_id must be greater than 0"
+"Invalid local pool id","Invalid local pool id"
+"The selected local pool domain is no longer available","The selected local pool domain is no longer available"
+"Reserved local domain: %{domain}","Reserved local domain: %{domain}"
+"Starting plan generation","Starting plan generation"
+"Plan generation completed","Plan generation completed"
+"AI plan generation failed, fallback will be used: %{message}","AI plan generation failed, fallback will be used: %{message}"
+"No external references were provided; the plan is based on the written requirement.","No external references were provided; the plan is based on the written requirement."
+"The provided references should guide the visual tone, palette, and conversion direction: %{refs}","The provided references should guide the visual tone, palette, and conversion direction: %{refs}"
 已接入,已接入
 查看此流程,查看此流程
 "已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。","已为你创建一个可恢复的 AI 建站工作区。你可以先整理需求、阶段与 scope，再按当前 provider 继续推进。"

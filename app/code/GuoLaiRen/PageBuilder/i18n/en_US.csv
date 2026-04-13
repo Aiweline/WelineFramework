@@ -130,13 +130,17 @@ AI生成组件配置,AI生成组件配置
 工作区已删除,工作区已删除
 "原生 SSE 模式无需额外续约","原生 SSE 模式无需额外续约"
 未登录,"Not signed in"
-鍙傛暟鏃犳晥,鍙傛暟鏃犳晥
-浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶,浼氳瘽涓嶅瓨鍦ㄦ垨鏃犳潈璁块棶
-鏆傛棤娉曞垱寤哄煙鍚嶈喘涔板伐浣滃尯,鏆傛棤娉曞垱寤哄煙鍚嶈喘涔板伐浣滃尯
-鍔犲叆鍩熷悕璐拱闃熷垪澶辫触,鍔犲叆鍩熷悕璐拱闃熷垪澶辫触
-宸插姞鍏ュ煙鍚嶈喘涔伴槦鍒?,宸插姞鍏ュ煙鍚嶈喘涔伴槦鍒?
+暂时无法创建域名购买工作区,"Domain purchase workspace is not available right now"
+加入域名购买队列失败,"Failed to join the domain purchase queue"
+已加入域名购买队列,"Added to the domain purchase queue"
+请先完成域名推荐并确认目标域名后，再开始生成主题/页面,请先完成域名推荐并确认目标域名后，再开始生成主题/页面
 所选页面类型不在当前工作区中,所选页面类型不在当前工作区中
 已记录区块微调：%{component},已记录区块微调：%{component}
+"Unable to resolve block task for the current component","Unable to resolve block task for the current component"
+姝ｅ湪重建区块：%{page},姝ｅ湪重建区块：%{page}
+区块任务已完成：%{page},区块任务已完成：%{page}
+区块微调完成,区块微调完成
+区块重建完成,区块重建完成
 域名尚未就绪，请先等待域名流程完成后再确认建站发布。,域名尚未就绪，请先等待域名流程完成后再确认建站发布。
 当前工作区尚未准备好发布，请先完成页面生成与编辑。,当前工作区尚未准备好发布，请先完成页面生成与编辑。
 未找到要更新的区块,未找到要更新的区块
@@ -158,14 +162,18 @@ AI生成组件配置,AI生成组件配置
 "正在建立 PageBuilder 工作区事件流...","正在建立 PageBuilder 工作区事件流..."
 "已连接 PageBuilder 工作区事件流","Connected to PageBuilder workspace event stream"
 未找到待执行的工作区操作,未找到待执行的工作区操作
+该操作已结束，请重新发起,该操作已结束，请重新发起
+操作状态异常，请刷新后重试,操作状态异常，请刷新后重试
 操作开始执行,操作开始执行
+该操作已在其他连接中执行，本连接不重复运行,该操作已在其他连接中执行，本连接不重复运行
+已同步当前状态,已同步当前状态
+该操作已结束或不可用,该操作已结束或不可用
 已开始执行操作,已开始执行操作
 已开始执行：%{operation},已开始执行：%{operation}
 "AI 片段（%{region}）：%{chunk}","AI 片段（%{region}）：%{chunk}"
 "AI 片段：%{chunk}","AI 片段：%{chunk}"
 未知操作,未知操作
 操作执行完成,操作执行完成
-检测到重复的操作事件流连接，已同步当前状态，未重复执行。,"Duplicate operation stream connection; state synced without re-running."
 操作执行失败：%{message},操作执行失败：%{message}
 编辑环境已准备好，可先调整已生成页面,编辑环境已准备好，可先调整已生成页面
 检测到历史操作长时间无进展，已自动回收并允许重新开始,检测到历史操作长时间无进展，已自动回收并允许重新开始
@@ -176,13 +184,29 @@ AI生成组件配置,AI生成组件配置
 操作已启动,操作已启动
 正在准备网站资料,正在准备网站资料
 "AI 正在生成站点页头与页脚","AI 正在生成站点页头与页脚"
+共享任务已完成：Header,共享任务已完成：Header
+共享任务已完成：Footer,共享任务已完成：Footer
 "AI 已生成站点页头与页脚","AI 已生成站点页头与页脚"
 生成页头页脚失败：%{message},生成页头页脚失败：%{message}
 "正在生成 HTML 区块：%{page}","正在生成 HTML 区块：%{page}"
 页面已生成：%{page},页面已生成：%{page}
+页面任务已完成：%{page},页面任务已完成：%{page}
 "HTML 区块已生成","HTML 区块已生成"
 "HTML 区块已就绪，可预览或发布","HTML 区块已就绪，可预览或发布"
 "HTML 区块构建完成","HTML 区块构建完成"
+姝ｅ湪鍑嗗缃戠珯璧勬枡,姝ｅ湪鍑嗗缃戠珯璧勬枡
+"姝ｅ湪鐢熸垚鍏变韩 Header","姝ｅ湪鐢熸垚鍏变韩 Header"
+"姝ｅ湪鐢熸垚鍏变韩 Footer","姝ｅ湪鐢熸垚鍏变韩 Footer"
+鍏变韩浠诲姟宸插畬鎴愶細Header,鍏变韩浠诲姟宸插畬鎴愶細Header
+鍏变韩浠诲姟宸插畬鎴愶細Footer,鍏变韩浠诲姟宸插畬鎴愶細Footer
+"姝ｅ湪鐢熸垚 HTML 鍖哄潡锛?{page}","姝ｅ湪鐢熸垚 HTML 鍖哄潡锛?{page}"
+椤甸潰宸茬敓鎴愶細%{page},椤甸潰宸茬敓鎴愶細%{page}
+鍖哄潡浠诲姟宸插畬鎴愶細%{page},鍖哄潡浠诲姟宸插畬鎴愶細%{page}
+"HTML 鍖哄潡宸插氨缁紝鍙瑙堟垨鍙戝竷","HTML 鍖哄潡宸插氨缁紝鍙瑙堟垨鍙戝竷"
+"HTML 鍖哄潡鏋勫缓瀹屾垚","HTML 鍖哄潡鏋勫缓瀹屾垚"
+"HTML blocks generated","HTML blocks generated"
+"HTML blocks ready for preview or publish","HTML blocks ready for preview or publish"
+"HTML block build complete","HTML block build complete"
 正在生成虚拟主题骨架,正在生成虚拟主题骨架
 "Header 组件已存在，跳过生成","Header 组件已存在，跳过生成"
 "Footer 组件已存在，跳过生成","Footer 组件已存在，跳过生成"
@@ -195,11 +219,15 @@ AI生成组件配置,AI生成组件配置
 正在生成页面：%{page},"Generating page: %{page}"
 主题构建完成,主题构建完成
 虚拟主题已生成，可继续进入页面编辑,虚拟主题已生成，可继续进入页面编辑
-姝ｅ湪鍑嗗缃戠珯璧勬枡,姝ｅ湪鍑嗗缃戠珯璧勬枡
-姝ｅ湪鐢熸垚椤甸潰锛?{page},姝ｅ湪鐢熸垚椤甸潰锛?{page}
-椤甸潰宸茬敓鎴愶細%{page},椤甸潰宸茬敓鎴愶細%{page}
-涓婚鏋勫缓瀹屾垚,涓婚鏋勫缓瀹屾垚
-铏氭嫙涓婚宸茬敓鎴愶紝鍙户缁繘鍏ラ頁面编辑,铏氭嫙涓婚宸茬敓鎴愶紝鍙户缁繘鍏ラ頁面编辑
+仍有页面待生成，构建进度已记录,"Some pages are still pending; build progress has been recorded"
+"Preparing virtual theme workspace","Preparing virtual theme workspace"
+"Generating shared header","Generating shared header"
+"Generating shared footer","Generating shared footer"
+"Generating themed page section: %{page}","Generating themed page section: %{page}"
+"Theme section task complete: %{page}","Theme section task complete: %{page}"
+"Virtual theme generated","Virtual theme generated"
+"Virtual theme ready for editing","Virtual theme ready for editing"
+"Virtual theme build complete","Virtual theme build complete"
 缺少要重建的页面类型,缺少要重建的页面类型
 页面类型不在当前工作区中,页面类型不在当前工作区中
 正在重建页面：%{page},正在重建页面：%{page}
@@ -216,6 +244,7 @@ AI生成组件配置,AI生成组件配置
 工作区事件流已断开（未及时续约），操作已终止,"Workspace event stream disconnected (lease not renewed); the operation was cancelled."
 由于工作区连接超时未续约，已终止后台操作,"Background operation stopped because the workspace stream lease expired."
 保存失败,"Save failed"
+工作区已自动保存,工作区已自动保存
 工作区信息已合并保存,工作区信息已合并保存
 工作区信息已整体替换,工作区信息已整体替换
 "JSON 无效：%{1}","JSON 无效：%{1}"
@@ -774,11 +803,13 @@ Component,Component
 "PageBuilder materialization requires a real website_id","PageBuilder materialization requires a real website_id"
 "Failed to materialize PageBuilder page: %{1}","Failed to materialize PageBuilder page: %{1}"
 "Unsupported shared component region: %{1}","Unsupported shared component region: %{1}"
+"Unknown page section: %{section}","Unknown page section: %{section}"
+"AI 组件兜底模板仍未通过 PHP 语法校验：%{message}","AI 组件兜底模板仍未通过 PHP 语法校验：%{message}"
+"AI 组件输出未通过校验，已自动切换安全兜底渲染：%{reason}","AI 组件输出未通过校验，已自动切换安全兜底渲染：%{reason}"
 "AI 生成的组件未通过 PHP 语法校验（已尝试 %{n} 轮自动修复）：%{message}","AI 生成的组件未通过 PHP 语法校验（已尝试 %{n} 轮自动修复）：%{message}"
 "AI 组件 JSON 校验失败：%{message}","AI 组件 JSON 校验失败：%{message}"
 "AI 组件预览渲染失败：%{message}","AI 组件预览渲染失败：%{message}"
 "AI 未返回有效的组件 JSON 结果","AI 未返回有效的组件 JSON 结果"
-"AI 返回的组件 JSON 结构无效，正在进行第 %{1}/%{2} 轮修复","Round %{1}/%{2}: invalid component JSON; repair in progress"
 "正在对组件 JSON 进行本地解析与修复（提取 JSON、控制字符、尾逗号、截断补全等）…","Running local JSON parse/repair (extract JSON, escape control characters, trailing commas, truncation recovery)…"
 "本地解析与修复成功，已得到有效组件 JSON。","Local parse/repair succeeded; component JSON is valid."
 "本地解析与修复仍未得到有效 JSON，将按轮次调用 AI 进行结构修复（共 %{1} 轮）","Local repair did not yield valid JSON; will request AI structural repair for up to %{1} round(s)."
@@ -787,6 +818,8 @@ Component,Component
 "第 %{1}/%{2} 轮：AI 已返回，正在解析校验…","Round %{1}/%{2}: AI response received; validating parse…"
 "第 %{1}/%{2} 轮：AI 修复后解析成功。","Round %{1}/%{2}: AI repair produced valid JSON."
 "第 %{1}/%{2} 轮：解析仍失败，将继续下一轮（若仍有）。","Round %{1}/%{2}: parse still failing; continuing to the next round if any."
+"Invalid generated content component payload","Invalid generated content component payload"
+"Invalid generated page layout payload","Invalid generated page layout payload"
 "Home | Pages | Contact","Home | Pages | Contact"
 主题虚拟部件,"Theme virtual parts"
 法律信息,法律信息
@@ -913,7 +946,6 @@ English,English
 更多页面,更多页面
 确认并生成,确认并生成
 已有草稿，重新生成会覆盖现有内容,已有草稿，重新生成会覆盖现有内容
-构建进度,"Build progress"
 还没有生成页面,还没有生成页面
 重新选择页面类型并重新生成,重新选择页面类型并重新生成
 可勾选博客、政策页等全部类型；确认后将按新选择重新生成虚拟主题与页面（会覆盖当前生成结果）。,可勾选博客、政策页等全部类型；确认后将按新选择重新生成虚拟主题与页面（会覆盖当前生成结果）。
@@ -927,10 +959,19 @@ English,English
 生成站点后，这里会显示网站预览,生成站点后，这里会显示网站预览
 看起来不错！,看起来不错！
 你的网站已经生成了。点击下方按钮做最后一次检查，然后就可以上线了。,你的网站已经生成了。点击下方按钮做最后一次检查，然后就可以上线了。
+预览即将发布的网站,预览即将发布的网站
+将打开最终发布态预览，建议先检查首页、导航、页脚与关键转化按钮。,将打开最终发布态预览，建议先检查首页、导航、页脚与关键转化按钮。
 仍需增删页面类型？重新选择并重新生成,仍需增删页面类型？重新选择并重新生成
 上线前若还要加页面（如隐私政策、博客），可先调整并重新生成，再发布。,上线前若还要加页面（如隐私政策、博客），可先调整并重新生成，再发布。
 运行发布检查,运行发布检查
 立即发布,立即发布
+构建进度,"Build progress"
+任务进度,任务进度
+按完整任务推进；已完成任务不会重复生成。,按完整任务推进；已完成任务不会重复生成。
+总任务,总任务
+已完成,已完成
+待处理,待处理
+进行中,进行中
 域名与注册商,"Domain & registrar"
 注册商账户,注册商账户
 "AI 推荐: {label}","AI 推荐: {label}"
@@ -1012,6 +1053,8 @@ Close,Close
 预览页已切换,预览页已切换
 请至少选择一个页面类型,请至少选择一个页面类型
 请先填写你的网站需求描述，再开始生成。,请先填写你的网站需求描述，再开始生成。
+请先填写网站名称，再开始生成。,请先填写网站名称，再开始生成。
+请先填写目标域名，再确认生成。,请先填写目标域名，再确认生成。
 操作已创建，但缺少流式监听参数；已保留当前页面，请修正后重试。,操作已创建，但缺少流式监听参数；已保留当前页面，请修正后重试。
 无法启动重新生成，请刷新页面后重试,无法启动重新生成，请刷新页面后重试
 当前阶段还没有生成页面，请先确认页面类型并开始生成。,当前阶段还没有生成页面，请先确认页面类型并开始生成。
@@ -1025,6 +1068,7 @@ Close,Close
 区块字段已更新，已刷新当前块,区块字段已更新，已刷新当前块
 正在准备可视化编辑环境，请稍候…,"Preparing the visual editing workspace, please wait…"
 编辑环境已就绪，可先开始调整已生成页面。,"The editor is ready. You can start adjusting generated pages now."
+检测到重复的操作事件流连接，已同步当前状态，未重复执行。,"Duplicate operation stream connection; state synced without re-running."
 页面仍在生成中，离开后会中断当前生成。,"Pages are still being generated. Leaving now will interrupt the current build."
 "请先填写网站名称或需求描述，再让 AI 推荐域名。","请先填写网站名称或需求描述，再让 AI 推荐域名。"
 请先选择购买服务商账号。,请先选择购买服务商账号。
@@ -1039,6 +1083,9 @@ Close,Close
 当前无法启动发布，请刷新页面后重试。,当前无法启动发布，请刷新页面后重试。
 正在进行发布前检查，请稍候…,正在进行发布前检查，请稍候…
 发布任务已在执行中，请稍候…,发布任务已在执行中，请稍候…
+暂无可用的发布预览地址，请先完成页面生成。,暂无可用的发布预览地址，请先完成页面生成。
+域名进度事件流创建失败,域名进度事件流创建失败
+连接重试中，域名任务可能仍在后台执行...,"Reconnecting. The domain task may still be running in the background..."
 "After confirming the purchase, the system will continue DNS, CDN, resolve, and follow-up lifecycle handling.","After confirming the purchase, the system will continue DNS, CDN, resolve, and follow-up lifecycle handling."
 "DNS Mode","DNS Mode"
 "Follow Registrar","Follow Registrar"
@@ -1058,6 +1105,8 @@ Cancel,Cancel
 发布检查通过,"Pre-publish check passed"
 发布检查存在未完成项,发布检查存在未完成项
 "AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。","AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。"
+检测到未完成任务，是否继续生成？,"Unfinished tasks detected. Continue generating?"
+继续生成,Continue generating
 开始执行工作区操作：,开始执行工作区操作：
 "操作事件流创建失败，请检查 URL 或浏览器连接策略。","操作事件流创建失败，请检查 URL 或浏览器连接策略。"
 工作区操作已启动,工作区操作已启动
@@ -1069,6 +1118,7 @@ Footer,Footer
 已生成并同步,已生成并同步
 "页面已完成真实 AI 生成","页面已完成真实 AI 生成"
 页面已生成：,"Page generated:"
+任务已完成,任务已完成
 "操作已创建但缺少 SSE 参数","操作已创建但缺少 SSE 参数"
 启动发布失败,启动发布失败
 域名尚未就绪，请先等待域名流程完成后再确认建站。,域名尚未就绪，请先等待域名流程完成后再确认建站。
@@ -2245,12 +2295,10 @@ AI建站工作台,AI建站工作台
 订单ID,订单ID
 创建时间,创建时间
 错误信息,错误信息
-待处理,待处理
 购买域名中,购买域名中
 "DNS 配置中","DNS 配置中"
 "CDN 配置中","CDN 配置中"
 "SSL 申请中","SSL 申请中"
-已完成,已完成
 快速建站向导,快速建站向导
 建站描述,建站描述
 域名准备流程（完成后域名标记为可用，可在本向导中选择）：,域名准备流程（完成后域名标记为可用，可在本向导中选择）：
@@ -3071,7 +3119,3 @@ Topic,Topic
 立即咨询,立即咨询
 "Premium Experience","Premium Experience"
 "EXCLUSIVE LUXURY","EXCLUSIVE LUXURY"
-暂时无法创建域名购买工作区,"Domain purchase workspace is not available right now"
-加入域名购买队列失败,"Failed to join the domain purchase queue"
-已加入域名购买队列,"Added to the domain purchase queue"
-仍有页面待生成，构建进度已记录,"Some pages are still pending; build progress has been recorded"

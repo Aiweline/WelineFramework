@@ -37,7 +37,7 @@ class RequestFilter extends DataObject
             'bool', 'boolean'  => (bool)$data,
             'json'             => json_decode($data, true),
             'xml'              => simplexml_load_string($data),
-            'serialize'        => unserialize($data),
+            'serialize'        => self::filterSerialized($data),
             'htmlspecialchars' => htmlspecialchars($data),
             'htmlentities'     => htmlentities($data),
             'urldecode'        => urldecode($data),
@@ -50,6 +50,22 @@ class RequestFilter extends DataObject
             'nl2br'            => nl2br($data),
             default            => $data,
         };
+    }
+
+    private static function filterSerialized(mixed $data): mixed
+    {
+        if (!self::allowPhpUnserialize()) {
+            throw new \InvalidArgumentException(
+                'RequestFilter serialize is disabled by security.request_filter.allow_php_unserialize.'
+            );
+        }
+
+        return unserialize($data);
+    }
+
+    private static function allowPhpUnserialize(): bool
+    {
+        return (bool)Env::get('security.request_filter.allow_php_unserialize', false);
     }
 
     /**

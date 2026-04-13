@@ -22,7 +22,12 @@ $urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
 $chatUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/chat');
 $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
 $requestPath = strtolower((string) ($this->request->getPathInfo() ?? ($_SERVER['REQUEST_URI'] ?? '')));
+$isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
+    || (string)$this->request->getGet('preview', '') === '1'
+    || str_contains($requestPath, 'workspace-preview');
+$disableCustomerServiceWidget = $isWorkspacePreview;
 $showGuestBindPrompt = !$isLoggedIn
+    && !$disableCustomerServiceWidget
     && !str_contains($requestPath, 'customer/account/login')
     && !str_contains($requestPath, 'customer/account/register')
     && !str_contains($requestPath, 'customer/account/forgot-password')
@@ -30,6 +35,7 @@ $showGuestBindPrompt = !$isLoggedIn
     && !str_contains($requestPath, 'customer/account/logout');
 ?>
 <!-- 客服服务组件 -->
+<?php if ($disableCustomerServiceWidget) { return; } ?>
 <link rel="stylesheet" href="@static(Weline_CustomerService::css/customer-service.css)">
 <div id="customer-service-widget" class="customer-service-widget" data-editor-interactive>
     <!-- 悬浮聊天按钮 -->

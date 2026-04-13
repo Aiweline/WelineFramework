@@ -9,6 +9,8 @@ use Weline\Framework\Context;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\View\TemplateEnvView;
+use Weline\Framework\View\TemplateRequestView;
 use Weline\Framework\View\Template;
 
 final class TemplateRequestRefreshTest extends TestCase
@@ -71,6 +73,45 @@ final class TemplateRequestRefreshTest extends TestCase
 
         self::assertSame('Weline_Framework', $template->getData('title'));
         self::assertSame('http://fresh.test/fresh', $template->getData('req')['url'] ?? null);
+    }
+
+    public function testLazyRequestProxyTracksCurrentRequestWithoutReinitializingTemplate(): void
+    {
+        Context::enter(new Context([
+            'meta' => [
+                'type' => 'request',
+                'mode' => 'wls',
+            ],
+        ]));
+
+        ObjectManager::setInstance(Request::class, $this->createRequestStub('http://bootstrap.test/init'));
+        $template = Template::getInstance();
+        $reqView = $template->getData('req');
+
+        self::assertInstanceOf(TemplateRequestView::class, $reqView);
+
+        ObjectManager::setInstance(Request::class, $this->createRequestStub('http://first.test/one'));
+        self::assertSame('http://first.test/one', $reqView['url'] ?? null);
+
+        ObjectManager::setInstance(Request::class, $this->createRequestStub('http://second.test/two'));
+        self::assertSame('http://second.test/two', $reqView['url'] ?? null);
+    }
+
+    public function testInitUsesLazyEnvProxy(): void
+    {
+        Context::enter(new Context([
+            'meta' => [
+                'type' => 'request',
+                'mode' => 'wls',
+            ],
+        ]));
+
+        ObjectManager::setInstance(Request::class, $this->createRequestStub('http://bootstrap.test/init'));
+        $template = Template::getInstance();
+        $envView = $template->getData('env');
+
+        self::assertInstanceOf(TemplateEnvView::class, $envView);
+        self::assertTrue(isset($envView['router']) || isset($envView['system']) || isset($envView['cache']));
     }
 
     private function createRequestStub(string $baseUrl): Request

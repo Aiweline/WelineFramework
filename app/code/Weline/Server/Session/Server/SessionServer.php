@@ -20,6 +20,7 @@ declare(strict_types=1);
 namespace Weline\Server\Session\Server;
 
 use Weline\Server\Log\WlsLogger;
+use Weline\Server\Service\SharedStateServiceRegistry;
 
 final class SessionServer
 {
@@ -56,6 +57,10 @@ final class SessionServer
 
     /** 配置 */
     private array $config = [];
+    private string $serviceRole = 'session_server';
+    private SharedStateServiceRegistry $sharedRegistry;
+    private int $sharedConsumerLeaseTtlSec = 300;
+    private ?int $idleShutdownDueAt = null;
 
     /** 上次 bind 失败原因（供入口脚本输出到日志） */
     private ?string $lastBindError = null;
@@ -76,6 +81,9 @@ final class SessionServer
     public function __construct(array $config = [])
     {
         $this->config = $config;
+        $this->serviceRole = (string) ($config['role'] ?? 'session_server');
+        $this->sharedRegistry = new SharedStateServiceRegistry();
+        $this->sharedConsumerLeaseTtlSec = \max(1, (int) ($config['shared_consumer_lease_ttl_sec'] ?? 300));
         $this->port = (int)($config['port'] ?? (19970 + \Weline\Server\Service\MasterProcess::getProjectPortOffset()));
         $this->gcInterval = (int)($config['gc_interval'] ?? 300);
         $this->store = new SessionStore($config);
@@ -191,6 +199,19 @@ final class SessionServer
         }
 
         $this->store->loadFromFile();
+        $this->idleShutdownDueAt = \time() + $this->sharedConsumerLeaseTtlSec;
+        $this->sharedRegistry->putRecord($this->serviceRole, [
+            'role' => $this->serviceRole,
+            'host' => $this->host,
+            'port' => $this->port,
+            'pid' => \getmypid(),
+            'token_file_name' => \basename($this->tokenFilePath),
+            'consumers' => $this->sharedRegistry->getConsumers($this->serviceRole),
+            'started_at' => \date('c'),
+            'healthy_at' => \date('c'),
+            'shared_service' => true,
+            'shutdown_due_at' => \date('c', $this->idleShutdownDueAt),
+        ]);
 
         $this->running = true;
         $this->log("Started on {$this->host}:{$this->port}");
@@ -240,6 +261,8 @@ final class SessionServer
             @\fclose($this->serverSocket);
             $this->serverSocket = null;
         }
+
+        $this->sharedRegistry->removeRecord($this->serviceRole);
         
         $this->cleanupTokenFile();
 
@@ -328,6 +351,12 @@ final class SessionServer
             'buffer' => '',
             'addr' => $peerName ?? 'unknown',
             'authenticated' => $this->authToken === null,
+            'consumer_code' => '',
+            'instance_name' => '',
+            'owner_type' => 'instance',
+            'hello_completed' => false,
+            'shutdown_requested' => false,
+            'last_lease_refresh_at' => 0,
         ];
 
         $this->logDebug("Client connected: {$peerName} (id={$clientId})");
@@ -383,6 +412,13 @@ final class SessionServer
             $this->disconnectClient($clientId);
             return;
         }
+
+        if ($cmd === SessionProtocol::CMD_HELLO) {
+            $this->handleHello($clientId, $msg);
+            return;
+        }
+
+        $this->refreshClientConsumerLease($clientId);
         
         $sessionId = $this->resolveStateId($msg);
         $key = $msg['key'] ?? null;
@@ -476,14 +512,8 @@ final class SessionServer
                 break;
 
             case SessionProtocol::CMD_SHUTDOWN:
-                $persisted = $this->store->forcePersist();
-                $response = SessionProtocol::encodeSuccess([
-                    'shutdown' => true,
-                    'persisted' => $persisted,
-                ]);
+                $response = $this->handleShutdownCommand($clientId, $msg);
                 $this->sendToClient($clientId, $response);
-                $this->log('Graceful shutdown requested by authenticated client');
-                $this->setRunning(false);
                 return;
 
             case SessionProtocol::CMD_STATS:
@@ -593,8 +623,13 @@ final class SessionServer
         }
 
         $addr = $this->clients[$clientId]['addr'];
+        $consumerCode = (string) ($this->clients[$clientId]['consumer_code'] ?? '');
         @\fclose($this->clients[$clientId]['socket']);
         unset($this->clients[$clientId]);
+
+        if ($consumerCode !== '') {
+            $this->syncIdleShutdownWindow();
+        }
 
         $this->log("Client disconnected: {$addr} (id={$clientId})");
     }
@@ -631,6 +666,10 @@ final class SessionServer
             $this->detectConnectionLeaks();
             $this->lastLeakCheckTime = $nowFloat;
         }
+
+        $this->refreshConnectedConsumerLeases();
+        $this->pruneExpiredConsumerLeases();
+        $this->syncIdleShutdownWindow();
     }
 
     /**
@@ -645,6 +684,186 @@ final class SessionServer
         // 由于 ConnectionPoolManager 是单例且私有，我们无法直接访问
         // 实际的泄漏检测会在客户端调用 acquire/release 时触发
         // 这里仅作为占位符，实际检测逻辑在 ConnectionPoolManager::detectLeaks()
+    }
+
+    private function handleHello(int $clientId, array $msg): void
+    {
+        $consumerCode = \trim((string) ($msg['consumer_code'] ?? ''));
+        if ($consumerCode === '') {
+            $this->sendToClient($clientId, SessionProtocol::encodeError('Missing consumer_code', 'HELLO_CONSUMER_REQUIRED'));
+            return;
+        }
+
+        $instanceName = \trim((string) ($msg['instance_name'] ?? $consumerCode));
+        $ownerType = \trim((string) ($msg['owner_type'] ?? 'instance'));
+        $leaseTtl = \max(1, (int) ($msg['lease_ttl'] ?? $this->sharedConsumerLeaseTtlSec));
+
+        $this->clients[$clientId]['consumer_code'] = $consumerCode;
+        $this->clients[$clientId]['instance_name'] = $instanceName;
+        $this->clients[$clientId]['owner_type'] = $ownerType !== '' ? $ownerType : 'instance';
+        $this->clients[$clientId]['hello_completed'] = true;
+        $this->clients[$clientId]['shutdown_requested'] = false;
+        $this->clients[$clientId]['last_lease_refresh_at'] = \time();
+
+        $this->upsertConsumerLease($consumerCode, $instanceName, $ownerType, $leaseTtl);
+        $this->idleShutdownDueAt = null;
+        $this->sharedRegistry->setShutdownDueAt($this->serviceRole, null);
+
+        $this->sendToClient($clientId, SessionProtocol::encodeSuccess([
+            'hello' => true,
+            'consumer_code' => $consumerCode,
+            'service_role' => $this->serviceRole,
+            'lease_ttl' => $leaseTtl,
+        ]));
+    }
+
+    private function handleShutdownCommand(int $clientId, array $msg): string
+    {
+        $consumerCode = \trim((string) ($msg['consumer_code'] ?? ($this->clients[$clientId]['consumer_code'] ?? '')));
+        $serverShutdown = (bool) ($msg['server'] ?? false);
+
+        if ($consumerCode === '') {
+            if ($serverShutdown) {
+                $persisted = $this->store->forcePersist();
+                $this->log('Graceful shutdown requested by authenticated client');
+                $this->setRunning(false);
+
+                return SessionProtocol::encodeSuccess([
+                    'shutdown' => true,
+                    'persisted' => $persisted,
+                ]);
+            }
+
+            return SessionProtocol::encodeError('Missing consumer_code', 'SHUTDOWN_CONSUMER_REQUIRED');
+        }
+
+        $this->clients[$clientId]['shutdown_requested'] = true;
+        $this->clients[$clientId]['consumer_code'] = '';
+        $this->clients[$clientId]['hello_completed'] = false;
+        $this->removeConsumerLease($consumerCode);
+        $this->syncIdleShutdownWindow(true);
+
+        return SessionProtocol::encodeSuccess([
+            'shutdown' => false,
+            'consumer_released' => true,
+            'consumer_code' => $consumerCode,
+            'service_role' => $this->serviceRole,
+            'shutdown_due_at' => $this->idleShutdownDueAt !== null ? \date('c', $this->idleShutdownDueAt) : null,
+        ]);
+    }
+
+    private function refreshClientConsumerLease(int $clientId): void
+    {
+        $consumerCode = \trim((string) ($this->clients[$clientId]['consumer_code'] ?? ''));
+        if ($consumerCode === '') {
+            return;
+        }
+
+        $now = \time();
+        $lastRefreshAt = (int) ($this->clients[$clientId]['last_lease_refresh_at'] ?? 0);
+        if (($now - $lastRefreshAt) < 30) {
+            return;
+        }
+
+        $this->clients[$clientId]['last_lease_refresh_at'] = $now;
+        $this->upsertConsumerLease(
+            $consumerCode,
+            (string) ($this->clients[$clientId]['instance_name'] ?? $consumerCode),
+            (string) ($this->clients[$clientId]['owner_type'] ?? 'instance'),
+            $this->sharedConsumerLeaseTtlSec
+        );
+    }
+
+    private function refreshConnectedConsumerLeases(): void
+    {
+        foreach (\array_keys($this->clients) as $clientId) {
+            if (!isset($this->clients[$clientId])) {
+                continue;
+            }
+            $this->refreshClientConsumerLease((int) $clientId);
+        }
+    }
+
+    private function pruneExpiredConsumerLeases(): void
+    {
+        $now = \time();
+        $removedAny = false;
+        $this->sharedRegistry->withRoleLock($this->serviceRole, function () use ($now, &$removedAny): void {
+            $record = $this->sharedRegistry->getRecord($this->serviceRole);
+            $consumers = $record['consumers'] ?? [];
+            if (!\is_array($consumers)) {
+                return;
+            }
+
+            foreach ($consumers as $consumerCode => $consumer) {
+                $leaseExpiresAt = \strtotime((string) ($consumer['lease_expires_at'] ?? ''));
+                if ($leaseExpiresAt !== false && $leaseExpiresAt > 0 && $leaseExpiresAt <= $now) {
+                    $this->sharedRegistry->removeConsumer($this->serviceRole, (string) $consumerCode);
+                    $removedAny = true;
+                }
+            }
+        });
+
+        if ($removedAny) {
+            $this->syncIdleShutdownWindow();
+        }
+    }
+
+    private function upsertConsumerLease(string $consumerCode, string $instanceName, string $ownerType, int $leaseTtl): void
+    {
+        $leaseExpiresAt = \date('c', \time() + \max(1, $leaseTtl));
+        $this->sharedRegistry->upsertConsumer($this->serviceRole, $consumerCode, [
+            'instance_name' => $instanceName,
+            'owner_type' => $ownerType !== '' ? $ownerType : 'instance',
+            'last_seen_at' => \date('c'),
+            'lease_expires_at' => $leaseExpiresAt,
+        ]);
+    }
+
+    private function removeConsumerLease(string $consumerCode): void
+    {
+        $this->sharedRegistry->removeConsumer($this->serviceRole, $consumerCode);
+    }
+
+    private function hasActiveHelloClients(): bool
+    {
+        foreach ($this->clients as $client) {
+            if (!empty($client['hello_completed']) && \trim((string) ($client['consumer_code'] ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function syncIdleShutdownWindow(bool $explicitConsumerShutdown = false): void
+    {
+        $consumers = $this->sharedRegistry->getConsumers($this->serviceRole);
+        if ($consumers !== [] || $this->hasActiveHelloClients()) {
+            $this->idleShutdownDueAt = null;
+            $this->sharedRegistry->setShutdownDueAt($this->serviceRole, null);
+            return;
+        }
+
+        if ($explicitConsumerShutdown) {
+            $this->idleShutdownDueAt = \time() + $this->sharedConsumerLeaseTtlSec;
+            $this->sharedRegistry->setShutdownDueAt($this->serviceRole, \date('c', $this->idleShutdownDueAt));
+            return;
+        }
+
+        if ($this->idleShutdownDueAt === null) {
+            $record = $this->sharedRegistry->getRecord($this->serviceRole);
+            $shutdownDueAt = \strtotime((string) ($record['shutdown_due_at'] ?? ''));
+            $this->idleShutdownDueAt = $shutdownDueAt !== false && $shutdownDueAt > 0
+                ? $shutdownDueAt
+                : (\time() + $this->sharedConsumerLeaseTtlSec);
+            $this->sharedRegistry->setShutdownDueAt($this->serviceRole, \date('c', $this->idleShutdownDueAt));
+        }
+
+        if (\time() >= $this->idleShutdownDueAt) {
+            $this->log('No shared-service consumers remain; idle shutdown reached, stopping server');
+            $this->setRunning(false);
+        }
     }
 
     /**

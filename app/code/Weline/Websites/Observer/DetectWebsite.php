@@ -356,20 +356,33 @@ class DetectWebsite implements ObserverInterface
         $requestKey = self::REQUEST_CACHE_PREFIX . 'match.' . sha1($requestUrl);
         if (RequestContext::has($requestKey)) {
             $cached = RequestContext::get($requestKey);
-            return \is_array($cached) ? $cached : null;
+            if (\is_array($cached)) {
+                return $cached;
+            }
+            RequestContext::remove($requestKey);
         }
 
         $processKey = self::CACHE_KEY_MATCHED_SITE_PREFIX . sha1($requestUrl);
         $processCached = $this->getProcessValueCache($processKey);
         if ($processCached !== null || $this->hasProcessValueCache($processKey)) {
-            RequestContext::set($requestKey, $processCached);
-            return \is_array($processCached) ? $processCached : null;
+            if (\is_array($processCached)) {
+                RequestContext::set($requestKey, $processCached);
+                return $processCached;
+            }
+            unset(self::$processValueCache[$processKey], self::$processValueCacheExpiresAt[$processKey]);
         }
 
         $matchedSite = null;
         $currentHost = \parse_url($requestUrl, PHP_URL_HOST);
         if (\is_string($currentHost) && $currentHost !== '') {
             $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
+            if ($matchedSite === null) {
+                $this->invalidateDetectionCachesForRetry($requestUrl);
+                $matchedSite = $this->findSiteByWebsiteDomain($requestUrl, $currentHost, $websiteModel);
+            }
+            if ($matchedSite === null) {
+                $matchedSite = $this->findSiteByWebsiteDomainDirect($requestUrl, $currentHost, $websiteModel);
+            }
         }
         if ($matchedSite === null) {
             $matchedSite = $this->findSiteByWebsiteUrl($requestUrl, $websiteModel);
@@ -380,6 +393,92 @@ class DetectWebsite implements ObserverInterface
         $this->setProcessValueCache($processKey, $cachedValue);
 
         return $matchedSite;
+    }
+
+    private function invalidateDetectionCachesForRetry(string $requestUrl): void
+    {
+        foreach ([
+            self::REQUEST_CACHE_PREFIX . 'website_rows',
+            self::REQUEST_CACHE_PREFIX . 'website_domains',
+            self::REQUEST_CACHE_PREFIX . 'expanded_sites',
+            self::REQUEST_CACHE_PREFIX . 'website_rows_by_id',
+            self::REQUEST_CACHE_PREFIX . 'match.' . sha1($requestUrl),
+        ] as $requestKey) {
+            RequestContext::remove($requestKey);
+        }
+
+        self::clearProcessCache();
+
+        try {
+            $this->getCache()->clear();
+        } catch (\Throwable) {
+        }
+    }
+
+    /**
+     * Direct DB-backed fallback for freshly-bound domains under persistent workers.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findSiteByWebsiteDomainDirect(string $requestUrl, string $currentHost, Website $websiteModel): ?array
+    {
+        $hostNorm = \strtolower(\trim($currentHost));
+        if ($hostNorm === '') {
+            return null;
+        }
+
+        $candidateHosts = [$hostNorm];
+        if (\str_starts_with($hostNorm, 'www.')) {
+            $candidateHosts[] = (string)\substr($hostNorm, 4);
+        } elseif (\str_contains($hostNorm, '.')) {
+            $candidateHosts[] = 'www.' . $hostNorm;
+        }
+
+        $path = Url::parse_url($requestUrl, 'path') ?: '';
+        $path = '/' . \trim((string)$path, '/');
+        if ($path === '//') {
+            $path = '/';
+        }
+        $parsedRequestUrl = \parse_url($requestUrl);
+        $requestScheme = (($parsedRequestUrl['scheme'] ?? '') === 'http') ? 'http' : 'https';
+        $requestPort = isset($parsedRequestUrl['port']) ? ':' . $parsedRequestUrl['port'] : '';
+
+        /** @var WebsiteDomain $baseDomainModel */
+        $baseDomainModel = w_obj(WebsiteDomain::class);
+        foreach (\array_values(\array_unique($candidateHosts)) as $candidateHost) {
+            /** @var WebsiteDomain $domainModel */
+            $domainModel = clone $baseDomainModel;
+            $domainModel->clearData()->clearQuery()->loadByDomain($candidateHost);
+            if ($domainModel->getDomainId() <= 0 || $domainModel->getStatus() !== WebsiteDomain::STATUS_ACTIVE) {
+                continue;
+            }
+
+            $subPath = \trim($domainModel->getSubPath());
+            if ($subPath !== '' && !\str_starts_with($subPath, '/')) {
+                $subPath = '/' . $subPath;
+            }
+            if ($subPath !== '' && $subPath !== '/' && !\str_starts_with($path, $subPath) && $path !== $subPath) {
+                continue;
+            }
+
+            /** @var Website $website */
+            $website = clone $websiteModel;
+            $website->clearData()->clearQuery()->load($domainModel->getWebsiteId());
+            if ($website->getWebsiteId() <= 0) {
+                continue;
+            }
+
+            $matchedBaseUrl = $requestScheme . '://' . $hostNorm . $requestPort;
+            if ($subPath !== '' && $subPath !== '/') {
+                $matchedBaseUrl .= $subPath;
+            }
+
+            $data = $website->getData();
+            $data['url'] = $matchedBaseUrl;
+            return $data;
+        }
+
+        return null;
     }
 
     /**

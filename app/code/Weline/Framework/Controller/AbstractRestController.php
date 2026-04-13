@@ -89,7 +89,7 @@ abstract class AbstractRestController extends Core
         return $xml;
     }
 
-    protected function success(string $msg = '请求成功', mixed $data = '', int $code = 200): string
+    protected function success(string $msg = '请求成功', mixed $data = '', int $code = 200): array|string
     {
         return Response::json([
             'success' => true,
@@ -101,7 +101,7 @@ abstract class AbstractRestController extends Core
         ], $code)->getBody();
     }
 
-    protected function error(string $msg = '请求失败', mixed $data = '', int $code = 400, ?string $title = null): string
+    protected function error(string $msg = '请求失败', mixed $data = '', int $code = 400, ?string $title = null): array|string
     {
         return Response::json([
             'success' => false,

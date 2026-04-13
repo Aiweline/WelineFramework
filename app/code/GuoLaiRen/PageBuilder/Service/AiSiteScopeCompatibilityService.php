@@ -84,6 +84,7 @@ class AiSiteScopeCompatibilityService
 
         $normalized['workspace_track'] = $this->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
         $normalized['site_ready'] = (int)($scope['site_ready'] ?? 1);
+        $normalized['extra_page_types_panel_open'] = ((int)($scope['extra_page_types_panel_open'] ?? 0) === 1) ? 1 : 0;
 
         return $normalized;
     }

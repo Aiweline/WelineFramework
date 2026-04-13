@@ -24,6 +24,7 @@ use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\IPC\ControlMessage;
+use Weline\Server\Log\LogConfig;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\Contract\ServiceContext;
 use Weline\Server\Service\Control\IpcControlGateway;
@@ -201,8 +202,8 @@ class MasterProcess
         // 始终启用文件日志（后台模式也需要日志）
         $this->logger->setFileEnabled(true);
 
-        // 前台模式或开发模式：额外启用控制台输出
-        if ($frontend || \Weline\Server\Log\LogConfig::isDevMode()) {
+        // 前台模式或全量调试 (-log)：控制台输出；默认后台仅写文件
+        if (LogConfig::isStdoutEnabled($frontend, LogConfig::isDevMode())) {
             $this->logger->setStdoutEnabled(true);
         }
 
