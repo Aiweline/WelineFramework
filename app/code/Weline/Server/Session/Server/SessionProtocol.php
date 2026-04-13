@@ -104,6 +104,9 @@ final class SessionProtocol
 
     /** 心跳/存活检测 */
     public const CMD_PING = 'ping';
+
+    /** 首次建链登记实例租约 */
+    public const CMD_HELLO = 'hello';
     
     /** 认证命令 */
     public const CMD_AUTH = 'auth';
@@ -419,9 +422,29 @@ final class SessionProtocol
         return self::encodeRequest(self::CMD_PERSIST);
     }
 
-    public static function buildShutdown(): string
+    public static function buildShutdown(?string $consumerCode = null, array $params = []): string
     {
-        return self::encodeRequest(self::CMD_SHUTDOWN);
+        if ($consumerCode !== null && \trim($consumerCode) !== '') {
+            $params['consumer_code'] = \trim($consumerCode);
+        }
+
+        return self::encodeRequest(self::CMD_SHUTDOWN, $params);
+    }
+
+    public static function buildHello(
+        string $consumerCode,
+        string $instanceName = '',
+        string $role = '',
+        string $ownerType = 'instance',
+        int $leaseTtl = 300
+    ): string {
+        return self::encodeRequest(self::CMD_HELLO, [
+            'consumer_code' => \trim($consumerCode),
+            'instance_name' => \trim($instanceName) !== '' ? \trim($instanceName) : \trim($consumerCode),
+            'role' => \trim($role),
+            'owner_type' => \trim($ownerType) !== '' ? \trim($ownerType) : 'instance',
+            'lease_ttl' => \max(1, $leaseTtl),
+        ]);
     }
 
     /**

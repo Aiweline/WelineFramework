@@ -23,6 +23,7 @@ use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Runtime\StateManager;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Server\Log\LogConfig;
 /**
  * WLS 运行时
  * 
@@ -130,6 +131,7 @@ class WlsRuntime implements RuntimeInterface
         
         // 注册框架核心重置回调
         StateManager::registerFrameworkResets();
+        FiberOutputBuffer::install();
         
         // 预加载常用对象（进程级缓存）
         $this->eventManager = ObjectManager::getInstance(EventsManager::class);
@@ -207,6 +209,13 @@ class WlsRuntime implements RuntimeInterface
                 if ($resolvedClass !== Request::class) {
                     ObjectManager::setInstance($resolvedClass, $request);
                 }
+                $request->resetResponse();
+                $requestResponse = $request->getResponse();
+                ObjectManager::setInstance(Response::class, $requestResponse);
+                $resolvedResponseClass = ObjectManager::parserClass(Response::class);
+                if ($resolvedResponseClass !== Response::class) {
+                    ObjectManager::setInstance($resolvedResponseClass, $requestResponse);
+                }
                 $globalsEmulator = new GlobalsEmulator();
                 $globalsEmulator->emulate($request);
                 WelineEnv::getInstance()->initFromRequest($request);
@@ -245,10 +254,10 @@ class WlsRuntime implements RuntimeInterface
             WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
             WelineEnv::set('request.method', $_SERVER['REQUEST_METHOD'] ?? 'GET', 'WlsRuntime handle');
             
-            // DEV 环境或前端模式：记录请求日志
+            // 请求日志：默认始终写入 runtime.log（由 shouldWriteRequestLog 控制），全量调试见 -log
             $isDev = \defined('DEV') && DEV;
             $isFrontend = \defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE;
-            if (($isDev || $isFrontend) && $request !== null) {
+            if ($request !== null) {
                 $this->logWlsRequest($request, $isFrontend);
             }
             
@@ -376,7 +385,10 @@ class WlsRuntime implements RuntimeInterface
             }
             
             // 检查是否是 SSE 模式（如果是，响应已经流式发送，返回空字符串）
-            if (\Weline\Framework\Http\Sse\SseContext::isSseEnabled()) {
+            // 关键：必须使用“请求级”标记，不能只看 SseContext 全局静态状态。
+            // WLS 多 Fiber 并发下，全局静态标记可能被其它 Fiber 的 SSE 请求短暂置为 true，
+            // 若据此短路，普通 HTTP 请求会被误判为 SSE 并返回空响应。
+            if ($this->isSseStreamHandledInCurrentRequest($request)) {
                 return '';  // SSE 响应已流式发送，不需要返回内容
             }
             
@@ -847,15 +859,14 @@ class WlsRuntime implements RuntimeInterface
     }
     
     /**
-     * 记录 WLS 请求日志（DEV 环境或前端模式）
-     * 
+     * 记录 WLS 请求日志（默认写入 runtime.log，可由 wls.performance.request_log_enabled 关闭）
+     *
      * @param Request $request 请求对象
-     * @param bool $isFrontend 是否前端模式（前端模式输出到控制台，DEV 模式写入文件）
+     * @param bool $isFrontend 是否前端模式（保留参数供扩展）
      */
     private function logWlsRequest(Request $request, bool $isFrontend = false): void
     {
-        $isDev = \defined('DEV') && DEV;
-        if (!$this->shouldWriteRequestLog($isDev, $isFrontend)) {
+        if (!$this->shouldWriteRequestLog()) {
             return;
         }
         
@@ -878,8 +889,7 @@ class WlsRuntime implements RuntimeInterface
      */
     private function logWlsError(\Throwable $e): void
     {
-        $isDev = \defined('DEV') && DEV;
-        if (!$this->shouldWriteErrorLog($isDev)) {
+        if (!$this->shouldWriteErrorLog()) {
             return;
         }
         
@@ -949,9 +959,8 @@ class WlsRuntime implements RuntimeInterface
             w_log_debug('[WLS Performance Detail] ' . \json_encode($timing, \JSON_UNESCAPED_UNICODE));
         }
 
-        if (!empty($config['file_log_enabled'])) {
-            $this->appendJsonLine($this->getPerformanceLogFile(), $timing);
-        }
+        // 进入本方法前已由 shouldLog 过滤；timing 文件记录慢请求与全量调试场景
+        $this->appendJsonLine($this->getPerformanceLogFile(), $timing);
 
         if (!empty($config['analysis_log_enabled']) && $timing['total_ms'] >= 1000) {
             $analysis = [];
@@ -987,13 +996,15 @@ class WlsRuntime implements RuntimeInterface
 
         $serverConfig = Env::getInstance()->getConfig('wls') ?? [];
         $performanceConfig = \is_array($serverConfig['performance'] ?? null) ? $serverConfig['performance'] : [];
+        $verbose = LogConfig::isVerboseWlsLog();
         $this->performanceConfig = \array_merge([
             'slow_request_threshold_ms' => 500,
             'response_headers_enabled' => true,
-            'file_log_enabled' => true,
-            'debug_log_enabled' => true,
-            'analysis_log_enabled' => true,
-            'log_all_in_dev' => true,
+            // 以下项默认随「全量日志」(-log) 开启；未开启时仅保留慢请求 timing 落盘（见 recordPerformanceTiming）
+            'file_log_enabled' => $verbose,
+            'debug_log_enabled' => $verbose,
+            'analysis_log_enabled' => $verbose,
+            'log_all_in_dev' => $verbose,
             'request_log_enabled' => null,
             'error_log_enabled' => null,
             'runtime_log_file' => 'var/log/wls/runtime.log',
@@ -1003,21 +1014,21 @@ class WlsRuntime implements RuntimeInterface
         return $this->performanceConfig;
     }
 
-    private function shouldWriteRequestLog(bool $isDev, bool $isFrontend): bool
+    private function shouldWriteRequestLog(): bool
     {
         $enabled = $this->getPerformanceConfig()['request_log_enabled'];
         if ($enabled === null) {
-            return $isDev || $isFrontend;
+            return true;
         }
 
         return (bool)$enabled;
     }
 
-    private function shouldWriteErrorLog(bool $isDev): bool
+    private function shouldWriteErrorLog(): bool
     {
         $enabled = $this->getPerformanceConfig()['error_log_enabled'];
         if ($enabled === null) {
-            return $isDev;
+            return true;
         }
 
         return (bool)$enabled;
@@ -1135,6 +1146,22 @@ class WlsRuntime implements RuntimeInterface
         }
 
         return false;
+    }
+
+    /**
+     * 当前 Fiber/请求是否已经进入 SSE 流式发送。
+     *
+     * 判定必须是请求级：
+     * 1) 当前请求本身是 SSE 协议请求（Accept: text/event-stream）
+     * 2) 当前请求上下文中，SSE Writer 已调用 start() 并打上请求级标记
+     */
+    private function isSseStreamHandledInCurrentRequest(?Request $request = null): bool
+    {
+        if (!$this->isSseRequest($request)) {
+            return false;
+        }
+
+        return (bool)RequestContext::get(RequestContext::SSE_WRITER_KEY, false);
     }
 
     /**

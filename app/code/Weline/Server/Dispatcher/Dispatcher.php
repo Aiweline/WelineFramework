@@ -321,9 +321,10 @@ class Dispatcher
         $this->expectedWorkerCount = \max(0, $workerCount);
         $this->httpsEnabled = $this->detectHttpsEnabled($instanceName);
         $this->passthroughCore = new PassthroughCore($workerHost, $workerBasePort, $workerCount, $this->httpsEnabled);
-        $this->passthroughCore->setSpinWaitTickCallback(function (): void {
-            $this->pumpSpinWaitControlTick();
-        });
+        // 暂时不自旋等待，否则无法进入维护模式
+        // $this->passthroughCore->setSpinWaitTickCallback(function (): void {
+        //     $this->pumpSpinWaitControlTick();
+        // });
         $this->attackDetector = AttackDetector::getInstance()->setInstanceName($instanceName);
         $this->startTime = \time();
         $this->lastMasterCheck = \time();
@@ -1536,6 +1537,15 @@ class Dispatcher
             if ($this->passthroughCore->handleNewConnection($clientSocket, $clientIp)) {
                 $this->registerAcceptedClientConnection($clientSocket, $clientIp, $connId);
             } else {
+                // 业务 Worker 与维护 Worker 均不可用时，立即返回 503（WLS 启动中），不再等待路由重试。
+                if ($this->shouldReturnStartup503Immediately()) {
+                    if (!$this->tryRespondWithStartupProtection($clientSocket)) {
+                        @\socket_close($clientSocket);
+                    }
+                    $accepted++;
+                    continue;
+                }
+
                 if ($this->tryWaitAndRouteUnavailableBackend($clientSocket, $clientIp, $connId)) {
                     $accepted++;
                     if (($accepted % 10) === 0) {
@@ -1544,7 +1554,9 @@ class Dispatcher
                     continue;
                 }
                 if ($this->shouldRespondWithStartupProtectionBeforeMaintenanceRouting()) {
-                    $this->respondWithStartupProtection($clientSocket);
+                    if (!$this->tryRespondWithStartupProtection($clientSocket)) {
+                        @\socket_close($clientSocket);
+                    }
                     $accepted++;
                     continue;
                 }
@@ -1589,7 +1601,9 @@ class Dispatcher
                     }
                 }
                 if ($this->shouldServeMaintenanceFallback()) {
-                    $this->respondWithStartupProtection($clientSocket);
+                    if (!$this->tryRespondWithStartupProtection($clientSocket)) {
+                        @\socket_close($clientSocket);
+                    }
                 } elseif (!$this->tryRespondServiceUnavailable($clientSocket)) {
                     // HTTPS/TLS 原始流无法返回明文 503，只能关闭连接
                     @\socket_close($clientSocket);
@@ -1775,6 +1789,51 @@ class Dispatcher
     }
 
     /**
+     * 当业务 Worker 与维护 Worker 均不可用时，立即返回启动中 503。
+     *
+     * 含「IPC 已下发业务端口但尚未 listen / 短时全挂」：池非空但 handleNewConnection 已走 all_workers_down。
+     */
+    private function shouldReturnStartup503Immediately(): bool
+    {
+        $legacyAllWorkersDown = $this->passthroughCore->lastNewConnectionEndedInAllWorkersDown();
+        $maintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+        if ($legacyAllWorkersDown) {
+            return $maintenancePorts === [];
+        }
+
+        goto skipLegacyImmediateStartup503;
+
+        $maintenancePorts = $this->passthroughCore->getMaintenanceWorkerPorts();
+        if ($maintenancePorts !== []) {
+            return false;
+        }
+
+        // PassthroughCore 已穷尽业务池、自旋与维护候选仍失败，且当前不存在维护候选
+        // → 直接走启动中的明文 HTTP 维护页；TLS 原始流则由调用方关闭连接。
+        if ($this->passthroughCore->lastNewConnectionEndedInAllWorkersDown()) {
+            return true;
+        }
+
+skipLegacyImmediateStartup503:
+        if (!$this->shouldServeMaintenanceFallback()) {
+            return false;
+        }
+
+        $healthSummary = $this->passthroughCore->getWorkerHealthSummary();
+        $healthy = (int)($healthSummary['healthy'] ?? 0);
+        if ($healthy > 0) {
+            return false;
+        }
+
+        $workerPoolSize = $this->passthroughCore->getWorkerCount();
+        if ($workerPoolSize > 0) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
      * 在后端尚未可路由的短窗口内，先等待并重试一次路由，避免 TLS 请求立即断开导致 ERR_CONNECTION_ABORTED。
      *
      * @param \Socket|resource $clientSocket
@@ -1912,10 +1971,21 @@ HTML;
      *
      * @param \Socket|resource $clientSocket
      */
-    private function respondWithStartupProtection($clientSocket): void
+    private function tryRespondWithStartupProtection($clientSocket): bool
     {
+        $peek = '';
+        $peekLen = @\socket_recv($clientSocket, $peek, 8, \MSG_PEEK);
+        if ($peekLen === false || $peekLen <= 0 || $peek === '') {
+            return false;
+        }
+
+        if ($this->isTlsHandshakePeek($peek)) {
+            return false;
+        }
+
         @\socket_write($clientSocket, $this->fallbackMaintenancePage);
         @\socket_close($clientSocket);
+        return true;
     }
 
     /**
@@ -1931,15 +2001,18 @@ HTML;
             return false;
         }
 
-        $firstByte = \ord($peek[0]);
-        // TLS 握手流不发送明文 HTTP 503，避免破坏协议
-        if ($firstByte === 0x16) {
+        if ($this->isTlsHandshakePeek($peek)) {
             return false;
         }
 
         @\socket_write($clientSocket, $this->fallbackMaintenancePage);
         @\socket_close($clientSocket);
         return true;
+    }
+
+    private function isTlsHandshakePeek(string $peek): bool
+    {
+        return $peek !== '' && \ord($peek[0]) === 0x16;
     }
 
     /**

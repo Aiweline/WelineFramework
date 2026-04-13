@@ -48,7 +48,7 @@ final class SessionServerShutdownCommandTest extends TestCase
             $server->tick(50000);
             $server->tick(50000);
 
-            \fwrite($socket, SessionProtocol::buildShutdown());
+            \fwrite($socket, SessionProtocol::buildShutdown(null, ['server' => true]));
             for ($i = 0; $i < 10 && $server->isRunning(); $i++) {
                 $server->tick(50000);
             }
