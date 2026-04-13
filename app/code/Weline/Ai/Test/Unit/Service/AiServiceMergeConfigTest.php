@@ -6,6 +6,7 @@ namespace Weline\Ai\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Model\AiModel;
+use Weline\Ai\Model\Provider\Account;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -15,14 +16,25 @@ class AiServiceMergeConfigTest extends TestCase
 
     private \ReflectionMethod $mergeConfigMethod;
 
+    private \ReflectionMethod $createDetachedModelMethod;
+
+    private \ReflectionMethod $injectAccountConfigMethod;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $reflection = new \ReflectionClass(AiService::class);
         $this->service = $reflection->newInstanceWithoutConstructor();
+
         $this->mergeConfigMethod = $reflection->getMethod('mergeConfigToProviderConfig');
         $this->mergeConfigMethod->setAccessible(true);
+
+        $this->createDetachedModelMethod = $reflection->getMethod('createDetachedModel');
+        $this->createDetachedModelMethod->setAccessible(true);
+
+        $this->injectAccountConfigMethod = $reflection->getMethod('injectAccountConfig');
+        $this->injectAccountConfigMethod->setAccessible(true);
     }
 
     public function testMergeConfigToProviderConfigKeepsProviderApiKeyWhenModelConfigValueIsEmpty(): void
@@ -59,5 +71,58 @@ class AiServiceMergeConfigTest extends TestCase
         $this->assertTrue($method->invoke($this->service, new \Exception('Invalid API key or unauthorized')));
         $this->assertTrue($method->invoke($this->service, new \Exception('余额不足')));
         $this->assertFalse($method->invoke($this->service, new \Exception('Invalid prompt format')));
+    }
+
+    public function testDetachedModelKeepsPerAttemptAccountConfigIsolated(): void
+    {
+        /** @var AiModel $baseModel */
+        $baseModel = ObjectManager::make(AiModel::class);
+        $baseModel->setData(AiModel::schema_fields_MODEL_CODE, 'gpt-4o-mini');
+        $baseModel->setData(AiModel::schema_fields_SUPPLIER, 'openai');
+        $baseModel->setData(AiModel::schema_fields_CONFIG, json_encode([
+            'temperature' => 0.7,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+        $baseModel->setData(AiModel::schema_fields_PROVIDER_CONFIG, json_encode([], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+
+        /** @var AiModel $firstAttempt */
+        $firstAttempt = $this->createDetachedModelMethod->invoke($this->service, $baseModel);
+        /** @var Account $firstAccount */
+        $firstAccount = ObjectManager::make(Account::class);
+        $firstAccount->setData([
+            Account::schema_fields_API_KEY => 'sk-first',
+            Account::schema_fields_BASE_URL => 'https://first.example/v1',
+            Account::schema_fields_PROXY_CONFIG => json_encode([
+                'enabled' => true,
+                'host' => '127.0.0.1',
+                'port' => 7890,
+            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+        $this->injectAccountConfigMethod->invoke($this->service, $firstAttempt, $firstAccount);
+
+        /** @var AiModel $secondAttempt */
+        $secondAttempt = $this->createDetachedModelMethod->invoke($this->service, $baseModel);
+        /** @var Account $secondAccount */
+        $secondAccount = ObjectManager::make(Account::class);
+        $secondAccount->setData([
+            Account::schema_fields_API_KEY => 'sk-second',
+            Account::schema_fields_PROXY_CONFIG => json_encode([], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES),
+        ]);
+        $this->injectAccountConfigMethod->invoke($this->service, $secondAttempt, $secondAccount);
+
+        $firstConfig = $firstAttempt->getConfig();
+        $secondConfig = $secondAttempt->getConfig();
+        $firstProxy = json_decode((string)$firstAttempt->getProxyInfo(), true) ?: [];
+        $secondProxy = json_decode((string)$secondAttempt->getProxyInfo(), true) ?: [];
+
+        $this->assertNotSame($baseModel, $firstAttempt);
+        $this->assertNotSame($firstAttempt, $secondAttempt);
+        $this->assertSame('sk-first', $firstConfig['api_key'] ?? null);
+        $this->assertSame('https://first.example/v1', $firstConfig['base_url'] ?? null);
+        $this->assertSame('127.0.0.1', $firstProxy['host'] ?? null);
+        $this->assertSame('sk-second', $secondConfig['api_key'] ?? null);
+        $this->assertArrayNotHasKey('base_url', $secondConfig);
+        $this->assertSame([], $secondProxy);
+        $this->assertArrayNotHasKey('api_key', $baseModel->getConfig());
+        $this->assertSame([], $baseModel->getProviderConfig());
     }
 }

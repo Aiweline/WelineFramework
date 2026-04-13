@@ -78,6 +78,9 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertStringContainsString("define('WLS_MAINTENANCE_WORKER', true)", $workerSource);
         self::assertStringContainsString("define('WLS_MAINTENANCE_WORKER', true)", $workerSslSource);
         self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $interceptorSource);
+        self::assertStringContainsString('Runtime::isCli()', $interceptorSource);
+        self::assertStringContainsString("defined('WLS_MODE')", $interceptorSource);
+        self::assertStringNotContainsString("PHP_SAPI === 'cli'", $interceptorSource);
         self::assertStringContainsString('sendMaintenanceResponse()', $interceptorSource);
     }
 }

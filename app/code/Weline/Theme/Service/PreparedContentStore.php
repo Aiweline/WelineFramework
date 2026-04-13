@@ -4,14 +4,19 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Context;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\StateManager;
 
 class PreparedContentStore
 {
-    /** @var array<string,string> */
-    private static array $contentByKey = [];
+    private const STORAGE_KEY = 'theme.prepared_content_store.items_by_scope';
+    private const COUNTER_KEY = 'theme.prepared_content_store.counter_by_scope';
 
-    private static int $counter = 0;
+    /** @var array<string,string> */
+    private static array $fallbackContentByKey = [];
+
+    private static int $fallbackCounter = 0;
 
     private static bool $stateManagerRegistered = false;
 
@@ -31,8 +36,10 @@ class PreparedContentStore
     {
         self::registerStateManager();
 
-        $key = 'prepared_content_' . (++self::$counter);
-        self::$contentByKey[$key] = $content;
+        $items = self::getItems();
+        $key = 'prepared_content_' . self::nextCounter();
+        $items[$key] = $content;
+        self::setItems($items);
 
         return $key;
     }
@@ -41,7 +48,7 @@ class PreparedContentStore
     {
         self::registerStateManager();
 
-        return $key !== null && $key !== '' && array_key_exists($key, self::$contentByKey);
+        return $key !== null && $key !== '' && array_key_exists($key, self::getItems());
     }
 
     public static function get(?string $key, string $fallback = ''): string
@@ -52,7 +59,7 @@ class PreparedContentStore
             return $fallback;
         }
 
-        return self::$contentByKey[$key] ?? $fallback;
+        return self::getItems()[$key] ?? $fallback;
     }
 
     public static function resolveLayoutContent(
@@ -82,8 +89,37 @@ class PreparedContentStore
 
     public static function resetRequestState(): void
     {
-        self::$contentByKey = [];
-        self::$counter = 0;
+        if (self::shouldUseRequestContextStorage()) {
+            $scopeId = self::getCurrentScopeId();
+            if ($scopeId !== null) {
+                $allItems = RequestContext::get(self::STORAGE_KEY, []);
+                if (\is_array($allItems)) {
+                    unset($allItems[$scopeId]);
+                    if ($allItems === []) {
+                        RequestContext::remove(self::STORAGE_KEY);
+                    } else {
+                        RequestContext::set(self::STORAGE_KEY, $allItems);
+                    }
+                }
+
+                $allCounters = RequestContext::get(self::COUNTER_KEY, []);
+                if (\is_array($allCounters)) {
+                    unset($allCounters[$scopeId]);
+                    if ($allCounters === []) {
+                        RequestContext::remove(self::COUNTER_KEY);
+                    } else {
+                        RequestContext::set(self::COUNTER_KEY, $allCounters);
+                    }
+                }
+            } else {
+                RequestContext::remove(self::STORAGE_KEY);
+                RequestContext::remove(self::COUNTER_KEY);
+            }
+            return;
+        }
+
+        self::$fallbackContentByKey = [];
+        self::$fallbackCounter = 0;
     }
 
     private static function resolveKey(mixed $contentRenderKey, mixed $meta, mixed $childHtml): string
@@ -115,6 +151,99 @@ class PreparedContentStore
 
         if (is_array($childHtml) && array_key_exists('content', $childHtml) && is_string($childHtml['content'])) {
             return $childHtml['content'];
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function getItems(): array
+    {
+        if (self::shouldUseRequestContextStorage()) {
+            $scopeId = self::getCurrentScopeId();
+            if ($scopeId === null) {
+                return [];
+            }
+
+            $allItems = RequestContext::get(self::STORAGE_KEY, []);
+            if (!\is_array($allItems)) {
+                return [];
+            }
+
+            $items = $allItems[$scopeId] ?? [];
+            return \is_array($items) ? $items : [];
+        }
+
+        return self::$fallbackContentByKey;
+    }
+
+    /**
+     * @param array<string, string> $items
+     */
+    private static function setItems(array $items): void
+    {
+        if (self::shouldUseRequestContextStorage()) {
+            $scopeId = self::getCurrentScopeId();
+            if ($scopeId === null) {
+                return;
+            }
+
+            $allItems = RequestContext::get(self::STORAGE_KEY, []);
+            if (!\is_array($allItems)) {
+                $allItems = [];
+            }
+            $allItems[$scopeId] = $items;
+            RequestContext::set(self::STORAGE_KEY, $allItems);
+            return;
+        }
+
+        self::$fallbackContentByKey = $items;
+    }
+
+    private static function nextCounter(): int
+    {
+        if (self::shouldUseRequestContextStorage()) {
+            $scopeId = self::getCurrentScopeId();
+            if ($scopeId === null) {
+                return 1;
+            }
+
+            $allCounters = RequestContext::get(self::COUNTER_KEY, []);
+            if (!\is_array($allCounters)) {
+                $allCounters = [];
+            }
+
+            $counter = (int)($allCounters[$scopeId] ?? 0) + 1;
+            $allCounters[$scopeId] = $counter;
+            RequestContext::set(self::COUNTER_KEY, $allCounters);
+            return $counter;
+        }
+
+        return ++self::$fallbackCounter;
+    }
+
+    private static function shouldUseRequestContextStorage(): bool
+    {
+        $context = Context::getCurrent();
+        if ($context === null) {
+            return false;
+        }
+
+        return (string)$context->get('meta.type', '') === 'request' || RequestContext::isInitialized();
+    }
+
+    private static function getCurrentScopeId(): ?string
+    {
+        $connectionId = RequestContext::getConnectionId();
+        if ($connectionId !== null && $connectionId !== '') {
+            return 'conn:' . $connectionId;
+        }
+
+        $requestId = RequestContext::getId();
+        if ($requestId !== null && $requestId !== '') {
+            return 'request:' . $requestId;
         }
 
         return null;

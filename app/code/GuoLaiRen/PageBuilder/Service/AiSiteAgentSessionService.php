@@ -15,12 +15,16 @@ use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnect
 use Weline\Framework\Database\Connection\Adapter\Pgsql\SchemaConfig;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Service\LocalWelineHostsSyncService;
+use Weline\Websites\Service\LocalWelineWildcardCertificateService;
 
 class AiSiteAgentSessionService
 {
     public function __construct(
         private readonly AiSiteAgentSession $sessionModel,
         private readonly AiSiteAgentSessionEvent $eventModel,
+        private readonly ?LocalWelineHostsSyncService $localWelineHostsSyncService = null,
+        private readonly ?LocalWelineWildcardCertificateService $localWelineWildcardCertificateService = null,
     ) {
     }
 
@@ -184,6 +188,8 @@ class AiSiteAgentSessionService
         $session->setData(AiSiteAgentSession::schema_fields_WEBSITE_ID, \max(0, $websiteId));
         $this->touchUpdateTime($session);
         $session->save();
+        $this->injectEligibleLocalWelineDomainHosts($session);
+        $this->ensureEligibleLocalWelineWildcardCertificate($session, $websiteId);
         return true;
     }
 
@@ -374,6 +380,55 @@ class AiSiteAgentSessionService
             AiSiteAgentSession::schema_fields_UPDATE_TIME,
             \date('Y-m-d H:i:s')
         );
+    }
+
+    private function getLocalWelineHostsSyncService(): LocalWelineHostsSyncService
+    {
+        return $this->localWelineHostsSyncService
+            ?? ObjectManager::getInstance(LocalWelineHostsSyncService::class);
+    }
+
+    private function getLocalWelineWildcardCertificateService(): LocalWelineWildcardCertificateService
+    {
+        return $this->localWelineWildcardCertificateService
+            ?? ObjectManager::getInstance(LocalWelineWildcardCertificateService::class);
+    }
+
+    private function injectEligibleLocalWelineDomainHosts(AiSiteAgentSession $session): void
+    {
+        $scope = $session->getScopeArray();
+        $domain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? '')));
+        if ($domain === '') {
+            return;
+        }
+
+        try {
+            $this->getLocalWelineHostsSyncService()->ensureHostsInjected($domain);
+        } catch (\Throwable $throwable) {
+            \w_log_warning(
+                '[PageBuilder\\AiSiteAgentSessionService] local weline hosts injection failed: '
+                . $domain . ' - ' . $throwable->getMessage()
+            );
+        }
+    }
+
+    private function ensureEligibleLocalWelineWildcardCertificate(AiSiteAgentSession $session, int $websiteId): void
+    {
+        $scope = $session->getScopeArray();
+        $domain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? '')));
+        if ($domain === '') {
+            return;
+        }
+
+        try {
+            $this->getLocalWelineWildcardCertificateService()
+                ->ensureWildcardCertificateForDomain($domain, $websiteId);
+        } catch (\Throwable $throwable) {
+            \w_log_warning(
+                '[PageBuilder\\AiSiteAgentSessionService] local weline wildcard certificate ensure failed: '
+                . $domain . ' - ' . $throwable->getMessage()
+            );
+        }
     }
 
     /**

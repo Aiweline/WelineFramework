@@ -1,0 +1,48 @@
+<?php
+declare(strict_types=1);
+
+namespace Weline\Websites\Test\Unit\Service;
+
+use PHPUnit\Framework\TestCase;
+use Weline\Websites\Service\LocalWelineHostsSyncService;
+
+final class LocalWelineHostsSyncServiceTest extends TestCase
+{
+    public function testIsEligibleDomainOnlyAcceptsSingleLevelWelineLocalSubdomain(): void
+    {
+        $service = new LocalWelineHostsSyncService();
+
+        self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.weline.local'));
+        self::assertTrue($service->isEligibleDomain('DEMO-123.weline.local'));
+
+        self::assertFalse($service->isEligibleDomain('weline.local'));
+        self::assertFalse($service->isEligibleDomain('foo.bar.weline.local'));
+        self::assertFalse($service->isEligibleDomain('apk-seo.local'));
+        self::assertFalse($service->isEligibleDomain('apk-seo.example.com'));
+        self::assertFalse($service->isEligibleDomain('localhost'));
+    }
+
+    public function testEnsureHostsInjectedUsesQueryExecutorOnlyForEligibleDomain(): void
+    {
+        $calls = [];
+        $service = new LocalWelineHostsSyncService(
+            static function (string $provider, string $operation, array $params) use (&$calls): array {
+                $calls[] = [$provider, $operation, $params];
+                return ['success' => true, 'message' => 'ok'];
+            }
+        );
+
+        $ok = $service->ensureHostsInjected('apk-seo-d4de8e.weline.local');
+        self::assertTrue((bool)($ok['success'] ?? false));
+        self::assertCount(1, $calls);
+        self::assertSame('server', $calls[0][0]);
+        self::assertSame('hostsAdd', $calls[0][1]);
+        self::assertSame('apk-seo-d4de8e.weline.local', $calls[0][2]['domain']);
+
+        $calls = [];
+        $skipped = $service->ensureHostsInjected('apk-seo.example.com');
+        self::assertFalse((bool)($skipped['success'] ?? true));
+        self::assertTrue((bool)($skipped['skipped'] ?? false));
+        self::assertCount(0, $calls);
+    }
+}
