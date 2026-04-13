@@ -1,0 +1,539 @@
+<?php
+/**
+ * P0可观测性增强：SSE连接追踪与日志
+ * 
+ * 提供详细的SSE连接状态追踪，帮助诊断重复订阅、连接泄露等问题
+ * 此文件包含增强的SSE日志功能，用于调试和监控PageBuilder工作区的SSE连接
+ */
+
+// 确保在workspace.phtml中引入增强的SSE日志器
+?>
+
+<script src="<?= $this->getViewFileUrl('GuoLaiRen_PageBuilder::backend/ai-site-agent/workspace/enhanced-sse-logger.js') ?>"></script>
+
+<script>
+(function () {
+    'use strict';
+    
+    var workspaceApi = window.__pbWorkspaceApi;
+    if (!workspaceApi || typeof workspaceApi !== 'object') {
+        workspaceApi = {};
+        window.__pbWorkspaceApi = workspaceApi;
+    }
+    workspaceApi.observability = workspaceApi.observability && typeof workspaceApi.observability === 'object'
+        ? workspaceApi.observability
+        : {};
+    
+    // P0可观测性：初始化增强SSE日志器
+    var sseLogger = null;
+    try {
+        if (window.PbAiSseConnectionManager) {
+            sseLogger = window.PbAiSseConnectionManager.createLogger('pagebuilder-workspace', {
+                publicId: <?= \json_encode(($publicId ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                enableDetailedLogging: true,
+                maxLogEntries: 500
+            });
+            
+            // 统一收敛到 workspace API
+            workspaceApi.observability.sseLogger = sseLogger;
+            // 向后兼容
+            window.pbAiWorkspaceSseLogger = sseLogger;
+        }
+    } catch (e) {
+        console.warn('[SSE] 初始化增强日志器失败:', e);
+    }
+    
+    // 增强的连接状态追踪
+    var connectionStartTime = null;
+    var currentConnectionId = null;
+    var connectionRetryCount = 0;
+    var connectionAttempts = new Map(); // 追踪所有连接尝试
+    
+    // 连接健康监控
+    var connectionHealthMonitor = {
+        startTime: Date.now(),
+        totalMessages: 0,
+        duplicateMessages: 0,
+        lastMessageTime: Date.now(),
+        connectionDrops: 0,
+        
+        recordMessage: function(eventType, data, isDuplicate = false) {
+            this.totalMessages++;
+            this.lastMessageTime = Date.now();
+            
+            if (isDuplicate) {
+                this.duplicateMessages++;
+            }
+            
+            if (sseLogger) {
+                sseLogger.log('debug', '消息健康监控', {
+                    event: 'message_health',
+                    eventType: eventType,
+                    isDuplicate: isDuplicate,
+                    totalMessages: this.totalMessages,
+                    duplicateRate: (this.duplicateMessages / this.totalMessages * 100).toFixed(2) + '%',
+                    timeSinceLastMessage: Date.now() - this.lastMessageTime
+                });
+            }
+        },
+        
+        recordConnectionDrop: function(reason) {
+            this.connectionDrops++;
+            
+            if (sseLogger) {
+                sseLogger.log('warn', '连接断开', {
+                    event: 'connection_drop',
+                    reason: reason,
+                    totalDrops: this.connectionDrops,
+                    uptime: Date.now() - this.startTime
+                });
+            }
+        },
+        
+        getHealthReport: function() {
+            var now = Date.now();
+            return {
+                uptime: now - this.startTime,
+                totalMessages: this.totalMessages,
+                duplicateMessages: this.duplicateMessages,
+                duplicateRate: this.totalMessages > 0 ? (this.duplicateMessages / this.totalMessages * 100).toFixed(2) + '%' : '0%',
+                lastMessageAgo: now - this.lastMessageTime,
+                connectionDrops: this.connectionDrops,
+                isHealthy: (now - this.lastMessageTime) < 30000 && this.duplicateRate < 10 // 30秒内有消息且重复率<10%
+            };
+        }
+    };
+    
+    // 重复连接检测器
+    var duplicateConnectionDetector = {
+        activeConnections: new Map(),
+        connectionHistory: [],
+        maxHistorySize: 100,
+        
+        registerConnection: function(url, connectionId, metadata = {}) {
+            var connectionKey = this.generateConnectionKey(url);
+            var existingConnection = this.activeConnections.get(connectionKey);
+            
+            if (existingConnection) {
+                // 检测到重复连接
+                var duplicateInfo = {
+                    existingConnectionId: existingConnection.connectionId,
+                    existingStartTime: existingConnection.startTime,
+                    newConnectionId: connectionId,
+                    newStartTime: Date.now(),
+                    url: url,
+                    metadata: metadata
+                };
+                
+                this.recordDuplicateConnection(duplicateInfo);
+                
+                if (sseLogger) {
+                    sseLogger.logDuplicateConnectionDetected(url, existingConnection.connectionId);
+                }
+                
+                return false; // 表示这是重复连接
+            }
+            
+            // 注册新连接
+            var connectionInfo = {
+                connectionId: connectionId,
+                url: url,
+                startTime: Date.now(),
+                metadata: metadata,
+                messageCount: 0
+            };
+            
+            this.activeConnections.set(connectionKey, connectionInfo);
+            this.recordConnectionHistory('registered', connectionInfo);
+            
+            return true; // 表示这是新连接
+        },
+        
+        unregisterConnection: function(url, connectionId, reason = '') {
+            var connectionKey = this.generateConnectionKey(url);
+            var connectionInfo = this.activeConnections.get(connectionKey);
+            
+            if (connectionInfo && connectionInfo.connectionId === connectionId) {
+                var duration = Date.now() - connectionInfo.startTime;
+                
+                this.activeConnections.delete(connectionKey);
+                
+                this.recordConnectionHistory('unregistered', {
+                    ...connectionInfo,
+                    duration: duration,
+                    reason: reason
+                });
+                
+                if (sseLogger) {
+                    sseLogger.logConnectionClosed(url, connectionId, reason);
+                }
+                
+                return true;
+            }
+            
+            return false;
+        },
+        
+        generateConnectionKey: function(url) {
+            // 基于URL和会话生成连接键，忽略时间戳等动态参数
+            try {
+                var urlObj = new URL(url);
+                var baseUrl = urlObj.origin + urlObj.pathname;
+                var publicId = urlObj.searchParams.get('public_id') || '';
+                var tabToken = urlObj.searchParams.get('tab_token') || '';
+                return baseUrl + '|' + publicId + '|' + tabToken;
+            } catch (e) {
+                return url.split('?')[0]; // 降级处理
+            }
+        },
+        
+        recordDuplicateConnection: function(duplicateInfo) {
+            this.connectionHistory.push({
+                type: 'duplicate_detected',
+                timestamp: Date.now(),
+                ...duplicateInfo
+            });
+            
+            this.trimHistory();
+            
+            // 在控制台输出详细的重复连接信息
+            console.warn('[SSE] 检测到重复连接:', {
+                url: duplicateInfo.url,
+                existingConnectionId: duplicateInfo.existingConnectionId,
+                newConnectionId: duplicateInfo.newConnectionId,
+                timeDiff: duplicateInfo.newStartTime - duplicateInfo.existingStartTime
+            });
+        },
+        
+        recordConnectionHistory: function(type, connectionInfo) {
+            this.connectionHistory.push({
+                type: type,
+                timestamp: Date.now(),
+                ...connectionInfo
+            });
+            
+            this.trimHistory();
+        },
+        
+        trimHistory: function() {
+            if (this.connectionHistory.length > this.maxHistorySize) {
+                this.connectionHistory = this.connectionHistory.slice(-this.maxHistorySize);
+            }
+        },
+        
+        getDuplicateReport: function() {
+            var duplicates = this.connectionHistory.filter(entry => entry.type === 'duplicate_detected');
+            return {
+                totalDuplicates: duplicates.length,
+                recentDuplicates: duplicates.slice(-10), // 最近10次
+                duplicateRate: (duplicates.length / Math.max(1, this.connectionHistory.length) * 100).toFixed(2) + '%'
+            };
+        }
+    };
+    
+    // 增强的SSE连接包装器
+    function EnhancedSseConnection(originalTerminal, options = {}) {
+        this.originalTerminal = originalTerminal;
+        this.connectionId = 'conn_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+        this.connectionStartTime = Date.now();
+        this.isActive = false;
+        this.messageCount = 0;
+        this.options = options;
+        
+        if (sseLogger) {
+            sseLogger.log('info', '创建增强SSE连接', {
+                event: 'enhanced_connection_created',
+                connectionId: this.connectionId,
+                options: options
+            });
+        }
+    }
+    
+    EnhancedSseConnection.prototype.start = function(url, startOptions = {}) {
+        if (this.isActive) {
+            if (sseLogger) {
+                sseLogger.log('warn', '尝试启动已激活的连接', {
+                    event: 'connection_already_active',
+                    connectionId: this.connectionId
+                });
+            }
+            return false;
+        }
+        
+        // 检查重复连接
+        var isUnique = duplicateConnectionDetector.registerConnection(url, this.connectionId, {
+            startOptions: startOptions,
+            timestamp: Date.now()
+        });
+        
+        if (!isUnique) {
+            if (sseLogger) {
+                sseLogger.log('warn', '检测到重复连接，阻止启动', {
+                    event: 'duplicate_connection_blocked',
+                    connectionId: this.connectionId,
+                    url: url
+                });
+            }
+            return false;
+        }
+        
+        this.isActive = true;
+        this.connectionStartTime = Date.now();
+        connectionStartTime = this.connectionStartTime;
+        currentConnectionId = this.connectionId;
+        
+        if (sseLogger) {
+            sseLogger.logConnectionAttempt(url, startOptions);
+            currentConnectionId = sseLogger.logConnectionSuccess(url, this);
+        }
+        
+        // 增强原始终端的start方法
+        var enhancedStartOptions = {
+            ...startOptions,
+            onOpen: (event) => {
+                if (sseLogger) {
+                    sseLogger.log('info', 'SSE连接已打开', {
+                        event: 'connection_opened',
+                        connectionId: this.connectionId,
+                        url: url
+                    });
+                }
+                
+                if (startOptions.onOpen) {
+                    startOptions.onOpen(event);
+                }
+            },
+            onMessage: (event) => {
+                this.messageCount++;
+                connectionHealthMonitor.recordMessage('message', event.data);
+                
+                if (sseLogger) {
+                    sseLogger.logMessageReceived(this.connectionId, 'message', event.data);
+                }
+                
+                if (startOptions.onMessage) {
+                    startOptions.onMessage(event);
+                }
+            },
+            onError: (event) => {
+                if (sseLogger) {
+                    sseLogger.logConnectionError(url, event.error || event, event.target?.readyState);
+                }
+                
+                if (startOptions.onError) {
+                    startOptions.onError(event);
+                }
+            }
+        };
+        
+        return this.originalTerminal.start(url, enhancedStartOptions);
+    };
+    
+    EnhancedSseConnection.prototype.stop = function(options = {}) {
+        if (!this.isActive) {
+            return;
+        }
+        
+        this.isActive = false;
+        var duration = Date.now() - this.connectionStartTime;
+        
+        duplicateConnectionDetector.unregisterConnection(
+            this.originalTerminal.getUrl ? this.originalTerminal.getUrl() : 'unknown',
+            this.connectionId,
+            options.reason || 'manual_stop'
+        );
+        
+        if (sseLogger) {
+            sseLogger.logConnectionClosed(
+                this.originalTerminal.getUrl ? this.originalTerminal.getUrl() : 'unknown',
+                this.connectionId,
+                options.reason || 'manual_stop'
+            );
+        }
+        
+        if (this.originalTerminal.stop) {
+            return this.originalTerminal.stop(options);
+        }
+    };
+    
+    // 增强终端方法
+    function enhanceTerminal(originalTerminal) {
+        if (!originalTerminal) {
+            return originalTerminal;
+        }
+        
+        var enhancedConnection = new EnhancedSseConnection(originalTerminal);
+        
+        // 包装原始方法
+        var enhancedTerminal = Object.create(originalTerminal);
+        
+        enhancedTerminal.start = function(url, options) {
+            return enhancedConnection.start(url, options);
+        };
+        
+        enhancedTerminal.stop = function(options) {
+            return enhancedConnection.stop(options);
+        };
+        
+        enhancedTerminal.getConnectionStats = function() {
+            return {
+                connectionId: enhancedConnection.connectionId,
+                isActive: enhancedConnection.isActive,
+                messageCount: enhancedConnection.messageCount,
+                duration: enhancedConnection.isActive ? 
+                    Date.now() - enhancedConnection.connectionStartTime : 0
+            };
+        };
+        
+        return enhancedTerminal;
+    }
+    
+    // 统一 API（可观测能力）
+    workspaceApi.observability.enhanceTerminal = function(terminal) {
+        return enhanceTerminal(terminal);
+    };
+    workspaceApi.observability.getHealthReport = function() {
+        return {
+            connectionHealth: connectionHealthMonitor.getHealthReport(),
+            duplicateConnections: duplicateConnectionDetector.getDuplicateReport(),
+            globalStats: window.PbAiSseConnectionManager ? 
+                window.PbAiSseConnectionManager.getGlobalStats() : null,
+            workspaceStats: sseLogger ? sseLogger.getStats() : null
+        };
+    };
+    workspaceApi.observability.exportLogs = function() {
+        var exportData = {
+            timestamp: new Date().toISOString(),
+            healthReport: workspaceApi.observability.getHealthReport(),
+            workspaceLogs: sseLogger ? sseLogger.exportLogs() : null,
+            connectionHistory: duplicateConnectionDetector.connectionHistory
+        };
+        
+        // 创建下载链接
+        var blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'pb-ai-sse-logs-' + Date.now() + '.json';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        return exportData;
+    };
+    // 向后兼容旧全局入口
+    window.enhancePbAiWorkspaceTerminal = function (terminal) {
+        return workspaceApi.observability.enhanceTerminal(terminal);
+    };
+    window.getPbAiSseHealthReport = function () {
+        return workspaceApi.observability.getHealthReport();
+    };
+    window.exportPbAiSseLogs = function () {
+        return workspaceApi.observability.exportLogs();
+    };
+    
+    console.info('[SSE] P0可观测性增强已加载');
+    if (sseLogger) {
+        sseLogger.log('info', 'P0可观测性增强初始化完成', {
+            event: 'observability_initialized',
+            tabToken: workspaceStreamTabToken,
+            publicId: publicId
+        });
+    }
+})();
+</script>
+
+<!-- P0可观测性：调试面板 -->
+<div id="pb-ai-sse-debug-panel" style="display: none; position: fixed; top: 10px; right: 10px; width: 400px; max-height: 600px; background: #1e1e2e; border: 1px solid #313244; border-radius: 8px; padding: 15px; z-index: 9999; overflow-y: auto; font-family: 'SFMono-Regular', Consolas, monospace; font-size: 12px; color: #cdd6f4;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #313244; padding-bottom: 10px;">
+        <h4 style="margin: 0; color: #89b4fa;">SSE连接调试面板</h4>
+        <button onclick="document.getElementById('pb-ai-sse-debug-panel').style.display='none'" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">✕</button>
+    </div>
+    
+    <div style="margin-bottom: 15px;">
+        <button onclick="console.log(window.getPbAiSseHealthReport())" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 5px;">查看健康报告</button>
+        <button onclick="window.exportPbAiSseLogs()" style="background: #45475a; border: none; color: #cdd6f4; padding: 5px 10px; border-radius: 4px; cursor: pointer;">导出日志</button>
+    </div>
+    
+    <div id="pb-ai-sse-stats" style="background: #313244; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+        <div>加载中...</div>
+    </div>
+    
+    <div id="pb-ai-sse-logs" style="background: #181825; padding: 10px; border-radius: 4px; max-height: 300px; overflow-y: auto;">
+        <div>日志将在这里显示...</div>
+    </div>
+</div>
+
+<script>
+// 调试面板控制
+(function () {
+    'use strict';
+
+    var workspaceApi = window.__pbWorkspaceApi;
+    if (!workspaceApi || typeof workspaceApi !== 'object') {
+        workspaceApi = {};
+        window.__pbWorkspaceApi = workspaceApi;
+    }
+    workspaceApi.observability = workspaceApi.observability && typeof workspaceApi.observability === 'object'
+        ? workspaceApi.observability
+        : {};
+
+    workspaceApi.observability.toggleDebugPanel = function () {
+        var panel = document.getElementById('pb-ai-sse-debug-panel');
+        if (!panel) {
+            return;
+        }
+        if (panel.style.display === 'none') {
+            panel.style.display = 'block';
+            workspaceApi.observability.updateDebugPanel();
+        } else {
+            panel.style.display = 'none';
+        }
+    };
+
+    workspaceApi.observability.updateDebugPanel = function () {
+        try {
+            var healthReport = workspaceApi.observability.getHealthReport ? workspaceApi.observability.getHealthReport() : null;
+            var statsEl = document.getElementById('pb-ai-sse-stats');
+            var logsEl = document.getElementById('pb-ai-sse-logs');
+
+            if (statsEl && healthReport) {
+                statsEl.innerHTML = `
+                <div><strong>连接状态:</strong> ${healthReport.connectionHealth.isHealthy ? '✅ 健康' : '❌ 异常'}</div>
+                <div><strong>总消息数:</strong> ${healthReport.connectionHealth.totalMessages}</div>
+                <div><strong>重复消息:</strong> ${healthReport.connectionHealth.duplicateMessages} (${healthReport.connectionHealth.duplicateRate})</div>
+                <div><strong>重复连接:</strong> ${healthReport.duplicateConnections.totalDuplicates}</div>
+                <div><strong>连接断开:</strong> ${healthReport.connectionHealth.connectionDrops}</div>
+                <div><strong>最后消息:</strong> ${healthReport.connectionHealth.lastMessageAgo}ms 前</div>
+            `;
+            }
+
+            if (logsEl && workspaceApi.observability.sseLogger && typeof workspaceApi.observability.sseLogger.getRecentLogs === 'function') {
+                var recentLogs = workspaceApi.observability.sseLogger.getRecentLogs(20);
+                logsEl.textContent = JSON.stringify(recentLogs, null, 2);
+            }
+        } catch (e) {
+            console.error('更新调试面板失败:', e);
+        }
+    };
+
+    // 向后兼容旧全局入口
+    window.togglePbAiSseDebugPanel = function () {
+        return workspaceApi.observability.toggleDebugPanel();
+    };
+    window.updatePbAiSseDebugPanel = function () {
+        return workspaceApi.observability.updateDebugPanel();
+    };
+
+    // 快捷键支持
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+            e.preventDefault();
+            workspaceApi.observability.toggleDebugPanel();
+        }
+    });
+
+    console.info('[SSE] 按 Ctrl+Shift+D 打开调试面板');
+})();
+</script>
