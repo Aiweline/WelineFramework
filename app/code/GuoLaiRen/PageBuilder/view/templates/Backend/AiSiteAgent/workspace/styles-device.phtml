@@ -1,0 +1,43 @@
+<style>
+.pb-ai-preview-device-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+.pb-ai-preview-device-bar .btn.active {
+    background: #0f172a;
+    border-color: #0f172a;
+    color: #fff;
+}
+.pb-ai-preview-device-stage {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    overflow: auto;
+    padding: 16px;
+    background: linear-gradient(180deg, #eef2f7 0%, #e2e8f0 100%);
+}
+.pb-ai-preview-device-stage iframe {
+    display: block;
+    margin: 0 auto;
+    transition: width .2s ease, min-height .2s ease, box-shadow .2s ease;
+    box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18);
+}
+.pb-ai-preview-device-stage.is-desktop iframe {
+    width: 100%;
+    max-width: 100%;
+    min-height: 860px;
+}
+.pb-ai-preview-device-stage.is-tablet iframe {
+    width: 834px;
+    max-width: 834px;
+    min-height: 1112px;
+}
+.pb-ai-preview-device-stage.is-mobile iframe {
+    width: 390px;
+    max-width: 390px;
+    min-height: 844px;
+}
+</style>
