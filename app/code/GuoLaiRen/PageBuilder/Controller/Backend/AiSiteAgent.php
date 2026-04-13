@@ -53,8 +53,12 @@ class AiSiteAgent extends BaseController
      * 工作区 stream-sse 续约窗口：超过此时间未收到续约请求（POST post-touch-stream-lease）则视为断连，
      * 服务端将结束事件流并清理与本 lease 关联的排队/运行中操作。
      * 前端心跳间隔应显著小于本值（当前页面约 20s 一次 POST 续约）。
+     * 
+     * 注意：此值需要与 observeDuplicateOperationStream 中的 $maxIdleLoops 协调，
+     * 确保长时间运行的 AI 生成任务（如大型页面构建）不会被误判为过时。
+     * 当前设置为 600 秒（10分钟），以支持复杂的 AI 内容生成场景。
      */
-    private const STALE_ACTIVE_OPERATION_TTL_SEC = 180;
+    private const STALE_ACTIVE_OPERATION_TTL_SEC = 600;
 
     private readonly AiSiteAgentSessionService $sessionService;
     private readonly AiSiteScopeCompatibilityService $scopeCompatibilityService;
@@ -2099,7 +2103,9 @@ SCRIPT;
         string $operation,
         string $executionToken
     ): array {
-        $maxIdleLoops = 240;
+        // 增加超时时间以支持长时间的AI生成任务
+        // 从240秒增加到600秒（10分钟），适应大型页面生成场景
+        $maxIdleLoops = 600;
         $pollIntervalMs = 1000;
         $idleLoops = 0;
 
@@ -2142,6 +2148,14 @@ SCRIPT;
 
             if ($idleLoops >= $maxIdleLoops && $this->isActiveOperationStale($activeOperation)) {
                 $timedOut = true;
+                // 记录超时日志，便于问题追踪和调试
+                $this->logOperationSse('observation_timeout', [
+                    'public_id' => $session->getPublicId(),
+                    'operation' => $operation,
+                    'idle_loops' => $idleLoops,
+                    'timeout_seconds' => $maxIdleLoops * ($pollIntervalMs / 1000),
+                    'active_operation' => $activeOperation,
+                ]);
                 break;
             }
 
@@ -2160,7 +2174,8 @@ SCRIPT;
         $success = !$timedOut && !\in_array($status, ['error', 'cancelled', 'queued', 'running'], true);
         $message = \trim((string)($activeOperation['message'] ?? ''));
         if ($timedOut) {
-            $message = (string)__('操作仍在执行，但进度观察已超时，请刷新重试');
+            // 提供更详细的超时信息和操作建议
+            $message = (string)__('操作仍在执行中，但进度观察已超时（10分钟无响应）。这可能发生在大型页面生成或复杂任务中。建议：1）刷新页面查看最新状态；2）如果操作未完成，可重新触发；3）检查系统日志了解详细信息');
         } elseif ($message === '') {
             $message = $success ? (string)__('操作执行完成') : (string)__('操作执行失败');
         }
