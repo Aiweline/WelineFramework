@@ -1005,7 +1005,7 @@ class WlsRuntime implements RuntimeInterface
             'debug_log_enabled' => $verbose,
             'analysis_log_enabled' => $verbose,
             'log_all_in_dev' => $verbose,
-            'request_log_enabled' => null,
+            'request_log_enabled' => $verbose,
             'error_log_enabled' => null,
             'runtime_log_file' => 'var/log/wls/runtime.log',
             'timing_log_file' => 'var/log/wls/timing.log',

@@ -34,6 +34,10 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
         if (!isset($options['pool_min_idle']) && !isset($options['min_idle'])) {
             $options['pool_min_idle'] = 1;
         }
+        if (!isset($options['pool_size']) && !isset($options['max_size'])) {
+            // 默认提升共享服务连接池容量，适配高并发 Worker 复用场景。
+            $options['pool_size'] = 32;
+        }
         if (!isset($options['idle_timeout'])) {
             $options['idle_timeout'] = 86400.0;
         }

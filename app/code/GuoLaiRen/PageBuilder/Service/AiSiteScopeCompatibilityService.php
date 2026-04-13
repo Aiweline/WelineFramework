@@ -847,7 +847,12 @@ class AiSiteScopeCompatibilityService
     private function hydrateEditableBlockMetadata(array $existingBlocks, array $defaultBlocks): array
     {
         if ($defaultBlocks === []) {
-            return $existingBlocks;
+            $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
+
+            return \array_values(\array_map(
+                static fn(array $block): array => $blocksBuilder->hydrateGeneratedBlockMetadata($block),
+                \array_values(\array_filter($existingBlocks, static fn(mixed $block): bool => \is_array($block)))
+            ));
         }
 
         $defaultById = [];
@@ -863,6 +868,7 @@ class AiSiteScopeCompatibilityService
         }
 
         $hydrated = [];
+        $blocksBuilder = $this->aiSiteHtmlBlocksBuildService ?? ObjectManager::getInstance(AiSiteHtmlBlocksBuildService::class);
         foreach ($existingBlocks as $block) {
             if (!\is_array($block)) {
                 continue;
@@ -878,7 +884,7 @@ class AiSiteScopeCompatibilityService
                     $block['field_schema'] = \is_array($defaultBlock['field_schema'] ?? null) ? $defaultBlock['field_schema'] : [];
                 }
             }
-            $hydrated[] = $block;
+            $hydrated[] = $blocksBuilder->hydrateGeneratedBlockMetadata($block);
         }
 
         $existingIds = \array_values(\array_filter(\array_map(static function (array $block): string {
@@ -914,13 +920,20 @@ class AiSiteScopeCompatibilityService
             if ($bid === '') {
                 $bid = 'blk_' . \bin2hex(\random_bytes(4));
             }
-            $out[] = [
+            $normalized = [
                 'block_id' => $bid,
                 'type' => \trim((string)($b['type'] ?? 'section')),
                 'html' => (string)($b['html'] ?? ''),
                 'config' => \is_array($b['config'] ?? null) ? $b['config'] : [],
                 'field_schema' => \is_array($b['field_schema'] ?? null) ? $b['field_schema'] : [],
             ];
+            foreach ($b as $key => $value) {
+                if (!\is_string($key) || !\str_starts_with($key, '_pb_server_')) {
+                    continue;
+                }
+                $normalized[$key] = $value;
+            }
+            $out[] = $normalized;
         }
 
         return $out;
