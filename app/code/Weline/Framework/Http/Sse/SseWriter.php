@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Http\Sse;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\SchedulerSystem;
 
 /**
@@ -114,11 +115,12 @@ class SseWriter
         @\set_time_limit(0);
         @\ignore_user_abort(true);
         
-        // 标记 SSE 模式已启用
+        // 标记 SSE 模式已启用（请求级 + 兼容旧全局标记）
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, true);
         SseContext::enableSse();
         
         // 检查是否在 WLS 模式（有连接资源）
-        $isWlsMode = SseContext::getConnection() !== null;
+        $isWlsMode = SseContext::getConnection() !== null || SseContext::getWriteCallback() !== null;
         
         if ($isWlsMode) {
             // WLS 模式：直接写入 socket，构建完整 HTTP 响应
@@ -132,6 +134,8 @@ class SseWriter
 
             // 使用带重试的写入方法
             $this->writeWithRetry($headers);
+            // 与 FPM 分支一致：大块注释推动 Nginx/浏览器尽早刷新首包，降低「仅有状态行、长时间0 字节」的观感
+            $this->writeWithRetry(':' . \str_repeat(' ', 2048) . "\n\n");
         } else {
             // FPM/CLI 模式：使用 PHP 原生 header() 函数
             // 尽可能关闭压缩与输出缓冲，避免 SSE 首包被 FPM/代理缓冲导致前端长期 pending。
@@ -166,7 +170,13 @@ class SseWriter
         
         $this->started = true;
         $this->lastHeartbeat = \time();
-        
+
+        // WLS：数据先入 worker 写队列，须让当前 Fiber 挂起一瞬，主循环才能 wlsHttpFlushQueuedWrites，
+        // 否则 start() 后若长时间同步业务（DB/认领）才首次 yield，客户端会长期收不到任何 SSE 字节。
+        if ($isWlsMode && SseContext::getWriteCallback() !== null) {
+            SchedulerSystem::yield();
+        }
+
         return $this;
     }
     
@@ -258,6 +268,10 @@ class SseWriter
     {
         $writtenLen = \strlen($data);
         for ($i = 0; $i < $maxRetries; $i++) {
+            if (!SseContext::isConnectionAlive()) {
+                return false;
+            }
+
             $result = SseContext::write($data);
             if ($result !== false) {
                 // #region agent debug log
@@ -482,7 +496,6 @@ class SseWriter
         // 仅重置 SseContext 状态，让 worker 的 sendResponseAndCleanup / pendingClose 负责关连。
         if (\defined('WLS_MODE') && WLS_MODE) {
             $this->started = false;
-            SseContext::reset();
             return;
         }
 

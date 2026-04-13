@@ -1571,13 +1571,29 @@ if ($dataLayout !== 'horizontal'):
 
         function calculatePathMatchScore(currentPath, menuPath) {
             function getPathname(url) {
+                var path;
                 try {
                     var a = document.createElement('a');
                     a.href = url;
-                    return a.pathname.replace(/\/+$/, '');
+                    path = a.pathname || '';
                 } catch (e) {
-                    return url.replace(/\/+$/, '');
+                    path = String(url || '');
                 }
+
+                path = String(path || '').split(/[?#]/)[0].replace(/\/+$/, '');
+                var segments = path.split('/').filter(function(s) { return s.length > 0; });
+                if (segments.length > 1 && /^[A-Za-z0-9]{16,}$/.test(segments[0])) {
+                    segments = segments.slice(1);
+                }
+                if (
+                    segments.length > 2
+                    && /^[A-Z]{3}$/.test(segments[0])
+                    && /^[a-z]{2}_[A-Za-z]+_[A-Z]{2}$/.test(segments[1])
+                ) {
+                    segments = segments.slice(2);
+                }
+
+                return '/' + segments.join('/');
             }
 
             var currentPathname = getPathname(currentPath);

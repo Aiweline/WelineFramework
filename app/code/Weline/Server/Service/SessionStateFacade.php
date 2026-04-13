@@ -172,6 +172,10 @@ class SessionStateFacade implements SessionStateFacadeInterface
             'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
             'service_type' => 'Session',
+            'service_role' => ControlMessage::ROLE_SESSION_SERVER,
+            'consumer_code' => $this->consumerCode,
+            'instance_name' => $this->consumerCode,
+            'owner_type' => 'instance',
         ];
     }
 

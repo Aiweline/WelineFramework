@@ -13,13 +13,16 @@ use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 final class AiSitePageComponentGenerationService
 {
     private const REQUEST_CTX_AI_CHUNK_FORWARDER = 'pagebuilder.ai.chunk.forwarder';
     public const REQUEST_KEY_FORCE_REAL_AI_IN_TEST = 'pagebuilder.ai.force_real_in_test';
+    public const REQUEST_KEY_ALLOW_STUB_AI_IN_TEST = 'pagebuilder.ai.allow_stub_in_test';
     private const JSON_REPAIR_MAX_ATTEMPTS = 3;
     private const SYNTAX_FIX_MAX_ATTEMPTS = 2;
+    private const COMPONENT_GENERATION_MAX_ATTEMPTS = 3;
 
     public function __construct(
         private readonly ?FrameworkBuilder $frameworkBuilder = null,
@@ -71,13 +74,19 @@ final class AiSitePageComponentGenerationService
      *   ai_data:array<string,mixed>
      * }
      */
-    public function generateSharedComponent(string $region, array $websiteProfile, array $scope): array
-    {
+    public function generateSharedComponent(
+        string $region,
+        array $websiteProfile,
+        array $scope,
+        string $refinementInstruction = '',
+        bool $forceRegenerate = false,
+    ): array {
         $region = \trim($region);
         if (!\in_array($region, ['header', 'footer'], true)) {
             throw new \InvalidArgumentException((string)__('Unsupported shared component region: %{1}', [$region]));
         }
 
+        $refinementInstruction = \trim($refinementInstruction);
         $siteDisplayName = $this->getPageBlueprintService()->resolveSiteDisplayName($websiteProfile, $scope);
         $cacheKey = \md5((string)\json_encode([
             'region' => $region,
@@ -87,14 +96,15 @@ final class AiSitePageComponentGenerationService
             'style' => $this->resolvePromptStyleCode($scope, Page::TYPE_HOME),
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
         static $sharedCache = [];
-        if (isset($sharedCache[$cacheKey]) && \is_array($sharedCache[$cacheKey])) {
+        $useCache = !$forceRegenerate && $refinementInstruction === '';
+        if ($useCache && isset($sharedCache[$cacheKey]) && \is_array($sharedCache[$cacheKey])) {
             return $sharedCache[$cacheKey];
         }
 
         $headerConfig = $this->buildHeaderDefaultConfig($websiteProfile, $scope, $siteDisplayName);
         $footerConfig = $this->buildFooterDefaultConfig($websiteProfile, $scope, $siteDisplayName);
 
-        $sharedCache[$cacheKey] = match ($region) {
+        $result = match ($region) {
             'header' => $this->generateComponent(
                 'header/ai-site-header',
                 'AI Site Header',
@@ -113,7 +123,11 @@ final class AiSitePageComponentGenerationService
             ),
         };
 
-        return $sharedCache[$cacheKey];
+        if ($useCache) {
+            $sharedCache[$cacheKey] = $result;
+        }
+
+        return $result;
     }
 
     /**
@@ -135,6 +149,102 @@ final class AiSitePageComponentGenerationService
     public function generatePageSections(string $pageType, array $websiteProfile, array $scope): array
     {
         return $this->generatePageSectionsConcurrently($pageType, $websiteProfile, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array{
+     *   blueprint:array<string,mixed>,
+     *   sections:list<array{
+     *     key:string,
+     *     code:string,
+     *     name:string,
+     *     region:string,
+     *     sort_order:int,
+     *     prompt:string,
+     *     default_config:array<string,mixed>,
+     *     render_context:array<string,mixed>
+     *   }>
+     * }
+     */
+    public function buildPageSectionSpecs(string $pageType, array $websiteProfile, array $scope): array
+    {
+        $blueprint = $this->getPageBlueprintService()->buildPageBlueprint($pageType, $scope, $websiteProfile);
+        $sections = [];
+        foreach (($blueprint['sections'] ?? []) as $section) {
+            if (!\is_array($section)) {
+                continue;
+            }
+            $sectionCode = \trim((string)($section['code'] ?? ''));
+            if ($sectionCode === '') {
+                continue;
+            }
+            $defaultConfig = $this->buildSectionDefaultConfig($pageType, $section, $blueprint, $websiteProfile, $scope);
+            $sections[] = [
+                'key' => (string)($section['key'] ?? ''),
+                'code' => $sectionCode,
+                'name' => (string)($section['name'] ?? $sectionCode),
+                'region' => 'content',
+                'sort_order' => (int)($section['sort_order'] ?? 0),
+                'prompt' => $this->buildSectionGenerationPrompt($pageType, $section, $blueprint, $websiteProfile, $scope),
+                'default_config' => $defaultConfig,
+                'render_context' => $this->buildRenderContext($pageType, $websiteProfile, $scope, $defaultConfig),
+            ];
+        }
+
+        return [
+            'blueprint' => $blueprint,
+            'sections' => $sections,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array{
+     *   key:string,
+     *   code:string,
+     *   name:string,
+     *   region:string,
+     *   sort_order:int,
+     *   phtml:string,
+     *   html:string,
+     *   default_config:array<string,mixed>,
+     *   ai_data:array<string,mixed>
+     * }
+     */
+    public function generatePageSection(string $pageType, string $sectionCode, array $websiteProfile, array $scope): array
+    {
+        $specs = $this->buildPageSectionSpecs($pageType, $websiteProfile, $scope);
+        foreach ($specs['sections'] as $section) {
+            if ((string)($section['code'] ?? '') !== $sectionCode) {
+                continue;
+            }
+
+            $component = $this->generateComponent(
+                (string)$section['code'],
+                (string)$section['name'],
+                (string)$section['region'],
+                (string)$section['prompt'],
+                \is_array($section['default_config'] ?? null) ? $section['default_config'] : [],
+                \is_array($section['render_context'] ?? null) ? $section['render_context'] : []
+            );
+
+            return [
+                'key' => (string)($section['key'] ?? ''),
+                'code' => (string)$section['code'],
+                'name' => (string)$section['name'],
+                'region' => (string)$section['region'],
+                'sort_order' => (int)($section['sort_order'] ?? 0),
+                'phtml' => (string)($component['phtml'] ?? ''),
+                'html' => (string)($component['html'] ?? ''),
+                'default_config' => \is_array($component['default_config'] ?? null) ? $component['default_config'] : [],
+                'ai_data' => \is_array($component['ai_data'] ?? null) ? $component['ai_data'] : [],
+            ];
+        }
+
+        throw new \InvalidArgumentException((string)__('Unknown page section: %{section}', ['section' => $sectionCode]));
     }
 
     /**
@@ -216,8 +326,8 @@ final class AiSitePageComponentGenerationService
                     }
                 }
             }
-            // 避免 CPU 空转
-            \usleep(5000);
+            // 避免 CPU 空转，并让出当前调度片
+            SchedulerSystem::yieldDelay(5);
         }
 
         // 按原始顺序 yield 结果
@@ -346,20 +456,117 @@ final class AiSitePageComponentGenerationService
         array $defaultConfig,
         array $renderContext
     ): array {
-        $aiData = $this->runAiGeneration($region, $prompt);
-        $aiData = $this->ensureAiPayloadValid($aiData, $region);
-
         $componentInfo = [
             'name' => $name,
             'name_en' => $name,
             'description' => $prompt,
         ];
+        $attemptPrompt = $prompt;
+        $lastThrowable = null;
 
-        $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
+        for ($attempt = 1; $attempt <= self::COMPONENT_GENERATION_MAX_ATTEMPTS; $attempt++) {
+            $aiData = [];
+            try {
+                $aiData = $this->runAiGeneration($region, $attemptPrompt);
+                $aiData = $this->ensureAiPayloadValid($aiData, $region);
 
+                $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $aiData);
+
+                $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
+                if (empty($syntaxCheck['valid'])) {
+                    $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
+                }
+
+                $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
+
+                return [
+                    'code' => $componentCode,
+                    'name' => $name,
+                    'region' => $region,
+                    'phtml' => $phtml,
+                    'html' => $html,
+                    'default_config' => $defaultConfig,
+                    'ai_data' => $aiData,
+                ];
+            } catch (\Throwable $throwable) {
+                $lastThrowable = $throwable;
+                if (!$this->shouldRetryComponentGeneration($throwable)) {
+                    break;
+                }
+                if ($attempt >= self::COMPONENT_GENERATION_MAX_ATTEMPTS) {
+                    break;
+                }
+
+                $reason = $this->summarizeThrowable($throwable);
+                $attemptPrompt = $this->buildRetryGenerationPrompt(
+                    $region,
+                    $componentCode,
+                    $prompt,
+                    $reason,
+                    $attempt + 1
+                );
+                $this->emitComponentRetryNotice($region, $componentCode, $reason, $attempt + 1);
+                \w_log_warning('[AI Site Component Retry] ' . $componentCode . ' (' . $region . ') attempt '
+                    . ($attempt + 1) . '/' . self::COMPONENT_GENERATION_MAX_ATTEMPTS . ': ' . $reason);
+            }
+        }
+
+        $finalReason = $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown'));
+        $message = $this->shouldRetryComponentGeneration($lastThrowable ?? new \RuntimeException('unknown'))
+            ? 'AI component generation failed after '
+                . self::COMPONENT_GENERATION_MAX_ATTEMPTS
+                . ' real-AI attempts: '
+                . $finalReason
+            : 'AI component generation failed: ' . $finalReason;
+
+        throw new \RuntimeException($message, 0, $lastThrowable);
+
+        /*
+        throw new \RuntimeException(
+            (string)__('AI 缁勪欢鐢熸垚澶辫触锛堝凡灏濊瘯 %{1} 杞?AI 閲嶇敓鎴愶級锛?{2}', [
+                self::COMPONENT_GENERATION_MAX_ATTEMPTS,
+                $this->summarizeThrowable($lastThrowable ?? new \RuntimeException('unknown')),
+            ]),
+            0,
+            $lastThrowable
+        );
+        */
+    }
+
+    /**
+     * 尝试自动修复 PHP 语法错误，修复失败则抛出异常
+     */
+    private function buildFallbackComponent(
+        string $componentCode,
+        string $name,
+        string $region,
+        string $prompt,
+        array $defaultConfig,
+        array $renderContext,
+        array $componentInfo,
+        array $aiData,
+        \Throwable $throwable
+    ): array {
+        throw new \LogicException('Local fallback component generation is disabled; use real AI retry or fail explicitly.', 0, $throwable);
+
+        $reason = $this->summarizeThrowable($throwable);
+        $fallbackAiData = $this->buildStubAiPayload($region, $prompt);
+        $fallbackAiData['_fallback_reason'] = $reason;
+        $fallbackAiData['_fallback_used'] = 1;
+
+        $this->emitComponentFallbackNotice($region, $componentCode, $reason);
+        \w_log_warning('[AI Site Component Fallback] ' . $componentCode . ' (' . $region . '): ' . $reason);
+
+        $phtml = $this->getFrameworkBuilder()->buildComponent($region, $componentInfo, $fallbackAiData);
         $syntaxCheck = $this->getCodeValidator()->checkSyntax($phtml);
         if (empty($syntaxCheck['valid'])) {
-            $phtml = $this->attemptSyntaxFix($phtml, $region, $componentInfo, $aiData, $syntaxCheck);
+            throw new \RuntimeException(
+                (string)__('AI 组件兜底模板仍未通过 PHP 语法校验：%{message}', [
+                    'message' => (string)($syntaxCheck['error'] ?? $reason),
+                ]),
+                0,
+                $throwable
+            );
         }
 
         $html = $this->renderTemplateToHtml($phtml, $defaultConfig, $renderContext);
@@ -371,13 +578,81 @@ final class AiSitePageComponentGenerationService
             'phtml' => $phtml,
             'html' => $html,
             'default_config' => $defaultConfig,
-            'ai_data' => $aiData,
+            'ai_data' => $fallbackAiData,
+            'generation_notice' => [
+                'type' => 'fallback',
+                'message' => $reason,
+                'source_ai_data' => $aiData,
+            ],
         ];
     }
 
-    /**
-     * 尝试自动修复 PHP 语法错误，修复失败则抛出异常
-     */
+    private function emitComponentFallbackNotice(string $region, string $componentCode, string $reason): void
+    {
+        $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+        if (!$sse || !\method_exists($sse, 'sendEvent')) {
+            return;
+        }
+
+        try {
+            $sse->sendEvent('warning', [
+                'region' => $region,
+                'component_code' => $componentCode,
+                'message' => (string)__('AI 组件输出未通过校验，已自动切换安全兜底渲染：%{reason}', [
+                    'reason' => $reason,
+                ]),
+                'fallback_used' => true,
+            ]);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function summarizeThrowable(\Throwable $throwable): string
+    {
+        $message = \trim($throwable->getMessage());
+        if ($message === '') {
+            $message = $throwable::class;
+        }
+
+        return $this->clipText($message, 220);
+    }
+
+    private function shouldRetryComponentGeneration(\Throwable $throwable): bool
+    {
+        $message = \strtolower(\trim($throwable->getMessage()));
+        if ($message === '') {
+            return true;
+        }
+
+        $nonRetryableMarkers = [
+            'http 401',
+            'http 402',
+            'http 403',
+            'insufficient balance',
+            'api key',
+            'missing api key',
+            'model selection',
+            'no available',
+            'provider account',
+            'provider configuration',
+            'quota',
+            '余额',
+            '密钥',
+            '未配置',
+            '配置',
+            '账户',
+            'account',
+        ];
+
+        foreach ($nonRetryableMarkers as $marker) {
+            if (\str_contains($message, $marker)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     private function attemptSyntaxFix(string $phtml, string $region, array $componentInfo, array $aiData, array $initialCheck): string
     {
         $codeFixer = $this->getCodeFixer();
@@ -410,7 +685,7 @@ final class AiSitePageComponentGenerationService
             } elseif (\str_starts_with($field, 'css_')) {
                 $fixedAiData[$field] = $codeFixer->fixCss($fixedAiData[$field]);
             } else {
-                $fixedAiData[$field] = $codeFixer->fixHtmlContent($fixedAiData[$field]);
+                $fixedAiData[$field] = $codeFixer->fixHtmlContent($fixedAiData[$field], $field);
             }
             if ($fixedAiData[$field] !== $original) {
                 $patched = true;
@@ -619,7 +894,8 @@ final class AiSitePageComponentGenerationService
     private function runAiGeneration(string $region, string $prompt): array
     {
         $forceRealAiInTest = (bool)RequestContext::get(self::REQUEST_KEY_FORCE_REAL_AI_IN_TEST, false);
-        if ($this->isTestEnvironment() && !$forceRealAiInTest) {
+        $allowStubAiInTest = (bool)RequestContext::get(self::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, false);
+        if ($this->isTestEnvironment() && !$forceRealAiInTest && $allowStubAiInTest) {
             return $this->buildStubAiPayload($region, $prompt);
         }
 
@@ -672,7 +948,14 @@ final class AiSitePageComponentGenerationService
             },
             null,
             'pagebuilder_component_generation',
-            null
+            null,
+            [
+                'allow_zero_balance_provider' => true,
+                'temperature' => 0.35,
+                'max_tokens' => 12000,
+                'timeout' => 240,
+                'response_format' => ['type' => 'json_object'],
+            ]
         );
         $flushChunkBuffer(true);
 
@@ -888,6 +1171,7 @@ final class AiSitePageComponentGenerationService
                 'max_tokens' => 16000,
                 'timeout' => 180,
                 'response_format' => ['type' => 'json_object'],
+                'allow_zero_balance_provider' => true,
             ]
         );
 
@@ -1122,6 +1406,7 @@ final class AiSitePageComponentGenerationService
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
+        $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'header');
 
         return $langRule
             . "You are generating a PageBuilder website header component.\n"
@@ -1130,6 +1415,7 @@ final class AiSitePageComponentGenerationService
             . "Style reference: {$styleCode} ({$styleDirection})\n"
             . "Selected pages: " . \implode(', ', $pageList) . "\n"
             . "Current navigation fallback: " . \json_encode($headerConfig['nav_items'] ?? [], \JSON_UNESCAPED_UNICODE) . "\n"
+            . ($sharedRefinement !== '' ? "Latest user refinement for this header: {$sharedRefinement}\n" : '')
             . "Rules:\n"
             . "1. Output only one header component, never a full page.\n"
             . "2. The copy must read like finished website copy for visitors.\n"
@@ -1148,12 +1434,14 @@ final class AiSitePageComponentGenerationService
         $styleCode = $this->resolvePromptStyleCode($scope, Page::TYPE_HOME);
         $styleDirection = $this->describeStyleDirection($styleCode);
         $langRule = $this->buildPrimaryLanguageRuleEn($websiteProfile, $scope);
+        $sharedRefinement = $this->resolveSharedComponentRefinement($scope, 'footer');
 
         return $langRule
             . "You are generating a PageBuilder website footer component.\n"
             . "Site name: {$siteDisplayName}\n"
             . "Visitor-facing brand summary: {$siteSummary}\n"
             . "Style reference: {$styleCode} ({$styleDirection})\n"
+            . ($sharedRefinement !== '' ? "Latest user refinement for this footer: {$sharedRefinement}\n" : '')
             . "Footer link fallback: " . \json_encode([
                 'column1' => $footerConfig['links.column1_items'] ?? '',
                 'column2' => $footerConfig['links.column2_items'] ?? '',
@@ -1219,6 +1507,7 @@ final class AiSitePageComponentGenerationService
             . "- Field php_variables: ONLY raw PHP statements that will be injected inside an existing try { } block in a .phtml template. No <?php, no ?>, no opening/closing PHP tags. Prefer an empty string if you do not need extra logic.\n"
             . "- In php_variables, every array literal must be complete: e.g. \$x = ['k' => 'v']; with all [, ], (, ), quotes, and semicolons balanced. Never paste JavaScript object literals or JSON blobs here. The PHP token => must appear only inside valid PHP array syntax, never loose in HTML/CSS.\n"
             . "- Do not redeclare or break framework-provided variables (\$page, \$getConfig, \$componentId, \$cls, \$parseLinks, \$navItems, etc.) unless you know exactly how; prefer using them read-only.\n"
+            . "- Prefer simple safe components: leave extra_fields, php_variables, and js_content empty unless they are absolutely necessary.\n"
             . "- html_extra, html_extra_column, html_content: use <?= expression ?> for output. Never write <?php = (invalid). Each <?= must wrap one valid PHP expression; use htmlspecialchars(\$var, ENT_QUOTES, 'UTF-8') for text.\n"
             . "- css_extra, css_responsive: CSS only. No <? ... ?> and no PHP. No unclosed /* comments.\n"
             . "- js_content: JavaScript only; avoid embedding PHP unless trivial and syntactically valid.\n";
@@ -1536,6 +1825,60 @@ final class AiSitePageComponentGenerationService
     }
 
     /**
+     * HTML 轨共享页头/页脚微调：可能写在 shared_component_refinements 或各页 section_refinements（如 *-site-header）。
+     *
+     * @param array<string,mixed> $scope
+     */
+    private function resolveSharedComponentRefinement(array $scope, string $region): string
+    {
+        $region = \trim($region);
+        if (!\in_array($region, ['header', 'footer'], true)) {
+            return '';
+        }
+
+        $direct = \is_array($scope['shared_component_refinements'] ?? null) ? $scope['shared_component_refinements'] : [];
+        if (\is_scalar($direct[$region] ?? null)) {
+            $text = \trim((string)$direct[$region]);
+            if ($text !== '') {
+                return $text;
+            }
+        }
+
+        $canonicalKey = $region === 'header' ? 'header/ai-site-header' : 'footer/ai-site-footer';
+        $dashKey = $region === 'header' ? 'header-ai-site-header' : 'footer-ai-site-footer';
+        $sharedKey = 'shared:' . $region;
+        $virtualPages = \is_array($scope['virtual_pages_by_type'] ?? null) ? $scope['virtual_pages_by_type'] : [];
+        foreach ($virtualPages as $virtualPage) {
+            if (!\is_array($virtualPage)) {
+                continue;
+            }
+            $refinements = \is_array($virtualPage['section_refinements'] ?? null) ? $virtualPage['section_refinements'] : [];
+            foreach ([$sharedKey, $canonicalKey, $dashKey] as $key) {
+                if (\is_scalar($refinements[$key] ?? null)) {
+                    $text = \trim((string)$refinements[$key]);
+                    if ($text !== '') {
+                        return $text;
+                    }
+                }
+            }
+            $suffix = $region === 'header' ? '-site-header' : '-site-footer';
+            foreach ($refinements as $key => $value) {
+                if (!\is_string($key) || !\is_scalar($value)) {
+                    continue;
+                }
+                if (\str_ends_with($key, $suffix)) {
+                    $text = \trim((string)$value);
+                    if ($text !== '') {
+                        return $text;
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
      * @param array<string,mixed> $scope
      */
     private function resolvePrimaryCtaText(array $scope): string
@@ -1669,6 +2012,45 @@ final class AiSitePageComponentGenerationService
         $hint = $this->describeLocaleForAiPrompt($locale);
 
         return "主语言（locale {$locale}，{$hint}）：所有面向访客可见的文案（标题、按钮、导航、段落、页脚等）均须使用该语言撰写。\n";
+    }
+
+    private function emitComponentRetryNotice(string $region, string $componentCode, string $reason, int $attempt): void
+    {
+        $sse = RequestContext::get(RequestContext::SSE_WRITER_KEY);
+        if (!$sse || !\method_exists($sse, 'sendEvent')) {
+            return;
+        }
+
+        try {
+            $sse->sendEvent('warning', [
+                'region' => $region,
+                'component_code' => $componentCode,
+                'message' => (string)__('AI 缁勪欢鐢熸垚鏈€氳繃鏍￠獙锛屾鍦ㄤ娇鐢?AI 绠€鍖栨柟妗堥噸璇曪紙绗?%{1} 杞級锛?{2}', [
+                    $attempt,
+                    $reason,
+                ]),
+                'retry_attempt' => $attempt,
+            ]);
+        } catch (\Throwable) {
+        }
+    }
+
+    private function buildRetryGenerationPrompt(
+        string $region,
+        string $componentCode,
+        string $basePrompt,
+        string $reason,
+        int $attempt
+    ): string {
+        return $basePrompt
+            . "\n\nRetry mode (attempt {$attempt}/" . self::COMPONENT_GENERATION_MAX_ATTEMPTS . "):"
+            . "\n- The previous AI output failed validation because: {$reason}"
+            . "\n- Regenerate the SAME component with a simpler, safer implementation."
+            . "\n- Simpler is better than fancy."
+            . "\n- Keep `extra_fields`, `php_variables`, and `js_content` empty unless absolutely necessary."
+            . "\n- Prefer one small section/root wrapper, one heading, one short paragraph, and one optional CTA."
+            . "\n- Avoid loops, complex PHP, embedded arrays, dynamic calculations, markdown fences, and long CSS."
+            . "\n- Return pure JSON only for component `{$componentCode}`.";
     }
 
     private function describeLocaleForAiPrompt(string $locale): string

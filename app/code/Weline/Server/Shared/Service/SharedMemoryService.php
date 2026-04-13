@@ -209,4 +209,9 @@ class SharedMemoryService implements MemoryServiceInterface, AtomicMemoryService
     {
         return $ttl > 0 ? $ttl : 3600;
     }
+
+    public function __destruct()
+    {
+        $this->client->disconnect();
+    }
 }

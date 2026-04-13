@@ -46,6 +46,11 @@ class CacheMemoryService
         return $this->memoryService->incr($this->ns($poolIdentity), $key, $delta, $ttl);
     }
 
+    public function cas(string $poolIdentity, string $key, mixed $expected, mixed $value, int $ttl = 0): bool
+    {
+        return $this->memoryService->cas($this->ns($poolIdentity), $key, $expected, $value, $ttl);
+    }
+
     private function ns(string $poolIdentity): string
     {
         return 'cache:' . $poolIdentity;

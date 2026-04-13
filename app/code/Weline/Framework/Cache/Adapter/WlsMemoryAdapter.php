@@ -86,6 +86,20 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         return $this->memoryFacade()->clearCache($this->identity);
     }
 
+    public function compareAndSet(string $key, mixed $expected, mixed $value, int $ttl = 0): bool
+    {
+        $result = $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl);
+        if ($result) {
+            if ($value === null) {
+                unset($this->localCache[$key]);
+            } else {
+                $this->setLocalCache($key, $value);
+            }
+        }
+
+        return $result;
+    }
+
     /**
      * 设置本地缓存（LRU淘汰）
      */

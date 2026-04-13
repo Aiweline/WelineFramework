@@ -14,6 +14,7 @@ use GuoLaiRen\PageBuilder\Service\AI\CodeValidator;
 use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 
 /**
  * PHPUnit 下 AiSitePageComponentGenerationService 走桩数据（不调用真实 AI），
@@ -46,7 +47,12 @@ final class AiSiteVirtualThemeGenerationTest extends TestCase
         );
         $service = new AiSiteVirtualThemeService(new AiSitePageBlueprintService(), $generation);
 
-        $result = $service->ensureAiGeneratedVirtualTheme($scope, $websiteProfile, $pageTypes, [], 0);
+        RequestContext::set(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST, true);
+        try {
+            $result = $service->ensureAiGeneratedVirtualTheme($scope, $websiteProfile, $pageTypes, [], 0);
+        } finally {
+            RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
+        }
 
         $virtualThemeId = (int)($result['virtual_theme_id'] ?? 0);
         self::assertGreaterThan(0, $virtualThemeId);

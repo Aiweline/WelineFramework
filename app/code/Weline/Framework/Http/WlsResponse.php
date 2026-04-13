@@ -33,7 +33,7 @@ class WlsResponse extends Response
         return $response;
     }
 
-    public static function json(array $data, int $statusCode = 200): self
+    public static function json(mixed $data, int $statusCode = 200): self
     {
         $base = Response::json($data, $statusCode);
         return self::fromResponse($base);

@@ -17,10 +17,12 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Sse\SseContext;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 
@@ -51,6 +53,8 @@ class Core
      */
     private ?UrlProcessor $urlProcessor = null;
 
+    private ?FullPageCacheCoordinator $fullPageCacheCoordinator = null;
+
     protected array $router;
     protected string $url;
     /**缓存建*/
@@ -79,6 +83,12 @@ class Core
      * 用于检测是否是新请求，避免重复初始化
      */
     private string $lastRequestId = '';
+
+    /** @var array<string, array> */
+    private static array $generatedRouterFileCache = [];
+
+    /** @var array<string, int> */
+    private static array $generatedRouterFileMtimes = [];
     
     /**
      * @DESC         |任何时候都会初始化
@@ -233,6 +243,15 @@ class Core
             $this->urlProcessor = new UrlProcessor();
         }
         return $this->urlProcessor;
+    }
+
+    private function getFullPageCacheCoordinator(): FullPageCacheCoordinator
+    {
+        if ($this->fullPageCacheCoordinator === null) {
+            $this->fullPageCacheCoordinator = ObjectManager::getInstance(FullPageCacheCoordinator::class);
+        }
+
+        return $this->fullPageCacheCoordinator;
     }
 
     private function clearCurrentRequestRouteCaches(): void
@@ -627,7 +646,7 @@ class Core
             $router_filepath = Env::path_FRONTEND_REST_API_ROUTER_FILE;
         }
         if (file_exists($router_filepath)) {
-            $routers = include $router_filepath;
+            $routers = self::loadGeneratedRouterFile($router_filepath);
             $requestMethod = strtoupper($this->request->getMethod());
             $method = '::' . $requestMethod;
             // HEAD 请求应该回退到 GET 路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
@@ -656,6 +675,26 @@ class Core
             $this->request->getResponse()->noRouter();
         }
         return false;
+    }
+
+    public static function resetGeneratedRouterFileCache(): void
+    {
+        self::$generatedRouterFileCache = [];
+        self::$generatedRouterFileMtimes = [];
+    }
+
+    private static function loadGeneratedRouterFile(string $routerFilepath): array
+    {
+        $mtime = (int)(@\filemtime($routerFilepath) ?: 0);
+        if (!isset(self::$generatedRouterFileCache[$routerFilepath])
+            || (self::$generatedRouterFileMtimes[$routerFilepath] ?? -1) !== $mtime
+        ) {
+            $routers = include $routerFilepath;
+            self::$generatedRouterFileCache[$routerFilepath] = \is_array($routers) ? $routers : [];
+            self::$generatedRouterFileMtimes[$routerFilepath] = $mtime;
+        }
+
+        return self::$generatedRouterFileCache[$routerFilepath];
     }
 
     /**
@@ -706,7 +745,7 @@ class Core
         }
         if (is_file($router_filepath)) {
             try {
-                $routers = include $router_filepath;
+                $routers = self::loadGeneratedRouterFile($router_filepath);
             } catch (\Throwable $includeE) {
                 throw $includeE;
             }
@@ -936,48 +975,29 @@ class Core
         # 页头阻止XSS
         $this->header_xss();
 
-        # 全页缓存 - 后端请求不缓存；开发模式跳过
-        $cache_key = null;
-        // 检查全页缓存是否启用（检查 router_cache 和 frontend_cache 配置）
-        // 使用静态方法 Env::get()，使用点号分隔符访问嵌套配置
         $routerCacheEnabled = Env::get('cache.status.router_cache', 1);
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
-        if (!$this->is_backend && PROD && $routerCacheEnabled && $frontendCacheEnabled) {
-            // 性能优化：复用已读取的统一缓存数据
-            if ($this->unifiedCacheData === null) {
-                $this->unifiedCacheData = $this->cache->get($this->unified_cache_key);
-            }
-            
-            // 优先从统一缓存中读取
-            if (is_array($this->unifiedCacheData) && isset($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_FPC_KEY]) && !empty($this->unifiedCacheData[KeyBuilder::UNIFIED_CACHE_FPC_KEY])) {
-                $unifiedCache = $this->unifiedCacheData;
-                // 恢复响应头（先清除已存在的响应头，避免重复）
-                if (isset($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY]) && is_array($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY]) && !headers_sent()) {
-                    foreach ($unifiedCache[KeyBuilder::UNIFIED_CACHE_HEADERS_KEY] as $header) {
-                        // 解析响应头名称
-                        if (str_contains($header, ':')) {
-                            $headerName = trim(explode(':', $header, 2)[0]);
-                            // 先移除已存在的同名响应头，避免重复
-                            header_remove($headerName);
-                        }
-                        // 设置响应头
-                        header($header, true); // true 表示替换已存在的同名 header
+        $fpcCoordinator = null;
+        $fpcBuildLock = null;
+
+        try {
+            if (!$this->is_backend && PROD && $routerCacheEnabled && $frontendCacheEnabled) {
+                $fpcCoordinator = $this->getFullPageCacheCoordinator();
+                $cachedResponse = $fpcCoordinator->getCachedResponse($this->request->getMethod() ?: 'GET');
+                if ($cachedResponse !== null) {
+                    $this->is_match = true;
+                    return $cachedResponse;
+                }
+
+                $fpcBuildLock = $fpcCoordinator->acquireBuildLock($this->request->getMethod() ?: 'GET');
+                if ($fpcBuildLock === null) {
+                    $cachedResponse = $fpcCoordinator->waitForPublishedResponse($this->request->getMethod() ?: 'GET');
+                    if ($cachedResponse !== null) {
+                        $this->is_match = true;
+                        return $cachedResponse;
                     }
                 }
-                // 添加缓存命中标志 header（使用框架独有的标识）
-                header('X-Weline-FPC: HIT');
-                return $unifiedCache[KeyBuilder::UNIFIED_CACHE_FPC_KEY];
             }
-            
-            // 回退到旧的缓存方式（兼容性）
-            $fullUri = (string) (\w_env('full_request_uri', \w_env('request.uri', '/')) ?? '/');
-            $cache_key = KeyBuilder::build('router', 'fpc:' . $fullUri . ':' . Cookie::getLangLocal());
-            if (PROD && $html = $this->cache->get($cache_key)) {
-                // 添加缓存命中标志 header（使用框架独有的标识）
-                header('X-Weline-FPC: HIT');
-                return $html;
-            }
-        }
         
         # 方法体方法和请求方法不匹配时 禁止访问
         # HEAD 请求应该被允许访问 GET 方法的路由（HTTP 规范：HEAD 返回与 GET 相同的响应头）
@@ -1022,7 +1042,7 @@ class Core
             if (method_exists($dispatchAttribute, 'execute')) {
                 $result = $dispatchAttribute->execute();
                 if ($result) {
-                    return Response::normalize($result, $this->request->getResponse());
+                    return $this->resolveRequestScopedResponse($result, '');
                 }
             }
         }
@@ -1054,7 +1074,7 @@ class Core
             $dispatch_class = $dispatch::class;
             throw new Exception(__('%{1}: 控制器方法 %{2} 不存在!', [$dispatch_class, $method]));
         }
-        ob_start();
+        FiberOutputBuffer::beginCapture();
 
         // 将 action_execute 设为当前父节点，控制器内通过 RequestLifecycleTrace::recordSpan() 打的子 span 会挂到本节点下，便于拆分 1.x s 耗时
         $actionSpanStart = RequestLifecycleTrace::isEnabled() ? microtime(true) : 0.0;
@@ -1068,9 +1088,7 @@ class Core
             // 检测是否是流式响应（SSE）- 如果是，直接返回，不进行后续处理
             // 仅依赖 headers_list 在部分 FPM 场景会失效，因此优先检查 SseContext 开关。
             if (SseContext::isSseEnabled()) {
-                while (ob_get_level() > 0) {
-                    ob_end_flush();
-                }
+                FiberOutputBuffer::discardCapture();
                 $this->is_match = true;
                 return;
             }
@@ -1080,9 +1098,7 @@ class Core
             foreach ($currentHeaders as $header) {
                 if ($isSseAcceptRequest && stripos($header, 'Content-Type: text/event-stream') !== false) {
                     // 清理输出缓冲区并直接返回（流式响应已经发送）
-                    while (ob_get_level() > 0) {
-                        ob_end_flush();
-                    }
+                    FiberOutputBuffer::discardCapture();
                     $this->is_match = true;
                     return;
                 }
@@ -1102,54 +1118,24 @@ class Core
             }
             // 获取输出缓冲区内容（控制器可能直接输出而不是返回）
             SchedulerSystem::yield();
-            $output = ob_get_clean();
+            $output = FiberOutputBuffer::endCapture();
             // 如果控制器返回了结果，优先使用返回值；否则使用输出缓冲区内容
             $fpcHtml = !empty($result) ? (is_string($result) ? $result : $output) : $output;
             
-            // 捕获响应头（在控制器执行后）
-            $responseHeaders = headers_list();
-            $fallbackResponse = $this->request->getResponse();
-            if ($result instanceof Response) {
-                $response = $result;
-                if ($output !== '' && $response->getBody() === '') {
-                    $response->setBody($output);
-                }
-            } else {
-                $normalizedPayload = $result;
-                if ($normalizedPayload === null || $normalizedPayload === '') {
-                    $normalizedPayload = $output !== '' ? $output : null;
-                }
-                $response = Response::normalize($normalizedPayload, $fallbackResponse);
-            }
+            $response = $this->resolveRequestScopedResponse($result, $output);
             $fpcHtml = $response->getBody();
-            $responseHeaders = [];
-            foreach ($response->getHeaders() as $name => $value) {
-                if (\is_array($value)) {
-                    foreach ($value as $headerValue) {
-                        $responseHeaders[] = $name . ': ' . $headerValue;
-                    }
-                } else {
-                    $responseHeaders[] = $name . ': ' . $value;
-                }
-            }
         } catch (\Weline\Framework\Http\RedirectException $redirectEx) {
             // 重定向异常：直接重新抛出，让 WlsRuntime 处理
             // 异常情况下清理输出缓冲区
-            if (ob_get_level() > 0) {
-                ob_end_clean();
-            }
+            FiberOutputBuffer::discardCapture();
             throw $redirectEx;
         } catch (\Exception $e) {
             // 异常情况下清理输出缓冲区
-            if (ob_get_level() > 0) {
-                ob_end_clean();
-            }
+            FiberOutputBuffer::discardCapture();
             throw $e;
         } catch (\Throwable $e) {
             // 异常情况下清理输出缓冲区
-            if (ob_get_level() > 0) {
-                ob_end_clean();
-            }
+            FiberOutputBuffer::discardCapture();
             throw $e;
         } finally {
             if (RequestLifecycleTrace::isEnabled()) {
@@ -1158,12 +1144,6 @@ class Core
             }
         }
 
-//        file_put_contents(__DIR__.'/'.$cache_key.'.html', $result);
-        /** Get output buffer. */
-        // 只在前端请求时保存旧的缓存键（兼容性）
-        if ($cache_key !== null) {
-            $this->cache->set($cache_key, $fpcHtml, 5);
-        }
         $this->is_match = true;
         # 最后输出前 保证真实可靠的URL才进行缓存
         if (is_null($this->request->uri_cache_url_path_data)) {
@@ -1177,24 +1157,23 @@ class Core
         $frontendCacheEnabled = Env::get('cache.status.frontend_cache', 1);
         // 编辑器预览模式不写入全页缓存
         $isEditorMode = \w_env_get('editor_mode') !== null && (\w_env_get('editor_mode') === '1' || \w_env_get('editor_mode') === 'true');
-        if (!$this->is_backend && !$isEditorMode && $routerCacheEnabled && $frontendCacheEnabled && !empty($fpcHtml)) {
-            // 写前校验：fullUri 无效时跳过 FPC 写入，避免以错误 key 污染缓存
-            $fullUri = (string) (\w_env('full_request_uri', '') ?? '');
-            if (KeyBuilder::isValidFullPageCacheKey($fullUri)) {
-                // 构建统一缓存结构，包含所有请求相关数据
-                $unifiedCacheData = [
-                    KeyBuilder::UNIFIED_CACHE_URL_KEY => $this->url,
-                    KeyBuilder::UNIFIED_CACHE_RULE_KEY => $this->request->getRule(),
-                    KeyBuilder::UNIFIED_CACHE_ROUTER_KEY => $this->router,
-                    KeyBuilder::UNIFIED_CACHE_PARAMS_KEY => $this->routerGeneratedGetParams,
-                    KeyBuilder::UNIFIED_CACHE_FPC_KEY => $fpcHtml,
-                    KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => $responseHeaders,
-                ];
-
-                // 保存统一缓存（使用较长的过期时间，因为包含全页缓存）
-                $saveCacheKey = KeyBuilder::buildUnifiedRequestCacheKey('', $this->request->getMethod() ?: 'GET');
-                $this->cache->set($saveCacheKey, $unifiedCacheData, 3600);
-            }
+        if (
+            !$this->is_backend
+            && !$isEditorMode
+            && $routerCacheEnabled
+            && $frontendCacheEnabled
+            && !empty($fpcHtml)
+            && $fpcCoordinator !== null
+            && $fpcBuildLock !== null
+        ) {
+            $fpcCoordinator->publishResponse(
+                $response,
+                $this->url,
+                $this->request->getRule(),
+                $this->router,
+                $this->routerGeneratedGetParams,
+                $this->request->getMethod() ?: 'GET'
+            );
         }
         // 兼容性：如果 url_cache_data 为空，也保存到旧的缓存键
         if (!$this->url_cache_data) {
@@ -1206,7 +1185,83 @@ class Core
             $this->cache->set($this->url_cache_key, $this->url);
         }
         // 返回结果（如果控制器返回了值）或输出缓冲区内容
-        return $response ?? Response::normalize(!empty($result) ? $result : $fpcHtml, $this->request->getResponse());
+        return $response ?? $this->resolveRequestScopedResponse(!empty($result) ? $result : $fpcHtml, '');
+        } finally {
+            if ($fpcCoordinator !== null) {
+                $fpcCoordinator->releaseBuildLock($fpcBuildLock);
+            }
+        }
+    }
+
+    private function resolveRequestScopedResponse(mixed $result, string $output): Response
+    {
+        $requestResponse = $this->request->getResponse();
+
+        if ($result instanceof Response) {
+            return $this->absorbDetachedResponse($requestResponse, $result, $output);
+        }
+
+        $normalizedPayload = $result;
+        if ($normalizedPayload === null || $normalizedPayload === '') {
+            if ($output !== '') {
+                $normalizedPayload = $output;
+            } else {
+                return $requestResponse;
+            }
+        }
+
+        $normalized = Response::normalize($normalizedPayload, $requestResponse);
+        if ($normalized === $requestResponse) {
+            return $requestResponse;
+        }
+
+        return $this->absorbDetachedResponse($requestResponse, $normalized, '');
+    }
+
+    private function absorbDetachedResponse(Response $target, Response $source, string $outputFallback): Response
+    {
+        if ($target === $source) {
+            if ($outputFallback !== '' && $target->getBody() === '') {
+                $target->setBody($outputFallback);
+            }
+
+            return $target;
+        }
+
+        $target->setHttpResponseCode($source->getStatusCode());
+
+        foreach ($source->getHeaders() as $name => $value) {
+            if (\is_array($value)) {
+                foreach ($value as $headerValue) {
+                    $target->setHeader($name, (string) $headerValue);
+                }
+            } else {
+                $target->setHeader($name, (string) $value);
+            }
+        }
+
+        foreach ($source->getCookies() as $cookie) {
+            $target->setCookie(
+                (string) ($cookie['name'] ?? ''),
+                (string) ($cookie['value'] ?? ''),
+                (int) ($cookie['expire'] ?? 0),
+                (string) ($cookie['path'] ?? '/'),
+                (string) ($cookie['domain'] ?? ''),
+                (bool) ($cookie['secure'] ?? false),
+                (bool) ($cookie['httpOnly'] ?? true),
+                (string) ($cookie['sameSite'] ?? 'Lax'),
+            );
+        }
+
+        $body = $source->getBody();
+        if ($body === '' && $outputFallback !== '') {
+            $body = $outputFallback;
+        }
+        if ($body !== '') {
+            $target->setBody($body);
+        }
+
+        return $target;
     }
 
     /**
@@ -1218,10 +1273,21 @@ class Core
         if (headers_sent($file, $line)) {
             return;
         }
-        
-        header("X-Frame-Options: SAMEORIGIN");
-        header("X-Content-Type-Options: nosniff");
-        header("X-XSS-Protection: 1; mode=block");
+
+        $collector = HeaderCollector::getInstance();
+        $collector->setHeader('X-Frame-Options', 'SAMEORIGIN');
+        $collector->setHeader('X-Content-Type-Options', 'nosniff');
+        $collector->setHeader('X-XSS-Protection', '1; mode=block');
+
+        $cspReportOnly = trim((string)Env::get('security.headers.csp_report_only', ''));
+        if ($cspReportOnly !== '') {
+            $collector->setHeader('Content-Security-Policy-Report-Only', $cspReportOnly);
+        }
+
+        $csp = trim((string)Env::get('security.headers.csp', ''));
+        if ($csp !== '') {
+            $collector->setHeader('Content-Security-Policy', $csp);
+        }
     }
 
     /**
