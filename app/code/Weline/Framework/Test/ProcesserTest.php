@@ -255,10 +255,9 @@ class ProcesserTest extends TestCore
         ]);
 
         self::assertIsString($script);
-        self::assertStringContainsString("WindowStyle = 'Hidden'", $script);
+        self::assertStringContainsString("WindowStyle = 'Normal'", $script);
         self::assertStringContainsString("FilePath = 'cmd.exe'", $script);
-        self::assertStringContainsString('start "weline-worker-visible"', $script);
-        self::assertStringContainsString('cmd.exe /d /c', $script);
+        self::assertStringContainsString("ArgumentList = @('/d','/c','\"C:\\temp\\weline-worker-visible.cmd\"')", $script);
         self::assertStringContainsString('weline-worker-visible.cmd', $script);
         self::assertStringContainsString("FilePath = 'C:\\php\\php.exe'", $script);
         self::assertStringContainsString("ArgumentList = @('worker.php','--name=weline-worker-hidden')", $script);
@@ -289,7 +288,7 @@ class ProcesserTest extends TestCore
         self::assertIsString($script);
         self::assertStringContainsString('$results.Add("worker-foreground`t0")', $script);
         self::assertStringContainsString('Start-Process @startArgs | Out-Null', $script);
-        self::assertStringContainsString('start "weline-worker-visible"', $script);
+        self::assertStringContainsString("ArgumentList = @('/d','/c','\"C:\\temp\\weline-worker-visible.cmd\"')", $script);
     }
 
     public function testBuildWindowsBatchCreateScriptUsesExplicitArgumentArrayForBackgroundProcess(): void
@@ -379,6 +378,25 @@ class ProcesserTest extends TestCore
         self::assertFalse($this->invokePrivateStatic(Processer::class, 'shouldTryManagedProcessReuse', [false, true]));
     }
 
+    public function testShouldLaunchWindowsForegroundImmediatelyInBatchOnlyForNonBlockingForeground(): void
+    {
+        self::assertTrue($this->invokePrivateStatic(
+            Processer::class,
+            'shouldLaunchWindowsForegroundImmediatelyInBatch',
+            [true, false]
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'shouldLaunchWindowsForegroundImmediatelyInBatch',
+            [true, true]
+        ));
+        self::assertFalse($this->invokePrivateStatic(
+            Processer::class,
+            'shouldLaunchWindowsForegroundImmediatelyInBatch',
+            [false, false]
+        ));
+    }
+
     public function testWindowsFastDetachedBatchCreateFallbackHelperRemoved(): void
     {
         self::assertFalse((new \ReflectionClass(Processer::class))->hasMethod('shouldUseWindowsFastDetachedBatchCreate'));
@@ -411,6 +429,7 @@ class ProcesserTest extends TestCore
 
         try {
             $script = (string) \file_get_contents($scriptPath);
+            self::assertStringContainsString('title weline-process', $script);
             self::assertStringContainsString('cd /d "C:\repo"', $script);
             self::assertStringContainsString('"C:\php\php.exe" worker.php --name=weline-worker-visible --launch-id=launch-visible', $script);
             self::assertStringContainsString('del "%~f0"', $script);

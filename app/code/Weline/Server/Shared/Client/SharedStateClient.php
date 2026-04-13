@@ -7,6 +7,7 @@ namespace Weline\Server\Shared\Client;
 use Weline\Server\Session\Server\SessionProtocol;
 use Weline\Server\Shared\Connection\ConnectionPoolManager;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
+use Weline\Server\Shared\Contract\LocalConsumerRegistryInterface;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
 class SharedStateClient
@@ -29,6 +30,11 @@ class SharedStateClient
             // 与 SessionClient 一致：默认保持至少 1 条空闲长连接，避免每请求 TCP 握手。
             $options['min_idle'] = 1;
         }
+        if (!isset($options['max_size']) && !isset($options['pool_size'])) {
+            // 大并发场景下默认 8 往往不够用（池满后 acquire 只能等待/超时），提高默认上限以减少排队。
+            // 注意：连接池为「每 Worker 进程」级别，实际连接总数约为 workers * pool_size。
+            $options['pool_size'] = 32;
+        }
         if (!isset($options['idle_timeout'])) {
             // Worker 常驻：默认 24h 内不因「空闲略久」主动拆 TCP（仍可在 acquire 失败时 invalidate）
             $options['idle_timeout'] = 86400.0;
@@ -41,7 +47,7 @@ class SharedStateClient
         $this->acquireTimeout = (float)($options['acquire_timeout'] ?? $options['pool_acquire_timeout'] ?? 0.2);
         $this->consumerCode = \trim((string) ($options['consumer_code'] ?? ''));
 
-        if ($this->consumerCode !== '' && \method_exists($this->pool, 'registerLocalConsumer')) {
+        if ($this->consumerCode !== '' && $this->pool instanceof LocalConsumerRegistryInterface) {
             $this->pool->registerLocalConsumer(
                 $this->consumerCode,
                 \trim((string) ($options['instance_name'] ?? $this->consumerCode)),
@@ -86,7 +92,7 @@ class SharedStateClient
             return;
         }
 
-        if ($this->consumerCode !== '' && \method_exists($this->pool, 'unregisterLocalConsumer')) {
+        if ($this->consumerCode !== '' && $this->pool instanceof LocalConsumerRegistryInterface) {
             $this->pool->unregisterLocalConsumer($this->consumerCode);
         }
 

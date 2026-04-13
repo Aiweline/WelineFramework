@@ -7,9 +7,10 @@ namespace Weline\Server\Shared\Connection;
 use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Scheduler\FiberScheduler;
 use Weline\Server\Shared\Contract\ConnectionPoolInterface;
+use Weline\Server\Shared\Contract\LocalConsumerRegistryInterface;
 use Weline\Server\Shared\Contract\PooledConnectionInterface;
 
-class ConnectionPoolManager implements ConnectionPoolInterface
+class ConnectionPoolManager implements ConnectionPoolInterface, LocalConsumerRegistryInterface
 {
     /** @var array<string, self> */
     private static array $instances = [];

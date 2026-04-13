@@ -63,4 +63,130 @@ class AiSiteHtmlBlocksBuildServiceTest extends TestCase
         self::assertGreaterThanOrEqual(5, \count($footerConfig['links.column3_items'] ?? []));
         self::assertStringContainsString('All Pages', (string)($footerBlock['html'] ?? ''));
     }
+
+    public function testBuildGeneratedSharedBlockParsesSchemaFromGeneratedPhtml(): void
+    {
+        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+
+        $block = $service->buildGeneratedSharedBlock('header', Page::TYPE_HOME, [
+            'code' => 'header/ai-site-header',
+            'name' => 'AI Site Header',
+            'region' => 'header',
+            'html' => '',
+            'phtml' => $this->buildGeneratedHeaderPhtml(),
+            'default_config' => [
+                'logo.text' => 'Acme Studio',
+                'navigation.items' => "Home=>/\nDocs=>/docs",
+                'nav_items' => [
+                    ['label' => 'Home', 'href' => '/', 'active' => true],
+                    ['label' => 'Docs', 'href' => '/docs', 'active' => false],
+                ],
+            ],
+        ]);
+
+        $schema = \is_array($block['field_schema'] ?? null) ? $block['field_schema'] : [];
+        self::assertArrayHasKey('logo', $schema);
+        self::assertArrayHasKey('logo.text', $schema['logo']['fields'] ?? []);
+        self::assertArrayHasKey('navigation', $schema);
+        self::assertSame('nav-lines', $schema['navigation']['fields']['navigation.items']['format'] ?? null);
+    }
+
+    public function testRebuildGeneratedSharedHeaderUsesEditableConfigAndPreservesSharedNavigation(): void
+    {
+        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+
+        $original = $service->buildGeneratedSharedBlock('header', Page::TYPE_HOME, [
+            'code' => 'header/ai-site-header',
+            'name' => 'AI Site Header',
+            'region' => 'header',
+            'html' => '',
+            'phtml' => $this->buildGeneratedHeaderPhtml(),
+            'default_config' => [
+                'logo.text' => 'Acme Studio',
+                'navigation.items' => "Home=>/\nDocs=>/docs",
+                'nav_items' => [
+                    ['label' => 'Home', 'href' => '/', 'active' => true],
+                    ['label' => 'Docs', 'href' => '/docs', 'active' => false],
+                ],
+            ],
+        ]);
+
+        $edited = $service->rebuildBlock($original, [], [], [
+            'logo.text' => 'Custom Brand',
+            'navigation.items' => "Pricing=>/pricing\nSupport=>/support",
+        ]);
+
+        self::assertSame('header', $service->resolveSharedBlockRegion($edited));
+        self::assertStringContainsString('Custom Brand', (string)($edited['html'] ?? ''));
+        self::assertStringContainsString('/pricing', (string)($edited['html'] ?? ''));
+        self::assertSame("Pricing=>/pricing\nSupport=>/support", (string)($edited['config']['navigation.items'] ?? ''));
+        self::assertSame('Pricing', (string)($edited['config']['nav_items'][0]['label'] ?? ''));
+
+        $regenerated = $service->buildGeneratedSharedBlock('header', Page::TYPE_HOME, [
+            'code' => 'header/ai-site-header',
+            'name' => 'AI Site Header',
+            'region' => 'header',
+            'html' => '',
+            'phtml' => $this->buildGeneratedHeaderPhtml(),
+            'default_config' => [
+                'logo.text' => 'Fresh Default',
+                'navigation.items' => "Home=>/\nAbout=>/about",
+                'nav_items' => [
+                    ['label' => 'Home', 'href' => '/', 'active' => true],
+                    ['label' => 'About', 'href' => '/about', 'active' => false],
+                ],
+            ],
+        ]);
+
+        $merged = $service->mergeUserCustomizedSharedBlockConfig($regenerated, $edited);
+        self::assertSame("Pricing=>/pricing\nSupport=>/support", (string)($merged['config']['navigation.items'] ?? ''));
+        self::assertSame('Pricing', (string)($merged['config']['nav_items'][0]['label'] ?? ''));
+        self::assertStringContainsString('/support', (string)($merged['html'] ?? ''));
+    }
+
+    public function testHydrateGeneratedBlockMetadataFallsBackToConfigKeys(): void
+    {
+        $service = new AiSiteHtmlBlocksBuildService(new AiSitePageBlueprintService());
+
+        $hydrated = $service->hydrateGeneratedBlockMetadata([
+            'block_id' => 'header-ai-site-header',
+            'type' => 'ai_generated_shared_header',
+            'html' => '<header></header>',
+            'config' => [
+                'logo.text' => 'Fallback Brand',
+                'navigation.items' => "Home=>/\nContact=>/contact",
+            ],
+            'field_schema' => [],
+        ]);
+
+        $schema = \is_array($hydrated['field_schema'] ?? null) ? $hydrated['field_schema'] : [];
+        self::assertArrayHasKey('logo', $schema);
+        self::assertArrayHasKey('logo.text', $schema['logo']['fields'] ?? []);
+        self::assertSame('nav-lines', $schema['navigation']['fields']['navigation.items']['format'] ?? null);
+    }
+
+    private function buildGeneratedHeaderPhtml(): string
+    {
+        return <<<'PHTML'
+<?php
+/**
+ * @fields_start
+ * group:logo => Logo
+ * logo.text => Logo Text:text:Brand Name
+ * group:navigation => Navigation
+ * navigation.items => Navigation Items:textarea:Home=>/\nDocs=>/docs
+ * @fields_end
+ */
+$componentConfig = $this->getData('component_config') ?: [];
+$logoText = (string)($componentConfig['logo.text'] ?? '');
+$navItems = is_array($componentConfig['nav_items'] ?? null) ? $componentConfig['nav_items'] : [];
+?>
+<header>
+    <strong><?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?></strong>
+    <?php foreach ($navItems as $item): ?>
+        <a href="<?= htmlspecialchars((string)($item['href'] ?? '#'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)($item['label'] ?? ''), ENT_QUOTES, 'UTF-8') ?></a>
+    <?php endforeach; ?>
+</header>
+PHTML;
+    }
 }
