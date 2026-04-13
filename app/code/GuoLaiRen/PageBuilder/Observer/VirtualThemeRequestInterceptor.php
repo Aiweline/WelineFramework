@@ -106,10 +106,15 @@ class VirtualThemeRequestInterceptor implements ObserverInterface
 
         $this->request->setGet('virtual_theme_id', $virtualThemeId);
         $this->request->setGet('is_virtual_theme', '1');
-        $this->request->setGet('editor_area', 'frontend');
-        $this->request->setGet('shell', 'pagebuilder');
         $this->request->setGet('virtual_theme_path', (string)$context['theme_path']);
         $this->request->setGet('theme_component_area', (string)($context['area'] ?? 'frontend'));
+
+        if (!$this->shouldInjectFrontendRenderState()) {
+            return;
+        }
+
+        $this->request->setGet('editor_area', 'frontend');
+        $this->request->setGet('shell', 'pagebuilder');
     }
 
     private function shouldUseStoredContextForCurrentRoute(): bool
@@ -130,5 +135,26 @@ class VirtualThemeRequestInterceptor implements ObserverInterface
         }
 
         return false;
+    }
+
+    private function shouldInjectFrontendRenderState(): bool
+    {
+        $currentPath = \strtolower(\trim((string)$this->request->getUrlPath()));
+        if ($currentPath === '') {
+            return false;
+        }
+
+        foreach ([
+            '/pagebuilder/backend/page/',
+            '/pagebuilder/backend/preview/',
+            '/pagebuilder/backend/visual/',
+            '/pagebuilder/backend/ai-site-agent/workspace-preview',
+        ] as $pathMarker) {
+            if (\str_contains($currentPath, $pathMarker)) {
+                return true;
+            }
+        }
+
+        return (string)$this->request->getParam('visual_editor', '') === '1';
     }
 }

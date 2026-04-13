@@ -20,6 +20,16 @@ use Weline\Meta\Model\MetaConfig;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Widget\Ui\ParamType\AbstractParamType;
 
+final class ThemeDataRequestState
+{
+    public ?WelineTheme $currentTheme = null;
+    public ?string $currentArea = null;
+    public ?string $performanceKey = null;
+    public bool $initialized = false;
+    public bool $performanceLoading = false;
+    public array $performanceCache = [];
+}
+
 /**
  * ThemeData 静态类
  * 
@@ -40,55 +50,84 @@ use Weline\Widget\Ui\ParamType\AbstractParamType;
  */
 class ThemeData
 {
-    /** @var WelineTheme|null 当前主题 */
-    private static ?WelineTheme $currentTheme = null;
-    
-    /** @var string|null 当前区域 */
-    private static ?string $currentArea = null;
-    
-    /** @var string|null 性能缓存key */
-    private static ?string $performanceKey = null;
-    
-    /** @var bool 是否已初始化 */
-    private static bool $initialized = false;
-    
-    /** @var bool 是否正在加载性能缓存（防止循环调用） */
-    private static bool $performanceLoading = false;
+    private static ?ThemeDataRequestState $mainState = null;
 
-    /** @var array 性能缓存：按 key 存储预加载的数据 [key => [metaRecords => [], metaConfigs => [], namespace => '', metaIdentify => '', scope => '', locale => '']] */
-    private static array $performanceCache = [];
+    /** @var \WeakMap<\Fiber, ThemeDataRequestState>|null */
+    private static ?\WeakMap $fiberStates = null;
+
+    private static function currentFiber(): ?\Fiber
+    {
+        if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
+            return null;
+        }
+
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            return null;
+        }
+
+        return \Fiber::getCurrent();
+    }
+
+    private static function state(): ThemeDataRequestState
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            self::$mainState ??= new ThemeDataRequestState();
+            return self::$mainState;
+        }
+
+        self::$fiberStates ??= new \WeakMap();
+        if (!isset(self::$fiberStates[$fiber])) {
+            self::$fiberStates[$fiber] = new ThemeDataRequestState();
+        }
+
+        return self::$fiberStates[$fiber];
+    }
+
+    private static function resetCurrentState(): void
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            self::$mainState = new ThemeDataRequestState();
+            return;
+        }
+
+        self::$fiberStates ??= new \WeakMap();
+        self::$fiberStates[$fiber] = new ThemeDataRequestState();
+    }
     
     /**
      * 自动初始化（延迟加载），使用performanceLoad预加载配置
      */
     private static function ensureInitialized(): void
     {
-        if (self::$initialized) {
+        $state = self::state();
+        if ($state->initialized) {
             return;
         }
         
         try {
             // 自动识别区域
-            if (self::$currentArea === null) {
-                self::$currentArea = State::isBackend() ? 'backend' : 'frontend';
+            if ($state->currentArea === null) {
+                $state->currentArea = State::isBackend() ? 'backend' : 'frontend';
             }
 
             // 获取当前主题（按当前区域解析激活主题，缺失时回退全局）
-            if (self::$currentTheme === null) {
+            if ($state->currentTheme === null) {
                 /** @var WelineTheme $theme */
                 $theme = ObjectManager::getInstance(WelineTheme::class);
-                self::$currentTheme = $theme->getActiveTheme(self::$currentArea);
+                $state->currentTheme = $theme->getActiveTheme($state->currentArea);
             }
             
             // 如果主题存在且不在加载中，预加载配置（防止循环调用）
-            if (self::$currentTheme && self::$currentTheme->getId() && !self::$performanceLoading) {
+            if ($state->currentTheme && $state->currentTheme->getId() && !$state->performanceLoading) {
                 self::performanceLoad();
             }
             
-            self::$initialized = true;
+            $state->initialized = true;
         } catch (\Exception $e) {
             // 初始化失败，继续执行但不预加载
-            self::$initialized = true;
+            $state->initialized = true;
         }
     }
     
@@ -121,8 +160,9 @@ class ThemeData
                 $configKey = implode('.', array_slice($parts, 2)) . '.value';
                 
                 // 从 performanceCache 中查找
-                if (self::$performanceKey && isset(self::$performanceCache[self::$performanceKey])) {
-                    $themeConfigs = self::$performanceCache[self::$performanceKey];
+                $state = self::state();
+                if ($state->performanceKey && isset($state->performanceCache[$state->performanceKey])) {
+                    $themeConfigs = $state->performanceCache[$state->performanceKey];
                     if (isset($themeConfigs[$configKey])) {
                         return $themeConfigs[$configKey];
                     }
@@ -154,8 +194,9 @@ class ThemeData
         
         // 获取主题ID
         $themeId = null;
-        if (self::$currentTheme && self::$currentTheme->getId()) {
-            $themeId = self::$currentTheme->getId();
+        $state = self::state();
+        if ($state->currentTheme && $state->currentTheme->getId()) {
+            $themeId = $state->currentTheme->getId();
         }
         
         // 统一使用MetaData设置值
@@ -187,8 +228,9 @@ class ThemeData
         
         // 先从单条缓存中查找
         $cacheKey = "meta_single_{$identify}";
-        if (isset(self::$performanceCache[$cacheKey])) {
-            return self::$performanceCache[$cacheKey];
+        $state = self::state();
+        if (isset($state->performanceCache[$cacheKey])) {
+            return $state->performanceCache[$cacheKey];
         }
         
         // 解析 identify 提取 area 和 type
@@ -207,7 +249,7 @@ class ThemeData
         foreach ($metaList as $meta) {
             if (($meta['meta_identify'] ?? '') === $identify) {
                 // 缓存单条记录
-                self::$performanceCache[$cacheKey] = $meta;
+                $state->performanceCache[$cacheKey] = $meta;
                 return $meta;
             }
         }
@@ -323,7 +365,7 @@ class ThemeData
 
             /** @var MetaConfig $metaConfig */
             $metaConfig = ObjectManager::getInstance(MetaConfig::class);
-            $themeId = self::$currentTheme?->getId();
+            $themeId = self::state()->currentTheme?->getId();
             $resolvedLocale = $locale ?? (Cookie::getLang() ?? 'zh_Hans_CN');
 
             $value = null;
@@ -390,7 +432,7 @@ class ThemeData
         }
 
         [$namespace, $configKey] = self::resolveNamespaceAndConfigKey($identify, "param.{$paramName}.value");
-        $themeId = self::$currentTheme?->getId();
+        $themeId = self::state()->currentTheme?->getId();
 
         if ($themeId) {
             /** @var MetaConfig $metaConfig */
@@ -542,13 +584,14 @@ class ThemeData
     public static function performanceLoad(?string $namespace = null, ?string $metaIdentify = null, ?string $scope = null, ?string $locale = null): void
     {
         // 如果正在加载，直接返回，防止循环调用
-        if (self::$performanceLoading) {
+        $state = self::state();
+        if ($state->performanceLoading) {
             return;
         }
         
         try {
             // 标记为正在加载
-            self::$performanceLoading = true;
+            $state->performanceLoading = true;
             
             // 确保已初始化（获取当前主题和区域）
             // 注意：ensureInitialized 中会检查 performanceLoading 标志，不会再次调用 performanceLoad
@@ -556,10 +599,10 @@ class ThemeData
             
             // 如果没有提供namespace，自动生成（基于当前区域）
             if ($namespace === null) {
-                if (self::$currentArea === null) {
-                    self::$currentArea = State::isBackend() ? 'backend' : 'frontend';
+                if ($state->currentArea === null) {
+                    $state->currentArea = State::isBackend() ? 'backend' : 'frontend';
                 }
-                $namespace = "theme." . self::$currentArea;
+                $namespace = "theme." . $state->currentArea;
             }
             
             // 如果没有提供metaIdentify，使用通配符加载所有
@@ -579,8 +622,8 @@ class ThemeData
             
             // 获取当前主题ID
             $themeId = null;
-            if (self::$currentTheme && self::$currentTheme->getId()) {
-                $themeId = self::$currentTheme->getId();
+            if ($state->currentTheme && $state->currentTheme->getId()) {
+                $themeId = $state->currentTheme->getId();
             }
             
             // 生成缓存key（包含主题ID）
@@ -588,7 +631,7 @@ class ThemeData
             $key = md5(implode('.', $keyParts));
             
             // 如果已经加载过相同的配置，直接返回
-            if (self::$performanceKey === $key) {
+            if ($state->performanceKey === $key) {
                 return;
             }
             // 先调用MetaData的performanceLoad方法加载Meta记录
@@ -621,19 +664,19 @@ class ThemeData
                         $themeConfigs[$configKey] = $configValue;
                     }
                     
-                    self::$performanceCache[$key] = $themeConfigs;
+                    $state->performanceCache[$key] = $themeConfigs;
                 } catch (\Throwable $e) {
-                    self::$performanceCache[$key] = [];
+                    $state->performanceCache[$key] = [];
                 }
             }
             
             // 保存performanceKey
-            self::$performanceKey = $key;
+            $state->performanceKey = $key;
         } catch (\Exception $e) {
             // 预加载失败，继续执行
         } finally {
             // 重置加载标志，允许后续调用
-            self::$performanceLoading = false;
+            $state->performanceLoading = false;
         }
     }
     
@@ -643,11 +686,7 @@ class ThemeData
     public static function clearCache(): void
     {
         MetaData::clearCache();
-        self::$currentTheme = null;
-        self::$currentArea = null;
-        self::$performanceKey = null;
-        self::$performanceCache = []; // 清除本地缓存
-        self::$initialized = false;
+        self::resetCurrentState();
     }
 
     /**
@@ -656,7 +695,7 @@ class ThemeData
     public static function resetRequestState(): void
     {
         self::clearCache();
-        self::$performanceLoading = false;
+        self::state()->performanceLoading = false;
     }
     
     /**
@@ -677,12 +716,13 @@ class ThemeData
             }
             
             // 包含 theme. 但不包含 frontend/backend，自动添加
-            if (self::$currentArea === null) {
-                self::$currentArea = State::isBackend() ? 'backend' : 'frontend';
+            $state = self::state();
+            if ($state->currentArea === null) {
+                $state->currentArea = State::isBackend() ? 'backend' : 'frontend';
             }
             // 去掉 theme. 前缀，添加 area
             $rest = substr($identify, 6); // 去掉 'theme.'
-            return "theme." . self::$currentArea . "." . $rest;
+            return "theme." . $state->currentArea . "." . $rest;
         }
         
         // 如果不包含 theme. 前缀，检查是否包含 frontend/backend
@@ -692,10 +732,11 @@ class ThemeData
         }
         
         // 既不包含 theme. 也不包含 frontend/backend，自动添加
-        if (self::$currentArea === null) {
-            self::$currentArea = State::isBackend() ? 'backend' : 'frontend';
+        $state = self::state();
+        if ($state->currentArea === null) {
+            $state->currentArea = State::isBackend() ? 'backend' : 'frontend';
         }
-        return "theme." . self::$currentArea . "." . $identify;
+        return "theme." . $state->currentArea . "." . $identify;
     }
     
     /**
@@ -706,8 +747,9 @@ class ThemeData
      */
     public static function setCurrentTheme(?WelineTheme $theme): void
     {
-        self::$currentTheme = $theme;
-        self::$initialized = false; // 重置初始化状态，下次调用时会重新初始化
+        $state = self::state();
+        $state->currentTheme = $theme;
+        $state->initialized = false; // 重置初始化状态，下次调用时会重新初始化
     }
     
     /**
@@ -718,8 +760,9 @@ class ThemeData
      */
     public static function setCurrentArea(?string $area): void
     {
-        self::$currentArea = $area;
-        self::$initialized = false; // 重置初始化状态，下次调用时会重新初始化
+        $state = self::state();
+        $state->currentArea = $area;
+        $state->initialized = false; // 重置初始化状态，下次调用时会重新初始化
     }
     
     /**
@@ -730,7 +773,7 @@ class ThemeData
     public static function getCurrentTheme(): ?WelineTheme
     {
         self::ensureInitialized();
-        return self::$currentTheme;
+        return self::state()->currentTheme;
     }
     
     /**
@@ -741,7 +784,7 @@ class ThemeData
     public static function getCurrentArea(): ?string
     {
         self::ensureInitialized();
-        return self::$currentArea;
+        return self::state()->currentArea;
     }
     
     /**
@@ -759,8 +802,9 @@ class ThemeData
         self::ensureInitialized();
         
         $cacheKey = "meta_list_{$area}_{$type}";
-        if (isset(self::$performanceCache[$cacheKey])) {
-            return self::$performanceCache[$cacheKey];
+        $state = self::state();
+        if (isset($state->performanceCache[$cacheKey])) {
+            return $state->performanceCache[$cacheKey];
         }
         
         try {
@@ -815,7 +859,7 @@ class ThemeData
                 ];
             }
             
-            self::$performanceCache[$cacheKey] = $result;
+            $state->performanceCache[$cacheKey] = $result;
             return $result;
         } catch (\Exception $e) {
             return [];
@@ -1092,14 +1136,15 @@ class ThemeData
         self::ensureInitialized();
         
         // 获取主题ID（用于查询配置）
+        $state = self::state();
         $themeId = null;
-        if (self::$currentTheme && self::$currentTheme->getId()) {
-            $themeId = self::$currentTheme->getId();
+        if ($state->currentTheme && $state->currentTheme->getId()) {
+            $themeId = $state->currentTheme->getId();
         }
         
         $cacheKey = "config_list_{$area}_{$type}_{$scope}_{$themeId}";
-        if (isset(self::$performanceCache[$cacheKey])) {
-            return self::$performanceCache[$cacheKey];
+        if (isset($state->performanceCache[$cacheKey])) {
+            return $state->performanceCache[$cacheKey];
         }
         
         try {
@@ -1155,7 +1200,7 @@ class ThemeData
                 $result[$keyWithoutType] = $configValue;
             }
             
-            self::$performanceCache[$cacheKey] = $result;
+            $state->performanceCache[$cacheKey] = $result;
             return $result;
         } catch (\Exception $e) {
             return [];
@@ -1173,15 +1218,16 @@ class ThemeData
         self::ensureInitialized();
 
         $area = strtolower(trim($area)) === 'backend' ? 'backend' : 'frontend';
-        $themeId = self::$currentTheme?->getId();
+        $state = self::state();
+        $themeId = $state->currentTheme?->getId();
         $cacheKey = "scope_list_{$area}_{$themeId}";
-        if (isset(self::$performanceCache[$cacheKey])) {
-            return self::$performanceCache[$cacheKey];
+        if (isset($state->performanceCache[$cacheKey])) {
+            return $state->performanceCache[$cacheKey];
         }
 
         $scopes = ['default'];
         if (!$themeId) {
-            self::$performanceCache[$cacheKey] = $scopes;
+            $state->performanceCache[$cacheKey] = $scopes;
             return $scopes;
         }
 
@@ -1223,7 +1269,7 @@ class ThemeData
             return strcmp($left, $right);
         });
 
-        self::$performanceCache[$cacheKey] = $scopes;
+        $state->performanceCache[$cacheKey] = $scopes;
         return $scopes;
     }
     

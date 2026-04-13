@@ -13,6 +13,8 @@ class SharedStateClient
 {
     private ConnectionPoolInterface $pool;
     private float $acquireTimeout;
+    private string $consumerCode = '';
+    private bool $released = false;
 
     public function __construct(
         string $host = '127.0.0.1',
@@ -37,6 +39,16 @@ class SharedStateClient
         }
         $this->pool = ConnectionPoolManager::getInstance($host, $port, $options);
         $this->acquireTimeout = (float)($options['acquire_timeout'] ?? $options['pool_acquire_timeout'] ?? 0.2);
+        $this->consumerCode = \trim((string) ($options['consumer_code'] ?? ''));
+
+        if ($this->consumerCode !== '' && \method_exists($this->pool, 'registerLocalConsumer')) {
+            $this->pool->registerLocalConsumer(
+                $this->consumerCode,
+                \trim((string) ($options['instance_name'] ?? $this->consumerCode)),
+                \trim((string) ($options['service_role'] ?? '')),
+                \trim((string) ($options['owner_type'] ?? 'instance')),
+            );
+        }
     }
 
     public function request(string $cmd, array $params = []): ?array
@@ -61,11 +73,24 @@ class SharedStateClient
         return \is_array($resp) && SessionProtocol::isSuccess($resp) && SessionProtocol::getData($resp) === 'pong';
     }
 
+    public function warmup(): bool
+    {
+        $result = $this->withConnection(static fn (PooledConnectionInterface $connection): array => ['ok' => $connection->isConnected()]);
+
+        return \is_array($result);
+    }
+
     public function disconnect(): void
     {
-        // Keep the process-level shared-service pool alive for WLS worker reuse.
-        // Real socket shutdown can still happen through explicit shutdownPool()
-        // or naturally when the worker process exits.
+        if ($this->released) {
+            return;
+        }
+
+        if ($this->consumerCode !== '' && \method_exists($this->pool, 'unregisterLocalConsumer')) {
+            $this->pool->unregisterLocalConsumer($this->consumerCode);
+        }
+
+        $this->released = true;
     }
 
     public function shutdownPool(): void
@@ -106,5 +131,10 @@ class SharedStateClient
         }
 
         return $result;
+    }
+
+    public function __destruct()
+    {
+        $this->disconnect();
     }
 }

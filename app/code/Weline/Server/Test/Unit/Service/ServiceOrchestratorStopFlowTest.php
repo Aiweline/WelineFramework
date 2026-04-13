@@ -59,6 +59,40 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
         $this->invokePrivate($orchestrator, 'waitForServiceIpcDisconnectAfterShutdown');
     }
 
+    public function testForceTerminateMasterAndChildrenSkipsIpcBroadcastWhenNoServiceClientsRemain(): void
+    {
+        $server = $this->createMock(MasterControlServer::class);
+        $server->expects(self::atLeastOnce())->method('countServiceClients')->willReturn(0);
+        $server->expects(self::never())->method('sendTo');
+        $server->expects(self::once())->method('flushPendingWrites');
+        $server->expects(self::once())->method('close');
+
+        $orchestrator = new class extends ServiceOrchestrator {
+            public ?int $forcedExitCode = null;
+
+            protected function finalizeForceTerminateMasterExit(int $exitCode): void
+            {
+                $this->forcedExitCode = $exitCode;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        $registry->addInstance(new ServiceInstance(
+            role: 'worker',
+            instanceId: 1,
+            pid: 0,
+            ipcClientId: 11,
+            state: ServiceInstance::STATE_STOPPING
+        ));
+
+        $this->setProperty($orchestrator, 'controlServer', $server);
+        $this->setProperty($orchestrator, 'stopStage', 'verify');
+
+        $orchestrator->forceTerminateMasterAndChildren('repeat_signal:Ctrl+C (Windows)');
+
+        self::assertSame(2, $orchestrator->forcedExitCode);
+    }
+
     public function testVerifyAndKillRemainingProcessesAggregatesAtStageFive(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
@@ -454,14 +488,14 @@ final class ServiceOrchestratorStopFlowTest extends TestCase
 
     private function setProperty(object $object, string $property, mixed $value): void
     {
-        $reflection = new \ReflectionProperty($object, $property);
+        $reflection = $this->findPropertyRecursive($object, $property);
         $reflection->setAccessible(true);
         $reflection->setValue($object, $value);
     }
 
     private function readProperty(object $object, string $property): mixed
     {
-        $reflection = new \ReflectionProperty($object, $property);
+        $reflection = $this->findPropertyRecursive($object, $property);
         $reflection->setAccessible(true);
 
         return $reflection->getValue($object);

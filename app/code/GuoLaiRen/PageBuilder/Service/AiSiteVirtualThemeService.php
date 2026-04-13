@@ -103,6 +103,88 @@ class AiSiteVirtualThemeService
     }
 
     /**
+     * @param array<string, mixed> $component
+     */
+    public function saveGeneratedContentComponent(int $themeId, string $pageType, array $component): void
+    {
+        $componentCode = \trim((string)($component['code'] ?? ''));
+        if ($themeId <= 0 || $pageType === '' || $componentCode === '') {
+            throw new \InvalidArgumentException((string)__('Invalid generated content component payload'));
+        }
+
+        $this->saveThemeComponent(
+            $themeId,
+            $componentCode,
+            VirtualThemeComponent::AREA_FRONTEND,
+            VirtualThemeComponent::CATEGORY_CONTENT,
+            (string)($component['name'] ?? $componentCode),
+            (string)($component['phtml'] ?? ''),
+            \is_array($component['default_config'] ?? null) ? $component['default_config'] : [],
+            [
+                'position' => ['content'],
+                'page_layouts' => [$pageType],
+                'sort_order' => (int)($component['sort_order'] ?? 0),
+                'section_key' => (string)($component['key'] ?? ''),
+            ]
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     * @param array<string, mixed> $component
+     * @return array<string, mixed>
+     */
+    public function mergeGeneratedContentIntoLayout(array $layout, array $component): array
+    {
+        $componentCode = \trim((string)($component['code'] ?? ''));
+        if ($componentCode === '') {
+            return $layout;
+        }
+
+        $content = \is_array($layout['content'] ?? null) ? $layout['content'] : [];
+        $next = [
+            'code' => $componentCode,
+            'enabled' => true,
+            'config' => \is_array($component['default_config'] ?? null) ? $component['default_config'] : [],
+            'instance_id' => '',
+            'sort_order' => (int)($component['sort_order'] ?? 0),
+        ];
+
+        $merged = [];
+        $replaced = false;
+        foreach ($content as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if (\trim((string)($row['code'] ?? '')) === $componentCode) {
+                $merged[] = $next;
+                $replaced = true;
+                continue;
+            }
+            $merged[] = $row;
+        }
+        if (!$replaced) {
+            $merged[] = $next;
+        }
+        \usort($merged, static fn(array $left, array $right): int => ((int)($left['sort_order'] ?? 0)) <=> ((int)($right['sort_order'] ?? 0)));
+        $layout['content'] = $merged;
+
+        return $layout;
+    }
+
+    /**
+     * @param array<string, mixed> $layout
+     */
+    public function saveGeneratedPageLayout(int $themeId, string $pageType, array $layout): void
+    {
+        if ($themeId <= 0 || $pageType === '') {
+            throw new \InvalidArgumentException((string)__('Invalid generated page layout payload'));
+        }
+
+        $this->saveThemeLayout($themeId, $pageType, $layout);
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param list<string> $pageTypes

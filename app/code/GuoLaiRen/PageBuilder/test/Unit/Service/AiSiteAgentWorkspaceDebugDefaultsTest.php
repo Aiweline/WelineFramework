@@ -13,5 +13,14 @@ final class AiSiteAgentWorkspaceDebugDefaultsTest extends TestCase
     {
         self::assertNotSame('', \trim(AiSiteAgentWorkspaceDebugDefaults::SITE_TITLE));
         self::assertNotSame('', \trim(AiSiteAgentWorkspaceDebugDefaults::BRIEF_DESCRIPTION));
+        self::assertSame('en_US', AiSiteAgentWorkspaceDebugDefaults::DEFAULT_LOCALE);
+    }
+
+    public function testNormalizeDefaultLocale(): void
+    {
+        self::assertSame('en_US', AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale(null));
+        self::assertSame('en_US', AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale(''));
+        self::assertSame('en_US', AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale('invalid'));
+        self::assertSame('zh_Hans_CN', AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale('zh_Hans_CN'));
     }
 }

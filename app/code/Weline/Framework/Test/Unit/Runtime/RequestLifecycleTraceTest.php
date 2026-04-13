@@ -5,12 +5,17 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
+use Weline\Framework\Runtime\RuntimeInterface;
 
 class RequestLifecycleTraceTest extends TestCase
 {
     protected function tearDown(): void
     {
+        Context::leave();
+        Runtime::resetModeCache();
         RequestLifecycleTrace::reset();
     }
 
@@ -33,6 +38,28 @@ class RequestLifecycleTraceTest extends TestCase
         ]);
 
         self::assertSame(0.0, RequestLifecycleTrace::sumDurationsByName('missing_span'));
+    }
+
+    public function testShouldSkipForAiWorkbenchRoutesInWlsMode(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        Context::enter(new Context([
+            'input' => ['uri' => '/pagebuilder/backend/ai-site-agent/workspace'],
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+
+        self::assertTrue(RequestLifecycleTrace::shouldSkipForCurrentRequest());
+    }
+
+    public function testShouldNotSkipForRegularBackendRouteInWlsMode(): void
+    {
+        Runtime::setMode(RuntimeInterface::MODE_WLS);
+        Context::enter(new Context([
+            'input' => ['uri' => '/admin/dashboard/index'],
+            'runtime' => ['request_context' => ['initialized' => true]],
+        ]));
+
+        self::assertFalse(RequestLifecycleTrace::shouldSkipForCurrentRequest());
     }
 
     /**

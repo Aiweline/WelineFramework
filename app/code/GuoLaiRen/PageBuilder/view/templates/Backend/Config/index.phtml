@@ -8,11 +8,20 @@
  * @var string $i18n_enabled
  * @var string $ai_site_agent_debug_site_title
  * @var string $ai_site_agent_debug_brief_description
+ * @var string $ai_site_agent_debug_default_locale
  */
 $aiEnabled = $ai_enabled ?? '0';
 $i18nEnabled = $i18n_enabled ?? '0';
 $aiSiteDebugSiteTitle = (string)($ai_site_agent_debug_site_title ?? '');
 $aiSiteDebugBrief = (string)($ai_site_agent_debug_brief_description ?? '');
+$aiSiteDebugDefaultLocale = (string)($ai_site_agent_debug_default_locale ?? 'en_US');
+$pbAiConfigLocaleOptions = [
+    'zh_Hans_CN' => (string)__('简体中文'),
+    'en_US' => (string)__('English'),
+    'zh_Hant_TW' => (string)__('繁體中文'),
+    'ja_JP' => (string)__('日本語'),
+    'ko_KR' => (string)__('한국어'),
+];
 ?>
 
 <style>
@@ -165,7 +174,7 @@ $aiSiteDebugBrief = (string)($ai_site_agent_debug_brief_description ?? '');
                     <div class="mb-4">
                         <h6 class="mb-3"><i class="mdi mdi-bug-outline me-2"></i><lang>AI 建站工作台 · 调试预填</lang></h6>
                         <p class="pagebuilder-config-description mb-3">
-                            <lang>仅在「站点名称」「需求描述」在会话中为空时，作为表单默认值显示（快速模式与高级模式均生效）。从未保存过本配置时使用内置默认文案；若将两项清空并保存，则关闭预填。</lang>
+                            <lang>仅在「站点名称」「需求描述」「主语言」在会话中未设置时，作为表单默认值（快速模式与高级模式均生效）。从未保存过本配置时使用内置默认值（主语言为英语）；站点名称与描述若清空并保存则关闭对应预填。</lang>
                         </p>
                         <div class="mb-3">
                             <label class="form-label" for="pagebuilder_ai_site_debug_site_title"><lang>默认站点名称</lang></label>
@@ -175,10 +184,19 @@ $aiSiteDebugBrief = (string)($ai_site_agent_debug_brief_description ?? '');
                                    placeholder="Teenipiya websiteProfile">
                             <div class="form-text text-muted small"><lang>示例：Teenipiya websiteProfile</lang></div>
                         </div>
-                        <div class="mb-0">
+                        <div class="mb-3">
                             <label class="form-label" for="pagebuilder_ai_site_debug_brief_description"><lang>默认网站描述</lang></label>
                             <textarea class="form-control" name="ai_site_agent_debug_brief_description" id="pagebuilder_ai_site_debug_brief_description" rows="3"
                                       placeholder="<?= htmlspecialchars(__('我想做一个印度市场的棋牌网站，推广棋牌apk下载的seo网站'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($aiSiteDebugBrief, ENT_QUOTES, 'UTF-8') ?></textarea>
+                        </div>
+                        <div class="mb-0">
+                            <label class="form-label" for="pagebuilder_ai_site_debug_default_locale"><lang>默认主语言</lang></label>
+                            <select class="form-select" name="ai_site_agent_debug_default_locale" id="pagebuilder_ai_site_debug_default_locale" autocomplete="off">
+                                <?php foreach ($pbAiConfigLocaleOptions as $locCode => $locLabel): ?>
+                                    <option value="<?= htmlspecialchars((string)$locCode, ENT_QUOTES, 'UTF-8') ?>"<?= $aiSiteDebugDefaultLocale === $locCode ? ' selected' : '' ?>><?= htmlspecialchars((string)$locLabel, ENT_QUOTES, 'UTF-8') ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <div class="form-text text-muted small"><lang>会话未带主语言时，建站工作台「主语言」选此项；未配置过后台时内置为英语。</lang></div>
                         </div>
                     </div>
 

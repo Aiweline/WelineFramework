@@ -49,6 +49,8 @@ if (!\defined('DS')) {
 // resolveControlPort 依赖框架类与 BP 常量，必须先完成基础 bootstrap。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
+\Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
+
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用命令行参数 --control-port=，否则从实例文件自动发现
 if ($controlPort <= 0) {
@@ -77,9 +79,8 @@ ErrorBootstrap::init($processTag, [
     'process_name' => $processName,
 ]);
 
-// 所有进程都启用 stdout 输出（便于调试和监控）
 WlsLogger::getInstance()
-    ->setStdoutEnabled(true)
+    ->setStdoutEnabled(\Weline\Server\Log\LogConfig::isStdoutEnabled($isFrontend, \Weline\Server\Log\LogConfig::isDevMode()))
     ->setProcessTag($processTag);
 
 // 进程日志文件（持久化，跨重启保留）
