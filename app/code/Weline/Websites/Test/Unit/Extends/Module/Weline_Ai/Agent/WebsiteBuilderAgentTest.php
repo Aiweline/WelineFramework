@@ -132,6 +132,74 @@ final class WebsiteBuilderAgentTest extends TestCase
         $this->assertStringContainsString('避免反复重试', $prompt);
     }
 
+    public function testExecutePropagatesStreamCancellationToProviderStreamFull(): void
+    {
+        $provider = new class implements ProviderInterface {
+            public function generate(AiModel $model, string $prompt, array $params = []): array
+            {
+                return ['content' => '', 'tool_calls' => []];
+            }
+
+            public function generateStream(AiModel $model, string $prompt, callable $callback, array $params = []): array
+            {
+                return ['content' => '', 'usage' => []];
+            }
+
+            public function supports(string $modelCode): bool
+            {
+                return true;
+            }
+
+            public function getProviderCode(): string
+            {
+                return 'test';
+            }
+
+            public function getSupportedModels(): array
+            {
+                return [];
+            }
+
+            public function generateStreamFull(AiModel $model, string $prompt, array $params = []): array
+            {
+                $continued = ($params['on_content'])('partial chunk');
+                if ($continued === false) {
+                    throw new \RuntimeException('upstream cancelled');
+                }
+
+                return ['content' => 'final', 'tool_calls' => []];
+            }
+        };
+
+        $providerFactory = $this->createMock(ProviderFactory::class);
+        $providerFactory->expects($this->once())
+            ->method('getProvider')
+            ->willReturn($provider);
+
+        $model = $this->createMock(AiModel::class);
+        $model->method('getModelCode')->willReturn('test-model');
+
+        $agent = new WebsiteBuilderAgent();
+        $result = $agent->execute(
+            prompt: 'build site',
+            model: $model,
+            params: [
+                'provider_factory' => $providerFactory,
+                'max_iterations' => 1,
+            ],
+            streamCallback: static function (string $eventType, array $data): bool {
+                if ($eventType === 'ai_response') {
+                    return false;
+                }
+
+                return true;
+            }
+        );
+
+        $this->assertFalse($result->success);
+        $this->assertStringContainsString('upstream cancelled', (string)$result->error);
+    }
+
     private function createToolDouble(string $name, array $result): ToolInterface
     {
         $tool = $this->createMock(ToolInterface::class);

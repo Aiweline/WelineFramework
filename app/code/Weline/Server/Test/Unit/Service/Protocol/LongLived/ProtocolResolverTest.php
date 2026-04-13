@@ -67,4 +67,16 @@ final class ProtocolResolverTest extends TestCase
         self::assertSame('sse', $detected['protocol']);
         self::assertSame('layer-3-path-fallback', $detected['layer']);
     }
+
+    public function testFallsBackToPathForPostStreamRouteWithoutEventStreamAccept(): void
+    {
+        $resolver = new ProtocolResolver();
+        $raw = "POST /pagebuilder/backend/ai-generate/component-config-stream HTTP/1.1\r\nHost: example.com\r\nAccept: */*\r\nX-Requested-With: XMLHttpRequest\r\n\r\n";
+
+        $detected = $resolver->detect($raw);
+
+        self::assertTrue($detected['is_long_lived']);
+        self::assertSame('sse', $detected['protocol']);
+        self::assertSame('layer-3-path-fallback', $detected['layer']);
+    }
 }
