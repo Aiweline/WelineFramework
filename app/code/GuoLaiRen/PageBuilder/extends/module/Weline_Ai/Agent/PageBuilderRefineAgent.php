@@ -243,30 +243,30 @@ SYSTEM_PROMPT;
                         'temperature' => (float)($params['temperature'] ?? 0.6),
                         'max_tokens' => (int)($params['max_tokens'] ?? 8000),
                         'timeout' => (int)($params['timeout'] ?? 180),
-                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
-                            $streamCallback('thinking', [
+                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
+                            return $streamCallback('thinking', [
                                 'content' => $chunk,
                                 'iteration' => $currentIteration,
                                 'streaming' => true,
-                            ]);
+                            ]) !== false;
                         } : null,
-                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration) {
-                            $streamCallback('ai_response', [
+                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
+                            return $streamCallback('ai_response', [
                                 'content' => $chunk,
                                 'iteration' => $currentIteration,
                                 'streaming' => true,
-                            ]);
+                            ]) !== false;
                         } : null,
-                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback) {
-                            $streamCallback('heartbeat', ['ts' => time()]);
+                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
+                            return $streamCallback('heartbeat', ['ts' => time()]) !== false;
                         } : null,
-                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $currentIteration) {
-                            $streamCallback('agent_status', [
+                        'on_waiting' => $streamCallback ? function (int $elapsed) use ($streamCallback, $currentIteration): bool {
+                            return $streamCallback('agent_status', [
                                 'status' => 'waiting_ai',
                                 'message' => __('等待 AI 响应中... (已等待 %{1} 秒)', [$elapsed]),
                                 'iteration' => $currentIteration,
                                 'elapsed' => $elapsed,
-                            ]);
+                            ]) !== false;
                         } : null,
                     ]);
                 } else {

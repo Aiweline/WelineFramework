@@ -269,6 +269,7 @@ class Env extends DataObject
     private array $config = [];
     private array $persistentConfig = [];
     private array $runtimeConfig = [];
+    private ?bool $runtimeMaintenanceModeOverride = null;
 
     private array $module_list = [];
     private static array $module_configs = [];
@@ -387,6 +388,7 @@ class Env extends DataObject
         }
         $this->persistentConfig = array_replace_recursive(self::default_CONFIG, $envConfig);
         $this->runtimeConfig = [];
+        $this->runtimeMaintenanceModeOverride = null;
         $this->rebuildEffectiveConfig();
         return $this;
     }
@@ -705,6 +707,12 @@ class Env extends DataObject
     {
         $now = \microtime(true);
 
+        if ($this->runtimeMaintenanceModeOverride !== null) {
+            self::$maintenanceCached = $this->runtimeMaintenanceModeOverride;
+            self::$maintenanceLastCheck = $now;
+            return self::$maintenanceCached;
+        }
+
         $interval = ($this->config['wls'] ?? [])['maintenance_check_interval']
                     ?? self::MAINTENANCE_CHECK_INTERVAL;
 
@@ -759,6 +767,7 @@ class Env extends DataObject
      */
     public function setRuntimeMaintenanceMode(bool $enabled): void
     {
+        $this->runtimeMaintenanceModeOverride = $enabled;
         $this->applyRuntimeConfig([
             'system' => ['maintenance' => $enabled],
         ]);

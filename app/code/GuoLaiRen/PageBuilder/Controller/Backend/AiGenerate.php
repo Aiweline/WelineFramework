@@ -3984,9 +3984,13 @@ PROMPT;
                     'timeout' => 0, // 不限制单次 curl 超时，智能体多轮迭代依靠心跳保活
                     'max_tokens' => 16000, // 组件 JSON 可能较长，提高上限降低截断率
                 ],
-                function (string $eventType, array $data) use ($sse) {
+                function (string $eventType, array $data) use ($sse): bool {
                     // SSE 事件透传
+                    if (!$sse->isAlive()) {
+                        return false;
+                    }
                     $sse->sendEvent($eventType, $data);
+                    return $sse->isAlive();
                 }
             );
 

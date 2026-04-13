@@ -35,7 +35,9 @@ class PathFallbackMatcher implements MatcherInterface
             return ['is_long_lived' => true, 'layer' => 'layer-3-path-fallback', 'protocol' => 'webrtc-signaling'];
         }
         if ($containsSegment($segments, 'sse')
-            || $containsSegment($segments, 'event-stream')) {
+            || $containsSegment($segments, 'event-stream')
+            // fetch + POST 流式读取常用 `*-stream` 路由名，不一定携带 EventSource 风格 Accept
+            || $containsSegment($segments, 'stream')) {
             return ['is_long_lived' => true, 'layer' => 'layer-3-path-fallback', 'protocol' => 'sse'];
         }
 
