@@ -154,7 +154,7 @@ class FiberScheduler
      * @param callable|null $beforeResume 在 resume 前调用，接收 Fiber 参数，
      *                                    由 Worker 负责恢复该 Fiber 的请求级上下文。
      */
-    public function tick(?callable $beforeResume = null, ?float $maxExecutionMs = null): void
+    public function tick(?callable $beforeResume = null, ?float $maxExecutionMs = null, ?callable $afterResume = null): void
     {
         if (empty($this->timers)) {
             return;
@@ -194,6 +194,9 @@ class FiberScheduler
                         $beforeResume($fiber);
                     }
                     $fiber->resume();
+                    if ($afterResume !== null) {
+                        $afterResume($fiber);
+                    }
                 } catch (RequestExitException) {
                     // Fiber 中抛出退出异常，正常结束该 Fiber
                 } catch (\Throwable $e) {

@@ -232,6 +232,10 @@ class SseContext
      */
     public static function isConnectionAlive(): bool
     {
+        if (\defined('WLS_MODE') && WLS_MODE && self::$writeCallback === null) {
+            return false;
+        }
+
         if (self::$aliveCallback !== null) {
             try {
                 return (bool) (self::$aliveCallback)();
