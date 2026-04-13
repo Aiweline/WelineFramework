@@ -172,7 +172,12 @@ class DevToolPanelObserver implements ObserverInterface
     private function writeBackPayload(Event $event, array $payload): void
     {
         if (is_array($event->getData('data'))) {
-            $event->setData('data', $payload);
+            if (array_key_exists('result', $payload)) {
+                $event->setData('result', (string)($payload['result'] ?? ''));
+            }
+            if (array_key_exists('trace', $payload) && is_array($payload['trace'])) {
+                $event->setData('trace', $payload['trace']);
+            }
             return;
         }
 

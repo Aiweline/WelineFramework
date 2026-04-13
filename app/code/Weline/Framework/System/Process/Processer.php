@@ -2089,22 +2089,10 @@ class Processer
             return $optimizedResults;
         }
 
-        // Last-resort fallback only. The old Windows "fast detached" path
-        // lived before tryBatchCreateOptimized() and called create() in a
-        // foreach loop, which made WLS bootstrap look concurrent in code but
-        // launch one process at a time in practice.
-        if (IS_WIN && self::shouldUseWindowsFastDetachedBatchCreate($commands)) {
-            $results = [];
-            foreach ($commands as $key => $config) {
-                $results[$key] = self::create(
-                    (string) ($config['command'] ?? ''),
-                    false,
-                    false,
-                    $config['enableLog'] ?? null
-                );
-            }
-
-            return $results;
+        if (IS_WIN) {
+            throw new \RuntimeException(
+                'Windows batch process creation is unavailable; refusing to fall back to serial create() startup.'
+            );
         }
 
         $results = [];
@@ -2122,19 +2110,6 @@ class Processer
         }
 
         return $results;
-    }
-
-    /**
-     * @param array<string, array{command: string, block?: bool, foreground?: bool, enableLog?: bool|null}> $commands
-     */
-    private static function shouldUseWindowsFastDetachedBatchCreate(array $commands): bool
-    {
-        unset($commands);
-
-        // Disabled by design: this fallback is a serial foreach over create().
-        // Keep the method as a documented guard so future changes do not
-        // accidentally reintroduce one-by-one WLS startup on Windows.
-        return false;
     }
 
     /**
@@ -3012,14 +2987,23 @@ CMD;
             $lines[] = '    $startArgs = @{';
             $lines[] = "        FilePath = '" . ($foreground ? 'cmd.exe' : $php) . "'";
             $lines[] = "        WorkingDirectory = '{$cwd}'";
-            $lines[] = "        WindowStyle = '" . ($foreground ? 'Normal' : 'Hidden') . "'";
+            $lines[] = "        WindowStyle = 'Hidden'";
             $lines[] = "        ErrorAction = 'Stop'";
             if (!$foreground && $block) {
                 $lines[] = '        PassThru = $true';
             }
             $lines[] = '    }';
             if ($foreground) {
-                $lines[] = "    \$startArgs.ArgumentList = @('/d','/c','\"{$foregroundScript}\"')";
+                $windowTitle = \trim((string) ($item['process_name'] ?? $item['key'] ?? 'weline-process'));
+                if ($windowTitle === '') {
+                    $windowTitle = 'weline-process';
+                }
+                $foregroundStartCommand = self::buildWindowsForegroundStartCommand(
+                    (string) ($item['foreground_script'] ?? ''),
+                    (string) ($item['cwd'] ?? BP),
+                    $windowTitle
+                );
+                $lines[] = "    \$startArgs.ArgumentList = @('/d','/c','" . self::escapePowerShellLiteral($foregroundStartCommand) . "')";
                 $lines[] = '    Start-Process @startArgs | Out-Null';
                 $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
             } else {

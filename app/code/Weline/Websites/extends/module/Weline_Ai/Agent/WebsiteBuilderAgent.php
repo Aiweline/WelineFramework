@@ -136,6 +136,19 @@ PROMPT;
         $finalContent = '';
         $siteBuildCompleted = false;
         $useStreamFull = method_exists($provider, 'generateStreamFull');
+        $emit = function (string $eventType, array $data = []) use ($streamCallback): bool {
+            if ($streamCallback === null) {
+                return true;
+            }
+
+            return $streamCallback($eventType, $data) !== false;
+        };
+        $cancel = function () use ($model): AgentResult {
+            return AgentResult::failure(
+                __('上游已取消 AI 流式任务'),
+                $this->getCode()
+            );
+        };
 
         $maxIterations = $this->resolveMaxIterations($params);
         while ($iteration < $maxIterations) {
@@ -156,10 +169,10 @@ PROMPT;
                     'timeout' => (int) ($params['timeout'] ?? 120),
                 ];
                 if ($useStreamFull && $streamCallback) {
-                    $genParams['on_content'] = function (string $chunk) use ($streamCallback) {
-                        $streamCallback('ai_response', ['content' => $chunk, 'streaming' => true]);
+                    $genParams['on_content'] = function (string $chunk) use ($streamCallback): bool {
+                        return $streamCallback('ai_response', ['content' => $chunk, 'streaming' => true]) !== false;
                     };
-                    $genParams['on_heartbeat'] = fn() => $streamCallback && $streamCallback('heartbeat', ['ts' => time()]);
+                    $genParams['on_heartbeat'] = fn() => $streamCallback('heartbeat', ['ts' => time()]) !== false;
                 }
                 if ($useStreamFull) {
                     /** @var callable(AiModel,string,array):array $streamFullCallable */

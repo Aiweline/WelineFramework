@@ -1886,160 +1886,19 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($this->readPrivateBool($orchestrator, 'fullRestartRequested'));
     }
 
-    public function testCooperativeSequentialStartupBatchDisabledDuringWindowsBootstrapEvenWhenFlagEnabled(): void
+    public function testSerialStartupFallbackHelpersRemoved(): void
     {
-        $orchestrator = new ServiceOrchestrator();
+        $reflection = new \ReflectionClass(ServiceOrchestrator::class);
 
-        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
-        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
-        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
-            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
-            {
-                return 0;
-            }
-        });
-
-        $enabled = $this->invokePrivateWithArgs(
-            $orchestrator,
-            'shouldUseCooperativeSequentialStartupBatch',
-            [[1, 2]]
-        );
-
-        self::assertFalse($enabled);
-    }
-
-    public function testCooperativeSequentialProvidersStartupBatchDisabledDuringWindowsBootstrapEvenWhenFlagEnabled(): void
-    {
-        $orchestrator = new ServiceOrchestrator();
-
-        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
-        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
-        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
-            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
-            {
-                return 0;
-            }
-        });
-
-        $enabled = $this->invokePrivateWithArgs(
-            $orchestrator,
-            'shouldUseCooperativeSequentialProvidersStartupBatch',
-            [2, ['custom_phase_one', ControlMessage::ROLE_DISPATCHER]]
-        );
-
-        self::assertFalse($enabled);
-    }
-
-    public function testCooperativeSequentialProvidersStartupBatchDisabledForDispatcherMaintenanceRedirectSet(): void
-    {
-        $orchestrator = new ServiceOrchestrator();
-
-        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
-        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
-        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
-            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
-            {
-                return 0;
-            }
-        });
-
-        $enabled = $this->invokePrivateWithArgs(
-            $orchestrator,
-            'shouldUseCooperativeSequentialProvidersStartupBatch',
-            [3, [
-                ControlMessage::ROLE_DISPATCHER,
-                ControlMessage::ROLE_MAINTENANCE,
-                ControlMessage::ROLE_REDIRECT,
-            ]]
-        );
-
-        self::assertFalse($enabled);
-    }
-
-    public function testCooperativeSequentialProvidersStartupBatchDisabledForSingleLaunch(): void
-    {
-        $orchestrator = new ServiceOrchestrator();
-
-        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
-        $this->writePrivate($orchestrator, 'useCooperativeSequentialStartup', true);
-        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
-            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
-            {
-                return 0;
-            }
-        });
-
-        $enabled = $this->invokePrivateWithArgs(
-            $orchestrator,
-            'shouldUseCooperativeSequentialProvidersStartupBatch',
-            [1, [ControlMessage::ROLE_DISPATCHER]]
-        );
-
-        self::assertFalse($enabled);
-    }
-
-    public function testCooperativeSequentialStartupBatchDisabledWithoutBootstrapContext(): void
-    {
-        $orchestrator = new ServiceOrchestrator();
-
-        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', false);
-        $this->writePrivate($orchestrator, 'controlServer', null);
-
-        $enabled = $this->invokePrivateWithArgs(
-            $orchestrator,
-            'shouldUseCooperativeSequentialStartupBatch',
-            [[1, 2]]
-        );
-
-        self::assertFalse($enabled);
-    }
-
-    public function testCooperativeSequentialStartupBatchDisabledByDefaultDuringWindowsBootstrap(): void
-    {
-        $orchestrator = new ServiceOrchestrator();
-
-        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
-        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
-            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
-            {
-                return 0;
-            }
-        });
-
-        $enabled = $this->invokePrivateWithArgs(
-            $orchestrator,
-            'shouldUseCooperativeSequentialStartupBatch',
-            [[1, 2]]
-        );
-
-        self::assertFalse($enabled);
-    }
-
-    public function testWindowsDetachedFastStartupBatchDisabledByDefaultDuringWindowsBootstrap(): void
-    {
-        $orchestrator = new ServiceOrchestrator();
-
-        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
-        $this->writePrivate($orchestrator, 'controlServer', new class extends MasterControlServer {
-            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
-            {
-                return 0;
-            }
-        });
-
-        $enabled = $this->invokePrivateWithArgs(
-            $orchestrator,
-            'shouldUseWindowsDetachedFastStartupBatch',
-            [3]
-        );
-
-        self::assertFalse($enabled);
+        self::assertFalse($reflection->hasMethod('shouldUseCooperativeSequentialStartupBatch'));
+        self::assertFalse($reflection->hasMethod('shouldUseCooperativeSequentialProvidersStartupBatch'));
+        self::assertFalse($reflection->hasMethod('shouldUseWindowsDetachedFastStartupBatch'));
     }
 
     /**
-     * --frontend should still show child consoles during bootstrap; the batch
-     * script no longer waits for PID/output, so visible windows need not
-     * degrade launch into one-by-one startup.
+     * Bootstrap priority: worker / maintenance must stay in the same batch as
+     * the rest of the services, so Windows frontend bootstrap keeps them on the
+     * detached path even when frontend child-process flags are enabled.
      */
     public function testShouldLaunchForegroundAllowsWindowsFrontendChildProcessesDuringBootstrapWhenFlagsSet(): void
     {
@@ -2088,7 +1947,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         if (\defined('IS_WIN') && IS_WIN) {
             self::assertTrue($dispatchForeground);
-            self::assertTrue($workerForeground);
+            self::assertFalse($workerForeground);
             return;
         }
 
