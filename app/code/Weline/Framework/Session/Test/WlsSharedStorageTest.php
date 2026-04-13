@@ -83,4 +83,38 @@ final class WlsSharedStorageTest extends TestCase
         self::assertTrue($storage->ping());
         self::assertSame('strong_consistency', $storage->getStats()['mode'] ?? null);
     }
+
+    /**
+     * 共享存储有连接但某 sid 仅在文件 fallback 中有数据时，read 应回灌到共享存储，避免「登录写文件、下次读内存为空」。
+     */
+    public function testReadRepairsFromFileWhenSharedEmpty(): void
+    {
+        $file = new FileStorage(['path' => $this->testPath, 'lifetime' => 3600]);
+        $file->write('split-brain-session', ['WF_BACKEND_USER_ID' => 1], 3600);
+
+        $facade = $this->getMockBuilder(SessionStateFacade::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['read', 'write', 'destroy', 'exists', 'touch', 'gc', 'getStats', 'ping', 'list'])
+            ->getMock();
+
+        $facade->method('read')
+            ->with('split-brain-session')
+            ->willReturn([]);
+        $facade->expects($this->once())
+            ->method('write')
+            ->with('split-brain-session', ['WF_BACKEND_USER_ID' => 1], 3600)
+            ->willReturn(true);
+        $facade->method('ping')->willReturn(true);
+        $facade->method('getStats')->willReturn([]);
+
+        $storage = new WlsSharedStorage(
+            ['path' => $this->testPath, 'lifetime' => 3600],
+            static fn(): SessionStateFacade => $facade,
+            $file
+        );
+
+        $data = $storage->read('split-brain-session');
+        self::assertSame(['WF_BACKEND_USER_ID' => 1], $data);
+        self::assertSame([], $file->read('split-brain-session'));
+    }
 }

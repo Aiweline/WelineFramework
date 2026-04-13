@@ -13,6 +13,7 @@ declare(strict_types=1);
 
 namespace Weline\Acl\Observer;
 
+use Weline\Admin\Service\BackendRememberLoginService;
 use Weline\Acl\Model\WhiteAclSource;
 use Weline\Acl\Service\AclService;
 use Weline\Acl\Service\AclServiceInterface;
@@ -55,16 +56,19 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
      */
     private AclServiceInterface $aclService;
     private PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher;
+    private BackendRememberLoginService $backendRememberLoginService;
 
     public function __construct(
         WhiteAclSource $whiteAclSource,
-        AclService     $aclService,
-        PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher
+        AclService $aclService,
+        PublicApiAuthRouteMatcher $publicApiAuthRouteMatcher,
+        BackendRememberLoginService $backendRememberLoginService
     ) {
         $this->whiteAclSource = $whiteAclSource;
         $this->aclCache = w_cache('acl');
         $this->aclService = $aclService;
         $this->publicApiAuthRouteMatcher = $publicApiAuthRouteMatcher;
+        $this->backendRememberLoginService = $backendRememberLoginService;
     }
 
     /** 获取当前请求的后台 Session，延迟创建；同请求内复用，WLS 下由 StateManager 在请求结束时清空 */
@@ -240,6 +244,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $user = null;
             $role = null;
             $sessionAclContext = null;
+            $restoredAclContext = null;
             $access_sources = [];
             $roleId = 0;
             // 后续 hasUser 为 false，走未授权分支；需要带登录态时由调用方通过 event 传入 user/role
@@ -249,6 +254,7 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
             $role = null;
             /** @var array{user_id: int, role_id: int, is_enabled: int}|null 仅 session 分支轻量查询时非空 */
             $sessionAclContext = null;
+            $restoredAclContext = null;
             $access_sources = [];
             $eventUser = $event->getData('user');
             $eventRole = $event->getData('role');
@@ -271,12 +277,30 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionCreate', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 $userId = $backendSession->getUserId();
+                if (($userId === null || $userId === '') && $request->isBackend()) {
+                    if ($this->backendRememberLoginService->restoreIfNeeded($request)) {
+                        $restoredAclContext = $this->backendRememberLoginService->consumeRestoredAclContext();
+                        $restoredSession = $this->backendRememberLoginService->consumeRestoredSession();
+                        if ($restoredSession instanceof AuthenticatedSessionInterface) {
+                            self::$backendSessionRequestCache = $restoredSession;
+                            $backendSession = $restoredSession;
+                        } else {
+                            self::$backendSessionRequestCache = null;
+                            $backendSession = $this->getBackendSession();
+                        }
+                        $userId = $restoredAclContext['user_id'] ?? $backendSession->getUserId();
+                    }
+                }
                 if (RequestLifecycleTrace::isEnabled()) {
                     RequestLifecycleTrace::recordSpan('acl::RouteBefore::sessionGetUserId', (microtime(true) - $t0) * 1000, 'observer', $parent);
                 }
                 $tAcl = microtime(true);
                 $fromCache = false;
-                if ($userId !== null && $userId !== '') {
+                if ($restoredAclContext !== null) {
+                    $sessionAclContext = $restoredAclContext;
+                    $roleId = (int) ($restoredAclContext['role_id'] ?? 0);
+                    $fromCache = true;
+                } elseif ($userId !== null && $userId !== '') {
                     $rawSession = $backendSession->getSession();
                     $cachedRoleId = $rawSession->get('backend_acl_role_id');
                     $cachedIsEnabled = $rawSession->get('backend_acl_is_enabled');

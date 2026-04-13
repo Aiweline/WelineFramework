@@ -145,6 +145,32 @@ class WlsLogService
         return $instance !== '' ? $instance : self::DEFAULT_INSTANCE;
     }
 
+    /**
+     * 读取实例运行态 JSON 中的 enable_log（与 `server:start -log` 写入字段一致）。
+     */
+    public static function readEnableLogFromInstanceFile(string $instanceName): bool
+    {
+        $instanceName = self::sanitizeInstanceName($instanceName);
+        if (!\defined('BP')) {
+            return false;
+        }
+        $path = BP . 'var' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'instances'
+            . DIRECTORY_SEPARATOR . $instanceName . '.json';
+        if (!\is_file($path)) {
+            return false;
+        }
+        $raw = @\file_get_contents($path);
+        if ($raw === false || $raw === '') {
+            return false;
+        }
+        $data = @\json_decode($raw, true);
+        if (!\is_array($data)) {
+            return false;
+        }
+
+        return (bool)($data['enable_log'] ?? false);
+    }
+
     public static function getConfiguredBasePath(): string
     {
         $raw = self::loadRawEnvConfig();

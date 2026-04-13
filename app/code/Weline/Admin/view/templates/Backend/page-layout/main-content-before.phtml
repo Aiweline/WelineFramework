@@ -1,52 +1,65 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
-/**@var \Weline\Backend\Block\ThemeConfig $themeConfig */
+/** @var \Weline\Framework\View\Template $this */
+/** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
 $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Block\ThemeConfig::class);
+
+$logStage = static function (string $stage, float $startedAt, string $html = ''): void {
+    if (!defined('DEV') || !DEV || !class_exists(\Weline\Server\Log\WlsLogger::class)) {
+        return;
+    }
+
+    if (!(bool)\Weline\Framework\App\Env::get('wls.debug.backend_layout_trace', false)) {
+        return;
+    }
+
+    \Weline\Server\Log\WlsLogger::warning_('[BackendLayout::before] ' . $stage, [
+        'elapsed_ms' => round((microtime(true) - $startedAt) * 1000, 2),
+        'html_bytes' => strlen($html),
+    ]);
+};
+
+$stageStartedAt = microtime(true);
+$headHtml = $this->fetchTagHtml('templates', 'Weline_Admin::common/head.phtml');
+$logStage('head', $stageStartedAt, $headHtml);
+
+$stageStartedAt = microtime(true);
+$loadingHtml = $this->fetchTagHtml('templates', 'Weline_Admin::common/page/loading.phtml');
+$logStage('loading', $stageStartedAt, $loadingHtml);
+
+$stageStartedAt = microtime(true);
+$topbarBlock = \Weline\Framework\Manager\ObjectManager::make(\Weline\Admin\Block\Backend\Page\Topbar::class);
+$topbarHtml = $topbarBlock->render();
+$logStage('topbar', $stageStartedAt, $topbarHtml);
+
+$stageStartedAt = microtime(true);
+$topnavBlock = \Weline\Framework\Manager\ObjectManager::make(\Weline\Admin\Block\Backend\Page\Topnav::class);
+$topnavHtml = $topnavBlock->render();
+$logStage('topnav', $stageStartedAt, $topnavHtml);
+
+$stageStartedAt = microtime(true);
+$leftSidebarHtml = $this->fetchTagHtml('templates', 'Weline_Admin::common/left-sidebar.phtml');
+$logStage('left_sidebar', $stageStartedAt, $leftSidebarHtml);
 ?>
 <!DOCTYPE html>
 <!--
- *@Author       秋枫雁飞
+ *@Author       绉嬫灚闆侀
  *@Email        aiweline@qq.com
  *@Forum        https://bbs.aiweline.com
- *@DESC         后台共用头部
+ *@DESC         鍚庡彴鍏辩敤澶撮儴
 -->
-<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
+<html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? ' dir="rtl"' : '' ?>>
 <head>
-    <w:template>Weline_Admin::common/head.phtml</w:template>
-    <!-- jvectormap -->
+    <?= $headHtml ?>
     <link href="@static(Weline_Admin::assets/libs/jqvmap/jqvmap.min.css)" rel="stylesheet"/>
-    <title><lang>Weline Admin 管理面板</lang></title>
+    <title><lang>Weline Admin 绠＄悊闈㈡澘</lang></title>
 </head>
 
-<!--<body data-sidebar="dark" data-topbar='colored' data-layout='horizontal'>-->
 <body <?= $themeConfig->getLayouts() ?? ''; ?>>
-<!-- <body data-layout="horizontal" data-topbar="dark"> -->
-<!--加载中组件 开始-->
-<w:template>Weline_Admin::common/page/loading.phtml</w:template>
-<!-- 开始 页面 -->
+<?= $loadingHtml ?>
 <div id="layout-wrapper">
+    <?= $topbarHtml ?>
+    <?= $topnavHtml ?>
+    <?= $leftSidebarHtml ?>
 
-    <!--页头工具条 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topbar'/>
-    <!--页头工具条 结束-->
-
-    <!-- ========== Topnav Start ========== -->
-    <!--页头菜单栏 开始-->
-    <w:block class='Weline\Admin\Block\Backend\Page\Topnav'/>
-    <!--页头菜单栏 结束-->
-
-    <!-- ========== Left Sidebar Start ========== -->
-    <!--左侧菜单栏 开始-->
-    <w:template>Weline_Admin::common/left-sidebar.phtml</w:template>
-    <!--左侧菜单栏 结束-->
-
-
-    <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
-
-        <!-- ============================================================== -->
-    <!-- Start right Content here -->
-    <!-- ============================================================== -->
     <div class='main-content'>
         <div class='page-content'>

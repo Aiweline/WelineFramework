@@ -54,11 +54,6 @@ class AiService
      * 服务模式：PHP服务模式
      */
     public const MODE_PHP = 'php';
-    private const REQUEST_KEY_STREAM_402_TRIPPED = 'ai.stream.402.tripped';
-    private const STREAM_402_COOLDOWN_SEC = 45.0;
-    private static float $stream402CooldownUntilAt = 0.0;
-    private static float $stream402LastLogAt = 0.0;
-
     /**
      * @var AiModel
      */
@@ -129,6 +124,28 @@ class AiService
         $this->usageLog = $usageLog;
         $this->accountService = $accountService;
         $this->agentScanner = $agentScanner;
+    }
+
+    /**
+     * @param array<string,mixed> $resolvedConfig
+     */
+    private function applyResolvedConfigToModel(AiModel $model, array $resolvedConfig): void
+    {
+        $filteredConfig = $this->filterConfigOverrides($resolvedConfig);
+        if (empty($filteredConfig)) {
+            return;
+        }
+
+        $mergedConfig = array_merge($model->getConfig(), $filteredConfig);
+        $mergedProviderConfig = array_merge($model->getProviderConfig(), $filteredConfig);
+        $model->setData(
+            AiModel::schema_fields_CONFIG,
+            json_encode($mergedConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
+        $model->setData(
+            AiModel::schema_fields_PROVIDER_CONFIG,
+            json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+        );
     }
 
     /**
@@ -273,6 +290,7 @@ class AiService
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
         // 5. 语言验证
+        $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
         if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
             throw new Exception("不支持的语言: {$locale}");
         }
@@ -349,6 +367,29 @@ class AiService
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
             throw new ModelSelectionException($reason);
         }
+
+        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
+        $userConfig = \is_array($params['user_config'] ?? null) ? $params['user_config'] : [];
+        $userId = isset($params['user_id']) ? (int)$params['user_id'] : null;
+        $isBackend = (bool)($params['is_backend'] ?? false);
+        $isTestMode = false;
+        if (\array_key_exists('test_mode', $params)) {
+            $isTestMode = \in_array($params['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
+        } elseif (isset($userConfig['test_mode'])) {
+            $isTestMode = \in_array($userConfig['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
+        }
+        if ($isTestMode) {
+            $userConfig['test_mode'] = true;
+        } elseif (isset($userConfig['test_mode'])) {
+            unset($userConfig['test_mode']);
+        }
+        $params['resolved_config'] = $configResolver->resolveConfig(
+            $model->getModelCode(),
+            $userConfig,
+            $userId,
+            $isBackend
+        );
+        $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
         // 2. 场景适配器处理
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
@@ -673,20 +714,28 @@ class AiService
             
             // 2. 获取该供应商的账户列表（用于回退重试）
             $allAccounts = $this->accountService->getProviderAccounts($providerCode);
+            $resolvedConfig = \is_array($params['resolved_config'] ?? null) ? $params['resolved_config'] : [];
+            if (!empty($resolvedConfig)) {
+                $this->applyResolvedConfigToModel($model, $resolvedConfig);
+            }
             if (empty($allAccounts)) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
 
             // 测试模式放宽筛选：仅要求激活；非测试模式要求激活+连通成功+余额>0
             $isTestMode = (bool)($params['test_mode'] ?? false);
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode) {
+            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($isTestMode, $allowZeroBalanceProvider) {
                 if ((int)($acc['is_active'] ?? 0) !== 1) {
                     return false;
                 }
                 if ($isTestMode) {
                     return true;
                 }
-                return (($acc['connection_status'] ?? '') === 'success') && (float)($acc['balance'] ?? 0) > 0;
+                if (($acc['connection_status'] ?? '') !== 'success') {
+                    return false;
+                }
+                return $allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0;
             }));
             if (empty($candidateAccounts)) {
                 $message = $isTestMode 
@@ -805,6 +854,10 @@ class AiService
             }
 
             $allAccounts = $this->accountService->getProviderAccounts($providerCode);
+            $resolvedConfig = \is_array($params['resolved_config'] ?? null) ? $params['resolved_config'] : [];
+            if (!empty($resolvedConfig)) {
+                $this->applyResolvedConfigToModel($model, $resolvedConfig);
+            }
             if (empty($allAccounts)) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
@@ -943,9 +996,7 @@ class AiService
         ?string $locale,
         array $params
     ): void {
-        $now = \microtime(true);
-        if ((bool)RequestContext::get(self::REQUEST_KEY_STREAM_402_TRIPPED, false)
-            || $now < self::$stream402CooldownUntilAt) {
+        if (false) {
             throw new Exception('AI流式生成失败: AI API 错误 (HTTP 402, unknown_error): Insufficient Balance');
         }
 
@@ -967,10 +1018,15 @@ class AiService
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
 
-            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) {
-                return ((int)($acc['is_active'] ?? 0) === 1)
-                    && (($acc['connection_status'] ?? '') === 'success')
-                    && (float)($acc['balance'] ?? 0) > 0;
+            $allowZeroBalanceProvider = (bool)($params['allow_zero_balance_provider'] ?? false);
+            $candidateAccounts = array_values(array_filter($allAccounts, function ($acc) use ($allowZeroBalanceProvider) {
+                if ((int)($acc['is_active'] ?? 0) !== 1) {
+                    return false;
+                }
+                if (($acc['connection_status'] ?? '') !== 'success') {
+                    return false;
+                }
+                return $allowZeroBalanceProvider || (float)($acc['balance'] ?? 0) > 0;
             }));
             if (empty($candidateAccounts)) {
                 throw new Exception(ErrorMessageHelper::getErrorMessageWithConfigLink(
@@ -1055,12 +1111,7 @@ class AiService
             }
 
             if ($this->isInsufficientBalanceError($e)) {
-                RequestContext::set(self::REQUEST_KEY_STREAM_402_TRIPPED, true);
-                self::$stream402CooldownUntilAt = \microtime(true) + self::STREAM_402_COOLDOWN_SEC;
-                if ((\microtime(true) - self::$stream402LastLogAt) >= self::STREAM_402_COOLDOWN_SEC) {
-                    self::$stream402LastLogAt = \microtime(true);
-                    w_log_error("AI流式API调用失败: " . $e->getMessage());
-                }
+                w_log_error("AI流式API调用失败: " . $e->getMessage());
             } else {
                 w_log_error("AI流式API调用失败: " . $e->getMessage());
             }

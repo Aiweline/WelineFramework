@@ -28,6 +28,8 @@ class TelemetryBroadcaster
      */
     public static function broadcast(string $result, ?Request $request = null): string
     {
+        $allowResultMutation = !(bool)\w_env('response.from_cache', false);
+
         // 遥测事件始终派发：即便未启用 RequestLifecycleTrace，监听者也可以拿到 request/runtime/result 等信息
         $spans = RequestLifecycleTrace::isEnabled()
             ? RequestLifecycleTrace::getSpansWithDbSummary()
@@ -56,6 +58,10 @@ class TelemetryBroadcaster
         /** @var EventsManager $eventsManager */
         $eventsManager = ObjectManager::getInstance(EventsManager::class);
         $eventsManager->dispatch('Weline_Framework::telemetry::request_collected', $eventData);
+
+        if (!$allowResultMutation) {
+            return $result;
+        }
 
         return (string)($eventData['data']['result'] ?? $result);
     }
