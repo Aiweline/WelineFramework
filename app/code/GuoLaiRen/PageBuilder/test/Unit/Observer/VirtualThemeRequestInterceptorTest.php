@@ -177,4 +177,54 @@ class VirtualThemeRequestInterceptorTest extends TestCase
         $event = $this->createMock(Event::class);
         $observer->execute($event);
     }
+
+    public function testAiSiteAgentWorkspaceKeepsBackendShellState(): void
+    {
+        $virtualThemeId = 456;
+
+        $request = $this->createMock(Request::class);
+        $session = $this->createMock(\Weline\Framework\Session\Session::class);
+        $virtualTheme = $this->getMockBuilder(VirtualTheme::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getId', 'getName', 'getPath', 'getSessionId', 'load'])
+            ->getMock();
+
+        $request->method('getParam')
+            ->willReturnCallback(static function (string $key, mixed $default = null) use ($virtualThemeId) {
+                return $key === 'virtual_theme_id' ? $virtualThemeId : $default;
+            });
+        $request->method('getUrlPath')->willReturn('/pagebuilder/backend/ai-site-agent/workspace');
+
+        $virtualTheme->method('getId')->willReturn($virtualThemeId);
+        $virtualTheme->method('getName')->willReturn('Workspace Virtual Theme');
+        $virtualTheme->method('getPath')->willReturn('ai/workspace-theme');
+        $virtualTheme->method('getSessionId')->willReturn(333);
+        $virtualTheme->method('load')->willReturnSelf();
+
+        $session->expects($this->once())
+            ->method('setData')
+            ->with(
+                VirtualThemeContextService::SESSION_KEY,
+                $this->callback(static fn(array $context): bool => (int)($context['virtual_theme_id'] ?? 0) === $virtualThemeId)
+            );
+
+        $setGetCalls = [];
+        $request->method('setGet')
+            ->willReturnCallback(function (string $key, mixed $value) use (&$setGetCalls, $request) {
+                $setGetCalls[$key] = $value;
+                return $request;
+            });
+
+        $contextService = new VirtualThemeContextService($request, $session);
+        $observer = new VirtualThemeRequestInterceptor($request, $contextService, $virtualTheme);
+        $event = $this->createMock(Event::class);
+        $observer->execute($event);
+
+        $this->assertSame($virtualThemeId, $setGetCalls['virtual_theme_id'] ?? null);
+        $this->assertSame('1', $setGetCalls['is_virtual_theme'] ?? null);
+        $this->assertSame('ai/workspace-theme', $setGetCalls['virtual_theme_path'] ?? null);
+        $this->assertSame('frontend', $setGetCalls['theme_component_area'] ?? null);
+        $this->assertArrayNotHasKey('editor_area', $setGetCalls);
+        $this->assertArrayNotHasKey('shell', $setGetCalls);
+    }
 }

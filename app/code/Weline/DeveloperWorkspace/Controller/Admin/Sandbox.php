@@ -55,7 +55,7 @@ class Sandbox extends BackendController
             setcookie('w_sandbox', '1', 0, '/' . Env::getAreaRoutePrefix('backend'), '', false, false);
         }
         Message::success(__('沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！'));
-        $this->redirect($this->request->getServer('HTTP_REFERER'));
+        $this->redirect('*/admin/sandbox', ['reload' => 1]);
     }
 
     function setSandboxKey()
@@ -63,14 +63,15 @@ class Sandbox extends BackendController
         if ($this->request->isPost()) {
             $key = $this->request->getPost('key');
             Env::getInstance()->setConfig('sandbox_key', $key);
-            $this->redirect('/component/offcanvas/success', ['msg' => __('沙盒启动Key设置成功'), 'url' => '*/admin/sandbox','reload' => 1]);
+            Message::success(__('沙盒启动Key设置成功'));
         }
-        return $this->fetch();
+        $this->redirect('*/admin/sandbox', ['reload' => 1]);
     }
 
     function getCloseSandbox()
     {
         Env::getInstance()->setConfig('sandbox_key', false);
-        $this->redirect('/component/offcanvas/success', ['msg' =>__( '沙盒启动Key设置成功'), 'url' => '*/admin/sandbox','reload' => 1]);
+        Message::success(__('沙盒环境已关闭'));
+        $this->redirect('*/admin/sandbox', ['reload' => 1]);
     }
 }

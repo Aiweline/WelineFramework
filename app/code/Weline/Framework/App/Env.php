@@ -174,6 +174,23 @@ class Env extends DataObject
         'router' => [
             'area_routes' => [],
         ],
+        'security' => [
+            'csrf' => [
+                'pc_controller_mode' => 'off',
+                'rest_mode' => 'off',
+            ],
+            'request_filter' => [
+                'allow_php_unserialize' => false,
+            ],
+            'headers' => [
+                'csp_report_only' => '',
+                'csp' => '',
+            ],
+            'view' => [
+                'assign_params_mode' => 'all',
+                'assign_params_prefixes' => [],
+            ],
+        ],
         'dev' => [
             'php_cs' => false,
             'static_rand_version' => false,

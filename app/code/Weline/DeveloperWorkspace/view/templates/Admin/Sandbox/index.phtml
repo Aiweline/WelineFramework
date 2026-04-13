@@ -49,34 +49,31 @@
                         <lang>当前Key：</lang>
                         <span class="badge bg-info">{{env.sandbox_key}}</span>
                     </div>
-                    <div class="mt-2"><block class='Weline\Component\Block\OffCanvas'
-                           template='Weline_Component::off-canvas.phtml'
-                           cache='0'
-                           id='sandbox'
-                           target-tag="button"
-                           target-button-class="btn btn-primary"
-                           action='*/admin/sandbox/setSandboxKey'
-                           title='配置沙盒启动Key'
-                           close-button-show='1'
-                           close-button-text='关闭'
-                           direction='right'
-                           class-names='w-25 h-100'
-                           target-button-text='配置'
-                           save="1"
-                           flush="1"
-                    /></div>
-                    
+                    <div class="mt-3">
+                        <form class="row g-2 align-items-end" method="post"
+                              action="@url{'*/admin/sandbox/setSandboxKey'}" novalidate>
+                            <div class="col-md-6 col-lg-5">
+                                <label class="form-label mb-1" for="sandbox_key_input"><lang>沙盒Key</lang></label>
+                                <input type="text" class="form-control" name="key" id="sandbox_key_input"
+                                       placeholder="@lang{请输入沙盒Key}" value="{{env.sandbox_key}}" required>
+                            </div>
+                            <div class="col-auto pb-1">
+                                <button type="submit" class="btn btn-primary"><lang>保存</lang></button>
+                            </div>
+                        </form>
+                    </div>
+
                     <div class="mt-2">
                         <lang>沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：</lang>
                         @frontend-url{'*/sandbox/enable'}?enable=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
-                        <a href="@url{'*/admin/sandbox/enable'}?enable=on&key={{env.sandbox_key}}">
+                        <a href="@backend-url{'*/admin/sandbox/enable'}?enable=on&key={{env.sandbox_key}}">
                             <lang>开启沙盒</lang>
                         </a>
                     </div>
                     <div class="mt-2">
                         <lang>关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：</lang>
                         @frontend-url{'*/sandbox/close'}?close=on&key=<span class="text-info">{{ env.sandbox_key }}</span></span>
-                        <a href="@url{'*/admin/sandbox/close'}?close=on&key={{env.sandbox_key}}">
+                        <a href="@backend-url{'*/admin/sandbox/close'}?close=on&key={{env.sandbox_key}}">
                             <lang>关闭沙盒</lang>
                         </a>
                     </div>

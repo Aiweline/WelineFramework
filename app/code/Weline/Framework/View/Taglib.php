@@ -136,6 +136,76 @@ class Taglib
      * 性能优化：缓存编译后的正则表达式
      */
     private static array $compiledRegexCache = [];
+
+    /** @var \WeakMap<\Fiber, int>|null */
+    private static ?\WeakMap $fiberCompileDepth = null;
+
+    /** @var \WeakMap<\Fiber, array>|null */
+    private static ?\WeakMap $fiberCachedTags = null;
+
+    private static function currentFiber(): ?\Fiber
+    {
+        if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
+            return null;
+        }
+
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            return null;
+        }
+
+        return \Fiber::getCurrent();
+    }
+
+    private static function getCompileDepthValue(): int
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            return self::$compileDepth;
+        }
+
+        return self::$fiberCompileDepth[$fiber] ?? 0;
+    }
+
+    private static function setCompileDepthValue(int $depth): void
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            self::$compileDepth = $depth;
+            return;
+        }
+
+        self::$fiberCompileDepth ??= new \WeakMap();
+        self::$fiberCompileDepth[$fiber] = $depth;
+    }
+
+    private static function getCachedTagsValue(): ?array
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            return self::$cachedTags;
+        }
+
+        return self::$fiberCachedTags[$fiber] ?? null;
+    }
+
+    private static function setCachedTagsValue(?array $tags): void
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            self::$cachedTags = $tags;
+            return;
+        }
+
+        self::$fiberCachedTags ??= new \WeakMap();
+        if ($tags === null) {
+            if (isset(self::$fiberCachedTags[$fiber])) {
+                unset(self::$fiberCachedTags[$fiber]);
+            }
+            return;
+        }
+
+        self::$fiberCachedTags[$fiber] = $tags;
+    }
     
     // ====== 懒加载获取器 ======
     
@@ -387,10 +457,11 @@ class Taglib
         
         // 阶段 1: 提取 PHP 代码
         // 嵌套编译（如 <w:template> 触发子模板编译）必须用独立 extractor，否则会覆盖父级占位符
-        self::$compileDepth++;
-        $topLevelCompile = self::$compileDepth === 1;
+        $compileDepth = self::getCompileDepthValue() + 1;
+        self::setCompileDepthValue($compileDepth);
+        $topLevelCompile = $compileDepth === 1;
         try {
-            $extractor = (self::$compileDepth > 1) ? new PhpExtractor() : $this->getPhpExtractor();
+            $extractor = ($compileDepth > 1) ? new PhpExtractor() : $this->getPhpExtractor();
             $extractor->reset();
             $cleanContent = $extractor->extract($content);
             
@@ -435,7 +506,7 @@ class Taglib
             
             return $result;
         } finally {
-            self::$compileDepth--;
+            self::setCompileDepthValue(\max(0, $compileDepth - 1));
             if ($topLevelCompile) {
                 $this->resetCompileScopedTagState();
             }
@@ -615,7 +686,8 @@ class Taglib
         self::$varParserCache = [];
         self::$hookCheckCache = [];
         self::$compiledRegexCache = [];
-        self::$cachedTags = null;
+        self::setCachedTagsValue(null);
+        self::setCompileDepthValue(0);
     }
     
     /**
@@ -1105,8 +1177,9 @@ class Taglib
     public function getTags(Template $template, string $fileName = '', $content = ''): array
     {
         // 优化：使用静态缓存，避免同一请求内重复收集标签
-        if (self::$cachedTags !== null) {
-            return self::$cachedTags;
+        $cachedTags = self::getCachedTagsValue();
+        if ($cachedTags !== null) {
+            return $cachedTags;
         }
         
         $tags = [
@@ -1230,7 +1303,6 @@ class Taglib
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) {
                         // 优化：使用静态缓存 HookReader 实例，避免重复实例化（在函数最外层声明）
-                        static $cachedHookReader = null;
                         
                         // 处理成对标签的情况（支持 else）
                         if ($tag_key === 'tag') {
@@ -1311,10 +1383,7 @@ class Taglib
                                 if ($hook_exists) {
                                     try {
                                         // 使用缓存的 HookReader 实例
-                                        if ($cachedHookReader === null) {
-                                            $cachedHookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
-                                        }
-                                        $hookReader = $cachedHookReader;
+                                        $hookReader = \Weline\Framework\Manager\ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
                                         $hookReader->setPath($hook_name);
                                         $hook_files = $hookReader->getFileList();
                                         $hook_has_files = !empty($hook_files);
@@ -1386,10 +1455,7 @@ class Taglib
                                     // 在开发模式下，获取 hook 实现文件列表并添加注释
                                     try {
                                         // 使用缓存的 HookReader 实例
-                                        if ($cachedHookReader === null) {
-                                            $cachedHookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
-                                        }
-                                        $hookReader = $cachedHookReader;
+                                        $hookReader = \Weline\Framework\Manager\ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
                                         $hookReader->setPath($hook_name);
                                         // 获取原始文件列表（不使用 callback，获取绝对路径）
                                         $hook_files_raw = $hookReader->getFileList(function($modules_files) {
@@ -1543,10 +1609,7 @@ class Taglib
                         $hook_files = [];
                         try {
                             // 使用缓存的 HookReader 实例
-                            if ($cachedHookReader === null) {
-                                $cachedHookReader = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Hook\Config\HookReader::class);
-                            }
-                            $hookReader = $cachedHookReader;
+                            $hookReader = \Weline\Framework\Manager\ObjectManager::make(\Weline\Framework\Hook\Config\HookReader::class);
                             $hookReader->setPath($hook_name);
                             $hook_files = $hookReader->getFileList();
                         } catch (\Throwable $e) {
@@ -2359,7 +2422,7 @@ class Taglib
         }
         
         // 缓存结果，避免同一请求内重复收集
-        self::$cachedTags = $tags;
+        self::setCachedTagsValue($tags);
         
         return $tags;
     }

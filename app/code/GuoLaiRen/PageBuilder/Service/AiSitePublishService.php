@@ -7,11 +7,15 @@ namespace GuoLaiRen\PageBuilder\Service;
 use GuoLaiRen\PageBuilder\Model\Page;
 use GuoLaiRen\PageBuilder\Model\VirtualTheme;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Model\WebsiteDomain;
 
 class AiSitePublishService
 {
     private readonly AiHtmlSanitizerService $htmlSanitizer;
     private readonly Page $pageModel;
+    private readonly WebsiteDomain $websiteDomainModel;
+    private readonly DomainPool $domainPoolModel;
 
     public function __construct(
         private readonly AiSiteMaterializationService $materializationService,
@@ -19,9 +23,13 @@ class AiSitePublishService
         private readonly VirtualTheme $virtualThemeModel,
         ?AiHtmlSanitizerService $htmlSanitizer = null,
         ?Page $pageModel = null,
+        ?WebsiteDomain $websiteDomainModel = null,
+        ?DomainPool $domainPoolModel = null,
     ) {
         $this->htmlSanitizer = $htmlSanitizer ?? ObjectManager::getInstance(AiHtmlSanitizerService::class);
         $this->pageModel = $pageModel ?? ObjectManager::getInstance(Page::class);
+        $this->websiteDomainModel = $websiteDomainModel ?? ObjectManager::getInstance(WebsiteDomain::class);
+        $this->domainPoolModel = $domainPoolModel ?? ObjectManager::getInstance(DomainPool::class);
     }
 
     /**
@@ -48,6 +56,7 @@ class AiSitePublishService
                 $virtualPagesByType
             );
             $this->applyPublishSnapshotsForMaterializedPages($materialized['pagebuilder_pages_by_type'] ?? []);
+            $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
             $previewPageId = (int)($materialized['preview_page_id'] ?? 0);
 
@@ -68,6 +77,7 @@ class AiSitePublishService
             $pageTypeLayouts,
             $virtualPagesByType
         );
+        $this->ensureWebsiteDomainBinding($websiteId, $websiteProfile);
 
         if ($virtualThemeId > 0) {
             // 重新加载虚拟主题
@@ -97,6 +107,44 @@ class AiSitePublishService
             ],
             $this->visualUrlService->resolveUrls($previewPageId, $virtualThemeId)
         );
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function ensureWebsiteDomainBinding(int $websiteId, array $websiteProfile): void
+    {
+        $domain = \strtolower(\trim((string)($websiteProfile['target_domain'] ?? '')));
+        if ($websiteId <= 0 || $domain === '') {
+            return;
+        }
+
+        $existing = clone $this->websiteDomainModel;
+        $existing->clearData()->clearQuery()->loadByDomain($domain);
+        if ((int)$existing->getDomainId() > 0) {
+            if ((int)$existing->getWebsiteId() === $websiteId
+                && $existing->getStatus() !== WebsiteDomain::STATUS_ACTIVE) {
+                $existing->setStatus(WebsiteDomain::STATUS_ACTIVE)->save(true);
+            }
+            return;
+        }
+
+        $record = clone $this->websiteDomainModel;
+        $record->clearData()->clearQuery();
+        $record->setWebsiteId($websiteId)
+            ->setDomain($domain)
+            ->setSubPath('')
+            ->setIsPrimary(false)
+            ->setStatus(WebsiteDomain::STATUS_ACTIVE);
+
+        $pool = clone $this->domainPoolModel;
+        $pool->clearData()->clearQuery()->loadByDomain($domain);
+        if ((int)$pool->getPoolId() > 0) {
+            $record->setPoolId((int)$pool->getPoolId());
+            $record->syncFromPool();
+        }
+
+        $record->save(true);
     }
 
     /**

@@ -2257,6 +2257,10 @@ class ServiceOrchestrator
         int $instanceId,
         ServiceContext $context
     ): ?ServiceInstance {
+        if ($this->childServicesBootstrapInProgress) {
+            return null;
+        }
+
         $role = $provider->getRole();
         if (!\in_array($role, [ControlMessage::ROLE_SESSION_SERVER, ControlMessage::ROLE_MEMORY_SERVER], true)) {
             return null;
@@ -3315,8 +3319,9 @@ class ServiceOrchestrator
         }
 
         if (\defined('IS_WIN') && IS_WIN) {
-            // Windows 下前台子进程拉起成本很高，默认强制走后台 detached。
-            // 仅当显式允许时，才读取 legacy 的前台子进程配置。
+            // Windows 下前台子进程拉起成本较高，默认强制走后台 detached。
+            // server:start --frontend 会通过 buildOrchestratorRuntimeOptions 写入 allow_windows_frontend_child_process
+            // 与 frontend_worker_windows；批量脚本已不等待 PID/重定向输出，因此启动批次也可以显示子窗口。
             $allowWindowsFrontendChildProcess = (bool) ($context->getConfig(
                 'wls.orchestrator.allow_windows_frontend_child_process',
                 false
@@ -3472,7 +3477,7 @@ class ServiceOrchestrator
     public function forceTerminateMasterAndChildren(string $reason = 'force'): void
     {
         WlsLogger::warning_("[Orchestrator] 强制终止 Master 及子进程，原因: {$reason}，阶段: {$this->stopStage}");
-        if ($this->controlServer !== null) {
+        if ($this->controlServer !== null && $this->shouldForceTerminateNotifyIpcClients()) {
             try {
                 $this->broadcastDrainToAll();
                 $this->broadcastShutdownToAll();
@@ -3484,6 +3489,8 @@ class ServiceOrchestrator
             } catch (\Throwable $e) {
                 WlsLogger::warning_('[Orchestrator] 强制停机前 IPC 通知失败: ' . $e->getMessage());
             }
+        } elseif ($this->controlServer !== null) {
+            WlsLogger::info_('[Orchestrator] 强制停机前跳过 IPC 广播：无已连接的服务 IPC 客户端');
         }
         $pids = [];
         foreach ($this->registry->getAllInstances() as $instance) {
@@ -3503,8 +3510,18 @@ class ServiceOrchestrator
             }
         }
         $this->closeIpcServer('force_terminate:' . $reason);
+        $this->finalizeForceTerminateMasterExit(2);
+    }
+
+    protected function shouldForceTerminateNotifyIpcClients(): bool
+    {
+        return ($this->controlServer?->countServiceClients($this->stopProgressClientId) ?? 0) > 0;
+    }
+
+    protected function finalizeForceTerminateMasterExit(int $exitCode): void
+    {
         $this->cleanupMasterPidIndex();
-        exit(2);
+        exit($exitCode);
     }
 
     /**
@@ -7018,6 +7035,9 @@ class ServiceOrchestrator
         if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded) {
             $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
             $this->controlServer?->sendTo($clientId, ControlMessage::ackReady($workerId));
+            if ($instance->role === ControlMessage::ROLE_WORKER && $instance->port !== null && $instance->port > 0) {
+                $this->recoverDispatcherBusinessPoolAfterWorkerReady($instance, true);
+            }
             WlsLogger::info_(
                 "[Orchestrator] 重复 READY 已幂等处理: {$instance->role}#{$instance->instanceId} (clientId={$clientId}, port={$instance->port})"
             );
@@ -7056,13 +7076,7 @@ class ServiceOrchestrator
 
         // 如果是 Worker 就绪，通知 Dispatcher 添加该端口
         if ($instance->role === 'worker' && $instance->port !== null) {
-            $maintenanceModeBeforeReady = $this->maintenanceMode;
-            // 检查是否应该退出维护模式（业务 Worker 已就绪）
-            $this->checkAndDisableMaintenanceIfReady();
-            // 维护模式仍在生效时，业务 Worker 只做待命，不应提前被 Dispatcher 纳入流量池。
-            if (!$maintenanceModeBeforeReady) {
-                $this->notifyDispatcherWorkerReady($instance);
-            }
+            $this->recoverDispatcherBusinessPoolAfterWorkerReady($instance, false);
         }
 
         // 维护 Worker 就绪：必须在维护模式下推送 SET_WORKER_POOL。否则 Dispatcher 若早于维护进程 READY，
@@ -7625,6 +7639,32 @@ class ServiceOrchestrator
         }
     }
 
+    private function recoverDispatcherBusinessPoolAfterWorkerReady(ServiceInstance $workerInstance, bool $duplicateReady): void
+    {
+        if ($workerInstance->port === null || $workerInstance->port <= 0) {
+            return;
+        }
+
+        $maintenanceModeBeforeReady = $this->maintenanceMode;
+        if ($maintenanceModeBeforeReady) {
+            // Maintenance pool switch and REMOVE_WORKER can leave Dispatcher state behind.
+            // Once business workers are READY again, always converge Dispatcher from Registry.
+            $this->checkAndDisableMaintenanceIfReady();
+            if ($this->maintenanceMode) {
+                return;
+            }
+            $this->syncDispatcherFullWorkerPoolFromRegistry();
+            return;
+        }
+
+        if ($duplicateReady) {
+            $this->syncDispatcherFullWorkerPoolFromRegistry();
+            return;
+        }
+
+        $this->notifyDispatcherWorkerReady($workerInstance);
+    }
+
     /**
      * Dispatcher 负载池整体替换（维护切换）
      *
@@ -7657,6 +7697,17 @@ class ServiceOrchestrator
                 'dispatcher_pool_publish:' . $role . ':' . $portsStr . ':' . $this->formatMaintenanceOperationContext(),
                 0.0
             );
+        }
+
+        if ($role === ControlMessage::ROLE_WORKER) {
+            $normalizedPorts = \array_values(\array_filter(
+                \array_unique(\array_map('intval', $ports)),
+                static fn(int $port): bool => $port > 0
+            ));
+            \sort($normalizedPorts, \SORT_NUMERIC);
+            $this->lastDispatcherWorkerPoolSignature = \implode(',', $normalizedPorts);
+        } else {
+            $this->lastDispatcherWorkerPoolSignature = '';
         }
     }
 
@@ -7721,6 +7772,9 @@ class ServiceOrchestrator
                 );
             }
         }
+        // REMOVE_WORKER changes Dispatcher state incrementally, so the last full-pool signature
+        // is no longer authoritative. Clear it to force the next Registry sync to re-publish.
+        $this->lastDispatcherWorkerPoolSignature = '';
     }
 
     /**

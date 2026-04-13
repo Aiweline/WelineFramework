@@ -45,9 +45,28 @@ final class WlsSharedStorage implements SessionStorageInterface
     public function read(string $sessionId): array
     {
         $facade = $this->sessionFacade();
-        $data = $facade !== null
-            ? $facade->read($sessionId)
-            : $this->fallbackStorage()->read($sessionId);
+        if ($facade === null) {
+            $data = $this->fallbackStorage()->read($sessionId);
+        } else {
+            $data = $facade->read($sessionId);
+            // Session Server 曾短暂不可用时写入会落在文件；恢复后若只读共享存储会得到空数组，
+            // 表现为「已登录 Cookie 仍在但 WF_BACKEND_USER_ID 丢失」→ ACL not_logged_in 循环。
+            if ($data === []) {
+                $fileData = $this->fallbackStorage()->read($sessionId);
+                if ($fileData !== []) {
+                    $ttl = $this->defaultTtl > 0 ? $this->defaultTtl : 3600;
+                    $facade->write($sessionId, $fileData, $ttl);
+                    $data = $fileData;
+                    if (\function_exists('w_log_warning')) {
+                        w_log_warning(
+                            '[WlsSharedStorage] Session 已从文件回灌到共享存储（此前可能仅写入了 fallback 文件）。sid=' . \substr($sessionId, 0, 8) . '...',
+                            ['keys' => \count($data)],
+                            'session'
+                        );
+                    }
+                }
+            }
+        }
         if (self::shouldLogSessionOperations()) {
             w_log_info(
                 '[WlsSharedStorage] read sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data),
@@ -63,9 +82,12 @@ final class WlsSharedStorage implements SessionStorageInterface
     {
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $facade = $this->sessionFacade();
-        $ok = $facade !== null
-            ? $facade->write($sessionId, $data, $ttl)
-            : $this->fallbackStorage()->write($sessionId, $data, $ttl);
+        if ($facade !== null) {
+            $ok = $facade->write($sessionId, $data, $ttl);
+            $this->persistFallbackMirror($sessionId, $data, $ttl);
+        } else {
+            $ok = $this->fallbackStorage()->write($sessionId, $data, $ttl);
+        }
         if (self::shouldLogSessionOperations()) {
             w_log_info(
                 '[WlsSharedStorage] write sid=' . \substr($sessionId, 0, 8) . '... keys=' . \count($data) . ' ttl=' . $ttl . ' ok=' . ($ok ? '1' : '0'),
@@ -87,9 +109,13 @@ final class WlsSharedStorage implements SessionStorageInterface
     public function destroy(string $sessionId): bool
     {
         $facade = $this->sessionFacade();
-        $ok = $facade !== null
-            ? $facade->destroy($sessionId)
-            : $this->fallbackStorage()->destroy($sessionId);
+        if ($facade !== null) {
+            $okShared = $facade->destroy($sessionId);
+            $okFile = $this->fallbackStorage()->destroy($sessionId);
+            $ok = $okShared && $okFile;
+        } else {
+            $ok = $this->fallbackStorage()->destroy($sessionId);
+        }
         if (self::shouldLogSessionOperations()) {
             w_log_info(
                 '[WlsSharedStorage] destroy sid=' . \substr($sessionId, 0, 8) . '... ok=' . ($ok ? '1' : '0'),
@@ -115,9 +141,13 @@ final class WlsSharedStorage implements SessionStorageInterface
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
         $facade = $this->sessionFacade();
 
-        return $facade !== null
-            ? $facade->touch($sessionId, $ttl)
-            : $this->fallbackStorage()->touch($sessionId, $ttl);
+        if ($facade !== null) {
+            $ok = $facade->touch($sessionId, $ttl);
+            $this->fallbackStorage()->touch($sessionId, $ttl);
+            return $ok;
+        }
+
+        return $this->fallbackStorage()->touch($sessionId, $ttl);
     }
 
     public function gc(int $maxLifetime): int
@@ -240,5 +270,17 @@ final class WlsSharedStorage implements SessionStorageInterface
         }
 
         return $this->fallbackStorage;
+    }
+
+    private function persistFallbackMirror(string $sessionId, array $data, int $ttl): void
+    {
+        $ok = $this->fallbackStorage()->write($sessionId, $data, $ttl);
+        if (!$ok && \function_exists('w_log_warning')) {
+            w_log_warning(
+                '[WlsSharedStorage] Fallback mirror write failed. sessionId=' . \substr($sessionId, 0, 8) . '...',
+                ['keys' => \count($data), 'ttl' => $ttl],
+                'session'
+            );
+        }
     }
 }

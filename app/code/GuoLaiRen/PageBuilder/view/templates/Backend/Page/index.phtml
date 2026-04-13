@@ -83,14 +83,12 @@ $quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_C
                                 <span><lang>新建页面</lang></span>
                             </a>
                         </acl>
-                        <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
                             <button type="button" class="btn btn-action-publish-header" 
                                     data-bs-toggle="modal" data-bs-target="#publishSiteModal"
                                     title="<?= __('一键发布本站') ?>">
                                 <i class="mdi mdi-publish"></i>
                                 <span><lang>一键发布本站</lang></span>
                             </button>
-                        </acl>
                     </div>
                 </div>
 
@@ -264,22 +262,18 @@ $quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_C
                                             }
                                             ?>
                                             
-                                            <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
                                                 <button type="button" class="btn btn-action-publish publish-page-btn"
                                                         data-page-id="<?= (int)$page->getId() ?>"
                                                         title="<?= __('发布页面') ?>">
                                                     <i class="mdi mdi-publish"></i>
                                                     <span><?= __('发布') ?></span>
                                                 </button>
-                                            </acl>
                                             
-                                            <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
                                                 <a class='btn btn-action-edit'
                                                    href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $page->getId() ?>">
                                                     <i class="mdi mdi-pencil"></i>
                                                     <span><?= __('编辑') ?></span>
                                                 </a>
-                                            </acl>
 
                                             <!-- 更多操作下拉菜单 -->
                                             <div class="dropdown">
@@ -592,21 +586,17 @@ $quickSiteDefaultLocale = \Weline\Framework\Http\Cookie::getLang() ?: 'zh_Hans_C
                                                                 $childIsPublished = $childPage->getData('status') == 1;
                                                                 ?>
                                                                 
-                                                                <acl source="GuoLaiRen_PageBuilder::page_builder_publish">
                                                                     <button type="button" class="btn btn-sm btn-primary d-inline-flex align-items-center publish-page-btn"
                                                                             data-page-id="<?= (int)$childPage->getId() ?>"
                                                                             style="min-width: 70px; white-space: nowrap;"
                                                                             title="<?= __('发布页面') ?>">
                                                                         <i class="mdi mdi-publish me-1"></i><?= __('发布') ?>
                                                                     </button>
-                                                                </acl>
-                                                                <acl source="GuoLaiRen_PageBuilder::page_builder_edit">
                                                                     <a class='btn btn-sm btn-info d-inline-flex align-items-center'
                                                                        href="<?= $this->getBackendUrl('*/backend/page/edit') ?>?id=<?= $childPage->getId() ?>"
                                                                        style="min-width: 70px; white-space: nowrap;">
                                                                         <i class="mdi mdi-pencil me-1"></i><?= __('编辑') ?>
                                                                     </a>
-                                                                </acl>
                                                                 <!-- 更多操作下拉菜单 -->
                                                                 <div class="dropdown">
                                                                     <button type="button"

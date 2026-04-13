@@ -69,8 +69,35 @@ if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }
 
-// resolveControlPort 依赖框架类与 BP 常量，必须先完成基础 bootstrap。
+// 先完成自动加载；控制面解析与框架 bootstrap 可能较慢，主端口须尽快 listen，否则客户端会得到 ERR_CONNECTION_REFUSED（无法进入 503 启动页）。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+
+// ========== 主端口尽早 listen（先于 resolveControlPort / WlsRuntime）==========
+$socket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
+if ($socket === false) {
+    $errorCode = \socket_last_error();
+    $errorMsg = \socket_strerror($errorCode);
+    \fwrite(STDERR, "[Dispatcher] socket_create failed: ({$errorCode}) {$errorMsg}\n");
+    exit(1);
+}
+\socket_set_option($socket, SOL_SOCKET, SO_REUSEADDR, 1);
+if (!@\socket_bind($socket, $host, $port)) {
+    $errorCode = \socket_last_error($socket);
+    $errorMsg = \socket_strerror($errorCode);
+    \fwrite(STDERR, "[Dispatcher] socket_bind failed on {$host}:{$port}: ({$errorCode}) {$errorMsg}\n");
+    \socket_close($socket);
+    exit(1);
+}
+if (@\socket_listen($socket, 1024) === false) {
+    $errorCode = \socket_last_error($socket);
+    $errorMsg = \socket_strerror($errorCode);
+    \fwrite(STDERR, "[Dispatcher] socket_listen failed: ({$errorCode}) {$errorMsg}\n");
+    \socket_close($socket);
+    exit(1);
+}
+\socket_set_nonblock($socket);
+
+\Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用命令行参数 --control-port=，否则从实例文件自动发现
@@ -109,13 +136,16 @@ ErrorBootstrap::init($processTag, [
     'process_name' => $processName,
 ]);
 
-// 所有进程都启用 stdout 输出（便于调试和监控）
 WlsLogger::getInstance()
-    ->setStdoutEnabled(true)
+    ->setStdoutEnabled(\Weline\Server\Log\LogConfig::isStdoutEnabled($isFrontend, \Weline\Server\Log\LogConfig::isDevMode()))
     ->setProcessTag($processTag);
 
 if ($processName) {
     \Weline\Server\Service\WlsLogService::prepareProcessLogFile($processName, $instanceName, $processTag);
+    \Weline\Framework\System\Process\Processer::setPid('--name=' . $processName, \getmypid());
+    if ($port > 0) {
+        \Weline\Framework\System\Process\Processer::setProcessPorts('--name=' . $processName, [$port]);
+    }
 }
 
 // Daemon 下向已关闭连接写数据会触发 SIGPIPE 导致进程退出，与 Nginx 一致忽略 SIGPIPE
@@ -137,41 +167,7 @@ try {
 $envConfig = $_wlsEnvConfig;
 unset($_wlsEnvFile, $_wlsEnvConfig, $_wlsDevMode);
 
-// ========== 创建 TCP Socket（使用 socket 扩展）==========
-$socket = @\socket_create(AF_INET, SOCK_STREAM, SOL_TCP);
-if ($socket === false) {
-    $errorCode = \socket_last_error();
-    $errorMsg = \socket_strerror($errorCode);
-    \fwrite(STDERR, "[Dispatcher] socket_create failed: ({$errorCode}) {$errorMsg}\n");
-    exit(1);
-}
-
-// 设置 SO_REUSEADDR
-\socket_set_option($socket, SOL_SOCKET, SO_REUSEADDR, 1);
-
-    // 绑定地址
-    if (!@\socket_bind($socket, $host, $port)) {
-        $errorCode = \socket_last_error($socket);
-        $errorMsg = \socket_strerror($errorCode);
-        \fwrite(STDERR, "[Dispatcher] socket_bind failed on {$host}:{$port}: ({$errorCode}) {$errorMsg}\n");
-        \socket_close($socket);
-        // 如果端口被占用，直接退出，由 Master 处理
-        exit(1);
-    }
-
-// 监听
-if (@\socket_listen($socket, 1024) === false) {
-    $errorCode = \socket_last_error($socket);
-    $errorMsg = \socket_strerror($errorCode);
-    \fwrite(STDERR, "[Dispatcher] socket_listen failed: ({$errorCode}) {$errorMsg}\n");
-    \socket_close($socket);
-    exit(1);
-}
-
-// 设置非阻塞
-\socket_set_nonblock($socket);
-
-// ========== 启动 Dispatcher ==========
+// ========== 启动 Dispatcher（主端口已在上方 listen）==========
 $dispatcher = new \Weline\Server\Dispatcher\Dispatcher(
     $socket,
     '127.0.0.1', // Worker 主机地址（内网）

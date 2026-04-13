@@ -36,6 +36,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $this->printing = $printing;
     }
 
+    /**
+     * PHPUnit 生成配置、覆盖率与报告目录（tests/phpunit）。
+     */
+    private function getPhpUnitWorkspacePath(): string
+    {
+        return BP . 'tests' . DS . 'phpunit' . DS;
+    }
+
     private function isCoverageRequested(array $args, array $data): bool
     {
         foreach (['coverage', 'c', 'coverage-html', 'coverage-text', 'coverage-xml', 'coverage-clover'] as $key) {
@@ -308,7 +316,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $actualFileName = $parts[0]; // 文件名部分
             }
             
-            $php_unit_path = DEV_PATH . 'phpunit' . DS;
+            $php_unit_path = $this->getPhpUnitWorkspacePath();
             if (!is_dir($php_unit_path)) {
                 mkdir($php_unit_path, 0755, true);
             }
@@ -374,13 +382,14 @@ class Run implements \Weline\Framework\Console\CommandInterface
                         $this->printing->warning(__('检测到非交互环境，已跳过启动 Web 报告服务器（避免后台进程堆积）'));
                         return $exitCode;
                     }
-                    $php_unit_report_path = DEV_PATH . 'phpunit' . DS . 'report';
+                    $php_unit_workspace = $this->getPhpUnitWorkspacePath();
+                    $php_unit_report_path = $php_unit_workspace . 'report';
                     if (!is_dir($php_unit_report_path)) {
                         mkdir($php_unit_report_path, 0755, true);
                     }
                     $port = $this->getPortFromArgs($args, $data);
-                    $this->startPhpUnitServerBackground($php_unit_report_path, $port, false);
-                    $this->openBrowser($port);
+                    $this->startPhpUnitServerBackground($php_unit_workspace, $port, false);
+                    $this->openBrowser($port, $this->isCoverageRequested($args, $data));
                 }
                 
                 return $exitCode;
@@ -440,13 +449,13 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('运行模式: 套件测试'));
         }
         $this->printing->note(__('正在 收集 测试套件...'));
-        $php_unit_path = DEV_PATH . 'phpunit' . DS;
+        $php_unit_path = $this->getPhpUnitWorkspacePath();
         if (!is_dir($php_unit_path)) {
-            mkdir($php_unit_path, 755, true);
+            mkdir($php_unit_path, 0755, true);
         }
         $php_unit_report_path = $php_unit_path . 'report';
         if (!is_dir($php_unit_report_path)) {
-            mkdir($php_unit_report_path, 755, true);
+            mkdir($php_unit_report_path, 0755, true);
         }
         $php_unit_config_path = $php_unit_path . 'config.xml';
         
@@ -505,7 +514,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         if (isset($args['debug']) || isset($data['debug'])) {
             $phpunitCommand .= ' --debug';
         }
-        $phpunitCommand = $this->appendCoverageArguments($phpunitCommand, $args, $data, $php_unit_report_path);
+        $phpunitCommand = $this->appendCoverageArguments($phpunitCommand, $args, $data, $php_unit_path);
         
         if ($fileName) {
             # 文件模式：运行指定文件的测试
@@ -759,14 +768,18 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $this->printing->note(__('如需查看报告，请在交互终端手动执行：php bin/w phpunit:run --web'));
                 return;
             }
-            $this->startPhpUnitServerBackground($php_unit_report_path, $port, $watchMode);
+            $this->startPhpUnitServerBackground($php_unit_path, $port, $watchMode);
             
-            # 自动打开浏览器
-            $this->openBrowser($port);
+            # 自动打开浏览器（文档根为 tests/phpunit：/report/ 为摘要，/coverage-html/ 为 PHPUnit 覆盖率）
+            $this->printing->note(__('报告摘要: http://localhost:%{1}/report/index.html', [(string)$port]));
+            if ($coverageRequested) {
+                $this->printing->note(__('覆盖率 HTML: http://localhost:%{1}/coverage-html/index.html', [(string)$port]));
+            }
+            $this->openBrowser($port, $coverageRequested);
             
             # 如果启用监听模式，启动文件监听
             if ($watchMode) {
-                $this->startWatchMode($php_unit_report_path, $port, $args, $data);
+                $this->startWatchMode($php_unit_path, $port, $args, $data);
             }
             
             # 在服务器启动后输出测试完成标志
@@ -780,23 +793,27 @@ class Run implements \Weline\Framework\Console\CommandInterface
             # 确保立即返回
             return;
         } else {
-            $this->system->exec("php -S localhost:$port -t $php_unit_report_path");
+            $this->system->exec('php -S localhost:' . $port . ' -t ' . escapeshellarg($php_unit_path));
         }
     }
 
     /**
      * 自动打开浏览器
-     * 
+     *
+     * 内置服务器文档根为 tests/phpunit：摘要报告在 /report/index.html，覆盖率在 /coverage-html/index.html。
+     *
      * @param int $port 端口号
+     * @param bool $openCoverageFirst 是否优先打开覆盖率 HTML（已生成 --coverage 时）
      */
-    private function openBrowser(int $port): void
+    private function openBrowser(int $port, bool $openCoverageFirst = false): void
     {
         // 检查是否禁用自动打开浏览器
         if (getenv('WELINE_NO_BROWSER') === '1') {
             return;
         }
-        
-        $url = "http://localhost:$port";
+
+        $path = $openCoverageFirst ? '/coverage-html/index.html' : '/report/index.html';
+        $url = 'http://localhost:' . $port . $path;
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
         
         if ($isWindows) {
@@ -861,13 +878,13 @@ class Run implements \Weline\Framework\Console\CommandInterface
     }
 
     /**
-     * 后台启动PHPUnit报告服务器
-     * 
-     * @param string $reportPath 报告路径
+     * 后台启动 PHPUnit 报告服务器（文档根为 tests/phpunit，可同时访问 report/ 与 coverage-html/）
+     *
+     * @param string $documentRoot PHPUnit 工作区路径（tests/phpunit）
      * @param int $port 端口号
      * @param bool $watchMode 是否启用监听模式
      */
-    private function startPhpUnitServerBackground(string $reportPath, int $port = 9980, bool $watchMode = false): void
+    private function startPhpUnitServerBackground(string $documentRoot, int $port = 9980, bool $watchMode = false): void
     {
         $pidFile = BP . 'var' . DS . 'phpunit_server.pid';
         $logFile = BP . 'var' . DS . 'log' . DS . 'phpunit_server.log';
@@ -877,7 +894,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $pid = (int)file_get_contents($pidFile);
             if (Processer::isRunningByPid($pid)) {
                 $this->printing->note(__('PHPUnit报告服务器已在运行 (PID: %{1})', (string)$pid));
-                $this->printing->note(__('访问地址: http://localhost:%{1}', (string)$port));
+                $this->printing->note(__('访问地址: 摘要 http://localhost:%{1}/report/index.html | 覆盖率 http://localhost:%{2}/coverage-html/index.html', [(string)$port, (string)$port]));
                 return;
             } else {
                 # 清理无效的PID文件
@@ -914,7 +931,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
         $pid = 0;
         $method = '';
         $this->printing->note(__('使用统一启动方案启动内置 PHP 服务器...'));
-        $pid = Processer::startBuiltInServer($reportPath, $port, $logFile);
+        $pid = Processer::startBuiltInServer($documentRoot, $port, $logFile);
         if ($pid > 0) {
             $method = 'built_in';
             $this->printing->success(__('服务器已启动 (PID: %{1})', (string)$pid));
@@ -957,7 +974,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->updateServerInfo($pid, 'running', $port);
             
             $this->printing->success(__('PHPUnit报告服务器已启动 (PID: %{1}, 方法: %{2})', [(string)$pid, $method]));
-            $this->printing->note(__('访问地址: http://localhost:%{1}', (string)$port));
+            $this->printing->note(__('访问地址: 摘要 http://localhost:%{1}/report/index.html | 覆盖率 http://localhost:%{2}/coverage-html/index.html', [(string)$port, (string)$port]));
             $this->printing->note(__('日志文件: %{1}', $logFile));
             $this->printing->note(__('停止命令: php bin/w phpunit:stop'));
         } else {
@@ -965,7 +982,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->note(__('建议：'));
             $this->printing->note(__('1. 检查 php.ini 中的 disable_functions 配置'));
             $this->printing->note(__('2. 确认端口 %{1} 未被占用', (string)$port));
-            $this->printing->note(__('3. 尝试手动启动: php -S localhost:%{1} -t %{2}', [(string)$port, $reportPath]));
+            $this->printing->note(__('3. 尝试手动启动: php -S localhost:%{1} -t %{2}', [(string)$port, $documentRoot]));
         }
     }
     
@@ -1540,18 +1557,20 @@ class Run implements \Weline\Framework\Console\CommandInterface
                 $php_unit_xml .= $testsuites;
             }
         }
-        
+
+        $coverageRoot = $this->normalizeCoverageSourcePath('../../app/code');
+
         $php_unit_xml .= '</testsuites>
 <coverage processUncoveredFiles="true">
         <include>
-            <directory suffix=".php">' . $coverageSource . '</directory>
+            <directory suffix=".php">' . $coverageRoot . '</directory>
         </include>
         <exclude>
-            <directory suffix=".php">' . $coverageSource . '/Test</directory>
-            <directory suffix=".php">' . $coverageSource . '/test</directory>
-            <directory suffix=".php">' . $coverageSource . '/view</directory>
-            <directory suffix=".php">' . $coverageSource . '/Console</directory>
-            <directory suffix=".php">' . $coverageSource . '/env</directory>
+            <directory suffix=".php">' . $coverageRoot . '/*/*/Test</directory>
+            <directory suffix=".php">' . $coverageRoot . '/*/*/test</directory>
+            <directory suffix=".php">' . $coverageRoot . '/*/*/view</directory>
+            <directory suffix=".php">' . $coverageRoot . '/*/*/Console</directory>
+            <directory suffix=".php">' . $coverageRoot . '/*/*/env</directory>
         </exclude>
     </coverage>
      <logging>
@@ -1723,7 +1742,9 @@ class Run implements \Weline\Framework\Console\CommandInterface
             $this->printing->error(__('未找到测试文件: %{1}', [$fileName]));
             return '';
         }
-        
+
+        $coverageSource = $this->resolveCoverageSourceForTestFile($testFile);
+
         $php_unit_xml = '<?xml version=\'1.0\' encoding=\'UTF-8\'?>
 <phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:noNamespaceSchemaLocation="http://schema.phpunit.de/6.2/phpunit.xsd"
@@ -1862,7 +1883,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
                     );
                     
                     foreach ($iterator as $file) {
-                        if ($file->isFile() && preg_match('/\.php$/i', $file->getExtension())) {
+                        if ($file->isFile() && strtolower($file->getExtension()) === 'php') {
                             $basename = $file->getBasename('.php');
                             // 支持多种匹配方式
                             if ($basename === $actualFileName || 
@@ -1999,6 +2020,29 @@ class Run implements \Weline\Framework\Console\CommandInterface
                         $withoutTest = substr($lastSeg, 4);
                         $possibleFile = $root . ($dirPrefix ? $dirPrefix . DS : '') . $withoutTest . 'Test.php';
                         if (file_exists($possibleFile)) return $possibleFile;
+                    }
+
+                    if (is_dir($root)) {
+                        $iterator = new \RecursiveIteratorIterator(
+                            new \RecursiveDirectoryIterator($root, \RecursiveDirectoryIterator::SKIP_DOTS),
+                            \RecursiveIteratorIterator::SELF_FIRST
+                        );
+
+                        foreach ($iterator as $file) {
+                            if (!$file->isFile() || strtolower($file->getExtension()) !== 'php') {
+                                continue;
+                            }
+
+                            $basename = $file->getBasename('.php');
+                            if (
+                                $basename === $actualFileName
+                                || $basename === $actualFileName . 'Test'
+                                || str_contains($basename, $actualFileName)
+                                || str_contains($actualFileName, $basename)
+                            ) {
+                                return $file->getPathname();
+                            }
+                        }
                     }
                 }
                 break;
@@ -2277,7 +2321,7 @@ class Run implements \Weline\Framework\Console\CommandInterface
     💡 Web 模式功能：
     - 测试完成后自动启动报告服务器
     - 自动打开浏览器显示测试报告
-    - 报告地址默认 http://localhost:9980
+    - 报告地址默认 http://localhost:9980/report/index.html（摘要）；覆盖率：http://localhost:9980/coverage-html/index.html
     - 如不想自动打开浏览器，设置环境变量：WELINE_NO_BROWSER=1
 
 📡 监听模式（Watch Mode）：
