@@ -1,0 +1,240 @@
+<script>
+(function () {
+    'use strict';
+    var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
+    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var streamBaseUrl = <?= \json_encode($streamSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var lastEventId = <?= (int)$initialLastEventId ?>;
+    var seenEventIds = [];
+    var seenEventIdMap = Object.create(null);
+    var recentSignalMap = Object.create(null);
+    var suppressTransportErrorUntil = 0;
+    var hasActiveOperation = false;
+    var lastActivityTime = Date.now();
+    var workspaceStreamPaused = !!window.__pbWorkspaceStreamPaused;
+    var workspaceStreamFatal = false; // 402 等不可恢复错误后停止重连
+    /** P0/P1：同标签页稳定 token，便于服务端区分并发 stream-sse */
+    var workspaceStreamTabToken = (function () {
+        var storageKey = 'pb_ai_ws_tab_' + String(publicId || '');
+        try {
+            var existing = sessionStorage.getItem(storageKey);
+            if (existing && String(existing).length <= 64) {
+                return String(existing);
+            }
+            var t = 't' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 12);
+            sessionStorage.setItem(storageKey, t);
+            return t;
+        } catch (e) {
+            return 't' + Date.now().toString(36);
+        }
+    })();
+
+    if (!terminal || !streamBaseUrl || !publicId) {
+        return;
+    }
+
+    function parseSsePayload(event) {
+        if (!event || typeof event.data !== 'string' || event.data === '') {
+            return {};
+        }
+        try { return JSON.parse(event.data); } catch (error) { return {}; }
+    }
+
+    function buildWorkspaceStreamUrl() {
+        try {
+            var requestUrl = new URL(streamBaseUrl, window.location.origin);
+            requestUrl.searchParams.set('public_id', publicId);
+            if (workspaceStreamTabToken) {
+                requestUrl.searchParams.set('tab_token', workspaceStreamTabToken);
+            }
+            if (lastEventId > 0) {
+                requestUrl.searchParams.set('last_event_id', String(lastEventId));
+            } else {
+                requestUrl.searchParams.delete('last_event_id');
+            }
+            return requestUrl.toString();
+        } catch (error) {
+            var separator = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
+            var url = streamBaseUrl + separator + 'public_id=' + encodeURIComponent(publicId);
+            url += '&tab_token=' + encodeURIComponent(workspaceStreamTabToken || '');
+            if (lastEventId > 0) {
+                url += '&last_event_id=' + encodeURIComponent(String(lastEventId));
+            }
+            return url;
+        }
+    }
+
+    function startWorkspaceStream() {
+        workspaceStreamPaused = !!window.__pbWorkspaceStreamPaused;
+        if (workspaceStreamPaused || workspaceStreamFatal) {
+            return;
+        }
+        var nextUrl = buildWorkspaceStreamUrl();
+        if (!nextUrl) {
+            return;
+        }
+        try {
+            var current = typeof terminal.getUrl === 'function' ? String(terminal.getUrl() || '') : '';
+            if (typeof terminal.isRunning === 'function' && terminal.isRunning()) {
+                if (current === nextUrl) {
+                    return;
+                }
+                if (typeof terminal.stop === 'function') {
+                    terminal.stop({ suppressTransportError: true });
+                }
+            }
+        } catch (guardErr) {
+            // 继续尝试 start，避免偶发 API 异常导致永不连接
+        }
+        terminal.setUrl(nextUrl);
+        terminal.start(nextUrl);
+    }
+    window.__pbStartWorkspaceStream = startWorkspaceStream;
+
+    function formatWorkspaceLog(entry) {
+        var payload = entry && entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+        var stageLabel = payload.stage_label || payload.stage_code || entry.stage_code || '';
+        var message = payload.message || entry.message || entry.event_type || '';
+        if (!message && payload.operation) {
+            message = String(payload.operation);
+        }
+        return stageLabel ? (stageLabel + ': ' + message) : message;
+    }
+
+    function rememberEventId(eventId) {
+        if (!eventId || seenEventIdMap[eventId]) {
+            return;
+        }
+        seenEventIdMap[eventId] = true;
+        seenEventIds.push(eventId);
+        if (seenEventIds.length > 400) {
+            var removedEventId = seenEventIds.shift();
+            if (removedEventId) {
+                delete seenEventIdMap[removedEventId];
+            }
+        }
+    }
+
+    function isDuplicateSignal(kind, payload) {
+        var message = payload && payload.message ? String(payload.message) : '';
+        var cursor = payload && payload.last_event_id ? String(payload.last_event_id) : '';
+        var fingerprint = kind + '|' + cursor + '|' + message;
+        var now = Date.now();
+        var lastSeenAt = recentSignalMap[fingerprint] || 0;
+        recentSignalMap[fingerprint] = now;
+        Object.keys(recentSignalMap).forEach(function (key) {
+            if (now - recentSignalMap[key] > 5000) {
+                delete recentSignalMap[key];
+            }
+        });
+        return lastSeenAt > 0 && (now - lastSeenAt) < 2000;
+    }
+
+    terminal.on('snapshot', function (event) {
+        var data = parseSsePayload(event);
+        if (Array.isArray(data.events)) {
+            data.events.forEach(function (entry) {
+                var eventId = parseInt(entry && entry.event_id ? entry.event_id : 0, 10) || 0;
+                if (eventId > lastEventId) {
+                    lastEventId = eventId;
+                }
+                rememberEventId(eventId);
+            });
+        } else {
+            var snapshotLastEventId = parseInt(data && data.last_event_id ? data.last_event_id : 0, 10) || 0;
+            if (snapshotLastEventId > lastEventId) {
+                lastEventId = snapshotLastEventId;
+                rememberEventId(snapshotLastEventId);
+            }
+        }
+
+        if (data.active_operation && typeof data.active_operation === 'object') {
+            var opStatus = String(data.active_operation.status || '');
+            hasActiveOperation = (opStatus === 'queued' || opStatus === 'running');
+            if (hasActiveOperation) {
+                lastActivityTime = Date.now();
+            }
+        }
+    });
+
+    terminal.on('log', function (event) {
+        var entry = parseSsePayload(event);
+        if (!entry || typeof entry !== 'object') {
+            return;
+        }
+        var eventId = parseInt(entry.event_id || 0, 10) || 0;
+        if (eventId > 0 && seenEventIdMap[eventId]) {
+            return;
+        }
+        if (eventId > lastEventId) {
+            lastEventId = eventId;
+        }
+        rememberEventId(eventId);
+        terminal.log(formatWorkspaceLog(entry), entry.level || 'info');
+
+        lastActivityTime = Date.now();
+
+        var eventType = String(entry.event_type || '');
+        if (eventType === 'operation_started' || eventType === 'operation_progress') {
+            hasActiveOperation = true;
+        } else if (eventType === 'operation_completed' || eventType === 'operation_failed') {
+            hasActiveOperation = false;
+        }
+    });
+
+    terminal.on('done', function (event) {
+        var data = parseSsePayload(event);
+        if (isDuplicateSignal('done', data)) {
+            return;
+        }
+        if (data && data.last_event_id) {
+            lastEventId = parseInt(data.last_event_id, 10) || lastEventId;
+        }
+        suppressTransportErrorUntil = Date.now() + 1500;
+        if (data && data.message) {
+            terminal.log(data.message, 'done');
+        }
+    });
+
+    terminal.on('error', function (event) {
+        var data = parseSsePayload(event);
+        if (!data.message && Date.now() < suppressTransportErrorUntil) {
+            return;
+        }
+        if (isDuplicateSignal('error', data)) {
+            return;
+        }
+        var message = (data && data.message) ? String(data.message) : '';
+        if (message) {
+            terminal.log(message, 'error');
+            var httpCode = parseInt(data.http_code || data.code || 0, 10) || 0;
+            var lowerMessage = message.toLowerCase();
+            var fatal402 = httpCode === 402
+                || lowerMessage.indexOf('http 402') >= 0
+                || lowerMessage.indexOf('402') >= 0
+                || lowerMessage.indexOf('insufficient balance') >= 0
+                || lowerMessage.indexOf('余额不足') >= 0
+                || lowerMessage.indexOf('额度不足') >= 0;
+            if (fatal402) {
+                workspaceStreamFatal = true;
+                if (terminal && typeof terminal.stop === 'function') {
+                    terminal.stop({ suppressTransportError: true });
+                }
+                terminal.log('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>', 'error');
+                if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+                    window.BackendToast.error('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>');
+                }
+                return;
+            }
+            if (message.indexOf('会话不存在') >= 0 || message.indexOf('无访问权限') >= 0 || message.indexOf('参数无效') >= 0) {
+                if (terminal && typeof terminal.stop === 'function') {
+                    terminal.stop({ suppressTransportError: true });
+                }
+                return;
+            }
+        }
+    });
+
+    startWorkspaceStream();
+})();
+</script>
