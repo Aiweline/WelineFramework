@@ -1364,6 +1364,7 @@ SCRIPT;
         $virtualPage = \is_array($virtualPages[$pageType] ?? null) ? $virtualPages[$pageType] : [];
         $blocks = \is_array($virtualPage['blocks'] ?? null) ? $virtualPage['blocks'] : [];
         $updatedBlock = null;
+        $websiteProfile = \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [];
 
         foreach ($blocks as $index => $block) {
             if (!\is_array($block) || \trim((string)($block['block_id'] ?? '')) !== $blockId) {
@@ -1372,7 +1373,7 @@ SCRIPT;
 
             $updatedBlock = $this->htmlBlocksBuildService->rebuildBlock(
                 $block,
-                \is_array($scope['website_profile'] ?? null) ? $scope['website_profile'] : [],
+                $websiteProfile,
                 $scope,
                 $blockConfig
             );
@@ -1384,9 +1385,49 @@ SCRIPT;
             return $this->fetchJson(['success' => false, 'message' => __('未找到要更新的区块')]);
         }
 
-        $virtualPage['blocks'] = \array_values($blocks);
-        $virtualPage['last_generated_at'] = \date('Y-m-d H:i:s');
-        $virtualPages[$pageType] = $virtualPage;
+        $sharedRegion = $this->htmlBlocksBuildService->resolveSharedBlockRegion($updatedBlock);
+        $lastGeneratedAt = \date('Y-m-d H:i:s');
+        if ($sharedRegion !== '') {
+            foreach ($virtualPages as $virtualPageType => $virtualPageRow) {
+                if (!\is_string($virtualPageType) || !\is_array($virtualPageRow)) {
+                    continue;
+                }
+                $pageBlocks = $virtualPageType === $pageType
+                    ? $blocks
+                    : (\is_array($virtualPageRow['blocks'] ?? null) ? $virtualPageRow['blocks'] : []);
+                $pageUpdated = false;
+                foreach ($pageBlocks as $blockIndex => $pageBlock) {
+                    if (!\is_array($pageBlock)) {
+                        continue;
+                    }
+                    if ($this->htmlBlocksBuildService->resolveSharedBlockRegion($pageBlock) !== $sharedRegion) {
+                        continue;
+                    }
+                    if ($virtualPageType === $pageType && \trim((string)($pageBlock['block_id'] ?? '')) === $blockId) {
+                        $pageBlocks[$blockIndex] = $updatedBlock;
+                        $pageUpdated = true;
+                        continue;
+                    }
+                    $pageBlocks[$blockIndex] = $this->htmlBlocksBuildService->rebuildBlock(
+                        $pageBlock,
+                        $websiteProfile,
+                        $scope,
+                        $blockConfig
+                    );
+                    $pageUpdated = true;
+                }
+                if (!$pageUpdated) {
+                    continue;
+                }
+                $virtualPageRow['blocks'] = \array_values($pageBlocks);
+                $virtualPageRow['last_generated_at'] = $lastGeneratedAt;
+                $virtualPages[$virtualPageType] = $virtualPageRow;
+            }
+        } else {
+            $virtualPage['blocks'] = \array_values($blocks);
+            $virtualPage['last_generated_at'] = $lastGeneratedAt;
+            $virtualPages[$pageType] = $virtualPage;
+        }
         $scope['virtual_pages_by_type'] = $virtualPages;
         $scope['build_summary'] = \array_replace(
             \is_array($scope['build_summary'] ?? null) ? $scope['build_summary'] : [],
@@ -1412,7 +1453,7 @@ SCRIPT;
         return $this->fetchJson([
             'success' => true,
             'message' => __('区块已更新'),
-            'block' => $updatedBlock,
+            'block' => $this->htmlBlocksBuildService->stripServerOnlyBlock($updatedBlock),
             'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
         ]);
     }
@@ -1936,18 +1977,24 @@ SCRIPT;
                     'public_id' => $publicId,
                     'operation' => $operation,
                 ]);
-                $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
                 $sse->sendEvent('warning', [
-                    'message' => (string)__('该操作已在其他连接中执行，本连接不重复运行'),
+                    'message' => (string)__('检测到重复的操作事件流连接，当前已切换为观察模式，将继续同步剩余进度。'),
                     'operation' => $operation,
+                    'observer_mode' => true,
                 ]);
+                $observed = $this->observeDuplicateOperationStream($sse, $session, $adminId, $operation, $executionToken);
+                if (!(bool)($observed['success'] ?? true)) {
+                    $sse->sendError(
+                        (string)($observed['message'] ?? __('操作执行失败')),
+                        (int)($observed['http_code'] ?? 500)
+                    );
+                }
                 $sse->complete([
-                    'success' => true,
-                    'duplicate_stream' => true,
-                    'message' => (string)__('已同步当前状态'),
-                    'state' => $this->buildWorkspaceEventStatePayload(
-                        $this->buildWorkspaceState($fresh, $adminId, 80, true)
-                    ),
+                    'success' => (bool)($observed['success'] ?? true),
+                    'message' => (string)($observed['message'] ?? __('操作执行完成')),
+                    'operation' => $operation,
+                    'data' => \is_array($observed['data'] ?? null) ? $observed['data'] : [],
+                    'state' => \is_array($observed['state'] ?? null) ? $observed['state'] : [],
                 ]);
                 return;
             }
@@ -2036,6 +2083,331 @@ SCRIPT;
             RequestContext::set(RequestContext::SSE_WRITER_KEY, true);
             RequestContext::remove(self::REQUEST_CTX_AI_CHUNK_FORWARDER);
         }
+    }
+
+    /**
+     * EventSource reconnects can attach a second operation-sse connection while the
+     * original executor is still running. Keep the duplicate connection in observer
+     * mode so the UI continues receiving the remaining progress instead of ending early.
+     *
+     * @return array{success: bool, message: string, data: array<string, mixed>, state: array<string, mixed>, http_code: int}
+     */
+    private function observeDuplicateOperationStream(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $operation,
+        string $executionToken
+    ): array {
+        $maxIdleLoops = 240;
+        $pollIntervalMs = 1000;
+        $idleLoops = 0;
+
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $startedAtRaw = \trim((string)($activeOperation['started_at'] ?? ''));
+        $lastEventId = 0;
+
+        $recentEvents = $this->filterObservedOperationEvents(
+            $this->sessionService->listRecentEvents($session->getId(), $adminId, 160),
+            $operation,
+            $startedAtRaw,
+            $lastEventId
+        );
+        $lastEventId = $this->forwardObservedOperationEvents($sse, $session, $adminId, $recentEvents, $lastEventId);
+
+        $timedOut = false;
+        while ($sse->isAlive()) {
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $newEvents = $this->filterObservedOperationEvents(
+                $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80),
+                $operation,
+                $startedAtRaw,
+                $lastEventId
+            );
+            if ($newEvents !== []) {
+                $idleLoops = 0;
+                $lastEventId = $this->forwardObservedOperationEvents($sse, $session, $adminId, $newEvents, $lastEventId);
+            } else {
+                $idleLoops++;
+            }
+
+            $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+            $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+            if (!$this->isObservedOperationStillRunning($activeOperation, $operation, $executionToken)) {
+                break;
+            }
+
+            if ($idleLoops >= $maxIdleLoops && $this->isActiveOperationStale($activeOperation)) {
+                $timedOut = true;
+                break;
+            }
+
+            $sse->maybeHeartbeat();
+            SchedulerSystem::yieldDelay($pollIntervalMs);
+        }
+
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceEventStatePayload(
+            $this->buildWorkspaceState($fresh, $adminId, 80, true)
+        );
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        $status = \trim((string)($activeOperation['status'] ?? ''));
+
+        $success = !$timedOut && !\in_array($status, ['error', 'cancelled', 'queued', 'running'], true);
+        $message = \trim((string)($activeOperation['message'] ?? ''));
+        if ($timedOut) {
+            $message = (string)__('操作仍在执行，但进度观察已超时，请刷新重试');
+        } elseif ($message === '') {
+            $message = $success ? (string)__('操作执行完成') : (string)__('操作执行失败');
+        }
+
+        return [
+            'success' => $success,
+            'message' => $message,
+            'data' => $this->buildObservedOperationResultData($operation, $state),
+            'state' => $state,
+            'http_code' => $success ? 200 : 409,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     */
+    private function isObservedOperationStillRunning(array $activeOperation, string $operation, string $executionToken): bool
+    {
+        return \trim((string)($activeOperation['operation'] ?? '')) === $operation
+            && \trim((string)($activeOperation['execution_token'] ?? '')) === $executionToken
+            && \in_array(\trim((string)($activeOperation['status'] ?? '')), ['queued', 'running'], true);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $events
+     * @return list<array<string, mixed>>
+     */
+    private function filterObservedOperationEvents(
+        array $events,
+        string $operation,
+        string $startedAtRaw,
+        int $afterEventId
+    ): array {
+        $startedAtTs = $startedAtRaw !== '' ? (\strtotime($startedAtRaw) ?: 0) : 0;
+        $filtered = [];
+        foreach ($events as $event) {
+            if (!\is_array($event)) {
+                continue;
+            }
+            $eventId = (int)($event['event_id'] ?? 0);
+            if ($eventId <= $afterEventId) {
+                continue;
+            }
+            if (!$this->isObservedOperationEventRelevant($event, $operation, $startedAtTs)) {
+                continue;
+            }
+            $filtered[] = $event;
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * @param array<string, mixed> $event
+     */
+    private function isObservedOperationEventRelevant(array $event, string $operation, int $startedAtTs): bool
+    {
+        $eventType = \trim((string)($event['event_type'] ?? ''));
+        if (!\in_array($eventType, [
+            'operation_started',
+            'operation_progress',
+            'ai_chunk',
+            'shared_component_generated',
+            'page_generated',
+            'operation_failed',
+        ], true)) {
+            return false;
+        }
+
+        $payload = \is_array($event['payload'] ?? null) ? $event['payload'] : [];
+        if (\trim((string)($payload['operation'] ?? '')) !== $operation) {
+            return false;
+        }
+
+        if ($startedAtTs <= 0) {
+            return true;
+        }
+
+        $eventTs = \strtotime(\trim((string)($event['create_time'] ?? '')));
+        return $eventTs === false || $eventTs >= $startedAtTs;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $events
+     */
+    private function forwardObservedOperationEvents(
+        SseWriter $sse,
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $events,
+        int $lastEventId
+    ): int {
+        foreach ($events as $event) {
+            $eventType = \trim((string)($event['event_type'] ?? ''));
+            $eventName = $this->mapObservedOperationEventName($eventType);
+            if ($eventName === '') {
+                continue;
+            }
+            $payload = $this->buildObservedOperationEventPayload($session, $adminId, $eventType, $event);
+            if ($payload === null) {
+                continue;
+            }
+            $eventId = (int)($event['event_id'] ?? 0);
+            $sse->sendEvent($eventName, $payload, $eventId > 0 ? $eventId : null);
+            if ($eventId > $lastEventId) {
+                $lastEventId = $eventId;
+            }
+        }
+
+        return $lastEventId;
+    }
+
+    private function mapObservedOperationEventName(string $eventType): string
+    {
+        return match ($eventType) {
+            'operation_started' => 'start',
+            'operation_progress' => 'progress',
+            'ai_chunk' => 'chunk',
+            'shared_component_generated' => 'shared_component_generated',
+            'page_generated' => 'page_generated',
+            'operation_failed' => 'error',
+            default => '',
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $event
+     * @return array<string, mixed>|null
+     */
+    private function buildObservedOperationEventPayload(
+        AiSiteAgentSession $session,
+        int $adminId,
+        string $eventType,
+        array $event
+    ): ?array {
+        $payload = \is_array($event['payload'] ?? null) ? $event['payload'] : [];
+        $details = \is_array($payload['details'] ?? null) ? $payload['details'] : [];
+
+        return match ($eventType) {
+            'operation_started' => [
+                'message' => (string)($payload['message'] ?? __('已开始执行操作')),
+                'operation' => (string)($payload['operation'] ?? ''),
+                'page_type' => (string)($payload['page_type'] ?? ''),
+            ],
+            'operation_progress' => [
+                'message' => (string)($payload['message'] ?? ''),
+                'operation' => (string)($payload['operation'] ?? ''),
+                'page_type' => (string)($payload['page_type'] ?? ''),
+                'progress_percent' => isset($payload['progress_percent']) ? (int)$payload['progress_percent'] : 0,
+            ],
+            'ai_chunk' => [
+                'message' => (string)($payload['message'] ?? ''),
+                'operation' => (string)($payload['operation'] ?? ''),
+                'region' => (string)($details['region'] ?? $payload['region'] ?? ''),
+                'chunk' => (string)($details['chunk'] ?? $payload['chunk'] ?? ''),
+            ],
+            'shared_component_generated' => $this->buildObservedSharedComponentPayload($session, $adminId, $payload, $details),
+            'page_generated' => $this->buildObservedPageGeneratedPayload($session, $adminId, $payload, $details),
+            'operation_failed' => [
+                'message' => (string)($payload['message'] ?? __('操作执行失败')),
+                'operation' => (string)($payload['operation'] ?? ''),
+                'page_type' => (string)($payload['page_type'] ?? ''),
+                'details' => $details,
+                'http_code' => 500,
+            ],
+            default => null,
+        };
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $details
+     * @return array<string, mixed>
+     */
+    private function buildObservedSharedComponentPayload(
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $payload,
+        array $details
+    ): array {
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceEventStatePayload(
+            $this->buildWorkspaceState($fresh, $adminId, 80, true)
+        );
+        $region = (string)($details['region'] ?? $payload['region'] ?? $payload['shared_region'] ?? '');
+
+        return [
+            'message' => (string)($payload['message'] ?? ''),
+            'operation' => (string)($payload['operation'] ?? ''),
+            'region' => $region,
+            'shared_region' => $region,
+            'component_code' => (string)($details['component_code'] ?? ''),
+            'virtual_theme_id' => (int)($details['virtual_theme_id'] ?? $state['virtual_theme_id'] ?? 0),
+            'state' => $state,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $details
+     * @return array<string, mixed>
+     */
+    private function buildObservedPageGeneratedPayload(
+        AiSiteAgentSession $session,
+        int $adminId,
+        array $payload,
+        array $details
+    ): array {
+        $pageType = (string)($payload['page_type'] ?? '');
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $state = $this->buildWorkspaceEventStatePayload(
+            $this->buildWorkspaceState($fresh, $adminId, 80, true),
+            $pageType !== '' ? [$pageType] : []
+        );
+        $pagesByType = \is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : [];
+        $pageRow = \is_array($pagesByType[$pageType] ?? null) ? $pagesByType[$pageType] : [];
+
+        return [
+            'message' => (string)($payload['message'] ?? ''),
+            'operation' => (string)($payload['operation'] ?? ''),
+            'page_type' => $pageType,
+            'page_label' => (string)(Page::getPageTypes()[$pageType] ?? $pageType),
+            'page_id' => (int)($pageRow['page_id'] ?? 0),
+            'virtual_theme_id' => (int)($details['virtual_theme_id'] ?? $state['virtual_theme_id'] ?? 0),
+            'section_code' => (string)($details['section_code'] ?? ''),
+            'section_count' => (int)($details['section_count'] ?? 0),
+            'state' => $state,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function buildObservedOperationResultData(string $operation, array $state): array
+    {
+        return match ($operation) {
+            'build' => [
+                'draft_website_id' => (int)($state['draft_website_id'] ?? 0),
+                'virtual_theme_id' => (int)($state['virtual_theme_id'] ?? 0),
+                'page_types' => \array_values(\array_map('strval', \array_keys(\is_array($state['pagebuilder_pages_by_type'] ?? null) ? $state['pagebuilder_pages_by_type'] : []))),
+            ],
+            'publish' => [
+                'redirect_url' => $this->url->getBackendUrl('pagebuilder/backend/page/index'),
+            ],
+            default => [],
+        };
     }
 
     private function inferThrowableHttpCode(\Throwable $throwable): int
@@ -2307,6 +2679,20 @@ SCRIPT;
             ]);
         }
 
+        $clientVirtualPagesByType = $this->htmlBlocksBuildService->stripServerOnlyVirtualPages($virtualPagesByType);
+        $clientScope = $normalized;
+        $clientScope['virtual_pages_by_type'] = $clientVirtualPagesByType;
+        unset($clientScope['_ai_generated_shared_components']);
+        if (\is_array($clientScope['shared_components'] ?? null)) {
+            foreach ($clientScope['shared_components'] as $region => $component) {
+                if (!\is_array($component)) {
+                    continue;
+                }
+                unset($component['phtml']);
+                $clientScope['shared_components'][$region] = $component;
+            }
+        }
+
         $result = [
             'public_id' => $session->getPublicId(),
             'stage' => $stage,
@@ -2322,7 +2708,7 @@ SCRIPT;
             'draft_website_id' => $draftWebsiteId,
             'pagebuilder_pages_by_type' => $pagesByType,
             'page_type_layouts' => \is_array($normalized['page_type_layouts'] ?? null) ? $normalized['page_type_layouts'] : [],
-            'virtual_pages_by_type' => $virtualPagesByType,
+            'virtual_pages_by_type' => $clientVirtualPagesByType,
             'pending_generation_page_types' => $pendingGenerationPageTypes,
             'build_task_summary' => $taskSummary,
             'auto_start_build_after_stream' => $this->shouldAutoStartBuildAfterWorkspaceStream($workspaceStatus, $activeOperation, $pendingGenerationPageTypes),
@@ -2336,7 +2722,7 @@ SCRIPT;
             'active_operation' => $activeOperation,
             'build_summary' => \is_array($normalized['build_summary'] ?? null) ? $normalized['build_summary'] : [],
             'top_logs' => $topLogs,
-            'scope' => $normalized,
+            'scope' => $clientScope,
             'events' => $events,
             'last_event_id' => $this->resolveWorkspaceLastEventId($events),
         ];
@@ -3444,8 +3830,13 @@ SCRIPT;
     ): array {
         $blocks = [];
 
+        $existingHeaderBlock = $this->findExistingHtmlSharedBlock($existingBlocks, 'header');
         if (\is_array($sharedComponents['header'] ?? null)) {
-            $blocks[] = $this->htmlBlocksBuildService->buildGeneratedSharedBlock('header', $pageType, $sharedComponents['header']);
+            $headerBlock = $this->htmlBlocksBuildService->buildGeneratedSharedBlock('header', $pageType, $sharedComponents['header']);
+            if (\is_array($existingHeaderBlock)) {
+                $headerBlock = $this->htmlBlocksBuildService->mergeUserCustomizedSharedBlockConfig($headerBlock, $existingHeaderBlock);
+            }
+            $blocks[] = $headerBlock;
         } else {
             $blocks[] = $this->htmlBlocksBuildService->buildSharedHeaderBlock($pageType, $websiteProfile, $scope);
         }
@@ -3471,8 +3862,13 @@ SCRIPT;
             $blocks[] = $sectionBlock;
         }
 
+        $existingFooterBlock = $this->findExistingHtmlSharedBlock($existingBlocks, 'footer');
         if (\is_array($sharedComponents['footer'] ?? null)) {
-            $blocks[] = $this->htmlBlocksBuildService->buildGeneratedSharedBlock('footer', $pageType, $sharedComponents['footer']);
+            $footerBlock = $this->htmlBlocksBuildService->buildGeneratedSharedBlock('footer', $pageType, $sharedComponents['footer']);
+            if (\is_array($existingFooterBlock)) {
+                $footerBlock = $this->htmlBlocksBuildService->mergeUserCustomizedSharedBlockConfig($footerBlock, $existingFooterBlock);
+            }
+            $blocks[] = $footerBlock;
         } else {
             $blocks[] = $this->htmlBlocksBuildService->buildSharedFooterBlock($pageType, $websiteProfile, $scope);
         }
@@ -3491,6 +3887,26 @@ SCRIPT;
 
         $type = \trim((string)($block['type'] ?? ''));
         return \str_starts_with($type, 'ai_generated_shared_');
+    }
+
+    /**
+     * @param list<array<string, mixed>> $existingBlocks
+     * @return array<string, mixed>|null
+     */
+    private function findExistingHtmlSharedBlock(array $existingBlocks, string $region): ?array
+    {
+        foreach ($existingBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            if ($this->htmlBlocksBuildService->resolveSharedBlockRegion($block) !== $region) {
+                continue;
+            }
+
+            return $block;
+        }
+
+        return null;
     }
 
     private function persistVirtualThemeBuildScope(
