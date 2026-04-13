@@ -193,6 +193,39 @@ class DispatcherMaintenanceFallbackRoutingTest extends TestCase
         self::assertFalse($method->invoke($dispatcher));
     }
 
+    public function testImmediateStartup503WaitsForRegisteredMaintenanceWorkers(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+        $core = $this->createMock(PassthroughCore::class);
+
+        $core->expects(self::once())
+            ->method('lastNewConnectionEndedInAllWorkersDown')
+            ->willReturn(true);
+        $core->expects(self::once())
+            ->method('getMaintenanceWorkerPorts')
+            ->willReturn([19004]);
+        $core->expects(self::never())->method('getWorkerHealthSummary');
+        $core->expects(self::never())->method('getWorkerCount');
+
+        $this->setProperty($dispatcher, 'passthroughCore', $core);
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'shouldReturnStartup503Immediately');
+        $method->setAccessible(true);
+
+        self::assertFalse($method->invoke($dispatcher));
+    }
+
+    public function testTlsHandshakePeekIsDetectedAsTlsTraffic(): void
+    {
+        $dispatcher = $this->newDispatcherWithoutConstructor();
+
+        $method = new \ReflectionMethod(Dispatcher::class, 'isTlsHandshakePeek');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke($dispatcher, "\x16\x03\x01\x00"));
+        self::assertFalse($method->invoke($dispatcher, 'GET / HT'));
+    }
+
     public function testFriendlyStartupMaintenancePageContainsFriendlyMessage(): void
     {
         $dispatcher = $this->newDispatcherWithoutConstructor();

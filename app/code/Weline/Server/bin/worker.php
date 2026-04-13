@@ -71,6 +71,8 @@ if (!\defined('DS')) {
 // 该 helper 位于框架命名空间，且内部依赖 BP 常量读取实例文件。
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
 
+\Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
+
 // IPC 控制端口（从实例 JSON 发现，支持并发启动无序）
 // 优先使用 --control-port= 参数，否则从实例文件自动发现
 // resolveControlPort 会轮询等待 Master 写入实例信息（最多 6 秒）
@@ -177,9 +179,9 @@ if (\defined('DEV') && DEV) {
 } elseif ($envConfig !== null && isset($envConfig['deploy']) && $envConfig['deploy'] === 'dev') {
     $isDev = true;
 }
-// 所有 Worker 都启用 stdout 输出（便于调试和监控）
+// stdout：默认显示子进程启动/操作日志；只有显式配置关闭时才静默
 WlsLogger::getInstance()
-    ->setStdoutEnabled(true)
+    ->setStdoutEnabled(\Weline\Server\Log\LogConfig::isStdoutEnabled($isFrontend, \Weline\Server\Log\LogConfig::isDevMode()))
     ->setProcessTag($processTag);
 // ========== 日志系统结束 ==========
 
@@ -257,11 +259,35 @@ try {
         $memoryTokenFileName = 'memory_server.token';
     }
 
+    $resolvedSessionPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
+        $instanceName,
+        'session_port',
+        6
+    );
+    if ($resolvedSessionPort > 0) {
+        $sessionPort = $resolvedSessionPort;
+        WlsLogger::info_("[Session] Detected session service port from instance json {$sessionHost}:{$sessionPort}");
+    } else {
+        WlsLogger::warning_("[Session] Session service port not found in instance json; temporarily using runtime/env fallback {$sessionHost}:{$sessionPort}");
+    }
+
+    $resolvedMemoryPort = \Weline\Server\IPC\ChildControl\SubprocessControlKernel::resolveServicePort(
+        $instanceName,
+        'memory_port',
+        6
+    );
+    if ($resolvedMemoryPort > 0) {
+        $memoryPort = $resolvedMemoryPort;
+        WlsLogger::info_("[Memory] Detected memory service port from instance json {$memoryHost}:{$memoryPort}");
+    } else {
+        WlsLogger::warning_("[Memory] Memory service port not found in instance json; temporarily using runtime/env fallback {$memoryHost}:{$memoryPort}");
+    }
+
     // 注意：Worker 启动阶段不进行任何服务发现或连接尝试
     // 所有连接将由首个请求到达时按需进行（Lazy Initialization）
     // 连接池的预热由框架内部在首次使用时自动完成
-    WlsLogger::info_("[Session] Session 服务地址已预配置 {$sessionHost}:{$sessionPort}");
-    WlsLogger::info_("[Memory] Memory 服务地址已预配置 {$memoryHost}:{$memoryPort}");
+    WlsLogger::info_("[Session] Session service address preconfigured {$sessionHost}:{$sessionPort}");
+    WlsLogger::info_("[Memory] Memory service address preconfigured {$memoryHost}:{$memoryPort}");
     WlsLogger::info_("[Worker] Worker 将快速启动并上报 READY，Session/Memory 连接由首个请求按需进行");
 
     // 异步预热连接池：调用 getInstance 触发后台连接建立
@@ -1986,6 +2012,68 @@ function wlsHttpFlushQueuedWrites(
 /**
  * SSE 写入接入 HTTP Worker 写缓冲，并协作等待排空（与 worker_ssl enqueueSseWriteAndAwaitDrain 对齐）。
  */
+function wlsHttpIsSseClientConnected(
+    int $connId,
+    mixed $conn,
+    array &$connections,
+    array &$pendingClose
+): bool {
+    if (isset($pendingClose[$connId])) {
+        return false;
+    }
+    if (!isset($connections[$connId]) || $connections[$connId] !== $conn) {
+        return false;
+    }
+    if (!\is_resource($conn) || !\in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+        return false;
+    }
+
+    $meta = @\stream_get_meta_data($conn);
+    if ($meta === false || ($meta['eof'] ?? false) || ($meta['timed_out'] ?? false)) {
+        return false;
+    }
+
+    if (!\function_exists('stream_select')) {
+        return true;
+    }
+
+    $read = [$conn];
+    $write = [];
+    $except = [$conn];
+    $changed = @\stream_select($read, $write, $except, 0, 0);
+    if ($changed === false) {
+        return true;
+    }
+    if ($except !== []) {
+        return false;
+    }
+    if ($changed === 0 || $read === []) {
+        return true;
+    }
+
+    if (\function_exists('socket_import_stream') && \function_exists('socket_recv')) {
+        $socket = @\socket_import_stream($conn);
+        if ($socket !== false) {
+            $peekBuffer = '';
+            $peekFlag = \defined('MSG_PEEK') ? (int) \constant('MSG_PEEK') : 2;
+            $peek = @\socket_recv($socket, $peekBuffer, 1, $peekFlag);
+            if ($peek === 0) {
+                return false;
+            }
+            if ($peek === false) {
+                $error = \socket_last_error($socket);
+                if (\function_exists('socket_clear_error')) {
+                    \socket_clear_error($socket);
+                }
+
+                return \in_array($error, [11, 35, 10035], true);
+            }
+        }
+    }
+
+    return !@\feof($conn);
+}
+
 function wlsHttpEnqueueSseWriteAndAwaitDrain(
     int $connId,
     mixed $conn,
@@ -1997,9 +2085,9 @@ function wlsHttpEnqueueSseWriteAndAwaitDrain(
     array &$writeBuffers,
     array &$writableConnections,
     array &$pendingClose
-): void {
+): bool {
     if ($data === '') {
-        return;
+        return true;
     }
 
     $streamOk = isset($connections[$connId])
@@ -2020,18 +2108,20 @@ function wlsHttpEnqueueSseWriteAndAwaitDrain(
             $pendingClose[$connId]
         );
 
-        return;
+        return false;
     }
 
     // 防止资源 ID 复用污染：验证 $conn 是否仍是 $connections[$connId] 的同一资源
     // 如果 SSE 连接已关闭且 ID 被新连接复用，$conn !== $connections[$connId]，跳过写入
     if ($conn !== $connections[$connId]) {
-        return;
+        return false;
     }
 
     $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $data;
     $writableConnections[$connId] = $conn;
     $connectionLastActivity[$connId] = \time();
+
+    return true;
 }
 
 /**
@@ -2314,8 +2404,8 @@ function wlsDispatchRequestFiberStep(
                         &$writeBuffers,
                         &$writableConnections,
                         &$pendingClose
-                    ): void {
-                        wlsHttpEnqueueSseWriteAndAwaitDrain(
+                    ): bool {
+                        return wlsHttpEnqueueSseWriteAndAwaitDrain(
                             $fiberConnId,
                             $fiberConn,
                             $data,
@@ -2325,6 +2415,21 @@ function wlsDispatchRequestFiberStep(
                             $requestLogged,
                             $writeBuffers,
                             $writableConnections,
+                            $pendingClose
+                        );
+                    }
+                );
+                \Weline\Framework\Http\Sse\SseContext::setAliveCallback(
+                    static function () use (
+                        $fiberConnId,
+                        $fiberConn,
+                        &$connections,
+                        &$pendingClose
+                    ): bool {
+                        return wlsHttpIsSseClientConnected(
+                            $fiberConnId,
+                            $fiberConn,
+                            $connections,
                             $pendingClose
                         );
                     }
@@ -2562,15 +2667,23 @@ function injectWlsProcessTimeHeader(string $response, float $durationMs): string
  */
 function wlsFiberRequestContextEnter(mixed $conn): void
 {
-    // 关键修复：Fiber 启动时必须完全重置所有请求级状态，防止复用上一个 Fiber 的残留状态
-    // 这是 WLS 多 Fiber 并发的核心隔离点：每个新 Fiber 必须从干净的全局状态开始
-    \Weline\Framework\Runtime\StateManager::reset();
+    // 关键修复：多 Fiber 并发时，新请求进入不能做“全量 reset”，否则会清掉其他挂起 Fiber 的请求级状态。
+    // 与 WlsRuntime::reset() 一致：存在并发挂起 Fiber 时，跳过会影响其他请求上下文的回调。
+    $omitCallbacks = null;
+    if (
+        \Weline\Framework\Runtime\Runtime::isPersistent()
+        && \Weline\Framework\Runtime\WlsConcurrency::getOtherSuspendedRequestFiberCount() > 0
+    ) {
+        $omitCallbacks = \Weline\Framework\Runtime\WlsConcurrency::callbackNamesOmittableWithPeerFibers();
+    }
+    \Weline\Framework\Runtime\StateManager::reset($omitCallbacks);
 
     \Weline\Framework\Runtime\RequestContext::cleanup();
     \Weline\Framework\Http\Url::resetWlsFiberInterleavedParserScratch();
     \Weline\Framework\Http\Sse\SseContext::reset();
     \Weline\Framework\Http\Sse\SseContext::setConnection($conn);
     \Weline\Framework\Http\Sse\SseContext::clearWriteCallback();
+    \Weline\Framework\Http\Sse\SseContext::clearAliveCallback();
 }
 
 /**
@@ -3251,6 +3364,25 @@ function handleRequest(
         }
         
         // 临时禁用 gzip 压缩以排除压缩问题
+        $responseBody = (string)$response->getBody();
+        $responseContentType = \strtolower((string)($response->getHeader('Content-Type') ?? ''));
+        $responseLocation = (string)($response->getHeader('Location') ?? '');
+        $isExpectedEmptyResponse = \strtoupper($method) === 'HEAD'
+            || \in_array($statusCode, [204, 205, 304], true)
+            || $responseLocation !== ''
+            || \str_contains($responseContentType, 'text/event-stream');
+        if ($responseBody === '' && !$isExpectedEmptyResponse) {
+            WlsLogger::error_(
+                '[UnexpectedEmptyResponse] method=' . $method
+                . ' uri=' . ($request->getUri() ?: ($request->getServer('REQUEST_URI') ?? ''))
+                . ' status=' . $statusCode
+                . ' content_type=' . ($responseContentType !== '' ? $responseContentType : '(empty)')
+                . ' location=' . ($responseLocation !== '' ? $responseLocation : '(none)')
+                . ' worker_id=' . $workerId
+                . ' worker_port=' . $port
+            );
+        }
+
         // $acceptEncoding = $request->getHeader('Accept-Encoding');
         // if ($acceptEncoding && \is_string($acceptEncoding)) {
         //     $response->compress($acceptEncoding);

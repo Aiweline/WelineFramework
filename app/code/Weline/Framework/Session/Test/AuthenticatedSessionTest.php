@@ -153,15 +153,32 @@ class AuthenticatedSessionTest extends TestCase
 
     private function createMockUser(int $id, string $username): AuthenticableInterface
     {
-        $user = $this->createMock(AuthenticableInterface::class);
-        
-        $user->method('getAuthIdentifier')->willReturn($id);
-        $user->method('getAuthUsername')->willReturn($username);
-        $user->method('getAuthSessionId')->willReturn('');
-        $user->expects($this->any())
-            ->method('getAuthModelClass')
-            ->willReturn(get_class($user));
-        
-        return $user;
+        return new class($id, $username) implements AuthenticableInterface {
+            public function __construct(
+                private readonly int $id,
+                private readonly string $username
+            ) {
+            }
+
+            public function getAuthIdentifier(): int|string
+            {
+                return $this->id;
+            }
+
+            public function getAuthUsername(): string
+            {
+                return $this->username;
+            }
+
+            public function getAuthSessionId(): string
+            {
+                return '';
+            }
+
+            public static function getAuthModelClass(): string
+            {
+                return self::class;
+            }
+        };
     }
 }

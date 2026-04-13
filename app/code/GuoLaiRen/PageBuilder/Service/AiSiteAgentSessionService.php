@@ -111,7 +111,14 @@ class AiSiteAgentSessionService
             ->delete()
             ->fetch();
 
-        return (bool)$session->delete()->fetch();
+        // AbstractModel::delete() 内部已执行 fetch()；切勿再链式 ->fetch()，否则返回的是模型对象，(bool)$model 恒为 true。
+        // QueryAst 对 DELETE 的 fetch 结果为 rowCount>0 时的 boolean，应以此为准。
+        $session->delete();
+        if ($session->getQueryData() === true) {
+            return true;
+        }
+
+        return $this->loadById($sessionId, $forAdminUserId) === null;
     }
 
     /**
@@ -122,6 +129,10 @@ class AiSiteAgentSessionService
         $session = $this->loadById($sessionId, $forAdminUserId);
         if ($session === null) {
             return false;
+        }
+        if (\array_key_exists('target_domain', $patch)) {
+            $td = \trim((string)$patch['target_domain']);
+            $patch['target_domain'] = $td === '' ? '' : \strtolower($td);
         }
         $scope = $session->getScopeArray();
         $merged = \array_replace($scope, $patch);
@@ -141,6 +152,10 @@ class AiSiteAgentSessionService
         $session = $this->loadById($sessionId, $forAdminUserId);
         if ($session === null) {
             return false;
+        }
+        if (\array_key_exists('target_domain', $scope)) {
+            $td = \trim((string)$scope['target_domain']);
+            $scope['target_domain'] = $td === '' ? '' : \strtolower($td);
         }
         $session->setScopeArray($scope);
         $this->touchUpdateTime($session);

@@ -123,6 +123,12 @@ class PassthroughCore
     private int $maintenancePort = 0;
 
     /**
+     * 最近一次 handleNewConnection 是否以「业务与维护均不可连」结束（all_workers_down 路径）。
+     * 供 Dispatcher 在池非空但全端口失败时仍返回 503「WLS正在启动」页。
+     */
+    private bool $lastNewConnectionEndedInAllWorkersDown = false;
+
+    /**
      * 可选：探活/预热过程中协作式让出（仅应在 Dispatcher 的入池 Fiber 内注册为 Fiber::suspend）。
      */
     private ?\Closure $warmupCooperativeYield = null;
@@ -479,7 +485,8 @@ class PassthroughCore
     public function handleNewConnection($clientSocket, string $clientIp): bool
     {
         $this->stats['total_connections']++;
-        
+        $this->lastNewConnectionEndedInAllWorkersDown = false;
+
         $connId = \spl_object_id($clientSocket);
         $sni = '';
         $workerPort = null;
@@ -659,12 +666,21 @@ class PassthroughCore
         }
 
         $this->stats['all_workers_down']++;
+        $this->lastNewConnectionEndedInAllWorkersDown = true;
         $this->logMaintenanceDecision(
             'all_workers_down',
             '业务 Worker 与维护 Worker 均不可用，' . $this->formatMaintenanceLogContext(),
             'WARN'
         );
         return false;
+    }
+
+    /**
+     * 上次 handleNewConnection(false) 是否因业务与维护 Worker 均不可连（含池有端口但全部连接失败）。
+     */
+    public function lastNewConnectionEndedInAllWorkersDown(): bool
+    {
+        return $this->lastNewConnectionEndedInAllWorkersDown;
     }
 
     /**

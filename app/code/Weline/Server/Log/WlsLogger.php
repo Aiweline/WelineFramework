@@ -63,7 +63,7 @@ class WlsLogger
         $this->minLevel = LogConfig::getMinLevel();
         $this->fileEnabled = LogConfig::isEnabled();
 
-        if (LogConfig::isDevMode()) {
+        if (LogConfig::isDevMode() && LogConfig::isVerboseWlsLog()) {
             $this->stdoutEnabled = true;
             $this->fileEnabled = true;
             $this->devDebugLogFile = WlsLogService::getDebugLogFile();

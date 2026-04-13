@@ -15,6 +15,7 @@ use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 
 class Block extends Template implements BlockInterface
 {
@@ -94,7 +95,7 @@ class Block extends Template implements BlockInterface
     public function fetchHtml(string $fileName, array $dictionary = []): string
     {
         $comFileName = $this->fetchTagSource('blocks', $fileName);
-        ob_start();
+        FiberOutputBuffer::beginCapture();
         try {
             if ($dictionary) {
                 $this->addData($dictionary);
@@ -105,12 +106,12 @@ class Block extends Template implements BlockInterface
             }
             include $comFileName;
         } catch (\Exception $exception) {
-            ob_end_clean();
+            FiberOutputBuffer::discardCapture();
             throw $exception;
         }
         /** Get output buffer. */
         # FIXME 是否显示模板路径
-        return ob_get_clean();
+        return FiberOutputBuffer::endCapture();
     }
 
     public function __toString()

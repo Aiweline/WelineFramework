@@ -18,8 +18,19 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 
+final class UrlParserRequestState
+{
+    public array $parserServer = [];
+    public array $parserMatchs = [];
+    public array $parserCache = [];
+    public array $decodeUrls = [];
+    public bool $parsingInProgress = false;
+}
+
 class Url implements UrlInterface
 {
+    private const PARSER_SITES_VERSION_CACHE_KEY = 'websites.url.parser_sites_version.v1';
+
     /**
      * @deprecated WLS 模式下此属性会过期。始终使用 $this->getRequest() 获取当前请求。
      */
@@ -31,6 +42,11 @@ class Url implements UrlInterface
     {
         $this->request = $request;
     }
+
+    private static ?UrlParserRequestState $mainParserState = null;
+    /** @var \WeakMap<\Fiber, UrlParserRequestState>|null */
+    private static ?\WeakMap $fiberParserStates = null;
+    private static string $parserSitesVersion = '';
     
     /**
      * 获取当前请求对象
@@ -742,8 +758,27 @@ class Url implements UrlInterface
 
     public static function parser(string $parse_url = '', string $key = ''): array|string
     {
+        $restoreParserScratch = false;
+        $parserScratchBackup = [];
+        if (self::currentParserFiber() !== null) {
+            $parserScratchBackup = [
+                'parserServer' => self::$parserServer,
+                'parserMatchs' => self::$parserMatchs,
+                'parserCache' => self::$parserCache,
+                'decodeUrls' => self::$decode_urls,
+                'parsingInProgress' => self::$parsingInProgress,
+            ];
+            $state = self::parserState();
+            self::$parserServer = $state->parserServer;
+            self::$parserMatchs = $state->parserMatchs;
+            self::$parserCache = $state->parserCache;
+            self::$decode_urls = $state->decodeUrls;
+            self::$parsingInProgress = $state->parsingInProgress;
+            $restoreParserScratch = true;
+        }
         
         // 防止重入：如果正在解析中，直接返回URL，避免无限循环
+        try {
         if (self::$parsingInProgress) {
             return $parse_url ?: (string)(self::currentServer()['REQUEST_URI'] ?? '/');
         }
@@ -756,36 +791,38 @@ class Url implements UrlInterface
             return (string)(self::currentServer()['REQUEST_URI'] ?? '/');
         }
 
+        self::ensureParserSitesFresh();
+
         $url = $parse_url;
         # 初始化server
-        if (empty(self::$parserServer)) {
-            self::$parserServer = self::currentServer();
-            self::$parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
+        if (empty($parserServer)) {
+            $parserServer = self::currentServer();
+            $parserServer['WELINE_ORIGIN_TIMEZONE'] = date_default_timezone_get();
             
             // 使用新的 area_routes 分组配置获取区域前缀
             $restFrontendPrefix = Env::getAreaRoutePrefix('rest_frontend');
             if (empty($restFrontendPrefix)) {
                 // 如果没有配置，使用默认值 'api'
-                self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] = 'api';
+                $parserServer['WELINE_REST_FRONTEND_PREFIX'] = 'api';
             } else {
-                self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] = strtolower($restFrontendPrefix);
+                $parserServer['WELINE_REST_FRONTEND_PREFIX'] = strtolower($restFrontendPrefix);
             }
-            self::$parserServer['WELINE_REST_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('rest_backend') ?? '';
-            self::$parserServer['WELINE_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('backend') ?? '';
+            $parserServer['WELINE_REST_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('rest_backend') ?? '';
+            $parserServer['WELINE_BACKEND_PREFIX'] = Env::getAreaRoutePrefix('backend') ?? '';
             
             // 保留旧的变量名以兼容，后续可逐步移除
-            self::$parserServer['WELINE_API_AREA'] = self::$parserServer['WELINE_REST_FRONTEND_PREFIX'];
-            self::$parserServer['WELINE_API_AREA_PREFIX'] = '/' . self::$parserServer['WELINE_REST_FRONTEND_PREFIX'] . '/';
-            self::$parserServer['WELINE_API_ADMIN_AREA'] = self::$parserServer['WELINE_REST_BACKEND_PREFIX'];
-            self::$parserServer['WELINE_BACKEND_AREA'] = self::$parserServer['WELINE_BACKEND_PREFIX'];
+            $parserServer['WELINE_API_AREA'] = $parserServer['WELINE_REST_FRONTEND_PREFIX'];
+            $parserServer['WELINE_API_AREA_PREFIX'] = '/' . $parserServer['WELINE_REST_FRONTEND_PREFIX'] . '/';
+            $parserServer['WELINE_API_ADMIN_AREA'] = $parserServer['WELINE_REST_BACKEND_PREFIX'];
+            $parserServer['WELINE_BACKEND_AREA'] = $parserServer['WELINE_BACKEND_PREFIX'];
             
-            self::$parserServer['WELINE_AREA_ROUTE'] = '';
-            self::$parserServer['WELINE_AREA'] = 'frontend';
-            self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
-            self::$parserServer['WELINE_USER_LANG'] = State::getLang();
-            self::$parserServer['WELINE_WEBSITE_ID'] = self::$parserServer['WELINE_WEBSITE_ID'] ?? '';
-            self::$parserServer['WELINE_WEBSITE_CODE'] = self::$parserServer['WELINE_WEBSITE_CODE'] ?? '';
-            self::$parserServer['WELINE_WEBSITE_URL'] = self::$parserServer['WELINE_WEBSITE_URL'] ?? '';
+            $parserServer['WELINE_AREA_ROUTE'] = '';
+            $parserServer['WELINE_AREA'] = 'frontend';
+            $parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
+            $parserServer['WELINE_USER_LANG'] = State::getLang();
+            $parserServer['WELINE_WEBSITE_ID'] = $parserServer['WELINE_WEBSITE_ID'] ?? '';
+            $parserServer['WELINE_WEBSITE_CODE'] = $parserServer['WELINE_WEBSITE_CODE'] ?? '';
+            $parserServer['WELINE_WEBSITE_URL'] = $parserServer['WELINE_WEBSITE_URL'] ?? '';
         }
         
         if ($url) {
@@ -812,7 +849,7 @@ class Url implements UrlInterface
         }
         // 如果 self::$parserSites 已经初始化，直接使用，避免重复事件分发
         if (empty(self::$parserSites)) {
-            self::$parsingInProgress = true;
+            $parsingInProgress = true;
             try {
                 $detectWebsiteStart = \microtime(true);
                 $detect_website_data = new DataObject([
@@ -841,16 +878,18 @@ class Url implements UrlInterface
                 foreach ($sites as $site) {
                     $site_url = $site['url'];
                     $length = strlen($site_url);
-                    $tmp[$length] = $site;
+                    $tmp[$length][] = $site;
                 }
                 krsort($tmp);
-                foreach ($tmp as $site) {
-                    $site_url = $site['url'];
-                    self::$parserSites[$site_url] = $site;
+                foreach ($tmp as $sitesAtLength) {
+                    foreach ((array)$sitesAtLength as $site) {
+                        $site_url = $site['url'];
+                        self::$parserSites[$site_url] = $site;
+                    }
                 }
             } finally {
                 // 确保无论成功或异常都重置标志
-                self::$parsingInProgress = false;
+                $parsingInProgress = false;
             }
         }
         # 匹配网站 self::$parserSites 最长倒序
@@ -919,6 +958,54 @@ class Url implements UrlInterface
 
         # 如果网站匹配失败，从完整URL中提取路径部分，并回退到默认网站
         if (!isset($data['website']) && str_contains($url, '://')) {
+            self::resetWebsiteParserSites();
+            self::ensureParserSitesLoaded();
+            foreach (self::$parserSites as $site_url => $site) {
+                $site_url_for_match = self::ensureCurrentScheme($site_url);
+                $site_parsed_tmp = \parse_url($site_url_for_match);
+                if (!isset($site_parsed_tmp['port']) && !empty($parsers['port'])) {
+                    $site_url_for_match = ($site_parsed_tmp['scheme'] ?? 'https') . '://'
+                        . ($site_parsed_tmp['host'] ?? 'localhost')
+                        . ':' . $parsers['port']
+                        . ($site_parsed_tmp['path'] ?? '');
+                }
+                if (str_starts_with($url, $site_url_for_match)) {                    $url = str_replace($site_url_for_match, '', $url);
+                    $uri = self::parse_url($url, 'path') ?: '';
+                    if (isset(self::$parserSiteMatchs[$site_url])) {
+                        $data = array_merge((array)$data, self::$parserSiteMatchs[$site_url]);
+                    }
+                    $data['url'] = $url;
+                    $parsed_url = self::parse_url($url);
+                    $data['parse'] = is_array($parsed_url) ? $parsed_url : [];
+                    $matchedWebsiteUrl = $site_url_for_match;
+                    $data['website_url'] = $matchedWebsiteUrl;
+                    $data['website'] = $site;
+                    self::$parserServer['WELINE_WEBSITE_CODE'] = $site['code'];
+                    self::$parserServer['WELINE_WEBSITE_ID'] = $site['website_id'];
+                    self::$parserServer['WELINE_WEBSITE_URL'] = $matchedWebsiteUrl;
+                    self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $site['default_currency'];
+                    self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $site['default_language'];
+                    if (empty(self::$parserServer['WELINE_USER_LANG'])) {
+                        self::$parserServer['WELINE_USER_LANG'] = State::getLang() ?: $site['default_language'];
+                    }
+                    if (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
+                        self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency() ?: $site['default_currency'];
+                    }
+                    if (empty($uri)) {
+                        $query_part = self::parse_url($url, 'query') ?: '';
+                        $query = $query_part ? '?' . $query_part : '';
+                        $data['url'] = $matchedWebsiteUrl . $query;
+                        $data['server'] = self::$parserServer;
+                        $data['language'] = self::$parserServer['WELINE_USER_LANG'];
+                        $data['currency'] = self::$parserServer['WELINE_USER_CURRENCY'];
+                        if ($key) {
+                            return $data[$key] ?? '';
+                        }
+                        return $data;
+                    }
+                    break;
+                }
+            }
             $parsed = self::parse_url($url);
             if (isset($parsed['path'])) {
                 # 规范化路径：去除多余斜杠，确保以 / 开头
@@ -1275,6 +1362,22 @@ class Url implements UrlInterface
         }
 
         return $data;
+        } finally {
+            if ($restoreParserScratch) {
+                $state = self::parserState();
+                $state->parserServer = self::$parserServer;
+                $state->parserMatchs = self::$parserMatchs;
+                $state->parserCache = self::$parserCache;
+                $state->decodeUrls = self::$decode_urls;
+                $state->parsingInProgress = self::$parsingInProgress;
+
+                self::$parserServer = $parserScratchBackup['parserServer'] ?? [];
+                self::$parserMatchs = $parserScratchBackup['parserMatchs'] ?? [];
+                self::$parserCache = $parserScratchBackup['parserCache'] ?? [];
+                self::$decode_urls = $parserScratchBackup['decodeUrls'] ?? [];
+                self::$parsingInProgress = (bool)($parserScratchBackup['parsingInProgress'] ?? false);
+            }
+        }
     }
 
     static private array $decode_urls = [];
@@ -1318,9 +1421,152 @@ class Url implements UrlInterface
      */
     public static function resetWlsFiberInterleavedParserScratch(): void
     {
+        $state = self::parserState();
+        $state->parserServer = [];
+        $state->parserMatchs = [];
+        $state->parserCache = [];
+        $state->decodeUrls = [];
+        $state->parsingInProgress = false;
+
         self::$parserServer = [];
         self::$parserCache = [];
+        self::$decode_urls = [];
         self::$parsingInProgress = false;
+    }
+
+    public static function resetWebsiteParserSites(): void
+    {
+        self::$parserSites = [];
+        self::$parserSiteMatchs = [];
+        self::$parserMatchs = [];
+        self::$parserSitesVersion = '';
+    }
+
+    private static function ensureParserSitesFresh(): void
+    {
+        $version = '';
+        try {
+            $cached = w_cache('website_detect')->get(self::PARSER_SITES_VERSION_CACHE_KEY);
+            $version = \is_scalar($cached) ? (string)$cached : '';
+        } catch (\Throwable) {
+        }
+
+        if ($version === '') {
+            return;
+        }
+
+        if (self::$parserSitesVersion !== '' && self::$parserSitesVersion !== $version) {
+            self::resetWebsiteParserSites();
+        }
+
+        self::$parserSitesVersion = $version;
+    }
+
+    private static function ensureParserSitesLoaded(): void
+    {
+        if (!empty(self::$parserSites)) {
+            return;
+        }
+
+        self::$parsingInProgress = true;
+        try {
+            $detectWebsiteStart = \microtime(true);
+            $detect_website_data = new DataObject([
+                'sites' => [],
+                'site_sample' => [
+                    "website_id" => 1,
+                    "name" => "榛樿缃戠珯",
+                    "code" => "default",
+                    "url" => "http://127.0.0.1:9981/default",
+                    "default_currency" => "CNY",
+                    "default_language" => "zh_Hans_CN",
+                    "default_timezone" => "Asia/Shanghai",
+                ],
+                'get_sites' => true
+            ]);
+            $eventManager = w_obj(EventsManager::class);
+            $eventManager->dispatch('Weline_Framework_Url::detect_website', $detect_website_data);
+            $detectWebsiteEnd = \microtime(true);
+            $detectWebsiteDuration = \round(($detectWebsiteEnd - $detectWebsiteStart) * 1000, 2);
+            if ($detectWebsiteDuration > 100) {
+                w_log_warning('[WLS Performance] detect_website event took ' . $detectWebsiteDuration . 'ms');
+            }
+            $sites = $detect_website_data->getData('sites');
+            $tmp = [];
+            foreach ($sites as $site) {
+                $site_url = $site['url'];
+                $length = strlen($site_url);
+                $tmp[$length][] = $site;
+            }
+            krsort($tmp);
+            foreach ($tmp as $sitesAtLength) {
+                foreach ((array)$sitesAtLength as $site) {
+                    $site_url = $site['url'];
+                    self::$parserSites[$site_url] = $site;
+                }
+            }
+        } finally {
+            self::$parsingInProgress = false;
+        }
+    }
+
+    private static function currentParserFiber(): ?\Fiber
+    {
+        if (!\class_exists(\Weline\Framework\Runtime\Runtime::class)) {
+            return null;
+        }
+
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            return null;
+        }
+
+        return \Fiber::getCurrent();
+    }
+
+    private static function parserState(): UrlParserRequestState
+    {
+        $fiber = self::currentParserFiber();
+        if ($fiber === null) {
+            self::$mainParserState ??= new UrlParserRequestState();
+            return self::$mainParserState;
+        }
+
+        self::$fiberParserStates ??= new \WeakMap();
+        if (!isset(self::$fiberParserStates[$fiber])) {
+            self::$fiberParserStates[$fiber] = new UrlParserRequestState();
+        }
+
+        return self::$fiberParserStates[$fiber];
+    }
+
+    private static function &parserServerRef(): array
+    {
+        $state = self::parserState();
+        return $state->parserServer;
+    }
+
+    private static function &parserMatchsRef(): array
+    {
+        $state = self::parserState();
+        return $state->parserMatchs;
+    }
+
+    private static function &parserCacheRef(): array
+    {
+        $state = self::parserState();
+        return $state->parserCache;
+    }
+
+    private static function &decodeUrlsRef(): array
+    {
+        $state = self::parserState();
+        return $state->decodeUrls;
+    }
+
+    private static function &parsingInProgressRef(): bool
+    {
+        $state = self::parserState();
+        return $state->parsingInProgress;
     }
 
     private static function currentServer(): array

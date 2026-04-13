@@ -229,7 +229,8 @@ class ServerBag
 
         foreach (self::MEMORY_ALIAS_MAP as $serverKey => $alias) {
             $value = WelineEnv::get($alias, null);
-            if ($value === null) {
+            // 空字符串表示 Context/影子未就绪，不要用其覆盖 $_SERVER 里已由 WLS/GlobalsEmulator 写入的值
+            if ($value === null || $value === '') {
                 continue;
             }
             $server[$serverKey] = $value;

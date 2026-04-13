@@ -66,6 +66,13 @@ class WlsRequest extends Request
         $request->parseRawHttp($rawData, $serverInfo);
         return $request;
     }
+
+    private static function normalizeHeaderName(string $name): string
+    {
+        $name = \strtolower($name);
+
+        return \implode('-', \array_map(static fn(string $part): string => \ucfirst($part), \explode('-', $name)));
+    }
     
     /**
      * 解析原始 HTTP 数据
@@ -96,9 +103,14 @@ class WlsRequest extends Request
         foreach ($lines as $line) {
             if (\strpos($line, ':') !== false) {
                 list($name, $value) = \explode(':', $line, 2);
-                $name = \trim($name);
+                $name = self::normalizeHeaderName((string)\trim($name));
                 $value = \trim($value);
-                $headers[$name] = $value;
+                if (isset($headers[$name]) && $headers[$name] !== '') {
+                    // RFC 7230: 重复头按逗号拼接（Cookie/Set-Cookie 不在请求头场景）。
+                    $headers[$name] .= ',' . $value;
+                } else {
+                    $headers[$name] = $value;
+                }
             }
         }
         $this->parsedHeaders = $headers;
@@ -148,7 +160,7 @@ class WlsRequest extends Request
         
         if ($viaDispatcher) {
             // 使用 Weline- 头还原原始请求信息
-            $originalHost = \trim(\explode(',', $headers['Weline-Original-Host'] ?? ($headers['Host'] ?? 'localhost'), 2)[0]);
+            $originalHost = \trim(\explode(',', (string)($headers['Weline-Original-Host'] ?? ($headers['Host'] ?? '')), 2)[0]);
             $originalScheme = \strtolower(\trim(\explode(',', $headers['Weline-Original-Scheme'] ?? 'http', 2)[0]));
             $originalPort = \trim(\explode(',', $headers['Weline-Original-Port'] ?? '', 2)[0]);
             $originalSsl = $headers['Weline-Original-Ssl'] ?? 'off';
@@ -156,7 +168,7 @@ class WlsRequest extends Request
             $isHttps = ($originalScheme === 'https' || $originalSsl === 'on');
         } else {
             // 回退到标准 X-Forwarded-* 头（兼容其他代理）
-            $originalHost = \trim(\explode(',', $headers['X-Forwarded-Host'] ?? ($headers['Host'] ?? 'localhost'), 2)[0]);
+            $originalHost = \trim(\explode(',', (string)($headers['X-Forwarded-Host'] ?? ($headers['Host'] ?? '')), 2)[0]);
             $originalPort = \trim(\explode(',', $headers['X-Forwarded-Port'] ?? '', 2)[0]); // 非 Dispatcher 模式，优先使用 X-Forwarded-Port
             $forwardedProto = \strtolower(\trim(\explode(',', $headers['X-Forwarded-Proto'] ?? '', 2)[0]));
             $realIp = $headers['CF-Connecting-IP'] ?? ($headers['X-Real-IP'] ?? '');
@@ -195,7 +207,19 @@ class WlsRequest extends Request
                 }
             }
         }
-        
+
+        // Host 必须来源于用户请求；禁止回退 localhost，避免登录后跳转到 localhost。
+        $originalHost = \trim($originalHost);
+        if ($originalHost === '') {
+            $originalHost = \trim((string)($headers['Host'] ?? ''));
+        }
+        if ($originalHost === '') {
+            throw new \InvalidArgumentException('Missing Host header in request.');
+        }
+        if (\str_contains($originalHost, '/')) {
+            throw new \InvalidArgumentException('Invalid Host header value.');
+        }
+
         // ========== 构建完整的 $_SERVER（兼容 FPM 环境）==========
         // 基础路径信息
         $documentRoot = \defined('BP') ? \rtrim(BP, DIRECTORY_SEPARATOR) : \getcwd();
@@ -702,7 +726,10 @@ class WlsRequest extends Request
     public function getBaseHost(): string
     {
         $currentScheme = $this->isSecure() ? 'https' : 'http';
-        $host = $this->parsedHost ?: ($this->getHeader('Host') ?? 'localhost');
+        $host = $this->parsedHost ?: (string)($this->getHeader('Host') ?? '');
+        if ($host === '') {
+            throw new \RuntimeException('Host is not available for current request.');
+        }
 
         // 透传模式：只信 Host 头（含端口），不做代理头推断
         $currentPort = '';

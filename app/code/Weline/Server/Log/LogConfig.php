@@ -21,6 +21,9 @@ class LogConfig
 
     private static ?array $configCache = null;
 
+    /** 与 server:start -log / 前台模式 / 实例 enable_log 对齐：开发态额外行为见 WlsLogger、MasterProcess */
+    private static ?bool $runtimeVerbose = null;
+
     public static function get(): array
     {
         if (self::$configCache !== null) {
@@ -63,22 +66,50 @@ class LogConfig
 
     public static function getMinLevel(): string
     {
-        $configLevel = (string)self::getValue('level', LogLevel::INFO);
+        $configLevel = LogLevel::normalize((string)self::getValue('level', LogLevel::INFO));
 
-        // 生产环境强制最低 INFO 级别（除非显式配置）
+        // 生产环境强制最低级别（除非显式配置更高）
         if (!self::isDevMode()) {
-            $productionLevel = (string)self::getValue('production_level', LogLevel::INFO);
-
-            // 如果配置的级别低于生产环境最低级别，使用生产环境级别
-            $configPriority = LogLevel::getPriority($configLevel);
-            $productionPriority = LogLevel::getPriority($productionLevel);
-
-            if ($configPriority < $productionPriority) {
-                return $productionLevel;
+            $productionLevel = LogLevel::normalize((string)self::getValue('production_level', LogLevel::INFO));
+            if (LogLevel::getPriority($configLevel) < LogLevel::getPriority($productionLevel)) {
+                $configLevel = $productionLevel;
             }
         }
 
         return $configLevel;
+    }
+
+    /**
+     * 设置运行时 verbose 标志（与实例 JSON enable_log / 命令行 -log / 前台启动 一致；影响开发态 stdout 等，不再压低主链日志级别）。
+     */
+    public static function bootstrapVerbose(bool $verbose): void
+    {
+        if (!\defined('WLS_VERBOSE_LOG')) {
+            \define('WLS_VERBOSE_LOG', $verbose);
+        }
+        self::$runtimeVerbose = $verbose;
+    }
+
+    /**
+     * 从实例运行态 JSON 读取 enable_log 并应用（供 worker/dispatcher 等子进程）。
+     */
+    public static function bootstrapVerboseFromInstanceFile(string $instanceName): void
+    {
+        self::bootstrapVerbose(WlsLogService::readEnableLogFromInstanceFile($instanceName));
+    }
+
+    public static function isVerboseWlsLog(): bool
+    {
+        if (self::$runtimeVerbose !== null) {
+            return self::$runtimeVerbose;
+        }
+        if (\defined('WLS_VERBOSE_LOG')) {
+            return (bool) WLS_VERBOSE_LOG;
+        }
+        $env = self::loadRawEnvConfig();
+        $wlsLog = \is_array($env['wls']['log'] ?? null) ? $env['wls']['log'] : [];
+
+        return (bool)($wlsLog['verbose'] ?? false);
     }
 
     public static function isEnabled(): bool
@@ -88,10 +119,25 @@ class LogConfig
 
     public static function isStdoutEnabled(bool $isFrontend = false, bool $isDev = false): bool
     {
-        $value = self::getValue('stdout', 'auto');
+        return self::resolveStdoutEnabled(self::getValue('stdout', 'auto'), $isFrontend, $isDev);
+    }
 
-        if ($value === 'auto') {
-            return $isFrontend || $isDev;
+    public static function resolveStdoutEnabled(mixed $value, bool $isFrontend = false, bool $isDev = false): bool
+    {
+        if (\is_string($value)) {
+            $normalized = \strtolower(\trim($value));
+            if ($normalized === 'auto') {
+                return true;
+            }
+
+            $boolean = \filter_var($normalized, \FILTER_VALIDATE_BOOLEAN, \FILTER_NULL_ON_FAILURE);
+            if ($boolean !== null) {
+                return $boolean;
+            }
+        }
+
+        if ($value === null) {
+            return true;
         }
 
         return (bool)$value;
