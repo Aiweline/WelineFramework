@@ -27,6 +27,8 @@ use Weline\Framework\View\Template;
 class DevToolPanelObserver implements ObserverInterface
 {
     private const PERSISTENT_MAX_RESPONSE_BYTES = 262144;
+    private const MAX_TRACE_SPANS = 300;
+    private const MAX_TRACE_META_FIELD_BYTES = 2048;
 
     private Request $request;
 
@@ -231,7 +233,9 @@ class DevToolPanelObserver implements ObserverInterface
     {
         $traceSpans = RequestLifecycleTrace::getSpansWithDbSummary();
         if (!empty($traceSpans)) {
-            return $this->filterTraceSpansForPayload($traceSpans);
+            return $this->normalizeTraceSpansForPayload(
+                $this->filterTraceSpansForPayload($traceSpans)
+            );
         }
 
         $payloadTraceSpans = $payload['trace']['spans'] ?? [];
@@ -239,7 +243,9 @@ class DevToolPanelObserver implements ObserverInterface
             return [];
         }
 
-        return $this->filterTraceSpansForPayload($payloadTraceSpans);
+        return $this->normalizeTraceSpansForPayload(
+            $this->filterTraceSpansForPayload($payloadTraceSpans)
+        );
     }
 
     private function measureTraceStage(string $spanName, callable $callback): mixed
@@ -354,16 +360,46 @@ class DevToolPanelObserver implements ObserverInterface
 
     private function shouldSkipForResponseSize(string $result): bool
     {
-        if (!Runtime::isPersistent()) {
-            return false;
-        }
-
         $limit = (int)Env::get('dev_tool.max_response_bytes', self::PERSISTENT_MAX_RESPONSE_BYTES);
         if ($limit <= 0) {
             return false;
         }
 
         return \strlen($result) > $limit;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $traceSpans
+     * @return array<int, array<string, mixed>>
+     */
+    private function normalizeTraceSpansForPayload(array $traceSpans): array
+    {
+        if ($traceSpans === []) {
+            return [];
+        }
+
+        $limited = \array_slice($traceSpans, -self::MAX_TRACE_SPANS);
+        foreach ($limited as &$span) {
+            if (!\is_array($span)) {
+                continue;
+            }
+
+            if (isset($span['meta']) && \is_array($span['meta'])) {
+                foreach ($span['meta'] as $key => $value) {
+                    if (!\is_scalar($value) && $value !== null) {
+                        continue;
+                    }
+                    $stringValue = (string)$value;
+                    if (\strlen($stringValue) <= self::MAX_TRACE_META_FIELD_BYTES) {
+                        continue;
+                    }
+                    $span['meta'][$key] = \substr($stringValue, 0, self::MAX_TRACE_META_FIELD_BYTES) . '...(truncated)';
+                }
+            }
+        }
+        unset($span);
+
+        return $limited;
     }
 
     /**

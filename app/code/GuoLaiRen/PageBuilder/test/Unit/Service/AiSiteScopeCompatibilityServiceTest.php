@@ -138,6 +138,8 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
     public function testBuildVirtualPagesByTypeHydratesLegacySingleContentPageIntoBlocks(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->method('hydrateGeneratedBlockMetadata')
+            ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->expects($this->once())
             ->method('buildPlaceholderBlocksForPageType')
             ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
@@ -187,6 +189,8 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
     public function testBuildVirtualPagesByTypeFallsBackToStaticBlocksWhenAiHydrationHitsRecoverable402Failure(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->method('hydrateGeneratedBlockMetadata')
+            ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->expects($this->once())
             ->method('buildPlaceholderBlocksForPageType')
             ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
@@ -243,6 +247,8 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
     public function testBuildVirtualPagesByTypeFallsBackToStaticBlocksWhenAiComponentPayloadValidationFails(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->method('hydrateGeneratedBlockMetadata')
+            ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->expects($this->once())
             ->method('buildPlaceholderBlocksForPageType')
             ->with(Page::TYPE_HOME, $this->isType('array'), $this->isType('array'))
@@ -299,6 +305,8 @@ class AiSiteScopeCompatibilityServiceTest extends TestCase
     public function testBuildVirtualPagesByTypeUsesStaticMetadataWhenBlocksAlreadyExist(): void
     {
         $blocksBuilder = $this->createMock(AiSiteHtmlBlocksBuildService::class);
+        $blocksBuilder->method('hydrateGeneratedBlockMetadata')
+            ->willReturnCallback(static fn(array $block): array => $block);
         $blocksBuilder->expects($this->never())
             ->method('buildPlaceholderBlocksForPageType');
         $blocksBuilder->expects($this->once())
