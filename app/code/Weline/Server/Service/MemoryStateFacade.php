@@ -233,6 +233,11 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
         return $this->cacheMemoryService->clear($poolIdentity);
     }
 
+    public function compareAndSetCache(string $poolIdentity, string $key, mixed $expected, mixed $value, int $ttl = 0): bool
+    {
+        return $this->cacheMemoryService->cas($poolIdentity, $key, $expected, $value, $ttl);
+    }
+
     public function getRuntime(): array
     {
         return $this->runtime;
@@ -270,6 +275,10 @@ class MemoryStateFacade implements MemoryStateFacadeInterface
                 ?? $this->resolveConfiguredRuntime($config)['token_file_name']
             ),
             'service_type' => 'Memory',
+            'service_role' => ControlMessage::ROLE_MEMORY_SERVER,
+            'consumer_code' => $this->consumerCode,
+            'instance_name' => $this->consumerCode,
+            'owner_type' => 'instance',
             // Master/CLI 门面默认静默逐条 CONN-*，避免与 Memory 侧车/token 就绪竞态时刷屏；排障可设 log_pool_lifecycle=true
             'log_pool_lifecycle' => (bool) ($config['log_pool_lifecycle'] ?? false),
         ];

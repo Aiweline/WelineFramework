@@ -18,6 +18,7 @@ use Weline\Framework\Hook\HookInterface;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Template;
 
 /**
@@ -25,6 +26,8 @@ use Weline\Framework\View\Template;
  */
 class DevToolPanelObserver implements ObserverInterface
 {
+    private const PERSISTENT_MAX_RESPONSE_BYTES = 262144;
+
     private Request $request;
 
     public function __construct(Request $request)
@@ -74,6 +77,14 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
+        if (Runtime::isPersistent() && !(bool)Env::get('wls.debug.dev_tool_panel', false)) {
+            return;
+        }
+
+        if (RequestLifecycleTrace::shouldSkipForCurrentRequest()) {
+            return;
+        }
+
         try {
             $result = $payload['result'] ?? '';
             if (empty($result) || !is_string($result)) {
@@ -81,6 +92,10 @@ class DevToolPanelObserver implements ObserverInterface
             }
 
             if (!$this->isHtmlResponse($result)) {
+                return;
+            }
+
+            if ($this->shouldSkipForResponseSize($result)) {
                 return;
             }
 
@@ -330,6 +345,20 @@ class DevToolPanelObserver implements ObserverInterface
         return stripos($output, '<html') !== false ||
             stripos($output, '<!doctype') !== false ||
             stripos($output, '<body') !== false;
+    }
+
+    private function shouldSkipForResponseSize(string $result): bool
+    {
+        if (!Runtime::isPersistent()) {
+            return false;
+        }
+
+        $limit = (int)Env::get('dev_tool.max_response_bytes', self::PERSISTENT_MAX_RESPONSE_BYTES);
+        if ($limit <= 0) {
+            return false;
+        }
+
+        return \strlen($result) > $limit;
     }
 
     /**

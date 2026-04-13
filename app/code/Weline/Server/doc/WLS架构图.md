@@ -390,3 +390,35 @@ POST /zones/{zone_id}/firewall/access_rules/rules
     "notes": "Auto-blocked by WLS attack detection"
 }
 ```
+
+## Fiber 池与自动预热
+
+WLS 的 Fiber 设计采用“可复用请求执行单元”模型，而不是“每个请求创建一次性 Fiber”模型。
+
+- 一个请求在执行期独占绑定一个 Fiber。
+- 请求结束后，Fiber 不立即销毁，而是回到空闲池等待下一个请求复用。
+- Fiber 的角色更接近 FPM 的 worker 进程，只是调度粒度位于单个 Worker 进程内部。
+- 只有空闲超过 5 分钟且未再次被请求复用的 Fiber，才允许销毁回收。
+
+### 目标规则
+
+- Worker 内必须维持 Fiber 池，不应等到新连接到达时才临时创建全部 Fiber。
+- Fiber 池需要自主预热，保持可立即接单的空闲 Fiber。
+- 池繁忙度定义为 `busy_fibers / total_fibers`。
+- 当繁忙度达到或超过 `90%` 时，Worker 应主动继续预热新 Fiber。
+- Fiber 总量的保底值为 `100`，即使当前流量很低，也应尽量维持不少于 `100` 个可复用 Fiber。
+
+### 生命周期
+
+1. Worker 启动后先自主预热 Fiber 池。
+2. 新请求优先复用空闲 Fiber。
+3. 当空闲 Fiber 不足且繁忙度逼近 90% 时，后台继续补充 Fiber。
+4. 请求处理完成后，Fiber 清理请求级上下文并返回空闲态。
+5. 空闲 Fiber 超过 5 分钟未被复用时，按回收策略销毁。
+
+### 实现约束
+
+- Fiber 必须是常驻循环执行体，能够在“空闲等待 -> 接收请求 -> 执行 -> 清理 -> 回到空闲”之间切换。
+- 已经 `terminated` 的 Fiber 不能作为复用对象，因此复用模型不能建立在“一请求一 Fiber、结束即终止”的实现上。
+- 请求级状态必须在 Fiber 返回空闲前完整清理，包括 RequestContext、SseContext、HeaderCollector、Session、ObjectManager 请求实例等。
+- 自动预热与回收需要同时适配 `worker.php` 与 `worker_ssl.php`，保持一致的 Fiber 池语义。

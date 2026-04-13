@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd" bootstrap="app/bootstrap_phpunit.php" executionOrder="depends,defects" beStrictAboutOutputDuringTests="true" failOnRisky="true" failOnWarning="false" colors="true" cacheDirectory=".phpunit.cache" requireCoverageMetadata="false" beStrictAboutCoverageMetadata="true">
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://schema.phpunit.de/10.5/phpunit.xsd" bootstrap="app/bootstrap_phpunit.php" executionOrder="depends,defects" beStrictAboutOutputDuringTests="true" failOnRisky="true" failOnWarning="false" colors="true" cacheDirectory="tests/phpunit/.phpunit.cache" requireCoverageMetadata="false" beStrictAboutCoverageMetadata="true">
   <testsuites>
     <testsuite name="Unit Tests">
       <directory>tests</directory>
@@ -7,13 +7,13 @@
   </testsuites>
   <coverage>
     <report>
-      <html outputDirectory="coverage-html"/>
-      <text outputFile="coverage.txt"/>
-      <clover outputFile="coverage.xml"/>
+      <html outputDirectory="tests/phpunit/coverage-html"/>
+      <text outputFile="tests/phpunit/coverage.txt"/>
+      <clover outputFile="tests/phpunit/coverage.xml"/>
     </report>
   </coverage>
   <logging>
-    <junit outputFile="test-results.xml"/>
+    <junit outputFile="tests/phpunit/test-results.xml"/>
   </logging>
   <php>
     <ini name="error_reporting" value="22527"/>

@@ -13,6 +13,7 @@ use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Data\WebsiteData;
 use Weline\Websites\Model\Website;
+use Weline\Websites\Model\WebsiteDomain;
 
 /**
  * AI 建站工作台端到端验收（集成测试，需 DB + 后台登录上下文）。
@@ -91,11 +92,16 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertGreaterThan(0, (int)($buildResult['draft_website_id'] ?? 0));
         self::assertGreaterThan(0, (int)($buildResult['virtual_theme_id'] ?? 0));
         self::assertGreaterThanOrEqual(\count($pageTypes), $buildWriter->countEvents('progress'));
-        self::assertCount(\count($pageTypes), $buildWriter->eventsByName('page_generated'));
         self::assertSame(1, $buildWriter->countEvents('environment_ready'));
+        $generatedPageTypes = [];
         foreach ($buildWriter->eventsByName('page_generated') as $generatedEvent) {
             $payload = \is_array($generatedEvent['data'] ?? null) ? $generatedEvent['data'] : [];
             self::assertGreaterThan(0, (int)($payload['page_id'] ?? 0));
+            $generatedPageTypes[] = (string)($payload['page_type'] ?? '');
+        }
+        $generatedPageTypes = \array_values(\array_unique(\array_filter($generatedPageTypes)));
+        foreach ($pageTypes as $pageType) {
+            self::assertContains($pageType, $generatedPageTypes, 'Each requested page type should emit at least one page_generated event.');
         }
 
         $buildStatePayload = $this->invokeJsonAction(
@@ -133,10 +139,10 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
             \count((array)($buildState['page_type_layouts'][Page::TYPE_HOME]['content'] ?? [])),
             'Prompt-driven build should create multiple content sections per page.'
         );
-        self::assertTrue(
-            \str_contains($visualPreviewUrl, '/pagebuilder/backend/preview/full')
-            || \str_contains($visualPreviewUrl, '/pagebuilder/backend/ai-site-agent/workspace-preview'),
-            'Visual preview URL should point to preview/full or workspace-preview route.'
+        self::assertStringContainsString(
+            '/pagebuilder/backend/preview/full',
+            $visualPreviewUrl,
+            'Draft workbench with materialized preview_page_id should embed preview/full, not scope-only workspace-preview.'
         );
         self::assertStringContainsString('virtual_theme_id=' . $virtualThemeId, $visualPreviewUrl);
         self::assertStringNotContainsString('weline_theme_id=', $visualPreviewUrl);
@@ -239,6 +245,11 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         // 模拟访客站「本地已建站」：前端 Live 模式按 page_id 渲染首页（与线上根域名访问同一套 PageRenderService）
         $homePageId = (int)($publishedPages[Page::TYPE_HOME]['page_id'] ?? 0);
         self::assertGreaterThan(0, $homePageId);
+        /** @var WebsiteDomain $websiteDomain */
+        $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
+        $websiteDomain->clearData()->clearQuery()->loadByDomain($targetDomain);
+        self::assertGreaterThan(0, $websiteDomain->getDomainId(), 'Published website should persist a website_domain binding.');
+        self::assertSame($draftWebsiteId, $websiteDomain->getWebsiteId());
         WebsiteData::setWebsite($website);
         $this->prepareFrontendRequest(
             '/pagebuilder/frontend/page/view',

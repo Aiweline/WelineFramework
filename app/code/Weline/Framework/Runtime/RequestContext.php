@@ -312,41 +312,19 @@ class RequestContext
     public static function syncFromServer(): void
     {
         $context = self::ensureContext(true);
-        $preferContextServer = (bool)$context->get(self::INITIALIZED_PATH, false);
-        $server = $preferContextServer ? $context->server() : (\is_array($_SERVER ?? null) ? $_SERVER : $context->server());
-        if (!\is_array($server) || $server === []) {
-            $server = $preferContextServer
-                ? (\is_array($_SERVER ?? null) ? $_SERVER : [])
-                : $context->server();
+        $server = \is_array($_SERVER ?? null) ? $_SERVER : [];
+        self::syncSnapshot($context, $server, false);
+    }
+
+    public static function syncFromContext(?Context $context = null): void
+    {
+        $context ??= self::ensureContext(true);
+        $server = (array)$context->get('input.server', []);
+        if ($server === []) {
+            $server = \is_array($_SERVER ?? null) ? $_SERVER : [];
         }
-        if (!\is_array($server)) {
-            $server = [];
-        }
-        $context->set('input.server', $server);
 
-        $area = (string)(self::get('env.area', $context->get('route.area', $server['WELINE_AREA'] ?? self::AREA_FRONTEND)) ?: self::AREA_FRONTEND);
-        $areaRoute = (string)(self::get('env.area_route', $context->get('route.area_route', $server['WELINE_AREA_ROUTE'] ?? '')) ?? '');
-        $websiteId = (int)(self::get('env.website_id', $context->get('route.website_id', $server['WELINE_WEBSITE_ID'] ?? 0)) ?: 0);
-        $websiteCode = (string)(self::get('env.website_code', $context->get('route.website_code', $server['WELINE_WEBSITE_CODE'] ?? '')) ?? '');
-        $websiteUrl = (string)(self::get('env.website_url', $context->get('route.website_url', $server['WELINE_WEBSITE_URL'] ?? '')) ?? '');
-        $userLang = (string)(self::get('env.user.lang', $context->get('route.language', $server['WELINE_USER_LANG'] ?? 'zh_Hans_CN')) ?: 'zh_Hans_CN');
-        $userCurrency = (string)(self::get('env.user.currency', $context->get('route.currency', $server['WELINE_USER_CURRENCY'] ?? 'CNY')) ?: 'CNY');
-
-        $context->set('route.area', $area);
-        $context->set('route.area_route', $areaRoute);
-        $context->set('route.website_id', $websiteId);
-        $context->set('route.website_code', $websiteCode);
-        $context->set('route.website_url', $websiteUrl);
-        $context->set('route.language', $userLang);
-        $context->set('route.currency', $userCurrency);
-
-        self::set('env.area', $area);
-        self::set('env.area_route', $areaRoute);
-        self::set('env.website_id', (string)$websiteId);
-        self::set('env.website_code', $websiteCode);
-        self::set('env.website_url', $websiteUrl);
-        self::set('env.user.lang', $userLang);
-        self::set('env.user.currency', $userCurrency);
+        self::syncSnapshot($context, $server, true);
     }
 
     public static function resetWelineVars(): void
@@ -441,5 +419,166 @@ class RequestContext
         }
 
         return \bin2hex(\random_bytes(8)) . '-' . (int)(\microtime(true) * 1000000);
+    }
+
+    private static function syncSnapshot(Context $context, array $server, bool $preferContext): void
+    {
+        $routeArea = (string)$context->get('route.area', self::AREA_FRONTEND);
+        $area = (string)(
+            $preferContext
+                ? ($routeArea ?: ($server['WELINE_AREA'] ?? self::AREA_FRONTEND))
+                : (($server['WELINE_AREA'] ?? $routeArea) ?: self::AREA_FRONTEND)
+        );
+        if ($area === '') {
+            $area = self::AREA_FRONTEND;
+        }
+
+        $areaRoute = (string)(
+            $preferContext
+                ? ($context->get('route.area_route', '') ?: ($server['WELINE_AREA_ROUTE'] ?? ''))
+                : ($server['WELINE_AREA_ROUTE'] ?? $context->get('route.area_route', ''))
+        );
+        $websiteId = (int)(
+            $preferContext
+                ? ($context->get('route.website_id', $server['WELINE_WEBSITE_ID'] ?? 0) ?: 0)
+                : (($server['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)) ?: 0)
+        );
+        $websiteCode = (string)(
+            $preferContext
+                ? ($context->get('route.website_code', '') ?: ($server['WELINE_WEBSITE_CODE'] ?? ''))
+                : ($server['WELINE_WEBSITE_CODE'] ?? $context->get('route.website_code', ''))
+        );
+        $websiteUrl = (string)(
+            $preferContext
+                ? ($context->get('route.website_url', '') ?: ($server['WELINE_WEBSITE_URL'] ?? ''))
+                : ($server['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', ''))
+        );
+        $userLang = (string)(
+            $preferContext
+                ? ($context->get('route.language', 'zh_Hans_CN') ?: ($server['WELINE_USER_LANG'] ?? 'zh_Hans_CN'))
+                : (($server['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')) ?: 'zh_Hans_CN')
+        );
+        $userCurrency = (string)(
+            $preferContext
+                ? ($context->get('route.currency', 'CNY') ?: ($server['WELINE_USER_CURRENCY'] ?? 'CNY'))
+                : (($server['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')) ?: 'CNY')
+        );
+        $isBackend = \array_key_exists('WELINE_IS_BACKEND', $server)
+            ? (bool)$server['WELINE_IS_BACKEND']
+            : (bool)$context->get('route.is_backend', \in_array($area, [self::AREA_BACKEND, self::AREA_REST_BACKEND], true));
+        if ($preferContext && $context->has('route.is_backend')) {
+            $isBackend = (bool)$context->get('route.is_backend', $isBackend);
+        }
+        $isStatic = \array_key_exists('WELINE_IS_STATIC_FILE', $server)
+            ? (bool)$server['WELINE_IS_STATIC_FILE']
+            : (bool)$context->get('route.is_static', false);
+        if ($preferContext && $context->has('route.is_static')) {
+            $isStatic = (bool)$context->get('route.is_static', $isStatic);
+        }
+        $isMedia = \array_key_exists('WELINE_IS_MEDIA', $server)
+            ? (bool)$server['WELINE_IS_MEDIA']
+            : (bool)$context->get('route.is_media', false);
+        if ($preferContext && $context->has('route.is_media')) {
+            $isMedia = (bool)$context->get('route.is_media', $isMedia);
+        }
+        $urlParsed = \array_key_exists('WELINE_URL_PARSED', $server)
+            ? (bool)$server['WELINE_URL_PARSED']
+            : (bool)$context->get('route.url_parsed', false);
+        if ($preferContext && $context->has('route.url_parsed')) {
+            $urlParsed = (bool)$context->get('route.url_parsed', $urlParsed);
+        }
+
+        $uri = (string)(
+            $preferContext
+                ? ($context->get('input.uri', '/') ?: ($server['REQUEST_URI'] ?? '/'))
+                : (($server['REQUEST_URI'] ?? $context->get('input.uri', '/')) ?: '/')
+        );
+        if ($uri === '') {
+            $uri = '/';
+        }
+        $method = (string)(
+            $preferContext
+                ? ($context->get('input.method', 'GET') ?: ($server['REQUEST_METHOD'] ?? 'GET'))
+                : (($server['REQUEST_METHOD'] ?? $context->get('input.method', 'GET')) ?: 'GET')
+        );
+        $scheme = (string)(
+            $preferContext
+                ? ($context->get('input.scheme', 'http') ?: ($server['REQUEST_SCHEME'] ?? 'http'))
+                : (($server['REQUEST_SCHEME'] ?? $context->get('input.scheme', 'http')) ?: 'http')
+        );
+        $host = (string)(
+            $preferContext
+                ? ($context->get('input.host', '') ?: ($server['HTTP_HOST'] ?? $server['SERVER_NAME'] ?? ''))
+                : (($server['HTTP_HOST'] ?? $server['SERVER_NAME'] ?? $context->get('input.host', '')) ?: '')
+        );
+        $ip = (string)(
+            $preferContext
+                ? ($context->get('input.ip', '') ?: ($server['REMOTE_ADDR'] ?? ''))
+                : (($server['REMOTE_ADDR'] ?? $context->get('input.ip', '')) ?: '')
+        );
+        $originRequestUri = (string)(
+            $preferContext
+                ? ($context->get('input.origin_request_uri', $uri) ?: ($server['WELINE_ORIGIN_REQUEST_URI'] ?? $uri))
+                : (($server['WELINE_ORIGIN_REQUEST_URI'] ?? $context->get('input.origin_request_uri', $uri)) ?: $uri)
+        );
+        $fullRequestUri = (string)(
+            $preferContext
+                ? ($context->get('input.full_request_uri', '') ?: ($server['WELINE_FULL_REQUEST_URI'] ?? ''))
+                : (($server['WELINE_FULL_REQUEST_URI'] ?? $context->get('input.full_request_uri', '')) ?: '')
+        );
+
+        $server['REQUEST_URI'] = $uri;
+        $server['REQUEST_METHOD'] = $method;
+        $server['REQUEST_SCHEME'] = $scheme;
+        $server['WELINE_ORIGIN_REQUEST_URI'] = $originRequestUri;
+        $server['WELINE_FULL_REQUEST_URI'] = $fullRequestUri;
+        $server['WELINE_AREA'] = $area;
+        $server['WELINE_AREA_ROUTE'] = $areaRoute;
+        $server['WELINE_WEBSITE_ID'] = (string)$websiteId;
+        $server['WELINE_WEBSITE_CODE'] = $websiteCode;
+        $server['WELINE_WEBSITE_URL'] = $websiteUrl;
+        $server['WELINE_USER_LANG'] = $userLang;
+        $server['WELINE_USER_CURRENCY'] = $userCurrency;
+        $server['WELINE_IS_BACKEND'] = $isBackend;
+        $server['WELINE_IS_STATIC_FILE'] = $isStatic;
+        $server['WELINE_IS_MEDIA'] = $isMedia;
+        $server['WELINE_URL_PARSED'] = $urlParsed;
+        if ($host !== '') {
+            $server['HTTP_HOST'] = $host;
+        }
+        if ($ip !== '') {
+            $server['REMOTE_ADDR'] = $ip;
+        }
+
+        $context->set('input.server', $server);
+        $context->set('input.uri', $uri);
+        $context->set('input.origin_request_uri', $originRequestUri);
+        $context->set('input.full_request_uri', $fullRequestUri);
+        $context->set('input.method', $method);
+        $context->set('input.scheme', $scheme);
+        $context->set('input.host', $host);
+        $context->set('input.ip', $ip);
+        $context->set('route.area', $area);
+        $context->set('route.area_route', $areaRoute);
+        $context->set('route.path', (string)(\parse_url($uri, \PHP_URL_PATH) ?: '/'));
+        $context->set('route.website_id', $websiteId);
+        $context->set('route.website_code', $websiteCode);
+        $context->set('route.website_url', $websiteUrl);
+        $context->set('route.language', $userLang);
+        $context->set('route.currency', $userCurrency);
+        $context->set('route.is_backend', $isBackend);
+        $context->set('route.is_static', $isStatic);
+        $context->set('route.is_media', $isMedia);
+        $context->set('route.url_parsed', $urlParsed);
+
+        $_SERVER = \array_replace(\is_array($_SERVER ?? null) ? $_SERVER : [], $server);
+
+        self::set('env.area', $area);
+        self::set('env.area_route', $areaRoute);
+        self::set('env.website_id', (string)$websiteId);
+        self::set('env.website_code', $websiteCode);
+        self::set('env.website_url', $websiteUrl);
+        self::set('env.user.lang', $userLang);
+        self::set('env.user.currency', $userCurrency);
     }
 }

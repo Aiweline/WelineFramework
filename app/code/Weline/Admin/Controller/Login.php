@@ -21,6 +21,7 @@ use Weline\Backend\Model\BackendUserToken;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\HeaderCollector;
+use Weline\Framework\Http\Response;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\Strategy\WlsStrategy;
@@ -149,7 +150,10 @@ class Login extends \Weline\Framework\App\Controller\BackendController
                 MessageManager::error(__('你的账户因尝试多次登录，已被锁定！请联系其他管理员开通。'));
             }
         }
-        return $this->fetch();
+        // 登录页本身就是一个独立完整模板，不依赖通用布局包装。
+        // 在 WLS 下直接返回 detached HTML Response，避免控制器 fetch 事件链
+        // 或后续结果归一化把登录页 body 吞成空响应。
+        return Response::html($this->template('Weline_Admin::templates/Login/index.phtml'));
     }
 
     /**

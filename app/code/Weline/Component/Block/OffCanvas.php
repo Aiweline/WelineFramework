@@ -59,7 +59,9 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
             }
             if ($check_field === 'action') {
                 $action_params['isIframe'] = 'true';
-                $field = $this->request->isBackend() ? $this->getBackendUrl($field, $action_params) : $this->getUrl($field, $action_params);
+                // 与 Url::isCurrentAreaBackend() 对齐：WLS 下单例 Request 与 w_env('area') 可能短暂不一致，
+                // 仅用 isBackend() 会把 */admin/... 生成成无前缀前台 URL，iframe POST 走 frontend 路由表 → 404。
+                $field = $this->shouldBuildBackendActionUrl() ? $this->getBackendUrl($field, $action_params) : $this->getUrl($field, $action_params);
             }
             $data[$check_field] = $field;
         }
@@ -85,6 +87,19 @@ class OffCanvas extends \Weline\Framework\View\Block implements \Weline\Componen
         $data['id'] = $data['id'] . md5(json_encode($data ?? []));
         $this->setData($data);
         $this->assign($data);
+    }
+
+    /**
+     * 是否与 {@see \Weline\Framework\Http\Url::getUrl()} 一样按「后台区域」拼接 URL（含 backend key 前缀）。
+     */
+    private function shouldBuildBackendActionUrl(): bool
+    {
+        $area = (string) \w_env('area', '');
+        if ($area === 'backend' || $area === 'rest_backend') {
+            return true;
+        }
+
+        return $this->request->isBackend();
     }
 
     public function doc(): string

@@ -546,6 +546,10 @@ class OpenAiProvider implements ProviderInterface
             $requestData['tool_choice'] = $params['tool_choice'] ?? 'auto';
         }
 
+        if (!empty($params['response_format']) && is_array($params['response_format'])) {
+            $requestData['response_format'] = $params['response_format'];
+        }
+
         $totalTokens = [
             'prompt_tokens' => 0,
             'completion_tokens' => 0,
