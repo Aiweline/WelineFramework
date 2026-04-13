@@ -23,6 +23,7 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FiberOutputBuffer;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 
@@ -182,29 +183,19 @@ class Template extends DataObject
     {
         // 语言初始化
         $this->initLanguage();
-            $this->theme ?? $this->theme = Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
-            $this->eventsManager ?? $this->eventsManager = ObjectManager::getInstance(EventsManager::class);
-            $this->viewCache ?? $this->viewCache = w_cache('view');
+        $this->theme ??= Env::getInstance()->getConfig('theme', Env::default_theme_DATA);
+        $this->eventsManager ??= ObjectManager::getInstance(EventsManager::class);
+        $this->viewCache ??= w_cache('view');
         $this->request = ObjectManager::getInstance(Request::class);
 
         if ($this->isRequestRuntime()) {
-            if (empty($this->view_dir)) {
-                $this->view_dir = $this->request->getRouterData('module_path') . DataInterface::dir . DS;
-            }
-                $this->getData('title') ?? $this->setData('title', $this->request->getModuleName());
+            // 请求级数据必须每次请求都重新绑定，避免单例状态泄漏。
+            $this->view_dir = $this->request->getRouterData('module_path') . DataInterface::dir . DS;
+            $this->setData('title', $this->request->getModuleName());
             $this->request->setData('url', $this->request->getUrlBuilder()->getCurrentUrl());
-                $reqParams = $this->request->getParams();
-                if (!\is_array($reqParams)) {
-                    $reqParams = [];
-                }
-                $this->getData('req') ?? $this->setData('req', array_merge($reqParams, [
-                'url' => $this->request->getUrlBuilder()->getCurrentUrl(),
-                'query' => $this->request->getQuery(),
-                'query_string' => http_build_query($this->request->getQuery()),
-                'params' => $reqParams
-            ]));
-                $this->getData('env') ?? $this->setData('env', Env::getInstance()->getConfig());
-                $this->getData('local') ?? $this->setData('local', ['code' => Cookie::getLangLocal(), 'lang' => Cookie::getLang()]);
+            $this->setData('req', new TemplateRequestView());
+            $this->setData('env', new TemplateEnvView());
+            $this->setData('local', ['code' => Cookie::getLangLocal(), 'lang' => Cookie::getLang()]);
         }
 
         if (empty($this->statics_dir)) {
@@ -601,10 +592,12 @@ class Template extends DataObject
 
     public function ob_file(string $filename, array $dictionary = []): string
     {
+        // 每次渲染都重新执行 init，确保请求级状态始终绑定当前请求。
+        $this->init();
         // WLS swaps the request instance per incoming request. Refresh the legacy
         // `$this->request` reference so older templates using that property stay correct.
         $this->request = ObjectManager::getInstance(Request::class);
-        ob_start();
+        FiberOutputBuffer::beginCapture();
         try {
             if ($dictionary) {
                 $this->addData($dictionary);
@@ -619,11 +612,11 @@ class Template extends DataObject
             }
             include $filename;
         } catch (\Exception $exception) {
-            ob_end_clean();
+            FiberOutputBuffer::discardCapture();
             throw $exception;
         }
         /** Get output buffer. */
-        $result = ob_get_clean();
+        $result = FiberOutputBuffer::endCapture();
         return $result;
     }
 

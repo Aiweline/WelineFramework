@@ -26,6 +26,7 @@ use Weline\Server\Service\MasterProcess;
 use Weline\Server\Service\SharedSidecarInspector;
 use Weline\Server\Service\ServerInstanceManager;
 use Weline\Server\Service\WlsLogService;
+use Weline\Server\Log\LogConfig;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Strategy\ServerConfig;
 use Weline\Server\Strategy\ServerStrategyFactory;
@@ -90,6 +91,21 @@ class Start extends CommandAbstract
      * Worker 端口分配锁文件路径
      */
     private string $workerPortAllocationLockFile = '';
+
+    /**
+     * 与启动锁对应的实例名（shutdown 清理用）
+     */
+    private string $startLockInstanceName = '';
+
+    /**
+     * 已向独立 Master 或前台 Master 完成子进程交接；为 true 时不在 shutdown 中杀 WLS
+     */
+    private bool $wlsStartupProcessHandoffDone = false;
+
+    /**
+     * 已执行 startMasterInBackground / runMasterProcess 尝试拉起子进程；fatal 退出时需清理残留
+     */
+    private bool $wlsChildProcessesMayExist = false;
     
     /**
      * @inheritDoc
@@ -181,8 +197,12 @@ class Start extends CommandAbstract
             return;
         }
         
-        // 注册关闭时释放锁
+        // 注册关闭时释放锁；fatal / 未交接时按实例前缀清理可能残留的 WLS 子进程
+        $this->startLockInstanceName = $instanceName;
+        $this->wlsStartupProcessHandoffDone = false;
+        $this->wlsChildProcessesMayExist = false;
         \register_shutdown_function([$this, 'releaseStartLock']);
+        \register_shutdown_function([$this, 'shutdownCleanupOrphanWlsProcessesIfNeeded']);
         
         // --frontend / -frontend / --foreground / -foreground：前台运行（不后台）
         // 兼容：部分参数解析器可能不会把 -frontend 解析为 args['frontend']，
@@ -208,7 +228,8 @@ class Start extends CommandAbstract
             }
         }
         
-        // -log / --log：启用进程日志（覆盖 env 配置 system.processer.log）
+        // -log / --log：启用进程管理日志（system.processer.log）+ 运行时 verbose（开发态 Master/子进程控制台等）
+        // --frontend：前台启动时同步视为全量日志开关，并写入实例 enable_log 供 Worker 等子进程读取
         $enableLog = isset($args['log']);
         if (!$enableLog) {
             foreach ($args as $key => $val) {
@@ -218,10 +239,14 @@ class Start extends CommandAbstract
                 }
             }
         }
+        if ($frontend) {
+            $enableLog = true;
+        }
         if ($enableLog) {
             Processer::setLogEnabled(true);
         }
-        
+        LogConfig::bootstrapVerbose($enableLog);
+
         // 获取配置（命令行参数 > 已保存实例配置 > env配置 > 默认值）
         $config = $this->getServerConfig($instanceName, $args);
         
@@ -725,7 +750,11 @@ class Start extends CommandAbstract
         }
 
         if ($daemon) {
+            $this->wlsChildProcessesMayExist = true;
             $startupCompleted = $this->startMasterInBackground($instanceName, $sslEnabled, $listenHost, $port);
+            if ($startupCompleted) {
+                $this->wlsStartupProcessHandoffDone = true;
+            }
             // 后台模式：Master 已独立启动，释放启动锁
             $this->releaseStartLock();
             $this->finalizeBackgroundStartupOutput(
@@ -758,7 +787,8 @@ class Start extends CommandAbstract
         $config['host'] = $listenHost;
 
         // Master 负责启动所有进程（不再传递 workerPids，由 Master 自己启动）
-        $this->runMasterProcess($instanceName, $config, $workerScript, [], $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend);
+        $this->wlsChildProcessesMayExist = true;
+        $this->runMasterProcess($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend);
     }
 
     /**
@@ -858,16 +888,16 @@ class Start extends CommandAbstract
         if ($sslEnabled) {
             $httpRedirectPort = ($port === 443) ? 80 : 0;
         }
-        $workerPids = \array_values($data['worker_pids'] ?? []);
         // 读取前台模式标记
         $frontend = (bool)($data['frontend'] ?? false);
         
-        // 读取进程日志开关（-log 参数传递过来的标记）
-        $enableLog = (bool)($data['enable_log'] ?? false);
+        // 读取进程日志开关（-log / 前台启动 写入的 enable_log）
+        $enableLog = (bool)($data['enable_log'] ?? false) || $frontend;
         if ($enableLog) {
             Processer::setLogEnabled(true);
         }
-        
+        LogConfig::bootstrapVerbose($enableLog);
+
         // 读取运行模式（策略模式使用）
         $masterMode = (string)($data['master_mode'] ?? MasterProcess::MODE_LEGACY);
         $mainPort = (int)($data['main_port'] ?? $port);
@@ -885,10 +915,6 @@ class Start extends CommandAbstract
         )->setPrinter($this->printer)
             // 恢复运行态配置（由 Start.php 保存）
             ->init($instanceName, $config, $workerScript, (string)($data['ssl_cert'] ?? ''), (string)($data['ssl_key'] ?? ''), $sslEnabled, $httpRedirectPort, $frontend)
-            ->setWorkerPids($workerPids)
-            ->setDispatcherPid((int)($data['dispatcher_pid'] ?? 0))
-            ->setHttpRedirectPid((int)($data['http_redirect_pid'] ?? 0))
-            ->setResurrectionMode(true)
             ->run();
     }
     
@@ -1352,7 +1378,7 @@ class Start extends CommandAbstract
     /**
      * 运行 Master 进程（监控并自动重启 Worker；HTTPS 启用时可自动启动 HTTP 重定向进程）
      */
-    protected function runMasterProcess(string $instanceName, array $config, string $workerScript, array $workerPids, string $sslCert = '', string $sslKey = '', bool $sslEnabled = false, int $httpRedirectPort = 0, bool $frontend = false): void
+    protected function runMasterProcess(string $instanceName, array $config, string $workerScript, string $sslCert = '', string $sslKey = '', bool $sslEnabled = false, int $httpRedirectPort = 0, bool $frontend = false): void
     {
         $masterPid = \getmypid();
         
@@ -1389,13 +1415,16 @@ class Start extends CommandAbstract
                 MasterProcess::MODE_LEGACY,
                 (int) ($config['port'] ?? 0)
             )->setPrinter($this->printer)
-                ->setOnStartedCallback(fn() => $this->releaseStartLock())
+                ->setOnStartedCallback(function () {
+                    $this->wlsStartupProcessHandoffDone = true;
+                    $this->releaseStartLock();
+                })
                 ->init($instanceName, $config, $workerScript, $sslCert, $sslKey, $sslEnabled, $httpRedirectPort, $frontend)
-                ->setWorkerPids($workerPids)
                 ->run();
         } catch (\Throwable $e) {
             // 启动中途失败时，强制清理当前实例已拉起的子进程，避免半启动残留。
             $this->cleanupFailedStartupProcesses($instanceName, (int) ($config['worker_count'] ?? 0));
+            $this->wlsChildProcessesMayExist = false;
             $this->printer->error(__('服务器启动失败'));
             $this->printer->error($e->getMessage());
             $this->printer->note(__(''));
@@ -3639,7 +3668,7 @@ class Start extends CommandAbstract
             'frontend' => $frontend,
             // 启动参数固化：子进程拉起链路统一读取实例参数，避免依赖 env.php 导致前台策略丢失。
             'orchestrator_runtime_options' => $orchestratorRuntimeOptions,
-            // 进程日志开关（-log 参数或 env 配置 system.processer.log）
+            // 与 -log 对齐：进程管理日志 + WLS 全量调试（子进程读此字段）
             'enable_log' => $enableLog,
             // IPC 控制端口（由 Master 进程计算并更新）
             // 初始值设为 0，Master 启动时会根据 main_port 计算真实端口并覆盖此值
@@ -5206,10 +5235,35 @@ PHP;
     {
         // 构建 ServerConfig
         $instanceName = $args['instance'] ?? $args['name'] ?? 'default';
+        $frontend = !empty($args['frontend']) || !empty($args['foreground'])
+            || \in_array('--frontend', $args, true) || \in_array('-frontend', $args, true)
+            || \in_array('--foreground', $args, true) || \in_array('-foreground', $args, true);
+        if (!$frontend) {
+            foreach ($args as $key => $val) {
+                if (\is_int($key) && \in_array($val, ['--frontend', '-frontend', '--foreground', '-foreground'], true)) {
+                    $frontend = true;
+                    break;
+                }
+            }
+        }
+        $enableLog = isset($args['log']);
+        if (!$enableLog) {
+            foreach ($args as $key => $val) {
+                if (\is_int($key) && ($val === '--log' || $val === '-log')) {
+                    $enableLog = true;
+                    break;
+                }
+            }
+        }
+        if ($frontend) {
+            $enableLog = true;
+        }
+        if ($enableLog) {
+            Processer::setLogEnabled(true);
+        }
+        LogConfig::bootstrapVerbose($enableLog);
+
         $config = $this->getServerConfig($instanceName, $args);
-        
-        // 检查是否前台运行
-        $frontend = !empty($args['frontend']) || \in_array('--frontend', $args, true) || \in_array('-frontend', $args, true);
         
         // 获取 SSL 证书
         $sslCert = '';
@@ -5350,6 +5404,25 @@ PHP;
         return false;
     }
     
+    /**
+     * PHP 进程异常结束（fatal / 未捕获错误）时：若曾尝试拉起本实例 WLS 且未完成交接，则清理残留子进程。
+     */
+    public function shutdownCleanupOrphanWlsProcessesIfNeeded(): void
+    {
+        if ($this->wlsStartupProcessHandoffDone || !$this->wlsChildProcessesMayExist) {
+            return;
+        }
+        $instanceName = $this->startLockInstanceName;
+        if ($instanceName === '') {
+            return;
+        }
+        try {
+            $this->cleanupFailedStartupProcesses($instanceName, 16);
+        } catch (\Throwable) {
+            // shutdown 阶段尽力而为
+        }
+    }
+
     /**
      * 释放启动锁
      */

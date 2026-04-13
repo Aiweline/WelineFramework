@@ -61,6 +61,11 @@ class SseContext
      * @var callable|null
      */
     private static $writeCallback = null;
+
+    /**
+     * @var callable|null
+     */
+    private static $aliveCallback = null;
     
     /**
      * 设置当前连接
@@ -74,6 +79,7 @@ class SseContext
             self::$sseEnabled = false;
             self::$headersSent = false;
             self::$writeCallback = null;
+            self::$aliveCallback = null;
 
             return;
         }
@@ -107,6 +113,21 @@ class SseContext
     public static function getWriteCallback(): mixed
     {
         return self::$writeCallback;
+    }
+
+    public static function setAliveCallback(callable $callback): void
+    {
+        self::$aliveCallback = $callback;
+    }
+
+    public static function getAliveCallback(): mixed
+    {
+        return self::$aliveCallback;
+    }
+
+    public static function clearAliveCallback(): void
+    {
+        self::$aliveCallback = null;
     }
 
     /**
@@ -163,8 +184,7 @@ class SseContext
     {
         // 优先使用回调（WLS Fiber 安全路径 / FPM 兼容）
         if (self::$writeCallback !== null) {
-            (self::$writeCallback)($data);
-            return true;
+            return (self::$writeCallback)($data) !== false;
         }
 
         // WLS 模式（Fiber 并发）：禁止通过 self::$connection 直接写入。
@@ -212,6 +232,14 @@ class SseContext
      */
     public static function isConnectionAlive(): bool
     {
+        if (self::$aliveCallback !== null) {
+            try {
+                return (bool) (self::$aliveCallback)();
+            } catch (\Throwable) {
+                return false;
+            }
+        }
+
         if (self::$connection === null) {
             // 非 WLS 模式，检查 PHP 连接状态
             return \connection_status() === CONNECTION_NORMAL;
@@ -279,8 +307,7 @@ class SseContext
     public static function writeNonBlocking(string $data): bool
     {
         if (self::$writeCallback !== null) {
-            (self::$writeCallback)($data);
-            return true;
+            return (self::$writeCallback)($data) !== false;
         }
 
         // WLS Fiber 并发：与 write() 同理，禁止通过 self::$connection 直接写入，
@@ -354,6 +381,7 @@ class SseContext
         self::$sseEnabled = false;
         self::$headersSent = false;
         self::$writeCallback = null;
+        self::$aliveCallback = null;
     }
 
     /**
@@ -365,5 +393,6 @@ class SseContext
         self::$sseEnabled = false;
         self::$headersSent = false;
         self::$writeCallback = null;
+        self::$aliveCallback = null;
     }
 }

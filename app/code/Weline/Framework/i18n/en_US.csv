@@ -1,6 +1,7 @@
 ﻿source_id与parent_source不能相同！,source_id与parent_source不能相同！
 系统正在升级，请稍后再试。,"System is being upgraded, please try again later."
-请先登录,"Please login first"
+未登录或登录已过期,未登录或登录已过期
+璇峰厛鐧诲綍,璇峰厛鐧诲綍
 调试信息,调试信息
 调试位置,调试位置
 调用位置,调用位置
@@ -14,8 +15,10 @@
 无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。,无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。
 "模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器","模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器"
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec"
+绯荤粺閿欒锛歿1},绯荤粺閿欒锛歿1}
 系统SERVER缺少key：%{1},系统SERVER缺少key：%{1}
 系统错误：%{1},系统错误：%{1}
+绯荤粺SERVER缂哄皯key锛歿1},绯荤粺SERVER缂哄皯key锛歿1}
 "MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例","MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例"
 "MemcachedAdapter: 按 prefix 清理失败，fallback 到 flush(): %{1}","MemcachedAdapter: 按 prefix 清理失败，fallback 到 flush(): %{1}"
 模块缓存清理中...,模块缓存清理中...
@@ -883,7 +886,7 @@ HTTP响应时间:,HTTP响应时间:
 响应大小:,响应大小:
 传输速度:,传输速度:
 未提供参数：%{1},未提供参数：%{1}
-文件不存在！,文件不存在！
+鏂囦欢涓嶅瓨鍦紒,鏂囦欢涓嶅瓨鍦紒
 错误！,错误！
 异常警告！,异常警告！
 操作成功！,操作成功！
@@ -1680,6 +1683,8 @@ HTTP方法,HTTP方法
 "检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。","检测到 --grep 与 --case/--case-id 同时使用，已保留你显式传入的 --grep。"
 测试收集脚本执行失败，模块过滤可能不可用。,测试收集脚本执行失败，模块过滤可能不可用。
 "可用 E2E 模块列表：","可用 E2E 模块列表："
+"未检测到 Xdebug/PCOV，覆盖率模式自动切换到 phpdbg 驱动","未检测到 Xdebug/PCOV，覆盖率模式自动切换到 phpdbg 驱动"
+"未检测到可用覆盖率驱动（Xdebug/PCOV/phpdbg），PHPUnit 可能无法生成覆盖率报告","未检测到可用覆盖率驱动（Xdebug/PCOV/phpdbg），PHPUnit 可能无法生成覆盖率报告"
 "使用 Pest 测试框架运行测试...","使用 Pest 测试框架运行测试..."
 "提示：默认使用 PHPUnit，如需使用 Pest，请添加 --pest 参数","提示：默认使用 PHPUnit，如需使用 Pest，请添加 --pest 参数"
 所有测试通过！,所有测试通过！

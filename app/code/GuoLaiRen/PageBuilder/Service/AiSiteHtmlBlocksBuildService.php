@@ -57,6 +57,71 @@ class AiSiteHtmlBlocksBuildService
     }
 
     /**
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    public function buildSharedHeaderBlock(string $pageType, array $websiteProfile, array $scope = []): array
+    {
+        return $this->buildHeaderBlock($pageType, $websiteProfile, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $scope
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    public function buildSharedFooterBlock(string $pageType, array $websiteProfile, array $scope = []): array
+    {
+        return $this->buildFooterBlock($pageType, $websiteProfile, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $section
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    public function buildGeneratedSectionBlock(array $section): array
+    {
+        $componentCode = \trim((string)($section['code'] ?? ''));
+        $blockId = \str_replace(['content/', '/'], ['', '-'], $componentCode);
+        $blockId = $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4)));
+
+        return $this->buildGeneratedBlockRecord(
+            $blockId,
+            'ai_generated_section',
+            (string)($section['html'] ?? ''),
+            \array_replace(
+                ['region' => 'content', 'html_content' => (string)($section['html'] ?? '')],
+                \is_array($section['default_config'] ?? null) ? $section['default_config'] : [],
+                ['component_label' => (string)($section['name'] ?? $blockId)]
+            )
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $component
+     * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
+     */
+    public function buildGeneratedSharedBlock(string $region, string $pageType, array $component): array
+    {
+        $region = \trim($region);
+        $componentCode = \trim((string)($component['code'] ?? ''));
+        $blockId = \str_replace(['/', '_'], '-', $componentCode !== '' ? $componentCode : ($region . '-' . $pageType));
+        $blockId = $blockId !== '' ? $blockId : ($region . '-' . \str_replace('_', '-', $pageType));
+
+        return [
+            'block_id' => $blockId,
+            'type' => 'ai_generated_shared_' . ($region !== '' ? $region : 'component'),
+            'html' => (string)($component['html'] ?? ''),
+            'config' => \array_replace(
+                ['region' => $region, 'component_label' => (string)($component['name'] ?? $blockId)],
+                \is_array($component['default_config'] ?? null) ? $component['default_config'] : []
+            ),
+            'field_schema' => $this->buildFieldSchema('ai_generated_section'),
+        ];
+    }
+
+    /**
      * 当 AI 生成不可用时，回退到可编辑的静态占位块，确保工作台仍可打开。
      *
      * @param array<string, mixed> $websiteProfile
@@ -979,4 +1044,3 @@ class AiSiteHtmlBlocksBuildService
         return \htmlspecialchars(\trim((string)$value), \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8');
     }
 }
-

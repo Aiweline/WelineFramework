@@ -116,6 +116,10 @@ class WebsiteDomain extends Model
         parent::save_after();
         try {
             w_cache('website')->clear();
+            w_cache('website_detect')->clear();
+            w_cache('website_detect')->set('websites.url.parser_sites_version.v1', (string)\microtime(true), 86400);
+            \Weline\Websites\Observer\DetectWebsite::clearProcessCache();
+            \Weline\Framework\Http\Url::resetWebsiteParserSites();
         } catch (\Throwable $e) {
             // 忽略
         }

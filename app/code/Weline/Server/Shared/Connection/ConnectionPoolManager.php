@@ -24,6 +24,11 @@ class ConnectionPoolManager implements ConnectionPoolInterface
     private float $nextConnectAttemptAt = 0.0;
     private int $consecutiveConnectFailures = 0;
     private string $lastConnectFailureReason = '';
+    private string $consumerCode = '';
+    private string $consumerInstanceName = '';
+    private string $serviceRole = '';
+    private string $ownerType = 'instance';
+    private int $localConsumerRefs = 0;
 
     /**
      * 池槽必须为带 conn 的完整结构；Fiber 交错下对 $pool[$idx]['busy'] 等字段赋值可能在错误 idx 上生成缺 conn 的残缺项，须统一经此校验。
@@ -115,10 +120,23 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $merged['pool_health_ping_idle'] = (bool)(($a['pool_health_ping_idle'] ?? false) || ($incoming['pool_health_ping_idle'] ?? false));
         $merged['log_connect_fail'] = (bool)(($a['log_connect_fail'] ?? true) || ($incoming['log_connect_fail'] ?? false));
         $merged['log_pool_lifecycle'] = (bool)(($a['log_pool_lifecycle'] ?? true) && ($incoming['log_pool_lifecycle'] ?? true));
+        if (\trim((string) ($incoming['consumer_code'] ?? '')) !== '') {
+            $merged['consumer_code'] = \trim((string) $incoming['consumer_code']);
+        }
+        if (\trim((string) ($incoming['instance_name'] ?? '')) !== '') {
+            $merged['instance_name'] = \trim((string) $incoming['instance_name']);
+        }
+        if (\trim((string) ($incoming['service_role'] ?? '')) !== '') {
+            $merged['service_role'] = \trim((string) $incoming['service_role']);
+        }
+        if (\trim((string) ($incoming['owner_type'] ?? '')) !== '') {
+            $merged['owner_type'] = \trim((string) $incoming['owner_type']);
+        }
         if (isset($incoming['service_type']) && \trim((string)$incoming['service_type']) !== '') {
             $merged['service_type'] = (string)$incoming['service_type'];
         }
         $this->options = $merged;
+        $this->syncConsumerContextFromOptions();
         $this->ensureMinIdleConnections();
     }
 
@@ -180,6 +198,7 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         private readonly int $port,
         private array $options
     ) {
+        $this->syncConsumerContextFromOptions();
         // 默认 0：就绪探测等场景不得在建池时抢先建连；显式 min_idle / pool_min_idle 的 Worker/SessionClient 仍会预热。
         $this->ensureMinIdleConnections();
     }
@@ -445,6 +464,46 @@ class ConnectionPoolManager implements ConnectionPoolInterface
         $this->pool = [];
     }
 
+    public function registerLocalConsumer(
+        string $consumerCode,
+        string $instanceName = '',
+        string $serviceRole = '',
+        string $ownerType = 'instance'
+    ): void {
+        $consumerCode = \trim($consumerCode);
+        if ($consumerCode === '') {
+            return;
+        }
+
+        $this->consumerCode = $consumerCode;
+        $this->consumerInstanceName = \trim($instanceName) !== '' ? \trim($instanceName) : $consumerCode;
+        if (\trim($serviceRole) !== '') {
+            $this->serviceRole = \trim($serviceRole);
+        }
+        if (\trim($ownerType) !== '') {
+            $this->ownerType = \trim($ownerType);
+        }
+        $this->localConsumerRefs++;
+    }
+
+    public function unregisterLocalConsumer(string $consumerCode): void
+    {
+        $consumerCode = \trim($consumerCode);
+        if ($consumerCode === '' || $this->consumerCode === '' || $consumerCode !== $this->consumerCode) {
+            return;
+        }
+
+        if ($this->localConsumerRefs > 0) {
+            $this->localConsumerRefs--;
+        }
+
+        if ($this->localConsumerRefs > 0) {
+            return;
+        }
+
+        $this->shutdown();
+    }
+
     private function createConnection(): PooledConnection
     {
         $basePath = \defined('BP') ? BP . 'var/session/' : '/tmp/wls_session/';
@@ -474,6 +533,10 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             (bool)($this->options['log_connect_fail'] ?? true),
             $serviceType !== '' ? $serviceType : null,
             (bool)($this->options['log_pool_lifecycle'] ?? true),
+            $this->consumerCode,
+            $this->consumerInstanceName,
+            $this->serviceRole,
+            $this->ownerType,
         );
     }
 
@@ -497,6 +560,31 @@ class ConnectionPoolManager implements ConnectionPoolInterface
             $options['max_size'] = (int)$options['pool_size'];
         }
         return $options;
+    }
+
+    private function syncConsumerContextFromOptions(): void
+    {
+        $consumerCode = \trim((string) ($this->options['consumer_code'] ?? ''));
+        if ($consumerCode !== '') {
+            $this->consumerCode = $consumerCode;
+        }
+
+        $instanceName = \trim((string) ($this->options['instance_name'] ?? ''));
+        if ($instanceName !== '') {
+            $this->consumerInstanceName = $instanceName;
+        } elseif ($this->consumerCode !== '' && $this->consumerInstanceName === '') {
+            $this->consumerInstanceName = $this->consumerCode;
+        }
+
+        $serviceRole = \trim((string) ($this->options['service_role'] ?? ''));
+        if ($serviceRole !== '') {
+            $this->serviceRole = $serviceRole;
+        }
+
+        $ownerType = \trim((string) ($this->options['owner_type'] ?? ''));
+        if ($ownerType !== '') {
+            $this->ownerType = $ownerType;
+        }
     }
 
     private static function mergeFloatOptionPreferLower(mixed $current, mixed $incoming, float $fallback): float

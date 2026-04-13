@@ -18,14 +18,13 @@ use Weline\Framework\App\Env;
 
 class Hooker
 {
-    private HookReader $hookReader;
     private ?HookManager $hookManager = null;
 
     public function __construct(
         HookReader $hookReader
     )
     {
-        $this->hookReader = $hookReader;
+        unset($hookReader);
     }
 
     /**
@@ -78,7 +77,9 @@ class Hooker
             }
         }
         
-        $this->hookReader->setPath($name);
-        return $this->hookReader->getFileList();
+        /** @var HookReader $hookReader */
+        $hookReader = ObjectManager::make(HookReader::class);
+        $hookReader->setPath($name);
+        return $hookReader->getFileList();
     }
 }

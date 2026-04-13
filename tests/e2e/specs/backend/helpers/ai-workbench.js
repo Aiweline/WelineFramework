@@ -51,6 +51,100 @@ function normalizeApiUrlForPage(page, absoluteOrRelativeUrl) {
   return new URL(`${target.pathname}${target.search}${target.hash}`, base.toString()).toString();
 }
 
+/**
+ * Resolve Websites workspace public_id from URL first, then from state_json_url or scope textarea when the URL is unstable.
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string>}
+ */
+async function resolveWorkspacePublicId(page) {
+  const pageUrl = String(page.url() || '');
+  const publicMatch = pageUrl.match(/[?&]public_id=([^&]+)/);
+  if (publicMatch && publicMatch[1]) {
+    return decodeURIComponent(publicMatch[1]);
+  }
+
+  const fromStateJsonUrl = await page.evaluate(() => {
+    const links = Array.from(document.querySelectorAll('a[href]'));
+    for (const link of links) {
+      const href = String(link.getAttribute('href') || '').trim();
+      if (!href || href.indexOf('get-state-json') < 0) {
+        continue;
+      }
+      try {
+        const url = new URL(href, window.location.origin);
+        const publicId = String(url.searchParams.get('public_id') || '').trim();
+        if (publicId) {
+          return publicId;
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+
+    const scopeEl = document.querySelector('#site-builder-scope-full');
+    const raw = scopeEl && 'value' in scopeEl ? String(scopeEl.value || '').trim() : '';
+    if (!raw) {
+      return '';
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      return String(parsed.public_id || parsed.session_public_id || '').trim();
+    } catch (error) {
+      return '';
+    }
+  }).catch(() => '');
+
+  return String(fromStateJsonUrl || '').trim();
+}
+
+/**
+ * Merge Websites workspace scope through the same backend API the page uses, then reload the page.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} backendRoot
+ * @param {Record<string, any>} scopePatch
+ */
+async function mergeWebsitesScope(page, backendRoot, scopePatch) {
+  const publicId = await resolveWorkspacePublicId(page);
+  if (!publicId) {
+    throw new Error('mergeWebsitesScope: public_id not found in workspace URL or DOM');
+  }
+
+  const root = String(backendRoot || resolveSiteBuilderBackendRoot(page, backendRoot)).replace(/\/+$/, '');
+  const mergeUrl = normalizeApiUrlForPage(
+    page,
+    new URL('websites/backend/site-builder-agent/merge-scope', `${root}/`).toString()
+  );
+
+  const result = await page.evaluate(
+    async ({ url, pid, patch }) => {
+      const fd = new FormData();
+      fd.append('public_id', pid);
+      fd.append('scope_patch', JSON.stringify(patch || {}));
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        credentials: 'same-origin',
+        body: fd,
+      });
+      const text = await res.text();
+      try {
+        return JSON.parse(text);
+      } catch (error) {
+        return { success: false, message: text.slice(0, 400), raw_status: res.status };
+      }
+    },
+    { url: mergeUrl, pid: publicId, patch: scopePatch }
+  );
+
+  if (!result || !result.success) {
+    throw new Error((result && result.message) ? String(result.message) : `mergeWebsitesScope failed: ${JSON.stringify(result)}`);
+  }
+
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+  return result;
+}
+
 function buildWorkbenchUrl(backendRoot = getBackendRoot(), provider = 'pagebuilder', fakeMode = false) {
   const normalizedBackendRoot = String(backendRoot || getBackendRoot()).replace(/\/+$/, '');
   const base = new URL(`${normalizedBackendRoot}/`);
@@ -156,6 +250,20 @@ function parseSseResponseText(raw) {
   const blocks = normalized.split('\n\n').filter((b) => b.trim() !== '');
   /** @type {Array<{ event: string, data: any }>} */
   const events = [];
+  function tryParseNestedJson(value) {
+    if (typeof value !== 'string') {
+      return value;
+    }
+    const trimmed = value.trim();
+    if (!trimmed || !/^[\[{]/.test(trimmed)) {
+      return value;
+    }
+    try {
+      return JSON.parse(trimmed);
+    } catch (error) {
+      return value;
+    }
+  }
   for (const block of blocks) {
     const lines = block.split('\n');
     let eventName = 'message';
@@ -181,6 +289,7 @@ function parseSseResponseText(raw) {
     } catch (e) {
       // keep string
     }
+    parsed = tryParseNestedJson(parsed);
     events.push({ event: eventName, data: parsed });
   }
   let lastDone = null;
@@ -223,6 +332,61 @@ function parseSseResponseText(raw) {
     }
   }
   return { events, lastDone };
+}
+
+/**
+ * Browser-context SSE consumer fallback for direct/WLS responses that Playwright APIRequest cannot parse.
+ * @param {import('@playwright/test').Page} page
+ * @param {string} absoluteUrl
+ * @param {number} timeoutMs
+ */
+async function consumeSseStreamInPage(page, absoluteUrl, timeoutMs) {
+  return page.evaluate(async ({ url, timeout }) => {
+    const response = await fetch(url, {
+      credentials: 'same-origin',
+      headers: { Accept: 'text/event-stream' },
+    });
+
+    if (!response.ok || !response.body) {
+      return {
+        ok: false,
+        status: response.status,
+        text: await response.text().catch(() => ''),
+      };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let raw = '';
+    const deadline = Date.now() + timeout;
+
+    while (Date.now() < deadline) {
+      const chunk = await Promise.race([
+        reader.read(),
+        new Promise(resolve => setTimeout(() => resolve({ timeout: true }), 400)),
+      ]);
+
+      if (chunk && chunk.timeout) {
+        continue;
+      }
+      if (!chunk || chunk.done) {
+        break;
+      }
+      raw += decoder.decode(chunk.value, { stream: true });
+      if (raw.includes('\nevent: done') || raw.startsWith('event: done') || raw.includes('\n\n')) {
+        if (raw.includes('event: done')) {
+          break;
+        }
+      }
+    }
+
+    await reader.cancel().catch(() => {});
+    return {
+      ok: true,
+      status: response.status,
+      text: raw,
+    };
+  }, { url: absoluteUrl, timeout: timeoutMs });
 }
 
 /**
@@ -269,16 +433,44 @@ async function consumeSseStream(page, absoluteUrl, options = {}) {
       rawHead: raw.slice(0, 240),
     };
   } catch (e) {
-    return {
-      ok: false,
-      status: 0,
-      events: [],
-      lastDone: null,
-      contentType: '',
-      eventNames: [],
-      rawHead: '',
-      error: String(e && e.message ? e.message : e),
-    };
+    try {
+      const browserBundle = await consumeSseStreamInPage(page, absoluteUrl, timeoutMs);
+      const status = Number(browserBundle && browserBundle.status ? browserBundle.status : 0);
+      const raw = String((browserBundle && browserBundle.text) || '');
+      if (!browserBundle || !browserBundle.ok) {
+        return {
+          ok: false,
+          status,
+          events: [],
+          lastDone: null,
+          contentType: '',
+          eventNames: [],
+          rawHead: raw.slice(0, 240),
+          error: String(e && e.message ? e.message : e),
+        };
+      }
+      const { events, lastDone } = parseSseResponseText(raw);
+      return {
+        ok: true,
+        status,
+        events,
+        lastDone,
+        contentType: 'text/event-stream',
+        eventNames: events.map((evt) => evt.event),
+        rawHead: raw.slice(0, 240),
+      };
+    } catch (inner) {
+      return {
+        ok: false,
+        status: 0,
+        events: [],
+        lastDone: null,
+        contentType: '',
+        eventNames: [],
+        rawHead: '',
+        error: String(inner && inner.message ? inner.message : inner) + '\n' + String(e && e.message ? e.message : e),
+      };
+    }
   }
 }
 
@@ -303,7 +495,7 @@ async function postSetStageFromWorkspace(page, backendRoot, stage) {
     throw new Error('postSetStageFromWorkspace: public_id not found in workspace URL');
   }
   const publicId = decodeURIComponent(publicMatch[1]);
-  const root = String(resolveSiteBuilderBackendRoot(page, backendRoot)).replace(/\/+$/, '');
+  const root = String(backendRoot || resolveSiteBuilderBackendRoot(page, backendRoot)).replace(/\/+$/, '');
   const fallbackUrl = new URL('websites/backend/site-builder-agent/set-stage', `${root}/`).toString();
   const fromDom = await page.locator('#site-builder-api-set-stage').inputValue().catch(() => '');
   const postUrl = normalizeApiUrlForPage(page, String(fromDom || '').trim() || fallbackUrl);
@@ -337,13 +529,11 @@ async function postSetStageFromWorkspace(page, backendRoot, stage) {
 async function triggerFakeDomainPurchase(page, backendRoot, options = {}) {
   const timeoutMs = options.timeoutMs ?? 120000;
   const allowReloginRetry = options.allowReloginRetry !== false;
-  const pageUrl = page.url();
-  const publicMatch = String(pageUrl).match(/[?&]public_id=([^&]+)/);
-  if (!publicMatch) {
+  const publicId = await resolveWorkspacePublicId(page);
+  if (!publicId) {
     throw new Error('triggerFakeDomainPurchase: public_id not found in workspace URL');
   }
-  const publicId = decodeURIComponent(publicMatch[1]);
-  const root = String(resolveSiteBuilderBackendRoot(page, backendRoot)).replace(/\/+$/, '');
+  const root = String(backendRoot || resolveSiteBuilderBackendRoot(page, backendRoot)).replace(/\/+$/, '');
   const fallbackPost = new URL(
     'websites/backend/site-builder-agent/start-domain-purchase',
     `${root}/`
@@ -480,9 +670,11 @@ module.exports = {
   buildWorkbenchUrl,
   buildTriggerSseUrl,
   createWorkspace,
+  mergeWebsitesScope,
   consumeSseStream,
   postRecommendDomain,
   postSetStageFromWorkspace,
+  resolveWorkspacePublicId,
   resolveSiteBuilderBackendRoot,
   triggerFakeDomainPurchase,
   readDomainPurchaseState,
