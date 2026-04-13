@@ -158,6 +158,24 @@ final class SseWriterTest extends TestCase
         $this->assertFalse($sse->isAlive());
     }
 
+    /**
+     * @runInSeparateProcess
+     */
+    public function testIsAliveReturnsFalseInWlsWhenWriteCallbackIsMissing(): void
+    {
+        if (!\defined('WLS_MODE')) {
+            \define('WLS_MODE', true);
+        }
+
+        $stream = $this->createStream();
+        SseContext::setConnection($stream);
+        SseContext::setAliveCallback(static fn (): bool => true);
+
+        $sse = new SseWriter();
+
+        $this->assertFalse($sse->isAlive());
+    }
+
     public function testWriteCallbackMayReportDisconnectedClient(): void
     {
         $stream = $this->createStream();

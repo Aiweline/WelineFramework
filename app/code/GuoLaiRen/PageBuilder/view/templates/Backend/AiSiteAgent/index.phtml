@@ -92,11 +92,20 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
     </div>
     <div class="col-lg-6">
         <div class="card">
-            <div class="card-header">
+            <div class="card-header d-flex align-items-center justify-content-between gap-2">
                 <h5 class="card-title mb-0">
                     <i class="mdi mdi-history me-1"></i>
                     <lang>最近会话</lang>
                 </h5>
+                <div class="d-flex align-items-center gap-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="pb-ai-session-select-all">
+                        <lang>全选</lang>
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="pb-ai-session-batch-delete" disabled>
+                        <i class="mdi mdi-delete-sweep-outline me-1"></i>
+                        <lang>批量删除</lang>
+                    </button>
+                </div>
             </div>
             <div class="card-body p-0">
                 <?php if ($recent_sessions === []) { ?>
@@ -106,6 +115,9 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                         <table class="table table-hover table-striped mb-0">
                             <thead>
                             <tr>
+                                <th style="width:44px;">
+                                    <input type="checkbox" id="pb-ai-session-check-all" class="form-check-input" aria-label="select all sessions">
+                                </th>
                                 <th><lang>令牌</lang></th>
                                 <th><lang>阶段</lang></th>
                                 <th><lang>更新</lang></th>
@@ -118,6 +130,9 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
                                 $ws = $this->getBackendUrl('*/backend/ai-site-agent/workspace', ['public_id' => $pid]);
                                 ?>
                                 <tr>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input pb-ai-session-check" value="<?= htmlspecialchars($pid, ENT_QUOTES, 'UTF-8') ?>" aria-label="select session">
+                                    </td>
                                     <td class="font-monospace small"><?= htmlspecialchars(\substr($pid, 0, 12) . '…', ENT_QUOTES, 'UTF-8') ?></td>
                                     <td><code><?= htmlspecialchars((string) ($row['stage'] ?? ''), ENT_QUOTES, 'UTF-8') ?></code></td>
                                     <td class="small text-muted"><?= htmlspecialchars((string) ($row['update_time'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
@@ -151,7 +166,10 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
 (function () {
     var createBtn = document.getElementById('pb-ai-site-create');
     var msgBox = document.getElementById('pb-ai-site-msg');
-    if (!createBtn) return;
+    var selectAllBtn = document.getElementById('pb-ai-session-select-all');
+    var checkAllEl = document.getElementById('pb-ai-session-check-all');
+    var batchDeleteBtn = document.getElementById('pb-ai-session-batch-delete');
+
     function showErr(msg) {
         if (window.BackendToast && typeof window.BackendToast.error === 'function') {
             window.BackendToast.error(msg);
@@ -160,26 +178,136 @@ $workbenchHomeUrl = (string) ($this->getData('workbench_home_url') ?? '');
             msgBox.classList.remove('d-none');
         }
     }
-    createBtn.addEventListener('click', function () {
-        if (msgBox) { msgBox.classList.add('d-none'); msgBox.textContent = ''; }
-        createBtn.disabled = true;
-        fetch(<?= json_encode($createUrl, JSON_THROW_ON_ERROR) ?>, {
+
+    function showSuccess(msg) {
+        if (window.BackendToast && typeof window.BackendToast.success === 'function') {
+            window.BackendToast.success(msg);
+        }
+    }
+
+    function getSessionChecks() {
+        return Array.prototype.slice.call(document.querySelectorAll('.pb-ai-session-check'));
+    }
+
+    function getSelectedSessionIds() {
+        return getSessionChecks().filter(function (item) { return !!item.checked; }).map(function (item) { return String(item.value || ''); });
+    }
+
+    function syncBatchButtons() {
+        if (!batchDeleteBtn) {
+            return;
+        }
+        var checks = getSessionChecks();
+        var selected = checks.filter(function (item) { return !!item.checked; }).length;
+        batchDeleteBtn.disabled = selected === 0;
+        if (checkAllEl) {
+            checkAllEl.checked = checks.length > 0 && selected === checks.length;
+            checkAllEl.indeterminate = selected > 0 && selected < checks.length;
+        }
+    }
+
+    function deleteSessionByPublicId(publicId) {
+        return fetch(<?= json_encode($deleteSessionUrl, JSON_THROW_ON_ERROR) ?>, {
             method: 'POST',
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: 'public_id=' + encodeURIComponent(publicId),
             credentials: 'same-origin'
-        }).then(function (r) { return r.json(); }).then(function (data) {
-            if (data && data.success && data.workspace_url) {
-                window.location.href = data.workspace_url;
+        }).then(function (response) { return response.json(); });
+    }
+
+    if (createBtn) {
+        createBtn.addEventListener('click', function () {
+            if (msgBox) { msgBox.classList.add('d-none'); msgBox.textContent = ''; }
+            createBtn.disabled = true;
+            fetch(<?= json_encode($createUrl, JSON_THROW_ON_ERROR) ?>, {
+                method: 'POST',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            }).then(function (r) { return r.json(); }).then(function (data) {
+                if (data && data.success && data.workspace_url) {
+                    window.location.href = data.workspace_url;
+                    return;
+                }
+                var msg = (data && data.message) ? data.message : <?= json_encode(__('创建会话失败，请重试'), JSON_THROW_ON_ERROR) ?>;
+                showErr(msg);
+            }).catch(function () {
+                showErr(<?= json_encode(__('网络错误，请重试'), JSON_THROW_ON_ERROR) ?>);
+            }).finally(function () {
+                createBtn.disabled = false;
+            });
+        });
+    }
+
+    if (checkAllEl) {
+        checkAllEl.addEventListener('change', function () {
+            var checked = !!checkAllEl.checked;
+            getSessionChecks().forEach(function (item) { item.checked = checked; });
+            syncBatchButtons();
+        });
+    }
+
+    if (selectAllBtn) {
+        selectAllBtn.addEventListener('click', function () {
+            var checks = getSessionChecks();
+            if (checks.length === 0) {
                 return;
             }
-            var msg = (data && data.message) ? data.message : <?= json_encode(__('创建会话失败，请重试'), JSON_THROW_ON_ERROR) ?>;
-            showErr(msg);
-        }).catch(function () {
-            showErr(<?= json_encode(__('网络错误，请重试'), JSON_THROW_ON_ERROR) ?>);
-        }).finally(function () {
-            createBtn.disabled = false;
+            var selected = checks.filter(function (item) { return !!item.checked; }).length;
+            var shouldSelectAll = selected !== checks.length;
+            checks.forEach(function (item) { item.checked = shouldSelectAll; });
+            syncBatchButtons();
         });
+    }
+
+    document.addEventListener('change', function (event) {
+        var target = event.target;
+        if (!(target instanceof HTMLInputElement)) {
+            return;
+        }
+        if (!target.classList.contains('pb-ai-session-check')) {
+            return;
+        }
+        syncBatchButtons();
     });
+
+    if (batchDeleteBtn) {
+        batchDeleteBtn.addEventListener('click', function () {
+            var selectedIds = getSelectedSessionIds();
+            if (selectedIds.length === 0) {
+                return;
+            }
+            BackendConfirm.show(<?= json_encode(__('确定要批量删除已选会话吗？删除后不可恢复。'), JSON_THROW_ON_ERROR) ?>).then(function (confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+                batchDeleteBtn.disabled = true;
+                Promise.all(selectedIds.map(function (publicId) {
+                    return deleteSessionByPublicId(publicId).catch(function () {
+                        return {success: false};
+                    });
+                })).then(function (results) {
+                    var successCount = results.filter(function (item) { return item && item.success; }).length;
+                    var failCount = selectedIds.length - successCount;
+                    if (successCount > 0) {
+                        showSuccess(<?= json_encode(__('批量删除已完成。'), JSON_THROW_ON_ERROR) ?> + ' ' + successCount);
+                    }
+                    if (failCount > 0) {
+                        showErr(<?= json_encode(__('部分会话删除失败，请重试。'), JSON_THROW_ON_ERROR) ?> + ' ' + failCount);
+                    }
+                    window.location.reload();
+                }).catch(function () {
+                    showErr(<?= json_encode(__('批量删除失败，请重试'), JSON_THROW_ON_ERROR) ?>);
+                }).finally(function () {
+                    batchDeleteBtn.disabled = false;
+                });
+            });
+        });
+    }
+
+    syncBatchButtons();
 })();
 </script>
 <js:part name="w-delete"/>
