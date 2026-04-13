@@ -29,6 +29,7 @@ use Weline\Ai\Agent\AgentResult;
 use Weline\Ai\Helper\ErrorMessageHelper;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Ai\Exception\ModelSelectionException;
+use Weline\Ai\Exception\StreamCancelledException;
 use Weline\Framework\App\Exception;
 use Weline\Framework\App\Env;
 use Weline\Framework\Runtime\RequestContext;
@@ -146,6 +147,31 @@ class AiService
             AiModel::schema_fields_PROVIDER_CONFIG,
             json_encode($mergedProviderConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
         );
+    }
+
+    private function newAiModelQuery(): AiModel
+    {
+        /** @var AiModel $model */
+        $model = ObjectManager::make(AiModel::class);
+        return $model->clearData()->reset();
+    }
+
+    private function createDetachedModel(AiModel $model): AiModel
+    {
+        /** @var AiModel $runtimeModel */
+        $runtimeModel = ObjectManager::make(AiModel::class);
+        $runtimeModel->setData($model->getData());
+        return $runtimeModel;
+    }
+
+    private function newProviderAccount(array $accountData = []): Account
+    {
+        /** @var Account $account */
+        $account = ObjectManager::make(Account::class);
+        if (!empty($accountData)) {
+            $account->setData($accountData);
+        }
+        return $account;
     }
 
     /**
@@ -417,7 +443,7 @@ class AiService
         // 1. 如果指定了模型代码，优先使用
         if ($modelCode) {
             // 优先取已激活模型
-            $model = $this->aiModel->reset()
+            $model = $this->newAiModelQuery()
                 ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                 ->find()
@@ -425,7 +451,7 @@ class AiService
 
             if (!$model->getId()) {
                 // 若未激活，则放宽激活限制，用于连接测试等场景
-                $model = $this->aiModel->reset()
+                $model = $this->newAiModelQuery()
                     ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->find()
                     ->fetch();
@@ -437,7 +463,7 @@ class AiService
             if ($scenarioCode) {
                 $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
                 if ($adapterDefaultModelCode) {
-                    $model = $this->aiModel->reset()
+                    $model = $this->newAiModelQuery()
                         ->where(AiModel::schema_fields_MODEL_CODE, $adapterDefaultModelCode)
                         ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                         ->find()
@@ -460,7 +486,7 @@ class AiService
 
         // 5. 如果找不到默认模型，使用任意一个已激活的默认标记模型
         if (!$model || !$model->getId()) {
-            $model = $this->aiModel->reset()
+            $model = $this->newAiModelQuery()
                 ->where(AiModel::schema_fields_IS_ACTIVE, 1)
                 ->where(AiModel::schema_fields_IS_DEFAULT, 1)
                 ->find()
@@ -469,6 +495,7 @@ class AiService
 
         // 6. 如果找到模型，用 config 覆盖 provider_config（读取时覆盖，不保存到数据库）
         if ($model && $model->getId()) {
+            $model = $this->createDetachedModel($model);
             $this->mergeConfigToProviderConfig($model);
             return $model;
         }
@@ -518,7 +545,7 @@ class AiService
         
         // 检查指定模型
         if ($modelCode) {
-            $model = $this->aiModel->reset()
+            $model = $this->newAiModelQuery()
                 ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
@@ -534,7 +561,7 @@ class AiService
         if ($scenarioCode) {
             $adapterDefaultModelCode = $this->adapterScanner->getDefaultModelCodeForAdapter($scenarioCode);
             if ($adapterDefaultModelCode) {
-                $model = $this->aiModel->reset()
+                $model = $this->newAiModelQuery()
                     ->where(AiModel::schema_fields_MODEL_CODE, $adapterDefaultModelCode)
                     ->find()
                     ->fetch();
@@ -553,7 +580,7 @@ class AiService
                 $reasons[] = __('场景 "%{1}" 未配置默认模型（可在「场景适配器」中为该适配器设置默认模型，或在「默认模型配置」中配置）', [$scenarioCode]);
             } elseif ($defaultConfig) {
                 $modelCode = $defaultConfig->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
-                $model = $this->aiModel->reset()
+                $model = $this->newAiModelQuery()
                     ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                     ->find()
                     ->fetch();
@@ -571,7 +598,7 @@ class AiService
             $reasons[] = __('未配置全局默认模型');
         } else {
             $modelCode = $globalDefault->getData(\Weline\Ai\Model\AiDefaultModel::schema_fields_MODEL_CODE);
-            $model = $this->aiModel->reset()
+            $model = $this->newAiModelQuery()
                 ->where(AiModel::schema_fields_MODEL_CODE, $modelCode)
                 ->find()
                 ->fetch();
@@ -583,7 +610,7 @@ class AiService
         }
         
         // 检查是否有已激活的默认标记模型
-        $activeDefaultCount = $this->aiModel->reset()
+        $activeDefaultCount = $this->newAiModelQuery()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->where(AiModel::schema_fields_IS_DEFAULT, 1)
             ->count();
@@ -592,7 +619,7 @@ class AiService
         }
         
         // 检查是否有任何已激活的模型
-        $activeModelCount = $this->aiModel->reset()
+        $activeModelCount = $this->newAiModelQuery()
             ->where(AiModel::schema_fields_IS_ACTIVE, 1)
             ->count();
         if ($activeModelCount == 0) {
@@ -701,6 +728,7 @@ class AiService
     {
         $startTime = microtime(true);
         $account = null;
+        $requestModel = $model;
         $usage = [];
         try {
             // 1. 获取供应商代码
@@ -718,6 +746,7 @@ class AiService
             if (!empty($resolvedConfig)) {
                 $this->applyResolvedConfigToModel($model, $resolvedConfig);
             }
+            $baseModel = $this->createDetachedModel($model);
             if (empty($allAccounts)) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
@@ -757,10 +786,12 @@ class AiService
             foreach ($candidateAccounts as $accData) {
                 // 将数组账户加载为模型实例以便复用现有注入逻辑
                 /** @var Account $accModel */
-                $accModel = ObjectManager::getInstance(Account::class);
-                $accModel->setData($accData);
+                $accModel = $this->newProviderAccount($accData);
+                $requestModel = $this->createDetachedModel($baseModel);
+                $model = $requestModel;
 
                 // 注入账户配置并尝试请求
+                $this->injectAccountConfig($model, $accModel);
                 $this->injectAccountConfig($model, $accModel);
                 $provider = $this->providerFactory->getProvider($model);
 
@@ -842,6 +873,7 @@ class AiService
     {
         $startTime = microtime(true);
         $account = null;
+        $requestModel = $model;
         $usage = [];
 
         try {
@@ -858,6 +890,7 @@ class AiService
             if (!empty($resolvedConfig)) {
                 $this->applyResolvedConfigToModel($model, $resolvedConfig);
             }
+            $baseModel = $this->createDetachedModel($model);
             if (empty($allAccounts)) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
@@ -892,9 +925,9 @@ class AiService
             $lastError = null;
 
             foreach ($candidateAccounts as $accData) {
-                /** @var Account $accModel */
-                $accModel = ObjectManager::getInstance(Account::class);
-                $accModel->setData($accData);
+                $accModel = $this->newProviderAccount($accData);
+                $requestModel = $this->createDetachedModel($baseModel);
+                $model = $requestModel;
 
                 $this->injectAccountConfig($model, $accModel);
                 $provider = $this->providerFactory->getProvider($model);
@@ -1002,6 +1035,7 @@ class AiService
 
         $startTime = microtime(true);
         $account = null;
+        $requestModel = $model;
         $usage = [];
 
         try {
@@ -1014,6 +1048,11 @@ class AiService
             }
 
             $allAccounts = $this->accountService->getProviderAccounts($providerCode);
+            $resolvedConfig = \is_array($params['resolved_config'] ?? null) ? $params['resolved_config'] : [];
+            if (!empty($resolvedConfig)) {
+                $this->applyResolvedConfigToModel($model, $resolvedConfig);
+            }
+            $baseModel = $this->createDetachedModel($model);
             if (empty($allAccounts)) {
                 throw new Exception(ErrorMessageHelper::getMissingAccountMessage($providerCode));
             }
@@ -1058,10 +1097,10 @@ class AiService
 
             $lastError = null;
             foreach ($candidateAccounts as $accData) {
-                /** @var Account $accModel */
-                $accModel = ObjectManager::getInstance(Account::class);
-                $accModel->setData($accData);
+                $accModel = $this->newProviderAccount($accData);
                 $account = $accModel;
+                $requestModel = $this->createDetachedModel($baseModel);
+                $model = $requestModel;
 
                 $this->injectAccountConfig($model, $accModel);
                 $provider = $this->providerFactory->getProvider($model);
@@ -1288,7 +1327,7 @@ class AiService
 
         // 验证模型代码
         if (isset($params['model_code']) && !empty($params['model_code'])) {
-            $model = $this->aiModel->reset()
+            $model = $this->newAiModelQuery()
                 ->where(AiModel::schema_fields_MODEL_CODE, $params['model_code'])
                 ->where(AiModel::schema_fields_STATUS, 'active')
                 ->find()
@@ -1325,7 +1364,7 @@ class AiService
     public function getServiceStats(): array
     {
         $modelStats = [];
-        $models = $this->aiModel->reset()
+        $models = $this->newAiModelQuery()
             ->where(AiModel::schema_fields_STATUS, 'active')
             ->select()
             ->fetch();
@@ -1440,7 +1479,7 @@ class AiService
      * @param string $prompt 用户提示词
      * @param string|null $modelCode 指定模型代码（null 则使用场景默认模型）
      * @param array $params 额外参数
-     * @param callable|null $streamCallback SSE 事件回调
+     * @param callable|null $streamCallback SSE 事件回调，返回 false 时应中止下游流式调用
      * @return AgentResult
      * @throws ModelSelectionException 未配置可用模型（场景/全局默认均无）
      * @throws Exception
@@ -1528,12 +1567,23 @@ class AiService
                     $line = mb_substr($line, 0, 2000) . '...';
                 }
                 Env::log('ai_activity.log', $line, 'INFO', true, true, 0);
-                $streamCallback($eventType, $data);
+                $result = $streamCallback($eventType, $data);
+                if ($result === false) {
+                    throw new StreamCancelledException('AI stream cancelled by upstream');
+                }
+                return $result;
             };
         }
 
         // 6. 委托给智能体执行（Agent 自行管理 Tool 调用循环）
-        $result = $agent->execute($prompt, $model, $params, $wrappedCallback);
+        try {
+            $result = $agent->execute($prompt, $model, $params, $wrappedCallback);
+        } catch (StreamCancelledException) {
+            return AgentResult::failure(
+                __('上游已取消 AI 流式任务'),
+                $agentCode
+            );
+        }
         $result->agentCode = $agentCode;
         $result->modelCode = $model->getModelCode();
 

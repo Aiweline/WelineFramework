@@ -2055,103 +2055,6 @@ class ServiceOrchestrator
             );
         }
 
-        if ($this->shouldUseCooperativeSequentialProvidersStartupBatch(
-            \count($prepared),
-            \array_values(\array_unique(\array_map(
-                static fn (array $item): string => (string) ($item['role'] ?? ''),
-                $prepared
-            )))
-        )) {
-            WlsLogger::info_(
-                '[Orchestrator] Windows phase-one startup falls back to cooperative sequential launch to keep IPC responsive'
-            );
-
-            foreach ($prepared as $key => $item) {
-                /** @var ServiceInstance $instance */
-                $instance = $item['instance'];
-                /** @var ServiceProviderInterface $provider */
-                $provider = $item['provider'];
-                /** @var ServiceCommand $command */
-                $command = $item['command_obj'];
-                $role = (string) $item['role'];
-                $instanceId = (int) $item['instance_id'];
-
-                $spawnStartedAt = \microtime(true);
-                $pid = $this->spawnProcess($command, $instance);
-                $spawnFinishedAt = \microtime(true);
-                if ($this->shouldAbortStartupTransition()) {
-                    return $result;
-                }
-
-                if ($pid <= 0) {
-                    WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（非阻塞路径），等待 IPC register 确认");
-                }
-
-                $this->markSpawnedInstance(
-                    $instance,
-                    $spawnStartedAt,
-                    $spawnFinishedAt,
-                    $pid,
-                    (string) $instance->getMeta('spawn_transport', 'spawn_process')
-                );
-                $this->registry->addInstance($instance);
-                $provider->onStarted($instance);
-                WlsLogger::info_("[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')');
-                $result[$role][] = $instance;
-
-                $this->drainControlPlaneAfterStartupStep();
-                if ($this->shouldAbortStartupTransition()) {
-                    return $result;
-                }
-            }
-
-            return $result;
-        }
-
-        if ($this->shouldUseWindowsDetachedFastStartupBatch(\count($prepared))) {
-            WlsLogger::info_(
-                '[Orchestrator] Windows startup uses detached fast-launch path for phase-one providers'
-            );
-
-            foreach ($prepared as $item) {
-                /** @var ServiceInstance $instance */
-                $instance = $item['instance'];
-                /** @var ServiceProviderInterface $provider */
-                $provider = $item['provider'];
-                /** @var ServiceCommand $command */
-                $command = $item['command_obj'];
-                $role = (string) $item['role'];
-                $instanceId = (int) $item['instance_id'];
-
-                $spawnStartedAt = \microtime(true);
-                $pid = $this->spawnProcess($command, $instance);
-                $spawnFinishedAt = \microtime(true);
-                if ($this->shouldAbortStartupTransition()) {
-                    return $result;
-                }
-
-                if ($pid <= 0) {
-                    WlsLogger::warning_("[Orchestrator] 启动 {$role}#{$instanceId} 未返回 PID（非阻塞路径），等待 IPC register 确认");
-                }
-
-                $this->markSpawnedInstance(
-                    $instance,
-                    $spawnStartedAt,
-                    $spawnFinishedAt,
-                    $pid,
-                    (string) $instance->getMeta('spawn_transport', 'spawn_process')
-                );
-                $this->registry->addInstance($instance);
-                $provider->onStarted($instance);
-                WlsLogger::info_("[Orchestrator] 已启动 {$role}#{$instanceId} (pid={$pid}" . ($instance->port !== null ? ", port={$instance->port}" : '') . ')');
-                $result[$role][] = $instance;
-            }
-
-            $this->controlServer?->poll(0, 200000);
-
-            return $result;
-        }
-
         // Register placeholders before batchCreate so early IPC register/ready
         // messages can still resolve to their intended phase-one instances.
         foreach ($prepared as $item) {
@@ -2210,16 +2113,6 @@ class ServiceOrchestrator
     /**
      * @param string[] $plannedRoles
      */
-    private function shouldUseCooperativeSequentialProvidersStartupBatch(int $plannedCount, array $plannedRoles = []): bool
-    {
-        unset($plannedCount, $plannedRoles);
-
-        // Startup now always prefers the concurrent launch path. Keeping a
-        // Windows-only sequential fallback here was the source of the WLS
-        // regression the user reported.
-        return false;
-    }
-
     /**
      * Dispatcher / maintenance / redirect are the small phase-one bootstrap
      * set we intentionally keep concurrent so the entry services come up together.
@@ -2843,35 +2736,6 @@ class ServiceOrchestrator
             return [$single];
         }
 
-        if ($this->shouldUseCooperativeSequentialStartupBatch($instanceIds)) {
-            $forceSingleSpawnPath = (bool) ($this->context?->getConfig(
-                'wls.orchestrator.windows_use_single_spawn_path',
-                false
-            ) ?? false);
-            if ($forceSingleSpawnPath && (\defined('IS_WIN') && IS_WIN) && !$this->useCooperativeSequentialStartup) {
-                WlsLogger::warning_(
-                    '[Orchestrator] Windows 启动阶段启用单槽快速拉起路径（显式配置），绕过 batchCreate 慢通道: '
-                    . $provider->getRole() . ' [' . \implode(',', $instanceIds) . ']'
-                );
-            } else {
-                WlsLogger::info_(
-                    '[Orchestrator] Windows 启动阶段采用协作式顺序拉起，避免批量创建长时间阻塞控制面: '
-                    . $provider->getRole() . ' [' . \implode(',', $instanceIds) . ']'
-                );
-            }
-
-            $results = [];
-            foreach ($instanceIds as $instanceId) {
-                $results[] = $this->startInstance($provider, $instanceId, $context);
-                $this->drainControlPlaneAfterStartupStep();
-                if ($this->shouldAbortStartupTransition()) {
-                    break;
-                }
-            }
-
-            return $results;
-        }
-
         $preparedInstances = [];
         $commands = [];
         $prepareStartedAt = \microtime(true);
@@ -3006,26 +2870,6 @@ class ServiceOrchestrator
      *
      * @param int[] $instanceIds
      */
-    private function shouldUseCooperativeSequentialStartupBatch(array $instanceIds): bool
-    {
-        unset($instanceIds);
-
-        // Startup now always prefers the concurrent launch path. The old
-        // cooperative sequential fallback made multi-worker bootstrap appear
-        // one-by-one on Windows.
-        return false;
-    }
-
-    private function shouldUseWindowsDetachedFastStartupBatch(int $plannedCount): bool
-    {
-        unset($plannedCount);
-
-        // Phase-one should now follow the normal batchCreate path on Windows.
-        // The old "detached fast-launch" branch still spawned each provider in a
-        // foreach loop, which preserved one-by-one startup timing in practice.
-        return false;
-    }
-
     /**
      * 启动窗口内尽量把已到达的 register/ready/ack 等控制消息及时消化掉，
      * 避免“只 poll 一帧”后马上再次进入长时间 spawnProcess，导致 READY 饿死。
@@ -3319,6 +3163,15 @@ class ServiceOrchestrator
         }
 
         if (\defined('IS_WIN') && IS_WIN) {
+            if ($this->childServicesBootstrapInProgress
+                && \in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
+            ) {
+                // Bootstrap priority: workers must join the same batch launch as
+                // the rest of the services instead of falling behind and being
+                // resurrected later by Master self-heal.
+                return false;
+            }
+
             // Windows 下前台子进程拉起成本较高，默认强制走后台 detached。
             // server:start --frontend 会通过 buildOrchestratorRuntimeOptions 写入 allow_windows_frontend_child_process
             // 与 frontend_worker_windows；批量脚本已不等待 PID/重定向输出，因此启动批次也可以显示子窗口。

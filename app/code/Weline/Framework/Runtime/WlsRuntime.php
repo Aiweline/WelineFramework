@@ -1152,15 +1152,12 @@ class WlsRuntime implements RuntimeInterface
      * 当前 Fiber/请求是否已经进入 SSE 流式发送。
      *
      * 判定必须是请求级：
-     * 1) 当前请求本身是 SSE 协议请求（Accept: text/event-stream）
-     * 2) 当前请求上下文中，SSE Writer 已调用 start() 并打上请求级标记
+     * 1) 当前请求上下文中，SSE Writer 已调用 start() 并打上请求级标记
+     * 2) 不再强依赖 Accept: text/event-stream，因为 fetch + POST 的流式读取
+     *    场景也会走 SSE Writer，但请求头未必声明 EventSource 风格的 Accept
      */
     private function isSseStreamHandledInCurrentRequest(?Request $request = null): bool
     {
-        if (!$this->isSseRequest($request)) {
-            return false;
-        }
-
         return (bool)RequestContext::get(RequestContext::SSE_WRITER_KEY, false);
     }
 

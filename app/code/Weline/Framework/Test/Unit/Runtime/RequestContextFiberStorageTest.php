@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Runtime;
 
@@ -12,12 +13,20 @@ final class RequestContextFiberStorageTest extends TestCase
     protected function setUp(): void
     {
         Runtime::setMode('wls');
+        unset($_SERVER['WELINE_CONNECTION_ID']);
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
         RequestContext::cleanup();
     }
 
     protected function tearDown(): void
     {
         RequestContext::cleanup();
+        unset($_SERVER['WELINE_CONNECTION_ID']);
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
         Runtime::resetModeCache();
     }
 
@@ -101,6 +110,47 @@ final class RequestContextFiberStorageTest extends TestCase
         self::assertNull($fiberA->resume());
         self::assertTrue($fiberA->isTerminated());
         self::assertSame($requestIdA, $fiberA->getReturn());
+    }
+
+    public function testWlsConnectionIdIsUsedAsScopeButRequestIdStaysPerRequest(): void
+    {
+        $fiber = new \Fiber(static function (): array {
+            Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+            RequestContext::setConnectionId('16895');
+            RequestContext::init();
+
+            return [
+                'request_id' => RequestContext::getId(),
+                'connection_id' => RequestContext::getConnectionId(),
+                'scope_id' => RequestContext::getStorageScopeId(),
+                'chain_id' => RequestContext::getChainId(),
+            ];
+        });
+
+        self::assertNull($fiber->start());
+        self::assertTrue($fiber->isTerminated());
+
+        $result = $fiber->getReturn();
+        self::assertIsString($result['request_id']);
+        self::assertNotSame('', $result['request_id']);
+        self::assertNotSame('16895', $result['request_id']);
+        self::assertSame('16895', $result['connection_id']);
+        self::assertSame('16895', $result['scope_id']);
+        self::assertSame('16895', $result['chain_id']);
+    }
+
+    public function testFpmConnectionIdFallsBackToRequestId(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]));
+        RequestContext::init();
+
+        $requestId = RequestContext::getId();
+
+        self::assertIsString($requestId);
+        self::assertNotSame('', $requestId);
+        self::assertSame($requestId, RequestContext::getConnectionId());
+        self::assertSame($requestId, RequestContext::getStorageScopeId());
+        self::assertSame($requestId, RequestContext::getChainId());
     }
 
     public function testCleanupCallbacksAreFiberLocal(): void

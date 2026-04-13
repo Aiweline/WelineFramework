@@ -156,14 +156,14 @@ PROMPT;
                         'temperature' => (float)($params['temperature'] ?? 0.4),
                         'max_tokens' => (int)($params['max_tokens'] ?? 16000),
                         'timeout' => (int)($params['timeout'] ?? 180),
-                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): void {
-                            $streamCallback('thinking', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]);
+                        'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
+                            return $streamCallback('thinking', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]) !== false;
                         } : null,
-                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): void {
-                            $streamCallback('chunk', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]);
+                        'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
+                            return $streamCallback('chunk', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]) !== false;
                         } : null,
-                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback): void {
-                            $streamCallback('heartbeat', ['ts' => time()]);
+                        'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
+                            return $streamCallback('heartbeat', ['ts' => time()]) !== false;
                         } : null,
                     ]);
                 } else {
@@ -267,14 +267,14 @@ PROMPT;
                     ];
                     $forced = $useStreamFull
                         ? $provider->generateStreamFull($model, '', array_merge($forceParams, [
-                            'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): void {
-                                $streamCallback('thinking', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]);
+                            'on_reasoning' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
+                                return $streamCallback('thinking', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]) !== false;
                             } : null,
-                            'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): void {
-                                $streamCallback('chunk', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]);
+                            'on_content' => $streamCallback ? function (string $chunk) use ($streamCallback, $currentIteration): bool {
+                                return $streamCallback('chunk', ['content' => $chunk, 'iteration' => $currentIteration, 'streaming' => true]) !== false;
                             } : null,
-                            'on_heartbeat' => $streamCallback ? function () use ($streamCallback): void {
-                                $streamCallback('heartbeat', ['ts' => time()]);
+                            'on_heartbeat' => $streamCallback ? function () use ($streamCallback): bool {
+                                return $streamCallback('heartbeat', ['ts' => time()]) !== false;
                             } : null,
                         ]))
                         : $provider->generate($model, '', $forceParams);
