@@ -11,9 +11,96 @@ use GuoLaiRen\PageBuilder\Service\AI\FrameworkBuilder;
 use GuoLaiRen\PageBuilder\Service\AiSitePageComponentGenerationService;
 use PHPUnit\Framework\TestCase;
 use Weline\Ai\Service\AiService;
+use Weline\Framework\Runtime\RequestContext;
 
 class AiSitePageComponentGenerationServiceTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_ALLOW_STUB_AI_IN_TEST);
+        RequestContext::remove(AiSitePageComponentGenerationService::REQUEST_KEY_FORCE_REAL_AI_IN_TEST);
+        parent::tearDown();
+    }
+
+    public function testRunAiGenerationUsesAiInPhpunitUnlessStubIsExplicitlyAllowed(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(static function (string $prompt, callable $callback): void {
+                $callback('{"html_extra":"<div>AI generated header</div>","css_extra":"","php_variables":"","extra_fields":"","js_content":""}');
+            });
+
+        $service = new AiSitePageComponentGenerationService(
+            aiService: $aiService,
+        );
+
+        $payload = (function (string $region, string $prompt): array {
+            return $this->runAiGeneration($region, $prompt);
+        })->call($service, 'header', 'Generate a simple header');
+
+        self::assertSame('<div>AI generated header</div>', $payload['html_extra'] ?? null);
+    }
+
+    public function testGenerateComponentThrowsAfterAiRetriesInsteadOfReturningStubFallback(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::exactly(3))
+            ->method('generateStream')
+            ->willThrowException(new \RuntimeException('model unavailable'));
+
+        $service = new AiSitePageComponentGenerationService(
+            frameworkBuilder: new FrameworkBuilder(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+            aiService: $aiService,
+        );
+
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('AI');
+
+        (function (): array {
+            return $this->generateComponent(
+                'header/ai-site-header',
+                'AI Site Header',
+                'header',
+                'Generate a simple header',
+                [],
+                []
+            );
+        })->call($service);
+    }
+
+    public function testGenerateComponentDoesNotRetryNonRetryableProviderErrors(): void
+    {
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willThrowException(new \RuntimeException('AI API error (HTTP 402, unknown_error): Insufficient Balance'));
+
+        $service = new AiSitePageComponentGenerationService(
+            frameworkBuilder: new FrameworkBuilder(),
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+            aiService: $aiService,
+        );
+
+        self::expectException(\RuntimeException::class);
+        self::expectExceptionMessage('AI component generation failed');
+        self::expectExceptionMessage('Insufficient Balance');
+
+        (function (): array {
+            return $this->generateComponent(
+                'header/ai-site-header',
+                'AI Site Header',
+                'header',
+                'Generate a simple header',
+                [],
+                []
+            );
+        })->call($service);
+    }
+
     public function testEnsureAiPayloadValidStripsInvalidHeaderPhpVariablesInsteadOfFailing(): void
     {
         $service = new AiSitePageComponentGenerationService(
@@ -119,5 +206,46 @@ HTML,
         self::assertTrue($fixedCheck['valid'], (string)($fixedCheck['error'] ?? 'syntax should be valid after repair'));
         self::assertStringNotContainsString('<?php =', $fixedPhtml);
         self::assertStringContainsString('<?= htmlspecialchars(', $fixedPhtml);
+    }
+
+    public function testEnsureAiPayloadValidRepairsLooseArrowAssignmentsInsideFooterMarkup(): void
+    {
+        $service = new AiSitePageComponentGenerationService(
+            codeFixer: new CodeFixer(),
+            codeValidator: new CodeValidator(),
+        );
+
+        $payload = [
+            'extra_fields' => '',
+            'php_variables' => '',
+            'css_extra' => '',
+            'css_content' => '',
+            'css_responsive' => '',
+            'html_extra_column' => <<<'HTML'
+<div class="ai-footer-extra">
+    <?php $footerNote => 'Need help?'; ?>
+    <p><?= htmlspecialchars($footerNote, ENT_QUOTES, 'UTF-8') ?></p>
+</div>
+HTML,
+            'html_extra' => '',
+            'footer_extra_text' => '',
+            'js_content' => '',
+        ];
+
+        $validatedPayload = (function (array $payload): array {
+            return $this->ensureAiPayloadValid($payload, 'footer');
+        })->call($service, $payload);
+
+        self::assertStringContainsString('$footerNote = \'Need help?\'', (string)($validatedPayload['html_extra_column'] ?? ''));
+
+        $componentInfo = [
+            'name' => 'Footer With Inline Php',
+            'name_en' => 'Footer With Inline Php',
+            'description' => 'repair loose arrow assignments in embedded footer php',
+        ];
+        $phtml = (new FrameworkBuilder())->buildComponent('footer', $componentInfo, $validatedPayload);
+        $check = (new CodeValidator())->checkSyntax($phtml);
+
+        self::assertTrue($check['valid'], (string)($check['error'] ?? 'footer markup should stay syntax-valid after repair'));
     }
 }

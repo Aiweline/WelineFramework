@@ -2084,8 +2084,15 @@ class Processer
             return [$key => $pid];
         }
 
-        // Windows 快速路径：对“后台非阻塞”命令直接逐个 detached 启动，
-        // 避免 batchCreateWindows 的 PowerShell 批量脚本在高压场景下阻塞几十秒。
+        $optimizedResults = self::tryBatchCreateOptimized($commands);
+        if ($optimizedResults !== null) {
+            return $optimizedResults;
+        }
+
+        // Last-resort fallback only. The old Windows "fast detached" path
+        // lived before tryBatchCreateOptimized() and called create() in a
+        // foreach loop, which made WLS bootstrap look concurrent in code but
+        // launch one process at a time in practice.
         if (IS_WIN && self::shouldUseWindowsFastDetachedBatchCreate($commands)) {
             $results = [];
             foreach ($commands as $key => $config) {
@@ -2098,11 +2105,6 @@ class Processer
             }
 
             return $results;
-        }
-
-        $optimizedResults = self::tryBatchCreateOptimized($commands);
-        if ($optimizedResults !== null) {
-            return $optimizedResults;
         }
 
         $results = [];
@@ -2127,20 +2129,12 @@ class Processer
      */
     private static function shouldUseWindowsFastDetachedBatchCreate(array $commands): bool
     {
-        foreach ($commands as $config) {
-            $command = (string) ($config['command'] ?? '');
-            if ($command === '') {
-                return false;
-            }
-            if ((bool) ($config['block'] ?? false)) {
-                return false;
-            }
-            if ((bool) ($config['foreground'] ?? false)) {
-                return false;
-            }
-        }
+        unset($commands);
 
-        return true;
+        // Disabled by design: this fallback is a serial foreach over create().
+        // Keep the method as a documented guard so future changes do not
+        // accidentally reintroduce one-by-one WLS startup on Windows.
+        return false;
     }
 
     /**
@@ -2309,8 +2303,7 @@ class Processer
 
                 return null;
             }
-            $status = @\proc_get_status($psProcess);
-            self::finishWindowsDetachedHelperProcess($psProcess, $status);
+            self::waitForWindowsBatchCreateHelper($psProcess, $resultPath, \count($launchItems));
         } elseif ($execAvailable) {
             \set_error_handler(function ($type, $msg) use (&$lastError) {
                 $lastError = $msg;
@@ -2414,6 +2407,76 @@ class Processer
             static fn (array $item): bool => (bool) ($item['block'] ?? false)
                 && (int) ($pidMap[(string) ($item['key'] ?? '')] ?? 0) <= 0
         ));
+    }
+
+    /**
+     * Wait for the one-shot Windows batch helper as a batch, not per child.
+     * The helper writes one result row per requested child after issuing all
+     * Start-Process calls. If it hangs, we cap the wait and still let IPC
+     * register/ready fill in child state later.
+     *
+     * @param resource $process
+     */
+    private static function waitForWindowsBatchCreateHelper($process, string $resultPath, int $expectedRows): void
+    {
+        if (!\is_resource($process)) {
+            return;
+        }
+
+        $expectedRows = \max(1, $expectedRows);
+        $timeoutSeconds = self::resolveWindowsBatchCreateHelperTimeout($expectedRows);
+        $deadline = \microtime(true) + $timeoutSeconds;
+        $status = @\proc_get_status($process);
+
+        do {
+            if (self::countWindowsBatchResultRows($resultPath) >= $expectedRows) {
+                break;
+            }
+
+            $status = @\proc_get_status($process);
+            if (($status['running'] ?? false) !== true) {
+                break;
+            }
+
+            \Weline\Framework\Runtime\SchedulerSystem::usleep(20_000);
+        } while (\microtime(true) < $deadline);
+
+        $status = @\proc_get_status($process);
+        if (($status['running'] ?? false) === true) {
+            @\proc_terminate($process);
+            $status = @\proc_get_status($process);
+        }
+
+        if (($status['running'] ?? false) === false) {
+            @\proc_close($process);
+        }
+    }
+
+    private static function resolveWindowsBatchCreateHelperTimeout(int $expectedRows): float
+    {
+        $configured = (float) (Env::get('system.processer.windows_batch_create_helper_timeout_sec', 0) ?? 0);
+        if ($configured > 0.0) {
+            return \max(0.2, \min(10.0, $configured));
+        }
+
+        return \min(5.0, \max(0.75, 0.25 + ($expectedRows * 0.15)));
+    }
+
+    private static function countWindowsBatchResultRows(string $resultPath): int
+    {
+        if (!\is_file($resultPath)) {
+            return 0;
+        }
+
+        $content = (string) (@\file_get_contents($resultPath) ?: '');
+        $content = \trim(self::normalizeWindowsPowerShellPipeOutput($content));
+        if ($content === '') {
+            return 0;
+        }
+
+        $rows = \preg_split('/\r\n|\r|\n/', $content) ?: [];
+
+        return \count(\array_filter($rows, static fn (string $row): bool => \trim($row) !== ''));
     }
 
     /**
@@ -2930,6 +2993,7 @@ CMD;
             $arguments = self::escapePowerShellLiteral((string) ($item['arguments'] ?? ''));
             $argumentList = $item['argument_list'] ?? self::tokenizeCommandLineArguments((string) ($item['arguments'] ?? ''));
             $foreground = !empty($item['foreground']);
+            $block = !empty($item['block']);
             $foregroundScript = self::escapePowerShellLiteral((string) ($item['foreground_script'] ?? ''));
             $redirectBase = (string) ($item['process_name'] ?? $item['key'] ?? 'process');
             $redirectBase = \preg_replace('/[^A-Za-z0-9._-]+/', '-', $redirectBase) ?: 'process';
@@ -2950,7 +3014,7 @@ CMD;
             $lines[] = "        WorkingDirectory = '{$cwd}'";
             $lines[] = "        WindowStyle = '" . ($foreground ? 'Normal' : 'Hidden') . "'";
             $lines[] = "        ErrorAction = 'Stop'";
-            if (!$foreground) {
+            if (!$foreground && $block) {
                 $lines[] = '        PassThru = $true';
             }
             $lines[] = '    }';
@@ -2959,8 +3023,10 @@ CMD;
                 $lines[] = '    Start-Process @startArgs | Out-Null';
                 $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
             } else {
-                $lines[] = "    \$startArgs.RedirectStandardOutput = '{$stdoutPath}'";
-                $lines[] = "    \$startArgs.RedirectStandardError = '{$stderrPath}'";
+                if ($block) {
+                    $lines[] = "    \$startArgs.RedirectStandardOutput = '{$stdoutPath}'";
+                    $lines[] = "    \$startArgs.RedirectStandardError = '{$stderrPath}'";
+                }
                 if ($argumentList !== []) {
                     $argumentListLiteral = '@(' . \implode(',', \array_map(
                         static fn (string $argument): string => self::toPowerShellSingleQuoted($argument),
@@ -2970,8 +3036,13 @@ CMD;
                 } elseif ($arguments !== '') {
                     $lines[] = "    \$startArgs.ArgumentList = @('" . self::escapePowerShellLiteral($arguments) . "')";
                 }
-                $lines[] = '    $p = Start-Process @startArgs';
-                $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
+                if ($block) {
+                    $lines[] = '    $p = Start-Process @startArgs';
+                    $lines[] = "    \$results.Add(\"{$key}`t\" + [string]\$p.Id) | Out-Null";
+                } else {
+                    $lines[] = '    Start-Process @startArgs | Out-Null';
+                    $lines[] = "    \$results.Add(\"{$key}`t0\") | Out-Null";
+                }
             }
             $lines[] = '} catch {';
             $lines[] = '    [System.IO.File]::AppendAllText($errorPath, $_.Exception.Message + [Environment]::NewLine)';

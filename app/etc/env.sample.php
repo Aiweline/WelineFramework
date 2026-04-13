@@ -212,6 +212,8 @@ return [
             'analysis_log_enabled' => true,
             // DEV 模式是否记录全部请求
             'log_all_in_dev' => true,
+            // 捕获业务直接输出（echo/print/var_dump）时是否输出提示日志（默认关闭）
+            'capture_output_verbose' => false,
             // 请求日志开关；null 表示沿用现有 DEV/frontend 判断
             'request_log_enabled' => null,
             // 错误日志开关；null 表示沿用现有 DEV 判断
@@ -253,11 +255,12 @@ return [
         'pid' => null,
         'start_time' => null,
         'status' => 'stopped',
-        // WLS 进程日志（原 log.wls，现仅读 wls.log）
+        // WLS 进程日志：主链 wls-*.log 按 level 输出（默认不再整体抬升到 WARNING）；verbose 用于开发态额外行为（见 LogConfig/WlsLogger）
         'log' => [
             'enabled' => true,
             'path' => 'var/log/wls/',
-            'level' => 'DEBUG',              // 开发环境日志级别：DEBUG, INFO, NOTICE, WARNING, ERROR, FATAL
+            'level' => 'DEBUG',              // 主链最低级别（生产环境另受 production_level 约束）
+            'verbose' => false,              // true：与 server:start -log / 实例 enable_log 等对齐的开发态增强（非压低主链级别）
             'production_level' => 'INFO',    // 生产环境强制最低级别（deploy=prod 时生效）
             'stdout' => 'auto',              // 控制台输出：auto（前台=true，后台=false）, true, false
             'rotate' => 'daily',             // 日志轮转策略：daily（按日期分割）
@@ -342,6 +345,12 @@ return [
             // control_poll_slice_usec：启动验收等控制面等待时 stream_select 超时（微秒），替代叠 sleep。
             'control_poll_slice_usec' => 100000,
         ],
+        // WLS 常驻 Worker 下开发面板默认不注入（避免大段 HTML）；本地调试 ?dev_tool=1 时仍须此项为 true
+        'debug' => [
+            // 闈炲父楂樺紑閿€锛氫細璁板綍 Session / Router / URL 瑙ｆ瀽绛夌儹璺粏绮掑害鏃ュ織锛屽彧搴旂煭鏃舵墜鍔ㄦ墦寮€
+            'hot_path_logs' => false,
+            'dev_tool_panel' => false,
+        ],
     ],
     
     // ==================== 路由配置 ====================
@@ -359,6 +368,30 @@ return [
                 'prefix' => '7r1XLapP8oNBJc6grWtUlUqA42e6GZWQ',
                 'description' => '后台 REST API',
             ],
+        ],
+    ],
+
+    // ==================== 安全策略配置 ====================
+    'security' => [
+        'csrf' => [
+            // off: 维持当前行为；session: 统一启用 session token；inherit: 预留给后续渐进策略
+            'pc_controller_mode' => 'off',
+            'rest_mode' => 'off',
+        ],
+        'request_filter' => [
+            // 默认关闭 PHP 原生 unserialize 请求过滤，避免把高危原语暴露给输入面
+            'allow_php_unserialize' => false,
+        ],
+        'headers' => [
+            // 留空表示不输出；后续可按环境接入 Report-Only / 正式 CSP
+            'csp_report_only' => '',
+            'csp' => '',
+        ],
+        'view' => [
+            // 兼容当前主题行为；后续可逐步收紧为 none / prefix 等策略
+            'assign_params_mode' => 'all',
+            // prefix 模式下仅注入这些前缀开头的请求参数；支持数组或逗号分隔字符串
+            'assign_params_prefixes' => [],
         ],
     ],
     
@@ -427,5 +460,6 @@ return [
         'key' => 'dev_tool',
         'cookie_name' => 'w_dev_tool',
         'secret' => '',
+        // WLS 模式另见顶层 wls.debug.dev_tool_panel
     ],
 ];

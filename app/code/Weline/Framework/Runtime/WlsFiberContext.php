@@ -22,6 +22,7 @@ class WlsFiberContext
     private bool $sseEnabled;
     private bool $sseHeadersSent;
     private mixed $sseWriteCallback = null;
+    private mixed $sseAliveCallback = null;
 
     private array $serverVars = [];
     private array $getVars = [];
@@ -53,6 +54,7 @@ class WlsFiberContext
         $ctx->sseEnabled = SseContext::isSseEnabled();
         $ctx->sseHeadersSent = SseContext::isHeadersSent();
         $ctx->sseWriteCallback = SseContext::getWriteCallback();
+        $ctx->sseAliveCallback = SseContext::getAliveCallback();
 
         $ctx->serverVars = \is_array($_SERVER ?? null) ? $_SERVER : [];
         $ctx->getVars = \is_array($_GET ?? null) ? $_GET : [];
@@ -87,6 +89,11 @@ class WlsFiberContext
         } else {
             SseContext::clearWriteCallback();
         }
+        if (\is_callable($this->sseAliveCallback)) {
+            SseContext::setAliveCallback($this->sseAliveCallback);
+        } else {
+            SseContext::clearAliveCallback();
+        }
         if ($this->sseEnabled) {
             SseContext::enableSse();
         }
@@ -112,42 +119,36 @@ class WlsFiberContext
                     'cookie' => $this->cookieVars,
                     'files' => $this->filesVars,
                     'server' => $this->serverVars,
-                    'uri' => (string)($this->serverVars['REQUEST_URI'] ?? $context->get('input.uri', '/')),
-                    'method' => (string)($this->serverVars['REQUEST_METHOD'] ?? $context->get('input.method', 'GET')),
-                    'scheme' => (string)($this->serverVars['REQUEST_SCHEME'] ?? $context->get('input.scheme', 'http')),
-                    'host' => (string)($this->serverVars['HTTP_HOST'] ?? $this->serverVars['SERVER_NAME'] ?? $context->get('input.host', '')),
-                    'ip' => (string)($this->serverVars['REMOTE_ADDR'] ?? $context->get('input.ip', '')),
+                    'uri' => (string)($context->get('input.uri', $this->serverVars['REQUEST_URI'] ?? '/')),
+                    'method' => (string)($context->get('input.method', $this->serverVars['REQUEST_METHOD'] ?? 'GET')),
+                    'scheme' => (string)($context->get('input.scheme', $this->serverVars['REQUEST_SCHEME'] ?? 'http')),
+                    'host' => (string)($context->get('input.host', $this->serverVars['HTTP_HOST'] ?? $this->serverVars['SERVER_NAME'] ?? '')),
+                    'ip' => (string)($context->get('input.ip', $this->serverVars['REMOTE_ADDR'] ?? '')),
                 ],
                 'route' => [
-                    'area' => (string)($this->serverVars['WELINE_AREA'] ?? $context->get('route.area', RequestContext::AREA_FRONTEND)),
-                    'area_route' => (string)($this->serverVars['WELINE_AREA_ROUTE'] ?? $context->get('route.area_route', '')),
-                    'website_id' => (int)($this->serverVars['WELINE_WEBSITE_ID'] ?? $context->get('route.website_id', 0)),
-                    'website_code' => (string)($this->serverVars['WELINE_WEBSITE_CODE'] ?? $context->get('route.website_code', '')),
-                    'website_url' => (string)($this->serverVars['WELINE_WEBSITE_URL'] ?? $context->get('route.website_url', '')),
-                    'language' => (string)($this->serverVars['WELINE_USER_LANG'] ?? $context->get('route.language', 'zh_Hans_CN')),
-                    'currency' => (string)($this->serverVars['WELINE_USER_CURRENCY'] ?? $context->get('route.currency', 'CNY')),
-                    'is_backend' => (bool)($this->serverVars['WELINE_IS_BACKEND']
-                        ?? $context->get('route.is_backend',
-                            \in_array(($this->serverVars['WELINE_AREA'] ?? ''), [RequestContext::AREA_BACKEND, RequestContext::AREA_REST_BACKEND], true))),
-                    'is_static' => (bool)($this->serverVars['WELINE_IS_STATIC_FILE'] ?? $context->get('route.is_static', false)),
-                    'url_parsed' => (bool)($this->serverVars['WELINE_URL_PARSED'] ?? $context->get('route.url_parsed', false)),
+                    'area' => (string)($context->get('route.area', $this->serverVars['WELINE_AREA'] ?? RequestContext::AREA_FRONTEND)),
+                    'area_route' => (string)($context->get('route.area_route', $this->serverVars['WELINE_AREA_ROUTE'] ?? '')),
+                    'website_id' => (int)($context->get('route.website_id', $this->serverVars['WELINE_WEBSITE_ID'] ?? 0)),
+                    'website_code' => (string)($context->get('route.website_code', $this->serverVars['WELINE_WEBSITE_CODE'] ?? '')),
+                    'website_url' => (string)($context->get('route.website_url', $this->serverVars['WELINE_WEBSITE_URL'] ?? '')),
+                    'language' => (string)($context->get('route.language', $this->serverVars['WELINE_USER_LANG'] ?? 'zh_Hans_CN')),
+                    'currency' => (string)($context->get('route.currency', $this->serverVars['WELINE_USER_CURRENCY'] ?? 'CNY')),
+                    'is_backend' => (bool)($context->get(
+                        'route.is_backend',
+                        $this->serverVars['WELINE_IS_BACKEND']
+                            ?? \in_array(($context->get('route.area', $this->serverVars['WELINE_AREA'] ?? '')), [RequestContext::AREA_BACKEND, RequestContext::AREA_REST_BACKEND], true)
+                    )),
+                    'is_static' => (bool)($context->get('route.is_static', $this->serverVars['WELINE_IS_STATIC_FILE'] ?? false)),
+                    'url_parsed' => (bool)($context->get('route.url_parsed', $this->serverVars['WELINE_URL_PARSED'] ?? false)),
                 ],
             ]);
             Context::enter($context);
+            RequestContext::syncFromContext($context);
         } else {
             Context::leave();
             Context::enter(Context::fromGlobals());
+            RequestContext::syncFromServer();
         }
-
-        RequestContext::syncFromServer();
-        $currentContext = Context::getCurrent();
-        RequestContext::area((string)($this->serverVars['WELINE_AREA'] ?? $currentContext?->get('route.area', RequestContext::AREA_FRONTEND)));
-        RequestContext::setWelineAreaRoute((string)($this->serverVars['WELINE_AREA_ROUTE'] ?? $currentContext?->get('route.area_route', '')));
-        RequestContext::setWelineWebsiteId((int)($this->serverVars['WELINE_WEBSITE_ID'] ?? $currentContext?->get('route.website_id', 0)));
-        RequestContext::setWelineWebsiteCode((string)($this->serverVars['WELINE_WEBSITE_CODE'] ?? $currentContext?->get('route.website_code', '')));
-        RequestContext::setWelineWebsiteUrl((string)($this->serverVars['WELINE_WEBSITE_URL'] ?? $currentContext?->get('route.website_url', '')));
-        RequestContext::locale((string)($this->serverVars['WELINE_USER_LANG'] ?? $currentContext?->get('route.language', 'zh_Hans_CN')));
-        RequestContext::currency((string)($this->serverVars['WELINE_USER_CURRENCY'] ?? $currentContext?->get('route.currency', 'CNY')));
 
         if ($this->request !== null) {
             ObjectManager::setInstance(Request::class, $this->request);

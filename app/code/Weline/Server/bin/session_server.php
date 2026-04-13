@@ -77,6 +77,7 @@ if (!\defined('DS')) {
 }
 
 require_once BP . 'app' . DIRECTORY_SEPARATOR . 'autoload.php';
+\Weline\Server\Log\LogConfig::bootstrapVerboseFromInstanceFile($instanceName);
 (new \Weline\Server\Service\LongRunningPhpRuntime())->apply();
 
 // 初始化 WLS 统一错误捕获系统（Layer 1-3）
@@ -100,9 +101,8 @@ ErrorBootstrap::init($processTag, [
     'bootstrap_instance' => $bootstrapInstance,
 ]);
 
-// 所有进程都启用 stdout 输出（便于调试和监控）
 WlsLogger::getInstance()
-    ->setStdoutEnabled(true)
+    ->setStdoutEnabled(\Weline\Server\Log\LogConfig::isStdoutEnabled($isFrontend, \Weline\Server\Log\LogConfig::isDevMode()))
     ->setProcessTag($processTag);
 
 if ($processName) {

@@ -104,9 +104,6 @@ abstract class RequestAbstract extends RequestFilter
                 $this->uri_cache_key = $expected_cache_key;
             }
         }
-        if (empty($this->_response)) {
-            $this->_response = $this->getResponse();
-        }
     }
 
     public function parse_url(string $url = ''): bool|int|array|string|null
@@ -266,7 +263,17 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function isBackend(): bool
     {
-        return $this->getData('backend') ?: false;
+        $serverFlag = $this->getServer('WELINE_IS_BACKEND');
+        if ($serverFlag !== null) {
+            return (bool)$serverFlag;
+        }
+
+        $area = (string)($this->getServer('WELINE_AREA') ?? '');
+        if ($area !== '') {
+            return $area === 'backend' || $area === 'rest_backend';
+        }
+
+        return (bool)$this->getData('backend');
     }
 
     public function setApiFrontend(): static
@@ -276,6 +283,11 @@ abstract class RequestAbstract extends RequestFilter
 
     public function isApiFrontend(): bool
     {
+        $area = (string)($this->getServer('WELINE_AREA') ?? '');
+        if ($area !== '') {
+            return $area === 'rest_frontend';
+        }
+
         return (bool)$this->getData('api_frontend');
     }
 
@@ -287,7 +299,12 @@ abstract class RequestAbstract extends RequestFilter
 
     public function isApiBackend(): bool
     {
-        return $this->getData('api_backend') ?: false;
+        $area = (string)($this->getServer('WELINE_AREA') ?? '');
+        if ($area !== '') {
+            return $area === 'rest_backend';
+        }
+
+        return (bool)$this->getData('api_backend');
     }
 
     /**
@@ -720,10 +737,27 @@ abstract class RequestAbstract extends RequestFilter
      */
     public function getResponse(): Response
     {
-        if (!isset($this->_response)) {
-            $this->_response = ObjectManager::getInstance(\Weline\Framework\Http\Response::class);
+        if (!$this->_response instanceof Response) {
+            $this->_response = new Response(true);
+            ObjectManager::setInstance(\Weline\Framework\Http\Response::class, $this->_response);
         }
         return $this->_response;
+    }
+
+    public function setResponse(Response $response): static
+    {
+        $this->_response = $response;
+        ObjectManager::setInstance(\Weline\Framework\Http\Response::class, $response);
+
+        return $this;
+    }
+
+    public function resetResponse(): static
+    {
+        $this->_response = null;
+        ObjectManager::removeInstance(\Weline\Framework\Http\Response::class);
+
+        return $this;
     }
 
     public function isAjax(): bool

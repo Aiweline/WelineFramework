@@ -34,7 +34,7 @@ class ErrorBootstrap
      * @param string $processTag 进程标识（如 'Worker#1', 'Dispatcher', 'SessionServer:19970'）
      * @param array $context 额外上下文信息（如 ['port' => 9981, 'instance' => 'default']）
      * @param array $options 选项：
-     *   - stdout: bool 是否输出到终端（默认 auto，根据前台模式和 DEV 环境判断）
+     *   - stdout: bool 是否输出到终端（默认遵循 LogConfig::isStdoutEnabled，auto 默认开启，除非显式关闭）
      *   - level: string 最小日志级别（默认从配置读取）
      *   - exit_on_exception: bool 异常后是否退出（默认 true）
      */
@@ -86,10 +86,10 @@ class ErrorBootstrap
         if (isset($options['stdout'])) {
             $logger->setStdoutEnabled((bool)$options['stdout']);
         } else {
-            // auto 模式：根据前台模式和 DEV 环境判断
+            // auto 模式：默认开启，只有显式配置关闭时才静默
             $isFrontend = \defined('WLS_FRONTEND_MODE') && WLS_FRONTEND_MODE;
             $isDev = LogConfig::isDevMode();
-            $logger->setStdoutEnabled($isFrontend || $isDev);
+            $logger->setStdoutEnabled(LogConfig::isStdoutEnabled($isFrontend, $isDev));
         }
 
         // 文件写入（始终启用）

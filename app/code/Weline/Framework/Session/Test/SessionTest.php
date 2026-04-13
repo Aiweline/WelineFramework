@@ -184,4 +184,116 @@ class SessionTest extends TestCase
 
         Session::flushRequestSessions();
     }
+
+    public function testConcurrentWlsSessionSavesMergeIndependentKeys(): void
+    {
+        $storage = $this->createInMemoryStorage([
+            'shared_session' => ['base' => 'v1'],
+        ]);
+
+        $sessionA = new Session($storage, new WlsStrategy($storage, ['lifetime' => 3600]), 3600);
+        $sessionB = new Session($storage, new WlsStrategy($storage, ['lifetime' => 3600]), 3600);
+
+        $sessionA->start('shared_session');
+        $sessionB->start('shared_session');
+
+        $sessionA->set('WF_BACKEND_USER', 'admin');
+        $sessionB->set('frontend_notice', 'hello');
+
+        $sessionA->save();
+        $sessionB->save();
+
+        self::assertSame([
+            'base' => 'v1',
+            'WF_BACKEND_USER' => 'admin',
+            'frontend_notice' => 'hello',
+        ], $storage->read('shared_session'));
+    }
+
+    public function testConcurrentWlsSessionDeletePreservesUnrelatedWrites(): void
+    {
+        $storage = $this->createInMemoryStorage([
+            'shared_session' => [
+                'WF_BACKEND_USER' => 'admin',
+                'backend_acl_role_id' => 3,
+                'base' => 'v1',
+            ],
+        ]);
+
+        $sessionA = new Session($storage, new WlsStrategy($storage, ['lifetime' => 3600]), 3600);
+        $sessionB = new Session($storage, new WlsStrategy($storage, ['lifetime' => 3600]), 3600);
+
+        $sessionA->start('shared_session');
+        $sessionB->start('shared_session');
+
+        $sessionA->delete('backend_acl_role_id');
+        $sessionB->set('frontend_notice', 'hello');
+
+        $sessionB->save();
+        $sessionA->save();
+
+        self::assertSame([
+            'WF_BACKEND_USER' => 'admin',
+            'base' => 'v1',
+            'frontend_notice' => 'hello',
+        ], $storage->read('shared_session'));
+    }
+
+    private function createInMemoryStorage(array $seed = []): SessionStorageInterface
+    {
+        return new class($seed) implements SessionStorageInterface {
+            private array $store;
+
+            public function __construct(array $seed)
+            {
+                $this->store = $seed;
+            }
+
+            public function read(string $sessionId): array
+            {
+                return $this->store[$sessionId] ?? [];
+            }
+
+            public function write(string $sessionId, array $data, int $ttl): bool
+            {
+                $this->store[$sessionId] = $data;
+                return true;
+            }
+
+            public function destroy(string $sessionId): bool
+            {
+                unset($this->store[$sessionId]);
+                return true;
+            }
+
+            public function exists(string $sessionId): bool
+            {
+                return \array_key_exists($sessionId, $this->store);
+            }
+
+            public function touch(string $sessionId, int $ttl): bool
+            {
+                return $this->exists($sessionId);
+            }
+
+            public function gc(int $maxLifetime): int
+            {
+                return 0;
+            }
+
+            public function getConfig(): array
+            {
+                return [];
+            }
+
+            public function list(array $options = []): array
+            {
+                $result = [];
+                foreach ($this->store as $sessionId => $data) {
+                    $result[] = ['session_id' => $sessionId, 'data' => $data];
+                }
+                return $result;
+            }
+        };
+    }
 }

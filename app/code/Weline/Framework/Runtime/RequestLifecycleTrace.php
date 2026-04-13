@@ -11,12 +11,19 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Runtime;
 
+use Weline\Framework\Context;
+
 class RequestLifecycleTrace
 {
     private static bool $stateManagerRegistered = false;
 
     /** 极端重试/风暴时防止静态 span 无限增长导致 OOM */
     private const MAX_SPANS = 4096;
+
+    private const HEAVY_ROUTE_PREFIXES = [
+        '/pagebuilder/backend/ai-site-agent/',
+        '/websites/backend/site-builder-agent/',
+    ];
 
     private static bool $maxSpansLogged = false;
 
@@ -56,7 +63,45 @@ class RequestLifecycleTrace
             return false;
         }
 
+        if (\class_exists(Runtime::class, false)
+            && Runtime::isPersistent()
+            && (!\class_exists(\Weline\Framework\App\Env::class, false)
+                || !(bool)\Weline\Framework\App\Env::get('wls.debug.request_trace', false))
+        ) {
+            return false;
+        }
+
+        if (self::shouldSkipForCurrentRequest()) {
+            return false;
+        }
+
         return true;
+    }
+
+    public static function shouldSkipForCurrentRequest(): bool
+    {
+        if (!\class_exists(Runtime::class, false) || !Runtime::isPersistent()) {
+            return false;
+        }
+
+        if (\class_exists(\Weline\Framework\App\Env::class, false)
+            && (bool)\Weline\Framework\App\Env::get('wls.debug.trace_heavy_routes', false)
+        ) {
+            return false;
+        }
+
+        $uri = self::currentRequestUri();
+        if ($uri === '') {
+            return false;
+        }
+
+        foreach (self::HEAVY_ROUTE_PREFIXES as $prefix) {
+            if (\str_contains($uri, $prefix)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -272,5 +317,18 @@ class RequestLifecycleTrace
         self::$startStack = [];
         self::$currentParentStack = [];
         self::$maxSpansLogged = false;
+    }
+
+    private static function currentRequestUri(): string
+    {
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $uri = (string)$context->get('input.uri', '');
+            if ($uri !== '') {
+                return $uri;
+            }
+        }
+
+        return (string)($_SERVER['REQUEST_URI'] ?? '');
     }
 }

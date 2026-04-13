@@ -58,14 +58,12 @@ final class SessionClient
      */
     public function connect(): bool
     {
-        // Worker 常驻+连接池复用场景下，不做额外 health probe：
-        // 实际连通性由 request() 的 acquire/send/read 成败决定。
         if ($this->connected) {
             return true;
         }
-        $this->connected = true;
-        $this->authenticated = true;
-        return true;
+        $this->connected = $this->stateClient->warmup();
+        $this->authenticated = $this->connected;
+        return $this->connected;
     }
 
     /**
@@ -396,6 +394,6 @@ final class SessionClient
      */
     public function __destruct()
     {
-        // Intentionally not closing shared pool to preserve long-lived reuse.
+        $this->disconnect();
     }
 }

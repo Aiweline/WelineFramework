@@ -10,6 +10,7 @@
 namespace Weline\Theme\Observer;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -25,19 +26,24 @@ use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemePageTypeResolver;
 
+final class ControllerFetchFileBeforeRequestCacheState
+{
+    public array $themeByAreaCache = [];
+    public array $layoutConfigCache = [];
+    public array $colorsCache = [];
+    public array $resolvedLayoutPathCache = [];
+    public array $layoutParamsRequestCache = [];
+}
+
 /**
  * 控制器模板获取前观察者
  * 根据控制器的 layoutType 自动加载对应的主题布局
  */
 class ControllerFetchFileBefore implements ObserverInterface
 {
-    /** 请求级缓存，WLS 下由 StateManager 重置 */
-    private static array $themeByAreaCache = [];
-    private static array $layoutConfigCache = [];
-    private static array $colorsCache = [];
-    private static array $resolvedLayoutPathCache = [];
-    /** 请求级布局 meta/params 缓存，用于“源未改不重编译”时复用 */
-    private static array $layoutParamsRequestCache = [];
+    private static ?ControllerFetchFileBeforeRequestCacheState $mainRequestCache = null;
+    /** @var \WeakMap<\Fiber, ControllerFetchFileBeforeRequestCacheState>|null */
+    private static ?\WeakMap $fiberRequestCaches = null;
     private static bool $stateManagerRegistered = false;
 
     private WelineTheme $welineTheme;
@@ -71,11 +77,7 @@ class ControllerFetchFileBefore implements ObserverInterface
     /** WLS 请求结束后清空请求级缓存 */
     public static function resetRequestCache(): void
     {
-        self::$themeByAreaCache = [];
-        self::$layoutConfigCache = [];
-        self::$colorsCache = [];
-        self::$resolvedLayoutPathCache = [];
-        self::$layoutParamsRequestCache = [];
+        self::resetCurrentRequestCacheState();
     }
 
     public function execute(Event &$event): void
@@ -89,7 +91,9 @@ class ControllerFetchFileBefore implements ObserverInterface
 
         $layoutType = $eventData->getData('layoutType');
         $request = ObjectManager::getInstance(Request::class);
-        if (empty($layoutType) && $request && !$request->isBackend()) {
+        $controller = $eventData->getData('controller');
+        $isBackendRequest = $this->isBackendRequest($request, $controller);
+        if (empty($layoutType) && $request && !$isBackendRequest) {
             $layoutType = $this->pageTypeResolver->resolveLayoutType(
                 null,
                 $eventData->getData('controller'),
@@ -108,7 +112,8 @@ class ControllerFetchFileBefore implements ObserverInterface
 
         // 判断区域（frontend/backend）
         $area = 'frontend';
-        if ($request && $request->isBackend()) {
+        $editorArea = '';
+        if ($request && $isBackendRequest) {
             $editorArea = (string)$request->getParam('editor_area', '');
             if ($editorArea === '') {
                 $editorArea = (string)$request->getParam('preview_area', '');
@@ -126,9 +131,46 @@ class ControllerFetchFileBefore implements ObserverInterface
         // 设置主题相关数据到 theme 对象中（由Helper处理业务逻辑，不在模板中处理）
         $template = Template::getInstance();
         $welineThemeColorMode = ThemeModeResolver::getThemeMode($area);
+        $requestCache = self::requestCacheState();
         
         // 获取当前主题：预览 / 激活由 ThemeContextService 统一解析
-        $theme = $this->resolveThemeForLayout($area);
+        $allowPreviewTheme = !$isBackendRequest || $editorArea === 'frontend';
+        $theme = $this->resolveThemeForLayout($area, $allowPreviewTheme);
+        $requestUriForDebug = (string)($request?->getServer('REQUEST_URI') ?? $request?->getUri() ?? '');
+        if (false && $requestUriForDebug !== ''
+            && \str_contains($requestUriForDebug, 'pagebuilder/backend/ai-site-agent')) {
+            $debugPayload = [
+                'uri' => $requestUriForDebug,
+                'is_backend_request' => $isBackendRequest,
+                'area' => $area,
+                'editor_area' => $editorArea,
+                'allow_preview_theme' => $allowPreviewTheme,
+                'server_area' => (string)($request?->getServer('WELINE_AREA') ?? ''),
+                'server_is_backend' => $request?->getServer('WELINE_IS_BACKEND'),
+                'context_area' => Context::getCurrent()?->get('route.area', ''),
+                'context_is_backend' => Context::getCurrent()?->get('route.is_backend', null),
+                'theme_id' => $theme->getId(),
+                'theme_path' => $theme->getOriginPath(),
+                'theme_cache_key' => $this->buildThemeCacheKey($area),
+            ];
+            try {
+                \Weline\Server\Log\WlsLogger::warning_('[ThemeResolve] ai-site-agent layout resolve', $debugPayload);
+            } catch (\Throwable) {
+            }
+
+            try {
+                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Area', $area);
+                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Is-Backend', $isBackendRequest ? '1' : '0');
+                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Editor-Area', $editorArea !== '' ? $editorArea : '(empty)');
+                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Allow-Preview', $allowPreviewTheme ? '1' : '0');
+                $request->getResponse()->setHeader('X-Weline-Debug-Theme-Id', (string)$theme->getId());
+                $request->getResponse()->setHeader(
+                    'X-Weline-Debug-Context-Area',
+                    (string)(Context::getCurrent()?->get('route.area', '') ?: '(empty)')
+                );
+            } catch (\Throwable) {
+            }
+        }
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -160,15 +202,15 @@ class ControllerFetchFileBefore implements ObserverInterface
             $themeId = $theme->getId() ?: 0;
             $configCacheKey = "{$themeId}_{$area}_{$scope}";
             $didPerformanceLoad = false;
-            if (isset(self::$layoutConfigCache[$configCacheKey])) {
-                $layoutConfig = self::$layoutConfigCache[$configCacheKey];
+            if (isset($requestCache->layoutConfigCache[$configCacheKey])) {
+                $layoutConfig = $requestCache->layoutConfigCache[$configCacheKey];
             } else {
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
                 ThemeData::performanceLoad();
                 $didPerformanceLoad = true;
                 $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
-                self::$layoutConfigCache[$configCacheKey] = $layoutConfig;
+                $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
             }
 
             // 配置来自元数据配置的布局
@@ -199,21 +241,21 @@ class ControllerFetchFileBefore implements ObserverInterface
             ];
             $template->setData('theme', $themeData);
 
-            if (isset(self::$colorsCache[$configCacheKey])) {
-                $colors = self::$colorsCache[$configCacheKey];
+            if (isset($requestCache->colorsCache[$configCacheKey])) {
+                $colors = $requestCache->colorsCache[$configCacheKey];
             } else {
                 $colors = self::loadThemeColors($area, $scope, $theme);
-                self::$colorsCache[$configCacheKey] = $colors;
+                $requestCache->colorsCache[$configCacheKey] = $colors;
             }
             $template->setData('colors', $colors);
 
             $layoutPath = LayoutPathResolver::buildLayoutPath($fileName, $area, $layoutType, $layoutOption);
             $pathCacheKey = "{$layoutPath}|{$themeId}|{$area}";
-            if (array_key_exists($pathCacheKey, self::$resolvedLayoutPathCache)) {
-                $resolvedLayoutPath = self::$resolvedLayoutPathCache[$pathCacheKey];
+            if (array_key_exists($pathCacheKey, $requestCache->resolvedLayoutPathCache)) {
+                $resolvedLayoutPath = $requestCache->resolvedLayoutPathCache[$pathCacheKey];
             } else {
                 $resolvedLayoutPath = LayoutPathResolver::resolveLayoutTemplate($layoutPath, $theme, $area);
-                self::$resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
+                $requestCache->resolvedLayoutPathCache[$pathCacheKey] = $resolvedLayoutPath;
             }
             if ($resolvedLayoutPath) {
                 $paramsCacheKey = "{$configCacheKey}|{$layoutType}|{$layoutOption}";
@@ -223,7 +265,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $compiledPath = LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang);
                 if ($sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
                     && filemtime($sourcePath) <= filemtime($compiledPath)
-                    && isset(self::$layoutParamsRequestCache[$paramsCacheKey])) {
+                    && isset($requestCache->layoutParamsRequestCache[$paramsCacheKey])) {
                     ThemeData::setCurrentTheme($theme);
                     ThemeData::setCurrentArea($area);
                     $themeData = [
@@ -234,13 +276,13 @@ class ControllerFetchFileBefore implements ObserverInterface
                         'theme' => $theme,
                     ];
                     $template->setData('theme', $themeData);
-                    $template->setData('colors', self::$colorsCache[$configCacheKey] ?? []);
+                    $template->setData('colors', $requestCache->colorsCache[$configCacheKey] ?? []);
                     $existingMeta = $template->getData('meta');
                     if (!is_array($existingMeta)) {
                         $existingMeta = [];
                     }
                     $template->setData('meta', array_merge(
-                        self::$layoutParamsRequestCache[$paramsCacheKey],
+                        $requestCache->layoutParamsRequestCache[$paramsCacheKey],
                         $existingMeta
                     ));
                     $eventData->setData('contentTemplate', $fileName);
@@ -251,8 +293,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                     $template->setData('contentTemplate', $fileName);
                     $template->setData('layoutTemplate', $resolvedLayoutPath);
                     $template->setData('fileName', $fileName);
-                    if (!$template->getData('title') && !empty(self::$layoutParamsRequestCache[$paramsCacheKey]['title'])) {
-                        $template->assign('title', self::$layoutParamsRequestCache[$paramsCacheKey]['title']);
+                    if (!$template->getData('title') && !empty($requestCache->layoutParamsRequestCache[$paramsCacheKey]['title'])) {
+                        $template->assign('title', $requestCache->layoutParamsRequestCache[$paramsCacheKey]['title']);
                     }
                     return;
                 }
@@ -343,7 +385,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 
                 // 将 meta 数据设置到模板中（转义处理由模板自行决定）
                 $template->setData('meta', $metaData);
-                self::$layoutParamsRequestCache[$paramsCacheKey] = $metaData;
+                $requestCache->layoutParamsRequestCache[$paramsCacheKey] = $metaData;
 
                 // 如果控制器没有设置标题，则从 meta 中获取默认标题并设置
                 if (!$template->getData('title') && !empty($metaData['title'])) {
@@ -378,23 +420,99 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
     }
 
+    private function isBackendRequest(?Request $request, mixed $controller = null): bool
+    {
+        if ($this->isBackendController($controller, $request)) {
+            return true;
+        }
+
+        $context = Context::getCurrent();
+        if ($context !== null) {
+            $area = (string)$context->get('route.area', '');
+            if ($area !== '') {
+                return $area === 'backend' || $area === 'rest_backend';
+            }
+
+            $isBackend = $context->get('route.is_backend', null);
+            if ($isBackend !== null) {
+                return (bool)$isBackend;
+            }
+        }
+
+        if ($request === null) {
+            return false;
+        }
+
+        $serverFlag = $request->getServer('WELINE_IS_BACKEND');
+        if ($serverFlag !== null) {
+            return (bool)$serverFlag;
+        }
+
+        $area = (string)($request->getServer('WELINE_AREA') ?? '');
+        if ($area !== '') {
+            return $area === 'backend' || $area === 'rest_backend';
+        }
+
+        $uri = (string)($context?->get('input.uri', $request->getServer('REQUEST_URI') ?? ($_SERVER['REQUEST_URI'] ?? '')) ?? '');
+        if ($uri !== '') {
+            try {
+                $backendPrefix = (string)\Weline\Framework\App\Env::getAreaRoutePrefix('backend');
+            } catch (\Throwable) {
+                $backendPrefix = '';
+            }
+
+            $backendPrefix = \trim($backendPrefix, '/');
+            if ($backendPrefix !== '') {
+                $normalizedUri = '/' . \ltrim($uri, '/');
+                if (\preg_match('#^/' . \preg_quote($backendPrefix, '#') . '(?:/|$)#', $normalizedUri) === 1) {
+                    return true;
+                }
+            }
+        }
+
+        return $request->isBackend();
+    }
+
+    private function isBackendController(mixed $controller, ?Request $request): bool
+    {
+        if (\is_object($controller)) {
+            $controllerClass = $controller::class;
+            if (\str_contains($controllerClass, '\\Controller\\Backend\\')) {
+                return true;
+            }
+        }
+
+        if ($request === null) {
+            return false;
+        }
+
+        $controllerName = (string)($request->getRouterData('class/controller_name') ?? '');
+        if ($controllerName !== '' && \str_contains(\str_replace('\\', '/', $controllerName), 'Backend/')) {
+            return true;
+        }
+
+        $controllerClass = (string)($request->getRouterData('class/name') ?? '');
+        return $controllerClass !== '' && \str_contains($controllerClass, '\\Controller\\Backend\\');
+    }
+
     /**
      * 解析布局用主题：优先预览主题（URL 参数或 Session），否则激活主题
      */
-    private function resolveThemeForLayout(string $area): WelineTheme
+    private function resolveThemeForLayout(string $area, bool $allowPreview = true): WelineTheme
     {
         self::registerStateManager();
         $cacheKey = $this->buildThemeCacheKey($area);
-        if (isset(self::$themeByAreaCache[$cacheKey])) {
-            return self::$themeByAreaCache[$cacheKey];
+        $requestCache = self::requestCacheState();
+        if (isset($requestCache->themeByAreaCache[$cacheKey])) {
+            return $requestCache->themeByAreaCache[$cacheKey];
         }
-        $theme = $this->themeContext->resolveTheme($area);
+        $theme = $this->themeContext->resolveTheme($area, null, $allowPreview);
         if ($theme === null || !$theme->getId()) {
             $theme = clone $this->welineTheme;
             $theme->clearData()->clearQuery();
             $theme->getActiveTheme($area);
         }
-        self::$themeByAreaCache[$cacheKey] = $theme;
+        $requestCache->themeByAreaCache[$cacheKey] = $theme;
         return $theme;
     }
 
@@ -427,6 +545,47 @@ class ControllerFetchFileBefore implements ObserverInterface
             'preview_theme:' . $previewThemeId,
             'preview_token:' . substr($previewToken, 0, 24),
         ]);
+    }
+
+    private static function currentFiber(): ?\Fiber
+    {
+        if (!class_exists(\Weline\Framework\Runtime\Runtime::class)) {
+            return null;
+        }
+
+        if (!\Weline\Framework\Runtime\Runtime::isPersistent()) {
+            return null;
+        }
+
+        return \Fiber::getCurrent();
+    }
+
+    private static function requestCacheState(): ControllerFetchFileBeforeRequestCacheState
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            self::$mainRequestCache ??= new ControllerFetchFileBeforeRequestCacheState();
+            return self::$mainRequestCache;
+        }
+
+        self::$fiberRequestCaches ??= new \WeakMap();
+        if (!isset(self::$fiberRequestCaches[$fiber])) {
+            self::$fiberRequestCaches[$fiber] = new ControllerFetchFileBeforeRequestCacheState();
+        }
+
+        return self::$fiberRequestCaches[$fiber];
+    }
+
+    private static function resetCurrentRequestCacheState(): void
+    {
+        $fiber = self::currentFiber();
+        if ($fiber === null) {
+            self::$mainRequestCache = new ControllerFetchFileBeforeRequestCacheState();
+            return;
+        }
+
+        self::$fiberRequestCaches ??= new \WeakMap();
+        self::$fiberRequestCaches[$fiber] = new ControllerFetchFileBeforeRequestCacheState();
     }
 
     /**
@@ -526,4 +685,3 @@ class ControllerFetchFileBefore implements ObserverInterface
     }
 
 }
-

@@ -7,6 +7,7 @@ test.describe('GuoLaiRen_PageBuilder backend (smoke)', () => {
   test.describe.configure({ retries: 0 });
 
   const PAGEBUILDER_MODULE = 'GuoLaiRen_PageBuilder';
+  const DIRECT_WLS = { useProxy: false };
 
   const FATAL_PATTERN = /WLS Runtime Error|ParseError|syntax error|Fatal error|Uncaught|Call to undefined|Class .* not found|404 Not Found/i;
 
@@ -34,10 +35,11 @@ test.describe('GuoLaiRen_PageBuilder backend (smoke)', () => {
   for (const c of cases) {
     test(`renders ${c.name} without PHP errors`, async ({ page }, testInfo) => {
       // Try best-effort auth. If runtime is unstable, continue and decide by page state.
-      await loginAsAdmin(page).catch(() => {});
+      await loginAsAdmin(page, { timeout: 90000, ...DIRECT_WLS }).catch(() => {});
       await gotoBackend(page, c.route, {
         timeout: 90000,
         settleMs: 1200,
+        ...DIRECT_WLS,
       });
 
       const body = page.locator('body');

@@ -141,6 +141,33 @@ final class SseWriterTest extends TestCase
         $this->assertTrue($disconnected, 'Peer disconnect should be detected without waiting for the next SSE write.');
     }
 
+    public function testIsAliveUsesBoundAliveCallback(): void
+    {
+        $stream = $this->createStream();
+        $alive = true;
+
+        SseContext::setConnection($stream);
+        SseContext::setAliveCallback(static function () use (&$alive): bool {
+            return $alive;
+        });
+
+        $sse = new SseWriter();
+        $this->assertTrue($sse->isAlive());
+
+        $alive = false;
+        $this->assertFalse($sse->isAlive());
+    }
+
+    public function testWriteCallbackMayReportDisconnectedClient(): void
+    {
+        $stream = $this->createStream();
+        SseContext::setConnection($stream);
+        SseContext::setWriteCallback(static fn (string $data): bool => false);
+
+        $this->assertFalse(SseContext::write('payload'));
+        $this->assertFalse(SseContext::writeNonBlocking('payload'));
+    }
+
     public function testYieldAfterSendDoesNotThrowWithoutScheduler(): void
     {
         $stream = $this->createStream();

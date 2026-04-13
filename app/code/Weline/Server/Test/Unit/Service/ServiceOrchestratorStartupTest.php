@@ -282,7 +282,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $this->invokePrivateWithArgs($orchestrator, 'handleStartupFailure', [
             new \RuntimeException('startup boom'),
-            '延迟启动子服务异常',
+            'deferred child startup exception',
         ]);
 
         self::assertTrue($this->readPrivateBool($orchestrator, 'running'));
@@ -552,6 +552,83 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('shared-session-19970', $registered->getMeta('service_instance_name'));
     }
 
+    public function testStartProvidersBatchSkipsSharedSidecarAdoptionDuringBootstrap(): void
+    {
+        $orchestrator = new class extends ServiceOrchestrator {
+            public int $inspectCalls = 0;
+
+            protected function inspectSharedSidecarForAdoption(string $role, int $port, string $expectedTokenFileName): array
+            {
+                unset($role, $port, $expectedTokenFileName);
+                $this->inspectCalls++;
+
+                return [
+                    'reusable' => true,
+                    'pid' => 5678,
+                    'port' => 19970,
+                    'role' => ControlMessage::ROLE_SESSION_SERVER,
+                    'token_file_name' => 'session_server.token',
+                    'process_name' => 'weline-wls-session-owner',
+                    'instance_name' => 'shared-session-19970',
+                ];
+            }
+
+            protected function batchCreateProcesses(array $commands): array
+            {
+                return [
+                    ControlMessage::ROLE_SESSION_SERVER . '#1' => 43210,
+                ];
+            }
+        };
+
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+        $this->writePrivate($orchestrator, 'running', true);
+
+        $provider = new SessionServerProvider();
+        $context = new ServiceContext(
+            instanceName: 'consumer-bootstrap',
+            epoch: 1,
+            controlPort: 19980,
+            masterPid: 999,
+            host: '127.0.0.1',
+            mainPort: 9982,
+            sslEnabled: false,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: false,
+            envConfig: [
+                'session' => ['server_port' => 19970],
+                'wls' => [
+                    'session' => [
+                        'port' => 19970,
+                        'token_file_name' => 'session_server.token',
+                        'wls_server' => [
+                            'port' => 19970,
+                            'token_file_name' => 'session_server.token',
+                        ],
+                    ],
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 10000,
+            workerPort: 19982,
+        );
+
+        $result = $this->invokePrivateWithArgs($orchestrator, 'startProvidersBatch', [[$provider], $context]);
+
+        self::assertSame(0, $orchestrator->inspectCalls);
+        self::assertCount(1, $result['session_server'] ?? []);
+        $instance = $result['session_server'][0];
+        self::assertInstanceOf(ServiceInstance::class, $instance);
+        self::assertSame(43210, $instance->pid);
+        self::assertFalse((bool) $instance->getMeta('shared_external'));
+        self::assertSame('providers_batch_create', $instance->getMeta('spawn_transport'));
+    }
+
     public function testStartProvidersBatchAdoptsConfiguredSharedRuntimeWithoutLaunchingLocalSessionServer(): void
     {
         $orchestrator = new class extends ServiceOrchestrator {
@@ -708,6 +785,8 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator = new ServiceOrchestrator();
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new WorkerProvider());
+        $registry->registerProvider(new SessionServerProvider());
+        $registry->registerProvider(new MemoryServerProvider());
 
         $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
         $this->writePrivate($orchestrator, 'desiredState', [
@@ -755,6 +834,8 @@ class ServiceOrchestratorStartupTest extends TestCase
         $orchestrator = new ServiceOrchestrator();
         $registry = $orchestrator->getRegistry();
         $registry->registerProvider(new WorkerProvider());
+        $registry->registerProvider(new SessionServerProvider());
+        $registry->registerProvider(new MemoryServerProvider());
 
         $this->writePrivate($orchestrator, 'controlServer', $server);
         $this->writePrivate($orchestrator, 'context', $this->createWorkerInfraContext());
@@ -787,7 +868,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             $session->ipcClientId = 77;
             $registry->updateInstance($session);
 
-            // 模拟 IPC 事件驱动更新 infraDegraded
+            // 妯℃嫙 IPC 浜嬩欢椹卞姩鏇存柊 infraDegraded
             $this->writePrivate($orchestrator, 'infraDegraded', [
                 ControlMessage::ROLE_SESSION_SERVER => false,
                 ControlMessage::ROLE_MEMORY_SERVER => false,
@@ -916,8 +997,8 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * 启动预置维护 + 第一阶段 Dispatcher/maintenance 同批并发（单入口 startProvidersBatch）+
-     * 无业务 Worker 时 Dispatcher READY 应收到 SET_WORKER_POOL（维护端口），而非 ADD_WORKER。
+     * 鍚姩棰勭疆缁存姢 + 绗竴闃舵 Dispatcher/maintenance 鍚屾壒骞跺彂锛堝崟鍏ュ彛 startProvidersBatch锛?
+     * 鏃犱笟鍔?Worker 鏃?Dispatcher READY 搴旀敹鍒?SET_WORKER_POOL锛堢淮鎶ょ鍙ｏ級锛岃€岄潪 ADD_WORKER銆?
      */
     /**
      * Failed slots that still own a live startup PID must keep the slot blocked
@@ -1003,8 +1084,8 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * 鍚姩棰勭疆缁存姢 + 绗竴闃舵 Dispatcher/maintenance 鍚屾壒骞跺彂锛堝崟鍏ュ彛 startProvidersBatch锛?
-     * 鏃犱笟鍔?Worker 鏃?Dispatcher READY 搴旀敹鍒?SET_WORKER_POOL锛堢淮鎶ょ鍙ｏ級锛岃€岄潪 ADD_WORKER銆?
+     * 閸氼垰濮╂０鍕枂缂佸瓨濮?+ 缁楊兛绔撮梼鑸殿唽 Dispatcher/maintenance 閸氬本澹掗獮璺哄絺閿涘牆宕熼崗銉ュ經 startProvidersBatch閿?
+     * 閺冪姳绗熼崝?Worker 閺?Dispatcher READY 鎼存梹鏁归崚?SET_WORKER_POOL閿涘牏娣幎銈囶伂閸欙綇绱氶敍宀冣偓宀勬姜 ADD_WORKER閵?
      */
     public function testStartupMaintenancePresetPhaseOneBatchAndDispatcherMaintenancePool(): void
     {
@@ -1153,7 +1234,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
             if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_ADD_WORKER) {
-                self::fail('维护模式下无业务 Worker 时不应向 Dispatcher 发送 ADD_WORKER');
+                self::fail('缁存姢妯″紡涓嬫棤涓氬姟 Worker 鏃朵笉搴斿悜 Dispatcher 鍙戦€?ADD_WORKER');
             }
         }
     }
@@ -1232,7 +1313,7 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * Worker 与 Dispatcher/维护进程在同一次 startProvidersBatch 中拉起，随后在 waitForStartupAcceptance 中等待维护端就绪门槛。
+     * Worker 涓?Dispatcher/缁存姢杩涚▼鍦ㄥ悓涓€娆?startProvidersBatch 涓媺璧凤紝闅忓悗鍦?waitForStartupAcceptance 涓瓑寰呯淮鎶ょ灏辩华闂ㄦ銆?
      */
     public function testWorkersLaunchBeforeStartupAcceptanceWaitsForPhaseOneReadiness(): void
     {
@@ -1344,7 +1425,7 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * 共享服务作为普通服务参与并发启动批次（无特殊 probe/ensure）。
+     * 鍏变韩鏈嶅姟浣滀负鏅€氭湇鍔″弬涓庡苟鍙戝惎鍔ㄦ壒娆★紙鏃犵壒娈?probe/ensure锛夈€?
      */
     public function testSharedServicesIncludedInPhaseOneBatch(): void
     {
@@ -1410,14 +1491,14 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $eventList = \iterator_to_array($events, false);
         self::assertNotEmpty($eventList);
-        // 验证共享服务包含在批量启动中
+        // 楠岃瘉鍏变韩鏈嶅姟鍖呭惈鍦ㄦ壒閲忓惎鍔ㄤ腑
         $batchEvent = $eventList[0] ?? '';
         self::assertStringContainsString(ControlMessage::ROLE_SESSION_SERVER, $batchEvent);
         self::assertStringContainsString(ControlMessage::ROLE_MEMORY_SERVER, $batchEvent);
     }
 
     /**
-     * 共享服务启动失败不阻塞其他子服务批量拉起（Provider 模式下由 Orchestrator 异步重试）。
+     * 鍏变韩鏈嶅姟鍚姩澶辫触涓嶉樆濉炲叾浠栧瓙鏈嶅姟鎵归噺鎷夎捣锛圥rovider 妯″紡涓嬬敱 Orchestrator 寮傛閲嶈瘯锛夈€?
      */
     public function testStartAllChildServicesBodyDoesNotThrowWhenSharedServiceProviderFails(): void
     {
@@ -1465,8 +1546,8 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * Dispatcher 先于维护 Worker READY 时，首次 sendAllWorkerPortsToDispatcher 无法下发池；
-     * 维护进程上报 READY 后应补发 SET_WORKER_POOL。
+     * Dispatcher 鍏堜簬缁存姢 Worker READY 鏃讹紝棣栨 sendAllWorkerPortsToDispatcher 鏃犳硶涓嬪彂姹狅紱
+     * 缁存姢杩涚▼涓婃姤 READY 鍚庡簲琛ュ彂 SET_WORKER_POOL銆?
      */
     public function testMaintenanceReadyAfterDispatcherSendsSetWorkerPool(): void
     {
@@ -1550,7 +1631,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             }
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
             if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL) {
-                self::fail('维护 Worker 尚未 READY 时不应下发 SET_WORKER_POOL');
+                self::fail('缁存姢 Worker 灏氭湭 READY 鏃朵笉搴斾笅鍙?SET_WORKER_POOL');
             }
         }
 
@@ -1955,6 +2036,121 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($enabled);
     }
 
+    /**
+     * --frontend should still show child consoles during bootstrap; the batch
+     * script no longer waits for PID/output, so visible windows need not
+     * degrade launch into one-by-one startup.
+     */
+    public function testShouldLaunchForegroundAllowsWindowsFrontendChildProcessesDuringBootstrapWhenFlagsSet(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+
+        $context = new ServiceContext(
+            instanceName: 'frontend-bootstrap',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: true,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: true,
+            envConfig: [
+                'wls' => [
+                    'orchestrator' => [
+                        'allow_windows_frontend_child_process' => true,
+                        'frontend_worker_windows' => true,
+                        'frontend_non_worker_windows' => true,
+                    ],
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 18080,
+            workerPort: 18080,
+        );
+
+        $dispatchForeground = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_DISPATCHER, $context]
+        );
+        $workerForeground = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_WORKER, $context]
+        );
+
+        if (\defined('IS_WIN') && IS_WIN) {
+            self::assertTrue($dispatchForeground);
+            self::assertTrue($workerForeground);
+            return;
+        }
+
+        self::assertTrue($dispatchForeground);
+        self::assertFalse($workerForeground);
+    }
+
+    public function testShouldLaunchForegroundAllowsWindowsFrontendChildProcessesAfterBootstrapWhenFlagsSet(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', false);
+
+        $context = new ServiceContext(
+            instanceName: 'frontend-after-bootstrap',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: true,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: true,
+            envConfig: [
+                'wls' => [
+                    'orchestrator' => [
+                        'allow_windows_frontend_child_process' => true,
+                        'frontend_worker_windows' => true,
+                        'frontend_non_worker_windows' => true,
+                    ],
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 18080,
+            workerPort: 18080,
+        );
+
+        $dispatchForeground = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_DISPATCHER, $context]
+        );
+        $workerForeground = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'shouldLaunchForeground',
+            [ControlMessage::ROLE_WORKER, $context]
+        );
+
+        if (\defined('IS_WIN') && IS_WIN) {
+            self::assertTrue($dispatchForeground);
+            self::assertTrue($workerForeground);
+            return;
+        }
+
+        self::assertTrue($dispatchForeground);
+        self::assertFalse($workerForeground);
+    }
+
     public function testBuildWindowsDetachedPhpArgvForBackgroundCommandIncludesEpochLaunchIdAndName(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -2197,9 +2393,142 @@ class ServiceOrchestratorStartupTest extends TestCase
 
             $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
             if (\is_array($decoded) && ($decoded['type'] ?? '') === ControlMessage::TYPE_ADD_WORKER) {
-                self::fail('维护模式仍在激活时，业务 Worker READY 不应立即发布给 Dispatcher');
+                self::fail('缁存姢妯″紡浠嶅湪婵€娲绘椂锛屼笟鍔?Worker READY 涓嶅簲绔嬪嵆鍙戝竷缁?Dispatcher');
             }
         }
+    }
+
+    public function testNotifyDispatcherRemoveWorkerInvalidatesDispatcherPoolSignature(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '16895,16896');
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: 1,
+            launchId: 'dispatcher-remove-signature',
+            port: 443,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201,
+        ));
+
+        $this->invokePrivateWithArgs($orchestrator, 'notifyDispatcherRemoveWorker', [16895]);
+
+        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+
+        $messages = \array_map(
+            static fn(array $entry): array => (array) \json_decode(\rtrim($entry['message'], "\n"), true),
+            $mockControl->sent
+        );
+        self::assertContains(ControlMessage::TYPE_REMOVE_WORKER, \array_column($messages, 'type'));
+    }
+
+    public function testDuplicateWorkerReadyResynchronizesDispatcherPoolAfterRemove(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'maintenanceMode', false);
+        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '18080,18081');
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-duplicate-ready-sync',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201,
+        ));
+
+        $workerOne = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-dup-ready-1',
+            port: 18080,
+            state: ServiceInstance::STATE_READY,
+            startedAt: \microtime(true) - 1.0,
+            ipcClientId: 301,
+        );
+        $workerOne->setMeta('worker_id', 1);
+        $workerOne->setMeta('ready_at', \microtime(true) - 1.0);
+        $registry->addInstance($workerOne);
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 2,
+            epoch: $context->epoch,
+            launchId: 'worker-dup-ready-2',
+            port: 18081,
+            state: ServiceInstance::STATE_READY,
+            startedAt: \microtime(true) - 1.0,
+            ipcClientId: 302,
+        ));
+
+        $this->invokePrivateWithArgs($orchestrator, 'notifyDispatcherRemoveWorker', [18080]);
+        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleReady', [[
+            'epoch' => $context->epoch,
+            'launch_id' => 'worker-dup-ready-1',
+            'port' => 18080,
+            'role' => ControlMessage::ROLE_WORKER,
+        ], 301]);
+
+        $poolMessages = [];
+        foreach ($mockControl->sent as $entry) {
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (!\is_array($decoded)) {
+                continue;
+            }
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL
+                && ($decoded['role'] ?? ControlMessage::ROLE_WORKER) === ControlMessage::ROLE_WORKER) {
+                $poolMessages[] = $decoded;
+            }
+        }
+
+        self::assertNotSame([], $poolMessages);
+        $lastPoolMessage = $poolMessages[\array_key_last($poolMessages)];
+        self::assertSame([18080, 18081], $lastPoolMessage['ports'] ?? []);
+        self::assertSame('18080,18081', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
     }
 
     private function createWorkerInfraContext(): ServiceContext
@@ -2244,8 +2573,8 @@ class ServiceOrchestratorStartupTest extends TestCase
     }
 
     /**
-     * PHPUnit CLI 下 Runtime::isWls() 常为 false，SchedulerWaitObserver 不会注册 yield 定时器，
-     * 挂起的 stop_all Fiber 需手动 resume 才能执行闭包内的 stopAll()。
+     * PHPUnit CLI 涓?Runtime::isWls() 甯镐负 false锛孲chedulerWaitObserver 涓嶄細娉ㄥ唽 yield 瀹氭椂鍣紝
+     * 鎸傝捣鐨?stop_all Fiber 闇€鎵嬪姩 resume 鎵嶈兘鎵ц闂寘鍐呯殑 stopAll()銆?
      */
     private function drainOrchestratorMainLoopTasks(ServiceOrchestrator $orchestrator): void
     {
@@ -2313,3 +2642,5 @@ class ServiceOrchestratorStartupTest extends TestCase
         throw new \ReflectionException(\sprintf('Property %s::%s does not exist', $object::class, $property));
     }
 }
+
+

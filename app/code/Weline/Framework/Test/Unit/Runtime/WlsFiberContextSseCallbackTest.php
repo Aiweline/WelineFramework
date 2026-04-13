@@ -77,6 +77,27 @@ final class WlsFiberContextSseCallbackTest extends TestCase
         self::assertSame('stream-body', (string)\stream_get_contents($stream));
     }
 
+    public function testRestoreReinstallsCapturedSseAliveCallback(): void
+    {
+        $stream = $this->createStream();
+        $alive = true;
+
+        SseContext::setConnection($stream);
+        SseContext::setAliveCallback(static function () use (&$alive): bool {
+            return $alive;
+        });
+
+        $context = WlsFiberContext::capture();
+
+        SseContext::setAliveCallback(static fn (): bool => false);
+
+        $context->restore();
+        self::assertTrue(SseContext::isConnectionAlive());
+
+        $alive = false;
+        self::assertFalse(SseContext::isConnectionAlive());
+    }
+
     public function testSetConnectionNullClearsSseFlagsAndWriteCallback(): void
     {
         $stream = $this->createStream();
@@ -85,6 +106,7 @@ final class WlsFiberContextSseCallbackTest extends TestCase
         SseContext::markHeadersSent();
         SseContext::setWriteCallback(static function (string $data): void {
         });
+        SseContext::setAliveCallback(static fn (): bool => true);
 
         SseContext::setConnection(null);
 
@@ -92,6 +114,7 @@ final class WlsFiberContextSseCallbackTest extends TestCase
         self::assertFalse(SseContext::isSseEnabled());
         self::assertFalse(SseContext::isHeadersSent());
         self::assertNull(SseContext::getWriteCallback());
+        self::assertNull(SseContext::getAliveCallback());
     }
 
     /**

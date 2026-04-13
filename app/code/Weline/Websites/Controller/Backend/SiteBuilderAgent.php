@@ -2487,9 +2487,24 @@ class SiteBuilderAgent extends BackendController
         $siteTitle = \trim((string)($scope['site_title'] ?? ''));
         $siteTagline = \trim((string)($scope['site_tagline'] ?? ''));
         $targetDomain = \strtolower(\trim((string)($scope['target_domain'] ?? $scope['selected_domain'] ?? $session->getSelectedDomain())));
-        $recommendedPages = $this->normalizeScopeStringList($scope['page_types'] ?? $scope['recommended_pages'] ?? []);
+        $selectedPageTypes = $this->normalizeScopeStringList($scope['page_types'] ?? []);
+        $recommendedPages = $selectedPageTypes !== []
+            ? $selectedPageTypes
+            : $this->normalizeScopeStringList($scope['recommended_pages'] ?? []);
         if ($recommendedPages === []) {
             $recommendedPages = $this->buildRecommendedPages($brief, 'pagebuilder', $scope);
+        }
+        $siteProfileManual = \is_array($scope['site_profile_manual'] ?? null) ? $scope['site_profile_manual'] : [];
+        foreach ([
+            'site_title' => $siteTitle,
+            'site_tagline' => $siteTagline,
+            'target_domain' => $targetDomain,
+            'brief_description' => $brief,
+            'default_locale' => \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? '')),
+        ] as $field => $value) {
+            if ($value !== '') {
+                $siteProfileManual[$field] = true;
+            }
         }
         $styleTemplate = '';
         $defaultLocale = \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? ''));
@@ -2521,8 +2536,10 @@ class SiteBuilderAgent extends BackendController
             'locales' => $locales,
             'preferred_editor' => 'pagebuilder',
             'provider_handoff_mode' => self::PAGEBUILDER_HANDOFF_MODE_NATIVE_WORKSPACE,
-            'page_types' => $recommendedPages,
+            'page_types' => $selectedPageTypes !== [] ? $selectedPageTypes : $recommendedPages,
             'recommended_pages' => $recommendedPages,
+            'page_types_user_customized' => $selectedPageTypes !== [] ? 1 : (int)($scope['page_types_user_customized'] ?? 0),
+            'site_profile_manual' => $siteProfileManual,
         ];
 
         foreach ([

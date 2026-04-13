@@ -117,6 +117,90 @@ async function gotoStable(page, url) {
   await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
 }
 
+function hubBriefLocator(page) {
+  return page.locator('#site-agent-description, #sbv1-desc').first();
+}
+
+async function expectHubBriefReady(page) {
+  await expect(hubBriefLocator(page)).toBeVisible({ timeout: 30000 });
+}
+
+async function fillHubBrief(page, text) {
+  await hubBriefLocator(page).fill(text);
+}
+
+async function openWebsitesSummaryDetails(page) {
+  const details = page.locator('#site-builder-summary-details');
+  if (!(await details.count().catch(() => 0))) {
+    return;
+  }
+  const isOpen = await details.evaluate(node => Boolean(node.open)).catch(() => false);
+  if (!isOpen) {
+    await details.evaluate(node => { node.open = true; });
+  }
+  await expect(page.locator('#site-builder-title')).toBeVisible({ timeout: 10000 });
+}
+
+async function confirmPagebuilderGenerateIfNeeded(page) {
+  const modal = page.locator('#pb-ai-page-type-confirm-modal');
+  const confirmBtn = page.locator('#pb-ai-confirm-generate-theme');
+  const exists = await modal.count().catch(() => 0);
+  if (!exists) {
+    return;
+  }
+  const isVisible = await modal.isVisible({ timeout: 10000 }).catch(() => false);
+  if (!isVisible) {
+    return;
+  }
+  await expect(confirmBtn).toBeVisible({ timeout: 10000 });
+  await confirmBtn.click({ force: true });
+}
+
+async function mergeWebsitesScope(page, patch) {
+  const result = await page.evaluate(async ({ scopePatch }) => {
+    const current = new URL(window.location.href);
+    const publicId = String(current.searchParams.get('public_id') || '').trim();
+    const mergeUrl = new URL(current.toString());
+    mergeUrl.search = '';
+    mergeUrl.hash = '';
+    mergeUrl.pathname = mergeUrl.pathname.replace(/\/workspace$/i, '/merge-scope');
+
+    const fd = new FormData();
+    fd.append('public_id', publicId);
+    fd.append('scope_patch', JSON.stringify(scopePatch || {}));
+
+    const response = await fetch(mergeUrl.toString(), {
+      method: 'POST',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+      body: fd,
+    });
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      return { success: false, message: text.slice(0, 400), raw_status: response.status };
+    }
+  }, { scopePatch: patch });
+
+  expect(result && result.success, JSON.stringify(result)).toBeTruthy();
+  await page.reload({ waitUntil: 'domcontentloaded', timeout: WORKSPACE_TIMEOUT });
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => {});
+}
+
+async function fillFirstVisible(page, selectors, value) {
+  for (const selector of selectors) {
+    const locator = page.locator(selector).first();
+    const visible = await locator.isVisible({ timeout: 2000 }).catch(() => false);
+    if (!visible) {
+      continue;
+    }
+    await locator.fill(value);
+    return selector;
+  }
+  throw new Error(`No visible input found for selectors: ${selectors.join(', ')}`);
+}
+
 async function readJsonTextarea(page, selector) {
   const raw = await page.locator(selector).inputValue({ timeout: WORKSPACE_TIMEOUT });
   return JSON.parse(raw.trim());
@@ -125,6 +209,11 @@ async function readJsonTextarea(page, selector) {
 function buildLocalDomain(prefix) {
   const suffix = Date.now().toString().slice(-8);
   return `${prefix}-${suffix}.local.test`;
+}
+
+function buildWelineLocalDomain(prefix) {
+  const suffix = Date.now().toString().slice(-8);
+  return `${prefix}-${suffix}.weline.local`;
 }
 
 function bindPageAnomalies(page) {
@@ -150,10 +239,14 @@ function filterUnexpectedAnomalies(items, allowlist) {
 }
 
 async function expectWorkbenchScreenshot(page, screenshotName) {
+  if (process.env.PLAYWRIGHT_ASSERT_SCREENSHOTS !== '1') {
+    return;
+  }
   await expect(page.locator('body')).toHaveScreenshot(screenshotName, {
     ...SCREENSHOT_OPTIONS,
     mask: [
       page.locator('#site-agent-description'),
+      page.locator('#sbv1-desc'),
       page.locator('#site-builder-domain'),
       page.locator('#site-builder-scope-full'),
       page.locator('#site-builder-workspace-terminal'),
@@ -244,10 +337,10 @@ test.describe('AI Site Workbench', () => {
     const anomalies = bindPageAnomalies(page);
 
     const { backendRoot } = await openHub(page, 'pagebuilder', false);
-    await expect(page.locator('#site-agent-description')).toBeVisible({ timeout: 30000 });
+    await expectHubBriefReady(page);
     await expectWorkbenchScreenshot(page, 'ai-site-workbench-hub.png');
 
-    await page.fill('#site-agent-description', 'Build a coffee brand site with story pages, contact page, and a clear home page hero.');
+    await fillHubBrief(page, 'Build a coffee brand site with story pages, contact page, and a clear home page hero.');
     const createWorkspacePayload = await createWorkspace(
       page,
       backendRoot,
@@ -262,18 +355,16 @@ test.describe('AI Site Workbench', () => {
     await expectWorkspaceStreamHealthy(page);
     await expectWorkbenchScreenshot(page, 'ai-site-workbench-workspace.png');
 
-    const localDomain = buildLocalDomain('pb-e2e');
-    await page.fill('#site-builder-title', 'PageBuilder E2E Coffee');
-    await page.fill('#site-builder-tagline', 'Roasting story and product showcase');
-    await page.fill('#site-builder-domain', localDomain);
-    await page.fill('#site-builder-brief', 'Need a home page, about page, and contact page with strong brand storytelling.');
-    await waitForWorkspaceReload(
-      page,
-      /site-builder-agent\/workspace\?public_id=/,
-      () => page.click('#site-builder-save-summary', { force: true })
-    );
+    const localDomain = buildWelineLocalDomain('pb-e2e');
+    await mergeWebsitesScope(page, {
+      site_title: 'PageBuilder E2E Coffee',
+      site_tagline: 'Roasting story and product showcase',
+      target_domain: localDomain,
+      brief_description: 'Need a home page, about page, and contact page with strong brand storytelling.',
+    });
 
     const websitesWorkspaceUrl = page.url();
+    await openWebsitesSummaryDetails(page);
     await expect(page.locator('#site-builder-domain')).toHaveValue(localDomain);
 
     const handoffLink = page.locator('a[href*="/site-builder-agent/pagebuilder-handoff"]').first();
@@ -310,7 +401,13 @@ test.describe('AI Site Workbench', () => {
     await expect(page.locator('#pb-ai-run-virtual-theme')).toBeVisible({ timeout: 30000 });
     await expectWorkbenchScreenshot(page, 'ai-site-workbench-pagebuilder-expert.png');
 
+    await fillFirstVisible(page, ['#pb-ai-site-title'], 'PageBuilder E2E Coffee');
+    await fillFirstVisible(page, ['#pb-ai-site-tagline'], 'Roasting story and product showcase');
+    await fillFirstVisible(page, ['#pb-ai-target-domain', '#pb-ai-target-domain-summary'], localDomain);
+    await fillFirstVisible(page, ['#pb-ai-brief-description'], 'Need a home page, about page, and contact page with strong brand storytelling.');
+
     await page.click('#pb-ai-run-virtual-theme', { force: true });
+    await confirmPagebuilderGenerateIfNeeded(page);
 
     await expect
       .poll(async () => {
@@ -413,10 +510,10 @@ test.describe('AI Site Workbench', () => {
     test.setTimeout(180000);
     const anomalies = bindPageAnomalies(page);
     const { backendRoot } = await openHub(page, 'pagebuilder', true);
-    await expect(page.locator('#site-agent-description')).toBeVisible({ timeout: 30000 });
+    await expectHubBriefReady(page);
 
     const brief = 'Fake mode PageBuilder handoff smoke test.';
-    await page.fill('#site-agent-description', brief);
+    await fillHubBrief(page, brief);
     const payload = await createWorkspace(page, backendRoot, 'pagebuilder', brief, { fakeMode: true });
     expect(payload.success).toBeTruthy();
     expect(payload.workspace_url).toBeTruthy();
