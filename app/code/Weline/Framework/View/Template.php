@@ -24,6 +24,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FiberOutputBuffer;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Ui\FormKey;
 use Weline\Framework\View\Data\DataInterface;
 
@@ -72,6 +73,8 @@ class Template extends DataObject
 
     private static ?Template $instance = null;
     private static ?\WeakMap $fiberInstances = null;
+    /** @var array<string, Template> */
+    private static array $scopedInstances = [];
 
     private function __clone()
     {
@@ -79,6 +82,17 @@ class Template extends DataObject
 
     public static function getInstance(): Template
     {
+        $scopeKey = self::currentScopeKey();
+        if ($scopeKey !== null) {
+            if (!isset(self::$scopedInstances[$scopeKey])) {
+                $instance = new self();
+                $instance->init();
+                self::$scopedInstances[$scopeKey] = $instance;
+            }
+
+            return self::$scopedInstances[$scopeKey];
+        }
+
         $fiber = self::currentFiber();
         if ($fiber !== null) {
             self::$fiberInstances ??= new \WeakMap();
@@ -107,6 +121,12 @@ class Template extends DataObject
      */
     public static function resetInstance(): void
     {
+        $scopeKey = self::currentScopeKey();
+        if ($scopeKey !== null) {
+            unset(self::$scopedInstances[$scopeKey]);
+            return;
+        }
+
         $fiber = self::currentFiber();
         if ($fiber !== null) {
             if (self::$fiberInstances !== null && isset(self::$fiberInstances[$fiber])) {
@@ -117,6 +137,18 @@ class Template extends DataObject
 
         self::$instance = null;
         self::$fiberInstances = null;
+        self::$scopedInstances = [];
+    }
+
+    private static function currentScopeKey(): ?string
+    {
+        try {
+            $scopeId = RequestContext::getStorageScopeId();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $scopeId === null || $scopeId === '' ? null : 'conn:' . $scopeId;
     }
 
     private static function currentFiber(): ?\Fiber

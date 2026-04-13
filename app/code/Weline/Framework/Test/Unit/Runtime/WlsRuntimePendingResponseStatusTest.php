@@ -4,19 +4,35 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Runtime;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Context;
 use Weline\Framework\Http\HeaderCollector;
+use Weline\Framework\Http\WlsRequest;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\WlsRuntime;
 
 final class WlsRuntimePendingResponseStatusTest extends TestCase
 {
+    private ?Context $previousContext = null;
+
     protected function setUp(): void
     {
+        $this->previousContext = Context::getCurrent();
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
         HeaderCollector::reset();
     }
 
     protected function tearDown(): void
     {
         HeaderCollector::reset();
+        RequestContext::cleanup();
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
+        if ($this->previousContext !== null) {
+            Context::enter($this->previousContext);
+        }
     }
 
     public function testSnapshotAndConsumePendingResponseStatusPreservesExplicitOverride(): void
@@ -95,5 +111,22 @@ final class WlsRuntimePendingResponseStatusTest extends TestCase
         self::assertSame('text/html; charset=utf-8', $resultA['headers']['Content-Type'] ?? null);
         self::assertSame('fiber-a', $resultA['cookies']['sid']['value'] ?? null);
         self::assertSame(['status_code' => 201, 'explicit' => true], $resultA['status']);
+    }
+
+    public function testSseHandledMarkerDoesNotRequireEventSourceAcceptHeader(): void
+    {
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::init();
+        RequestContext::set(RequestContext::SSE_WRITER_KEY, true);
+
+        $request = WlsRequest::fromRaw(
+            "POST /stream HTTP/1.1\r\nHost: example.test\r\nAccept: */*\r\nX-Requested-With: XMLHttpRequest\r\n\r\n"
+        );
+
+        $runtime = new WlsRuntime();
+        $method = new \ReflectionMethod(WlsRuntime::class, 'isSseStreamHandledInCurrentRequest');
+        $method->setAccessible(true);
+
+        self::assertTrue((bool)$method->invoke($runtime, $request));
     }
 }

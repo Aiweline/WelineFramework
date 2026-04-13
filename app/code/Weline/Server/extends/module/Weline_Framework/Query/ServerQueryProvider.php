@@ -6,10 +6,12 @@ namespace Weline\Server\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\App\Env;
 use Weline\Server\IPC\ControlMessage;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Server\Console\Server\Hosts\Add as HostsAddCommand;
 use Weline\Server\Model\SslCertificate as CertModel;
 use Weline\Server\Service\Control\BackendStatusService;
 use Weline\Server\Service\Control\BroadcastControlDispatchService;
 use Weline\Server\Service\Control\IpcControlGateway;
+use Weline\Server\Service\HostsFileManager;
 use Weline\Server\Service\OptimizationGuideService;
 use Weline\Server\Service\SslCertificateService;
 use Weline\Server\Service\Control\SharedStateAdminService;
@@ -51,6 +53,8 @@ class ServerQueryProvider implements QueryProviderInterface
             'stop' => $this->stop($params),
             'restart' => $this->restart($params),
             'reload' => $this->reload($params),
+            'hostsAdd' => $this->hostsAdd($params),
+            'ensureLocalWelineWildcardCertificate' => $this->ensureLocalWelineWildcardCertificate($params),
             'maintenanceEnable' => $this->maintenanceEnable($params),
             'maintenanceDisable' => $this->maintenanceDisable($params),
             'optimizationData' => $this->optimizationData(),
@@ -552,6 +556,70 @@ class ServerQueryProvider implements QueryProviderInterface
         ];
     }
 
+    private function hostsAdd(array $params): array
+    {
+        $envType = (string) Env::getInstance()->getConfig('system.env', 'local');
+        if (!\in_array($envType, ['local', 'dev', 'test'], true)) {
+            return [
+                'success' => false,
+                'message' => (string)__('Only local/dev/test environment may write hosts entries'),
+                'needs_admin' => false,
+            ];
+        }
+
+        $domain = \strtolower(\trim((string)($params['domain'] ?? '')));
+        $ip = \trim((string)($params['ip'] ?? '127.0.0.1'));
+        if ($ip === '') {
+            $ip = '127.0.0.1';
+        }
+        if ($domain === '') {
+            return ['success' => false, 'message' => (string)__('Domain is required')];
+        }
+        if (!$this->isEligibleWelineLocalHostDomain($domain)) {
+            return [
+                'success' => false,
+                'message' => (string)__('Only {subdomain}.weline.local may be injected into local hosts'),
+                'domain' => $domain,
+            ];
+        }
+        if (!HostsAddCommand::isEligibleLocalHostname($domain)) {
+            return [
+                'success' => false,
+                'message' => (string)__('The requested domain is not a valid local hostname'),
+                'domain' => $domain,
+            ];
+        }
+
+        return HostsFileManager::addDomain($domain, $ip) + [
+            'domain' => $domain,
+            'ip' => $ip,
+        ];
+    }
+
+    private function ensureLocalWelineWildcardCertificate(array $params): array
+    {
+        $websiteId = (int)($params['website_id'] ?? 0);
+        $domain = (string)($params['domain'] ?? '*.weline.local');
+        if (\strtolower(\trim($domain)) !== '*.weline.local') {
+            return [
+                'success' => false,
+                'message' => (string)__('Only *.weline.local is allowed for local wildcard certificate issuance'),
+                'domain' => $domain,
+            ];
+        }
+
+        $result = $this->sslCertificateService->ensureCertificate('*.weline.local', '', '', $websiteId);
+        if (\is_array($result)) {
+            $result['domain'] = '*.weline.local';
+        }
+
+        return \is_array($result) ? $result : [
+            'success' => false,
+            'message' => (string)__('Failed to ensure *.weline.local wildcard certificate'),
+            'domain' => '*.weline.local',
+        ];
+    }
+
     private function maintenanceEnable(array $params): array
     {
         $instance = (string)($params['instance'] ?? 'default');
@@ -919,5 +987,10 @@ class ServerQueryProvider implements QueryProviderInterface
         $payload['covers_hostname'] = $cert->coversHostname($hostname);
 
         return $payload;
+    }
+
+    private function isEligibleWelineLocalHostDomain(string $domain): bool
+    {
+        return (bool)\preg_match('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.weline\.local$/', $domain);
     }
 }

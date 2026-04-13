@@ -291,13 +291,13 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         ? (string)((int)($domainPurchaseState['purchase_order_id'] ?? 0))
         : (string)__('暂未生成'));
 ?>
-<?= $this->fetch('workspace/styles-device') ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-device.phtml') ?>
 <?php if ($guidedUi): ?>
 <?php /* ============================================================
    GUIDED UI（默认，快速模式）
    ============================================================ */ ?>
 <script type="application/json" id="pb-ai-guided-scope-defaults"><?= htmlspecialchars((string)\json_encode($guidedScopeDefaults, \JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?></script>
-<?= $this->fetch('workspace/styles-guided') ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/styles-guided.phtml') ?>
 <?php if ($purchaseDialogJsUrl !== ''): ?>
     <script src="<?= htmlspecialchars($purchaseDialogJsUrl, ENT_QUOTES, 'UTF-8') ?>"></script>
 <?php endif; ?>
@@ -504,22 +504,6 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                             <button type="button" class="btn btn-outline-primary btn-sm pb-ai-open-page-type-picker">
                                 <i class="mdi mdi-checkbox-multiple-marked-outline me-1"></i><?= htmlspecialchars((string)__('重新选择页面类型并重新生成'), ENT_QUOTES, 'UTF-8') ?>
                             </button>
-                            <p class="small text-muted mb-0 mt-2"><?= htmlspecialchars((string)__('可勾选博客、政策页等全部类型；确认后将按新选择重新生成虚拟主题与页面（会覆盖当前生成结果）。'), ENT_QUOTES, 'UTF-8') ?></p>
-                            <details class="border rounded p-3 mt-3 pb-guided-page-type-repick">
-                                <summary class="fw-semibold d-flex flex-wrap align-items-center gap-2" style="cursor:pointer;list-style-position:outside;">
-                                    <span class="flex-grow-1"><?= htmlspecialchars((string)__('展开：在此直接勾选/取消页面类型'), ENT_QUOTES, 'UTF-8') ?></span>
-                                    <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap ms-auto pb-ai-clear-page-type-selection"><?= htmlspecialchars((string)__('取消选择'), ENT_QUOTES, 'UTF-8') ?></button>
-                                </summary>
-                                <div class="d-flex flex-wrap gap-2 mt-3" id="pb-guided-visual-page-types">
-                                    <?php foreach ($pageTypeLabels as $pt => $label): ?>
-                                        <label class="form-check-label border rounded-pill px-3 py-2 mb-0" style="cursor:pointer;background:var(--backend-color-bg-secondary, #f1f5f9);">
-                                            <input class="form-check-input me-2 pb-ai-page-type-check" type="checkbox" value="<?= htmlspecialchars((string)$pt, ENT_QUOTES, 'UTF-8') ?>"<?= \in_array($pt, $selectedPageTypes, true) ? ' checked' : '' ?>>
-                                            <span><?= htmlspecialchars((string)$label, ENT_QUOTES, 'UTF-8') ?></span>
-                                        </label>
-                                    <?php endforeach; ?>
-                                </div>
-                                <p class="small text-muted mt-2 mb-0"><?= htmlspecialchars((string)__('修改后会自动保存到工作区；要生成新页面请点击上方「重新选择页面类型并重新生成」或返回步骤 1 使用「确认并生成」。'), ENT_QUOTES, 'UTF-8') ?></p>
-                            </details>
                         </div>
                         <?php if ($previewPageOptions): ?>
                         <div class="w-100">
@@ -1129,7 +1113,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
 <?php endif; ?>
 
-<?= $this->fetch('workspace/modals') ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/modals.phtml') ?>
 
 <script>
 (function () {
@@ -4210,7 +4194,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 })();
 </script>
 
-<?= $this->fetch('workspace/script-stream') ?>
+<?= $this->fetch('GuoLaiRen_PageBuilder::templates/Backend/AiSiteAgent/workspace/script-stream.phtml') ?>
 
 <script>
 (function () {
