@@ -367,57 +367,6 @@ class PcController extends Core
     }
 
     /**
-     * 渲染模板文件（通过事件系统）
-     * 
-     * @param string $fileName 模板文件路径
-     * @return string 渲染后的内容
-     */
-    private function fetchWithEvents(string $fileName): string
-    {
-        $eventData = new DataObject([
-            'fileName' => $fileName,
-            'content' => '',
-            'contentTemplate' => $fileName,
-            'controller' => $this,
-            'layoutType' => $this->layoutType ?? null
-        ]);
-
-        $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_before', $eventData);
-        SchedulerSystem::yield();
-        $fileName = $eventData->getData('fileName');
-        $content = $this->getTemplate()->fetch($fileName);
-        SchedulerSystem::yield();
-        $eventData->setData('content', $content);
-        $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
-        SchedulerSystem::yield();
-        $finalContent = (string)$eventData->getData('content');
-        if ($finalContent === '' && !$this->_templateEmptyRetrying && RequestContext::getId() !== null) {
-            $this->_templateEmptyRetrying = true;
-            try {
-                $templateData = $this->getTemplate()->getData();
-                WlsLogger::error_('[PcController::fetchTemplateWithEvents] empty content retry', [
-                    'request_id' => RequestContext::getId(),
-                    'file_name' => $originalFileName,
-                    'resolved_file_name' => $fileName,
-                    'controller' => static::class,
-                    'template_data_count' => \is_array($templateData) ? \count($templateData) : 0,
-                ]);
-                Template::resetInstance();
-                unset($this->_template);
-                $this->_templateRequestId = null;
-                if (\is_array($templateData) && $templateData !== []) {
-                    $this->getTemplate()->assign($templateData);
-                }
-                return $this->fetchTemplateWithEvents($originalFileName);
-            } finally {
-                $this->_templateEmptyRetrying = false;
-            }
-        }
-
-        return $finalContent;
-    }
-
-    /**
      * @DESC         |获取模板渲染
      *
      * 参数区：
@@ -504,6 +453,30 @@ class PcController extends Core
     protected function fetchTemplateWithEvents(string $fileName): mixed
     {
         $originalFileName = $fileName;
+        $content = $this->performTemplateFetchWithEvents($fileName);
+        if (($content === null || $content === '') && !$this->_templateEmptyRetrying && RequestContext::getId() !== null) {
+            $this->_templateEmptyRetrying = true;
+            try {
+                $templateData = $this->snapshotTemplateDataForEmptyRetry();
+                WlsLogger::error_('[PcController::fetchTemplateWithEvents] empty content retry', [
+                    'request_id' => RequestContext::getId(),
+                    'file_name' => $originalFileName,
+                    'resolved_file_name' => $fileName,
+                    'controller' => static::class,
+                    'template_data_count' => \count($templateData),
+                ]);
+                $this->resetTemplateAfterEmptyRetry($templateData);
+                return $this->performTemplateFetchWithEvents($originalFileName);
+            } finally {
+                $this->_templateEmptyRetrying = false;
+            }
+        }
+
+        return $content;
+    }
+
+    protected function performTemplateFetchWithEvents(string $fileName): mixed
+    {
         // 触发Weline_Framework_Controller::fetch_file_before事件
         $eventData = new DataObject([
             'fileName' => $fileName,
@@ -523,6 +496,22 @@ class PcController extends Core
         $this->getEventManager()->dispatch('Weline_Framework_Controller::fetch_file_after', $eventData);
         SchedulerSystem::yield();
         return $eventData->getData('content');
+    }
+
+    protected function snapshotTemplateDataForEmptyRetry(): array
+    {
+        $templateData = $this->getTemplate()->getData();
+        return \is_array($templateData) ? $templateData : [];
+    }
+
+    protected function resetTemplateAfterEmptyRetry(array $templateData): void
+    {
+        Template::resetInstance();
+        unset($this->_template);
+        $this->_templateRequestId = null;
+        if ($templateData !== []) {
+            $this->getTemplate()->assign($templateData);
+        }
     }
 
     /**
