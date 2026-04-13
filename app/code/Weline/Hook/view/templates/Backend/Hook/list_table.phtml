@@ -1,6 +1,7 @@
 <?php
 $hooks = $this->getData('hooks') ?? [];
-$totalCount = count($hooks);
+$visibleCount = count($hooks);
+$totalCount = (int)($this->getData('total_filtered_count') ?? $visibleCount);
 $currentSort = $this->getData('sort_by') ?? 'name';
 $currentOrder = $this->getData('sort_order') ?? 'asc';
 $quickSearch = $this->getData('quick_search') ?? '';
@@ -9,10 +10,41 @@ $filterRegistered = $this->getData('filter_registered') ?? '';
 $filterFiles = $this->getData('filter_files') ?? '';
 $filterArea = $this->getData('filter_area') ?? '';
 $filterType = $this->getData('filter_type') ?? '';
+$currentPage = max(1, (int)($this->getData('current_page') ?? 1));
+$perPage = max(1, (int)($this->getData('per_page') ?? 50));
+$totalPages = max(1, (int)($this->getData('total_pages') ?? 1));
+
+$buildQuery = static function (array $overrides = []) use (
+    $quickSearch,
+    $filterModule,
+    $filterRegistered,
+    $filterFiles,
+    $filterArea,
+    $filterType,
+    $currentSort,
+    $currentOrder,
+    $perPage
+): string {
+    $params = array_merge([
+        'q' => $quickSearch,
+        'module' => $filterModule,
+        'registered' => $filterRegistered,
+        'files' => $filterFiles,
+        'area' => $filterArea,
+        'type' => $filterType,
+        'sort' => $currentSort,
+        'order' => $currentOrder,
+        'per_page' => $perPage,
+    ], $overrides);
+
+    $params = array_filter($params, static fn($value) => $value !== '' && $value !== null);
+
+    return http_build_query($params);
+};
 ?>
 <div class="list-header">
     <div class="list-info">
-        <span>共找到 <strong><?= $totalCount ?></strong> 个 Hook</span>
+        <span>共找到 <strong><?= $totalCount ?></strong> 个 Hook，当前第 <strong><?= $currentPage ?></strong>/<?= $totalPages ?> 页，显示 <strong><?= $visibleCount ?></strong> 个</span>
     </div>
 </div>
 <?php if (empty($hooks)): ?>
@@ -27,20 +59,8 @@ $filterType = $this->getData('filter_type') ?? '';
             <thead>
                 <tr>
                     <th>
-                        <?php
-                        $newOrder = ($currentSort === 'name' && $currentOrder === 'asc') ? 'desc' : 'asc';
-                        $queryParams = http_build_query(array_filter([
-                            'q' => $quickSearch,
-                            'module' => $filterModule,
-                            'registered' => $filterRegistered,
-                            'files' => $filterFiles,
-                            'area' => $filterArea,
-                            'type' => $filterType,
-                            'sort' => 'name',
-                            'order' => $newOrder
-                        ]));
-                        ?>
-                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="name" data-order="<?= $newOrder ?>">
+                        <?php $newOrder = ($currentSort === 'name' && $currentOrder === 'asc') ? 'desc' : 'asc'; ?>
+                        <a href="?<?= $buildQuery(['sort' => 'name', 'order' => $newOrder, 'page' => 1]) ?>" class="sort-link" data-sort="name" data-order="<?= $newOrder ?>">
                             Hook 名
                             <?php if ($currentSort === 'name'): ?>
                                 <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
@@ -51,20 +71,8 @@ $filterType = $this->getData('filter_type') ?? '';
                     <th>区域/类型</th>
                     <th>组件/位置</th>
                     <th>
-                        <?php
-                        $newOrder = ($currentSort === 'files' && $currentOrder === 'asc') ? 'desc' : 'asc';
-                        $queryParams = http_build_query(array_filter([
-                            'q' => $quickSearch,
-                            'module' => $filterModule,
-                            'registered' => $filterRegistered,
-                            'files' => $filterFiles,
-                            'area' => $filterArea,
-                            'type' => $filterType,
-                            'sort' => 'files',
-                            'order' => $newOrder
-                        ]));
-                        ?>
-                        <a href="?<?= $queryParams ?>" class="sort-link" data-sort="files" data-order="<?= $newOrder ?>">
+                        <?php $newOrder = ($currentSort === 'files' && $currentOrder === 'asc') ? 'desc' : 'asc'; ?>
+                        <a href="?<?= $buildQuery(['sort' => 'files', 'order' => $newOrder, 'page' => 1]) ?>" class="sort-link" data-sort="files" data-order="<?= $newOrder ?>">
                             文件数
                             <?php if ($currentSort === 'files'): ?>
                                 <i class="mdi mdi-arrow-<?= $currentOrder === 'asc' ? 'up' : 'down' ?>"></i>
@@ -136,8 +144,8 @@ $filterType = $this->getData('filter_type') ?? '';
                         </td>
                         <td>
                             <div class="actions">
-                                <button type="button" 
-                                        class="btn btn-sm btn-outline-primary btn-view-detail" 
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-primary btn-view-detail"
                                         data-hook-name="<?= htmlspecialchars($hookName) ?>"
                                         title="查看详情">
                                     <i class="mdi mdi-eye"></i> 详情
@@ -149,4 +157,35 @@ $filterType = $this->getData('filter_type') ?? '';
             </tbody>
         </table>
     </div>
+
+    <?php if ($totalPages > 1): ?>
+        <div class="pagination-bar">
+            <div class="pagination-summary">
+                每页 <?= $perPage ?> 条，共 <?= $totalPages ?> 页
+            </div>
+            <div class="pagination-actions">
+                <a class="btn btn-sm btn-secondary pagination-link<?= $currentPage <= 1 ? ' disabled' : '' ?>"
+                   href="<?= $currentPage <= 1 ? 'javascript:void(0)' : ('?' . $buildQuery(['page' => $currentPage - 1])) ?>"
+                   data-page="<?= max(1, $currentPage - 1) ?>">
+                    上一页
+                </a>
+                <?php
+                $startPage = max(1, $currentPage - 2);
+                $endPage = min($totalPages, $currentPage + 2);
+                for ($page = $startPage; $page <= $endPage; $page++):
+                ?>
+                    <a class="btn btn-sm <?= $page === $currentPage ? 'btn-primary' : 'btn-outline-primary' ?> pagination-link"
+                       href="?<?= $buildQuery(['page' => $page]) ?>"
+                       data-page="<?= $page ?>">
+                        <?= $page ?>
+                    </a>
+                <?php endfor; ?>
+                <a class="btn btn-sm btn-secondary pagination-link<?= $currentPage >= $totalPages ? ' disabled' : '' ?>"
+                   href="<?= $currentPage >= $totalPages ? 'javascript:void(0)' : ('?' . $buildQuery(['page' => $currentPage + 1])) ?>"
+                   data-page="<?= min($totalPages, $currentPage + 1) ?>">
+                    下一页
+                </a>
+            </div>
+        </div>
+    <?php endif; ?>
 <?php endif; ?>

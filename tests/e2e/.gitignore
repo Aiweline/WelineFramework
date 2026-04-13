@@ -26,6 +26,7 @@ collected-tests.json
 # 本地运行产物 / 调试（不入库）
 .last-playwright-tee.txt
 .smoke-publish-last.log
+e2e-parallel-run.log
 framework/.active-proxy-port
 pw-json-out/
 pw-out/

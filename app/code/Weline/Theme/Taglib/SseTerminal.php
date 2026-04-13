@@ -90,6 +90,7 @@ class SseTerminal implements TaglibInterface
             $t_dns_response = addslashes(__('【DNS 供应商返回】'));
 
             // 解析属性
+            $t_reconnecting = addslashes(__('连接重试中...'));
             $t_url_not_configured = 'URL not configured';
             $code = \Weline\Taglib\Taglib::attributes($attributes);
             // path 优先：若提供 path 则用 getBackendUrl 解析为完整 URL
@@ -149,6 +150,7 @@ class SseTerminal implements TaglibInterface
             $html[] = '.weline-sse-terminal-status { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--backend-color-text-muted, #6c7086); }';
             $html[] = '.weline-sse-terminal-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--backend-color-text-muted, #6c7086); transition: background 0.3s; }';
             $html[] = '.weline-sse-terminal.connected .weline-sse-terminal-status-dot { background: var(--backend-color-success, #a6e3a1); box-shadow: 0 0 6px var(--backend-color-success, #a6e3a1); }';
+            $html[] = '.weline-sse-terminal.connecting .weline-sse-terminal-status-dot { background: var(--backend-color-info, #89dceb); box-shadow: 0 0 6px var(--backend-color-info, #89dceb); }';
             $html[] = '.weline-sse-terminal.error .weline-sse-terminal-status-dot { background: var(--backend-color-danger, #f38ba8); }';
             $html[] = '.weline-sse-terminal-actions { display: flex; gap: 4px; }';
             $html[] = '.weline-sse-terminal-btn { width: 28px; height: 28px; border: none; border-radius: 4px; background: transparent; color: var(--backend-color-text-muted, #6c7086); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }';
@@ -209,6 +211,7 @@ var postAbortController = null;
 var isRunning = false;
 var currentUrl = initialUrl;
 var eventSourceSeq = 0;
+var manualStopRequested = false;
 
 // 公共 API 暴露到 window
 window.WelineSseTerminal = window.WelineSseTerminal || {};
@@ -220,8 +223,10 @@ window.WelineSseTerminal[id] = {
     setUrl: function(url) { currentUrl = url; },
     getUrl: function() { return currentUrl; },
     isRunning: function() { return isRunning; },
+    getTransportState: function() { return container ? (container.dataset.transportState || 'disconnected') : 'disconnected'; },
     on: function(event, callback) { eventCallbacks[event] = callback; },
-    setProgress: setProgress
+    setProgress: setProgress,
+    setStatus: setStatus
 };
 
 var eventCallbacks = {};
@@ -331,11 +336,16 @@ function setProgress(percent) {
 }
 
 function setStatus(status, text) {
-    container.classList.remove('connected', 'error');
+    container.classList.remove('connected', 'connecting', 'error');
     if (status === 'connected') {
         container.classList.add('connected');
+    } else if (status === 'connecting') {
+        container.classList.add('connecting');
     } else if (status === 'error') {
         container.classList.add('error');
+    }
+    if (container) {
+        container.dataset.transportState = status;
     }
     if (statusText) statusText.textContent = text;
 }
@@ -394,6 +404,7 @@ function start(url, options) {
     options = options || {};
     currentUrl = resolvedUrl;
     isRunning = true;
+    manualStopRequested = false;
     
     if (btnToggle) {
         btnToggle.innerHTML = '<i class="mdi mdi-stop"></i>';
@@ -515,11 +526,15 @@ function start(url, options) {
             return;
         }
         if (source.readyState === EventSource.CLOSED) {
-            setStatus('disconnected', '$t_disconnected');
-            stop();
+            if (manualStopRequested) {
+                stop({ keepStatus: true, internal: true });
+                setStatus('disconnected', '$t_disconnected');
+            } else {
+                setStatus('connecting', '$t_reconnecting');
+            }
         } else if (source.readyState === EventSource.CONNECTING) {
             // 完全遵循原生 EventSource：CONNECTING 由浏览器自动重连管理
-            setStatus('connecting', '$t_connecting');
+            setStatus('connecting', '$t_reconnecting');
         } else {
             setStatus('error', '$t_error');
             log('$t_error', 'error');
@@ -565,7 +580,13 @@ function start(url, options) {
     });
 }
 
-function stop() {
+function stop(options) {
+    options = options || {};
+    var keepStatus = !!(options.keepStatus || options.suppressTransportError);
+    var internalStop = !!options.internal;
+    if (!internalStop) {
+        manualStopRequested = true;
+    }
     if (postAbortController) {
         postAbortController.abort();
         postAbortController = null;
@@ -583,7 +604,9 @@ function stop() {
         btnToggle.title = '$t_start';
     }
     
-    setStatus('disconnected', '$t_disconnected');
+    if (!keepStatus) {
+        setStatus('disconnected', '$t_disconnected');
+    }
     if (eventCallbacks.stop) eventCallbacks.stop();
 }
 

@@ -23,9 +23,13 @@ use Weline\Hook\HookRegistry;
  */
 class HookDataService
 {
+    private const REGISTRY_FILE = BP . 'generated' . DIRECTORY_SEPARATOR . 'hooks.php';
+
     private ?HookRegistry $hookRegistry = null;
     private ?HookReader $hookReader = null;
     private ?Scanner $scanner = null;
+    private ?array $cachedHooks = null;
+    private int $cachedHooksRegistryMtime = -1;
 
     public function __construct()
     {
@@ -48,10 +52,7 @@ class HookDataService
      */
     private function getHookReader(): HookReader
     {
-        if ($this->hookReader === null) {
-            $this->hookReader = ObjectManager::getInstance(HookReader::class);
-        }
-        return $this->hookReader;
+        return ObjectManager::make(HookReader::class);
     }
 
     /**

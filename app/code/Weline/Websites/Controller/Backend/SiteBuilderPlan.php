@@ -19,7 +19,7 @@ use Weline\Websites\Service\AiWorkbench\ProviderRegistry;
 use Weline\Websites\Service\AiWorkbench\ProviderWorkbenchService;
 use Weline\Websites\Service\AiWorkbench\SessionService;
 
-#[Acl('Weline_Websites::site_builder_agent', 'AI Site Plan Flow', 'mdi mdi-sitemap', 'Draft-first AI site planning flow', 'Weline_Websites::site_builder_agent')]
+#[Acl('Weline_Websites::site_builder_plan', 'AI Site Plan Flow', 'mdi mdi-sitemap', 'Draft-first AI site planning flow', 'Weline_Websites::site_builder_agent')]
 class SiteBuilderPlan extends BackendController
 {
     public function __construct(
@@ -80,7 +80,7 @@ class SiteBuilderPlan extends BackendController
         return $this->fetchJson([
             'success' => true,
             'draft_public_id' => $draft->getPublicId(),
-            'stream_url' => $this->url->getBackendUrl('websites/backend/site-builder-plan/stream', ['draft_public_id' => $draft->getPublicId()]),
+            'stream_url' => $this->url->getBackendUrl('websites/backend/site-builder-plan/stream-sse', ['draft_public_id' => $draft->getPublicId()]),
             'draft' => $this->planDraftService->buildDraftView($draft->getPublicId(), $adminId),
         ]);
     }
@@ -114,13 +114,24 @@ class SiteBuilderPlan extends BackendController
         return $this->fetchJson([
             'success' => true,
             'draft_public_id' => $draft->getPublicId(),
-            'stream_url' => $this->url->getBackendUrl('websites/backend/site-builder-plan/stream', ['draft_public_id' => $draft->getPublicId()]),
+            'stream_url' => $this->url->getBackendUrl('websites/backend/site-builder-plan/stream-sse', ['draft_public_id' => $draft->getPublicId()]),
             'draft' => $this->planDraftService->buildDraftView($draft->getPublicId(), $adminId),
         ]);
     }
 
     #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan', 'mdi mdi-access-point', 'Stream site plan generation', 'Weline_Websites::site_builder_agent')]
     public function getStream(): void
+    {
+        $this->handleStreamSse();
+    }
+
+    #[Acl('Weline_Websites::site_builder_agent_stream', 'Stream Draft Site Plan SSE', 'mdi mdi-access-point-network', 'Stream site plan generation via SSE endpoint', 'Weline_Websites::site_builder_agent')]
+    public function getStreamSse(): void
+    {
+        $this->handleStreamSse();
+    }
+
+    private function handleStreamSse(): void
     {
         @\set_time_limit(0);
         @\ignore_user_abort(true);
@@ -551,5 +562,30 @@ class SiteBuilderPlan extends BackendController
     private function getAdminId(): int
     {
         return (int)$this->getLoginUserId();
+    }
+
+    private function isFakeModeRequested(): bool
+    {
+        $queryValue = $this->request->getGet('fake_mode', null);
+        if ($queryValue !== null) {
+            return $this->isTruthyFlag($queryValue);
+        }
+
+        return $this->isTruthyFlag($this->getRequestBodyValue('fake_mode', false));
+    }
+
+    private function isTruthyFlag(mixed $value): bool
+    {
+        if (\is_bool($value)) {
+            return $value;
+        }
+        if (\is_int($value) || \is_float($value)) {
+            return (int)$value === 1;
+        }
+        if (\is_string($value)) {
+            return \in_array(\strtolower(\trim($value)), ['1', 'true', 'yes', 'on'], true);
+        }
+
+        return false;
     }
 }

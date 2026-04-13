@@ -24,6 +24,7 @@ class KeyBuilder
     public const UNIFIED_CACHE_PARAMS_KEY = 'params';
     public const UNIFIED_CACHE_FPC_KEY = 'fpc';
     public const UNIFIED_CACHE_HEADERS_KEY = 'headers';
+    public const UNIFIED_CACHE_STATUS_KEY = 'status';
 
     /**
      * 构建缓存键
@@ -215,6 +216,12 @@ class KeyBuilder
     public static function buildUnifiedRequestCacheKey(string $uri = '', string $method = 'GET'): string
     {
         $fullUri = \w_env('full_request_uri', $uri);
+        if (($fullUri === '' || !\str_contains($fullUri, '://')) && \is_array($_SERVER ?? null)) {
+            $serverFull = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+            if ($serverFull !== '' && \str_contains($serverFull, '://')) {
+                $fullUri = $serverFull;
+            }
+        }
         $usedFallback = false;
 
         if ($fullUri === '' || !\str_contains($fullUri, '://')) {
