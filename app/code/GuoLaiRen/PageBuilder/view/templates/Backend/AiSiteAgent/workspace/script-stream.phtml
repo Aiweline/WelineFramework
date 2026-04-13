@@ -1,6 +1,21 @@
 <script>
 (function () {
     'use strict';
+    
+    // P0可观测性：初始化增强SSE日志器
+    var sseLogger = null;
+    try {
+        if (window.PbAiSseConnectionManager) {
+            sseLogger = window.PbAiSseConnectionManager.createLogger('pagebuilder-workspace', {
+                publicId: <?= \json_encode(($publicId ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+                enableDetailedLogging: true,
+                maxLogEntries: 500
+            });
+        }
+    } catch (e) {
+        console.warn('[SSE] 初始化增强日志器失败:', e);
+    }
+    
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
     var publicId = <?= \json_encode(($publicId ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = <?= \json_encode(($streamSseUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
@@ -13,6 +28,12 @@
     var lastActivityTime = Date.now();
     var workspaceStreamPaused = !!window.__pbWorkspaceStreamPaused;
     var workspaceStreamFatal = false; // 402 等不可恢复错误后停止重连
+    
+    // P0可观测性：增强的连接追踪
+    var connectionStartTime = null;
+    var currentConnectionId = null;
+    var connectionRetryCount = 0;
+    
     /** P0/P1：同标签页稳定 token，便于服务端区分并发 stream-sse */
     var workspaceStreamTabToken = (function () {
         var storageKey = 'pb_ai_ws_tab_' + String(publicId || '');
