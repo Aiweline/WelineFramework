@@ -1,0 +1,297 @@
+<?php
+/**
+ * P1 SSE单连接治理集成
+ * 
+ * 集成SSE连接治理器到workspace，解决重复订阅问题
+ */
+?>
+
+<!-- P1单连接治理：引入SSE连接治理器 -->
+<script src="<?= $this->getViewFileUrl('GuoLaiRen_PageBuilder::backend/js/sse-connection-governor.js') ?>"></script>
+
+<script>
+(function() {
+    'use strict';
+    
+    // 等待DOM加载完成
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeSseGovernance);
+    } else {
+        initializeSseGovernance();
+    }
+    
+    function initializeSseGovernance() {
+        console.info('[SSE Governor] 初始化P1单连接治理');
+        
+        // 确保治理器可用
+        if (!window.pbAiSseConnectionGovernor) {
+            console.error('[SSE Governor] 连接治理器未加载');
+            return;
+        }
+        
+        const governor = window.pbAiSseConnectionGovernor;
+        
+        // 包装原始的SSE终端方法
+        enhanceWorkspaceSseTerminal(governor);
+        
+        // 设置全局治理状态
+        window.pbAiSseGovernanceActive = true;
+        
+        console.info('[SSE Governor] P1单连接治理初始化完成');
+        
+        // 暴露治理器状态检查
+        window.checkSseGovernanceStatus = function() {
+            return {
+                active: window.pbAiSseGovernanceActive,
+                stats: governor.getStats(),
+                health: governor.getConnectionHealthSummary()
+            };
+        };
+    }
+    
+    function enhanceWorkspaceSseTerminal(governor) {
+        // 保存原始终端引用
+        const originalTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
+        
+        if (!originalTerminal) {
+            console.warn('[SSE Governor] 未找到原始SSE终端');
+            return;
+        }
+        
+        console.info('[SSE Governor] 开始增强SSE终端');
+        
+        // 创建增强的终端包装器
+        const enhancedTerminal = createEnhancedTerminal(originalTerminal, governor);
+        
+        // 替换全局终端引用
+        window.WelineSseTerminal = window.WelineSseTerminal || {};
+        window.WelineSseTerminal['pagebuilder-workspace-terminal'] = enhancedTerminal;
+        window.WelineSseTerminal['pagebuilder-workspace-terminal-original'] = originalTerminal;
+        
+        console.info('[SSE Governor] SSE终端增强完成');
+    }
+    
+    function createEnhancedTerminal(originalTerminal, governor) {
+        const connectionId = 'workspace_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+        
+        const enhancedTerminal = {
+            ...originalTerminal,
+            
+            // 增强的start方法
+            start: function(url, options = {}) {
+                console.info('[SSE Governor] 处理连接请求', {
+                    connectionId: connectionId,
+                    url: url,
+                    options: options
+                });
+                
+                // 请求治理器授权连接
+                const authResult = governor.requestConnection(connectionId, url, options);
+                
+                if (!authResult.success) {
+                    console.warn('[SSE Governor] 连接被拒绝', authResult);
+                    
+                    // 记录到终端日志
+                    if (originalTerminal.log) {
+                        originalTerminal.log(
+                            '[SSE治理] 连接被拒绝: ' + authResult.message,
+                            'warning'
+                        );
+                    }
+                    
+                    // 触发错误回调
+                    if (options.onError) {
+                        options.onError({
+                            type: 'governance_rejection',
+                            message: authResult.message,
+                            reason: authResult.reason
+                        });
+                    }
+                    
+                    return false;
+                }
+                
+                console.info('[SSE Governor] 连接已授权', {
+                    connectionId: connectionId,
+                    authResult: authResult
+                });
+                
+                // 增强选项，添加治理回调
+                const enhancedOptions = {
+                    ...options,
+                    onOpen: function(event) {
+                        console.info('[SSE Governor] 连接已打开', {
+                            connectionId: connectionId
+                        });
+                        
+                        if (options.onOpen) {
+                            options.onOpen(event);
+                        }
+                    },
+                    onMessage: function(event) {
+                        // 记录消息活动
+                        governor.recordMessageActivity(connectionId);
+                        
+                        if (options.onMessage) {
+                            options.onMessage(event);
+                        }
+                    },
+                    onError: function(event) {
+                        console.error('[SSE Governor] 连接错误', {
+                            connectionId: connectionId,
+                            error: event
+                        });
+                        
+                        // 记录错误
+                        governor.recordConnectionError(connectionId, event);
+                        
+                        if (options.onError) {
+                            options.onError(event);
+                        }
+                    }
+                };
+                
+                // 调用原始start方法
+                const result = originalTerminal.start(url, enhancedOptions);
+                
+                if (result) {
+                    console.info('[SSE Governor] 连接启动成功', {
+                        connectionId: connectionId
+                    });
+                    
+                    // 注册连接成功
+                    governor.recordConnectionSuccess(connectionId);
+                }
+                
+                return result;
+            },
+            
+            // 增强的stop方法
+            stop: function(options = {}) {
+                console.info('[SSE Governor] 停止连接', {
+                    connectionId: connectionId,
+                    options: options
+                });
+                
+                // 通知治理器连接停止
+                governor.recordConnectionStop(connectionId, options.reason || 'manual_stop');
+                
+                // 调用原始stop方法
+                const result = originalTerminal.stop(options);
+                
+                console.info('[SSE Governor] 连接已停止', {
+                    connectionId: connectionId
+                });
+                
+                return result;
+            },
+            
+            // 新增方法：获取治理状态
+            getGovernanceStatus: function() {
+                return {
+                    connectionId: connectionId,
+                    governed: true,
+                    governorStats: governor.getStats(),
+                    connectionHealth: governor.getConnectionHealthSummary()
+                };
+            }
+        };
+        
+        // 保留原始终端的其他方法
+        Object.keys(originalTerminal).forEach(key => {
+            if (typeof originalTerminal[key] === 'function' && !enhancedTerminal[key]) {
+                enhancedTerminal[key] = originalTerminal[key].bind(originalTerminal);
+            }
+        });
+        
+        return enhancedTerminal;
+    }
+    
+    // 增强全局工作区流函数
+    if (window.__pbStartWorkspaceStream) {
+        const originalStartWorkspaceStream = window.__pbStartWorkspaceStream;
+        
+        window.__pbStartWorkspaceStream = function() {
+            console.info('[SSE Governor] 拦截工作区流启动');
+            
+            // 检查治理器状态
+            if (!window.pbAiSseConnectionGovernor) {
+                console.warn('[SSE Governor] 治理器未就绪，使用原始方法');
+                return originalStartWorkspaceStream.apply(this, arguments);
+            }
+            
+            const governor = window.pbAiSseConnectionGovernor;
+            
+            // 检查是否有活动的连接
+            const stats = governor.getStats();
+            if (stats.activeConnections > 0) {
+                console.info('[SSE Governor] 发现活动连接，检查健康状态', {
+                    activeConnections: stats.activeConnections
+                });
+                
+                const healthSummary = governor.getConnectionHealthSummary();
+                if (healthSummary.healthy > 0) {
+                    console.info('[SSE Governor] 存在健康连接，跳过重复启动');
+                    return false;
+                }
+                
+                console.info('[SSE Governor] 无健康连接，允许新连接');
+            }
+            
+            // 调用原始方法
+            return originalStartWorkspaceStream.apply(this, arguments);
+        };
+        
+        console.info('[SSE Governor] 工作区流函数已增强');
+    }
+    
+    // 设置页面生命周期监听
+    function setupLifecycleListeners(governor) {
+        // 页面可见性变化
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                console.info('[SSE Governor] 页面进入后台，暂停连接');
+                governor.pauseBackgroundConnections();
+            } else {
+                console.info('[SSE Governor] 页面进入前台，恢复连接');
+                governor.resumeForegroundConnections();
+            }
+        });
+        
+        // 页面卸载
+        window.addEventListener('beforeunload', function() {
+            console.info('[SSE Governor] 页面即将卸载，清理连接');
+            governor.cleanupAllConnections();
+        });
+        
+        // 页面关闭
+        window.addEventListener('unload', function() {
+            console.info('[SSE Governor] 页面已卸载，最终清理');
+            governor.cleanupAllConnections();
+        });
+        
+        console.info('[SSE Governor] 生命周期监听器已设置');
+    }
+    
+    // 快捷键支持：Ctrl+Shift+G 查看治理状态
+    document.addEventListener('keydown', function(e) {
+        if (e.ctrlKey && e.shiftKey && e.key === 'G') {
+            e.preventDefault();
+            
+            if (window.checkSseGovernanceStatus) {
+                const status = window.checkSseGovernanceStatus();
+                console.info('[SSE Governor] 治理状态:', status);
+                
+                // 显示简化的状态信息
+                if (window.BackendToast && window.BackendToast.info) {
+                    const health = status.health;
+                    const message = `SSE治理: ${health.total}连接, ${health.healthy}健康, ${health.unhealthy}异常`;
+                    window.BackendToast.info(message);
+                }
+            }
+        }
+    });
+    
+    console.info('[SSE Governor] 快捷键已设置: Ctrl+Shift+G 查看治理状态');
+})();
+</script>
