@@ -5,10 +5,18 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AI\MockPage;
+use GuoLaiRen\PageBuilder\Service\AI\PreviewRenderer;
 use Weline\Framework\Manager\ObjectManager;
 
 class AiSiteHtmlBlocksBuildService
 {
+    private const META_TEMPLATE_PHTML = '_pb_server_template_phtml';
+    private const META_COMPONENT_CODE = '_pb_server_component_code';
+    private const META_REGION = '_pb_server_region';
+    private const META_USER_CUSTOM_NAV = '_pb_server_user_custom_navigation';
+    private const META_USER_CUSTOM_LINKS = '_pb_server_user_custom_links';
+
     public function __construct(
         private readonly ?AiSitePageBlueprintService $pageBlueprintService = null,
         private readonly ?AiSitePageComponentGenerationService $pageComponentGenerationService = null,
@@ -40,11 +48,14 @@ class AiSiteHtmlBlocksBuildService
                 $blockId,
                 'ai_generated_section',
                 (string)($section['html'] ?? ''),
+                (string)($section['phtml'] ?? ''),
                 \array_replace(
                     ['region' => 'content', 'html_content' => (string)($section['html'] ?? '')],
                     \is_array($section['default_config'] ?? null) ? $section['default_config'] : [],
                     ['component_label' => (string)($section['name'] ?? $blockId)]
-                )
+                ),
+                'content',
+                (string)($section['code'] ?? '')
             );
         }
 
@@ -90,11 +101,14 @@ class AiSiteHtmlBlocksBuildService
             $blockId,
             'ai_generated_section',
             (string)($section['html'] ?? ''),
+            (string)($section['phtml'] ?? ''),
             \array_replace(
                 ['region' => 'content', 'html_content' => (string)($section['html'] ?? '')],
                 \is_array($section['default_config'] ?? null) ? $section['default_config'] : [],
                 ['component_label' => (string)($section['name'] ?? $blockId)]
-            )
+            ),
+            'content',
+            $componentCode
         );
     }
 
@@ -109,16 +123,18 @@ class AiSiteHtmlBlocksBuildService
         $blockId = \str_replace(['/', '_'], '-', $componentCode !== '' ? $componentCode : ($region . '-' . $pageType));
         $blockId = $blockId !== '' ? $blockId : ($region . '-' . \str_replace('_', '-', $pageType));
 
-        return [
-            'block_id' => $blockId,
-            'type' => 'ai_generated_shared_' . ($region !== '' ? $region : 'component'),
-            'html' => (string)($component['html'] ?? ''),
-            'config' => \array_replace(
+        return $this->buildGeneratedBlockRecord(
+            $blockId,
+            'ai_generated_shared_' . ($region !== '' ? $region : 'component'),
+            (string)($component['html'] ?? ''),
+            (string)($component['phtml'] ?? ''),
+            \array_replace(
                 ['region' => $region, 'component_label' => (string)($component['name'] ?? $blockId)],
                 \is_array($component['default_config'] ?? null) ? $component['default_config'] : []
             ),
-            'field_schema' => $this->buildFieldSchema('ai_generated_section'),
-        ];
+            $region !== '' ? $region : 'content',
+            $componentCode
+        );
     }
 
     /**
@@ -157,14 +173,36 @@ class AiSiteHtmlBlocksBuildService
         $config = \is_array($block['config'] ?? null) ? $block['config'] : [];
         if (\str_starts_with($type, 'ai_generated_')) {
             $config = \array_replace_recursive($config, $configPatch);
+            $syncResult = $this->syncGeneratedBlockConfig($block, $config, $configPatch);
+            $config = $syncResult['config'];
 
-            return [
+            $rebuilt = [
                 'block_id' => $blockId !== '' ? $blockId : ('block-' . \bin2hex(\random_bytes(4))),
                 'type' => $type !== '' ? $type : 'ai_generated_section',
-                'html' => \trim((string)($config['html_content'] ?? $block['html'] ?? '')),
+                'html' => $this->renderGeneratedBlockHtml($block, $config),
                 'config' => $config,
-                'field_schema' => $this->buildFieldSchema($type !== '' ? $type : 'ai_generated_section'),
+                'field_schema' => $this->buildGeneratedFieldSchema(
+                    (string)($block[self::META_TEMPLATE_PHTML] ?? ''),
+                    $config,
+                    $type !== '' ? $type : 'ai_generated_section',
+                    $this->resolveSharedBlockRegion($block)
+                ),
             ];
+
+            foreach ([self::META_TEMPLATE_PHTML, self::META_COMPONENT_CODE, self::META_REGION, self::META_USER_CUSTOM_NAV, self::META_USER_CUSTOM_LINKS] as $metaKey) {
+                if (\array_key_exists($metaKey, $block)) {
+                    $rebuilt[$metaKey] = $block[$metaKey];
+                }
+            }
+            foreach ($syncResult['meta'] as $metaKey => $metaValue) {
+                if ($metaValue) {
+                    $rebuilt[$metaKey] = $metaValue;
+                } else {
+                    unset($rebuilt[$metaKey]);
+                }
+            }
+
+            return $rebuilt;
         }
         $config = $this->normalizeBlockConfig($type, \array_replace_recursive($config, $configPatch), $websiteProfile, $scope);
 
@@ -198,15 +236,42 @@ class AiSiteHtmlBlocksBuildService
      * @param array<string, mixed> $config
      * @return array{block_id:string,type:string,html:string,config:array<string,mixed>,field_schema:array<string,mixed>}
      */
-    private function buildGeneratedBlockRecord(string $blockId, string $type, string $html, array $config): array
+    private function buildGeneratedBlockRecord(
+        string $blockId,
+        string $type,
+        string $html,
+        string $phtml,
+        array $config,
+        string $region = 'content',
+        string $componentCode = ''
+    ): array
     {
-        return [
+        $block = [
             'block_id' => $blockId,
             'type' => $type,
             'html' => $html,
             'config' => $config,
-            'field_schema' => $this->buildFieldSchema($type),
+            'field_schema' => $this->buildGeneratedFieldSchema($phtml, $config, $type, $region),
         ];
+
+        if ($phtml !== '') {
+            $block[self::META_TEMPLATE_PHTML] = $phtml;
+        }
+        if ($componentCode !== '') {
+            $block[self::META_COMPONENT_CODE] = $componentCode;
+        }
+        if ($region !== '') {
+            $block[self::META_REGION] = $region;
+        }
+
+        if ($phtml !== '') {
+            $renderedHtml = $this->renderGeneratedBlockHtml($block, $config);
+            if (\trim($renderedHtml) !== '') {
+                $block['html'] = $renderedHtml;
+            }
+        }
+
+        return $block;
     }
 
     /**
@@ -445,7 +510,9 @@ class AiSiteHtmlBlocksBuildService
         return match ($template) {
             'ai_generated_header',
             'ai_generated_section',
-            'ai_generated_footer' => [
+            'ai_generated_footer',
+            'ai_generated_shared_header',
+            'ai_generated_shared_footer' => [
                 'content' => [
                     'label' => 'AI Generated Result',
                     'fields' => [
@@ -525,6 +592,564 @@ class AiSiteHtmlBlocksBuildService
                 ],
             ],
         };
+    }
+
+    /**
+     * Keep older sessions editable even when their original metadata was missing.
+     *
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    public function hydrateGeneratedBlockMetadata(array $block): array
+    {
+        if (!\is_array($block['field_schema'] ?? null) || $block['field_schema'] === []) {
+            $block['field_schema'] = $this->buildGeneratedFieldSchema(
+                (string)($block[self::META_TEMPLATE_PHTML] ?? ''),
+                \is_array($block['config'] ?? null) ? $block['config'] : [],
+                (string)($block['type'] ?? ''),
+                $this->resolveSharedBlockRegion($block)
+            );
+        }
+
+        return $block;
+    }
+
+    /**
+     * @param array<string, mixed> $newBlock
+     * @param array<string, mixed> $existingBlock
+     * @return array<string, mixed>
+     */
+    public function mergeUserCustomizedSharedBlockConfig(array $newBlock, array $existingBlock): array
+    {
+        $region = $this->resolveSharedBlockRegion($newBlock);
+        if ($region === '' || $region !== $this->resolveSharedBlockRegion($existingBlock)) {
+            return $newBlock;
+        }
+
+        $newConfig = \is_array($newBlock['config'] ?? null) ? $newBlock['config'] : [];
+        $existingConfig = \is_array($existingBlock['config'] ?? null) ? $existingBlock['config'] : [];
+
+        if ($region === 'header' && !empty($existingBlock[self::META_USER_CUSTOM_NAV])) {
+            foreach (['navigation.display', 'navigation.items', 'nav_items'] as $key) {
+                if (\array_key_exists($key, $existingConfig)) {
+                    $newConfig[$key] = $existingConfig[$key];
+                }
+            }
+            $newBlock[self::META_USER_CUSTOM_NAV] = 1;
+        }
+
+        if ($region === 'footer' && !empty($existingBlock[self::META_USER_CUSTOM_LINKS])) {
+            foreach ([
+                'links.column1_title',
+                'links.column1_items',
+                'links.column2_title',
+                'links.column2_items',
+                'links.column3_title',
+                'links.column3_items',
+                'nav_items',
+            ] as $key) {
+                if (\array_key_exists($key, $existingConfig)) {
+                    $newConfig[$key] = $existingConfig[$key];
+                }
+            }
+            $newBlock[self::META_USER_CUSTOM_LINKS] = 1;
+        }
+
+        $newBlock['config'] = $newConfig;
+        if (isset($newBlock[self::META_TEMPLATE_PHTML])) {
+            $newBlock['html'] = $this->renderGeneratedBlockHtml($newBlock, $newConfig);
+        }
+        $newBlock['field_schema'] = $this->buildGeneratedFieldSchema(
+            (string)($newBlock[self::META_TEMPLATE_PHTML] ?? ''),
+            $newConfig,
+            (string)($newBlock['type'] ?? ''),
+            $region
+        );
+
+        return $newBlock;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    public function resolveSharedBlockRegion(array $block): string
+    {
+        $region = \trim((string)($block[self::META_REGION] ?? ''));
+        if (\in_array($region, ['header', 'footer'], true)) {
+            return $region;
+        }
+
+        $type = \trim((string)($block['type'] ?? ''));
+        if (\str_contains($type, 'header')) {
+            return 'header';
+        }
+        if (\str_contains($type, 'footer')) {
+            return 'footer';
+        }
+
+        $blockId = \trim((string)($block['block_id'] ?? ''));
+        if (\str_contains($blockId, 'header')) {
+            return 'header';
+        }
+        if (\str_contains($blockId, 'footer')) {
+            return 'footer';
+        }
+
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @return array<string, mixed>
+     */
+    public function stripServerOnlyBlock(array $block): array
+    {
+        foreach (\array_keys($block) as $key) {
+            if (\is_string($key) && \str_starts_with($key, '_pb_server_')) {
+                unset($block[$key]);
+            }
+        }
+
+        return $block;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $virtualPages
+     * @return array<string, array<string, mixed>>
+     */
+    public function stripServerOnlyVirtualPages(array $virtualPages): array
+    {
+        foreach ($virtualPages as $pageType => $page) {
+            if (!\is_string($pageType) || !\is_array($page)) {
+                continue;
+            }
+            $blocks = \is_array($page['blocks'] ?? null) ? $page['blocks'] : [];
+            foreach ($blocks as $index => $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $blocks[$index] = $this->stripServerOnlyBlock($block);
+            }
+            $page['blocks'] = $blocks;
+            $virtualPages[$pageType] = $page;
+        }
+
+        return $virtualPages;
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @param array<string, mixed> $configPatch
+     * @return array{config:array<string, mixed>,meta:array<string, int>}
+     */
+    private function syncGeneratedBlockConfig(array $block, array $config, array $configPatch): array
+    {
+        $region = $this->resolveSharedBlockRegion($block);
+        $meta = [];
+
+        if ($region === 'header' && (\array_key_exists('navigation.items', $configPatch) || \array_key_exists('nav_items', $configPatch))) {
+            if (\array_key_exists('navigation.items', $configPatch)) {
+                $config['nav_items'] = $this->parseNavigationLines((string)($config['navigation.items'] ?? ''));
+            } elseif (\array_key_exists('nav_items', $configPatch)) {
+                $config['navigation.items'] = $this->stringifyNavigationLines($config['nav_items'] ?? []);
+            }
+
+            if ($this->hasMeaningfulNavigationValue($config['navigation.items'] ?? null) || $this->hasMeaningfulNavigationValue($config['nav_items'] ?? null)) {
+                $meta[self::META_USER_CUSTOM_NAV] = 1;
+            } else {
+                $meta[self::META_USER_CUSTOM_NAV] = 0;
+            }
+        }
+
+        if (
+            $region === 'footer'
+            && (
+                \array_key_exists('links.column1_items', $configPatch)
+                || \array_key_exists('links.column2_items', $configPatch)
+                || \array_key_exists('links.column3_items', $configPatch)
+            )
+        ) {
+            if (
+                $this->hasMeaningfulNavigationValue($config['links.column1_items'] ?? null)
+                || $this->hasMeaningfulNavigationValue($config['links.column2_items'] ?? null)
+                || $this->hasMeaningfulNavigationValue($config['links.column3_items'] ?? null)
+            ) {
+                $meta[self::META_USER_CUSTOM_LINKS] = 1;
+            } else {
+                $meta[self::META_USER_CUSTOM_LINKS] = 0;
+            }
+        }
+
+        return ['config' => $config, 'meta' => $meta];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, mixed>
+     */
+    private function buildGeneratedFieldSchema(string $phtml, array $config, string $type, string $region): array
+    {
+        $schema = $this->parseFieldsSchemaFromPhtml($phtml);
+        if ($schema === []) {
+            $schema = $this->buildSchemaFromConfig($config, $type, $region);
+        } else {
+            $schema = $this->mergeConfigDrivenFieldsIntoSchema($schema, $config, $region);
+        }
+
+        if ($schema === []) {
+            $schema = $this->buildFieldSchema($type);
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     * @param array<string, mixed> $config
+     */
+    private function renderGeneratedBlockHtml(array $block, array $config): string
+    {
+        $phtml = (string)($block[self::META_TEMPLATE_PHTML] ?? '');
+        if (\trim($phtml) === '') {
+            return \trim((string)($config['html_content'] ?? $block['html'] ?? ''));
+        }
+
+        $renderer = new PreviewRenderer();
+        $renderer->setData('component_config', $config);
+        $renderer->setData('page', $this->buildPreviewPageForGeneratedBlock($block));
+        $result = $renderer->render($phtml);
+        if (!($result['success'] ?? false)) {
+            return \trim((string)($block['html'] ?? ''));
+        }
+
+        return \trim((string)($result['html'] ?? ''));
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildPreviewPageForGeneratedBlock(array $block): MockPage
+    {
+        if (!empty($block[self::META_USER_CUSTOM_NAV]) || !empty($block[self::META_USER_CUSTOM_LINKS])) {
+            return new class extends MockPage {
+                public function getNavigationPages(array $options = [], int $limit = 10): array
+                {
+                    return [];
+                }
+            };
+        }
+
+        return new MockPage();
+    }
+
+    /**
+     * @return array<string, array{label:string,fields:array<string,array<string,mixed>>}>
+     */
+    private function parseFieldsSchemaFromPhtml(string $phtml): array
+    {
+        if ($phtml === '' || !\preg_match('/@fields_start(.*?)@fields_end/s', $phtml, $matches)) {
+            return [];
+        }
+
+        $schema = [];
+        $currentGroupKey = 'content';
+        $currentGroupLabel = 'Content';
+
+        foreach (\preg_split('/\r?\n/', (string)$matches[1]) ?: [] as $line) {
+            $line = \trim((string)\preg_replace('/^\s*\*\s?/', '', (string)$line));
+            if ($line === '') {
+                continue;
+            }
+
+            if (\preg_match('/^group:([a-zA-Z0-9_-]+)\s*=>\s*(.+)$/', $line, $groupMatch)) {
+                $currentGroupKey = \trim((string)$groupMatch[1]);
+                $currentGroupLabel = \trim((string)$groupMatch[2]);
+                $schema[$currentGroupKey] ??= [
+                    'label' => $currentGroupLabel !== '' ? $currentGroupLabel : $currentGroupKey,
+                    'fields' => [],
+                ];
+                continue;
+            }
+
+            if (!\preg_match('/^([a-zA-Z0-9._-]+)\s*=>\s*(.+)$/', $line, $fieldMatch)) {
+                continue;
+            }
+
+            $fieldKey = \trim((string)$fieldMatch[1]);
+            $fieldDef = \trim((string)$fieldMatch[2]);
+            $schema[$currentGroupKey] ??= [
+                'label' => $currentGroupLabel !== '' ? $currentGroupLabel : $currentGroupKey,
+                'fields' => [],
+            ];
+            $schema[$currentGroupKey]['fields'][$fieldKey] = $this->parseFieldDefinition($fieldKey, $fieldDef);
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function parseFieldDefinition(string $fieldKey, string $fieldDef): array
+    {
+        $parts = \explode(':', $fieldDef);
+        $label = \trim((string)($parts[0] ?? $fieldKey));
+        $type = \strtolower(\trim((string)($parts[1] ?? 'text')));
+        $tail = \implode(':', \array_slice($parts, 2));
+        $default = $tail;
+        $options = [];
+        $format = '';
+
+        if ($type === 'select') {
+            [$default, $options] = $this->parseSelectFieldTail($tail);
+        } elseif ($type === 'number') {
+            [$default] = \explode('|', $tail, 2);
+            $default = \trim((string)$default);
+        } else {
+            [$default] = \explode('|', $tail, 2);
+            $default = \trim((string)$default);
+        }
+
+        if (
+            $fieldKey === 'navigation.items'
+            || $fieldKey === 'nav_items'
+            || \preg_match('/^links\.column\d+_items$/', $fieldKey) === 1
+        ) {
+            $format = $fieldKey === 'navigation.items' ? 'nav-lines' : 'nav-lines';
+            if ($type !== 'textarea') {
+                $type = 'textarea';
+            }
+        } elseif ($fieldKey === 'items') {
+            $format = 'card-items';
+            $type = 'textarea';
+        } elseif (\str_ends_with($fieldKey, '.items') || $fieldKey === 'chips' || $fieldKey === 'points') {
+            $format = 'lines';
+            $type = 'textarea';
+        }
+
+        $field = [
+            'type' => $type !== '' ? $type : 'text',
+            'label' => $label !== '' ? $label : $fieldKey,
+            'default' => $default,
+        ];
+        if ($options !== []) {
+            $field['options'] = $options;
+        }
+        if ($format !== '') {
+            $field['format'] = $format;
+        }
+
+        return $field;
+    }
+
+    /**
+     * @return array{0:string,1:list<string>}
+     */
+    private function parseSelectFieldTail(string $tail): array
+    {
+        [$optionPart] = \explode('|', $tail, 2);
+        $optionPart = \trim((string)$optionPart);
+        if ($optionPart === '') {
+            return ['', []];
+        }
+
+        $segments = \array_values(\array_filter(\array_map('trim', \explode(',', $optionPart)), static fn(string $value): bool => $value !== ''));
+        if ($segments === []) {
+            return [$optionPart, [$optionPart]];
+        }
+
+        $default = \trim((string)\explode('|', $segments[0])[0]);
+        if (\str_contains($segments[0], '|')) {
+            $firstParts = \array_values(\array_filter(\array_map('trim', \explode('|', $segments[0])), static fn(string $value): bool => $value !== ''));
+            if ($firstParts !== []) {
+                $default = $firstParts[0];
+                $segments = \array_values(\array_unique(\array_merge($firstParts, \array_slice($segments, 1))));
+            }
+        }
+
+        return [$default, $segments];
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     * @return array<string, array{label:string,fields:array<string,array<string,mixed>>}>
+     */
+    private function buildSchemaFromConfig(array $config, string $type, string $region): array
+    {
+        $schema = [];
+        foreach ($config as $fieldKey => $value) {
+            if (!\is_string($fieldKey) || $fieldKey === '' || \str_starts_with($fieldKey, '_pb_server_')) {
+                continue;
+            }
+            if ($fieldKey === 'region' || $fieldKey === 'component_label') {
+                continue;
+            }
+
+            $groupKey = $this->resolveSchemaGroupKey($fieldKey, $region);
+            $schema[$groupKey] ??= [
+                'label' => $this->humanizeGroupLabel($groupKey),
+                'fields' => [],
+            ];
+            $schema[$groupKey]['fields'][$fieldKey] = $this->inferSchemaFieldFromConfig($fieldKey, $value, $type, $region);
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @param array<string, array{label:string,fields:array<string,array<string,mixed>>}> $schema
+     * @param array<string, mixed> $config
+     * @return array<string, array{label:string,fields:array<string,array<string,mixed>>}>
+     */
+    private function mergeConfigDrivenFieldsIntoSchema(array $schema, array $config, string $region): array
+    {
+        $fallback = $this->buildSchemaFromConfig($config, '', $region);
+        foreach ($fallback as $groupKey => $group) {
+            $schema[$groupKey] ??= $group;
+            foreach ($group['fields'] as $fieldKey => $field) {
+                $schema[$groupKey]['fields'][$fieldKey] ??= $field;
+            }
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function inferSchemaFieldFromConfig(string $fieldKey, mixed $value, string $type, string $region): array
+    {
+        $field = [
+            'type' => 'text',
+            'label' => $this->humanizeFieldLabel($fieldKey),
+        ];
+
+        if (
+            $fieldKey === 'navigation.items'
+            || $fieldKey === 'nav_items'
+            || \preg_match('/^links\.column\d+_items$/', $fieldKey) === 1
+        ) {
+            $field['type'] = 'textarea';
+            $field['format'] = 'nav-lines';
+            return $field;
+        }
+
+        if ($fieldKey === 'items') {
+            $field['type'] = 'textarea';
+            $field['format'] = 'card-items';
+            return $field;
+        }
+
+        if ($fieldKey === 'points' || $fieldKey === 'chips') {
+            $field['type'] = 'textarea';
+            $field['format'] = 'lines';
+            return $field;
+        }
+
+        if (\is_array($value)) {
+            $field['type'] = 'textarea';
+            $field['format'] = 'lines';
+            return $field;
+        }
+
+        $textValue = \trim((string)$value);
+        if ($textValue !== '' && \preg_match('/^#[0-9a-fA-F]{3,8}$/', $textValue) === 1) {
+            $field['type'] = 'color';
+            return $field;
+        }
+        if ($textValue !== '' && \is_numeric($textValue)) {
+            $field['type'] = 'number';
+            return $field;
+        }
+        if (\in_array(\strtolower($textValue), ['yes', 'no', 'true', 'false'], true)) {
+            $field['type'] = 'select';
+            $field['options'] = ['yes', 'no'];
+            return $field;
+        }
+        if (\str_contains($fieldKey, 'description') || \str_contains($fieldKey, 'html') || \str_contains($fieldKey, 'image')) {
+            $field['type'] = 'textarea';
+        }
+
+        return $field;
+    }
+
+    private function resolveSchemaGroupKey(string $fieldKey, string $region): string
+    {
+        if (\str_contains($fieldKey, '.')) {
+            return (string)\explode('.', $fieldKey, 2)[0];
+        }
+        if ($region !== '') {
+            return $region;
+        }
+        return 'content';
+    }
+
+    private function humanizeGroupLabel(string $groupKey): string
+    {
+        return \ucwords(\str_replace(['_', '-'], ' ', $groupKey !== '' ? $groupKey : 'content'));
+    }
+
+    private function humanizeFieldLabel(string $fieldKey): string
+    {
+        $tail = \str_contains($fieldKey, '.') ? (string)\substr($fieldKey, (int)\strrpos($fieldKey, '.') + 1) : $fieldKey;
+        return \ucwords(\str_replace(['_', '-'], ' ', $tail));
+    }
+
+    private function hasMeaningfulNavigationValue(mixed $value): bool
+    {
+        if (\is_array($value)) {
+            return $this->normalizeNavItems($value) !== [];
+        }
+
+        if (!\is_scalar($value)) {
+            return false;
+        }
+
+        foreach (\preg_split('/\r?\n/', \trim((string)$value)) ?: [] as $line) {
+            $line = \trim((string)$line);
+            if ($line !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return list<array{label:string,href:string,active:bool}>
+     */
+    private function parseNavigationLines(string $raw): array
+    {
+        $items = [];
+        foreach (\preg_split('/\r?\n/', \trim($raw)) ?: [] as $index => $line) {
+            $line = \trim((string)$line);
+            if ($line === '') {
+                continue;
+            }
+
+            $parts = \str_contains($line, '=>')
+                ? \explode('=>', $line, 2)
+                : \explode('|', $line, 2);
+            $label = \trim((string)($parts[0] ?? ''));
+            if ($label === '') {
+                continue;
+            }
+            $items[] = [
+                'label' => $label,
+                'href' => \trim((string)($parts[1] ?? '#')) ?: '#',
+                'active' => $index === 0,
+            ];
+        }
+
+        return $items;
+    }
+
+    private function stringifyNavigationLines(mixed $items): string
+    {
+        return \implode("\n", \array_map(
+            static fn(array $item): string => \trim((string)($item['label'] ?? $item['text'] ?? '')) . '=>' . (\trim((string)($item['href'] ?? $item['url'] ?? '#')) ?: '#'),
+            $this->normalizeNavItems($items)
+        ));
     }
 
     /**

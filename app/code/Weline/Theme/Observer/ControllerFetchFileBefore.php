@@ -119,7 +119,18 @@ class ControllerFetchFileBefore implements ObserverInterface
                 $editorArea = (string)$request->getParam('preview_area', '');
             }
             $editorArea = strtolower(trim($editorArea));
-            if ($editorArea === 'backend') {
+
+            $currentPath = strtolower(trim((string)$request->getUrlPath()));
+            $isPageBuilderPreviewRoute = str_contains($currentPath, '/pagebuilder/backend/preview/');
+            $isVirtualThemePreview = (int)$request->getParam('virtual_theme_id', 0) > 0
+                || (string)$request->getParam('visual_editor', '') === '1';
+            if ($isPageBuilderPreviewRoute && $isVirtualThemePreview) {
+                // PageBuilder 预览链路必须按 frontend 主题渲染，避免后端 layout 覆盖。
+                $area = 'frontend';
+                if ($editorArea === '') {
+                    $editorArea = 'frontend';
+                }
+            } elseif ($editorArea === 'backend') {
                 $area = 'backend';
             } elseif ($editorArea === 'frontend') {
                 $area = 'frontend';
