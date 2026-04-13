@@ -43,7 +43,7 @@ function ensureCatalogTplScandirDir() {
 }
 
 function ensurePlaywrightArtifactsDir() {
-  const testResultsDir = path.resolve(__dirname, '../../../../test-results');
+  const testResultsDir = path.join(__dirname, '../../test-results');
   fs.mkdirSync(testResultsDir, { recursive: true });
 }
 
