@@ -9,6 +9,7 @@ if (!process.env.PLAYWRIGHT_BASE_URL) {
   process.env.PLAYWRIGHT_DISABLE_PROXY = '1';
 }
 
+const path = require('path');
 const { defineConfig, devices } = require('@playwright/test');
 const { getRuntimeInfo } = require('./framework/runtime');
 
@@ -22,6 +23,7 @@ const baseURL =
 
 module.exports = defineConfig({
   testDir: '.',
+  outputDir: path.join(__dirname, 'test-results'),
   timeout: Number(process.env.PLAYWRIGHT_TEST_TIMEOUT || 120000),
   expect: {
     timeout: Number(process.env.PLAYWRIGHT_EXPECT_TIMEOUT || 15000),
