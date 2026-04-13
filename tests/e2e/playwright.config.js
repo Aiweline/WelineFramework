@@ -220,10 +220,14 @@ console.log('[playwright] target origin:', runtimeInfo.runtime.target_origin);
 
 const globalSetupHostsPath = path.join(__dirname, 'global-setup-hosts.js');
 
+// 截图、trace、失败产物等统一落在 tests/e2e/test-results（勿用仓库根 test-results）
+const e2eTestResultsDir = path.join(__dirname, 'test-results');
+
 module.exports = defineConfig({
   rootDir,
   globalSetup: process.env.PLAYWRIGHT_E2E_HOSTS_FQDN ? globalSetupHostsPath : undefined,
   globalTeardown: undefined,
+  outputDir: e2eTestResultsDir,
   timeout: resolvedTimeout,
   expect: {
     timeout: resolvedExpectTimeout,
