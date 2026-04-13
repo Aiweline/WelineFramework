@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 /**
  * @var \Weline\Framework\View\Template $this
  * Guided UI mode (default):
@@ -1181,6 +1181,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         return window.__pbBlockRefreshState;
     }
     var blockRefreshState = getSharedBlockRefreshState();
+    var pendingBlockSseResult = null;
     var virtualPagesByTypeState = <?= \json_encode($initialVirtualPagesByTypeState, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     function mergeVirtualPagesByTypeState(pages) {
         if (!pages || typeof pages !== 'object') {
@@ -1220,6 +1221,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         refineContextFallback: <?= \json_encode((string)__('当前还没有选中的区块。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         editUnavailable: <?= \json_encode((string)__('当前区块暂时没有可编辑字段'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         editSaved: <?= \json_encode((string)__('区块字段已更新，已刷新当前块'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseDoneConfirm: <?= \json_encode((string)__('区块处理已完成，请点击“确认并刷新当前区块”应用结果。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseNoResult: <?= \json_encode((string)__('未找到可应用的重建结果，请重试一次。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        blockSseApplied: <?= \json_encode((string)__('已应用 AI 重建结果并刷新当前区块'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         buildPreparing: <?= \json_encode((string)__('正在准备可视化编辑环境，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         buildReady: <?= \json_encode((string)__('编辑环境已就绪，可先开始调整已生成页面。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         operationDuplicateStream: <?= \json_encode((string)__('检测到重复的操作事件流连接，已同步当前状态，未重复执行。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -2841,6 +2845,17 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         if (format === 'lines' && Array.isArray(raw)) {
             return raw.join('\n');
         }
+        if (format === 'nav-lines') {
+            if (Array.isArray(raw)) {
+                return raw.map(function (item) {
+                    if (!item || typeof item !== 'object') {
+                        return '';
+                    }
+                    return [String(item.label || item.text || ''), String(item.href || item.url || '')].join('=>');
+                }).filter(Boolean).join('\n');
+            }
+            return raw == null ? '' : String(raw);
+        }
         if (format === 'nav-items' && Array.isArray(raw)) {
             return raw.map(function (item) {
                 if (!item || typeof item !== 'object') {
@@ -2871,6 +2886,27 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 return [];
             }
             return raw.split(/\r?\n/).map(function (line) { return line.trim(); }).filter(Boolean);
+        }
+        if (format === 'nav-lines') {
+            if (raw === '') {
+                return '';
+            }
+            return raw.split(/\r?\n/).map(function (line) {
+                var text = String(line || '').trim();
+                if (!text) {
+                    return '';
+                }
+                if (text.indexOf('=>') >= 0) {
+                    return text;
+                }
+                var parts = text.split('|');
+                var label = String(parts[0] || '').trim();
+                var href = String(parts[1] || '').trim();
+                if (!label) {
+                    return '';
+                }
+                return label + '=>' + (href || '#');
+            }).filter(Boolean).join('\n');
         }
         if (format === 'nav-items') {
             if (raw === '') {
@@ -2941,12 +2977,16 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                 wrap.appendChild(label);
 
                 var input;
-                if (String(field.type || 'text') === 'textarea') {
+                var fieldType = String(field.type || 'text');
+                if (fieldType === 'textarea') {
                     input = document.createElement('textarea');
                     input.rows = 5;
                     if (field.format === 'nav-items') {
                         hintEl.classList.remove('d-none');
                         hintEl.textContent = '导航项格式：标题|链接，每行一项';
+                    } else if (field.format === 'nav-lines') {
+                        hintEl.classList.remove('d-none');
+                        hintEl.textContent = '导航项格式：标题=>链接，每行一项';
                     } else if (field.format === 'card-items') {
                         hintEl.classList.remove('d-none');
                         hintEl.textContent = '卡片格式：上方标签|标题|描述，每行一项';
@@ -2954,15 +2994,23 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                         hintEl.classList.remove('d-none');
                         hintEl.textContent = '列表格式：每行一项';
                     }
+                } else if (fieldType === 'select' && Array.isArray(field.options) && field.options.length > 0) {
+                    input = document.createElement('select');
+                    field.options.forEach(function (optionValue) {
+                        var option = document.createElement('option');
+                        option.value = String(optionValue);
+                        option.textContent = String(optionValue);
+                        input.appendChild(option);
+                    });
                 } else {
                     input = document.createElement('input');
-                    input.type = 'text';
+                    input.type = fieldType === 'number' ? 'number' : 'text';
                 }
 
                 input.className = 'form-control';
                 input.id = 'pb-ai-edit-field-' + fieldKey.replace(/[^a-zA-Z0-9_-]/g, '-');
                 input.setAttribute('data-field-key', fieldKey);
-                input.setAttribute('data-field-type', String(field.type || 'text'));
+                input.setAttribute('data-field-type', fieldType);
                 input.setAttribute('data-field-format', String(field.format || ''));
                 input.value = fieldValueToText(fieldKey, field, blockConfig);
                 wrap.appendChild(input);
@@ -3034,6 +3082,7 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
         var titleEl = document.getElementById('pb-ai-block-sse-modal-title');
         var contextEl = document.getElementById('pb-ai-block-sse-context');
+        var applyBtn = document.getElementById('pb-ai-block-sse-apply');
         var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
         if (!modalEl || !terminal) {
             toast('error', messages.blockSseUnavailable);
@@ -3053,6 +3102,11 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
         if (terminal.clear) {
             terminal.clear();
         }
+        pendingBlockSseResult = null;
+        if (applyBtn) {
+            applyBtn.classList.add('d-none');
+            applyBtn.disabled = true;
+        }
 
         terminal.on('done', function (event) {
             var payload = parsePayload(event);
@@ -3061,17 +3115,15 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
             }
             if (payload && payload.state && payload.state.virtual_pages_by_type) {
                 mergeVirtualPagesByTypeState(payload.state.virtual_pages_by_type);
-                var pageState = payload.state.virtual_pages_by_type[blockRefreshState.pageType] || null;
-                var nextBlock = pageState && Array.isArray(pageState.blocks)
-                    ? pageState.blocks.find(function (item) { return String(item.block_id || '') === String(blockRefreshState.blockId || ''); })
-                    : null;
-                if (nextBlock) {
-                    updateVirtualBlockState(blockRefreshState.pageType, nextBlock);
-                    replaceCurrentBlockHtml(blockRefreshState.pageType, nextBlock);
-                    bindEmbeddedPreviewFrameBridge();
-                }
             }
-            clearBlockStreamingState();
+            pendingBlockSseResult = payload && typeof payload === 'object' ? payload : null;
+            if (applyBtn) {
+                applyBtn.classList.remove('d-none');
+                applyBtn.disabled = false;
+            }
+            if (contextEl) {
+                contextEl.textContent = messages.blockSseDoneConfirm;
+            }
         });
 
         terminal.on('page_generated', function (event) {
@@ -3137,14 +3189,50 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
 
     (function initBlockSseModal() {
         var modalEl = document.getElementById('pb-ai-block-sse-modal');
+        var applyBtn = document.getElementById('pb-ai-block-sse-apply');
         if (!modalEl) {
             return;
+        }
+        if (applyBtn) {
+            applyBtn.addEventListener('click', function () {
+                if (!pendingBlockSseResult || !pendingBlockSseResult.state || !pendingBlockSseResult.state.virtual_pages_by_type) {
+                    toast('warning', messages.blockSseNoResult);
+                    return;
+                }
+                var pageState = pendingBlockSseResult.state.virtual_pages_by_type[blockRefreshState.pageType] || null;
+                var nextBlock = pageState && Array.isArray(pageState.blocks)
+                    ? pageState.blocks.find(function (item) { return String(item.block_id || '') === String(blockRefreshState.blockId || ''); })
+                    : null;
+                if (!nextBlock) {
+                    toast('warning', messages.blockSseNoResult);
+                    clearBlockStreamingState();
+                } else {
+                    updateVirtualBlockState(blockRefreshState.pageType, nextBlock);
+                    replaceCurrentBlockHtml(blockRefreshState.pageType, nextBlock);
+                    bindEmbeddedPreviewFrameBridge();
+                    clearBlockStreamingState();
+                    toast('success', messages.blockSseApplied);
+                }
+                pendingBlockSseResult = null;
+                applyBtn.classList.add('d-none');
+                applyBtn.disabled = true;
+                var modalInstance = resolveBootstrapModalInstance(modalEl);
+                if (modalInstance && typeof modalInstance.hide === 'function') {
+                    modalInstance.hide();
+                }
+            });
         }
         modalEl.addEventListener('hidden.bs.modal', function () {
             var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-block-sse-terminal'] : null;
             if (terminal && terminal.stop) {
                 terminal.stop();
             }
+            pendingBlockSseResult = null;
+            if (applyBtn) {
+                applyBtn.classList.add('d-none');
+                applyBtn.disabled = true;
+            }
+            clearBlockStreamingState();
         });
     })();
 
@@ -5194,6 +5282,9 @@ $domainOrderDisplay = (int)($domainPurchaseState['order_id'] ?? 0) > 0
                     previewBridge.setBuildNavigationGuard(false);
                 }
                 clearBlockStreamingState();
+                if (typeof previewBridge.resetBuildStartUi === 'function') {
+                    previewBridge.resetBuildStartUi();
+                }
                 if (typeof previewBridge.resumeWorkspaceStream === 'function') {
                     previewBridge.resumeWorkspaceStream();
                 }

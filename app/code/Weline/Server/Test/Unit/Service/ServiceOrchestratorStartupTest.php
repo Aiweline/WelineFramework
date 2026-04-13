@@ -1895,11 +1895,6 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertFalse($reflection->hasMethod('shouldUseWindowsDetachedFastStartupBatch'));
     }
 
-    /**
-     * Bootstrap priority: worker / maintenance must stay in the same batch as
-     * the rest of the services, so Windows frontend bootstrap keeps them on the
-     * detached path even when frontend child-process flags are enabled.
-     */
     public function testShouldLaunchForegroundAllowsWindowsFrontendChildProcessesDuringBootstrapWhenFlagsSet(): void
     {
         $orchestrator = new ServiceOrchestrator();
@@ -1947,7 +1942,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         if (\defined('IS_WIN') && IS_WIN) {
             self::assertTrue($dispatchForeground);
-            self::assertFalse($workerForeground);
+            self::assertTrue($workerForeground);
             return;
         }
 
@@ -2042,6 +2037,126 @@ class ServiceOrchestratorStartupTest extends TestCase
         } else {
             self::assertSame([], $argv);
         }
+    }
+
+    public function testBuildWindowsDetachedPhpArgvForBootstrapWorkerYieldsToFrontendWindowFlags(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', true);
+
+        $context = new ServiceContext(
+            instanceName: 'frontend-bootstrap-argv',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: true,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: true,
+            envConfig: [
+                'wls' => [
+                    'orchestrator' => [
+                        'allow_windows_frontend_child_process' => true,
+                        'frontend_worker_windows' => true,
+                        'frontend_non_worker_windows' => true,
+                    ],
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 18080,
+            workerPort: 18080,
+        );
+        $this->writePrivate($orchestrator, 'context', $context);
+
+        $provider = new WorkerProvider();
+        $command = $provider->buildCommand(1, $context);
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-bootstrap-launch',
+            port: 18081,
+            state: ServiceInstance::STATE_STARTING,
+        );
+
+        $argv = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'buildWindowsDetachedPhpArgvForCommand',
+            [$command, $instance, $command->getProcessName()]
+        );
+
+        if (\defined('IS_WIN') && IS_WIN) {
+            self::assertSame([], $argv);
+            return;
+        }
+
+        self::assertSame([], $argv);
+    }
+
+    public function testBuildWindowsDetachedPhpArgvForPostBootstrapWorkerYieldsToFrontendWindowFlags(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $this->writePrivate($orchestrator, 'childServicesBootstrapInProgress', false);
+
+        $context = new ServiceContext(
+            instanceName: 'frontend-post-bootstrap-argv',
+            epoch: 1,
+            controlPort: 19981,
+            masterPid: 1234,
+            host: '127.0.0.1',
+            mainPort: 8080,
+            sslEnabled: true,
+            sslCert: '',
+            sslKey: '',
+            mode: 'legacy',
+            daemon: true,
+            debug: false,
+            frontend: true,
+            envConfig: [
+                'wls' => [
+                    'orchestrator' => [
+                        'allow_windows_frontend_child_process' => true,
+                        'frontend_worker_windows' => true,
+                        'frontend_non_worker_windows' => true,
+                    ],
+                ],
+            ],
+            dispatcherEnabled: true,
+            workerCount: 2,
+            workerBasePort: 18080,
+            workerPort: 18080,
+        );
+        $this->writePrivate($orchestrator, 'context', $context);
+
+        $provider = new WorkerProvider();
+        $command = $provider->buildCommand(1, $context);
+        $instance = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-post-bootstrap-launch',
+            port: 18081,
+            state: ServiceInstance::STATE_STARTING,
+        );
+
+        $argv = $this->invokePrivateWithArgs(
+            $orchestrator,
+            'buildWindowsDetachedPhpArgvForCommand',
+            [$command, $instance, $command->getProcessName()]
+        );
+
+        if (\defined('IS_WIN') && IS_WIN) {
+            self::assertSame([], $argv);
+            return;
+        }
+
+        self::assertSame([], $argv);
     }
 
     public function testDrainControlPlaneAfterStartupStepPollsUntilIdle(): void
