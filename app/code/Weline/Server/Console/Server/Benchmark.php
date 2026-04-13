@@ -19,6 +19,8 @@ use Weline\Framework\App\Env;
  */
 class Benchmark extends CommandAbstract
 {
+    private const DEFAULT_BENCHMARK_PATH = '/_wls/health';
+
     /**
      * @inheritDoc
      */
@@ -40,16 +42,26 @@ class Benchmark extends CommandAbstract
         // 压测参数（仅核心参数需要用户指定）
         $concurrency = (int) ($args['concurrency'] ?? $args['c'] ?? 100);
         $totalRequests = (int) ($args['requests'] ?? $args['n'] ?? 10000);
-        $path = $args['path'] ?? '/';
+        $path = $this->resolveBenchmarkPath($args);
+        // keep-alive 会导致 Dispatcher 按 TCP 连接粘滞到某个 Worker；压测分流时可禁用连接复用
+        $noKeepAlive = isset($args['no-keepalive']) || isset($args['no_keepalive']) || isset($args['spread']);
+        // 命中 Worker 统计：支持自定义响应头（逗号分隔），默认自动探测常见 WLS 头
+        $workerHeader = (string)($args['worker-header'] ?? $args['worker_header'] ?? '');
+        $workerBalanceThreshold = (float)($args['worker-balance-threshold'] ?? $args['worker_balance_threshold'] ?? 1.5);
+        if ($workerBalanceThreshold < 1.0) {
+            $workerBalanceThreshold = 1.0;
+        }
         
         // 修复 Git Bash 路径转换问题（如 /_wls/health 被转成 C:/Program Files/Git/_wls/health）
-        $path = $this->fixGitBashPath($path);
-        
         $scheme = $ssl ? 'https' : 'http';
         $targetUrl = "{$scheme}://{$host}:{$port}{$path}";
         
         $this->printer->note(__('Weline Server 压力测试'));
         echo "\n";
+        if (!isset($args['path']) || \trim((string)$args['path']) === '') {
+            $this->printer->note(__('未指定 --path，默认使用轻量端点 %{1} 测 WLS 吞吐；压业务页请显式传 --path /xxx', [self::DEFAULT_BENCHMARK_PATH]));
+            echo "\n";
+        }
         
         // 显示探测到的服务器信息
         $this->printer->note('╔══════════════════════════════════════════════════════════════╗');
@@ -76,7 +88,7 @@ class Benchmark extends CommandAbstract
         echo "\n";
         
         // 直接运行压测（传入是否 HTTPS）
-        $this->runBenchmark($targetUrl, $concurrency, $totalRequests, $ssl);
+        $this->runBenchmark($targetUrl, $concurrency, $totalRequests, $ssl, $noKeepAlive, $workerHeader, $workerBalanceThreshold);
     }
     
     /**
@@ -123,6 +135,20 @@ class Benchmark extends CommandAbstract
     
     /**
      * 自动探测运行中的服务器
+     */
+    protected function resolveBenchmarkPath(array $args): string
+    {
+        $path = (string)($args['path'] ?? self::DEFAULT_BENCHMARK_PATH);
+        $path = \trim($path);
+        if ($path === '') {
+            $path = self::DEFAULT_BENCHMARK_PATH;
+        }
+
+        return $this->fixGitBashPath($path);
+    }
+
+    /**
+     * 鑷姩鎺㈡祴杩愯涓殑鏈嶅姟鍣?
      */
     protected function detectRunningServer(array $args): ?array
     {
@@ -243,10 +269,19 @@ class Benchmark extends CommandAbstract
      * @param int $totalRequests 总请求数
      * @param bool $ssl 是否 HTTPS（用于设置 SSL 验证选项，本地自签证书可跳过验证）
      */
-    protected function runBenchmark(string $url, int $concurrency, int $totalRequests, bool $ssl = false): void
+    protected function runBenchmark(
+        string $url,
+        int $concurrency,
+        int $totalRequests,
+        bool $ssl = false,
+        bool $noKeepAlive = false,
+        string $workerHeader = '',
+        float $workerBalanceThreshold = 1.5
+    ): void
     {
         $results = [];
         $errors = 0;
+        $workerHits = [];
         $startTime = \microtime(true);
         
         // 检查 curl 扩展
@@ -255,23 +290,33 @@ class Benchmark extends CommandAbstract
             return;
         }
         
-        // 基础选项 - 启用连接复用（Keep-Alive）
+        // 基础选项
         $baseOpts = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 30,
             CURLOPT_CONNECTTIMEOUT => 5,
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            // 连接复用配置
-            CURLOPT_FORBID_REUSE => false,      // 允许连接复用
-            CURLOPT_FRESH_CONNECT => false,     // 不强制新连接
-            CURLOPT_TCP_KEEPALIVE => 1,         // 启用 TCP Keep-Alive
-            CURLOPT_TCP_KEEPIDLE => 60,         // Keep-Alive 空闲时间
-            CURLOPT_TCP_KEEPINTVL => 30,        // Keep-Alive 间隔
-            CURLOPT_HTTPHEADER => [
+        ];
+        if ($noKeepAlive) {
+            // 分流压测模式：每个请求尽量新建连接，让 Dispatcher 在“连接级”重新选择 Worker
+            $baseOpts[CURLOPT_FORBID_REUSE] = true;
+            $baseOpts[CURLOPT_FRESH_CONNECT] = true;
+            $baseOpts[CURLOPT_TCP_KEEPALIVE] = 0;
+            $baseOpts[CURLOPT_HTTPHEADER] = [
+                'Connection: close',
+            ];
+        } else {
+            // 性能压测模式：启用连接复用（Keep-Alive）
+            $baseOpts[CURLOPT_FORBID_REUSE] = false;      // 允许连接复用
+            $baseOpts[CURLOPT_FRESH_CONNECT] = false;     // 不强制新连接
+            $baseOpts[CURLOPT_TCP_KEEPALIVE] = 1;         // 启用 TCP Keep-Alive
+            $baseOpts[CURLOPT_TCP_KEEPIDLE] = 60;         // Keep-Alive 空闲时间
+            $baseOpts[CURLOPT_TCP_KEEPINTVL] = 30;        // Keep-Alive 间隔
+            $baseOpts[CURLOPT_HTTPHEADER] = [
                 'Connection: keep-alive',
                 'Keep-Alive: timeout=60, max=1000',
-            ],
-        ];
+            ];
+        }
         if ($ssl) {
             $baseOpts[CURLOPT_SSL_VERIFYPEER] = false;
             $baseOpts[CURLOPT_SSL_VERIFYHOST] = 0;
@@ -279,12 +324,15 @@ class Benchmark extends CommandAbstract
         
         $mh = \curl_multi_init();
         
-        // 创建共享句柄，用于连接池复用
-        $sh = \curl_share_init();
-        \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
-        \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
-        if (\defined('CURL_LOCK_DATA_SSL_SESSION')) {
-            \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
+        // 创建共享句柄，用于连接池复用（禁用 keep-alive 时不启用共享池）
+        $sh = null;
+        if (!$noKeepAlive) {
+            $sh = \curl_share_init();
+            \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
+            \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
+            if (\defined('CURL_LOCK_DATA_SSL_SESSION')) {
+                \curl_share_setopt($sh, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
+            }
         }
         
         // 设置 curl_multi 管道化/复用（HTTP/1.1 管道化，HTTP/2 多路复用）
@@ -299,6 +347,7 @@ class Benchmark extends CommandAbstract
         // 创建固定数量的 curl handle 用于复用
         $handlePool = [];
         $activeHandles = [];  // key => ['handle' => $ch, 'start' => time, 'poolIndex' => index]
+        $headerBuffers = [];  // key => raw header text
         $completed = 0;
         $requestsSent = 0;
         
@@ -309,7 +358,13 @@ class Benchmark extends CommandAbstract
             $ch = \curl_init();
             \curl_setopt_array($ch, $baseOpts);
             \curl_setopt($ch, CURLOPT_URL, $url);
-            \curl_setopt($ch, CURLOPT_SHARE, $sh);  // 共享连接池
+            if ($sh !== null) {
+                \curl_setopt($ch, CURLOPT_SHARE, $sh);  // 共享连接池
+            }
+            \curl_setopt($ch, CURLOPT_HEADERFUNCTION, static function ($chRef, string $line) use (&$headerBuffers): int {
+                $headerBuffers[(int)$chRef] = ($headerBuffers[(int)$chRef] ?? '') . $line;
+                return \strlen($line);
+            });
             $handlePool[$i] = $ch;
         }
         
@@ -328,7 +383,9 @@ class Benchmark extends CommandAbstract
         $running = null;
         $lastProgress = 0;
         
-        $this->printer->note(__('使用 %{1} 个持久连接进行压测...', [$batchSize]));
+        $this->printer->note($noKeepAlive
+            ? __('压测模式：禁用 keep-alive（更利于分流验证），并发连接数=%{1}', [$batchSize])
+            : __('压测模式：启用 keep-alive（性能模式），使用 %{1} 个持久连接...', [$batchSize]));
         
         do {
             // 执行请求
@@ -349,6 +406,11 @@ class Benchmark extends CommandAbstract
                         $httpCode = \curl_getinfo($ch, CURLINFO_HTTP_CODE);
                         if ($httpCode >= 200 && $httpCode < 400) {
                             $results[] = $elapsed;
+                            $headers = $this->parseResponseHeaders($headerBuffers[$key] ?? '');
+                            $workerMarker = $this->extractWorkerMarker($headers, $workerHeader);
+                            if ($workerMarker !== '') {
+                                $workerHits[$workerMarker] = ($workerHits[$workerMarker] ?? 0) + 1;
+                            }
                         } else {
                             $errors++;
                         }
@@ -368,6 +430,7 @@ class Benchmark extends CommandAbstract
                     // 从 multi handle 移除
                     \curl_multi_remove_handle($mh, $ch);
                     unset($activeHandles[$key]);
+                    $headerBuffers[$key] = '';
                     
                     // 如果还有请求要发送，复用同一个 handle（共享连接池会自动复用连接）
                     if ($requestsSent < $totalRequests) {
@@ -395,19 +458,28 @@ class Benchmark extends CommandAbstract
             \curl_close($ch);
         }
         \curl_multi_close($mh);
-        \curl_share_close($sh);
+        if ($sh !== null) {
+            \curl_share_close($sh);
+        }
         
         $endTime = \microtime(true);
         $totalTime = $endTime - $startTime;
         
         // 生成报告
-        $this->generateReport($results, $errors, $totalTime, $totalRequests);
+        $this->generateReport($results, $errors, $totalTime, $totalRequests, $workerHits, $workerBalanceThreshold);
     }
     
     /**
      * 生成报告
      */
-    protected function generateReport(array $results, int $errors, float $totalTime, int $totalRequests): void
+    protected function generateReport(
+        array $results,
+        int $errors,
+        float $totalTime,
+        int $totalRequests,
+        array $workerHits = [],
+        float $workerBalanceThreshold = 1.5
+    ): void
     {
         $successCount = \count($results);
         $totalCompleted = $successCount + $errors;
@@ -456,6 +528,42 @@ class Benchmark extends CommandAbstract
         $this->printer->note(__('中位数：%{1}', [\round($medianTime, 3)]));
         $this->printer->note(__('P95：%{1}', [\round($p95Time, 3)]));
         $this->printer->note(__('P99：%{1}', [\round($p99Time, 3)]));
+        $workerBalance = null;
+        if (!empty($workerHits)) {
+            \arsort($workerHits);
+            echo "\n";
+            $this->printer->setup(__('Worker 命中分布'));
+            echo "\n";
+            $sum = \array_sum($workerHits);
+            foreach ($workerHits as $worker => $count) {
+                $ratio = $sum > 0 ? \round($count * 100 / $sum, 2) : 0.0;
+                $this->printer->note(__('%{1}：%{2} (%{3}%)', [$worker, $count, $ratio]));
+            }
+
+            $max = (int)\max($workerHits);
+            $min = (int)\min($workerHits);
+            $spreadRatio = $min > 0 ? $max / $min : INF;
+            $balanced = $spreadRatio <= $workerBalanceThreshold;
+            $workerBalance = [
+                'threshold' => \round($workerBalanceThreshold, 3),
+                'max' => $max,
+                'min' => $min,
+                'spread_ratio' => \is_finite($spreadRatio) ? \round($spreadRatio, 3) : INF,
+                'balanced' => $balanced,
+            ];
+            echo "\n";
+            if ($balanced) {
+                $this->printer->success(__('分流均衡检查：OK（max/min=%{1}，阈值=%{2}）', [
+                    (string)$workerBalance['spread_ratio'],
+                    (string)$workerBalance['threshold'],
+                ]));
+            } else {
+                $this->printer->warning(__('分流均衡检查：WARN（max/min=%{1}，阈值=%{2}）', [
+                    (string)$workerBalance['spread_ratio'],
+                    (string)$workerBalance['threshold'],
+                ]));
+            }
+        }
         
         echo "\n";
         
@@ -475,6 +583,8 @@ class Benchmark extends CommandAbstract
                 'p95' => \round($p95Time, 3),
                 'p99' => \round($p99Time, 3),
             ],
+            'worker_hits' => $workerHits,
+            'worker_balance' => $workerBalance,
         ];
         
         $reportDir = BP . 'var/log/wls';
@@ -505,19 +615,69 @@ class Benchmark extends CommandAbstract
             [
                 '-c, --concurrency <n>' => __('并发数（默认：100）'),
                 '-n, --requests <n>' => __('总请求数（默认：10000）'),
-                '--path <path>' => __('请求路径（默认：/）'),
+                '--path <path>' => __('请求路径（默认：/_wls/health）'),
                 '-p, --port <port>' => __('指定端口（可选，默认自动探测）'),
                 '-h, --host <ip>' => __('指定主机（可选，默认 127.0.0.1）'),
                 '-s, --ssl' => __('指定端口为 HTTPS（与 -p 合用；自动探测时根据实例配置）'),
+                '--no-keepalive, --spread' => __('禁用 keep-alive/连接复用（更利于验证 Dispatcher 分流；开销更大）'),
+                '--worker-header <name>' => __('命中 Worker 统计使用的响应头（可逗号分隔；默认自动探测 X-WLS-Worker-Port/Id/PID）'),
+                '--worker-balance-threshold <ratio>' => __('分流倾斜阈值，按 max/min 判定（默认 1.5，超过则 WARN）'),
                 '--help' => __('显示帮助信息'),
             ],
             [],
             [
                 __('基本压测（自动探测）') => 'php bin/w server:benchmark',
                 __('高并发') => 'php bin/w server:benchmark -c 500 -n 50000',
+                __('分流验证（禁用 keep-alive）') => 'php bin/w server:benchmark -c 500 -n 50000 --no-keepalive',
+                __('统计 Worker 分布') => 'php bin/w server:benchmark -p 9503 --ssl --path /_wls/health --worker-header X-WLS-Worker-Port',
+                __('分流倾斜阈值检查') => 'php bin/w server:benchmark -p 9503 --ssl --path /_wls/health --worker-balance-threshold 1.3',
                 __('指定端口') => 'php bin/w server:benchmark -p 9000',
                 __('指定 HTTPS 端口') => 'php bin/w server:benchmark -p 9443 --ssl',
             ]
         );
+    }
+
+    private function parseResponseHeaders(string $rawHeaders): array
+    {
+        if ($rawHeaders === '') {
+            return [];
+        }
+        // 多次重定向/1xx 时只取最后一段响应头
+        $blocks = \preg_split("/\r\n\r\n|\n\n/", \trim($rawHeaders));
+        $lastBlock = (string)($blocks[\count($blocks) - 1] ?? '');
+        $lines = \preg_split("/\r\n|\n/", $lastBlock) ?: [];
+        $headers = [];
+        foreach ($lines as $line) {
+            $pos = \strpos($line, ':');
+            if ($pos === false) {
+                continue;
+            }
+            $name = \strtolower(\trim(\substr($line, 0, $pos)));
+            $value = \trim(\substr($line, $pos + 1));
+            if ($name === '') {
+                continue;
+            }
+            $headers[$name] = $value;
+        }
+        return $headers;
+    }
+
+    private function extractWorkerMarker(array $headers, string $workerHeader): string
+    {
+        $candidates = [];
+        if ($workerHeader !== '') {
+            $candidates = \array_values(\array_filter(\array_map('trim', \explode(',', $workerHeader))));
+        }
+        if (empty($candidates)) {
+            $candidates = ['X-WLS-Worker-Port', 'X-WLS-Worker-Id', 'X-WLS-Worker-PID'];
+        }
+        foreach ($candidates as $headerName) {
+            $key = \strtolower($headerName);
+            if (!isset($headers[$key]) || $headers[$key] === '') {
+                continue;
+            }
+            return $headerName . '=' . $headers[$key];
+        }
+        return '';
     }
 }

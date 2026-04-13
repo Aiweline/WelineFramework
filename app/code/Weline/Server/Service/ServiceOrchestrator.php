@@ -3163,15 +3163,6 @@ class ServiceOrchestrator
         }
 
         if (\defined('IS_WIN') && IS_WIN) {
-            if ($this->childServicesBootstrapInProgress
-                && \in_array($role, [ControlMessage::ROLE_WORKER, ControlMessage::ROLE_MAINTENANCE], true)
-            ) {
-                // Bootstrap priority: workers must join the same batch launch as
-                // the rest of the services instead of falling behind and being
-                // resurrected later by Master self-heal.
-                return false;
-            }
-
             // Windows 下前台子进程拉起成本较高，默认强制走后台 detached。
             // server:start --frontend 会通过 buildOrchestratorRuntimeOptions 写入 allow_windows_frontend_child_process
             // 与 frontend_worker_windows；批量脚本已不等待 PID/重定向输出，因此启动批次也可以显示子窗口。
