@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use Weline\Ai\Service\AiService;
+use Weline\Framework\Manager\ObjectManager;
 
 final class AiSiteExecutionBlueprintService
 {
@@ -12,6 +14,7 @@ final class AiSiteExecutionBlueprintService
 
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
+        private readonly ?AiService $aiService = null,
     ) {
     }
 
@@ -38,6 +41,7 @@ final class AiSiteExecutionBlueprintService
             'target_domain' => \strtolower(\trim((string)($scope['target_domain'] ?? ''))),
             'brief_description' => \trim((string)($scope['brief_description'] ?? $scope['user_description'] ?? '')),
             'default_locale' => \trim((string)($scope['default_locale'] ?? $scope['default_language'] ?? '')),
+            'plan_locale' => \trim((string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? '')),
             'page_types' => \array_values(\array_map('strval', \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [])),
             'conversation' => $userConversation,
         ], \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
@@ -121,6 +125,7 @@ final class AiSiteExecutionBlueprintService
         $executionBlueprint['signature'] = $this->buildExecutionBlueprintSignature($executionBlueprint);
 
         $structured = [
+            'i18n' => $this->ensurePlanI18nSection([], $planLocale, $this->isEnglishLocale($planLocale)),
             'site_strategy' => [
                 'site_display_name' => $siteDisplayName,
                 'summary' => $siteSummary,
@@ -151,6 +156,83 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * 真实 AI 流式生成阶段一方案；失败时回退到本地规划器。
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $payload
+     * @param callable(string):void|null $onChunk
+     * @return array{
+     *   plan_json:array<string, mixed>,
+     *   structured:array<string, mixed>,
+     *   execution_blueprint:array<string, mixed>,
+     *   derived_scope_patch:array<string, mixed>,
+     *   markdown:string,
+     *   ai_generated?:int,
+     *   ai_fallback?:int
+     * }
+     */
+    public function buildPlanArtifactsByAiStream(array $scope, array $websiteProfile, array $payload = [], ?callable $onChunk = null): array
+    {
+        $pageTypes = $this->expandPageTypes($scope);
+        $instruction = \trim((string)($payload['instruction'] ?? ''));
+        $targetScope = \trim((string)($payload['target_scope'] ?? ''));
+        $planLocale = \trim((string)($scope['plan_locale'] ?? $scope['default_language'] ?? $scope['default_locale'] ?? ''));
+        $siteDisplayName = $this->pageBlueprintService->resolveSiteDisplayName($websiteProfile, $scope);
+        $siteSummary = $this->pageBlueprintService->buildSiteMarketingSummary($websiteProfile, $scope);
+
+        $prompt = $this->buildAiPlanPrompt($scope, $websiteProfile, $pageTypes, $planLocale, $instruction, $targetScope, $siteDisplayName, $siteSummary);
+        $fullContent = '';
+
+        try {
+            $this->getAiService()->generateStream(
+                $prompt,
+                static function (string $chunk) use (&$fullContent, $onChunk): bool {
+                    $fullContent .= $chunk;
+                    if (\is_callable($onChunk) && $chunk !== '') {
+                        $onChunk($chunk);
+                    }
+                    return true;
+                },
+                null,
+                'pagebuilder_plan_generation',
+                null,
+                [
+                    'allow_zero_balance_provider' => true,
+                    'temperature' => 0.35,
+                    'max_tokens' => 16000,
+                    'timeout' => 240,
+                    'response_format' => ['type' => 'json_object'],
+                ]
+            );
+
+            $decoded = \json_decode($fullContent, true);
+            if (!\is_array($decoded)) {
+                throw new \RuntimeException('invalid ai json');
+            }
+
+            $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, $decoded, $pageTypes, $planLocale, $instruction, $targetScope);
+            $artifacts['ai_generated'] = 1;
+            $artifacts['ai_fallback'] = 0;
+            return $artifacts;
+        } catch (\Throwable $throwable) {
+            $allowFallback = (bool)($payload['allow_fallback'] ?? false);
+            if (!$allowFallback) {
+                throw new \RuntimeException(
+                    'AI plan generation failed: ' . $throwable->getMessage(),
+                    (int)$throwable->getCode(),
+                    $throwable
+                );
+            }
+
+            $fallback = $this->buildPlanArtifacts($scope, $websiteProfile, $payload);
+            $fallback['ai_generated'] = 0;
+            $fallback['ai_fallback'] = 1;
+            return $fallback;
+        }
+    }
+
+    /**
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $websiteProfile
      * @param array<string, mixed> $payload
@@ -163,9 +245,9 @@ final class AiSiteExecutionBlueprintService
      *   change_scope_report:array<string, mixed>
      * }
      */
-    public function refineDraftPlan(array $scope, array $websiteProfile, array $payload): array
+    public function refineDraftPlan(array $scope, array $websiteProfile, array $payload, ?callable $onChunk = null): array
     {
-        $artifacts = $this->buildPlanArtifacts($scope, $websiteProfile, $payload);
+        $artifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $payload, $onChunk);
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $targetScope = \trim((string)($payload['target_scope'] ?? ''));
         $round = \max(1, (int)($payload['round'] ?? 1));
@@ -203,9 +285,9 @@ final class AiSiteExecutionBlueprintService
      *   rebuild_summary:array<string, mixed>
      * }
      */
-    public function rebuildDraftPlan(array $scope, array $websiteProfile, array $payload): array
+    public function rebuildDraftPlan(array $scope, array $websiteProfile, array $payload, ?callable $onChunk = null): array
     {
-        $artifacts = $this->buildPlanArtifacts($scope, $websiteProfile, $payload);
+        $artifacts = $this->buildPlanArtifactsByAiStream($scope, $websiteProfile, $payload, $onChunk);
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $round = \max(1, (int)($payload['round'] ?? 1));
         $summary = [
@@ -222,6 +304,223 @@ final class AiSiteExecutionBlueprintService
         $artifacts['rebuild_summary'] = $summary;
 
         return $artifacts;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     */
+    private function buildAiPlanPrompt(
+        array $scope,
+        array $websiteProfile,
+        array $pageTypes,
+        string $planLocale,
+        string $instruction,
+        string $targetScope,
+        string $siteDisplayName,
+        string $siteSummary
+    ): string {
+        $baseline = $this->buildPlanArtifacts($scope, $websiteProfile, [
+            'instruction' => $instruction,
+            'target_scope' => $targetScope,
+        ]);
+        $baselinePlanJson = \is_array($baseline['plan_json'] ?? null) ? $baseline['plan_json'] : [];
+        $baselineText = $baselinePlanJson === []
+            ? '{}'
+            : (\json_encode($baselinePlanJson, \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT) ?: '{}');
+
+        $outputLanguage = $planLocale !== '' ? $planLocale : 'zh_Hans_CN';
+        $pageTypeText = $pageTypes === [] ? '-' : \implode(', ', $pageTypes);
+
+        return \implode("\n", [
+            'You are an AI site planning engine for a PageBuilder workspace.',
+            'Return STRICT JSON only. Do not return markdown fence.',
+            'Output object schema:',
+            '{',
+            '  "markdown": "string",',
+            '  "plan_json": {',
+            '    "i18n": {',
+            '      "locale": "string",',
+            '      "labels": {',
+            '        "title": "string",',
+            '        "site": "string",',
+            '        "summary": "string",',
+            '        "site_structure": "string",',
+            '        "shared_global_plan": "string",',
+            '        "page_details": "string"',
+            '      }',
+            '    },',
+            '    "site_positioning": "string",',
+            '    "brand_tone": "string",',
+            '    "color_palette": ["#hex"],',
+            '    "visual_style": "string",',
+            '    "seo_keywords": ["string"],',
+            '    "page_types": ["home_page"],',
+            '    "execution_steps": [{"phase":"string","summary":"string","tasks":["string"]}]',
+            '  }',
+            '}',
+            'Hard rules:',
+            '- markdown and all text fields must use locale: ' . $outputLanguage,
+            '- page_types must keep only valid selected page types.',
+            '- Do not include explanations outside JSON.',
+            '- Keep structure practical for direct execution.',
+            'Planning context:',
+            'site_display_name: ' . $siteDisplayName,
+            'site_summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
+            'selected_page_types: ' . $pageTypeText,
+            'target_scope: ' . ($targetScope !== '' ? $targetScope : 'full_plan'),
+            'instruction: ' . ($instruction !== '' ? $instruction : '-'),
+            'baseline_plan_json:',
+            $baselineText,
+        ]);
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $websiteProfile
+     * @param array<string, mixed> $decoded
+     * @return array<string, mixed>
+     */
+    private function mapAiPlanToArtifacts(
+        array $scope,
+        array $websiteProfile,
+        array $decoded,
+        array $pageTypes,
+        string $planLocale,
+        string $instruction,
+        string $targetScope
+    ): array {
+        $fallback = $this->buildPlanArtifacts($scope, $websiteProfile, [
+            'instruction' => $instruction,
+            'target_scope' => $targetScope,
+        ]);
+        $isEn = $this->isEnglishLocale($planLocale);
+        $fallbackPlanJson = \is_array($fallback['plan_json'] ?? null) ? $fallback['plan_json'] : [];
+        $planJson = \is_array($decoded['plan_json'] ?? null) ? $decoded['plan_json'] : [];
+        $mergedPlanJson = $fallbackPlanJson;
+        if ($planJson !== []) {
+            foreach (['site_strategy', 'theme_style', 'palette', 'navigation_plan', 'footer_plan', 'seo_strategy'] as $sectionKey) {
+                if (!\is_array($planJson[$sectionKey] ?? null)) {
+                    continue;
+                }
+                $mergedPlanJson[$sectionKey] = \array_replace_recursive(
+                    \is_array($mergedPlanJson[$sectionKey] ?? null) ? $mergedPlanJson[$sectionKey] : [],
+                    $planJson[$sectionKey]
+                );
+            }
+            // 页面与区块层是执行蓝图核心，默认以本地规划器为准，避免 AI 文案漂移破坏任务契约。
+            // 仅在英文方案下允许 AI 对 pages 做受控覆盖；中文方案保持本地结构化基线。
+            if ($isEn && \is_array($planJson['pages'] ?? null)) {
+                $basePages = \is_array($mergedPlanJson['pages'] ?? null) ? $mergedPlanJson['pages'] : [];
+                foreach ($pageTypes as $pageType) {
+                    if (!\is_array($basePages[$pageType] ?? null)) {
+                        continue;
+                    }
+                    if (!\is_array($planJson['pages'][$pageType] ?? null)) {
+                        continue;
+                    }
+                    $basePages[$pageType] = \array_replace_recursive($basePages[$pageType], $planJson['pages'][$pageType]);
+                }
+                $mergedPlanJson['pages'] = $basePages;
+            }
+        }
+        $mergedPlanJson['page_types'] = $pageTypes;
+        $mergedPlanJson = $this->enforcePlanJsonBaseline($mergedPlanJson, $fallbackPlanJson, $pageTypes, $isEn);
+        $mergedPlanJson['i18n'] = $this->ensurePlanI18nSection(
+            \is_array($mergedPlanJson['i18n'] ?? null) ? $mergedPlanJson['i18n'] : [],
+            $planLocale,
+            $isEn
+        );
+        $fallback['plan_json'] = $mergedPlanJson;
+        $fallback['structured'] = \array_replace(
+            \is_array($fallback['structured'] ?? null) ? $fallback['structured'] : [],
+            [
+                'site_strategy' => \is_array($mergedPlanJson['site_strategy'] ?? null) ? $mergedPlanJson['site_strategy'] : [],
+                'theme_style' => \is_array($mergedPlanJson['theme_style'] ?? null) ? $mergedPlanJson['theme_style'] : [],
+                'palette' => \is_array($mergedPlanJson['palette'] ?? null) ? $mergedPlanJson['palette'] : [],
+                'navigation_plan' => \is_array($mergedPlanJson['navigation_plan'] ?? null) ? $mergedPlanJson['navigation_plan'] : [],
+                'footer_plan' => \is_array($mergedPlanJson['footer_plan'] ?? null) ? $mergedPlanJson['footer_plan'] : [],
+                'seo_strategy' => \is_array($mergedPlanJson['seo_strategy'] ?? null) ? $mergedPlanJson['seo_strategy'] : [],
+                'page_types' => $pageTypes,
+                'pages' => \is_array($mergedPlanJson['pages'] ?? null) ? $mergedPlanJson['pages'] : [],
+            ]
+        );
+
+        // 统一由本地模板按 plan_locale 渲染 Markdown，避免 AI 返回中英混排。
+        if (\is_array($fallback['plan_json'] ?? null)) {
+            $fallback['markdown'] = $this->buildMarkdownPlan($fallback['plan_json'], $planLocale);
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param list<string> $pageTypes
+     * @param array<string, mixed> $planJson
+     * @param array<string, mixed> $fallbackPlanJson
+     * @return array<string, mixed>
+     */
+    private function enforcePlanJsonBaseline(array $planJson, array $fallbackPlanJson, array $pageTypes, bool $isEn): array
+    {
+        $normalized = $planJson;
+        $normalized['page_types'] = $pageTypes;
+        if (!\is_array($normalized['pages'] ?? null)) {
+            $normalized['pages'] = [];
+        }
+        $fallbackPages = \is_array($fallbackPlanJson['pages'] ?? null) ? $fallbackPlanJson['pages'] : [];
+        foreach ($pageTypes as $pageType) {
+            if (!\is_array($normalized['pages'][$pageType] ?? null)) {
+                $normalized['pages'][$pageType] = \is_array($fallbackPages[$pageType] ?? null) ? $fallbackPages[$pageType] : [];
+                continue;
+            }
+            if (!\is_array($fallbackPages[$pageType] ?? null)) {
+                continue;
+            }
+            // 非英文方案下，强制使用本地页面块文案，确保遵守计划语言与结构约束。
+            if (!$isEn) {
+                $normalized['pages'][$pageType] = $fallbackPages[$pageType];
+            }
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * @param array<string, mixed> $i18n
+     * @return array<string, mixed>
+     */
+    private function ensurePlanI18nSection(array $i18n, string $planLocale, bool $isEn): array
+    {
+        $defaultLabels = $isEn
+            ? [
+                'title' => 'Stage 1 Execution Plan (Full Blueprint)',
+                'site' => 'Site',
+                'summary' => 'Summary',
+                'site_structure' => 'Site Structure',
+                'shared_global_plan' => 'Shared Global Plan',
+                'page_details' => 'Page And Block Execution Details',
+            ]
+            : [
+                'title' => '阶段一执行蓝图（完整规划）',
+                'site' => '站点',
+                'summary' => '摘要',
+                'site_structure' => '全站结构',
+                'shared_global_plan' => '全站共享规划',
+                'page_details' => '页面与区块执行细化',
+            ];
+
+        $labels = \is_array($i18n['labels'] ?? null) ? $i18n['labels'] : [];
+        foreach ($defaultLabels as $key => $value) {
+            $candidate = \trim((string)($labels[$key] ?? ''));
+            $labels[$key] = $candidate !== '' ? $candidate : $value;
+        }
+
+        return [
+            'locale' => \trim((string)($i18n['locale'] ?? '')) !== '' ? (string)$i18n['locale'] : $planLocale,
+            'labels' => $labels,
+        ];
     }
 
     /**
@@ -512,6 +811,127 @@ final class AiSiteExecutionBlueprintService
         ];
     }
 
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @return array<string, mixed>|null
+     */
+    private function resolveAppendBlockInstruction(string $instruction, string $targetScope, string $pageType, array $blocks): ?array
+    {
+        $appendType = null;
+        if ($this->shouldAppendPartnerBlock($instruction, $targetScope, $pageType)) {
+            $appendType = 'partner';
+        } elseif ($this->shouldAppendAboutBlock($instruction, $targetScope, $pageType)) {
+            $appendType = 'about_intro';
+        }
+        if ($appendType !== null) {
+            foreach ($blocks as $block) {
+                if (!\is_array($block)) {
+                    continue;
+                }
+                $blockKey = \mb_strtolower(\trim((string)($block['block_key'] ?? '')));
+                $sectionCode = \mb_strtolower(\trim((string)($block['section_code'] ?? '')));
+                $componentKind = \mb_strtolower(\trim((string)($block['component_kind'] ?? '')));
+                if (
+                    ($appendType === 'partner' && ($blockKey === 'partner' || $sectionCode === 'partner' || $componentKind === 'partner'))
+                    || ($appendType === 'about_intro' && (
+                        \str_contains($blockKey, 'about')
+                        || \str_contains($sectionCode, 'about')
+                        || \str_contains($componentKind, 'about')
+                    ))
+                ) {
+                    return null;
+                }
+            }
+
+            return [
+                'type' => $appendType,
+            ];
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $appendInstruction
+     * @param array<string, mixed> $palette
+     * @param array<string, mixed> $themeStyle
+     * @return array<string, mixed>
+     */
+    private function buildAppendedBlockPlan(
+        array $appendInstruction,
+        string $pageType,
+        string $pageLabel,
+        string $pageGoal,
+        array $palette,
+        array $themeStyle,
+        string $locale = ''
+    ): array {
+        $appendType = \trim((string)($appendInstruction['type'] ?? ''));
+        if ($appendType === 'partner') {
+            return $this->buildPartnerBlockPlan($pageType, $pageLabel, $palette);
+        }
+        if ($appendType === 'about_intro') {
+            return $this->buildAboutIntroBlockPlan($pageType, $pageLabel, $palette, $locale);
+        }
+
+        return [
+            'block_key' => 'custom',
+            'section_code' => 'custom',
+            'region' => 'content',
+            'component_kind' => 'content',
+            'order' => 980,
+            'goal' => $pageGoal,
+            'why' => $this->isEnglishLocale($locale)
+                ? ('Append custom block for ' . $pageLabel . ' by latest instruction.')
+                : ('按最新指令为 ' . $pageLabel . ' 追加自定义区块。'),
+            'style_brief' => [
+                'visual_tone' => (string)($themeStyle['visual_tone'] ?? ''),
+                'layout_rule' => $this->resolveLayoutRule('content', $locale),
+                'responsive_rule' => $this->resolveResponsiveRule('content', $locale),
+            ],
+            'palette_usage' => [
+                'background' => (string)($palette['surface'] ?? '#ffffff'),
+                'accent' => (string)($palette['accent'] ?? '#2563eb'),
+                'text' => (string)($palette['text'] ?? '#0f172a'),
+                'reason' => $this->isEnglishLocale($locale)
+                    ? 'Fallback block reuses current theme palette to keep consistency.'
+                    : '兜底区块沿用当前主题色盘，保证视觉一致性。',
+            ],
+            'seo_brief' => [
+                'intent' => $pageGoal,
+                'keywords' => [],
+                'anchors' => ['#custom'],
+                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
+            ],
+            'content_brief' => [
+                'goal' => $pageGoal,
+                'why' => $this->isEnglishLocale($locale)
+                    ? 'Keep appended block concise and conversion-oriented.'
+                    : '追加区块保持信息简洁并服务转化目标。',
+                'headline_direction' => $this->isEnglishLocale($locale) ? 'Add one clear value headline.' : '补充一个明确价值标题。',
+                'body_direction' => $this->isEnglishLocale($locale) ? 'Explain added value in short paragraph.' : '用短段落解释新增价值。',
+                'cta_direction' => $this->resolveCtaDirection('content', $pageLabel, $locale),
+            ],
+            'field_plan' => [
+                [
+                    'field' => 'title',
+                    'sample' => '',
+                    'reason' => $this->isEnglishLocale($locale)
+                        ? 'Title helps users identify appended content purpose quickly.'
+                        : '标题用于快速说明新增内容目的。',
+                ],
+                [
+                    'field' => 'description',
+                    'sample' => '',
+                    'reason' => $this->isEnglishLocale($locale)
+                        ? 'Description delivers actionable details for users.'
+                        : '描述补充可执行的信息细节。',
+                ],
+            ],
+            'result_ref' => [],
+        ];
+    }
+
     private function shouldAppendPartnerBlock(string $instruction, string $targetScope, string $pageType): bool
     {
         $instructionLower = \mb_strtolower(\trim($instruction));
@@ -527,6 +947,26 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $pageType === Page::TYPE_HOME && \str_contains($scope, 'page');
+    }
+
+    private function shouldAppendAboutBlock(string $instruction, string $targetScope, string $pageType): bool
+    {
+        $instructionLower = \mb_strtolower(\trim($instruction));
+        if (!$this->containsAny($instructionLower, ['关于我们', 'about us', 'about', 'company intro', '品牌介绍'])) {
+            return false;
+        }
+        if (!$this->containsAny($instructionLower, ['添加', '新增', '加入', 'append', 'add', 'insert'])) {
+            return false;
+        }
+        if ($targetScope === '') {
+            return $pageType === Page::TYPE_HOME;
+        }
+        $scope = \mb_strtolower($targetScope);
+        if (\str_contains($scope, $pageType)) {
+            return true;
+        }
+
+        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '首页') || \str_contains($scope, 'page'));
     }
 
     /**
@@ -570,6 +1010,55 @@ final class AiSiteExecutionBlueprintService
                 ['field' => 'title', 'sample' => '合作伙伴', 'reason' => '模块标题需要明确背书主题。'],
                 ['field' => 'partners', 'sample' => '', 'reason' => '合作伙伴列表是本模块核心数据。'],
                 ['field' => 'description', 'sample' => '', 'reason' => '说明合作范围与合作价值。'],
+            ],
+            'result_ref' => [],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildAboutIntroBlockPlan(string $pageType, string $pageLabel, array $palette, string $locale = ''): array
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        return [
+            'block_key' => 'about_intro',
+            'section_code' => 'about_intro',
+            'region' => 'content',
+            'component_kind' => 'about',
+            'order' => 985,
+            'goal' => $isEn ? 'Add an about-us section to strengthen trust and explain brand background.' : '补充关于我们模块，增强信任并说明品牌背景。',
+            'why' => $isEn
+                ? ($pageLabel . ' needs a concise about-us block to connect brand story with conversion intent.')
+                : ($pageLabel . ' 增加关于我们区块，可将品牌故事与转化目标衔接。'),
+            'style_brief' => [
+                'visual_tone' => $isEn ? 'Trust-building, concise, and story-driven.' : '可信、简洁、叙事导向。',
+                'layout_rule' => $isEn ? 'Two-column text+image on desktop, single column on mobile.' : '桌面端图文双栏，移动端单列排布。',
+                'responsive_rule' => $isEn ? 'Keep headline and brand highlights visible first.' : '优先展示标题和品牌亮点。',
+            ],
+            'palette_usage' => [
+                'background' => (string)($palette['surface'] ?? '#ffffff'),
+                'accent' => (string)($palette['accent'] ?? '#2563eb'),
+                'text' => (string)($palette['text'] ?? '#0f172a'),
+                'reason' => $isEn ? 'Use existing palette to keep visual consistency with other homepage blocks.' : '沿用现有色盘，确保与首页其它区块视觉一致。',
+            ],
+            'seo_brief' => [
+                'intent' => $isEn ? 'Brand credibility and company introduction' : '品牌可信背书与公司介绍',
+                'keywords' => $isEn ? ['about us', 'company intro', 'brand story'] : ['关于我们', '品牌介绍', '公司简介'],
+                'anchors' => ['#about-us'],
+                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
+            ],
+            'content_brief' => [
+                'goal' => $isEn ? 'Introduce who we are, what we do, and why users can trust us.' : '介绍我们是谁、做什么、为何可信。',
+                'why' => $isEn ? 'About-us content improves trust and conversion readiness.' : '关于我们内容有助于提升信任与转化准备度。',
+                'headline_direction' => $isEn ? 'Use a clear headline describing brand mission.' : '标题明确表达品牌使命。',
+                'body_direction' => $isEn ? 'Use 2-3 short paragraphs for background, strengths, and service promise.' : '用 2-3 个短段说明背景、优势与服务承诺。',
+                'cta_direction' => $isEn ? 'End with a trust-oriented CTA leading to contact or product pages.' : '结尾提供信任导向 CTA，引导到联系页或产品页。',
+            ],
+            'field_plan' => [
+                ['field' => 'title', 'sample' => '', 'reason' => $isEn ? 'Express mission clearly.' : '明确表达使命定位。'],
+                ['field' => 'description', 'sample' => '', 'reason' => $isEn ? 'Summarize story and strengths.' : '概述品牌故事与能力优势。'],
+                ['field' => 'button_text', 'sample' => '', 'reason' => $isEn ? 'Provide next-step action.' : '提供下一步行动入口。'],
             ],
             'result_ref' => [],
         ];
@@ -771,6 +1260,7 @@ final class AiSiteExecutionBlueprintService
         }
 
         return [
+            'i18n' => \is_array($structured['i18n'] ?? null) ? $structured['i18n'] : [],
             'site_strategy' => \is_array($structured['site_strategy'] ?? null) ? $structured['site_strategy'] : [],
             'theme_style' => \is_array($structured['theme_style'] ?? null) ? $structured['theme_style'] : [],
             'palette' => \is_array($structured['palette'] ?? null) ? $structured['palette'] : [],
@@ -789,6 +1279,12 @@ final class AiSiteExecutionBlueprintService
     private function buildMarkdownPlan(array $planJson, string $locale = ''): string
     {
         $isEn = $this->isEnglishLocale($locale);
+        $i18n = $this->ensurePlanI18nSection(
+            \is_array($planJson['i18n'] ?? null) ? $planJson['i18n'] : [],
+            $locale,
+            $isEn
+        );
+        $labels = \is_array($i18n['labels'] ?? null) ? $i18n['labels'] : [];
         $site = \trim((string)($planJson['site_strategy']['site_display_name'] ?? ''));
         $summary = \trim((string)($planJson['site_strategy']['summary'] ?? ''));
         $pageTypes = \is_array($planJson['page_types'] ?? null) ? $planJson['page_types'] : [];
@@ -800,28 +1296,28 @@ final class AiSiteExecutionBlueprintService
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
 
         $lines = [];
-        $lines[] = $isEn ? '# Stage 1 Execution Plan (Full Blueprint)' : '# 阶段一执行蓝图（完整规划）';
+        $lines[] = '# ' . (string)($labels['title'] ?? ($isEn ? 'Stage 1 Execution Plan (Full Blueprint)' : '阶段一执行蓝图（完整规划）'));
         $lines[] = '';
-        $lines[] = ($isEn ? '- Site: ' : '- 站点：') . ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
-        $lines[] = ($isEn ? '- Summary: ' : '- 摘要：') . ($summary !== '' ? $summary : ($isEn ? 'Pending details' : '待补充'));
+        $lines[] = '- ' . (string)($labels['site'] ?? ($isEn ? 'Site' : '站点')) . ($isEn ? ': ' : '：') . ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
+        $lines[] = '- ' . (string)($labels['summary'] ?? ($isEn ? 'Summary' : '摘要')) . ($isEn ? ': ' : '：') . ($summary !== '' ? $summary : ($isEn ? 'Pending details' : '待补充'));
         $lines[] = ($isEn ? '- Theme Style: ' : '- 主题风格：') . ($themeName !== '' ? $themeName : 'Plan-Driven Hybrid');
         $lines[] = ($isEn ? '- Theme Decision Reason: ' : '- 风格决策理由：') . '*' . \trim((string)($planJson['theme_style']['reason'] ?? '')) . '*';
         $lines[] = ($isEn ? '- Palette: ' : '- 色盘：') . ($paletteName !== '' ? $paletteName : 'Ocean Slate');
         $lines[] = ($isEn ? '- Palette Decision Reason: ' : '- 色盘决策理由：') . '*' . \trim((string)($planJson['palette']['reason'] ?? '')) . '*';
         $lines[] = ($isEn ? '- Page Count: ' : '- 页面数量：') . (string)\count($pageTypes);
         $lines[] = '';
-        $lines[] = $isEn ? '## Site Structure' : '## 全站结构';
+        $lines[] = '## ' . (string)($labels['site_structure'] ?? ($isEn ? 'Site Structure' : '全站结构'));
         foreach ($pageTypes as $pageType) {
             $lines[] = '- ' . (string)$pageType;
         }
         $lines[] = '';
-        $lines[] = $isEn ? '## Shared Global Plan' : '## 全站共享规划';
-        $lines[] = ($isEn ? '- Header Navigation: ' : '- Header 导航：') . $this->buildLinkSummary(\is_array($navigationPlan['header_items'] ?? null) ? $navigationPlan['header_items'] : []);
-        $lines[] = ($isEn ? '- Footer Sections: ' : '- Footer 栏目：') . $this->buildLinkSummary(\is_array($footerPlan['featured'] ?? null) ? $footerPlan['featured'] : []);
-        $lines[] = ($isEn ? '- Footer Policies: ' : '- Footer 政策：') . $this->buildLinkSummary(\is_array($footerPlan['policies'] ?? null) ? $footerPlan['policies'] : []);
+        $lines[] = '## ' . (string)($labels['shared_global_plan'] ?? ($isEn ? 'Shared Global Plan' : '全站共享规划'));
+        $lines[] = ($isEn ? '- Header Navigation: ' : '- Header 导航：') . $this->buildLinkSummary(\is_array($navigationPlan['header_items'] ?? null) ? $navigationPlan['header_items'] : [], $locale);
+        $lines[] = ($isEn ? '- Footer Sections: ' : '- Footer 栏目：') . $this->buildLinkSummary(\is_array($footerPlan['featured'] ?? null) ? $footerPlan['featured'] : [], $locale);
+        $lines[] = ($isEn ? '- Footer Policies: ' : '- Footer 政策：') . $this->buildLinkSummary(\is_array($footerPlan['policies'] ?? null) ? $footerPlan['policies'] : [], $locale);
         $lines[] = ($isEn ? '- SEO Core Strategy: ' : '- SEO 主策略：') . \trim((string)($seoStrategy['core_intent'] ?? ($isEn ? 'not set' : '未设置')));
         $lines[] = '';
-        $lines[] = $isEn ? '## Page And Block Execution Details' : '## 页面与区块执行细化';
+        $lines[] = '## ' . (string)($labels['page_details'] ?? ($isEn ? 'Page And Block Execution Details' : '页面与区块执行细化'));
 
         foreach ($pageTypes as $pageType) {
             $pageType = (string)$pageType;
@@ -844,7 +1340,7 @@ final class AiSiteExecutionBlueprintService
                     continue;
                 }
                 $blockOrder = $index + 1;
-                $lines[] = ($isEn ? '#### Block ' : '#### 区块 ') . $blockOrder . '：' . (string)($block['block_key'] ?? 'block');
+                $lines[] = ($isEn ? '#### Block ' : '#### 区块 ') . $blockOrder . ($isEn ? ': ' : '：') . (string)($block['block_key'] ?? 'block');
                 $lines[] = ($isEn ? '- Block Content: ' : '- 区块内容：') . \trim((string)($block['content'] ?? ''));
                 $lines[] = ($isEn ? '- Block Reason: ' : '- 区块原因：') . '*' . \trim((string)($block['why'] ?? '')) . '*';
                 $lines[] = '';
@@ -857,10 +1353,11 @@ final class AiSiteExecutionBlueprintService
     /**
      * @param list<array<string, mixed>> $items
      */
-    private function buildLinkSummary(array $items): string
+    private function buildLinkSummary(array $items, string $locale = ''): string
     {
+        $isEn = $this->isEnglishLocale($locale);
         if ($items === []) {
-            return '无';
+            return $isEn ? 'none' : '无';
         }
         $parts = [];
         foreach ($items as $item) {
@@ -875,7 +1372,7 @@ final class AiSiteExecutionBlueprintService
             }
         }
 
-        return $parts !== [] ? \implode('、', $parts) : '无';
+        return $parts !== [] ? \implode($isEn ? ', ' : '、', $parts) : ($isEn ? 'none' : '无');
     }
 
     private function resolvePageGoal(string $pageType, string $pageLabel, string $locale = ''): string
@@ -1130,6 +1627,11 @@ final class AiSiteExecutionBlueprintService
         $text = \trim($text, '-');
 
         return $text !== '' ? $text : 'section';
+    }
+
+    private function getAiService(): AiService
+    {
+        return $this->aiService ?? ObjectManager::getInstance(AiService::class);
     }
 
     private function isEnglishLocale(string $locale): bool

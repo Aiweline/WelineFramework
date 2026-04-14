@@ -334,14 +334,16 @@ class AiGenerate extends BackendController
         $sse->start();
 
         try {
-            if (!$this->request->isPost()) {
-                $sse->sendEvent('error', ['message' => __('仅支持POST请求')]);
-                $sse->close();
-                return;
-            }
+            $input = function (string $key, mixed $default = '') {
+                $post = $this->request->getPost($key, null);
+                if ($post !== null) {
+                    return $post;
+                }
+                return $this->request->getGet($key, $default);
+            };
 
-            $description = trim($this->request->getPost('description', ''));
-            $pageId = (int) $this->request->getPost('page_id', 0);
+            $description = trim((string)$input('description', ''));
+            $pageId = (int) $input('page_id', 0);
 
             $page = null;
             if ($pageId > 0) {
@@ -353,7 +355,7 @@ class AiGenerate extends BackendController
                     return;
                 }
                 // 生成前先保存 ai_description 到数据库
-                $aiDesc = trim((string) $this->request->getPost('description', ''));
+                $aiDesc = trim((string)$input('description', ''));
                 if ($aiDesc !== '') {
                     $page->setData(PageModel::schema_fields_AI_DESCRIPTION, $aiDesc)->save();
                     $this->invalidatePageCache((int)$page->getId());
@@ -395,37 +397,37 @@ class AiGenerate extends BackendController
 
             $sse->sendEvent('start', ['message' => __('开始生成页面内容...')]);
 
-            $pageType = $this->request->getPost('page_type', '');
+            $pageType = (string)$input('page_type', '');
             if (empty($pageType) && $page) {
                 $pageType = $page->getData('type') ?: 'page';
             } else {
                 $pageType = $pageType ?: 'page';
             }
-            $title = $this->request->getPost('title', '');
+            $title = (string)$input('title', '');
             if (empty($title) && $page) {
                 $title = $page->getData('title') ?: '';
             }
-            $metaTitle = $this->request->getPost('meta_title', '');
+            $metaTitle = (string)$input('meta_title', '');
             if (empty($metaTitle) && $page) {
                 $metaTitle = $page->getData('meta_title') ?: '';
             }
-            $metaDescription = $this->request->getPost('meta_description', '');
+            $metaDescription = (string)$input('meta_description', '');
             if (empty($metaDescription) && $page) {
                 $metaDescription = $page->getData('meta_description') ?: '';
             }
-            $metaKeywords = $this->request->getPost('meta_keywords', '');
+            $metaKeywords = (string)$input('meta_keywords', '');
             if (empty($metaKeywords) && $page) {
                 $metaKeywords = $page->getData('meta_keywords') ?: '';
             }
-            $handle = $this->request->getPost('handle', '');
+            $handle = (string)$input('handle', '');
             if (empty($handle) && $page) {
                 $handle = $page->getData('handle') ?: '';
             }
-            $styleCode = $this->request->getPost('style_code', '');
+            $styleCode = (string)$input('style_code', '');
             if (empty($styleCode) && $page) {
                 $styleCode = $page->getData('style') ?: '';
             }
-            $targetLocale = $this->request->getPost('default_locale', '');
+            $targetLocale = (string)$input('default_locale', '');
             if (empty($targetLocale) && $page) {
                 $targetLocale = $page->getData(PageModel::schema_fields_DEFAULT_LOCALE) ?: '';
             }
