@@ -4692,7 +4692,12 @@ class ServiceOrchestrator
             $remainingExit = 0;
             foreach ($instanceIds as $instanceId) {
                 $cur = $this->registry->getInstance('worker', $instanceId);
-                if ($cur !== null && $cur->ipcClientId !== null) {
+                if ($cur === null) {
+                    continue;
+                }
+                $stillConnected = $cur->ipcClientId !== null;
+                $stillRunning = $cur->pid > 0 && $this->isProcessRunning($cur->pid);
+                if ($stillConnected || $stillRunning) {
                     $allGone = false;
                     $remainingExit++;
                 }
@@ -4714,6 +4719,32 @@ class ServiceOrchestrator
                 $lastExitHeartbeatAt = $now;
             }
             $this->controlServer?->poll(0, 200000);
+        }
+
+        foreach ($instanceIds as $instanceId) {
+            $worker = $this->registry->getInstance('worker', $instanceId);
+            if ($worker === null) {
+                continue;
+            }
+
+            $stillConnected = $worker->ipcClientId !== null;
+            $stillRunning = $worker->pid > 0 && $this->isProcessRunning($worker->pid);
+            if (!$stillConnected && !$stillRunning) {
+                continue;
+            }
+
+            $reason = $skipDrain ? 'force 重载' : '优雅重载';
+            WlsLogger::warning_(
+                '[Orchestrator] ' . $reason . '发现旧 Worker 未退出，执行强制终止: '
+                . "worker#{$instanceId}, pid={$worker->pid}, ipc=" . ($stillConnected ? '1' : '0')
+            );
+            $this->killInstanceProcess($worker);
+            if ($stillConnected && $worker->ipcClientId !== null) {
+                $this->controlServer?->closeClient($worker->ipcClientId);
+            }
+            if ($worker->port !== null && $worker->port > 0) {
+                $this->ensurePortReleasedForResurrection((int) $worker->port);
+            }
         }
 
         $cleanupRefs = [];
@@ -6255,6 +6286,9 @@ class ServiceOrchestrator
             if ($roles !== null && !\in_array((string) ($entry['role'] ?? ''), $roles, true)) {
                 continue;
             }
+            if (!empty($entry['launching'])) {
+                continue;
+            }
             if ($this->childServicesBootstrapInProgress) {
                 $entryRole = (string) ($entry['role'] ?? '');
                 if ($entryRole === ControlMessage::ROLE_WORKER || $entryRole === ControlMessage::ROLE_MAINTENANCE) {
@@ -6341,47 +6375,75 @@ class ServiceOrchestrator
                 $this->cleanupInstancePidFile($oldInstance);
             }
 
-            WlsLogger::info_("[Orchestrator] 执行复活 {$entry['role']}#{$entry['instanceId']}");
-
-            // 移除旧实例
-            $this->registry->removeInstance($entry['role'], $entry['instanceId']);
-
-            // 启动新实例
-            $newInstance = $this->startInstance($provider, $entry['instanceId'], $this->context);
-            if ($newInstance !== null) {
-                $newInstance->restarts = $oldRestarts;
-                $this->persistServicesInfo($this->context);
-            }
-
-            $infraBudget = (int) ($entry['infraRetryBudget'] ?? 0);
-            if ($infraBudget > 0 && $newInstance === null) {
-                $left = $infraBudget - 1;
-                if ($left > 0) {
-                    WlsLogger::warning_(
-                        "[Orchestrator] {$entry['role']}#{$entry['instanceId']} 复活启动失败，1.5s 后再试（剩余 {$left} 次）"
-                    );
-                    $this->resurrectQueue[$key] = [
-                        'role' => $entry['role'],
-                        'instanceId' => $entry['instanceId'],
-                        'maxRestarts' => 10,
-                        'restartDelay' => 1.5,
-                        'scheduledAt' => $now + 1.5,
-                        'delayed' => false,
-                        'pid' => 0,
-                        'port' => $port,
-                        'infraRetryBudget' => $left,
-                    ];
-
-                    continue;
+            $taskKey = "resurrect_launch:{$key}";
+            $entry['launching'] = true;
+            $entry['launchingAt'] = $now;
+            $this->resurrectQueue[$key] = $entry;
+            if (!$this->scheduleMainLoopTask($taskKey, 'resurrect_launch', function () use ($key, $entry, $provider, $oldRestarts, $port): void {
+                if ($this->context === null) {
+                    unset($this->resurrectQueue[$key]);
+                    return;
                 }
+                $queuedEntry = $this->resurrectQueue[$key] ?? null;
+                if ($queuedEntry === null) {
+                    return;
+                }
+                try {
+                    WlsLogger::info_("[Orchestrator] 执行复活 {$entry['role']}#{$entry['instanceId']}（异步任务）");
+                    $this->registry->removeInstance($entry['role'], $entry['instanceId']);
+                    $newInstance = $this->startInstance($provider, $entry['instanceId'], $this->context);
+                } catch (\Throwable $throwable) {
+                    unset($queuedEntry['launching'], $queuedEntry['launchingAt']);
+                    $queuedEntry['scheduledAt'] = \microtime(true) + 1.5;
+                    $queuedEntry['delayed'] = false;
+                    $queuedEntry['pid'] = 0;
+                    $queuedEntry['port'] = $port;
+                    $this->resurrectQueue[$key] = $queuedEntry;
+                    WlsLogger::error_(
+                        "[Orchestrator] {$entry['role']}#{$entry['instanceId']} 复活任务异常，1.5s 后重试：{$throwable->getMessage()}"
+                    );
+
+                    return;
+                }
+                if ($newInstance !== null) {
+                    $newInstance->restarts = $oldRestarts;
+                    $this->persistServicesInfo($this->context);
+                    unset($this->resurrectQueue[$key]);
+                    return;
+                }
+
+                $infraBudget = (int) ($entry['infraRetryBudget'] ?? 0);
+                if ($infraBudget > 0) {
+                    $left = $infraBudget - 1;
+                    if ($left > 0) {
+                        WlsLogger::warning_(
+                            "[Orchestrator] {$entry['role']}#{$entry['instanceId']} 复活启动失败，1.5s 后再试（剩余 {$left} 次）"
+                        );
+                        $this->resurrectQueue[$key] = [
+                            'role' => $entry['role'],
+                            'instanceId' => $entry['instanceId'],
+                            'maxRestarts' => 10,
+                            'restartDelay' => 1.5,
+                            'scheduledAt' => \microtime(true) + 1.5,
+                            'delayed' => false,
+                            'pid' => 0,
+                            'port' => $port,
+                            'infraRetryBudget' => $left,
+                        ];
+                        return;
+                    }
+                    unset($this->resurrectQueue[$key]);
+                    WlsLogger::error_("[Orchestrator] {$entry['role']} 本地复活已用尽，触发整组重启");
+                    $this->requestFullRestart("infra_resurrect_exhausted:{$entry['role']}");
+                    return;
+                }
+
                 unset($this->resurrectQueue[$key]);
-                WlsLogger::error_("[Orchestrator] {$entry['role']} 本地复活已用尽，触发整组重启");
-                $this->requestFullRestart("infra_resurrect_exhausted:{$entry['role']}");
-
-                continue;
+            })) {
+                $entry['launching'] = false;
+                unset($entry['launchingAt']);
+                $this->resurrectQueue[$key] = $entry;
             }
-
-            unset($this->resurrectQueue[$key]);
         }
     }
 
@@ -6591,6 +6653,10 @@ class ServiceOrchestrator
 
             case ControlMessage::TYPE_READY:
                 $this->handleReady($msg, $clientId);
+                return;
+
+            case ControlMessage::TYPE_WORKER_POOL_ACK:
+                $this->handleWorkerPoolAck($msg, $clientId);
                 return;
 
             case ControlMessage::TYPE_WORKER_LOOP_STARTED:
@@ -6878,7 +6944,16 @@ class ServiceOrchestrator
         $readyAlreadyRecorded = $instance->getMeta('ready_at') !== null;
         if ($isDuplicateReadyFromSameClient && $readyAlreadyRecorded) {
             $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
-            $this->controlServer?->sendTo($clientId, ControlMessage::ackReady($workerId));
+            if ($instance->role !== ControlMessage::ROLE_WORKER || $instance->getMeta('dispatcher_pool_confirmed_at') !== null) {
+                $this->controlServer?->sendTo(
+                    $clientId,
+                    ControlMessage::ackReady(
+                        $workerId,
+                        $instance->role === ControlMessage::ROLE_WORKER,
+                        (int)($instance->port ?? 0)
+                    )
+                );
+            }
             if ($instance->role === ControlMessage::ROLE_WORKER && $instance->port !== null && $instance->port > 0) {
                 $this->recoverDispatcherBusinessPoolAfterWorkerReady($instance, true);
             }
@@ -6903,20 +6978,27 @@ class ServiceOrchestrator
         }
         $this->registry->updateInstance($instance);
 
-        // 发送 ACK_READY 确认
         $workerId = (int) ($instance->getMeta('worker_id') ?? $instance->instanceId);
-        $this->controlServer?->sendTo($clientId, ControlMessage::ackReady($workerId));
-        $ackReadyAt = \microtime(true);
-        $instance->setMeta('ack_ready_at', $ackReadyAt);
-        if ($instance->startedAt > 0) {
-            $instance->setMeta(
-                'ack_ready_elapsed_ms',
-                \max(0, (int) \round(($ackReadyAt - $instance->startedAt) * 1000))
+        if ($instance->role === ControlMessage::ROLE_WORKER) {
+            $instance->setMeta('dispatcher_pool_confirmed_at', null);
+            $this->registry->updateInstance($instance);
+            WlsLogger::info_("[Orchestrator] 服务就绪: {$instance->role}#{$instance->instanceId} (等待 Dispatcher 入池确认, port={$instance->port})");
+        } else {
+            $this->controlServer?->sendTo(
+                $clientId,
+                ControlMessage::ackReady($workerId, false, (int)($instance->port ?? 0))
             );
+            $ackReadyAt = \microtime(true);
+            $instance->setMeta('ack_ready_at', $ackReadyAt);
+            if ($instance->startedAt > 0) {
+                $instance->setMeta(
+                    'ack_ready_elapsed_ms',
+                    \max(0, (int) \round(($ackReadyAt - $instance->startedAt) * 1000))
+                );
+            }
+            $this->registry->updateInstance($instance);
+            WlsLogger::info_("[Orchestrator] 服务就绪: {$instance->role}#{$instance->instanceId} (已发送 ACK, port={$instance->port})");
         }
-        $this->registry->updateInstance($instance);
-
-        WlsLogger::info_("[Orchestrator] 服务就绪: {$instance->role}#{$instance->instanceId} (已发送 ACK, port={$instance->port})");
 
         // 如果是 Worker 就绪，通知 Dispatcher 添加该端口
         if ($instance->role === 'worker' && $instance->port !== null) {
@@ -6963,6 +7045,63 @@ class ServiceOrchestrator
         
         // 检查是否所有服务都已就绪，输出服务器准备就绪通知
         $this->checkAndNotifyServerReady();
+    }
+
+    /**
+     * Dispatcher 入池回执闭环：
+     * - Dispatcher 每次处理 add/set 都会回执 in_pool=true/false
+     * - 仅当 in_pool=true 时，Master 才向目标 Worker 回 ACK_READY 停止重报
+     */
+    private function handleWorkerPoolAck(array $msg, int $clientId): void
+    {
+        $role = (string)($msg['role'] ?? ControlMessage::ROLE_WORKER);
+        if ($role !== ControlMessage::ROLE_WORKER) {
+            return;
+        }
+
+        $port = (int)($msg['port'] ?? 0);
+        $inPool = (bool)($msg['in_pool'] ?? false);
+        if ($port <= 0) {
+            return;
+        }
+
+        $worker = null;
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $candidate) {
+            if ((int)($candidate->port ?? 0) === $port) {
+                $worker = $candidate;
+                break;
+            }
+        }
+        if ($worker === null) {
+            WlsLogger::warning_("[Orchestrator] 收到 worker_pool_ack 但未匹配到 Worker: port={$port}, dispatcher_client_id={$clientId}");
+            return;
+        }
+
+        if (!$inPool) {
+            WlsLogger::warning_("[Orchestrator] Dispatcher 回执 Worker 未入池: worker#{$worker->instanceId}, port={$port}");
+            return;
+        }
+
+        $workerId = (int) ($worker->getMeta('worker_id') ?? $worker->instanceId);
+        $targetClientId = $worker->ipcClientId;
+        if ($targetClientId === null || $this->controlServer === null) {
+            WlsLogger::warning_("[Orchestrator] Worker 已入池但 IPC 不可用，无法发送 ACK_READY: worker#{$worker->instanceId}, port={$port}");
+            return;
+        }
+
+        $ackReadyAt = \microtime(true);
+        $worker->setMeta('dispatcher_pool_confirmed_at', $ackReadyAt);
+        $worker->setMeta('ack_ready_at', $ackReadyAt);
+        if ($worker->startedAt > 0) {
+            $worker->setMeta(
+                'ack_ready_elapsed_ms',
+                \max(0, (int) \round(($ackReadyAt - $worker->startedAt) * 1000))
+            );
+        }
+        $this->registry->updateInstance($worker);
+
+        $this->controlServer->sendTo($targetClientId, ControlMessage::ackReady($workerId, true, $port));
+        WlsLogger::info_("[Orchestrator] Worker 入池闭环确认完成: worker#{$worker->instanceId}, port={$port}, dispatcher_client_id={$clientId}");
     }
 
     /**
@@ -7507,6 +7646,8 @@ class ServiceOrchestrator
         }
 
         $this->notifyDispatcherWorkerReady($workerInstance);
+        // 增量 ADD_WORKER 之后再做一次全量对齐，避免消息丢失/乱序导致 Dispatcher 池漂移。
+        $this->syncDispatcherFullWorkerPoolFromRegistry();
     }
 
     /**

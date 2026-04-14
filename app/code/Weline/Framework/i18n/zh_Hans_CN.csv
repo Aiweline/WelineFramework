@@ -15,8 +15,6 @@
 无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。,无法读取模块配置文件：%{1}。错误：%{2}。请检查文件权限或是否被其他程序占用。
 "模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器","模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器"
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec"
-绯荤粺閿欒锛歿1},绯荤粺閿欒锛歿1}
-系统SERVER缺少key：%{1},系统SERVER缺少key：%{1}
 系统错误：%{1},系统错误：%{1}
 绯荤粺SERVER缂哄皯key锛歿1},绯荤粺SERVER缂哄皯key锛歿1}
 "MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例","MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例"
@@ -1725,6 +1723,8 @@ HTTP方法,HTTP方法
 "%{1}. %{2}","%{1}. %{2}"
 "✓ 测试完成！","✓ 测试完成！"
 提示：测试已完成。,提示：测试已完成。
+"报告摘要: http://localhost:%{1}/report/index.html","报告摘要: http://localhost:%{1}/report/index.html"
+"覆盖率 HTML: http://localhost:%{1}/coverage-html/index.html","覆盖率 HTML: http://localhost:%{1}/coverage-html/index.html"
 "✓ 测试已完成，报告服务器已在后台运行","✓ 测试已完成，报告服务器已在后台运行"
 "📡 监听模式已启用，文件变化时将自动重新运行测试","📡 监听模式已启用，文件变化时将自动重新运行测试"
 "=== PHPUNIT_TEST_COMPLETED ===","=== PHPUNIT_TEST_COMPLETED ==="
@@ -1733,7 +1733,7 @@ HTTP方法,HTTP方法
 "使用 Pest 的 watch 模式...","使用 Pest 的 watch 模式..."
 启动文件监听模式...,启动文件监听模式...
 "PHPUnit报告服务器已在运行 (PID: %{1})","PHPUnit报告服务器已在运行 (PID: %{1})"
-"访问地址: http://localhost:%{1}","访问地址: http://localhost:%{1}"
+"访问地址: 摘要 http://localhost:%{1}/report/index.html | 覆盖率 http://localhost:%{2}/coverage-html/index.html","访问地址: 摘要 http://localhost:%{1}/report/index.html | 覆盖率 http://localhost:%{2}/coverage-html/index.html"
 "端口 %{1} 被占用，尝试停止占用该端口的进程...","端口 %{1} 被占用，尝试停止占用该端口的进程..."
 "端口 %{1} 仍被占用，自动选择端口 %{2}","端口 %{1} 仍被占用，自动选择端口 %{2}"
 "已停止占用端口 %{1} 的进程","已停止占用端口 %{1} 的进程"

@@ -21,7 +21,7 @@ $customerId = $isLoggedIn ? $session->getLoginID() : null;
 $urlBuilder = ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
 $chatUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/chat');
 $bindUrl = $urlBuilder->getFrontendUrl('customerservice/frontend/bind');
-$requestPath = strtolower((string) ($this->request->getPathInfo() ?? ($_SERVER['REQUEST_URI'] ?? '')));
+$requestPath = strtolower((string) ($this->request->getPathInfo() ?: \w_env_request_uri()));
 $isWorkspacePreview = (string)$this->request->getGet('visual_editor', '') === '1'
     || (string)$this->request->getGet('preview', '') === '1'
     || str_contains($requestPath, 'workspace-preview');

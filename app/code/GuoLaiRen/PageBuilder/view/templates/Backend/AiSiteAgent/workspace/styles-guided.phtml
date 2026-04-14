@@ -238,4 +238,24 @@
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
 }
+
+/* 域名与注册商板块置顶样式 */
+.pb-guided-domain-sidebar.fixed-top-right {
+    position: static;
+    top: auto;
+    right: auto;
+    z-index: auto;
+    max-width: none;
+    min-width: 0;
+    box-shadow: 0 2px 12px rgba(0,0,0,.07);
+}
+
+@media (max-width: 768px) {
+    .pb-guided-domain-sidebar.fixed-top-right {
+        position: static;
+        max-width: none;
+        min-width: auto;
+        box-shadow: 0 2px 12px rgba(0,0,0,.07);
+    }
+}
 </style>

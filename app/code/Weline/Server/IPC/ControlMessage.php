@@ -89,6 +89,8 @@ class ControlMessage
 
     /** Master → Worker：确认收到 ready 消息（启动确认协议） */
     public const TYPE_ACK_READY = 'ack_ready';
+    /** Dispatcher → Master：Worker 入池检查回执（闭环确认） */
+    public const TYPE_WORKER_POOL_ACK = 'worker_pool_ack';
 
     /** Master → CLI：滚动重启完成事件 */
     public const TYPE_RELOAD_COMPLETED = 'reload_completed';
@@ -742,11 +744,29 @@ class ControlMessage
      * @param int $workerId Worker ID
      * @return string NDJSON 消息
      */
-    public static function ackReady(int $workerId): string
+    public static function ackReady(int $workerId, bool $dispatcherConfirmed = false, int $port = 0): string
     {
-        return self::encode([
+        $data = [
             'type'      => self::TYPE_ACK_READY,
             'worker_id' => $workerId,
+            'dispatcher_confirmed' => $dispatcherConfirmed,
+        ];
+        if ($port > 0) {
+            $data['port'] = $port;
+        }
+        return self::encode($data);
+    }
+
+    /**
+     * 构建 worker_pool_ack 消息（Dispatcher → Master：告知 Worker 是否已在池内）
+     */
+    public static function workerPoolAck(int $port, bool $inPool, string $role = self::ROLE_WORKER): string
+    {
+        return self::encode([
+            'type' => self::TYPE_WORKER_POOL_ACK,
+            'port' => $port,
+            'role' => $role,
+            'in_pool' => $inPool,
         ]);
     }
 

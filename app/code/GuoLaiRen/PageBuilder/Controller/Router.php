@@ -73,7 +73,7 @@ class Router implements RouterInterface
                 $path = '/pagebuilder/frontend/page/view';
                 $rule['module'] = 'GuoLaiRen_PageBuilder';
                 $rule['handle'] = $queryHandle;
-                $_GET['handle'] = $queryHandle;
+                self::setQueryParam('handle', $queryHandle);
                 return;
             }
             if ($websiteId > 0) {
@@ -84,10 +84,10 @@ class Router implements RouterInterface
                     $rule['module'] = 'GuoLaiRen_PageBuilder';
                     if ($isPreview) {
                         $rule['handle'] = $homePageHandle ?? '';
-                        $_GET['handle'] = $rule['handle'];
+                        self::setQueryParam('handle', (string)$rule['handle']);
                     } else {
                         $rule['handle'] = '';
-                        $_GET['handle'] = '';
+                        self::setQueryParam('handle', '');
                     }
                     return;
                 }
@@ -96,7 +96,7 @@ class Router implements RouterInterface
             $path = '/pagebuilder/frontend/page/view';
             $rule['module'] = 'GuoLaiRen_PageBuilder';
             $rule['handle'] = '';
-            $_GET['handle'] = '';
+            self::setQueryParam('handle', '');
             return;
         }
         
@@ -143,12 +143,15 @@ class Router implements RouterInterface
         // 设置路由参数
         $rule['module'] = 'GuoLaiRen_PageBuilder';
         $rule['handle'] = $handle;
-        
-        // 将handle参数写入$_GET，确保控制器能接收到
-        $_GET['handle'] = $handle;
+        self::setQueryParam('handle', $handle);
         
         // 保留原始URL参数（如 preview、locale 等）
-        // $_GET中的参数会自动保留，无需特殊处理
+        // Query 参数由 Context/Request 统一同步，无需直接改超全局。
+    }
+
+    private static function setQueryParam(string $key, string $value): void
+    {
+        \Weline\Framework\Context::current()->set('input.query.' . $key, $value);
     }
     
     /**

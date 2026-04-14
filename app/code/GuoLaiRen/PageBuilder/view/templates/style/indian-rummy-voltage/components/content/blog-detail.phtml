@@ -117,7 +117,7 @@ $recent = !empty($recentPosts) ? array_slice($recentPosts, 0, 5) : $related;
         <?php else: ?>
             <?php
             $postTitle = $currentPost['title'] ?? ($untitledPostText !== '' ? $untitledPostText : 'Untitled Post');
-            $postUrl = $currentPost['url'] ?? ($_SERVER['REQUEST_URI'] ?? '/blog');
+            $postUrl = $currentPost['url'] ?? (\w_env_request_uri() ?: '/blog');
             $postDate = $formatDate($currentPost['published_at'] ?? '');
             $postAuthor = $currentPost['author'] ?? '';
             $postCover = $currentPost['cover_image'] ?? '';

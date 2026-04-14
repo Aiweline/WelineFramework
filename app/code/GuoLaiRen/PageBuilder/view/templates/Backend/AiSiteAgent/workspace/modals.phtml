@@ -3,13 +3,13 @@
     <div class="modal-dialog modal-lg" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="pb-ai-page-type-confirm-modal-title"><?= htmlspecialchars((string)__('确认AI构建方案'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <h5 class="modal-title" id="pb-ai-page-type-confirm-modal-title"><?= htmlspecialchars((string)__('生成阶段一方案'), ENT_QUOTES, 'UTF-8') ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="d-flex flex-wrap align-items-start justify-content-between gap-2 mb-3">
                     <p class="text-muted mb-0 flex-grow-1" style="min-width:12rem;">
-                        <?= htmlspecialchars((string)__('请选择要生成的页面类型（可点击「取消选择」后自行勾选），确认后将自动生成虚拟主题和页面布局。'), ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars((string)__('请选择要纳入方案的页面类型，确认后将先生成阶段一网站方案，再决定是否继续构建。'), ENT_QUOTES, 'UTF-8') ?>
                     </p>
                     <button type="button" class="btn btn-outline-secondary btn-sm text-nowrap flex-shrink-0" id="pb-ai-modal-clear-page-types"><?= htmlspecialchars((string)__('取消选择'), ENT_QUOTES, 'UTF-8') ?></button>
                 </div>
@@ -24,7 +24,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') ?></button>
                 <button type="button" class="btn btn-primary" id="pb-ai-confirm-generate-theme">
-                    <?= htmlspecialchars((string)__('确认AI构建方案'), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string)__('生成阶段一方案'), ENT_QUOTES, 'UTF-8') ?>
                 </button>
             </div>
         </div>
@@ -35,32 +35,72 @@
     <div class="modal-dialog modal-xl" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="pb-ai-plan-generation-modal-title"><?= htmlspecialchars((string)__('AI 构建方案'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <h5 class="modal-title" id="pb-ai-plan-generation-modal-title"><?= htmlspecialchars((string)__('阶段一网站方案'), ENT_QUOTES, 'UTF-8') ?></h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
                 <div class="alert alert-info mb-4">
                     <i class="mdi mdi-information-outline me-1"></i>
-                    <?= htmlspecialchars((string)__('AI 正在为您构建详细的网站方案，请稍候...'), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string)__('AI 正在根据当前需求生成阶段一网站方案，请确认后再进入页面构建。'), ENT_QUOTES, 'UTF-8') ?>
                 </div>
-                
-                <div class="d-flex flex-column mb-4">
-                    <div class="d-flex gap-2 mb-2">
-                        <button type="button" class="btn btn-outline-primary flex-fill active" id="pb-ai-plan-md-view" data-target="pb-ai-plan-md-content">
-                            Markdown
-                        </button>
-                        <button type="button" class="btn btn-outline-primary flex-fill" id="pb-ai-plan-preview-view" data-target="pb-ai-plan-preview-content">
-                            <?= htmlspecialchars((string)__('预览'), ENT_QUOTES, 'UTF-8') ?>
-                        </button>
-                    </div>
-                    
-                    <div class="border rounded">
-                        <div id="pb-ai-plan-md-content" class="p-3" style="max-height: 500px; overflow-y: auto; background-color: #f8f9fa; font-family: monospace; white-space: pre-wrap; min-height: 300px;">
-                            <?= htmlspecialchars((string)__('方案生成中...'), ENT_QUOTES, 'UTF-8') ?>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-lg-8">
+                        <div class="d-flex flex-column">
+                            <div class="d-flex gap-2 mb-2">
+                                <button type="button" class="btn btn-outline-primary flex-fill active" id="pb-ai-plan-md-view" data-target="pb-ai-plan-md-content">
+                                    Markdown
+                                </button>
+                                <button type="button" class="btn btn-outline-primary flex-fill" id="pb-ai-plan-preview-view" data-target="pb-ai-plan-preview-content">
+                                    <?= htmlspecialchars((string)__('预览'), ENT_QUOTES, 'UTF-8') ?>
+                                </button>
+                            </div>
+
+                            <div class="border rounded">
+                                <div id="pb-ai-plan-md-content" class="p-3" style="max-height: 500px; overflow-y: auto; background-color: #f8f9fa; font-family: monospace; white-space: pre-wrap; min-height: 300px;">
+                                    <?= htmlspecialchars((string)__('方案生成中...'), ENT_QUOTES, 'UTF-8') ?>
+                                </div>
+
+                                <div id="pb-ai-plan-preview-content" class="p-3" style="max-height: 500px; overflow-y: auto; display: none; min-height: 300px;">
+                                    <div id="pb-ai-plan-rendered-content"></div>
+                                </div>
+                            </div>
                         </div>
-                        
-                        <div id="pb-ai-plan-preview-content" class="p-3" style="max-height: 500px; overflow-y: auto; display: none; min-height: 300px;">
-                            <div id="pb-ai-plan-rendered-content"></div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="border rounded p-3 mb-3">
+                            <div class="small fw-semibold mb-2"><?= htmlspecialchars((string)__('方案模式'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="btn-group w-100 mb-2" role="group" aria-label="plan-mode">
+                                <button type="button" class="btn btn-outline-primary active" id="pb-ai-plan-mode-refine" data-plan-mode="refine"><?= htmlspecialchars((string)__('微调方案'), ENT_QUOTES, 'UTF-8') ?></button>
+                                <button type="button" class="btn btn-outline-warning" id="pb-ai-plan-mode-rebuild" data-plan-mode="rebuild"><?= htmlspecialchars((string)__('重建方案'), ENT_QUOTES, 'UTF-8') ?></button>
+                            </div>
+                            <div class="accordion accordion-flush border rounded mb-2" id="pb-ai-plan-mode-help">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="pb-ai-plan-help-refine-heading">
+                                        <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#pb-ai-plan-help-refine" aria-expanded="false" aria-controls="pb-ai-plan-help-refine"><?= htmlspecialchars((string)__('微调说明'), ENT_QUOTES, 'UTF-8') ?></button>
+                                    </h2>
+                                    <div id="pb-ai-plan-help-refine" class="accordion-collapse collapse" aria-labelledby="pb-ai-plan-help-refine-heading" data-bs-parent="#pb-ai-plan-mode-help">
+                                        <div class="accordion-body small text-muted"><?= htmlspecialchars((string)__('用于局部修正当前阶段一方案，只改必要联动内容。'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="pb-ai-plan-help-rebuild-heading">
+                                        <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#pb-ai-plan-help-rebuild" aria-expanded="false" aria-controls="pb-ai-plan-help-rebuild"><?= htmlspecialchars((string)__('重建说明'), ENT_QUOTES, 'UTF-8') ?></button>
+                                    </h2>
+                                    <div id="pb-ai-plan-help-rebuild" class="accordion-collapse collapse" aria-labelledby="pb-ai-plan-help-rebuild-heading" data-bs-parent="#pb-ai-plan-mode-help">
+                                        <div class="accordion-body small text-muted"><?= htmlspecialchars((string)__('用于按新方向重新生成整份阶段一方案与执行蓝图。'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="form-label small text-muted mb-1" for="pb-ai-plan-mode-prompt"><?= htmlspecialchars((string)__('补充说明（可选）'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <textarea class="form-control form-control-sm mb-2" id="pb-ai-plan-mode-prompt" rows="3" placeholder="<?= htmlspecialchars((string)__('例如：保留首页方向，但把 about/contact 的定位改得更偏品牌信任。'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+                            <div class="d-grid">
+                                <button type="button" class="btn btn-sm btn-primary" id="pb-ai-plan-run-mode"><?= htmlspecialchars((string)__('开始当前模式'), ENT_QUOTES, 'UTF-8') ?></button>
+                            </div>
+                            <div class="small text-muted mt-2" id="pb-ai-plan-mode-status"><?= htmlspecialchars((string)__('可在此继续微调或重建阶段一方案。'), ENT_QUOTES, 'UTF-8') ?></div>
+                        </div>
+                        <div class="border rounded p-2">
+                            <w:theme:sse-terminal id="pb-ai-plan-sse-terminal" title="@lang{阶段一方案流}" height="200px" events="start,progress,chunk,done,error,warning,info" show-start-toggle="false" />
                         </div>
                     </div>
                 </div>
@@ -73,7 +113,94 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') ?></button>
                 <button type="button" class="btn btn-primary" id="pb-ai-confirm-plan" disabled>
-                    <?= htmlspecialchars((string)__('确认并生成虚拟主题'), ENT_QUOTES, 'UTF-8') ?>
+                    <?= htmlspecialchars((string)__('确认阶段一方案'), ENT_QUOTES, 'UTF-8') ?>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="pb-ai-task-plan-generation-modal" tabindex="-1" role="dialog" aria-labelledby="pb-ai-task-plan-generation-modal-title" aria-hidden="true">
+    <div class="modal-dialog modal-xl" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="pb-ai-task-plan-generation-modal-title"><?= htmlspecialchars((string)__('阶段二任务计划'), ENT_QUOTES, 'UTF-8') ?></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info mb-4">
+                    <i class="mdi mdi-information-outline me-1"></i>
+                    <?= htmlspecialchars((string)__('AI 正在基于阶段一方案生成阶段二任务计划，确认后再进入构建执行。'), ENT_QUOTES, 'UTF-8') ?>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-lg-8">
+                        <div class="d-flex flex-column">
+                    <div class="d-flex gap-2 mb-2">
+                        <button type="button" class="btn btn-outline-primary flex-fill active" id="pb-ai-task-plan-md-view" data-target="pb-ai-task-plan-md-content">
+                            Markdown
+                        </button>
+                        <button type="button" class="btn btn-outline-primary flex-fill" id="pb-ai-task-plan-preview-view" data-target="pb-ai-task-plan-preview-content">
+                            <?= htmlspecialchars((string)__('预览'), ENT_QUOTES, 'UTF-8') ?>
+                        </button>
+                    </div>
+
+                    <div class="border rounded">
+                        <div id="pb-ai-task-plan-md-content" class="p-3" style="max-height: 500px; overflow-y: auto; background-color: #f8f9fa; font-family: monospace; white-space: pre-wrap; min-height: 300px;">
+                            <?= htmlspecialchars((string)__('任务计划生成中…'), ENT_QUOTES, 'UTF-8') ?>
+                        </div>
+
+                        <div id="pb-ai-task-plan-preview-content" class="p-3" style="max-height: 500px; overflow-y: auto; display: none; min-height: 300px;">
+                            <div id="pb-ai-task-plan-rendered-content"></div>
+                        </div>
+                    </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="border rounded p-3 mb-3">
+                            <div class="small fw-semibold mb-2"><?= htmlspecialchars((string)__('任务方案模式'), ENT_QUOTES, 'UTF-8') ?></div>
+                            <div class="btn-group w-100 mb-2" role="group" aria-label="task-plan-mode">
+                                <button type="button" class="btn btn-outline-primary active" id="pb-ai-task-plan-mode-refine" data-task-plan-mode="refine_task_plan"><?= htmlspecialchars((string)__('微调任务方案'), ENT_QUOTES, 'UTF-8') ?></button>
+                                <button type="button" class="btn btn-outline-warning" id="pb-ai-task-plan-mode-rebuild" data-task-plan-mode="rebuild_task_plan"><?= htmlspecialchars((string)__('重建任务方案'), ENT_QUOTES, 'UTF-8') ?></button>
+                            </div>
+                            <div class="accordion accordion-flush border rounded mb-2" id="pb-ai-task-plan-mode-help">
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="pb-ai-task-plan-help-refine-heading">
+                                        <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#pb-ai-task-plan-help-refine" aria-expanded="false" aria-controls="pb-ai-task-plan-help-refine"><?= htmlspecialchars((string)__('微调说明'), ENT_QUOTES, 'UTF-8') ?></button>
+                                    </h2>
+                                    <div id="pb-ai-task-plan-help-refine" class="accordion-collapse collapse" aria-labelledby="pb-ai-task-plan-help-refine-heading" data-bs-parent="#pb-ai-task-plan-mode-help">
+                                        <div class="accordion-body small text-muted"><?= htmlspecialchars((string)__('用于增量调整任务拆解，保留当前任务方案主体结构。'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    </div>
+                                </div>
+                                <div class="accordion-item">
+                                    <h2 class="accordion-header" id="pb-ai-task-plan-help-rebuild-heading">
+                                        <button class="accordion-button collapsed py-2" type="button" data-bs-toggle="collapse" data-bs-target="#pb-ai-task-plan-help-rebuild" aria-expanded="false" aria-controls="pb-ai-task-plan-help-rebuild"><?= htmlspecialchars((string)__('重建说明'), ENT_QUOTES, 'UTF-8') ?></button>
+                                    </h2>
+                                    <div id="pb-ai-task-plan-help-rebuild" class="accordion-collapse collapse" aria-labelledby="pb-ai-task-plan-help-rebuild-heading" data-bs-parent="#pb-ai-task-plan-mode-help">
+                                        <div class="accordion-body small text-muted"><?= htmlspecialchars((string)__('用于按新思路重建任务方案，可能替换已有任务拆解结果。'), ENT_QUOTES, 'UTF-8') ?></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <label class="form-label small text-muted mb-1" for="pb-ai-task-plan-mode-prompt"><?= htmlspecialchars((string)__('补充说明（可选）'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <textarea class="form-control form-control-sm mb-2" id="pb-ai-task-plan-mode-prompt" rows="3" placeholder="<?= htmlspecialchars((string)__('例如：先锁定首页与产品页，再补充发布检查清单。'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
+                            <button type="button" class="btn btn-sm btn-primary w-100" id="pb-ai-task-plan-run-mode"><?= htmlspecialchars((string)__('执行当前模式'), ENT_QUOTES, 'UTF-8') ?></button>
+                            <div class="small text-muted mt-2" id="pb-ai-task-plan-mode-status"><?= htmlspecialchars((string)__('可在此继续微调或重建任务方案。'), ENT_QUOTES, 'UTF-8') ?></div>
+                        </div>
+                        <div class="border rounded p-2">
+                            <w:theme:sse-terminal id="pb-ai-task-plan-sse-terminal" title="@lang{阶段二任务方案流}" height="200px" events="start,progress,chunk,done,error,warning,info" show-start-toggle="false" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="progress mb-3 mt-2">
+                    <div id="pb-ai-task-plan-progress-bar" class="progress-bar" role="progressbar" style="width: 0%"></div>
+                </div>
+                <div id="pb-ai-task-plan-status" class="text-muted small"><?= htmlspecialchars((string)__('准备开始生成任务计划…'), ENT_QUOTES, 'UTF-8') ?></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><?= htmlspecialchars((string)__('取消'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" class="btn btn-primary" id="pb-ai-confirm-task-plan" disabled>
+                    <?= htmlspecialchars((string)__('确认阶段二任务计划'), ENT_QUOTES, 'UTF-8') ?>
                 </button>
             </div>
         </div>

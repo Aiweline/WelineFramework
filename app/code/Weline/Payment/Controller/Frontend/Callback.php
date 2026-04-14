@@ -46,9 +46,7 @@ class Callback extends FrontendController
         // 获取所有回调数据
         $callbackData = array_merge(
             $this->request->getParams(),
-            $this->request->getBodyParams(),
-            $_POST,
-            $_GET
+            $this->request->getBodyParams()
         );
         
         try {
