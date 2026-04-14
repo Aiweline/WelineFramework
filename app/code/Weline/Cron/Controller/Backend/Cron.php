@@ -311,7 +311,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     public function postRunStream(): void
     {
         $this->layoutType = null;
-        $csrfPost = (string) $this->request->getPost('csrf', '');
+        $csrfPost = (string) $this->request->getPost('csrf', (string) $this->request->getGet('csrf', ''));
         $csrfValid = Token::get('csrf');
         if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
             $sse = new SseWriter();
@@ -322,7 +322,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             return;
         }
 
-        $executeName = \trim((string) $this->request->getPost('execute_name', ''));
+        $executeName = \trim((string) $this->request->getPost('execute_name', (string) $this->request->getGet('execute_name', '')));
         if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
             $sse = new SseWriter();
             $sse->start();
@@ -345,7 +345,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
             return;
         }
 
-        $suffix = (string) $this->request->getPost('suffix', '');
+        $suffix = (string) $this->request->getPost('suffix', (string) $this->request->getGet('suffix', ''));
         /** @var CronManualRunStreamer $streamer */
         $streamer = ObjectManager::getInstance(CronManualRunStreamer::class);
         $streamer->stream($executeName, $suffix, new SseWriter());
@@ -409,7 +409,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
     public function postRunLogStream(): void
     {
         $this->layoutType = null;
-        $csrfPost = (string) $this->request->getPost('csrf', '');
+        $csrfPost = (string) $this->request->getPost('csrf', (string) $this->request->getGet('csrf', ''));
         $csrfValid = Token::get('csrf');
         if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
             $sse = new SseWriter();
@@ -419,7 +419,7 @@ class Cron extends \Weline\Framework\App\Controller\BackendController
 
             return;
         }
-        $executeName = \trim((string) $this->request->getPost('execute_name', ''));
+        $executeName = \trim((string) $this->request->getPost('execute_name', (string) $this->request->getGet('execute_name', '')));
         if ($executeName === '' || !\preg_match('/^[a-zA-Z0-9_-]+$/', $executeName)) {
             $sse = new SseWriter();
             $sse->start();

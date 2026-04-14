@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 namespace Weline\Ai\Model;
+use Weline\Ai\Service\Provider\VendorConfigManager;
 use Weline\Framework\App\Env;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
@@ -106,7 +107,26 @@ class AiModel extends Model
     }
     public function canDelete(): bool
     {
-        return $this->isCopy();
+        if ($this->isCopy()) {
+            return true;
+        }
+
+        // 本地模型和自定义供应商模型允许删除
+        if ($this->isLocal()) {
+            return true;
+        }
+
+        $supplier = $this->getSupplier();
+        if ($supplier === '') {
+            return false;
+        }
+
+        try {
+            $supportedProviders = VendorConfigManager::getSupportedProviders();
+            return !isset($supportedProviders[$supplier]);
+        } catch (\Throwable) {
+            return false;
+        }
     }
     public function isLocal(): bool
     {
@@ -204,7 +224,7 @@ class AiModel extends Model
     {
         if (!$this->canDelete()) {
             throw new \RuntimeException(
-                'Cannot delete original model. Only copy models can be deleted.'
+                'Cannot delete protected model. Only copied or custom models can be deleted.'
             );
         }
         return parent::beforeDelete();
