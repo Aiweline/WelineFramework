@@ -34,16 +34,17 @@ class FpmRuntime implements RuntimeInterface
         }
 
         $isCliSapi = \in_array(\PHP_SAPI, ['cli', 'phpdbg'], true);
-        $context = Context::fromGlobals([
+        $meta = [
             'mode' => self::MODE_FPM,
             'type' => $isCliSapi ? 'system' : 'request',
             'process_tag' => $isCliSapi ? 'CLI' : 'FPM',
-        ]);
-        Context::enter($context);
-        $this->syncCurrentContextFromGlobals();
+        ];
+        Context::enter($request !== null ? Context::fromRequest($request, $meta) : Context::fromGlobals($meta));
 
         try {
-            $response = (new App(Context::current(), false))->runResponse();
+            $this->syncCurrentContextFromGlobals();
+            $app = new App();
+            $response = $app->runResponse();
 
             if (SseContext::isSseEnabled()) {
                 return '';
