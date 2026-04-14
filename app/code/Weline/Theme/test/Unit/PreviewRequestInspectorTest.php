@@ -18,7 +18,7 @@ class PreviewRequestInspectorTest extends TestCase
         $this->assertFalse($inspector->shouldAllowPreviewTokenCookie());
     }
 
-    public function testPreviewShellRouteAllowsStoredPreviewContextAndCookieToken(): void
+    public function testPreviewShellRouteAllowsStoredPreviewContextButBlocksCookieTokenOnThemeEditor(): void
     {
         $inspector = new PreviewRequestInspector(
             $this->createRequest('/theme/backend/theme-editor/layout-preview', [
@@ -27,7 +27,7 @@ class PreviewRequestInspectorTest extends TestCase
         );
 
         $this->assertTrue($inspector->shouldUseStoredPreviewContext());
-        $this->assertTrue($inspector->shouldAllowPreviewTokenCookie());
+        $this->assertFalse($inspector->shouldAllowPreviewTokenCookie());
     }
 
     public function testExplicitPreviewCarrierEnablesStoredContextOnContentRequests(): void

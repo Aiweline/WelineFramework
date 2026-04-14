@@ -846,54 +846,117 @@ SCRIPT;
             return $this->fetchJson(['success' => false, 'message' => $error]);
         }
         $scope = $this->scopeCompatibilityService->normalizeScope(\array_replace($session->getScopeArray(), $scopePatch));
+        $confirmRegenerate = \in_array(\strtolower(\trim((string)$this->getRequestBodyValue('confirm_regenerate', '0'))), ['1', 'true', 'yes', 'on'], true);
+        $requestedPlanLocale = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
+        if ($requestedPlanLocale !== '') {
+            $scope['plan_locale'] = $requestedPlanLocale;
+        }
         $scope['plan_locale'] = $this->resolvePlanLocale($scope);
-        $websiteProfile = $this->profileGenerationService->generate($scope, false);
-        $artifacts = $this->executionBlueprintService->buildPlanArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
-
-        $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
-        $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
-        $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
-        $markdown = (string)($artifacts['markdown'] ?? '');
-        $scopePatchPersist = \array_replace($scopePatch, $derivedPatch, [
-            'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
-            'execution_blueprint_draft' => $executionBlueprint,
-            'plan_json' => $planJson,
-            'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : $planJson,
-            'plan_locale' => $this->resolvePlanLocale($scope),
-            'plan_generated_at' => \date('Y-m-d H:i:s'),
+        // 第一阶段开始时先持久化用户本轮输入（域名/一句话描述/语言/页面类型等），再入队生成任务。
+        $persistPatch = \array_replace($scopePatch, [
+            'plan_locale' => (string)$scope['plan_locale'],
             'plan_confirmed' => 0,
         ]);
-        if (isset($scopePatchPersist['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $scopePatchPersist)) {
-            $scopePatchPersist[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = 1;
+        if (isset($persistPatch['page_types']) && !\array_key_exists(AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY, $persistPatch)) {
+            $persistPatch[AiSiteScopeCompatibilityService::PAGE_TYPES_USER_CUSTOMIZED_KEY] = !empty($persistPatch['page_types']) ? 1 : 0;
         }
-        $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatchPersist);
-        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
-
-        $this->appendWorkspaceEvent(
-            $session->getId(),
-            $adminId,
-            $this->scopeCompatibilityService->normalizeStage($fresh->getStage()),
-            'plan_generated',
-            (string)__('已生成阶段一方案，请确认后继续执行构建'),
-            [
+        $this->sessionService->mergeScope($session->getId(), $adminId, $persistPatch);
+        $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $currentScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $planStartDecision = $this->resolvePlanStartDecision($currentScope);
+        $hasPlanDraft = \is_array($currentScope['plan_json'] ?? null) && $currentScope['plan_json'] !== [];
+        if (
+            $hasPlanDraft
+            && \in_array((string)($planStartDecision['action'] ?? ''), ['rebuild', 'translate'], true)
+            && !$confirmRegenerate
+        ) {
+            $confirmMessage = (string)($planStartDecision['action'] ?? '') === 'translate'
+                ? (string)__('方案语言已变更。是否按新语言重新生成（翻译）阶段一方案？')
+                : (string)__('页面类型或方案语言已变更。是否立即重建阶段一方案？');
+            return $this->fetchJson([
+                'success' => true,
+                'message' => (string)__('检测到方案配置变更，当前先保留旧方案，等待你确认后再重新生成。'),
                 'operation' => 'plan',
-                'details' => [
-                    'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
-                    'task_count' => \is_array($executionBlueprint['tasks'] ?? null) ? \count($executionBlueprint['tasks']) : 0,
-                ],
-            ]
-        );
+                'start_sse' => false,
+                'requires_confirmation' => true,
+                'confirm_message' => $confirmMessage,
+                'plan_action' => (string)($planStartDecision['action'] ?? 'reuse'),
+                'plan_rebuild_required' => !empty($planStartDecision['rebuild_required']),
+                'plan_translation_required' => !empty($planStartDecision['translation_required']),
+                'plan_locale_changed' => !empty($planStartDecision['plan_locale_changed']),
+                'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
+                'data' => $this->buildWorkspaceState($session, $adminId, 80, true),
+            ]);
+        }
+        $requestedPageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($currentScope);
+        $activeOperation = \is_array($currentScope['active_operation'] ?? null) ? $currentScope['active_operation'] : [];
+        $activeOperationName = \trim((string)($activeOperation['operation'] ?? ''));
+        $activeOperationStatus = \trim((string)($activeOperation['status'] ?? ''));
+        if (
+            $activeOperationName === 'plan'
+            && \in_array($activeOperationStatus, ['queued', 'running'], true)
+            && $this->shouldRestartPlanOperationForScopeChange($activeOperation, (string)$scope['plan_locale'], $requestedPageTypes)
+        ) {
+            $this->cancelActivePlanOperationForScopeChange($session, $adminId);
+            $session = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+            $currentScope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+            $planStartDecision = $this->resolvePlanStartDecision($currentScope);
+        }
+        if ((string)($planStartDecision['action'] ?? '') === 'reuse' && $hasPlanDraft) {
+            return $this->fetchJson([
+                'success' => true,
+                'message' => (string)__('当前方案无需重建，已保留并回显已有方案内容。'),
+                'operation' => 'plan',
+                'start_sse' => false,
+                'requires_confirmation' => false,
+                'plan_action' => 'reuse',
+                'plan_rebuild_required' => false,
+                'plan_translation_required' => false,
+                'plan_locale_changed' => false,
+                'plan_page_types_changed' => false,
+                'data' => $this->buildWorkspaceState($session, $adminId, 80, true),
+            ]);
+        }
+        $stage = $this->scopeCompatibilityService->normalizeStage($session->getStage());
+        $result = $this->startOperation($session, $adminId, 'plan', $stage, [
+            'plan_locale' => (string)$scope['plan_locale'],
+            'plan_confirmed' => 0,
+        ]);
+        if (empty($result['success'])) {
+            if ((string)($result['operation'] ?? '') === 'plan') {
+                return $this->fetchJson([
+                    'success' => true,
+                    'message' => (string)__('检测到阶段一方案任务已在执行中，已继续复用当前任务进度。'),
+                    'operation' => 'plan',
+                    'start_sse' => true,
+                    'requires_confirmation' => false,
+                    'plan_action' => (string)($planStartDecision['action'] ?? 'reuse'),
+                    'plan_rebuild_required' => !empty($planStartDecision['rebuild_required']),
+                    'plan_translation_required' => !empty($planStartDecision['translation_required']),
+                    'plan_locale_changed' => !empty($planStartDecision['plan_locale_changed']),
+                    'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
+                    'data' => $this->buildWorkspaceState($session, $adminId, 80, true),
+                ]);
+            }
+            return $this->fetchJson([
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('当前无法启动阶段一方案生成')),
+                'operation' => (string)($result['operation'] ?? ''),
+            ]);
+        }
 
         return $this->fetchJson([
             'success' => true,
-            'message' => (string)__('方案生成完成，请先确认方案再执行构建'),
-            'plan' => [
-                'json' => $planJson,
-                'markdown' => $markdown,
-                'structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : $planJson,
-                'execution_blueprint' => $executionBlueprint,
-            ],
-            'data' => $this->buildWorkspaceState($fresh, $adminId, 80, true),
+            'message' => (string)__('阶段一方案生成任务已创建，请查看工作区事件流进度'),
+            'operation' => (string)($result['operation'] ?? 'plan'),
+            'start_sse' => true,
+            'requires_confirmation' => false,
+            'plan_action' => (string)($planStartDecision['action'] ?? 'generate'),
+            'plan_rebuild_required' => !empty($planStartDecision['rebuild_required']),
+            'plan_translation_required' => !empty($planStartDecision['translation_required']),
+            'plan_locale_changed' => !empty($planStartDecision['plan_locale_changed']),
+            'plan_page_types_changed' => !empty($planStartDecision['page_types_changed']),
+            'data' => \is_array($result['data'] ?? null) ? $result['data'] : $this->buildWorkspaceState($session, $adminId, 80, true),
         ]);
     }
 
@@ -992,15 +1055,27 @@ SCRIPT;
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $requestedPlanLocaleInput = \trim((string)$this->getRequestBodyValue('plan_locale', ''));
+        if ($requestedPlanLocaleInput !== '') {
+            $scope['plan_locale'] = $requestedPlanLocaleInput;
+        }
         $scope['plan_locale'] = $this->resolvePlanLocale($scope);
         $requestedPlanLocale = (string)$scope['plan_locale'];
         $lastGeneratedPlanLocale = \trim((string)($scope['plan_generated_locale'] ?? ''));
-        $effectivePromptMode = ($promptMode === 'refine' && $requestedPlanLocale !== '' && $lastGeneratedPlanLocale !== '' && $requestedPlanLocale !== $lastGeneratedPlanLocale)
-            ? 'rebuild'
-            : $promptMode;
+        $requestedPageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [];
+        $lastGeneratedPageTypes = \is_array($scope['plan_generated_page_types'] ?? null) ? $scope['plan_generated_page_types'] : [];
+        $planLocaleChanged = $requestedPlanLocale !== '' && $lastGeneratedPlanLocale !== '' && $requestedPlanLocale !== $lastGeneratedPlanLocale;
+        $pageTypesChanged = !$this->isSamePageTypeSelection($requestedPageTypes, $lastGeneratedPageTypes);
+        $effectivePromptMode = ($promptMode === 'refine' && $planLocaleChanged && $pageTypesChanged) ? 'rebuild' : $promptMode;
         $instruction = \trim((string)$this->getRequestBodyValue('instruction', ''));
         $targetScope = \trim((string)$this->getRequestBodyValue('target_scope', ''));
         $round = \max(1, (int)$this->getRequestBodyValue('round', 1));
+        if ($planLocaleChanged && !$pageTypesChanged) {
+            $targetScope = $targetScope !== '' ? $targetScope : 'locale_translation';
+            $instruction = $instruction !== ''
+                ? ((string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。') . ' ' . $instruction)
+                : (string)__('请按目标 plan_locale 翻译当前方案，并保留原有结构与页面类型。');
+        }
 
         $sse->sendEvent('start', [
             'message' => $effectivePromptMode === 'rebuild'
@@ -1020,16 +1095,34 @@ SCRIPT;
 
         try {
             $websiteProfile = $this->profileGenerationService->generate($scope, false);
+            $aiChunkCount = 0;
+            $emitAiChunkProgress = function (string $chunk) use (&$aiChunkCount, $sse, $effectivePromptMode): void {
+                if (\trim($chunk) === '') {
+                    return;
+                }
+                $aiChunkCount++;
+                if ($aiChunkCount === 1 || $aiChunkCount % 12 === 0) {
+                    $sse->sendEvent('progress', [
+                        'message' => (string)__('AI 正在生成阶段一方案内容…'),
+                        'prompt_mode' => $effectivePromptMode,
+                        'progress_percent' => 55,
+                        'ai_chunk_count' => $aiChunkCount,
+                    ]);
+                }
+            };
             $artifacts = $effectivePromptMode === 'rebuild'
                 ? $this->executionBlueprintService->rebuildDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                     'instruction' => $instruction,
                     'round' => $round,
-                ])
+                ], $emitAiChunkProgress)
                 : $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
                     'instruction' => $instruction,
                     'target_scope' => $targetScope,
                     'round' => $round,
-                ]);
+                ], $emitAiChunkProgress);
+            if ((int)($artifacts['ai_generated'] ?? 0) !== 1) {
+                throw new \RuntimeException((string)__('阶段一方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
+            }
 
             $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
             $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
@@ -1040,14 +1133,18 @@ SCRIPT;
                 'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
                 'execution_blueprint_draft' => $executionBlueprint,
                 'plan_json' => $planJson,
+                'plan_markdown' => $markdown,
                 'plan_structured' => $structured !== [] ? $structured : $planJson,
                 'plan_locale' => $this->resolvePlanLocale($scope),
+                'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
+                'plan_ai_fallback' => (int)($artifacts['ai_fallback'] ?? 0),
                 'plan_generated_at' => \date('Y-m-d H:i:s'),
                 'plan_confirmed' => 0,
                 'plan_last_prompt_mode' => $effectivePromptMode,
                 'plan_last_target_scope' => $targetScope,
                 'plan_last_round' => $round,
                 'plan_generated_locale' => $requestedPlanLocale,
+                'plan_generated_page_types' => \array_values(\array_map('strval', $requestedPageTypes)),
             ]);
             if ($effectivePromptMode === 'rebuild') {
                 $scopePatch['plan_rebuild_summary'] = \is_array($artifacts['rebuild_summary'] ?? null) ? $artifacts['rebuild_summary'] : [];
@@ -2302,6 +2399,7 @@ SCRIPT;
         $publicId = \trim((string)$this->request->getGet('public_id', ''));
         $lastEventId = LastEventIdResolver::resolve($this->request, 'last_event_id');
         $tabToken = \trim((string)$this->request->getGet('tab_token', ''));
+        $streamStage = $this->normalizeWorkspaceStreamStage((string)$this->request->getGet('stage', ''));
         if (\strlen($tabToken) > 64) {
             $tabToken = \substr($tabToken, 0, 64);
         }
@@ -2311,6 +2409,7 @@ SCRIPT;
             'last_event_id' => $lastEventId,
             'stream_kind' => 'workspace',
             'tab_token' => $tabToken !== '' ? $tabToken : null,
+            'stream_stage' => $streamStage !== '' ? $streamStage : null,
         ]);
 
         // 认证失败：返回 HTTP 401，不启动 SSE
@@ -2393,6 +2492,9 @@ SCRIPT;
         RequestContext::set(RequestContext::SSE_WRITER_KEY, $sse);
         $snapshotSource = $this->buildWorkspaceState($session, $adminId, 40, self::WORKSPACE_STREAM_SNAPSHOT_PERSIST);
         $snapshot = $this->buildWorkspaceStreamSnapshotPayload($snapshotSource);
+        if ($streamStage !== '') {
+            $snapshot = $this->filterWorkspaceSnapshotByStage($snapshot, $streamStage);
+        }
         $this->logStreamSse('snapshot_built', [
             'session_id' => $session->getId(),
             'snapshot_bytes' => \strlen((string)(\json_encode($snapshotSource, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: '')),
@@ -2416,13 +2518,15 @@ SCRIPT;
         $pollInterval = 1000;  // 每秒轮询一次
         $startTime = \time();
         $loopCount = 0;
-        $maxIdleLoops = 180;  // 最多连续 180 次无新事件（约 3 分钟），之后强制检测
+        // 标准 SSE 建议保持长连接，不因“空闲无事件”主动断开。
+        // 仅在连接死亡、租约失效或达到总循环兜底时退出。
         $consecutiveIdleLoops = 0;
         $maxTotalLoops = 86400;  // 最多运行 24 小时（兜底）
-        $forceCloseAfterIdleLoops = 60;  // 连续 60 次无新事件（约 1 分钟）后强制关闭
+        $probeEveryIdleLoops = 60;  // 连续空闲时定期探测连接健康
 
         while (true) {
             $loopCount++;
+            $this->runQueuedPlanOperationFromWorkspaceStream($sse, $session, $adminId);
 
             if (!$this->isStreamLeaseAlive($session, $adminId, $leaseToken)) {
                 $this->logStreamSse('lease_lost', [
@@ -2455,6 +2559,9 @@ SCRIPT;
                 break;
             }
             $newEvents = $this->sessionService->listEventsAfterId($session->getId(), $adminId, $lastEventId, 80);
+            if ($streamStage !== '') {
+                $newEvents = $this->filterWorkspaceEventsByStage($newEvents, $streamStage);
+            }
 
             if (!empty($newEvents)) {
                 $consecutiveIdleLoops = 0;
@@ -2474,18 +2581,8 @@ SCRIPT;
             } else {
                 $consecutiveIdleLoops++;
 
-                // 连续多次无事件，尝试主动检测连接状态
-                if ($consecutiveIdleLoops > $maxIdleLoops) {
-                    $this->logStreamSse('idle_max_reached', [
-                        'session_id' => $session->getId(),
-                        'loop_count' => $loopCount,
-                        'consecutive_idle_loops' => $consecutiveIdleLoops,
-                    ], 'warning');
-                    break;
-                }
-
                 // 连续多次无事件且 isAlive 仍返回 true，发送 comment 检测对端是否真的活着
-                if ($consecutiveIdleLoops === $forceCloseAfterIdleLoops) {
+                if ($consecutiveIdleLoops % $probeEveryIdleLoops === 0) {
                     $this->logStreamSse('probing_connection', [
                         'session_id' => $session->getId(),
                         'loop_count' => $loopCount,
@@ -2518,6 +2615,164 @@ SCRIPT;
             'last_event_id' => $lastEventId,
             'duration_sec' => \max(0, \time() - $startTime),
         ]);
+    }
+
+    private function runQueuedPlanOperationFromWorkspaceStream(SseWriter $sse, AiSiteAgentSession $session, int $adminId): void
+    {
+        $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
+        $scope = $this->scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+        $activeOperation = \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [];
+        if (\trim((string)($activeOperation['operation'] ?? '')) !== 'plan') {
+            return;
+        }
+        if (\trim((string)($activeOperation['status'] ?? '')) !== 'queued') {
+            return;
+        }
+
+        $this->updateActiveOperation(
+            $fresh,
+            $adminId,
+            ['status' => 'running', 'message' => (string)__('正在生成阶段一方案')],
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_BUILDING
+        );
+        $this->appendWorkspaceEvent(
+            $fresh->getId(),
+            $adminId,
+            'plan',
+            'operation_started',
+            (string)__('已开始执行阶段一方案生成'),
+            ['operation' => 'plan']
+        );
+        $sse->sendEvent('log', [
+            'event_type' => 'operation_started',
+            'stage_code' => 'plan',
+            'message' => (string)__('已开始执行阶段一方案生成'),
+            'payload' => ['operation' => 'plan'],
+            'level' => 'info',
+            'event_id' => 0,
+            'created_at' => \date('Y-m-d H:i:s'),
+        ]);
+
+        try {
+            $scope = $this->scopeCompatibilityService->normalizeScope(($this->sessionService->loadById($fresh->getId(), $adminId) ?? $fresh)->getScopeArray());
+            $scope['plan_locale'] = $this->resolvePlanLocale($scope);
+            $websiteProfile = $this->profileGenerationService->generate($scope, false);
+            $currentPageTypes = \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [];
+            $lastGeneratedPlanLocale = \trim((string)($scope['plan_generated_locale'] ?? ''));
+            $lastGeneratedPageTypes = \is_array($scope['plan_generated_page_types'] ?? null) ? $scope['plan_generated_page_types'] : [];
+            $planLocaleChanged = $lastGeneratedPlanLocale !== '' && $scope['plan_locale'] !== '' && $scope['plan_locale'] !== $lastGeneratedPlanLocale;
+            $pageTypesChanged = !$this->isSamePageTypeSelection($currentPageTypes, $lastGeneratedPageTypes);
+            $onChunk = function (string $chunk) use ($fresh, $adminId, $sse): void {
+                $trimmed = \trim($chunk);
+                if ($trimmed === '') {
+                    return;
+                }
+                $this->appendWorkspaceEvent(
+                    $fresh->getId(),
+                    $adminId,
+                    'plan',
+                    'plan_chunk',
+                    $trimmed,
+                    ['operation' => 'plan']
+                );
+                $sse->sendEvent('log', [
+                    'event_type' => 'plan_chunk',
+                    'stage_code' => 'plan',
+                    'message' => $trimmed,
+                    'payload' => ['operation' => 'plan'],
+                    'level' => 'info',
+                    'event_id' => 0,
+                    'created_at' => \date('Y-m-d H:i:s'),
+                ]);
+                $sse->maybeHeartbeat();
+            };
+            if ($planLocaleChanged && !$pageTypesChanged && \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== []) {
+                $translateInstruction = (string)__('请保留当前方案结构与页面类型，仅将方案内容完整翻译为目标 plan_locale，不新增或删除页面。');
+                $artifacts = $this->executionBlueprintService->refineDraftPlan($scope, \is_array($websiteProfile) ? $websiteProfile : [], [
+                    'instruction' => $translateInstruction,
+                    'target_scope' => 'locale_translation',
+                    'round' => 1,
+                ], $onChunk);
+            } else {
+                $artifacts = $this->executionBlueprintService->buildPlanArtifactsByAiStream($scope, \is_array($websiteProfile) ? $websiteProfile : [], [], $onChunk);
+            }
+            if ((int)($artifacts['ai_generated'] ?? 0) !== 1) {
+                throw new \RuntimeException((string)__('阶段一方案必须由 AI 生成，本次未成功调用 AI，请检查模型配置后重试。'));
+            }
+
+            $derivedPatch = \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [];
+            $executionBlueprint = \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [];
+            $planJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
+            $scopePatchPersist = \array_replace($derivedPatch, [
+                'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
+                'execution_blueprint_draft' => $executionBlueprint,
+                'plan_json' => $planJson,
+                'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
+                'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : $planJson,
+                'plan_locale' => $this->resolvePlanLocale($scope),
+                'plan_ai_generated' => (int)($artifacts['ai_generated'] ?? 0),
+                'plan_ai_fallback' => (int)($artifacts['ai_fallback'] ?? 0),
+                'plan_generated_at' => \date('Y-m-d H:i:s'),
+                'plan_generated_locale' => (string)$scope['plan_locale'],
+                'plan_generated_page_types' => \array_values(\array_map('strval', $currentPageTypes)),
+                'plan_confirmed' => 0,
+            ]);
+            $this->sessionService->mergeScope($fresh->getId(), $adminId, $scopePatchPersist);
+            $this->updateActiveOperation(
+                $fresh,
+                $adminId,
+                ['status' => 'done', 'message' => (string)__('阶段一方案生成完成')],
+                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+            );
+            $this->appendWorkspaceEvent(
+                $fresh->getId(),
+                $adminId,
+                'plan',
+                'plan_generated',
+                (string)__('已生成阶段一方案，请确认后继续执行构建'),
+                [
+                    'operation' => 'plan',
+                    'details' => [
+                        'execution_blueprint_signature' => (string)($executionBlueprint['signature'] ?? ''),
+                        'task_count' => \is_array($executionBlueprint['tasks'] ?? null) ? \count($executionBlueprint['tasks']) : 0,
+                    ],
+                ]
+            );
+            $sse->sendEvent('log', [
+                'event_type' => 'plan_generated',
+                'stage_code' => 'plan',
+                'message' => (string)__('阶段一方案生成完成'),
+                'payload' => ['operation' => 'plan'],
+                'level' => 'done',
+                'event_id' => 0,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $throwable) {
+            $this->updateActiveOperation(
+                $fresh,
+                $adminId,
+                ['status' => 'error', 'message' => $throwable->getMessage()],
+                AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+            );
+            $this->appendWorkspaceEvent(
+                $fresh->getId(),
+                $adminId,
+                'plan',
+                'operation_failed',
+                (string)__('阶段一方案生成失败：%{message}', ['message' => $throwable->getMessage()]),
+                ['operation' => 'plan', 'details' => ['exception' => $throwable->getMessage()]],
+                AiSiteAgentSessionEvent::LEVEL_ERROR
+            );
+            $sse->sendEvent('log', [
+                'event_type' => 'operation_failed',
+                'stage_code' => 'plan',
+                'message' => (string)__('阶段一方案生成失败：%{message}', ['message' => $throwable->getMessage()]),
+                'payload' => ['operation' => 'plan'],
+                'level' => 'error',
+                'event_id' => 0,
+                'created_at' => \date('Y-m-d H:i:s'),
+            ]);
+        }
     }
 
     /**
@@ -3445,6 +3700,14 @@ SCRIPT;
             'virtual_pages_by_type' => $clientVirtualPagesByType,
             'pending_generation_page_types' => $pendingGenerationPageTypes,
             'build_task_summary' => $taskSummary,
+            'plan' => [
+                'json' => \is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : [],
+                'markdown' => (string)($normalized['plan_markdown'] ?? ''),
+                'structured' => \is_array($normalized['plan_structured'] ?? null) ? $normalized['plan_structured'] : (\is_array($normalized['plan_json'] ?? null) ? $normalized['plan_json'] : []),
+                'execution_blueprint' => \is_array($normalized['execution_blueprint_draft'] ?? null) && $normalized['execution_blueprint_draft'] !== []
+                    ? $normalized['execution_blueprint_draft']
+                    : (\is_array($normalized['execution_blueprint'] ?? null) ? $normalized['execution_blueprint'] : []),
+            ],
             'plan_confirmed' => (int)($normalized['plan_confirmed'] ?? 0),
             'has_execution_blueprint' => \is_array($normalized['execution_blueprint'] ?? null) && $normalized['execution_blueprint'] !== [],
             'plan_sse_url' => $this->url->getBackendUrlPath('pagebuilder/backend/ai-site-agent/post-plan-sse'),
@@ -3629,6 +3892,7 @@ SCRIPT;
             $event = [
                 'event_id' => (int)($row['event_id'] ?? $row['ai_site_agent_event_id'] ?? 0),
                 'event_type' => (string)($row['event_type'] ?? ''),
+                'stage_code' => (string)($row['stage_code'] ?? ''),
                 'level' => (string)($row['level'] ?? ''),
                 'message' => $message,
             ];
@@ -3641,6 +3905,80 @@ SCRIPT;
             $result[] = $event;
         }
         return $result;
+    }
+
+    /**
+     * @param array<int, mixed> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function filterWorkspaceEventsByStage(array $rows, string $streamStage): array
+    {
+        if ($streamStage === '') {
+            return $rows;
+        }
+        $filtered = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            if ($this->workspaceEventMatchesStage($row, $streamStage)) {
+                $filtered[] = $row;
+            }
+        }
+        return $filtered;
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     * @return array<string, mixed>
+     */
+    private function filterWorkspaceSnapshotByStage(array $snapshot, string $streamStage): array
+    {
+        if ($streamStage === '') {
+            return $snapshot;
+        }
+        $snapshot['events'] = $this->filterWorkspaceEventsByStage(
+            \is_array($snapshot['events'] ?? null) ? $snapshot['events'] : [],
+            $streamStage
+        );
+        $snapshot['top_logs'] = $this->filterWorkspaceEventsByStage(
+            \is_array($snapshot['top_logs'] ?? null) ? $snapshot['top_logs'] : [],
+            $streamStage
+        );
+        return $snapshot;
+    }
+
+    /**
+     * @param array<string, mixed> $event
+     */
+    private function workspaceEventMatchesStage(array $event, string $streamStage): bool
+    {
+        $stageCode = \trim((string)($event['stage_code'] ?? ''));
+        if ($stageCode === $streamStage) {
+            return true;
+        }
+        $payload = \is_array($event['payload'] ?? null)
+            ? $event['payload']
+            : (\is_array($event['payload_json'] ?? null) ? $event['payload_json'] : []);
+        $operation = \trim((string)($payload['operation'] ?? ''));
+        $eventType = \trim((string)($event['event_type'] ?? ''));
+        if ($streamStage === 'plan') {
+            return $operation === 'plan'
+                || \in_array($eventType, ['plan_chunk', 'plan_generated', 'plan_refined', 'plan_rebuilt'], true);
+        }
+        return false;
+    }
+
+    private function normalizeWorkspaceStreamStage(string $stage): string
+    {
+        $normalized = \trim(\strtolower($stage));
+        if ($normalized === '') {
+            return '';
+        }
+        if (!\preg_match('/^[a-z0-9_\\-]{1,32}$/', $normalized)) {
+            return '';
+        }
+        return $normalized;
     }
 
     /**
@@ -4120,6 +4458,12 @@ SCRIPT;
             'updated_at' => \date('Y-m-d H:i:s'),
             'message' => (string)__('等待开始'),
         ];
+        if ($operation === 'plan') {
+            $scope['active_operation']['details'] = [
+                'plan_locale' => (string)($scope['plan_locale'] ?? ''),
+                'page_types' => \array_values(\array_map('strval', \is_array($scope['page_types'] ?? null) ? $scope['page_types'] : [])),
+            ];
+        }
         $scope['workspace_status'] = $workspaceStatus;
 
         $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
@@ -6495,12 +6839,65 @@ SCRIPT;
      */
     private function resolvePlanLocale(array $scope): string
     {
-        $planLocale = \trim((string)($scope['plan_locale'] ?? ''));
+        $planLocale = AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale(
+            \trim((string)($scope['plan_locale'] ?? ''))
+        );
         if ($planLocale !== '') {
             return $planLocale;
         }
 
-        return \trim((string)($scope['default_language'] ?? $scope['default_locale'] ?? ''));
+        return AiSiteAgentWorkspaceDebugDefaults::normalizeDefaultLocale(
+            \trim((string)($scope['default_language'] ?? $scope['default_locale'] ?? ''))
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array{
+     *   action:string,
+     *   rebuild_required:bool,
+     *   translation_required:bool,
+     *   plan_locale_changed:bool,
+     *   page_types_changed:bool
+     * }
+     */
+    private function resolvePlanStartDecision(array $scope): array
+    {
+        $requestedPlanLocale = (string)$this->resolvePlanLocale($scope);
+        $lastGeneratedPlanLocale = \trim((string)($scope['plan_generated_locale'] ?? ''));
+        $requestedPageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
+        $lastGeneratedPageTypes = \is_array($scope['plan_generated_page_types'] ?? null) ? $scope['plan_generated_page_types'] : [];
+        $hasPlanDraft = \is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [];
+        $planLocaleChanged = $hasPlanDraft
+            && $requestedPlanLocale !== ''
+            && $lastGeneratedPlanLocale !== ''
+            && $requestedPlanLocale !== $lastGeneratedPlanLocale;
+        $pageTypesChanged = $hasPlanDraft && !$this->isSamePageTypeSelection($requestedPageTypes, $lastGeneratedPageTypes);
+        if ($pageTypesChanged) {
+            return [
+                'action' => 'rebuild',
+                'rebuild_required' => true,
+                'translation_required' => false,
+                'plan_locale_changed' => $planLocaleChanged,
+                'page_types_changed' => true,
+            ];
+        }
+        if ($planLocaleChanged) {
+            return [
+                'action' => 'translate',
+                'rebuild_required' => false,
+                'translation_required' => true,
+                'plan_locale_changed' => true,
+                'page_types_changed' => false,
+            ];
+        }
+        return [
+            'action' => $hasPlanDraft ? 'reuse' : 'generate',
+            'rebuild_required' => false,
+            'translation_required' => false,
+            'plan_locale_changed' => false,
+            'page_types_changed' => false,
+        ];
     }
 
     /**
@@ -6532,6 +6929,68 @@ SCRIPT;
     }
 
     /**
+     * @param list<string>|array<int, mixed> $left
+     * @param list<string>|array<int, mixed> $right
+     */
+    private function isSamePageTypeSelection(array $left, array $right): bool
+    {
+        $normalize = static function (array $value): array {
+            $result = [];
+            foreach ($value as $item) {
+                $item = \trim((string)$item);
+                if ($item === '') {
+                    continue;
+                }
+                $result[$item] = true;
+            }
+            $types = \array_keys($result);
+            \sort($types);
+            return $types;
+        };
+
+        return $normalize($left) === $normalize($right);
+    }
+
+    /**
+     * @param array<string, mixed> $activeOperation
+     * @param list<string> $requestedPageTypes
+     */
+    private function shouldRestartPlanOperationForScopeChange(array $activeOperation, string $requestedPlanLocale, array $requestedPageTypes): bool
+    {
+        $details = \is_array($activeOperation['details'] ?? null) ? $activeOperation['details'] : [];
+        $runningPlanLocale = \trim((string)($details['plan_locale'] ?? ''));
+        $runningPageTypes = \is_array($details['page_types'] ?? null) ? $details['page_types'] : [];
+        if ($runningPlanLocale === '' && $runningPageTypes === []) {
+            return true;
+        }
+        if ($runningPlanLocale !== '' && $requestedPlanLocale !== '' && $runningPlanLocale !== $requestedPlanLocale) {
+            return true;
+        }
+        return !$this->isSamePageTypeSelection($requestedPageTypes, $runningPageTypes);
+    }
+
+    private function cancelActivePlanOperationForScopeChange(AiSiteAgentSession $session, int $adminId): void
+    {
+        $this->updateActiveOperation(
+            $session,
+            $adminId,
+            [
+                'status' => 'cancelled',
+                'message' => (string)__('检测到方案语言或页面类型变更，已取消旧任务并准备重新生成'),
+            ],
+            AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH
+        );
+        $this->appendWorkspaceEvent(
+            $session->getId(),
+            $adminId,
+            'plan',
+            'operation_cancelled',
+            (string)__('检测到方案配置变更（语言/页面类型），已取消旧任务并重新排队生成'),
+            ['operation' => 'plan', 'details' => ['reason' => 'plan_scope_changed']]
+        );
+    }
+
+    /**
      * @return list<array{value:string,label:string}>
      */
     private function getStageOptions(): array
@@ -6558,6 +7017,10 @@ SCRIPT;
         $value = $this->request->getPost($key, null);
         if ($value !== null) {
             return $value;
+        }
+        $getValue = $this->request->getGet($key, null);
+        if ($getValue !== null) {
+            return $getValue;
         }
         $bodyParams = $this->request->getBodyParams(true);
         if (\is_array($bodyParams) && \array_key_exists($key, $bodyParams)) {

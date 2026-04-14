@@ -122,6 +122,7 @@ class ControllerFetchFileBefore implements ObserverInterface
 
             $currentPath = strtolower(trim((string)$request->getUrlPath()));
             $isPageBuilderPreviewRoute = str_contains($currentPath, '/pagebuilder/backend/preview/');
+            $isThemeEditorInnerPreviewRoute = str_contains($currentPath, '/theme/backend/theme-editor/layout-preview');
             $isVirtualThemePreview = (int)$request->getParam('virtual_theme_id', 0) > 0
                 || (string)$request->getParam('visual_editor', '') === '1';
             if ($isPageBuilderPreviewRoute && $isVirtualThemePreview) {
@@ -130,10 +131,12 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if ($editorArea === '') {
                     $editorArea = 'frontend';
                 }
+            } elseif ($isThemeEditorInnerPreviewRoute && $editorArea === 'frontend') {
+                // ThemeEditor 的内层预览 iframe 允许按 preview_area/editor_area 切到 frontend；
+                // 但 backend 编辑器外壳页本身必须保持 backend，避免污染后台布局与静态资源。
+                $area = 'frontend';
             } elseif ($editorArea === 'backend') {
                 $area = 'backend';
-            } elseif ($editorArea === 'frontend') {
-                $area = 'frontend';
             } else {
                 $area = 'backend';
             }
@@ -145,7 +148,18 @@ class ControllerFetchFileBefore implements ObserverInterface
         $requestCache = self::requestCacheState();
         
         // 获取当前主题：预览 / 激活由 ThemeContextService 统一解析
-        $allowPreviewTheme = !$isBackendRequest || $editorArea === 'frontend';
+        // 主题编辑器预览链路（含 backend 预览）也必须允许读取 preview 主题上下文，
+        // 否则会错误回退到当前激活主题，导致 backend 预览显示成 frontend 主题结果。
+        $requestPath = strtolower(trim((string)($request?->getUrlPath() ?? '')));
+        $isThemeEditorPreviewRoute = $requestPath !== ''
+            && (
+                str_contains($requestPath, '/theme/backend/theme-editor/')
+                || str_contains($requestPath, '/theme/backend/config/layout/preview')
+                || str_contains($requestPath, '/theme/backend/index/preview')
+            );
+        $allowPreviewTheme = !$isBackendRequest
+            || $editorArea === 'frontend'
+            || ($editorArea === 'backend' && $isThemeEditorPreviewRoute);
         $theme = $this->resolveThemeForLayout($area, $allowPreviewTheme);
         $requestUriForDebug = (string)($request?->getServer('REQUEST_URI') ?? $request?->getUri() ?? '');
         if (false && $requestUriForDebug !== ''
@@ -478,6 +492,15 @@ class ControllerFetchFileBefore implements ObserverInterface
                 if (\preg_match('#^/' . \preg_quote($backendPrefix, '#') . '(?:/|$)#', $normalizedUri) === 1) {
                     return true;
                 }
+            }
+
+            // 兜底：某些代理/前缀场景下 route 上下文尚未就绪，仍需识别典型后台路由。
+            $normalizedUri = '/' . \ltrim($uri, '/');
+            if (\str_contains($normalizedUri, '/theme/backend/')
+                || \str_contains($normalizedUri, '/backend/theme/')
+                || \str_contains($normalizedUri, '/backend/theme-editor')
+            ) {
+                return true;
             }
         }
 

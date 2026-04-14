@@ -195,15 +195,11 @@ $currentSearch = $currentSearch ?? '';
                                     <th width="60"><lang>ID</lang></th>
                                     <th><lang>模型名称</lang></th>
                                     <th><lang>供应商</lang></th>
-                                    <th><lang>模型代码</lang></th>
-                                    <th><lang>版本</lang></th>
-                                    <th width="100"><lang>类型</lang></th>
-                                    <th><lang>输入价格</lang></th>
-                                    <th><lang>输出价格</lang></th>
+                                    <th width="280"><lang>模型信息</lang></th>
+                                    <th width="180"><lang>价格</lang></th>
                                     <th width="100"><lang>自配置状态</lang></th>
                                     <th width="100"><lang>自配置连通性</lang></th>
                                     <th width="100"><lang>供应商连通性</lang></th>
-                                    <th width="100"><lang>状态</lang></th>
                                     <th width="100"><lang>默认</lang></th>
                                     <th width="250"><lang>操作</lang></th>
                                 </tr>
@@ -232,22 +228,31 @@ $currentSearch = $currentSearch ?? '';
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <code><?= $model['model_code'] ?? '' ?></code>
+                                            <div><code><?= $model['model_code'] ?? '' ?></code></div>
+                                            <div class="mt-1">
+                                                <span class="badge bg-light text-dark border">
+                                                    <lang>版本</lang> <?= $model['version'] ?? '' ?>
+                                                </span>
+                                                <?php if (!empty($model['is_copied'])): ?>
+                                                    <span class="badge bg-warning text-dark ms-1">
+                                                        <i class="mdi mdi-content-copy"></i> <lang>复制</lang>
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary ms-1">
+                                                        <i class="mdi mdi-source-branch"></i> <lang>原始</lang>
+                                                    </span>
+                                                <?php endif; ?>
+                                                <?php if (!empty($model['is_active'])): ?>
+                                                    <span class="badge bg-success ms-1"><lang>激活</lang></span>
+                                                <?php else: ?>
+                                                    <span class="badge bg-secondary ms-1"><lang>未激活</lang></span>
+                                                <?php endif; ?>
+                                            </div>
                                         </td>
-                                        <td><?= $model['version'] ?? '' ?></td>
                                         <td>
-                                            <?php if (!empty($model['is_copied'])): ?>
-                                                <span class="badge bg-warning text-dark">
-                                                    <i class="mdi mdi-content-copy"></i> <lang>复制</lang>
-                                                </span>
-                                            <?php else: ?>
-                                                <span class="badge bg-secondary">
-                                                    <i class="mdi mdi-source-branch"></i> <lang>原始</lang>
-                                                </span>
-                                            <?php endif; ?>
+                                            <div><lang>输入</lang> $<?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</div>
+                                            <div><lang>输出</lang> $<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</div>
                                         </td>
-                                        <td>$<?= number_format((float)($model['token_price_input'] ?? 0), 6) ?>/1K</td>
-                                        <td>$<?= number_format((float)($model['token_price_output'] ?? 0), 6) ?>/1K</td>
                                         <td>
                                             <?php if (!empty($model['has_api_key'])): ?>
                                                 <span class="badge bg-success" title="<?= __('已配置自配置密钥') ?>">
@@ -295,13 +300,6 @@ $currentSearch = $currentSearch ?? '';
                                                 <span class="badge bg-info" title="<?= __('供应商连通性待测试') ?>">
                                                     <i class="mdi mdi-wifi"></i> <lang>待测试</lang>
                                                 </span>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td>
-                                            <?php if (!empty($model['is_active'])): ?>
-                                                <span class="badge bg-success"><lang>激活</lang></span>
-                                            <?php else: ?>
-                                                <span class="badge bg-secondary"><lang>未激活</lang></span>
                                             <?php endif; ?>
                                         </td>
                                         <td>
@@ -420,16 +418,17 @@ $currentSearch = $currentSearch ?? '';
                                                        flush-button-text='<?= __("刷新") ?>'
                                                        off-canvas-body-style=''
                                                 />
-                                                <?php if (!empty($model['is_copied'])): ?>
+                                                <?php $canDelete = !empty($model['is_copied']) || !empty($model['is_custom_model']); ?>
+                                                <?php if ($canDelete): ?>
                                                 <button type="button" class="btn btn-outline-danger" 
-                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', <?= !empty($model['is_copied']) ? 'true' : 'false' ?>)" 
+                                                        onclick="deleteModel(<?= $model['id'] ?? 0 ?>, '<?= $model['model_code'] ?? '' ?>', true)" 
                                                         title="<?= __('删除') ?>">
                                                     <i class="mdi mdi-delete"></i>
                                                 </button>
                                                 <?php else: ?>
                                                 <button type="button" class="btn btn-outline-danger" 
                                                         disabled
-                                                        title="<?= __('原始模型不能删除') ?>">
+                                                        title="<?= __('受保护模型不能删除') ?>">
                                                     <i class="mdi mdi-delete-off"></i>
                                                 </button>
                                                 <?php endif; ?>
@@ -647,7 +646,7 @@ $currentSearch = $currentSearch ?? '';
             return;
         }
         
-        BackendConfirm.show('<?= __('确定要删除选中的模型吗？此操作不可恢复！注意：只能删除复制的模型，原始模型无法删除。') ?>').then(function(confirmed) {
+        BackendConfirm.show('<?= __('确定要删除选中的模型吗？此操作不可恢复！注意：仅复制模型和自定义模型可删除。') ?>').then(function(confirmed) {
             if (!confirmed) return;
             apiRequest('<?= $this->getBackendUrl('*/backend/model/bulkDelete') ?>', {
                 method: 'POST',
@@ -825,17 +824,17 @@ $currentSearch = $currentSearch ?? '';
     }
 
     // 删除单个模型
-    window.deleteModel = function(modelId, modelCode, isCopied) {
-        if (!isCopied) {
+    window.deleteModel = function(modelId, modelCode, canDelete) {
+        if (!canDelete) {
             if (typeof Swal !== 'undefined') {
                 Swal.fire({
                     icon: 'warning',
                     title: '<?= __('提示') ?>',
-                    text: '<?= __('原始模型不能删除，只能删除复制的模型') ?>',
+                    text: '<?= __('受保护模型不能删除，只能删除复制模型或自定义模型') ?>',
                     confirmButtonText: '<?= __('确定') ?>'
                 });
             } else {
-                console.error('<?= __('原始模型不能删除，只能删除复制的模型') ?>');
+                console.error('<?= __('受保护模型不能删除，只能删除复制模型或自定义模型') ?>');
             }
             return;
         }
