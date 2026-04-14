@@ -280,6 +280,11 @@ class Response implements ResponseInterface
     public function emit(bool $terminate = true): void
     {
         if (!\headers_sent()) {
+            $contentType = (string)($this->getHeader('Content-Type') ?? '');
+            if (!\str_contains(\strtolower($contentType), 'text/event-stream')
+                && $this->getHeader('Content-Length') === null) {
+                $this->setHeader('Content-Length', (string)\strlen($this->body));
+            }
             $this->getHeaderCollector()->emit(true);
         }
 

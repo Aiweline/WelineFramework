@@ -45,7 +45,7 @@ interface RuntimeInterface
     /**
      * 处理请求
      * 
-     * @param Request|null $request 请求对象（WLS 模式传入，FPM 模式自动从超全局变量获取）
+     * @param Request|null $request WLS 模式下传入当前请求对象；FPM 模式下可为 null（从超全局快照初始化）。
      * @return string 响应内容
      */
     public function handle(?Request $request = null): string;
