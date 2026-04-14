@@ -118,8 +118,9 @@ class ThemeEditor extends BackendController
         );
         $requestedBackendThemeId = (int)$this->request->getParam('backend_theme_id', 0);
         $pageType = (string)$this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
+        $previewAreaParam = $this->request->getParam('preview_area', $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND));
         $editorArea = $previewContextService->normalizeArea(
-            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)
+            (string)$previewAreaParam
         );
         $themeListUrl = $this->_url->getBackendUrl('theme/backend');
 
@@ -1388,7 +1389,7 @@ class ThemeEditor extends BackendController
     {
         $previewContextService = $this->getPreviewContextService();
         $editorArea = $previewContextService->normalizeArea(
-            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)
+            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_BACKEND)
         );
         $layoutType = (string)$this->request->getParam('layout_type', 'homepage');
         $layoutOption = (string)$this->request->getParam('layout_option', 'default');
@@ -2014,7 +2015,7 @@ class ThemeEditor extends BackendController
             $layoutOption = 'default';
         }
         $editorArea = $previewContextService->normalizeArea(
-            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND)
+            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_BACKEND)
         );
         $context = $this->persistEditorContext([
             'frontend_theme_id' => (int)$this->request->getParam('frontend_theme_id', 0),
@@ -2029,6 +2030,14 @@ class ThemeEditor extends BackendController
             'target_value' => $layoutType,
         ]);
         $themeId = $previewContextService->getThemeIdForArea($editorArea, $context, true);
+        if ($editorArea === PreviewContextService::AREA_BACKEND
+            && !$this->resolveThemeLayoutExists($themeId, $editorArea, $layoutType, $layoutOption)
+        ) {
+            // backend 预览请求可能沿用 frontend 的 layout_type（如 homepage），
+            // 该布局在 backend 目录下不存在时，必须回退到 backend 默认布局，避免误渲染 frontend 页面。
+            $layoutType = 'default';
+            $layoutOption = 'default';
+        }
         $session = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Session\Session::class);
         $session->setData('preview_theme_id', $themeId);
         $session->setData('preview_theme_area', $editorArea);
@@ -3066,8 +3075,16 @@ HTML;
             $this->getPreviewContextService()->clearContext();
             PreviewManager::clearPreviewConfig();
             $this->session->delete('preview_auto_login');
+            $requestedEditorArea = $this->getPreviewContextService()->normalizeArea(
+                (string)$this->request->getParam(
+                    'editor_area',
+                    (string)($this->request->getParam('preview_area', (string)($context['editor_area'] ?? PreviewContextService::AREA_BACKEND)))
+                ),
+                PreviewContextService::AREA_BACKEND
+            );
 
             $editorContext = $this->getPreviewContextService()->buildContext(\array_replace($context, [
+                'editor_area' => $requestedEditorArea,
                 'shell' => PreviewContextService::SHELL_THEME_EDITOR,
                 'preview_token' => '',
                 'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,
@@ -3214,8 +3231,16 @@ HTML;
             $this->getPreviewContextService()->clearContext();
             PreviewManager::clearPreviewConfig();
             $this->session->delete('preview_auto_login');
+            $requestedEditorArea = $this->getPreviewContextService()->normalizeArea(
+                (string)$this->request->getParam(
+                    'editor_area',
+                    (string)($this->request->getParam('preview_area', (string)($previewContext['editor_area'] ?? PreviewContextService::AREA_BACKEND)))
+                ),
+                PreviewContextService::AREA_BACKEND
+            );
 
             $editorContext = $this->getPreviewContextService()->buildContext(\array_replace($previewContext, [
+                'editor_area' => $requestedEditorArea,
                 'shell' => PreviewContextService::SHELL_THEME_EDITOR,
                 'preview_token' => '',
                 'target_type' => PreviewContextService::TARGET_TYPE_LAYOUT,

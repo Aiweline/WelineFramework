@@ -392,6 +392,42 @@ function dispatchSseEvent(eventName, data) {
     }
 }
 
+function appendQueryParam(url, key, value) {
+    var sep = url.indexOf('?') >= 0 ? '&' : '?';
+    return url + sep + encodeURIComponent(key) + '=' + encodeURIComponent(value);
+}
+
+function buildEventSourceUrl(baseUrl, options) {
+    var resolved = String(baseUrl || '');
+    var opts = options || {};
+    if (!opts || !opts.method || String(opts.method).toUpperCase() !== 'POST' || !opts.body) {
+        return resolved;
+    }
+    var body = opts.body;
+    try {
+        if (typeof FormData !== 'undefined' && body instanceof FormData) {
+            body.forEach(function(v, k) {
+                if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') {
+                    resolved = appendQueryParam(resolved, String(k), String(v));
+                }
+            });
+            return resolved;
+        }
+        if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
+            body.forEach(function(v, k) {
+                resolved = appendQueryParam(resolved, String(k), String(v));
+            });
+            return resolved;
+        }
+        if (typeof body === 'string' && body.trim() !== '') {
+            var trimmed = body.replace(/^\?/, '');
+            return resolved + (resolved.indexOf('?') >= 0 ? '&' : '?') + trimmed;
+        }
+    } catch (e) {
+    }
+    return resolved;
+}
+
 function start(url, options) {
     if (isRunning) return;
 
@@ -415,98 +451,7 @@ function start(url, options) {
     log('$t_connecting', 'info');
     setStatus('connecting', '$t_connecting');
     
-    if (options.method === 'POST' && options.body) {
-        postAbortController = new AbortController();
-        fetch(resolvedUrl, {
-            method: 'POST',
-            body: options.body,
-            headers: { 'X-Requested-With': 'XMLHttpRequest' },
-            signal: postAbortController.signal
-        }).then(function(res) {
-            var ct = (res.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-            if (ct === 'application/json' || (ct.length > 0 && ct.indexOf('json') >= 0 && ct.indexOf('event-stream') < 0)) {
-                return res.text().then(function(text) {
-                    var msg = text;
-                    try {
-                        var j = text ? JSON.parse(text) : {};
-                        msg = (j && (j.error || j.message || j.msg)) ? String(j.error || j.message || j.msg) : (text || '$t_connection_failed');
-                    } catch (e1) {
-                        msg = text || (res.statusText || 'Request failed');
-                    }
-                    setStatus('error', '$t_error');
-                    log(String(msg), 'error');
-                    if (eventCallbacks.error) eventCallbacks.error(new Error(String(msg)));
-                    stop();
-                });
-            }
-            if (!res.ok) {
-                return res.text().then(function(text) {
-                    var msg = text;
-                    try {
-                        var j = text ? JSON.parse(text) : {};
-                        msg = (j && (j.error || j.message || j.msg)) ? String(j.error || j.message || j.msg) : (text || (res.status + ' ' + (res.statusText || '')));
-                    } catch (e2) {
-                        msg = text || (res.statusText || 'Request failed');
-                    }
-                    setStatus('error', '$t_error');
-                    log(String(msg), 'error');
-                    if (eventCallbacks.error) eventCallbacks.error(new Error(String(msg)));
-                    stop();
-                });
-            }
-            if (!res.body) throw new Error('Stream not supported');
-            setStatus('connected', '$t_connected');
-            log('$t_connected', 'success');
-            if (eventCallbacks.open) eventCallbacks.open();
-            var reader = res.body.getReader();
-            var decoder = new TextDecoder();
-            var buffer = '', currentEvent = '', currentData = '';
-            function finishEvent(evName) {
-                try {
-                    var payload = currentData ? JSON.parse(currentData) : {};
-                    if (evName === 'start' && eventCallbacks.start) eventCallbacks.start({ data: currentData });
-                    else if (evName === 'message' && eventCallbacks.message) eventCallbacks.message({ data: currentData });
-                    dispatchSseEvent(evName, payload);
-                } catch (e) {
-                    if (evName === 'error') dispatchSseEvent('error', { message: currentData });
-                }
-            }
-            function readNext() {
-                return reader.read().then(function(value) {
-                    if (value && value.value) {
-                        buffer += decoder.decode(value.value, { stream: true });
-                        var parts = buffer.split('\\n\\n');
-                        buffer = parts.pop() || '';
-                        for (var i = 0; i < parts.length; i++) {
-                            var lines = parts[i].split('\\n');
-                            currentEvent = '';
-                            currentData = '';
-                            for (var j = 0; j < lines.length; j++) {
-                                var line = lines[j];
-                                if (line.indexOf('event:') === 0) currentEvent = line.replace(/^event:\s*/, '').trim();
-                                else if (line.indexOf('data:') === 0) currentData = line.replace(/^data:\s*/, '');
-                            }
-                            if (currentEvent || currentData) finishEvent(currentEvent || 'message');
-                        }
-                    }
-                    if (value && !value.done) return readNext();
-                });
-            }
-            return readNext();
-        }).then(function() {
-            if (postAbortController) {
-                postAbortController = null;
-            }
-        }).catch(function(err) {
-            if (err.name === 'AbortError') return;
-            setStatus('error', '$t_error');
-            log('$t_error', 'error');
-            log('$t_connection_failed', 'error');
-            if (eventCallbacks.error) eventCallbacks.error(err);
-            stop();
-        });
-        return;
-    }
+    resolvedUrl = buildEventSourceUrl(resolvedUrl, options);
     
     var source = new EventSource(resolvedUrl);
     var sourceSeq = ++eventSourceSeq;

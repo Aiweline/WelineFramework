@@ -469,6 +469,7 @@ class Stop extends CommandAbstract
                 'weline-wls-session-' . $name,
                 'weline-wls-memory-' . $name,
                 MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+                'weline-master-' . $name . '-redirect-',
                 'weline-wls-worker-' . $name . '-',
                 'weline-master-' . $name . '-worker-',
             ];
@@ -1211,6 +1212,7 @@ class Stop extends CommandAbstract
         Processer::removePidFile('--name=weline-wls-session-' . $name);
         Processer::removePidFile('--name=weline-wls-memory-' . $name);
         Processer::removePidFile('--name=' . MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name);
+        Processer::removePidFile('--name=weline-master-' . $name . '-redirect-1');
         
         // Global stale pid pruning is intentionally excluded from the stop hot path.
     }
@@ -1271,6 +1273,7 @@ class Stop extends CommandAbstract
             'weline-wls-session-' . $name,
             'weline-wls-memory-' . $name,
             MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+            'weline-master-' . $name . '-redirect-',
         ];
 
         foreach ($processNames as $processName) {
@@ -1296,6 +1299,7 @@ class Stop extends CommandAbstract
             'weline-wls-dispatcher-' . $name,
             'weline-wls-worker-' . $name . '-',
             'weline-master-' . $name . '-worker-',
+            'weline-master-' . $name . '-redirect-',
             'weline-wls-session-' . $name,
             'weline-wls-memory-' . $name,
             MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,

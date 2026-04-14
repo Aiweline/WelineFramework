@@ -364,7 +364,7 @@ class Index extends BackendController
     public function postGenerateAllPreviewsConcurrent(): void
     {
         $sse = new SseWriter();
-        $concurrency = (int)$this->request->getPost('concurrency', ThemePreviewGenerator::DEFAULT_CONCURRENCY);
+        $concurrency = (int)$this->request->getPost('concurrency', $this->request->getGet('concurrency', ThemePreviewGenerator::DEFAULT_CONCURRENCY));
         $concurrency = max(1, min($concurrency, 8));
 
         try {
@@ -554,7 +554,7 @@ class Index extends BackendController
     public function postGenerateAllPreviewsSse(): void
     {
         $sse = new SseWriter();
-        $concurrency = (int)$this->request->getPost('concurrency', ThemePreviewGenerator::DEFAULT_CONCURRENCY);
+        $concurrency = (int)$this->request->getPost('concurrency', $this->request->getGet('concurrency', ThemePreviewGenerator::DEFAULT_CONCURRENCY));
         $concurrency = max(1, min($concurrency, 8));
 
         try {

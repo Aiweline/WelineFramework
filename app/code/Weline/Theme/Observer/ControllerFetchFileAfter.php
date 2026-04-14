@@ -7,6 +7,8 @@ namespace Weline\Theme\Observer;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
 use Weline\Theme\Service\PreparedContentStore;
@@ -285,12 +287,36 @@ class ControllerFetchFileAfter implements ObserverInterface
     private function detectAreaFromTemplatePath(string $templatePath): string
     {
         $normalizedPath = str_replace('\\', '/', strtolower($templatePath));
+        if (str_contains($normalizedPath, '/templates/frontend/theme-preview/content.phtml')
+            || str_contains($normalizedPath, '/templates/backend/theme-preview/content.phtml')
+        ) {
+            $requestArea = $this->resolveEditorAreaFromRequest();
+            if ($requestArea !== '') {
+                return $requestArea;
+            }
+        }
         if (str_contains($normalizedPath, '/theme/backend/layouts/')
             || str_contains($normalizedPath, 'theme/backend/layouts/')) {
             return 'backend';
         }
 
         return 'frontend';
+    }
+
+    private function resolveEditorAreaFromRequest(): string
+    {
+        try {
+            /** @var Request $request */
+            $request = ObjectManager::getInstance(Request::class);
+            $area = strtolower(trim((string)$request->getParam('editor_area', '')));
+            if ($area === '') {
+                $area = strtolower(trim((string)$request->getParam('preview_area', '')));
+            }
+
+            return $area === 'backend' ? 'backend' : ($area === 'frontend' ? 'frontend' : '');
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     private function traceTemplateLabel(string $templatePath): string

@@ -89,7 +89,11 @@ final class PreviewRequestInspector
 
     public function shouldAllowPreviewTokenCookie(): bool
     {
-        return $this->isPreviewShellPath() || $this->isPreviewStaticPath();
+        // Do not auto-apply preview token cookie on theme-editor shell routes.
+        // Editor entry URLs should stay deterministic and must not be polluted
+        // by stale preview sessions unless token is explicitly passed in URL/header.
+        return (!$this->isThemeEditorShellPath() && $this->isPreviewShellPath())
+            || $this->isPreviewStaticPath();
     }
 
     public function hasExplicitPreviewTokenCarrier(): bool
@@ -122,6 +126,13 @@ final class PreviewRequestInspector
         }
 
         return false;
+    }
+
+    private function isThemeEditorShellPath(): bool
+    {
+        $path = $this->normalizePath();
+
+        return \str_starts_with($path, '/theme/backend/theme-editor');
     }
 
     private function hasNonEmptyParam(array $keys): bool
