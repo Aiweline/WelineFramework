@@ -242,7 +242,16 @@ window.generatePageContent = function() {
         sseTerminal.clear(); sseTerminal.setUrl(url);
         sseTerminal.on('done',function(e){ try{ var p=e.data?JSON.parse(e.data):{}; var d=p.data||p; restoreModalAndButton(); applyGeneratedData(d); var m=bootstrap.Modal.getInstance(document.getElementById('aiGenerateModal')); if(m) m.hide(); BackendToast.success(_msgSuccess); }catch(err){ restoreModalAndButton(); BackendToast.error(<?= json_encode(__('解析结果失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); } });
         sseTerminal.on('error',function(e){ try{ var p=e.data?JSON.parse(e.data):{}; restoreModalAndButton(); BackendToast.error((p&&p.message)||_msgFailed); }catch(err){ restoreModalAndButton(); BackendToast.error(_msgFailed); } });
-        sseTerminal.start(url,{method:'POST',body:formData});
+        var sseUrl = String(url || '');
+        try {
+            var qs = new URLSearchParams();
+            formData.forEach(function(v, k){ if (typeof v === 'string') { qs.append(k, v); } });
+            var q = qs.toString();
+            if (q) {
+                sseUrl += (sseUrl.indexOf('?') >= 0 ? '&' : '?') + q;
+            }
+        } catch (e) {}
+        sseTerminal.start(sseUrl);
         return;
     }
     if(sseContent) sseContent.innerHTML='';

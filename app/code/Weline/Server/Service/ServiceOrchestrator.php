@@ -8695,6 +8695,17 @@ class ServiceOrchestrator
                     $expected[(int) $w->ipcClientId] = true;
                 }
             }
+            if ($skipBusinessDrainAck) {
+                // 快速接管（如 se:rel -f）：仅切 Dispatcher 到 maintenance 池，不改业务 Worker 维护态。
+                $this->logMaintenanceOperation(
+                    '维护启用采用快速接管：跳过业务 Worker set_maintenance_mode，仅执行流量池切换，'
+                    . $this->formatMaintenanceOperationContext(),
+                    'WARN',
+                    'enable_maintenance:skip_worker_toggle:' . $this->formatMaintenanceOperationContext(),
+                    0.0
+                );
+                $expected = [];
+            }
             if (!$shouldWaitForWorkerAck) {
                 $this->logMaintenanceOperation(
                     '维护启用采用快速接管：不会等待业务 Worker 排空 ACK，'

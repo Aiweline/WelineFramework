@@ -83,11 +83,6 @@ class LayoutSlotRenderer implements ObserverInterface
         
         // 鍒ゆ柇鍖哄煙锛堜粠妯℃澘璺緞鎴栧叾浠栦笂涓嬫枃鍒ゆ柇锛?
         $area = $this->detectArea($template);
-
-        // 鍙鐞嗗墠绔尯鍩?
-        if ($area !== 'frontend') {
-            return;
-        }
         
         // === 绗竴姝ワ細澶勭悊棰勮妯″紡锛堢嫭绔嬩簬鎻掓Ы澶勭悊锛?==
         // 妫€娴?URL 鍙傛暟涓殑棰勮 token锛屽鏋滄湁鏁堝垯璁剧疆 Cookie锛堝疄鐜伴瑙堢姸鎬佹寔涔呭寲锛?
@@ -101,11 +96,21 @@ class LayoutSlotRenderer implements ObserverInterface
         // 杩欎釜閫昏緫蹇呴』鍦ㄦ彃妲芥鏌ヤ箣鍓嶆墽琛岋紝鍥犱负鍗充娇椤甸潰娌℃湁鎻掓Ы锛屼篃闇€瑕佹樉绀洪€€鍑烘寜閽?
         if ($this->previewTokenService->isPreviewMode()) {
             $editorMode = $this->request->getParam('editor_mode');
-            // 鍙湪鐪熷疄鍓嶇棰勮鏃舵敞鍏ワ紝涓嶅湪缂栬緫鍣?iframe 涓敞鍏?
-            if ($editorMode !== '1' && $editorMode !== 'true') {
+            // frontend: editor_mode=1 的编辑器 iframe 不注入
+            // backend: 预览环境即使 editor_mode=1 也要提供退出浮窗
+            $shouldInjectPreviewFloat = ($editorMode !== '1' && $editorMode !== 'true')
+                || $area === 'backend';
+            if ($shouldInjectPreviewFloat) {
                 $html = $this->injectPreviewExitButton($html);
                 $html = $this->injectPreviewInterceptor($html);
             }
+        }
+
+        // 鎻掓Ы鏇挎崲浠呭 frontend 鐢熸晥锛�
+        // backend 棰勮涓嬩粛闇€淇濈暀棰勮鎮诞缁勪欢锛屼絾涓嶈蛋 slot 渲染銆�
+        if ($area !== 'frontend') {
+            $event->setData('content', $html);
+            return;
         }
 
         // === 绗簩姝ワ細澶勭悊鎻掓Ы鏇挎崲 ===
