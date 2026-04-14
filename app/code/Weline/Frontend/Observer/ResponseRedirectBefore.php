@@ -173,7 +173,7 @@ class ResponseRedirectBefore implements ObserverInterface
             // 闃叉寮€鏀鹃噸瀹氬悜鏀诲嚮
             if (isset($parsedUrl['host'])) {
                 $host = $parsedUrl['host'];
-                $currentHost = $_SERVER['HTTP_HOST'] ?? '';
+                $currentHost = (string)\w_env('server.http_host', '');
                 
                 // 鍙厑璁搁噸瀹氬悜鍒板綋鍓嶅煙鍚嶆垨鐧藉悕鍗曞煙鍚?
                 if ($host !== $currentHost && !$this->isAllowedHost($host)) {
@@ -202,7 +202,7 @@ class ResponseRedirectBefore implements ObserverInterface
     {
         try {
             // 妫€鏌ユ槸鍚︽槸绉诲姩璁惧
-            $userAgent = $_SERVER['HTTP_USER_AGENT'] ?? '';
+            $userAgent = (string)\w_env('server.http_user_agent', '');
             $isMobile = $this->isMobileDevice($userAgent);
             
             if ($isMobile) {

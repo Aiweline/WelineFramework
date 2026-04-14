@@ -79,7 +79,8 @@ class DevToolPanelObserver implements ObserverInterface
             return;
         }
 
-        if (Runtime::isPersistent() && !(bool)Env::get('wls.debug.dev_tool_panel', false)) {
+        $allowPersistentDevToolPanel = (bool)Env::get('wls.debug.dev_tool_panel', DEV);
+        if (Runtime::isPersistent() && !$allowPersistentDevToolPanel) {
             return;
         }
 

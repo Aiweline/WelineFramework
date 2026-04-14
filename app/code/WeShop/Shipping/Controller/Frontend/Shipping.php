@@ -33,7 +33,7 @@ class Shipping extends BaseController
         $this->assign('customer', $customer);
         $this->assign('shipping_methods', $shippingMethods);
         $this->assign('available_methods', $availableMethods);
-        $this->assign('currency', strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD')));
+        $this->assign('currency', strtoupper((string)\w_env('user.currency', 'USD')));
 
         return $this->fetch(self::CONTENT_TEMPLATE);
     }
@@ -80,7 +80,7 @@ class Shipping extends BaseController
     {
         $context = [
             'area' => 'frontend',
-            'currency' => strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD')),
+            'currency' => strtoupper((string)\w_env('user.currency', 'USD')),
         ];
 
         if ($customer && $customer->getId()) {
@@ -120,7 +120,7 @@ class Shipping extends BaseController
 
     protected function formatPrice(float $price, string $currency = ''): string
     {
-        $currency = $currency ?: strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD'));
+        $currency = $currency ?: strtoupper((string)\w_env('user.currency', 'USD'));
         if (class_exists(\NumberFormatter::class)) {
             $formatter = new \NumberFormatter(\Locale::getDefault() ?: 'en_US', \NumberFormatter::CURRENCY);
             return $formatter->formatCurrency($price, $currency);

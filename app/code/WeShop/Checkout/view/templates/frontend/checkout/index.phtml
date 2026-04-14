@@ -10,7 +10,7 @@ $countries = $this->getData('countries') ?? [];
 $isRetryPayment = (bool) ($this->getData('is_retry_payment') ?? false);
 $retryOrderId = (int) ($this->getData('retry_order_id') ?? 0);
 $retryOrderIncrementId = (string) ($this->getData('retry_order_increment_id') ?? '');
-$checkoutCurrency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD'));
+$checkoutCurrency = strtoupper((string)\w_env('user.currency', 'USD'));
 ?>
 <w:hook name="WeShop_Checkout::page::before"/>
 

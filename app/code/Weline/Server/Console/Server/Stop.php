@@ -217,7 +217,6 @@ class Stop extends CommandAbstract
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
-            $this->cleanupAllWlsProcesses($name);
             $this->printer->success(__('实例文件已清理 ✓'));
             return;
         }
@@ -237,7 +236,6 @@ class Stop extends CommandAbstract
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
-            $this->cleanupAllWlsProcesses($name);
             echo "\n";
             $this->printer->success(__('实例 [%{1}] 已停止（快速清场） ✓', [$name]));
             $this->printGoodbye(true);
@@ -261,7 +259,6 @@ class Stop extends CommandAbstract
             $manager->deleteInstance($name);
             $this->cleanupPidFiles($name, $instanceInfo);
             $this->releaseStartLock($name);
-            $this->cleanupAllWlsProcesses($name);
             echo "\n";
             $this->printer->success(\sprintf('Instance [%s] stopped (bootstrap cleanup).', $name));
             return;
@@ -294,9 +291,6 @@ class Stop extends CommandAbstract
         // 释放启动锁
         $this->releaseStartLock($name);
         
-        // 最后按名前缀再扫一遍，确保该实例下所有 weline-wls 进程已退出（含未登记或逃逸进程）
-        $this->cleanupAllWlsProcesses($name);
-
         echo "\n";
         $this->printer->success(__('实例 [%{1}] 已停止 ✓', [$name]));
 
@@ -450,13 +444,45 @@ class Stop extends CommandAbstract
     protected function runResidualCleanupPair(string $name, ServerInstanceInfo $info): void
     {
         $this->printer->note(__('清理残留进程...'));
+
+        // 1) 先按已知 PID（实例信息 + PID 索引）直接终止
         $pids = \array_merge(
             $this->collectResidualPidsByInfo($info),
             $this->collectIndexedResidualPids($name)
         );
-        $k = $this->terminateResidualProcesses($pids, true);
-        if ($k > 0) {
-            $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$k]));
+        $killedByPid = $this->terminateResidualProcesses($pids, true);
+        $remainingByPid = $this->collectRunningResidualPids($pids);
+
+        $killedByPrefix = 0;
+        // 2) 仅在按 PID 后仍有存活，或压根拿不到 PID 时，再执行按前缀兜底（Windows 上可显著减少慢扫描）
+        if (!empty($remainingByPid) || empty($pids)) {
+            $prefixes = [
+                MasterProcess::getMasterProcessName($name),
+                MasterProcess::buildScopedProcessName('weline-wls-dispatcher', $name),
+                MasterProcess::buildScopedProcessName('weline-wls-session', $name),
+                MasterProcess::buildScopedProcessName('weline-wls-memory', $name),
+                MasterProcess::buildScopedProcessName(MasterProcess::HTTP_REDIRECT_PROCESS_NAME, $name),
+                MasterProcess::buildScopedProcessName('weline-wls-worker', $name) . '-',
+                MasterProcess::buildScopedProcessName('weline-wls-maintenance', $name) . '-',
+                // 历史命名兼容
+                'weline-wls-dispatcher-' . $name,
+                'weline-wls-session-' . $name,
+                'weline-wls-memory-' . $name,
+                MasterProcess::HTTP_REDIRECT_PROCESS_NAME . '-' . $name,
+                'weline-wls-worker-' . $name . '-',
+                'weline-master-' . $name . '-worker-',
+            ];
+
+            foreach ($prefixes as $prefix) {
+                $killedByPrefix += Processer::killByProcessNamePrefix($prefix);
+            }
+        }
+
+        Processer::cleanupStalePidFiles();
+
+        $totalKilled = $killedByPid + $killedByPrefix;
+        if ($totalKilled > 0) {
+            $this->printer->success(__('  清理了 %{1} 个进程 ✓', [$totalKilled]));
         } else {
             $this->printer->note(__('  无残留进程'));
         }
@@ -1125,6 +1151,31 @@ class Stop extends CommandAbstract
         return $processed;
     }
 
+    /**
+     * @param array<int> $pids
+     * @return array<int>
+     */
+    private function collectRunningResidualPids(array $pids): array
+    {
+        $uniquePids = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $pids),
+            static fn (int $pid): bool => $pid > 0
+        )));
+        if (empty($uniquePids)) {
+            return [];
+        }
+
+        $processInfo = Processer::batchGetProcessInfo($uniquePids);
+        $running = [];
+        foreach ($uniquePids as $pid) {
+            if ((bool) ($processInfo[$pid]['exists'] ?? false)) {
+                $running[] = $pid;
+            }
+        }
+
+        return $running;
+    }
+
     private function isWindowsPlatform(): bool
     {
         return \strtoupper(\substr(PHP_OS, 0, 3)) === 'WIN';
@@ -1180,19 +1231,6 @@ class Stop extends CommandAbstract
         }
     }
     
-    /**
-     * 清理所有 weline-wls 前缀的残留进程
-     * 
-     * 使用快速的 PID 文件查找方式，避免 Windows 上的慢速系统调用
-     */
-    protected function cleanupAllWlsProcesses(string $instanceName): void
-    {
-        $totalKilled = $this->terminateResidualProcesses($this->collectIndexedResidualPids($instanceName), true);
-        
-        if ($totalKilled > 0) {
-            $this->printer->note(__('清理了 %{1} 个残留 WLS 进程', [$totalKilled]));
-        }
-    }
 
     private function findConfiguredRunningInstanceNameByPort(int $port): ?string
     {

@@ -1644,11 +1644,11 @@ class Model extends BackendController
         if (isset($this->request)) {
             $id = (int)$this->request->getParam('id');
         }
-        if (!$id && isset($_GET['id'])) {
-            $id = (int)$_GET['id'];
+        if (!$id) {
+            $id = (int)\w_env_get('id', 0);
         }
-        if (!$id && isset($_POST['id'])) {
-            $id = (int)$_POST['id'];
+        if (!$id) {
+            $id = (int)\w_env_post('id', 0);
         }
 
         if (!$id) {

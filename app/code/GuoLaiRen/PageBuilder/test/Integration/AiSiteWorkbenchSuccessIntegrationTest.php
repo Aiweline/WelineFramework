@@ -70,6 +70,13 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
 
         self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
 
+        $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
+        self::assertSame(
+            1,
+            (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0),
+            'Confirmed plan state should be visible before build starts.'
+        );
+
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',
@@ -469,6 +476,53 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         self::assertContains(Page::TYPE_ABOUT, $pts, 'about_page should be merged into scope when user switches preview to it');
     }
 
+    public function testStartBuildRequiresConfirmedPlanFirst(): void
+    {
+        $createPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-create-session',
+            'POST',
+            'postCreateSession'
+        );
+        self::assertTrue((bool)($createPayload['success'] ?? false), \json_encode($createPayload, \JSON_UNESCAPED_UNICODE));
+        $publicId = (string)($createPayload['public_id'] ?? '');
+        self::assertNotSame('', $publicId);
+
+        $scopePatch = [
+            'site_title' => 'Plan gate test',
+            'site_tagline' => 'Build must wait for confirm',
+            'target_domain' => 'plan-gate.local.test',
+            'brief_description' => 'Verify build is blocked before plan confirmation.',
+            'user_description' => 'Verify build is blocked before plan confirmation.',
+            'page_types' => [Page::TYPE_HOME],
+        ];
+
+        $mergePayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-merge-scope',
+            'POST',
+            'postMergeScope',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $startBuildPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-build',
+            'POST',
+            'postStartBuild',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+
+        self::assertFalse((bool)($startBuildPayload['success'] ?? true), \json_encode($startBuildPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertSame('PLAN_REQUIRED_BEFORE_BUILD', (string)($startBuildPayload['code'] ?? ''));
+    }
+
     /**
      * @return array{
      *   public_id:string,
@@ -516,6 +570,9 @@ class AiSiteWorkbenchSuccessIntegrationTest extends AbstractAiSiteWorkbenchInteg
         );
 
         self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
+
+        $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
+        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
 
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
