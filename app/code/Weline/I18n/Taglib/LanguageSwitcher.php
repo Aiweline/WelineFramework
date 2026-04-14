@@ -131,7 +131,7 @@ class LanguageSwitcher implements TaglibInterface
                 if ($renderFor === 'js') {
                     $html[] = '        <a href="javascript:void(0);" data-language-option="1" data-lang="' . $safeCode . '" data-search="' . $searchText . '" class="dropdown-item notify-item language-option weline-language-option' . $active . '">';
                 } else {
-                    $html[] = '        <a href="javascript:void(0);" onclick="select_language(\'' . $safeCode . '\');" data-search="' . $searchText . '" class="dropdown-item notify-item weline-language-option' . $active . '">';
+                    $html[] = '        <a href="javascript:void(0);" data-language-option="1" data-lang="' . $safeCode . '" data-search="' . $searchText . '" class="dropdown-item notify-item weline-language-option' . $active . '">';
                 }
                 $html[] = '            ' . $flag . '<span class="align-middle"> ' . $name . '</span>';
                 $html[] = '        </a>';
@@ -150,6 +150,39 @@ class LanguageSwitcher implements TaglibInterface
             $html[] = 'root.addEventListener("shown.bs.dropdown",function(){input.value="";filter();setTimeout(function(){try{input.focus();}catch(e){}},10);});';
             $html[] = 'root.addEventListener("hidden.bs.dropdown",function(){input.value="";filter();});';
             $html[] = 'filter();';
+            $html[] = '})();</script>';
+            $html[] = '<script>(function(){';
+            $html[] = 'var root=document.querySelector(\'[data-i18n-switcher-id="' . $switcherId . '"]\');if(!root){return;}';
+            $html[] = 'if(root.dataset.welineDropdownFixBound==="1"){return;}root.dataset.welineDropdownFixBound="1";';
+            $html[] = 'var btn=root.querySelector(\'[data-bs-toggle="dropdown"]\');if(!btn){return;}';
+            $html[] = 'btn.addEventListener("click",function(){';
+            $html[] = 'setTimeout(function(){';
+            $html[] = 'try{';
+            $html[] = 'if(btn.getAttribute("aria-expanded")==="true"){return;}';
+            $html[] = 'if(!window.bootstrap||!window.bootstrap.Dropdown){return;}';
+            $html[] = 'var Dropdown=window.bootstrap.Dropdown;var config={autoClose:true};';
+            $html[] = 'var instance=null;';
+            $html[] = 'if(typeof Dropdown.getOrCreateInstance==="function"){instance=Dropdown.getOrCreateInstance(btn,config);}';
+            $html[] = 'else if(typeof Dropdown.getInstance==="function"){instance=Dropdown.getInstance(btn)||new Dropdown(btn,config);}';
+            $html[] = 'else{instance=new Dropdown(btn,config);}';
+            $html[] = 'instance.toggle();';
+            $html[] = '}catch(e){}';
+            $html[] = '},0);';
+            $html[] = '});';
+            $html[] = '})();</script>';
+            $html[] = '<script>(function(){';
+            $html[] = 'var root=document.querySelector(\'[data-i18n-switcher-id="' . $switcherId . '"]\');if(!root){return;}';
+            $html[] = 'function buildLangHref(lang){var currentPath=window.location.pathname+window.location.search;if(typeof window.urlWithLang==="function"){return window.urlWithLang(currentPath,lang);}if(typeof window.inject_path==="function"){var po=currentPath.split("?")[0];var s=currentPath.indexOf("?")>-1?currentPath.split("?")[1]:"";return window.inject_path(po,lang,"lang")+(s?("?"+s):"");}return"";}';
+            $html[] = 'root.querySelectorAll("[data-language-option]").forEach(function(opt){';
+            $html[] = 'var code=opt.getAttribute("data-lang")||"";if(!code){return;}';
+            $html[] = 'var href=buildLangHref(code);if(href){opt.setAttribute("href",href);}';
+            $html[] = 'if(opt.dataset.welineLangBound==="1"){return;}opt.dataset.welineLangBound="1";';
+            $html[] = 'opt.addEventListener("click",function(event){';
+            $html[] = 'event.preventDefault();';
+            $html[] = 'if(typeof window.select_language==="function"){window.select_language(code);return;}';
+            $html[] = 'var target=opt.getAttribute("href")||href||buildLangHref(code);if(target){window.location.href=target;}';
+            $html[] = '});';
+            $html[] = '});';
             $html[] = '})();</script>';
             if ($renderFor === 'js') {
                 $html[] = '<script>(function(){';
