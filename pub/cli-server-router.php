@@ -28,13 +28,19 @@
  * php -S 127.0.0.1:9981
  */
 
-// 仅在 PHP CLI Server 环境下执行
-if (php_sapi_name() !== 'cli-server') {
+// 仅在 Web SAPI 下执行路径映射：
+// - PHP 内置服务器（cli-server）需要此文件模拟 Nginx 的 alias
+// - FPM/CGI/Apache 模块下若请求落到 pub/index.php（例如未单独配置 static 的 try_files），也必须在此直出文件
+// 排除纯 CLI（php bin/w、PHPUnit 等），避免非 HTTP 环境误执行 header/readfile
+$webSapis = ['cli-server', 'fpm-fcgi', 'cgi-fcgi', 'apache2handler', 'litespeed'];
+if (!in_array(php_sapi_name(), $webSapis, true)) {
     return;
 }
 
 $requestUri = $_SERVER['REQUEST_URI'] ?? '';
-$path = parse_url($requestUri, PHP_URL_PATH);
+$pathRaw = parse_url($requestUri, PHP_URL_PATH);
+// FPM 下部分网关/代理的 REQUEST_URI 会导致 PATH 为 null；str_contains/strpos 传 null 在 PHP 8+ 会抛错，必须先归一成字符串
+$path = \is_string($pathRaw) ? $pathRaw : '';
 
 // 定义需要映射的路径规则
 // 格式：[路径前缀 => 映射到的目录]

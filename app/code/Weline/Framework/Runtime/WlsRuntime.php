@@ -154,20 +154,18 @@ class WlsRuntime implements RuntimeInterface
             $this->bootstrap();
         }
 
-        Context::enter($request !== null
-            ? Context::fromRequest($request, [
-                'mode' => self::MODE_WLS,
-                'type' => 'request',
-                'instance' => (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? ''),
-                'process_tag' => (string)($_SERVER['WLS_PROCESS_TAG'] ?? 'WLS'),
-            ])
-            : Context::fromGlobals([
-                'mode' => self::MODE_WLS,
-                'type' => 'request',
-                'instance' => (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? ''),
-                'process_tag' => (string)($_SERVER['WLS_PROCESS_TAG'] ?? 'WLS'),
-            ])
-        );
+        if ($request === null) {
+            throw new \LogicException('WLS: WlsRuntime::handle() requires a Request instance for fiber-local context isolation.');
+        }
+
+        Context::enter(Context::fromRequest($request, [
+            'mode' => RuntimeInterface::MODE_WLS,
+            'type' => 'request',
+            'instance' => (string)($_SERVER['WLS_INSTANCE_NAME'] ?? $_SERVER['WLS_INSTANCE'] ?? ''),
+            'process_tag' => (string)($_SERVER['WLS_PROCESS_TAG'] ?? 'WLS'),
+        ]));
+
+        $app = new App();
 
         $globalsEmulator = null;
         
@@ -248,7 +246,6 @@ class WlsRuntime implements RuntimeInterface
             }
             $_SERVER['WLS_REQUEST_COUNT'] = $this->requestCount;
             Context::current()->set('runtime.request_count', $this->requestCount);
-            $app = new App(Context::current(), false);
             $app->bootstrapRequestCycle();
             $timing['uri'] = ($_SERVER['REQUEST_URI'] ?? '') ?: '/';
             WelineEnv::set('request.uri', $timing['uri'], 'WlsRuntime handle');
