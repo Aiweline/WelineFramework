@@ -68,7 +68,9 @@ if ((string) $logoHook !== '') {
                 </div>
             </div>
 
+            <!-- 语言选择 start-->
             <w:i18n:language:switcher />
+            <!-- 语言选择 end -->
 
             <button type="button"
                     class="btn header-item noti-icon waves-effect ms-1"
@@ -193,6 +195,13 @@ if ((string) $logoHook !== '') {
                 return;
             }
 
+            var Dropdown = window.bootstrap.Dropdown;
+            // Bootstrap 新版会自动处理 data-bs-toggle="dropdown"，
+            // 这里仅在旧版缺失 getOrCreateInstance 时做兜底，避免拦截其它组件点击逻辑（如语言切换器）
+            if (Dropdown && typeof Dropdown.getOrCreateInstance === 'function') {
+                return;
+            }
+
             var triggers = topbar.querySelectorAll('[data-bs-toggle="dropdown"]');
             triggers.forEach(function (trigger) {
                 if (trigger.dataset.welineDropdownBound === '1') {
@@ -202,10 +211,17 @@ if ((string) $logoHook !== '') {
 
                 trigger.addEventListener('click', function (event) {
                     event.preventDefault();
-                    event.stopPropagation();
-                    var instance = window.bootstrap.Dropdown.getOrCreateInstance(trigger, {
-                        autoClose: true
-                    });
+                    var config = {autoClose: true};
+
+                    var instance = null;
+                    if (Dropdown && typeof Dropdown.getInstance === 'function') {
+                        instance = Dropdown.getInstance(trigger);
+                        if (!instance) {
+                            instance = new Dropdown(trigger, config);
+                        }
+                    } else {
+                        instance = new Dropdown(trigger, config);
+                    }
                     instance.toggle();
                 });
             });
