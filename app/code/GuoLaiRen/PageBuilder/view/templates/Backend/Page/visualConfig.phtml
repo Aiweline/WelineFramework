@@ -6,7 +6,7 @@
  */
 $page = $this->getData('page');
 $pageId = $page && $page->getId() ? $page->getId() : 0;
-$virtualThemeId = (int) ($this->getData('visual_config_virtual_theme_id') ?: ($_GET['virtual_theme_id'] ?? 0));
+$virtualThemeId = (int) ($this->getData('visual_config_virtual_theme_id') ?: \w_env_get('virtual_theme_id', 0));
 $styleSettings = $page ? $page->getStyleSettings() : [];
 ?>
 

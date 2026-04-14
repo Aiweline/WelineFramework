@@ -9,7 +9,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWorkbenchIntegrationHarness
 {
-    public function testWorkspaceAutoContinuesPendingTasksWithoutConfirmationDialog(): void
+    public function testWorkspacePromptsBeforeContinuingPendingTasksOrObservingRunningOperation(): void
     {
         $createPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-create-session',
@@ -33,13 +33,15 @@ final class AiSiteWorkbenchPendingResumeIntegrationTest extends AbstractAiSiteWo
         $html = $controller->workspace();
 
         self::assertIsString($html);
-        self::assertStringContainsString('function maybeAutoStartBuildAfterWorkspaceSnapshot(data)', $html);
-        self::assertStringContainsString('return executeAutoStartBuildAfterWorkspaceSnapshot(data);', $html);
-        self::assertStringNotContainsString(
-            'BackendConfirm.show',
-            $html,
-            'Entering the workspace should auto-continue unfinished build tasks instead of blocking on a confirmation dialog.'
-        );
-        self::assertStringNotContainsString('检测到未完成任务，是否继续生成？', $html);
+        self::assertStringContainsString('function startPlanGenerationForSelection(triggerBtn, selectedTypes)', $html);
+        self::assertStringContainsString('function confirmCurrentPlanAndMaybeBuild()', $html);
+        self::assertStringContainsString('id="pb-ai-confirm-plan"', $html);
+        self::assertStringContainsString('function maybePromptWorkspaceContinuation(data)', $html);
+        self::assertStringContainsString('function requestExplicitResumeBuild()', $html);
+        self::assertStringContainsString("showWorkspaceResumeConfirm(messages.resumePendingPrompt)", $html);
+        self::assertStringContainsString("showWorkspaceResumeConfirm(messages.resumeRunningPrompt)", $html);
+        self::assertStringContainsString('BackendConfirm.show(message, {', $html);
+        self::assertStringNotContainsString('function maybeAutoStartBuildAfterWorkspaceSnapshot(data)', $html);
+        self::assertStringNotContainsString('autoResumeActiveOperation', $html);
     }
 }

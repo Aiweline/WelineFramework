@@ -24,6 +24,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
 use Weline\Framework\Router\Core as Router;
@@ -37,41 +38,32 @@ class App
 
     private static Env $_env;
 
-    private ?Context $context = null;
+    private Context $context;
 
-    private bool $ownsContext = false;
-
-    public function __construct(?Context $context = null, bool $ownsContext = true)
+    /**
+     * App 不再负责创建请求上下文。
+     * 上下文必须由 Runtime 在构造 App 之前完成 Context::enter()。
+     */
+    public function __construct()
     {
-        if ($context !== null) {
-            $this->context = $context;
-            Context::enter($context);
-            $this->ownsContext = $ownsContext;
+        $current = Context::getCurrent();
+        if ($current === null) {
+            throw new \LogicException('Runtime must enter Context before constructing App');
         }
+        $this->context = $current;
     }
 
-    public function __destruct()
-    {
-        if ($this->ownsContext && Context::getCurrent() === $this->context) {
-            Context::leave();
-        }
-    }
-
-    public function getContext(): ?Context
+    public function getContext(): Context
     {
         return $this->context;
     }
 
     public function dispatch(): Response
     {
-        try {
-            return Response::normalize(
-                $this->runPipeline(),
-                ObjectManager::getInstance(Response::class)
-            );
-        } catch (ResponseTerminateException $e) {
-            return $e->getResponse();
-        }
+        return Response::normalize(
+            $this->runPipeline(),
+            ObjectManager::getInstance(Response::class)
+        );
     }
 
     public function runResponse(): Response
@@ -140,12 +132,13 @@ class App
 
         $area = (string)($parse['area'] ?? $parse['server']['WELINE_AREA'] ?? $server['WELINE_AREA'] ?? '');
         $isBackendArea = $area === 'backend' || $area === 'rest_backend';
-
+        WelineEnv::set('route.is_backend', $isBackendArea, 'App applyParsedUrl');
         if (isset($parse['uri'])) {
             $uri = Url::decode_url((string)$parse['uri']);
-            if (!$isBackendArea) {
-                $parse['server']['REQUEST_URI'] = $uri;
-            }
+            // 必须始终把 parser 产出的 uri 写回 REQUEST_URI。
+            // 否则 backend 场景会保留旧 URI（含 backend key 前缀），
+            // 导致后续 w_env('request.uri') / Router 读取到错误路径并 404。
+            $parse['server']['REQUEST_URI'] = $uri;
             $parse['server']['QUERY_STRING'] = Url::parse_url($uri, 'query');
         }
 
@@ -157,7 +150,6 @@ class App
 
         foreach ($parse['server'] as $key => $value) {
             Context::current()->set('input.server.' . $key, $value);
-            $_SERVER[$key] = $value;
         }
 
         if ($area !== '') {
@@ -172,16 +164,25 @@ class App
         }
 
         $welineArea = (string)WelineEnv::get('area', 'frontend');
-        WelineEnv::set('is_backend', $welineArea === 'backend' || $welineArea === 'rest_backend', 'App applyParsedUrl');
+        $isBackend = $welineArea === 'backend' || $welineArea === 'rest_backend';
+        // 关键：syncCurrentContextFromGlobals() 会基于 input.server 重建 Context，
+        // 若 parse['server'] 缺少 WELINE_IS_BACKEND，会把 route.is_backend 回写为 false。
+        // 这里在回写前显式补齐该标记，确保后续 Router::__init() 读取一致。
+        $parse['server']['WELINE_IS_BACKEND'] = $isBackend;
+        Context::current()->set('input.server.WELINE_IS_BACKEND', $isBackend);
+        WelineEnv::set('is_backend', $isBackend, 'App applyParsedUrl');
         WelineEnv::set('url_parsed', true, 'App applyParsedUrl');
 
-        $currentUri = Url::decode_url((string)WelineEnv::get('request.uri', '/'));
+        // 必须用 parser 已合并进 input.server 的 REQUEST_URI，不能读旧的 request.uri（WlsRuntime 预写会残留）。
+        $serverMerged = Context::current()->server();
+        $currentUri = Url::decode_url((string)($serverMerged['REQUEST_URI'] ?? '/'));
         if ($currentUri === '') {
             $currentUri = '/';
         }
         if (!\str_starts_with($currentUri, '/')) {
             $currentUri = '/' . $currentUri;
         }
+        WelineEnv::set('request.uri', $currentUri, 'App applyParsedUrl');
 
         $scheme = (string)WelineEnv::get('request.scheme', Context::current()->get('input.scheme', 'http'));
         $host = (string)WelineEnv::get('server.http_host', Context::current()->get('input.host', 'localhost'));
@@ -211,7 +212,7 @@ class App
             return;
         }
 
-        SessionFactory::getInstance()->createSession()->start(null);
+        SessionFactory::getInstance()->createSession()->start('');
     }
 
     public function runRouter(?Router $router = null): mixed
@@ -222,7 +223,7 @@ class App
             try {
                 return $router->start();
             } catch (\ReflectionException|App\Exception $e) {
-                throw new Exception(__('绯荤粺閿欒锛歿1}', $e->getMessage()));
+                throw new Exception(__('系统错误：%{1}', $e->getMessage()));
             }
         }
 
@@ -318,7 +319,7 @@ class App
             }
             // Web 环境下不允许启用测试模式
             // 注释掉以下代码，确保 Web 请求中不会启用测试
-            // if (!$enableTest && isset($_SERVER['WELINE_ENABLE_TEST']) && $_SERVER['WELINE_ENABLE_TEST'] === '1') {
+            // if (!$enableTest && Context::current()->get('input.server.WELINE_ENABLE_TEST') === '1') {
             //     $enableTest = true;
             // }
             define('ENV_TEST', $enableTest);
@@ -342,37 +343,38 @@ class App
         }
         // SERVER 整理
         if (self::isRequestRuntime()) {
-            $requestUri = (string)($_SERVER['REQUEST_URI'] ?? Context::getCurrent()?->get('input.uri', '/') ?? '/');
+            $context = Context::current();
+            $requestUri = (string)$context->get('input.server.REQUEST_URI', $context->get('input.uri', '/'));
             if ($requestUri === '') {
                 $requestUri = '/';
             }
-            $_SERVER['WELINE_ORIGIN_REQUEST_URI'] = $requestUri;
+            $context->set('input.server.WELINE_ORIGIN_REQUEST_URI', $requestUri);
             // 完整的地址拼接（包含端口）
-            $scheme = (string)($_SERVER['REQUEST_SCHEME'] ?? Context::getCurrent()?->get('input.scheme', 'http') ?? 'http');
+            $scheme = (string)$context->get('input.server.REQUEST_SCHEME', $context->get('input.scheme', 'http'));
             $host = (string)(
-                $_SERVER['HTTP_HOST']
-                ?? $_SERVER['SERVER_NAME']
-                ?? Context::getCurrent()?->get('input.host', '')
+                $context->get('input.server.HTTP_HOST')
+                ?? $context->get('input.server.SERVER_NAME')
+                ?? $context->get('input.host', '')
                 ?? ''
             );
-            $port = (string)($_SERVER['SERVER_PORT'] ?? '80');
+            $port = (string)$context->get('input.server.SERVER_PORT', '80');
             // 如果 HTTP_HOST 不包含端口，且端口不是默认端口，则添加端口
             if ($host !== '' && !str_contains($host, ':') && $port != '80' && $port != '443') {
                 $host .= ':' . $port;
             }
             if ($host !== '') {
-                $_SERVER['WELINE_FULL_REQUEST_URI'] = $scheme . '://' . $host . $requestUri;
+                $context->set('input.server.WELINE_FULL_REQUEST_URI', $scheme . '://' . $host . $requestUri);
             } else {
                 // WLS：GlobalsEmulator / processUrlParse 可能已写入完整 URI；避免 host 暂不可见时清空导致 FPC 键回退到 http://localhost/
-                $prior = (string)($_SERVER['WELINE_FULL_REQUEST_URI'] ?? '');
+                $prior = (string)$context->get('input.server.WELINE_FULL_REQUEST_URI', '');
                 if ($prior !== '' && str_contains($prior, '://')) {
                     // 保留
                 } else {
-                    $_SERVER['WELINE_FULL_REQUEST_URI'] = '';
+                    $context->set('input.server.WELINE_FULL_REQUEST_URI', '');
                 }
             }
         } else {
-            $_SERVER['WELINE_FULL_REQUEST_URI'] = '';
+            Context::current()->set('input.server.WELINE_FULL_REQUEST_URI', '');
         }
 
         // ############################# 应用相关配置 #####################
@@ -553,30 +555,20 @@ class App
     }
 
     /**
-     * 使用 FpmRuntime 运行框架（运行时抽象层入口）
-     * 
-     * 此方法使用 FpmRuntime 统一运行时接口，与 WLS 模式共享相同的抽象层
-     * 推荐在新项目中使用，或需要与 WLS 模式保持一致行为时使用
-     * 
+     * 运行时抽象层入口：Runtime::createRuntime() 按当前进程检测选用 WlsRuntime 或 FpmRuntime，再 bootstrap → handle → terminate。
+     *
      * @return string 响应内容
      * @throws Exception
      */
     public static function runWithRuntime(): string
     {
-        $runtime = new \Weline\Framework\Runtime\FpmRuntime();
+        $runtime = Runtime::createRuntime();
         $runtime->bootstrap();
-        
         try {
-            $result = $runtime->handle(null);
-            return $result;
+            return $runtime->handle();
         } finally {
             $runtime->terminate();
         }
-    }
-
-    private function runString(): string
-    {
-        return $this->runPipeline();
     }
 
     private function runPipeline(): mixed
@@ -587,13 +579,15 @@ class App
         if (RequestLifecycleTrace::isEnabled()) {
             RequestLifecycleTrace::pushCurrentParent('run_before');
         }
+        
         $this->dispatchRunBefore();
+
         if (RequestLifecycleTrace::isEnabled()) {
             RequestLifecycleTrace::popCurrentParent();
             RequestLifecycleTrace::recordSpan('run_before', (microtime(true) - $runBeforeStart) * 1000, 'framework');
         }
-
         $result = '';
+        
         if (self::isRequestRuntime()) {
             $urlParserStart = microtime(true);
             $parse = $this->parseUrl();
@@ -629,7 +623,7 @@ class App
         $resultStr = $this->normalizeOutput($result);
         return $this->broadcastTelemetry($resultStr, $this->resolveRequest());
     }
-    
+
     /**
      * @DESC         |框架应用运行
      *
@@ -646,149 +640,6 @@ class App
     {
         # ----------事件：run之前 开始------------
         return (new self())->runPipeline();
-
-        self::init();
-        self::syncCurrentContextFromGlobals();
-        $_SERVER['WELINE_PARSER_URL'] = true;  // 是否解析URL
-        $_SERVER['WELINE_IS_MEDIA'] = false;  // 是否媒体资源
-        // 唯一判断处：静态文件仅按 path 判断，其他处只读 WELINE_IS_STATIC_FILE
-        if (!CLI && !isset($_SERVER['WELINE_IS_STATIC_FILE'])) {
-            $reqPath = \parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-            $_SERVER['WELINE_IS_STATIC_FILE'] = weline_is_static_file_path($reqPath);
-            self::syncCurrentContextFromGlobals();
-        }
-
-        // 性能优化：延迟获取 EventsManager，只在需要时实例化
-        static $eventManager = null;
-        if ($eventManager === null) {
-            $eventManager = ObjectManager::getInstance(EventsManager::class);
-        }
-        
-        $runBeforeStart = microtime(true);
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::pushCurrentParent('run_before');
-        }
-        $eventManager->dispatch('Weline_Framework::App::run_before');
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan('run_before', (microtime(true) - $runBeforeStart) * 1000, 'framework');
-        }
-        $result = '';
-        # URL结构：[网站前缀]/{区域前缀}/{货币前缀}/{语言前缀}/[模组前缀]/[路由]，没有网站
-        if (!CLI) {
-            $urlParserStart = microtime(true);
-            $parse = null;
-            if ($_SERVER['WELINE_PARSER_URL']) {
-                $parse = Url::parser();
-            }
-
-            # url 重写 兼容原本携带的参数和当前重写原参数
-            if (is_array($parse)) {
-                if ($_SERVER['REQUEST_METHOD'] && isset($parse['uri'])) {
-                    $uri = Url::decode_url($parse['uri']);
-                    $parse['server']['REQUEST_URI'] = $uri;
-                    $parse['server']['QUERY_STRING'] = Url::parse_url($uri, 'query');
-                }
-                $_SERVER = $parse['server'];
-                
-                // 根据 WELINE_AREA 设置后端标识，方便后续判断
-                $welineArea = $_SERVER['WELINE_AREA'] ?? '';
-                $_SERVER['WELINE_IS_BACKEND'] = ($welineArea === 'backend' || $welineArea === 'rest_backend');
-                // 标记 URL 解析已完成（用于 CheckFullPageCache 判断）
-                $_SERVER['WELINE_URL_PARSED'] = true;
-                
-                if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
-                    $default_cookies = [
-                        'WELINE_USER_LANG',
-                        'WELINE_USER_CURRENCY',
-                        'WELINE_WEBSITE_ID',
-                        'WELINE_WEBSITE_CODE',
-                        'WELINE_WEBSITE_URL',
-                    ];
-                    if ($parse['currency']) {
-                        $_SERVER['WELINE_USER_CURRENCY'] = $parse['currency'];
-                    }
-                    if ($parse['language']) {
-                        $_SERVER['WELINE_USER_LANG'] = $parse['language'];
-                    }
-                    // 性能优化：批量检查并设置 Cookie，减少 Cookie::set 调用次数
-                    $cookiesToSet = [];
-                    foreach ($default_cookies as $key) {
-                        if (!isset($_SERVER[$key])) {
-                            if (in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true)) {
-                                $_SERVER[$key] = '';
-                            } else {
-                                throw new Exception(__('系统SERVER缺少key：%{1}', $key));
-                            }
-                        }
-                        // 只在值发生变化时设置 Cookie（减少不必要的 Cookie 操作）
-                        $currentCookieValue = Cookie::get($key);
-                        if ($currentCookieValue !== $_SERVER[$key]) {
-                            $cookiesToSet[$key] = $_SERVER[$key];
-                        }
-                    }
-                    // 批量设置 Cookie
-                    foreach ($cookiesToSet as $key => $value) {
-                        Cookie::set($key, $value, 3600 * 24 * 30, []);
-                    }
-                }
-                
-                // URL 解析后，再次检查全页缓存（此时 WELINE_IS_BACKEND 已设置）
-                if (PROD && !($_SERVER['WELINE_IS_BACKEND'] ?? false)) {
-                    $eventManager->dispatch('Weline_Framework::App::url_parsed_after');
-                }
-                self::syncCurrentContextFromGlobals();
-            }
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::recordSpan('url_parser', (microtime(true) - $urlParserStart) * 1000, 'framework');
-            }
-            // 请求早期统一启动 Session（从 Cookie + 存储加载），供各区域（后台/前台等）复用；静态资源不启动
-
-            if (empty($_SERVER['WELINE_IS_STATIC_FILE'])) {
-                SessionFactory::getInstance()->createSession()->start(null);
-            }
-            $routerStartBegin = microtime(true);
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::pushCurrentParent('router_start');
-            }
-            if (PROD) {
-                try {
-                    $result = ObjectManager::getInstance(\Weline\Framework\Router\Core::class)->start();
-                } catch (\ReflectionException|App\Exception $e) {
-                    throw new Exception(__('系统错误：%{1}', $e->getMessage()));
-                }
-            } else {
-                $result = ObjectManager::getInstance(\Weline\Framework\Router\Core::class)->start();
-            }
-            if (RequestLifecycleTrace::isEnabled()) {
-                RequestLifecycleTrace::popCurrentParent();
-                RequestLifecycleTrace::recordSpan('router_start', (microtime(true) - $routerStartBegin) * 1000, 'framework');
-            }
-        }
-        $runAfterStart = microtime(true);
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::pushCurrentParent('run_after');
-        }
-        $data = new DataObject(['result' => $result]);
-        $eventManager->dispatch('Weline_Framework::App::run_after', $data);
-        $result = $data->getData('result');
-        if (RequestLifecycleTrace::isEnabled()) {
-            RequestLifecycleTrace::popCurrentParent();
-            RequestLifecycleTrace::recordSpan('run_after', (microtime(true) - $runAfterStart) * 1000, 'framework');
-        }
-        if ($result instanceof Response) {
-            $result = self::absorbResponseObject($result);
-        }
-        if(is_array($result)) {
-            $result = json_encode($result);
-            // 使用 ResponseTerminateException 替代 die()，由 Runtime 层统一处理
-            throw new \Weline\Framework\Http\ResponseTerminateException(200, $result, ['Content-Type' => 'application/json']);
-        }
-        $resultStr = (string) $result;
-        // 仅广播遥测事件，具体注入/展示由监听者模块处理（Framework 与上层模块解耦）
-        $resultStr = TelemetryBroadcaster::broadcast($resultStr);
-        // 返回结果，由调用方（index.php 或 Runtime）决定如何处理
-        return $resultStr;
     }
 
     /**
@@ -882,7 +733,7 @@ class App
                 $value = \in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true) ? '' : null;
             }
             if ($value === null) {
-                throw new Exception(__('绯荤粺SERVER缂哄皯key锛歿1}', $key));
+                throw new Exception(__('系统错误：%{1}', $key));
             }
 
             $value = (string)$value;
@@ -937,12 +788,13 @@ class App
             return;
         }
 
+        $context = Context::current();
         WelineEnv::getInstance()->initFromSnapshot(
-            \is_array($_GET ?? null) ? $_GET : [],
-            \is_array($_POST ?? null) ? $_POST : [],
-            \is_array($_COOKIE ?? null) ? $_COOKIE : [],
-            \is_array($_FILES ?? null) ? $_FILES : [],
-            \is_array($_SERVER ?? null) ? $_SERVER : [],
+            \is_array($context->get('input.query')) ? $context->get('input.query') : [],
+            \is_array($context->get('input.post')) ? $context->get('input.post') : [],
+            \is_array($context->get('input.cookie')) ? $context->get('input.cookie') : [],
+            \is_array($context->get('input.files')) ? $context->get('input.files') : [],
+            \is_array($context->get('input.server')) ? $context->get('input.server') : [],
         );
     }
 

@@ -69,7 +69,7 @@ class License extends BackendController
                     'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [
                         'license_key' => $licenseKey,
-                        'domain' => $domain ?: $_SERVER['HTTP_HOST'],
+                        'domain' => $domain ?: (string)\w_env('server.http_host', ''),
                     ],
                 ]
             );
@@ -134,7 +134,7 @@ class License extends BackendController
                     'headers' => ['Authorization' => 'Bearer ' . $token],
                     'json' => [
                         'license_key' => $licenseKey,
-                        'domain' => $_SERVER['HTTP_HOST'],
+                        'domain' => (string)\w_env('server.http_host', ''),
                     ],
                 ]
             );

@@ -25,7 +25,7 @@ $includedTax = (float) ($tax_breakdown['included_tax'] ?? 0.0);
 $chargeableTax = (float) ($tax_breakdown['chargeable_tax'] ?? 0.0);
 $applyToShipping = (bool) ($tax_breakdown['apply_to_shipping'] ?? false);
 $pricesIncludeTax = (bool) ($tax_breakdown['prices_include_tax'] ?? false);
-$currency = strtoupper((string) ($_SERVER['WELINE_USER_CURRENCY'] ?? 'USD'));
+$currency = strtoupper((string)\w_env('user.currency', 'USD'));
 ?>
 <style>
     .tax-info-page {

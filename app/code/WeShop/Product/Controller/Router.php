@@ -101,9 +101,14 @@ class Router implements RouterInterface
         // 7. 重写路由到产品查看控制器
         $path = 'product/frontend/product/view';
         $rule['module'] = 'WeShop_Product';
-        $_GET['id'] = $productId;
-        $_GET['product_id'] = $productId;
-        $_GET['handle'] = $productHandle;
+        self::setQueryParam('id', $productId);
+        self::setQueryParam('product_id', $productId);
+        self::setQueryParam('handle', $productHandle);
+    }
+
+    private static function setQueryParam(string $key, mixed $value): void
+    {
+        \Weline\Framework\Context::current()->set('input.query.' . $key, $value);
     }
     
     /**
