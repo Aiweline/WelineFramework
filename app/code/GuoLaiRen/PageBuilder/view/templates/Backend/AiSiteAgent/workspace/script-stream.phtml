@@ -17,8 +17,10 @@
     }
     
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
+    var planTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-plan-sse-terminal'] : null;
     var publicId = <?= \json_encode(($publicId ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = <?= \json_encode(($streamSseUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var streamStageCode = 'plan';
     var lastEventId = <?= (int)($initialLastEventId ?? 0) ?>;
     var seenEventIds = [];
     var seenEventIdMap = Object.create(null);
@@ -57,6 +59,82 @@
         return;
     }
 
+    function mirrorToPlanTerminal(message, level, payload) {
+        if (!planTerminal || typeof planTerminal.log !== 'function') {
+            return;
+        }
+        var text = String(message || '');
+        if (text === '') {
+            return;
+        }
+        var planTerminalStatusEl = document.getElementById('pb-ai-plan-sse-terminal_status');
+        if (planTerminalStatusEl) {
+            planTerminalStatusEl.textContent = '<?= __('已连接') ?>';
+        }
+        try {
+            planTerminal.log(text, level || 'info', payload && typeof payload === 'object' ? payload : undefined);
+        } catch (error) {
+            // ignore mirror errors to avoid breaking workspace stream
+        }
+    }
+
+    var planTypingBuffer = '';
+    var planTypingFlushTimer = null;
+    var planTypingChunkCount = 0;
+    var planMarkdownStreamBuffer = '';
+
+    function appendPlanMarkdownChunk(rawChunk) {
+        var chunk = String(rawChunk || '');
+        if (chunk === '') {
+            return;
+        }
+        planMarkdownStreamBuffer += chunk;
+        var existing = '';
+        var mdEl = document.getElementById('pb-ai-plan-md-content');
+        if (mdEl && typeof mdEl.textContent === 'string') {
+            existing = String(mdEl.textContent || '');
+        }
+        if (typeof window.updatePlanModalContent === 'function') {
+            window.updatePlanModalContent(existing + chunk);
+        } else if (mdEl) {
+            mdEl.textContent = existing + chunk;
+        }
+    }
+
+    function flushPlanTypingBuffer(force) {
+        if (planTypingFlushTimer) {
+            window.clearTimeout(planTypingFlushTimer);
+            planTypingFlushTimer = null;
+        }
+        var text = String(planTypingBuffer || '');
+        if (!text) {
+            return;
+        }
+        var shouldFlush = !!force
+            || /[\n\r。！？!?]$/.test(text)
+            || text.length >= 48
+            || planTypingChunkCount >= 18;
+        if (!shouldFlush) {
+            planTypingFlushTimer = window.setTimeout(function () {
+                flushPlanTypingBuffer(true);
+            }, 180);
+            return;
+        }
+        mirrorToPlanTerminal(text, 'chunk', { event_type: 'plan_chunk' });
+        planTypingBuffer = '';
+        planTypingChunkCount = 0;
+    }
+
+    function appendPlanTypingChunk(rawChunk) {
+        var chunk = String(rawChunk || '');
+        if (!chunk) {
+            return;
+        }
+        planTypingBuffer += chunk;
+        planTypingChunkCount += 1;
+        flushPlanTypingBuffer(false);
+    }
+
     function parseSsePayload(event) {
         if (!event || typeof event.data !== 'string' || event.data === '') {
             return {};
@@ -68,6 +146,9 @@
         try {
             var requestUrl = new URL(streamBaseUrl, window.location.origin);
             requestUrl.searchParams.set('public_id', publicId);
+            if (streamStageCode) {
+                requestUrl.searchParams.set('stage', streamStageCode);
+            }
             if (workspaceStreamTabToken) {
                 requestUrl.searchParams.set('tab_token', workspaceStreamTabToken);
             }
@@ -80,6 +161,9 @@
         } catch (error) {
             var separator = streamBaseUrl.indexOf('?') >= 0 ? '&' : '?';
             var url = streamBaseUrl + separator + 'public_id=' + encodeURIComponent(publicId);
+            if (streamStageCode) {
+                url += '&stage=' + encodeURIComponent(streamStageCode);
+            }
             url += '&tab_token=' + encodeURIComponent(workspaceStreamTabToken || '');
             if (lastEventId > 0) {
                 url += '&last_event_id=' + encodeURIComponent(String(lastEventId));
@@ -149,6 +233,26 @@
         return stageLabel ? (stageLabel + ': ' + message) : message;
     }
 
+    function formatPlanMirrorLog(entry) {
+        var payload = entry && entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
+        var eventType = String(entry && entry.event_type ? entry.event_type : '');
+        var operation = String(payload.operation || entry.operation || '');
+        var message = String(payload.message || entry.message || eventType || '').trim();
+        var isPlanEvent = operation === 'plan'
+            || eventType === 'plan_chunk'
+            || eventType === 'plan_generated'
+            || eventType === 'plan_refined'
+            || eventType === 'plan_rebuilt';
+        if (isPlanEvent) {
+            // 终端以方案正文为主，过滤“开始/进度”类提示文案，避免刷屏。
+            if (eventType === 'operation_started' || eventType === 'operation_progress') {
+                return '';
+            }
+            return message;
+        }
+        return '';
+    }
+
     function rememberEventId(eventId) {
         if (!eventId || seenEventIdMap[eventId]) {
             return;
@@ -180,6 +284,7 @@
 
     terminal.on('snapshot', function (event) {
         var data = parseSsePayload(event);
+        mirrorToPlanTerminal('<?= __('已连接共享事件流') ?>', 'start', data);
         workspaceReconnectDelayMs = 1200;
         if (connectionStartTime) {
             connectionRetryCount = 0;
@@ -214,6 +319,7 @@
         if (!entry || typeof entry !== 'object') {
             return;
         }
+        var eventType = String(entry.event_type || '');
         var eventId = parseInt(entry.event_id || 0, 10) || 0;
         if (eventId > 0 && seenEventIdMap[eventId]) {
             return;
@@ -222,15 +328,38 @@
             lastEventId = eventId;
         }
         rememberEventId(eventId);
-        terminal.log(formatWorkspaceLog(entry), entry.level || 'info');
+        var workspaceMessage = formatWorkspaceLog(entry);
+        terminal.log(workspaceMessage, entry.level || 'info');
+        var operation = String((entry && entry.payload && entry.payload.operation) || entry.operation || '');
+        var isPlanEvent = operation === 'plan'
+            || eventType === 'plan_chunk'
+            || eventType === 'plan_generated'
+            || eventType === 'plan_refined'
+            || eventType === 'plan_rebuilt';
+        if (!isPlanEvent) {
+            return;
+        }
+        if (eventType === 'plan_chunk') {
+            var chunkText = String(entry.message || (entry.payload && entry.payload.message) || '');
+            appendPlanTypingChunk(chunkText);
+            appendPlanMarkdownChunk(chunkText);
+        } else {
+            flushPlanTypingBuffer(true);
+            var planMessage = formatPlanMirrorLog(entry);
+            if (planMessage) {
+                mirrorToPlanTerminal(planMessage, entry.level || 'info', entry);
+            }
+        }
 
         lastActivityTime = Date.now();
 
-        var eventType = String(entry.event_type || '');
         if (eventType === 'operation_started' || eventType === 'operation_progress') {
             hasActiveOperation = true;
         } else if (eventType === 'operation_completed' || eventType === 'operation_failed') {
             hasActiveOperation = false;
+        }
+        if (eventType === 'plan_generated' && window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
+            window.__pbWorkspaceApi.refreshWorkspaceStateFromServer();
         }
     });
 
@@ -244,7 +373,9 @@
         }
         suppressTransportErrorUntil = Date.now() + 1500;
         if (data && data.message) {
+            flushPlanTypingBuffer(true);
             terminal.log(data.message, 'done');
+            mirrorToPlanTerminal(String(data.message), 'done', data);
         }
     });
 
@@ -259,7 +390,9 @@
         var message = (data && data.message) ? String(data.message) : '';
         var httpCode = parseInt((data && (data.http_code || data.code)) || 0, 10) || 0;
         if (message) {
+            flushPlanTypingBuffer(true);
             terminal.log(message, 'error');
+            mirrorToPlanTerminal(message, 'error', data);
         }
 
         var lowerMessage = message.toLowerCase();
