@@ -88,7 +88,12 @@ class Router implements RouterInterface
         // 6. 重写路由到分类查看控制器
         $path = 'catalog/frontend/category/view';
         $rule['module'] = 'WeShop_Catalog';
-        $_GET['handle'] = $categoryHandle;
+        self::setQueryParam('handle', $categoryHandle);
+    }
+
+    private static function setQueryParam(string $key, mixed $value): void
+    {
+        \Weline\Framework\Context::current()->set('input.query.' . $key, $value);
     }
     
     /**

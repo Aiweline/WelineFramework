@@ -16,7 +16,7 @@ class Price extends FrontendController
         $productId = (int) ($this->request->getParam('product_id') ?? 0);
         $customerId = $this->getCustomerId();
         $quantity = max(1, (int) ($this->request->getParam('quantity') ?? 1));
-        $currency = (string) ($this->request->getParam('currency') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY');
+        $currency = (string) ($this->request->getParam('currency') ?? \w_env('user.currency', 'CNY'));
 
         if ($productId <= 0) {
             $this->getResponse()->setHttpResponseCode(400);
@@ -77,7 +77,7 @@ class Price extends FrontendController
         $productId = (int) ($this->request->getParam('product_id') ?? 0);
         $customerId = $this->getCustomerId();
         $quantity = max(1, (int) ($this->request->getParam('quantity') ?? 1));
-        $currency = (string) ($this->request->getParam('currency') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY');
+        $currency = (string) ($this->request->getParam('currency') ?? \w_env('user.currency', 'CNY'));
 
         if ($productId <= 0) {
             return $this->fetchJson([
@@ -122,7 +122,7 @@ class Price extends FrontendController
         $productIds = array_filter(array_map('intval', explode(',', $productIdsParam)), fn(int $id): bool => $id > 0);
         $customerId = $this->getCustomerId();
         $quantity = max(1, (int) ($this->request->getParam('quantity') ?? 1));
-        $currency = (string) ($this->request->getParam('currency') ?? $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY');
+        $currency = (string) ($this->request->getParam('currency') ?? \w_env('user.currency', 'CNY'));
 
         if ($productIds === []) {
             return $this->fetchJson([

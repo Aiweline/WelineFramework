@@ -52,12 +52,12 @@ class Docs extends FrontendController
     public function index()
     {
         // 获取当前货币和语言
-        $currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
-        $currentLanguage = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+        $currentCurrency = \w_env('user.currency', 'CNY');
+        $currentLanguage = \w_env('user.lang', 'zh_Hans_CN');
         
         // 获取网站默认货币和语言
-        $defaultCurrency = $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
-        $defaultLanguage = $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+        $defaultCurrency = \w_env('website.currency', 'CNY');
+        $defaultLanguage = \w_env('website.lang', 'zh_Hans_CN');
         
         // 从数据库获取可用的货币列表
         $availableCurrencies = $this->getAvailableCurrencies();
@@ -591,12 +591,12 @@ class Docs extends FrontendController
     {
         try {
             // 获取当前货币和语言
-            $currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
-            $currentLanguage = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
+            $currentCurrency = \w_env('user.currency', 'CNY');
+            $currentLanguage = \w_env('user.lang', 'zh_Hans_CN');
             
             // 获取网站默认货币和语言
-            $defaultCurrency = $_SERVER['WELINE_WEBSITE_CURRENCY'] ?? 'CNY';
-            $defaultLanguage = $_SERVER['WELINE_WEBSITE_LANGUAGE'] ?? 'zh_Hans_CN';
+            $defaultCurrency = \w_env('website.currency', 'CNY');
+            $defaultLanguage = \w_env('website.lang', 'zh_Hans_CN');
             
             // 从数据库获取可用的货币列表
             $availableCurrencies = $this->getAvailableCurrencies();
@@ -751,9 +751,7 @@ class Docs extends FrontendController
     {
         try {
             $languageCodes = WebsiteData::getLanguageCodes();
-            $displayLocaleCode = $_SERVER['WELINE_USER_LANG']
-                ?? $_SERVER['WELINE_WEBSITE_LANGUAGE']
-                ?? 'zh_Hans_CN';
+            $displayLocaleCode = \w_env('user.lang', \w_env('website.lang', 'zh_Hans_CN'));
 
             /** @var Locale $localeModel */
             $localeModel = ObjectManager::getInstance(Locale::class);

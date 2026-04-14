@@ -36,7 +36,7 @@ $widgetId = 'search-bar-' . uniqid();
                    name="q" 
                    class="search-input" 
                    placeholder="<?= htmlspecialchars($placeholder ?? '') ?>"
-                   value="<?= htmlspecialchars($_GET['q'] ?? '') ?>"
+                   value="<?= htmlspecialchars((string)\w_env_get('q', '')) ?>"
                    autocomplete="off">
             
             <?php if ($showButton): ?>

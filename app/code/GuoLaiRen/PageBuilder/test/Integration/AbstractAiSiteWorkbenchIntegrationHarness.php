@@ -47,7 +47,12 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         $result = match ($controllerMethod) {
             'postCreateSession' => $controller->postCreateSession(),
             'postMergeScope' => $controller->postMergeScope(),
+            'postStartPlan' => $controller->postStartPlan(),
+            'postConfirmPlan' => $controller->postConfirmPlan(),
+            'postStartTaskPlan' => $controller->postStartTaskPlan(),
+            'postConfirmTaskPlan' => $controller->postConfirmTaskPlan(),
             'postStartBuild' => $controller->postStartBuild(),
+            'postResumeBuild' => $controller->postResumeBuild(),
             'postStartRefineComponent' => $controller->postStartRefineComponent(),
             'postPublishChecklist' => $controller->postPublishChecklist(),
             'postStartPublish' => $controller->postStartPublish(),
@@ -60,6 +65,43 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         self::assertIsArray($decoded, 'Controller JSON response must decode to array: ' . $result);
 
         return $decoded;
+    }
+
+    /**
+     * @param array<string, scalar|array> $scopePatch
+     * @return array{start_plan:array<string,mixed>, confirm_plan:array<string,mixed>}
+     */
+    protected function generateAndConfirmPlan(string $publicId, array $scopePatch): array
+    {
+        $startPlanPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-plan',
+            'POST',
+            'postStartPlan',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($startPlanPayload['success'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertIsArray($startPlanPayload['plan'] ?? null);
+        self::assertNotSame('', (string)($startPlanPayload['plan']['markdown'] ?? ''));
+
+        $confirmPlanPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-confirm-plan',
+            'POST',
+            'postConfirmPlan',
+            [],
+            [
+                'public_id' => $publicId,
+            ]
+        );
+        self::assertTrue((bool)($confirmPlanPayload['success'] ?? false), \json_encode($confirmPlanPayload, \JSON_UNESCAPED_UNICODE));
+
+        return [
+            'start_plan' => $startPlanPayload,
+            'confirm_plan' => $confirmPlanPayload,
+        ];
     }
 
     protected function invokePrivateOperation(string $method, InMemorySseWriter $writer, string $publicId): array

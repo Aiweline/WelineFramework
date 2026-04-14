@@ -863,6 +863,7 @@ Cookie政策,Cookie政策
 "我想做一个茶叶电商网站，风格偏高级简约，域名优先用 .com。","我想做一个茶叶电商网站，风格偏高级简约，域名优先用 .com。"
 系统会输出域名建议与后续建站进度/结果。,系统会输出域名建议与后续建站进度/结果。
 "根据描述自动购买域名、DNS 解析、HTTPS 申请、创建站点。支持理解用户意图并推荐合适域名。","根据描述自动购买域名、DNS 解析、HTTPS 申请、创建站点。支持理解用户意图并推荐合适域名。"
+"上游已取消 AI 流式任务","上游已取消 AI 流式任务"
 "正在调用 AI...","正在调用 AI..."
 "AI 调用失败：%{1}","AI 调用失败：%{1}"
 工具不存在：%{1},工具不存在：%{1}
@@ -1514,6 +1515,10 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "健康检查同步根域/池失败 domain_id=%{1}：%{2}","健康检查同步根域/池失败 domain_id=%{1}：%{2}"
 访问正常,"Access OK"
 "HTTPS/TLS 探测失败，HTTP 可访问（站点 HTTPS 是否启用以 SSL 证书管理为准）","HTTPS/TLS 探测失败，HTTP 可访问（站点 HTTPS 是否启用以 SSL 证书管理为准）"
+"Only {subdomain}.weline.local is allowed for automatic hosts injection","Only {subdomain}.weline.local is allowed for automatic hosts injection"
+"Only {subdomain}.weline.local uses the shared *.weline.local wildcard certificate","Only {subdomain}.weline.local uses the shared *.weline.local wildcard certificate"
+"Reusing existing *.weline.local wildcard certificate","Reusing existing *.weline.local wildcard certificate"
+"Failed to ensure *.weline.local wildcard certificate","Failed to ensure *.weline.local wildcard certificate"
 "Websites 配置查询不支持的操作：%{1}","Websites 配置查询不支持的操作：%{1}"
 启动配置流程：购买域名,启动配置流程：购买域名
 "域名商账号 ID","域名商账号 ID"
@@ -1560,6 +1565,17 @@ DNS远程同步失败，已使用本地/实时数据回填并同步域名池：%
 "开发环境模拟：域名 %{1} 视为可用","开发环境模拟：域名 %{1} 视为可用"
 "域名 %{1} 不可用，请更换后重试","域名 %{1} 不可用，请更换后重试"
 "域名 %{1} 可用","域名 %{1} 可用"
+"Local domain %{1} is now covered by the shared *.weline.local wildcard certificate","Local domain %{1} is now covered by the shared *.weline.local wildcard certificate"
+"Local domain %{1} skipped registrar purchase, but the shared *.weline.local wildcard certificate is not ready yet","Local domain %{1} skipped registrar purchase, but the shared *.weline.local wildcard certificate is not ready yet"
+"Build finished with shared *.weline.local wildcard certificate","Build finished with shared *.weline.local wildcard certificate"
+"Build finished in local simulation mode","Build finished in local simulation mode"
+"Build finished with shared *.weline.local wildcard certificate: %{1}","Build finished with shared *.weline.local wildcard certificate: %{1}"
+"Build finished in local simulation mode: %{1}","Build finished in local simulation mode: %{1}"
+"鏈湴鍩熷悕 %{1} 璺宠繃鍩熷悕鍟嗘祦绋嬶紝浣嗘硾鍩熷悕璇佷功灏氭湭灏辩华","鏈湴鍩熷悕 %{1} 璺宠繃鍩熷悕鍟嗘祦绋嬶紝浣嗘硾鍩熷悕璇佷功灏氭湭灏辩华"
+"寤虹珯瀹屾垚锛堟湰鍦板凡浣跨敤 *.weline.local 娉涘煙鍚嶈瘉涔︼級","寤虹珯瀹屾垚锛堟湰鍦板凡浣跨敤 *.weline.local 娉涘煙鍚嶈瘉涔︼級"
+寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級,寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級
+"寤虹珯瀹屾垚锛堟湰鍦板凡浣跨敤 *.weline.local 娉涘煙鍚嶈瘉涔︼級锛?{1}","寤虹珯瀹屾垚锛堟湰鍦板凡浣跨敤 *.weline.local 娉涘煙鍚嶈瘉涔︼級锛?{1}"
+寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級锛?{1},寤虹珯瀹屾垚锛堟湰鍦版ā鎷燂級锛?{1}
 "本地域名 %{1} 跳过域名商流程，直接模拟建站成功","本地域名 %{1} 跳过域名商流程，直接模拟建站成功"
 建站完成（本地模拟）,建站完成（本地模拟）
 建站完成（本地模拟）：%{1},建站完成（本地模拟）：%{1}

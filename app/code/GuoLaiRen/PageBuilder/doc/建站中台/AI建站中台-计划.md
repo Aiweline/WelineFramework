@@ -34,7 +34,7 @@
 
 ### 第一阶段实时交流窗口（新增细节）
 
-- MUST 支持用户在方案阶段持续输入补充要求，并通过 SSE 实时看到 AI 回复流。
+- MUST 支持用户在方案阶段持续输入修改要求（可指定章节/位置），并通过 SSE 实时看到 AI 回复流。
 - MUST 在窗口中展示当前模式状态（微调/重建）与本轮生成状态（进行中/完成/失败）。
 - MUST 在 `重建` 成功后刷新完整方案预览与任务蓝图草案，不沿用旧草案残留内容。
 - MUST 在 `微调` 成功后仅更新用户指定位置对应的章节与任务蓝图差异，并保留可读变更上下文。
@@ -52,7 +52,7 @@
 - MUST 在 Tab 内展示该模式最近一轮输入与流式输出，避免两种模式消息混流。
 - MUST 在用户切换 Tab 时保留各自未发送草稿输入（避免丢字）。
 - MUST 在正在流式生成时限制跨模式并发提交（禁止同时开启 refine/rebuild 两条方案流）。
-- MUST 在流式结束后允许继续同模式追加，或切换到另一模式发起新一轮。
+- MUST 在流式结束后允许继续同模式发起下一轮修改/重建，或切换到另一模式发起新一轮。
 - MUST 在 UI 上明确标识当前生效模式，防止用户误把“重建”当“微调”提交。
 
 ### 微调/重建按钮与图标规范（新增）
@@ -437,7 +437,7 @@
   - MUST 仅改目标位置及其必需联动字段，不得无关改写整份方案。
   - MUST 输出“本轮修改范围”清单，便于用户确认微调边界。
 - 重建（整案重生）：
-  - MUST 视为重新为用户生成一份新方案（`draft.markdown` + `draft.execution_blueprint` 全量重写）。
+  - MUST 视为重新为用户生成一份新方案（`draft.plan_json` + `draft.execution_blueprint` 全量重写，Markdown 由 JSON 派生）。
   - MUST 清空旧草案的局部增量上下文，不把旧方案内容作为默认继承项。
   - MUST 输出新的方案摘要与任务总量，便于与上一版对比是否满足预期。
 
@@ -457,7 +457,7 @@
 - MUST 明确目标：仅修改用户指定位置与必要联动项。
 - MUST 明确禁止：不得重写无关章节、不得重建整份方案。
 - MUST 要求输出：
-  - 更新后的 `draft.markdown`（仅目标段落发生变化）
+  - 更新后的 `draft.plan_json`（仅目标范围对应内容发生变化）
   - 更新后的 `draft.execution_blueprint`（仅受影响任务变化）
   - `change_scope`（本轮改动位置清单）
   - `change_reason`（每处修改与用户要求的对应关系）
@@ -467,7 +467,7 @@
 - MUST 明确目标：重新为用户生成整份方案与整份蓝图。
 - MUST 明确禁止：不得沿用旧方案局部内容作为默认继承。
 - MUST 要求输出：
-  - 全量新 `draft.markdown`
+  - 全量新 `draft.plan_json`
   - 全量新 `draft.execution_blueprint`
   - `rebuild_summary`（新方案摘要、任务总量、关键差异点）
 
@@ -568,6 +568,13 @@
 2) 同步输出 execution_blueprint.tasks[]，覆盖 shared:header/shared:footer 与每页每块任务。
 3) 每个任务必须包含字段：task_key/page_type/region/block_key/component_kind/dependencies/status/field_plan/style_brief/palette_usage/content_brief/seo_brief/result_ref。
 4) refine 模式必须附带 change_scope_report；rebuild 模式必须附带 rebuild_summary。
+5) 风格与色盘章节必须写“选型原因”：
+- 风格示例：`Plan-Driven Hybrid`，需解释为何匹配当前站点目标与页面结构。
+- 色盘示例：`Midnight Ember`，需解释为何匹配品牌调性、可读性与转化按钮识别。
+6) 页面范围必须严格等于 page_types 输入：
+- 只规划用户已选择页面类型；
+- 禁止输出未选择页面（例如未选博客时不得规划博客页）。
+7) 任何决策项都必须紧跟理由备注（适用于风格决策、色系决策、Header/Footer 决策、各页面块内容决策、任务排序决策）。
 ```
 
 #### F. 提示词构造与调用落点
@@ -582,7 +589,8 @@
 
 ### 第一阶段输出物 MUST
 
-- MUST 产出 `draft.markdown`（用户可读方案书）。
+- MUST 产出 `draft.plan_json`（第一阶段方案 JSON，作为唯一持久化真相源）。
+- MUST 令前端基于 `draft.plan_json` 实时解析并渲染 Markdown 预览；Markdown 为展示层派生物，不作为持久化真相源。
 - MUST 产出 `draft.execution_blueprint`（第二阶段任务蓝图草案）。
 - MUST 使用 Markdown 作为方案展示格式（左侧原文 + 实时预览一致来源于同一 Markdown 文本）。
 - MUST 覆盖用户所选的全部页面类型（第一阶段方案必须囊括所有选中页面，不得遗漏）。
@@ -594,9 +602,14 @@
   - 响应式策略
   - 第二阶段完整执行顺序
   - 每个页面块级规划
+- MUST 在“风格总览”中明确写出本轮选定风格（如 `Plan-Driven Hybrid`）及选型原因（业务目标、信息架构适配、实现与维护成本、可扩展性）。
+- MUST 在“颜色色系与选型原因”中明确写出本轮主色盘（如 `Midnight Ember`）及选型原因（品牌调性、可读性对比、CTA 识别度、跨端一致性）。
 
 ### 方案 Markdown 展示结构 MUST（补充细节）
 
+- MUST 对“任何决策性内容”执行统一输出规则：先给出“决策结论”，紧接“理由备注”，不得只给结论不解释原因。
+- MUST 将“理由备注”写在对应决策内容之后（同段或紧邻段落），禁止散落到文末汇总导致语义脱节。
+- MUST 让理由至少覆盖：目标匹配、约束匹配、用户价值/转化价值、实现与维护影响（可按场景裁剪，不得为空）。
 - MUST 在方案 Markdown 中包含以下固定章节（允许扩展，不允许缺失）：
   - `风格总览`
   - `颜色色系与选型原因`
@@ -606,23 +619,31 @@
   - `分页面块级设计`
   - `执行顺序与任务蓝图摘要`
 - MUST 在“分页面块级设计”中按页面类型展开（如：首页、关于页、联系页、政策页等）。
+- MUST 仅按“用户已选择的页面类型”展开，不得规划未选择页面（例如未选博客时不得输出博客页规划）。
+- MUST 在 `draft.plan_json.pages[*].blocks[*]` 仅存最小决策字段：
+  - `content`（区块内容决策）
+  - `why`（该内容决策理由）
 - MUST 对每个页面类型写清：
   - 块列表（按顺序）
   - 每个块的设计目标
   - 每个块的设计理由（为什么这样设计）
   - 关键内容方向（文案/CTA/SEO/内链）
+- MUST 在每个页面块“内容决策”后追加“理由备注”，明确该内容安排为何有利于当前页面目标与用户路径。
 - MUST 对 Header/Footer 单独说明：
   - 视觉风格定位
   - 导航/链接信息架构
   - 与主体页面风格的一致性关系
+- MUST 在 Header/Footer 的关键决策（导航层级、入口优先级、CTA 位置）后追加“理由备注”。
 - MUST 让“为什么这样设计”成为必填说明，不得只给块名称而无理由。
 - MUST 在方案中提供“页面覆盖清单”（selected pages checklist），明确标注每个已选页面均有对应设计计划。
+- MUST 在“页面覆盖清单”中同时校验“无越界页面”：若出现未选择页面（如博客）则判定方案校验失败。
 
 ### 第一阶段到第二阶段页面映射约束（新增）
 
 - MUST 以第一阶段已确认方案中的“全页面覆盖清单”作为第二阶段任务计划的唯一页面来源。
 - MUST 让第二阶段任务方案严格按这些页面生成任务，不允许临时增删页面范围。
 - MUST 若页面覆盖清单与任务计划页面集合不一致，阻断第二阶段确认并提示修正。
+- MUST 若任务计划包含任何未选择页面类型（例如博客未被选择却出现 `blog_page` 任务），直接阻断并返回 `PAGE_SCOPE_MISMATCH`。
 
 ### 方案确认后执行门禁 MUST
 
@@ -799,18 +820,20 @@
 
 ### Summary
 
-- 第一阶段先生成“建站方案书”，SSE 组件只负责把方案流追加到弹窗并实时预览，不承担任何第二阶段执行职责。
+- 第一阶段先生成“建站方案书”，SSE 组件只负责流式传输方案内容并实时预览，不承担任何第二阶段执行职责。
+- 第一阶段 `微调` 的语义是“按用户要求修改当前方案”，必须返回修订后的完整方案并替换当前草案，不是把补充说明追加到方案底部。
 - 用户确认方案后，先一次性把第二阶段所有块级任务规划完整并持久化，再进入生成主题；第二阶段只能执行已确认方案，不允许再按一句话需求临时拆任务。
 - 第二阶段必须具备任务级断点续跑：每完成一个任务就保存一次；下次进入工作台友好提示是否继续；用户确认后从未完成任务继续。
 
 ### Requirements And Measures
 
-#### 要求 1：第一阶段 SSE 只负责追加方案流
+#### 要求 1：第一阶段 SSE 只负责方案流传输与修订回写
 
 - 第一阶段使用独立 `PbAiPlanRunner` 和方案弹窗。
 - 不复用工作台右侧日志终端、不显示 build guard、不更新块级任务进度、不参与页面预览切换。
 - plan SSE 只处理 `start/progress/chunk/done/error` 五类事件。
-- `chunk` 只做 Markdown 追加和实时预览刷新。
+- `chunk` 只做流式片段拼接与实时预览刷新（传输层语义）。
+- 微调完成时必须以“修订后的完整 `draft.plan_json`”覆盖当前草案；禁止将微调结果作为补充说明追加到原文底部。
 
 #### 要求 2：第二阶段必须先规划完整任务再执行
 
@@ -854,7 +877,7 @@
   - 触发“AI 再次微调方案”
   - 触发“确认方案并进入第二阶段”
 - 第一阶段输出：
-  - `draft.markdown`
+  - `draft.plan_json`
   - `draft.execution_blueprint`
 - 方案书必须包含：
   - 色系与选型原因
@@ -1067,7 +1090,7 @@
 - 第一阶段方案流：
   - `post-start-plan` 返回 `operation=plan`
   - `operation-sse` 仅输出方案事件
-  - `draft.markdown` 与 `draft.execution_blueprint` 在 done 后存在
+  - `draft.plan_json` 与 `draft.execution_blueprint` 在 done 后存在
 - 方案确认：
   - `post-confirm-plan` 保存 `confirmed.*`
   - 执行蓝图写为第二阶段任务清单
@@ -1273,65 +1296,70 @@
 
 ### 12.1 任务清单（执行拆分，细化版）
 
+> 状态标记（写在每条任务最前面）：
+> - `- [x]` = done（已完成）
+> - `- [~]` = processing（处理中）
+> - `- [ ]` = pending（待处理）
+
 #### 第一阶段：方案（Plan）
 
-- T1 方案弹窗基础（打开/关闭保护/Markdown 原文+预览布局）
-- T2 右侧模式 Tab（微调/重建）与提示文案/手风琴说明（默认收起）
-- T3 方案右侧 SSE 交流窗口（仅 plan SSE：start/progress/chunk/done/error，不混入 build）
-- T4 `plan_locale` 设置与落库（方案语言）+ 与 `default_locale` 语义分离
-- T5 方案 Markdown 结构与章节完整性校验器（缺失章节判失败）
-- T6 页面覆盖清单生成与校验（用户所选全部页面必须在方案内）
-- T7 第一阶段提示词构造器：重建（`buildPlanRebuildPrompt`）+ 输出校验
-- T8 第一阶段提示词构造器：微调（`buildPlanRefinePrompt`，含 target_scope）+ 输出校验
-- T9 第一阶段方案微调（定点重写）SSE 流与 change_scope_report 落库
-- T10 第一阶段方案重建（整案重生）SSE 流与 rebuild_summary 落库
-- T11 第一阶段确认接口（post-confirm-plan）：写 confirmed.* + 初始化 build_tasks/build_checkpoint + 刷新进入第二阶段
+- [ ] T1 方案弹窗基础（打开/关闭保护/Markdown 原文+预览布局）
+- [ ] T2 右侧模式 Tab（微调/重建）与提示文案/手风琴说明（默认收起）
+- [ ] T3 方案右侧 SSE 交流窗口（仅 plan SSE：start/progress/chunk/done/error，不混入 build）
+- [ ] T4 `plan_locale` 设置与落库（方案语言）+ 与 `default_locale` 语义分离
+- [ ] T5 方案 Markdown 结构与章节完整性校验器（缺失章节判失败）
+- [ ] T6 页面覆盖清单生成与校验（用户所选全部页面必须在方案内）
+- [ ] T7 第一阶段提示词构造器：重建（`buildPlanRebuildPrompt`）+ 输出校验
+- [ ] T8 第一阶段提示词构造器：微调（`buildPlanRefinePrompt`，含 target_scope）+ 输出校验
+- [ ] T9 第一阶段方案微调（定点重写）SSE 流与 change_scope_report 落库
+- [ ] T10 第一阶段方案重建（整案重生）SSE 流与 rebuild_summary 落库
+- [ ] T11 第一阶段确认接口（post-confirm-plan）：写 confirmed.* + 初始化 build_tasks/build_checkpoint + 刷新进入第二阶段
 
 #### 第一阶段：域名选择（标签区）
 
-- T12 域名选择标签区 UI（独立区域，不与方案输入混杂）
-- T13 可选域名筛选（可建站但未建站域名列表）
-- T14 AI 推荐域名弹窗（正式环境）+ 供应商绑定选择
-- T15 推荐域名可用性检测（按供应商策略）+ 本地供应商简化校验
-- T16 域名选择结果落 scope（域名+供应商），供后续阶段使用
+- [ ] T12 域名选择标签区 UI（独立区域，不与方案输入混杂）
+- [ ] T13 可选域名筛选（可建站但未建站域名列表）
+- [ ] T14 AI 推荐域名弹窗（正式环境）+ 供应商绑定选择
+- [ ] T15 推荐域名可用性检测（按供应商策略）+ 本地供应商简化校验
+- [ ] T16 域名选择结果落 scope（域名+供应商），供后续阶段使用
 
 #### 第二阶段：虚拟主题任务方案（Task Plan）
 
-- T17 第二阶段进入即连 SSE + 检测是否已存在虚拟主题任务方案
-- T18 虚拟主题任务方案生成器（由第一阶段 confirmed.* 派生超详细任务方案）
-- T19 任务拆分与排序器（shared->home->other；dependencies/order_index/group_key）
-- T20 第二阶段任务方案确认弹窗（Markdown 原文+预览 + 关闭保护）
-- T21 第二阶段右侧模式 Tab（微调/重建）+ 手风琴说明（默认收起）
-- T22 第二阶段任务方案 SSE 交流窗口（refine_task_plan/rebuild_task_plan，不混流）
-- T23 第二阶段提示词构造器：重建任务方案（`buildTaskPlanRebuildPrompt`）+ 输出校验
-- T24 第二阶段提示词构造器：微调任务方案（`buildTaskPlanRefinePrompt`，含 target_scope）+ 输出校验
-- T25 第二阶段确认保存（virtual_theme_plan.confirmed）+ 刷新页面 + 弹“已保存，是否立即生成”
-- T26 “立即生成/稍后生成”提示框与行为（默认不自动开跑）
+- [ ] T17 第二阶段进入即连 SSE + 检测是否已存在虚拟主题任务方案
+- [ ] T18 虚拟主题任务方案生成器（由第一阶段 confirmed.* 派生超详细任务方案）
+- [ ] T19 任务拆分与排序器（shared->home->other；dependencies/order_index/group_key）
+- [ ] T20 第二阶段任务方案确认弹窗（Markdown 原文+预览 + 关闭保护）
+- [ ] T21 第二阶段右侧模式 Tab（微调/重建）+ 手风琴说明（默认收起）
+- [ ] T22 第二阶段任务方案 SSE 交流窗口（refine_task_plan/rebuild_task_plan，不混流）
+- [ ] T23 第二阶段提示词构造器：重建任务方案（`buildTaskPlanRebuildPrompt`）+ 输出校验
+- [ ] T24 第二阶段提示词构造器：微调任务方案（`buildTaskPlanRefinePrompt`，含 target_scope）+ 输出校验
+- [ ] T25 第二阶段确认保存（virtual_theme_plan.confirmed）+ 刷新页面 + 弹“已保存，是否立即生成”
+- [ ] T26 “立即生成/稍后生成”提示框与行为（默认不自动开跑）
 
 #### 第二阶段：执行器、进度、恢复
 
-- T27 执行器任务循环（先落库后 SSE；result_ref 回写；按任务单元推进）
-- T28 任务状态机与 SSE 进度事件（prev/next/completed/total/percent/updated_at）
-- T29 断点恢复引擎（跳过 done；从首个未成功继续；任务内失败重跑该任务）
-- T30 页面完成即实时可视化渲染 + 页面类型 Tab 即时可编辑（SSE 事件驱动）
+- [ ] T27 执行器任务循环（先落库后 SSE；result_ref 回写；按任务单元推进）
+- [ ] T28 任务状态机与 SSE 进度事件（prev/next/completed/total/percent/updated_at）
+- [ ] T29 断点恢复引擎（跳过 done；从首个未成功继续；任务内失败重跑该任务）
+- [ ] T30 页面完成即实时可视化渲染 + 页面类型 Tab 即时可编辑（SSE 事件驱动）
 
 #### 页面内跳转与组件级能力
 
-- T31 预览内链接重写器（仅站内页面类型链接 -> 可视化编辑预览路由）
-- T32 组件级操作入口（微调/重建/文本编辑/AI 再生成）与 meta 上下文注入
-- T33 组件级改动持久化与即时预览刷新（失败不影响其它组件）
+- [ ] T31 预览内链接重写器（仅站内页面类型链接 -> 可视化编辑预览路由）
+- [ ] T32 组件级操作入口（微调/重建/文本编辑/AI 再生成）与 meta 上下文注入
+- [ ] T33 组件级改动持久化与即时预览刷新（失败不影响其它组件）
 
 #### 共享组件媒体资源（Header/Footer）
 
-- T34 Header/Footer 媒体管理器接入（logo/图片选择）+ 默认 PageBuilder 站点 logo 目录定位
-- T35 媒体资源路径落库与恢复一致性（组件 meta/任务蓝图）+ 失效重选提示
+- [ ] T34 Header/Footer 媒体管理器接入（logo/图片选择）+ 默认 PageBuilder 站点 logo 目录定位
+- [ ] T35 媒体资源路径落库与恢复一致性（组件 meta/任务蓝图）+ 失效重选提示
 
 #### 历史预览、最终落库、验收
 
-- T36 历史确认方案只读预览中心（第一阶段+第二阶段同屏展示与复制）
-- T37 最终创建站点阶段展示（预览地址/正式地址/PageBuilder 页面管理入口）
-- T38 最终落库门禁（正式环境域名联通性未通过禁止建站）
-- T39 E2E 用例补齐与收官门禁（含 E2E-13：域名可访问站点）
+- [ ] T36 历史确认方案只读预览中心（第一阶段+第二阶段同屏展示与复制）
+- [ ] T37 最终创建站点阶段展示（预览地址/正式地址/PageBuilder 页面管理入口）
+- [ ] T38 最终落库门禁（正式环境域名联通性未通过禁止建站）
+- [ ] T39 E2E 用例补齐与收官门禁（含 E2E-13：域名可访问站点）
 
 ### 12.1C 任务-细节对齐规则（新增）
 
