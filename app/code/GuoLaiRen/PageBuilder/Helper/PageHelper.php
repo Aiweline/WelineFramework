@@ -209,7 +209,7 @@ class PageHelper
             'module' => 'GuoLaiRen_PageBuilder',
             'area' => 'backend',
         ]);
-        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
+        $i18nEnabled = $this->normalizeSwitchValue($i18nEnabled);
         
         // 获取所有已翻译的语言（始终生成，但通过CSS控制显示）
         $translatedLocales = $this->getTranslatedLocales($page);
@@ -252,6 +252,15 @@ class PageHelper
         }
         
         return $url;
+    }
+
+    private function normalizeSwitchValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '0';
+        }
+
+        return ((string)$value === '1' || $value === true || $value === 1) ? '1' : '0';
     }
 
     /**

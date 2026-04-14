@@ -72,8 +72,6 @@ WelineFramework,WelineFramework
 在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。,在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。
 "Backend login providers","Backend login providers"
 "Inject third-party sign-in providers above the backend login form.","Inject third-party sign-in providers above the backend login form."
-记住登录已过期，请重新登录！,记住登录已过期，请重新登录！
-用户不存在！,用户不存在！
 系统消息数据格式错误,系统消息数据格式错误
 "收到无效的系统消息数据。\n\n发送者：%{sender}\n数据类型：%{type}\n数据内容：%{content}\n\n请检查发送系统消息的代码，确保数据格式正确。","收到无效的系统消息数据。\n\n发送者：%{sender}\n数据类型：%{type}\n数据内容：%{content}\n\n请检查发送系统消息的代码，确保数据格式正确。"
 title,title
@@ -85,6 +83,8 @@ content,content
 未知,未知
 "SystemNotificationObserver Error: Failed to save error notification - %{error}","SystemNotificationObserver Error: Failed to save error notification - %{error}"
 未知来源,未知来源
+记住登录已过期，请重新登录！,记住登录已过期，请重新登录！
+用户不存在！,用户不存在！
 最近访问,最近访问
 访问最多,访问最多
 "搜索 ...","搜索 ..."
@@ -108,7 +108,7 @@ content,content
 删除!,删除!
 知道了,知道了
 value,value
-"Weline Admin 管理面板","Weline Admin 管理面板"
+"Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊闈㈡澘"
 角色归配,角色归配
 系统,系统
 管理员,管理员

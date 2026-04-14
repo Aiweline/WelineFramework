@@ -53,6 +53,7 @@ class LanguageSelect implements TaglibInterface
             'empty-text' => false,
             'search-placeholder' => false,
             'on-change' => false,
+            'inline-dropdown' => false,
         ];
     }
 
@@ -167,6 +168,7 @@ $__wls_search_placeholder = $__wls_trim_text(
     __('搜索国家、语言或代码...')
 );
 $__wls_on_change = $__wls_trim_text($Taglib__on_change ?? '');
+$__wls_inline_dropdown = $__wls_normalize_bool($Taglib__inline_dropdown ?? false, false);
 $__wls_selected_json = \json_encode(
     $__wls_selected_values,
     JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
@@ -454,6 +456,7 @@ HTML;
     var selectedValues = <?= $__wls_selected_json ?> || [];
     var readonlyValues = <?= $__wls_readonly_json ?> || [];
     var onChangeName = <?= json_encode($__wls_on_change, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var inlineDropdown = <?= $__wls_inline_dropdown ? 'true' : 'false' ?>;
     var emptyText = <?= json_encode($__wls_empty_text, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var displayOnlyText = <?= json_encode((string) __('仅展示'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var noMatchText = <?= json_encode((string) __('未找到匹配的语言'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -856,12 +859,24 @@ HTML;
         if (displayOnly || !dropdown) {
             return;
         }
-        floatingApi = window.WelineSmartDropdown.mount(trigger, dropdown, {
-            minWidth: trigger ? trigger.offsetWidth : 0,
-            preferredHeight: 320,
-            zIndex: 4200,
-            gap: 4
-        });
+        if (inlineDropdown) {
+            dropdown.style.position = '';
+            dropdown.style.left = '';
+            dropdown.style.top = '';
+            dropdown.style.width = '';
+            dropdown.style.maxHeight = '';
+            dropdown.style.minWidth = '';
+            dropdown.style.maxWidth = '';
+            dropdown.style.zIndex = '';
+            dropdown.style.display = 'block';
+        } else {
+            floatingApi = window.WelineSmartDropdown.mount(trigger, dropdown, {
+                minWidth: trigger ? trigger.offsetWidth : 0,
+                preferredHeight: 320,
+                zIndex: 4200,
+                gap: 4
+            });
+        }
         renderList(searchInput ? searchInput.value : '');
         if (searchInput) {
             window.setTimeout(function () {
@@ -870,20 +885,28 @@ HTML;
         }
         document.addEventListener('click', handleOutsideClick);
         document.addEventListener('keydown', handleEscape);
-        window.addEventListener('resize', handleViewportChange);
-        window.addEventListener('scroll', handleViewportChange, true);
+        if (!inlineDropdown) {
+            window.addEventListener('resize', handleViewportChange);
+            window.addEventListener('scroll', handleViewportChange, true);
+        }
     }
 
     function closeDropdown() {
         if (!dropdown) {
             return;
         }
-        window.WelineSmartDropdown.unmount(dropdown);
+        if (inlineDropdown) {
+            dropdown.style.display = 'none';
+        } else {
+            window.WelineSmartDropdown.unmount(dropdown);
+        }
         floatingApi = null;
         document.removeEventListener('click', handleOutsideClick);
         document.removeEventListener('keydown', handleEscape);
-        window.removeEventListener('resize', handleViewportChange);
-        window.removeEventListener('scroll', handleViewportChange, true);
+        if (!inlineDropdown) {
+            window.removeEventListener('resize', handleViewportChange);
+            window.removeEventListener('scroll', handleViewportChange, true);
+        }
     }
 
     function handleOutsideClick(event) {
@@ -893,6 +916,9 @@ HTML;
     }
 
     function handleViewportChange() {
+        if (inlineDropdown) {
+            return;
+        }
         if (!dropdown || dropdown.style.display !== 'block') {
             return;
         }

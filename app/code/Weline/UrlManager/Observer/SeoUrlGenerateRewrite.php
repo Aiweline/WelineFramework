@@ -35,7 +35,7 @@ class SeoUrlGenerateRewrite implements ObserverInterface
 
         // 检查当前请求是否为后台请求，如果是则跳过 SEO 重写
         // 后台 URL 不应该被 SEO 重写，因为它们有自己的路由规则
-        if (($_SERVER['WELINE_IS_BACKEND'] ?? false) || ($_SERVER['WELINE_AREA'] ?? '') === 'backend' || ($_SERVER['WELINE_AREA'] ?? '') === 'rest_backend') {
+        if ($this->isBackendRequest()) {
             return;
         }
 
@@ -78,6 +78,16 @@ class SeoUrlGenerateRewrite implements ObserverInterface
 
         $this->storeRewriteCache($websiteId, $matchUri, $realUri, $resolvedRewrite);
         $event->setData('data', $this->applyRewrite($url, $resolvedRewrite));
+    }
+
+    private function isBackendRequest(): bool
+    {
+        if (RequestContext::isBackendArea()) {
+            return true;
+        }
+
+        $area = (string)RequestContext::get('env.area', '');
+        return $area === RequestContext::AREA_BACKEND || $area === RequestContext::AREA_REST_BACKEND;
     }
 
     private function isRewriteCandidate(string $url): bool

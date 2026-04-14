@@ -17,7 +17,7 @@ class Router implements RouterInterface
         }
 
         $normalizedPath = trim(str_replace('\\', '/', $path), '/');
-        $hasPreviewTheme = (int)($_GET['preview_theme'] ?? 0) > 0;
+        $hasPreviewTheme = (int)\w_env_get('preview_theme', 0) > 0;
         $activeTheme = self::resolveActiveFrontendTheme();
 
         if (!self::shouldRewriteRootToWeShop($normalizedPath, self::isBackendRequest(), $hasPreviewTheme, $activeTheme)) {

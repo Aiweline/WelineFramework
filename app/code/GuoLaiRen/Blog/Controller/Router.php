@@ -59,7 +59,7 @@ class Router implements RouterInterface
             $path = '/blog/frontend/category/view';
             $rule['module'] = 'GuoLaiRen_Blog';
             $rule['slug'] = $slug;
-            $_GET['slug'] = $slug;
+            self::setQueryParam('slug', $slug);
             return;
         }
 
@@ -71,7 +71,12 @@ class Router implements RouterInterface
         $path = '/blog/frontend/post/view';
         $rule['module'] = 'GuoLaiRen_Blog';
         $rule['slug'] = $slug;
-        $_GET['slug'] = $slug;
+        self::setQueryParam('slug', $slug);
+    }
+
+    private static function setQueryParam(string $key, string $value): void
+    {
+        \Weline\Framework\Context::current()->set('input.query.' . $key, $value);
     }
 }
 

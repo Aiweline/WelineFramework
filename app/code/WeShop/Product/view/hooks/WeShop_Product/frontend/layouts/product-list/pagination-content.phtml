@@ -38,8 +38,11 @@ if ($endPage - $startPage + 1 < $maxVisiblePages) {
 }
 
 // 获取当前URL参数
-$currentUrl = parse_url($_SERVER['REQUEST_URI'] ?? '', PHP_URL_PATH);
-$queryParams = $_GET;
+$currentUrl = parse_url(\w_env_request_uri(), PHP_URL_PATH);
+$queryParams = \w_env_get();
+if (!is_array($queryParams)) {
+    $queryParams = [];
+}
 unset($queryParams['page']);
 $baseQuery = http_build_query($queryParams);
 $baseUrl = $currentUrl . ($baseQuery ? '?' . $baseQuery . '&' : '?');
