@@ -1795,7 +1795,7 @@ class Model extends BackendController
                 if ($model->getId()) {
                     // 只能删除复制的模型
                     if ($model->isCopied()) {
-                        $model->delete();
+                        $model->delete()->fetch();
                         $successCount++;
                     } else {
                         $skipCount++;
