@@ -1597,15 +1597,15 @@ class Model extends BackendController
                 return $this->redirect('*/backend/model/index');
             }
             
-            // 检查是否为原始模型（非复制模型）
-            if (!$model->isCopied()) {
+            // 仅允许删除：复制模型或自定义模型
+            if (!$model->canDelete()) {
                 if ($isAjax) {
                     return $this->jsonResponse([
                         'success' => false,
-                        'message' => __('原始模型不能删除，只能删除复制的模型')
+                        'message' => __('该模型受保护，只有复制模型或自定义模型可以删除')
                     ]);
                 }
-                $this->getMessageManager()->addError(__('原始模型不能删除，只能删除复制的模型'));
+                $this->getMessageManager()->addError(__('该模型受保护，只有复制模型或自定义模型可以删除'));
                 return $this->redirect('*/backend/model/index');
             }
             
@@ -1774,9 +1774,7 @@ class Model extends BackendController
     #[Acl('Weline_Ai::ai_model_bulk_delete', '批量删除模型', 'mdi-delete-sweep', '批量删除模型')]
     public function bulkDelete(): string
     {
-        $bodyParams = $this->request->getBodyParams();
-        $jsonData = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
-        $ids = $jsonData['ids'] ?? [];
+        $ids = $this->resolveBulkModelIds();
         
         if (empty($ids)) {
             return $this->jsonResponse([
@@ -1793,8 +1791,8 @@ class Model extends BackendController
             foreach ($ids as $id) {
                 $model = $this->getAiModel()->reset()->load((int)$id);
                 if ($model->getId()) {
-                    // 只能删除复制的模型
-                    if ($model->isCopied()) {
+                    // 允许删除复制模型与自定义模型
+                    if ($model->canDelete()) {
                         $model->delete()->fetch();
                         $successCount++;
                     } else {
@@ -1805,14 +1803,19 @@ class Model extends BackendController
             
             $message = '';
             if ($successCount > 0) {
-                $message .= __('成功删除 %{1} 个复制模型', $successCount);
+                $message .= __('成功删除 %{1} 个模型', $successCount);
             }
             if ($skipCount > 0) {
-                $message .= ($successCount > 0 ? '；' : '') . __('跳过 %{1} 个原始模型（原始模型不可删除）', $skipCount);
+                $message .= ($successCount > 0 ? '；' : '') . __('跳过 %{1} 个受保护模型（仅复制/自定义模型可删除）', $skipCount);
             }
             
+            $deleted = $successCount > 0;
+            if (!$deleted && $skipCount > 0 && $message === '') {
+                $message = __('所选模型均为受保护模型，仅复制/自定义模型可删除');
+            }
+
             return $this->jsonResponse([
-                'success' => true,
+                'success' => $deleted,
                 'message' => $message ?: __('没有模型被删除')
             ]);
             
@@ -1822,6 +1825,54 @@ class Model extends BackendController
                 'message' => __('批量删除失败：%{1}', $e->getMessage())
             ]);
         }
+    }
+
+    /**
+     * 兼容多种传参方式解析批量模型 ID：
+     * - JSON Body: {"ids":[1,2]}
+     * - 表单: ids[]=1&ids[]=2 或 ids=1,2
+     * - Query: ?id=1 或 ?ids=1,2
+     */
+    private function resolveBulkModelIds(): array
+    {
+        $ids = [];
+
+        $bodyParams = $this->request->getBodyParams();
+        $jsonData = is_array($bodyParams) ? $bodyParams : (is_string($bodyParams) ? json_decode($bodyParams, true) : null);
+        if (is_array($jsonData) && isset($jsonData['ids'])) {
+            $ids = $jsonData['ids'];
+        }
+
+        if (empty($ids)) {
+            $ids = $this->request->getPost('ids', []);
+        }
+
+        if (empty($ids)) {
+            $ids = $this->request->getGet('ids', []);
+        }
+
+        if (empty($ids)) {
+            $singleId = (int)$this->request->getParam('id', 0);
+            if ($singleId > 0) {
+                $ids = [$singleId];
+            }
+        }
+
+        if (is_string($ids)) {
+            $ids = array_map('trim', explode(',', $ids));
+        }
+
+        if (!is_array($ids)) {
+            return [];
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map(static function ($id): int {
+            return (int)$id;
+        }, $ids), static function (int $id): bool {
+            return $id > 0;
+        })));
+
+        return $ids;
     }
 
     /**
