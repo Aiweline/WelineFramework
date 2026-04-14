@@ -1,0 +1,1237 @@
+﻿<script>
+(function () {
+    'use strict';
+
+    var previewBridge = window.PbAiWorkspacePreview || {};
+    var compactPageDisplayLabel = typeof previewBridge.compactPageDisplayLabel === 'function'
+        ? previewBridge.compactPageDisplayLabel
+        : function (pageLabel, pageType) {
+            var fallback = String((pageTypeLabelMap && pageTypeLabelMap[pageType]) || pageType || '');
+            var normalized = String(pageLabel || '').trim();
+            if (!normalized) {
+                return fallback || String(pageType || '');
+            }
+            var match = normalized.match(/^(.*?)\s*-\s*.+$/);
+            if (match && match[1] && match[1].trim()) {
+                normalized = match[1].trim();
+            }
+            return normalized || fallback || String(pageType || '');
+        };
+    var isGuidedUi = !!previewBridge.isGuidedUi;
+    var messages = (previewBridge.messages && typeof previewBridge.messages === 'object') ? previewBridge.messages : {};
+    var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var runVirtualThemeUrl = <?= \json_encode($runVirtualThemeUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var startPublishUrl = <?= \json_encode($startPublishUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var publishCheckUrl = <?= \json_encode($publishCheckUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var operationSseBaseUrl = <?= \json_encode($operationSseUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var activeOperation = <?= \json_encode($activeOperation, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var pageTypeLabelMap = <?= \json_encode($pageTypeLabels, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var stateJsonUrl = <?= \json_encode($stateJsonUrl, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+    var workspaceTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
+    var runningSource = null;
+    var runningOperationKey = '';
+    var runningStartAtByOperationKey = Object.create(null);
+    var resumePromptHandledByKey = Object.create(null);
+    var lastOperationTerminalFingerprint = '';
+    var blockRefreshState = (window.__pbBlockRefreshState && typeof window.__pbBlockRefreshState === 'object')
+        ? window.__pbBlockRefreshState
+        : (window.__pbBlockRefreshState = {
+            active: false,
+            pageType: '',
+            blockId: ''
+        });
+    function resolveWorkspaceApi() {
+        return window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object'
+            ? window.__pbWorkspaceApi
+            : {};
+    }
+    function getSelectedPageTypesForSummary() {
+        var api = resolveWorkspaceApi();
+        if (typeof api.selectedPageTypes === 'function') {
+            return api.selectedPageTypes();
+        }
+        return ['home_page'];
+    }
+    function normalizeRequiredPageTypesForSummary(types) {
+        var api = resolveWorkspaceApi();
+        if (typeof api.ensureRequiredPageTypeSelected === 'function') {
+            return api.ensureRequiredPageTypeSelected(types);
+        }
+        var normalized = Array.isArray(types) ? types.slice() : [];
+        if (normalized.indexOf('home_page') === -1) {
+            normalized.unshift('home_page');
+        }
+        return normalized;
+    }
+    function getTaskAlwaysVisiblePageTypeMapForSummary() {
+        var api = resolveWorkspaceApi();
+        if (typeof api.getTaskAlwaysVisiblePageTypeMap === 'function') {
+            return api.getTaskAlwaysVisiblePageTypeMap() || {};
+        }
+        return { shared: true, home_page: true };
+    }
+    var buildStartupPending = false;
+
+    function relayoutExpertWorkspaceWithRightLog() {
+        if (isGuidedUi) {
+            return;
+        }
+        var terminalNode = document.getElementById('pagebuilder-workspace-terminal');
+        if (!terminalNode) {
+            return;
+        }
+        var logCard = terminalNode.closest('.card');
+        if (!logCard || logCard.closest('.pb-ai-sidebar-log-sticky')) {
+            return;
+        }
+        var layoutRow = logCard.nextElementSibling;
+        if (!layoutRow || !layoutRow.classList.contains('row')) {
+            return;
+        }
+        var cols = Array.prototype.slice.call(layoutRow.children || []).filter(function (node) {
+            return node && node.nodeType === 1;
+        });
+        if (cols.length < 2) {
+            return;
+        }
+        layoutRow.classList.add('justify-content-center', 'align-items-start');
+        cols[0].className = 'col-12 col-xxl-4 col-xl-5';
+        cols[1].className = 'col-12 col-xxl-5 col-xl-7';
+
+        var sidebarCol = document.createElement('div');
+        sidebarCol.className = 'col-12 col-xxl-3';
+        var sticky = document.createElement('div');
+        sticky.className = 'pb-ai-sidebar-log-sticky';
+        sidebarCol.appendChild(sticky);
+        logCard.classList.remove('mb-3');
+        logCard.classList.add('mb-0');
+        sticky.appendChild(logCard);
+        layoutRow.appendChild(sidebarCol);
+    }
+
+    relayoutExpertWorkspaceWithRightLog();
+
+    var toast = typeof previewBridge.toast === 'function'
+        ? previewBridge.toast
+        : function (type, message) {
+            if (!message) {
+                return;
+            }
+            if (window.BackendToast && typeof window.BackendToast[type] === 'function') {
+                window.BackendToast[type](message);
+                return;
+            }
+            console[type === 'error' ? 'error' : 'log'](message);
+        };
+
+
+
+    function parsePayload(event) {
+        if (!event || typeof event.data !== 'string' || event.data === '') {
+            return {};
+        }
+        try {
+            return JSON.parse(event.data);
+        } catch (error) {
+            return {};
+        }
+    }
+
+    function showWorkspaceResumeConfirm(message) {
+        if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+            return window.BackendConfirm.show(message, {
+                title: messages.resumePromptTitle
+            }).then(function (confirmed) {
+                return !!confirmed;
+            });
+        }
+        return Promise.resolve(window.confirm(message));
+    }
+
+    function requestExplicitResumeBuild() {
+        if (!resumeBuildUrl || !publicId) {
+            toast('error', messages.planConfirmRequired);
+            return;
+        }
+        postForm(resumeBuildUrl, {
+            public_id: publicId
+        }).then(function (response) {
+            if (response && response.data && typeof response.data === 'object') {
+                hydrateWorkspaceFromState(response.data);
+            }
+            if (response && response.success && window.PbAiOperationRunner && typeof window.PbAiOperationRunner.startFromResponse === 'function') {
+                if (window.PbAiOperationRunner.startFromResponse(response, 'build')) {
+                    toast('success', messages.resumeStarted);
+                    return;
+                }
+            }
+            toast(response && response.success ? 'info' : 'error', (response && response.message) ? String(response.message) : messages.networkError);
+        }).catch(function (error) {
+            toast('error', (error && error.message) ? String(error.message) : messages.networkError);
+        });
+    }
+
+    function maybePromptToObserveRunningOperation(data) {
+        if (!data || typeof data !== 'object') {
+            return false;
+        }
+        var op = data.active_operation && typeof data.active_operation === 'object' ? data.active_operation : null;
+        if (!op) {
+            return false;
+        }
+        var opStatus = String(op.status || '');
+        var opName = String(op.operation || '');
+        var executionToken = String(op.execution_token || '');
+        if (['queued', 'running'].indexOf(opStatus) < 0 || !executionToken || !opName) {
+            return false;
+        }
+        if (['build', 'regenerate_page', 'publish'].indexOf(opName) < 0) {
+            return false;
+        }
+        var operationKey = 'observe:' + opName + ':' + executionToken;
+        if (resumePromptHandledByKey[operationKey]) {
+            return false;
+        }
+        resumePromptHandledByKey[operationKey] = true;
+        showWorkspaceResumeConfirm(messages.resumeRunningPrompt).then(function (confirmed) {
+            if (!confirmed) {
+                toast('info', messages.resumeDeferred);
+                return;
+            }
+            disableNavigationDuringOperation();
+            startOperationStream(buildOperationUrl(executionToken), opName, executionToken, 'explicitResumeRunningOperation');
+        });
+        return true;
+    }
+
+    function maybePromptToContinuePendingBuild(data) {
+        if (!data || typeof data !== 'object') {
+            return false;
+        }
+        var op = data.active_operation && typeof data.active_operation === 'object' ? data.active_operation : null;
+        if (op && ['queued', 'running'].indexOf(String(op.status || '')) >= 0) {
+            return false;
+        }
+        if (!data.plan_confirmed || !data.has_execution_blueprint || !data.has_pending_build_tasks || !resumeBuildUrl || !publicId) {
+            return false;
+        }
+        var signature = '';
+        if (data.scope && typeof data.scope === 'object') {
+            signature = String(
+                data.scope.execution_blueprint_confirmed_signature
+                || data.scope.execution_blueprint_signature
+                || ''
+            );
+        }
+        var promptKey = 'pending:' + (signature || publicId);
+        if (resumePromptHandledByKey[promptKey]) {
+            return false;
+        }
+        resumePromptHandledByKey[promptKey] = true;
+        showWorkspaceResumeConfirm(messages.resumePendingPrompt).then(function (confirmed) {
+            if (!confirmed) {
+                toast('info', messages.resumeDeferred);
+                return;
+            }
+            requestExplicitResumeBuild();
+        });
+        return true;
+    }
+
+    function maybePromptWorkspaceContinuation(data) {
+        if (maybePromptToObserveRunningOperation(data)) {
+            return true;
+        }
+        return maybePromptToContinuePendingBuild(data);
+    }
+
+    if (workspaceTerminal && typeof workspaceTerminal.on === 'function') {
+        workspaceTerminal.on('snapshot', function (event) {
+            var data = parsePayload(event);
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+            if (data.active_operation && typeof data.active_operation === 'object') {
+                activeOperation = data.active_operation;
+            }
+            maybePromptWorkspaceContinuation(data);
+        });
+    }
+
+    function ensureWorkspaceTerminalVisible(operation) {
+        var panels = Array.from(document.querySelectorAll('.pb-ai-workspace-log-panel'));
+        panels.forEach(function (panel) {
+            if (panel && panel.tagName && panel.tagName.toLowerCase() === 'details') {
+                panel.open = true;
+            }
+        });
+        if (panels[0] && typeof panels[0].scrollIntoView === 'function') {
+            panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        if (workspaceTerminal && operation) {
+            workspaceTerminal.log(<?= \json_encode((string)__('开始执行工作区操作：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + String(operation), 'start');
+        }
+    }
+
+    function buildOperationTerminalMessage(payload, fallback) {
+        if (!payload || typeof payload !== 'object') {
+            return String(fallback || '');
+        }
+        var message = String(payload.message || fallback || '');
+        var pageType = String(payload.page_type || '');
+        var pageLabel = compactPageDisplayLabel(payload.page_label || '', pageType);
+        if (pageLabel && pageType && message.indexOf(pageLabel) < 0) {
+            return pageLabel + ' · ' + message;
+        }
+        return message;
+    }
+
+    function logOperationToWorkspaceTerminal(kind, payload, level, fallback) {
+        if (!workspaceTerminal) {
+            return;
+        }
+        var message = buildOperationTerminalMessage(payload, fallback);
+        if (!message) {
+            return;
+        }
+        var fingerprint = [
+            String(kind || ''),
+            String(level || ''),
+            String(payload && payload.page_type || ''),
+            String(payload && payload.progress_percent || ''),
+            message
+        ].join('|');
+        if (fingerprint === lastOperationTerminalFingerprint) {
+            return;
+        }
+        lastOperationTerminalFingerprint = fingerprint;
+        workspaceTerminal.log(message, level || 'info');
+    }
+
+    function resolveOperationSseBaseUrl() {
+        if (operationSseBaseUrl) {
+            return String(operationSseBaseUrl);
+        }
+        try {
+            var currentUrl = new URL(window.location.href);
+            var normalizedPath = String(currentUrl.pathname || '').replace(/\/workspace(?:\/)?$/i, '/operation-sse');
+            if (normalizedPath !== currentUrl.pathname) {
+                currentUrl.pathname = normalizedPath;
+                currentUrl.search = '';
+                return currentUrl.toString();
+            }
+        } catch (error) {
+            // no-op
+        }
+        return '';
+    }
+
+    function buildOperationUrl(executionToken) {
+        var baseUrl = resolveOperationSseBaseUrl();
+        if (!baseUrl || !executionToken) {
+            return '';
+        }
+        try {
+            var requestUrl = new URL(baseUrl, window.location.origin);
+            requestUrl.searchParams.set('public_id', publicId);
+            requestUrl.searchParams.set('execution_token', executionToken);
+            return requestUrl.toString();
+        } catch (error) {
+            var separator = baseUrl.indexOf('?') >= 0 ? '&' : '?';
+            return baseUrl
+                + separator
+                + 'public_id=' + encodeURIComponent(publicId)
+                + '&execution_token=' + encodeURIComponent(executionToken);
+        }
+    }
+
+    function normalizeOperationStreamStartPayload(payload, fallbackOperation) {
+        var operation = String((payload && payload.operation) || fallbackOperation || '');
+        var executionToken = String((payload && payload.execution_token) || '');
+        var streamUrl = String((payload && payload.stream_url) || '');
+
+        // 若后端仅返回 stream_url，尝试反解 execution_token
+        if (!executionToken && streamUrl) {
+            try {
+                var parsed = new URL(streamUrl, window.location.origin);
+                executionToken = String(parsed.searchParams.get('execution_token') || '');
+            } catch (error) {
+                var matched = streamUrl.match(/[?&]execution_token=([^&]+)/);
+                if (matched && matched[1]) {
+                    executionToken = decodeURIComponent(String(matched[1]));
+                }
+            }
+        }
+
+        // 仅接受 operation-sse 作为 EventSource 目标；否则回退到本地拼装
+        var streamLooksValid = false;
+        if (streamUrl) {
+            try {
+                var normalizedUrl = new URL(streamUrl, window.location.origin);
+                streamLooksValid = String(normalizedUrl.pathname || '').toLowerCase().indexOf('/operation-sse') >= 0;
+            } catch (error) {
+                streamLooksValid = streamUrl.toLowerCase().indexOf('/operation-sse') >= 0;
+            }
+        }
+        if (!streamLooksValid || !streamUrl) {
+            streamUrl = buildOperationUrl(executionToken);
+        }
+
+        return {
+            operation: operation,
+            executionToken: executionToken,
+            streamUrl: streamUrl
+        };
+    }
+
+    function closeOperationSource(source) {
+        var target = source || runningSource;
+        if (!target) {
+            return;
+        }
+        try {
+            target.close();
+        } catch (error) {
+            // no-op
+        }
+        if (!source || target === runningSource) {
+            runningSource = null;
+        }
+    }
+
+    function normalizeRedirectUrlForCurrentHost(redirectUrl) {
+        var raw = String(redirectUrl || '').trim();
+        if (!raw) {
+            return '';
+        }
+        try {
+            var currentUrl = new URL(window.location.href);
+            var parsed = new URL(raw, currentUrl.origin);
+            var redirectHost = String(parsed.hostname || '').toLowerCase();
+            var currentHost = String(currentUrl.hostname || '').toLowerCase();
+            if (!redirectHost) {
+                return parsed.toString();
+            }
+            var isLocalhost = redirectHost === 'localhost' || redirectHost === '127.0.0.1' || redirectHost === '::1';
+            if (isLocalhost && currentHost && currentHost !== redirectHost) {
+                parsed.protocol = currentUrl.protocol;
+                parsed.host = currentUrl.host;
+            }
+            return parsed.toString();
+        } catch (error) {
+            return raw;
+        }
+    }
+
+    function finishOperation(payload) {
+        var redirectUrl = '';
+        if (payload && payload.data && payload.data.redirect_url) {
+            redirectUrl = String(payload.data.redirect_url);
+        } else if (payload && payload.redirect_url) {
+            redirectUrl = String(payload.redirect_url);
+        }
+        if (redirectUrl) {
+            window.location.href = normalizeRedirectUrlForCurrentHost(redirectUrl);
+            return;
+        }
+        window.location.reload();
+    }
+
+    function resetOperationUiOnFailure(operation) {
+        if (String(operation || '') === 'build') {
+            buildStartupPending = false;
+            if (typeof previewBridge.hideBuildGuard === 'function') {
+                previewBridge.hideBuildGuard();
+            }
+            if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                previewBridge.setBuildNavigationGuard(false);
+            }
+            if (typeof previewBridge.resetBuildStartUi === 'function') {
+                previewBridge.resetBuildStartUi();
+            }
+        }
+        if (String(operation || '') === 'publish') {
+            var publishBtn = document.getElementById('pb-ai-start-publish');
+            if (publishBtn) {
+                publishBtn.disabled = false;
+            }
+            document.querySelectorAll('.pb-ai-start-publish-shortcut').forEach(function (btn) {
+                btn.disabled = false;
+            });
+        }
+        clearBlockStreamingState();
+    }
+
+    function renderBlockStreamingState(messageText) {
+        if (!blockRefreshState.active || !blockRefreshState.pageType || !blockRefreshState.blockId) {
+            return;
+        }
+        var frame = document.getElementById('pb-ai-visual-preview-frame');
+        if (!frame) {
+            return;
+        }
+        var doc;
+        try {
+            doc = frame.contentDocument;
+        } catch (error) {
+            return;
+        }
+        if (!doc) {
+            return;
+        }
+        var selector = '.pb-ai-block-wrapper[data-page-type="' + blockRefreshState.pageType + '"][data-component="' + blockRefreshState.blockId + '"]';
+        var wrapper = doc.querySelector(selector);
+        if (!wrapper) {
+            return;
+        }
+        if (!wrapper.style.position) {
+            wrapper.style.position = 'relative';
+        }
+        var overlay = wrapper.querySelector('.pb-ai-inline-stream-state');
+        if (!overlay) {
+            overlay = doc.createElement('div');
+            overlay.className = 'pb-ai-inline-stream-state';
+            overlay.style.cssText = 'position:absolute;inset:18px;display:flex;align-items:center;justify-content:center;padding:18px;border-radius:18px;background:rgba(15,23,42,.78);color:#fff;font-size:14px;font-weight:600;z-index:100100;backdrop-filter:blur(8px);text-align:center;';
+            wrapper.appendChild(overlay);
+        }
+        overlay.textContent = String(messageText || '');
+    }
+
+    function clearBlockStreamingState() {
+        var frame = document.getElementById('pb-ai-visual-preview-frame');
+        if (frame) {
+            try {
+                var doc = frame.contentDocument;
+                if (doc) {
+                    doc.querySelectorAll('.pb-ai-inline-stream-state').forEach(function (el) { el.remove(); });
+                }
+            } catch (error) {
+                // no-op
+            }
+        }
+        blockRefreshState.active = false;
+        blockRefreshState.pageType = '';
+        blockRefreshState.blockId = '';
+    }
+
+    function updateTaskSummaryFromState(workspaceState) {
+        var summary = workspaceState && workspaceState.build_task_summary && typeof workspaceState.build_task_summary === 'object'
+            ? workspaceState.build_task_summary
+            : null;
+        if (!summary) {
+            return;
+        }
+        window.__pbTaskSummary = summary;
+        if (typeof window.applyTaskSummarySelectionFilter === 'function') {
+            window.applyTaskSummarySelectionFilter();
+        }
+    }
+
+    window.applyTaskSummarySelectionFilter = function applyTaskSummarySelectionFilter() {
+        var summary = window.__pbTaskSummary && typeof window.__pbTaskSummary === 'object'
+            ? window.__pbTaskSummary
+            : null;
+        if (!summary) {
+            return;
+        }
+        var selectedMap = Object.create(null);
+        normalizeRequiredPageTypesForSummary(getSelectedPageTypesForSummary()).forEach(function (pageType) {
+            selectedMap[String(pageType || '')] = true;
+        });
+        Object.keys(getTaskAlwaysVisiblePageTypeMapForSummary()).forEach(function (fixedType) {
+            selectedMap[fixedType] = true;
+        });
+
+        var totalEl = document.getElementById('pb-ai-task-total');
+        var doneEl = document.getElementById('pb-ai-task-done');
+        var pendingEl = document.getElementById('pb-ai-task-pending');
+        var runningEl = document.getElementById('pb-ai-task-running');
+
+        var groupsContainer = document.getElementById('pb-ai-task-groups');
+        var groups = summary.groups && typeof summary.groups === 'object' ? summary.groups : null;
+        if (!groupsContainer || !groups) {
+            if (totalEl) { totalEl.textContent = String(summary.total || 0); }
+            if (doneEl) { doneEl.textContent = String(summary.done || 0); }
+            if (pendingEl) { pendingEl.textContent = String(summary.pending || 0); }
+            if (runningEl) { runningEl.textContent = String(summary.running || 0); }
+            return;
+        }
+        var calcTotal = 0;
+        var calcDone = 0;
+        var calcPending = 0;
+        var calcRunning = 0;
+        groupsContainer.innerHTML = '';
+        Object.keys(groups).forEach(function (groupKey) {
+            var group = groups[groupKey];
+            if (!group || typeof group !== 'object') {
+                return;
+            }
+            var pageType = String(group.page_type || groupKey || '').trim();
+            if (!selectedMap[pageType]) {
+                return;
+            }
+            var wrapper = document.createElement('div');
+            wrapper.className = 'border rounded p-2 small';
+            var done = parseInt(String(group.done || 0), 10) || 0;
+            var total = parseInt(String(group.total || 0), 10) || 0;
+            var running = parseInt(String(group.running || 0), 10) || 0;
+            var pending = Math.max(total - done - running, 0);
+            calcTotal += total;
+            calcDone += done;
+            calcRunning += running;
+            calcPending += pending;
+            wrapper.innerHTML = '<div class="d-flex align-items-center justify-content-between gap-2"><strong>'
+                + pageType
+                + '</strong><span class="text-muted">'
+                + done + '/' + total
+                + '</span></div>';
+            groupsContainer.appendChild(wrapper);
+        });
+        if (totalEl) { totalEl.textContent = String(calcTotal); }
+        if (doneEl) { doneEl.textContent = String(calcDone); }
+        if (pendingEl) { pendingEl.textContent = String(calcPending); }
+        if (runningEl) { runningEl.textContent = String(calcRunning); }
+    };
+
+    var workspaceApiRef = window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi === 'object' ? window.__pbWorkspaceApi : {};
+    workspaceApiRef.updateTaskSummaryFromState = updateTaskSummaryFromState;
+    workspaceApiRef.refreshWorkspaceStateFromServer = refreshWorkspaceStateFromServer;
+    window.__pbWorkspaceApi = workspaceApiRef;
+    window.updateTaskSummaryFromState = updateTaskSummaryFromState;
+
+    function refreshWorkspaceStateFromServer() {
+        if (!stateJsonUrl || typeof fetch !== 'function') {
+            return Promise.resolve(null);
+        }
+
+        return fetch(stateJsonUrl, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin'
+        }).then(function (response) {
+            return response.text().then(function (text) {
+                var payload = null;
+                try {
+                    payload = JSON.parse(text);
+                } catch (error) {
+                    return null;
+                }
+                if (!payload || !payload.success || !payload.data || typeof payload.data !== 'object') {
+                    return null;
+                }
+                hydrateWorkspaceFromState(payload.data);
+                if (payload.data.virtual_pages_by_type && typeof payload.data.virtual_pages_by_type === 'object') {
+                    if (typeof previewBridge.setVirtualPagesByType === 'function') {
+                        previewBridge.setVirtualPagesByType(payload.data.virtual_pages_by_type);
+                    }
+                }
+                if (payload.data.active_operation && typeof payload.data.active_operation === 'object') {
+                    activeOperation = payload.data.active_operation;
+                }
+                maybePromptWorkspaceContinuation(payload.data);
+                return payload.data;
+            });
+        }).catch(function () {
+            return null;
+        });
+    }
+
+    function startOperationStream(streamUrl, operation, executionToken, sourceTag) {
+        if (!streamUrl) {
+            return false;
+        }
+
+        var operationKey = String(operation || '') + ':' + String(executionToken || '');
+        var now = Date.now();
+        if (runningSource && runningOperationKey === operationKey) {
+            return true;
+        }
+        // 同一个 operation_key 在短时间内可能会被多路触发（snapshot 自动恢复、state 拉取、手工启动返回）
+        // 这里增加冷却窗口，避免出现“同一条 SSE 被接管多次”的重复连接。
+        if (runningOperationKey === operationKey) {
+            var lastStartedAt = parseInt(runningStartAtByOperationKey[operationKey] || 0, 10) || 0;
+            if (lastStartedAt > 0 && (now - lastStartedAt) < 3000) {
+                return false;
+            }
+        }
+
+        if (String(operation || '') === 'build') {
+            // 只有在还没有显示 build guard 时才显示（比如直接调用 startOperationStream 而不是通过 pbAiConfirmGenerateThemeContinue）
+            if (buildStartupPending && document.getElementById('pb-ai-build-guard') && !document.getElementById('pb-ai-build-guard').classList.contains('d-none')) {
+                // Build guard 已经显示了（由 pbAiConfirmGenerateThemeContinue 显示），不重复显示
+            } else {
+                buildStartupPending = true;
+                if (typeof previewBridge.showBuildGuard === 'function') {
+                    previewBridge.showBuildGuard(messages.buildPreparing);
+                }
+            }
+            if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                previewBridge.setBuildNavigationGuard(true);
+            }
+        }
+
+        try {
+            closeOperationSource();
+            runningOperationKey = operationKey;
+            runningStartAtByOperationKey[operationKey] = now;
+            ensureWorkspaceTerminalVisible(operation);
+            if (typeof previewBridge.pauseWorkspaceStream === 'function') {
+                previewBridge.pauseWorkspaceStream();
+            }
+        } catch (preSourceError) {
+            resetOperationUiOnFailure(operation);
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
+            return false;
+        }
+
+        var settled = false;
+        var lastServerError = '';
+        var source = null;
+        try {
+            source = new EventSource(streamUrl);
+        } catch (eventSourceError) {
+            toast('error', <?= \json_encode((string)__('操作事件流创建失败，请检查 URL 或浏览器连接策略。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
+            resetOperationUiOnFailure(operation);
+            return false;
+        }
+        runningSource = source;
+
+        source.addEventListener('start', function (event) {
+            logOperationToWorkspaceTerminal('start', parsePayload(event), 'start', <?= \json_encode((string)__('工作区操作已启动'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+        });
+
+        source.addEventListener('error', function (event) {
+            var payload = parsePayload(event);
+            if (payload && payload.message) {
+                lastServerError = normalizeToastMessage(String(payload.message));
+                if (Array.isArray(payload.required_params) && payload.required_params.length > 0) {
+                    lastServerError += ' [' + payload.required_params.join(', ') + ']';
+                }
+                logOperationToWorkspaceTerminal('error', payload, 'error', lastServerError);
+            }
+        });
+
+        source.addEventListener('warning', function (event) {
+            var payload = parsePayload(event);
+            var wmsg = normalizeToastMessage((payload && payload.message) ? String(payload.message) : (messages.operationDuplicateStream || ''));
+            if (wmsg) {
+                logOperationToWorkspaceTerminal('warning', payload, 'warning', wmsg);
+                if (!(payload && payload.retry_attempt)) {
+                    toast('warning', wmsg);
+                }
+            }
+        });
+
+        source.addEventListener('environment_ready', function (event) {
+            var payload = parsePayload(event);
+            if (payload && payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+            }
+            // 确保清理 buildStartupPending 状态
+            buildStartupPending = false;
+            if (typeof previewBridge.hideBuildGuard === 'function') {
+                previewBridge.hideBuildGuard();
+            }
+            if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                previewBridge.setBuildNavigationGuard(false);
+            }
+            toast('success', (payload && payload.message) ? String(payload.message) : (messages.buildReady || '编辑环境已就绪'));
+        });
+
+        source.addEventListener('progress', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || !payload.message) {
+                return;
+            }
+            logOperationToWorkspaceTerminal('progress', payload, 'progress', payload.message);
+
+            // 更新 build guard 进度条（如果正在显示）
+            if (buildStartupPending && typeof previewBridge.updateBuildGuardProgress === 'function') {
+                var pageType = String(payload.page_type || '');
+                var pageLabel = String(payload.page_label || pageTypeLabelMap[pageType] || pageType || '').trim();
+                var detailText = pageLabel ? (pageLabel + ' · ' + payload.message) : String(payload.message);
+                previewBridge.updateBuildGuardProgress(
+                    (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + (parseInt(payload.progress_percent || 0, 10) || 0) + '%'),
+                    payload.progress_percent || 0,
+                    detailText
+                );
+            }
+
+            // 第一个 progress 事件到来时，隐藏 build guard 并滚动到 SSE 终端
+            if (buildStartupPending && typeof previewBridge.hideBuildGuard === 'function') {
+                buildStartupPending = false;
+                previewBridge.hideBuildGuard();
+                previewBridge.setBuildNavigationGuard(false);
+                // 滚动到 SSE 终端
+                var panels = Array.from(document.querySelectorAll('.pb-ai-workspace-log-panel'));
+                if (panels.length > 0 && typeof panels[0].scrollIntoView === 'function') {
+                    panels[0].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            }
+
+            if (window.PbAiWorkspacePreview && payload.page_type) {
+                var progressPercent = parseInt(payload.progress_percent || 0, 10) || 0;
+                var messageText = progressPercent > 0
+                    ? (<?= \json_encode((string)__('生成中'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + progressPercent + '%')
+                    : String(payload.message);
+                window.PbAiWorkspacePreview.markPageGenerationStatus(String(payload.page_type), 'running', messageText);
+                if (blockRefreshState.active && String(payload.page_type || '') === String(blockRefreshState.pageType || '')) {
+                    renderBlockStreamingState(messageText);
+                }
+            }
+
+            // 实时更新预览 iframe（如果存在）
+            var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
+            if (previewFrame && payload.page_type && payload.progress_percent >= 100 && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === String(currentPreviewPageType || ''))) {
+                // 页面生成完成，刷新预览
+                window.setTimeout(function() {
+                    if (previewFrame.src) {
+                        previewFrame.src = previewFrame.src;
+                    }
+                }, 500);
+            }
+        });
+
+        source.addEventListener('chunk', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            if (!payload.message) {
+                var chunkText = String(payload.chunk || '');
+                var regionText = String(payload.region || '');
+                payload.message = regionText
+                    ? (<?= \json_encode((string)__('AI 片段（区域）'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ' ' + regionText + ': ' + chunkText)
+                    : (<?= \json_encode((string)__('AI 片段'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ': ' + chunkText);
+            }
+            logOperationToWorkspaceTerminal('chunk', payload, 'info', payload.message);
+        });
+
+        source.addEventListener('shared_component_generated', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            if (payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+            }
+
+            var region = String(payload.region || '');
+            var regionLabel = region === 'header'
+                ? <?= \json_encode((string)__('Header'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                : (region === 'footer'
+                    ? <?= \json_encode((string)__('Footer'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    : region);
+            var logMessage = payload.message || (regionLabel ? (regionLabel + ' ' + <?= \json_encode((string)__('已同步到可视化主题'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>) : '');
+            logOperationToWorkspaceTerminal('shared_component_generated', payload, 'progress', logMessage);
+
+            var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
+            if (previewFrame && previewFrame.src) {
+                window.setTimeout(function() {
+                    previewFrame.src = previewFrame.src;
+                }, 400);
+            }
+
+            if (regionLabel) {
+                toast('success', regionLabel + ' ' + <?= \json_encode((string)__('已生成并同步'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            }
+        });
+
+        source.addEventListener('page_generated', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || !payload.page_type) {
+                return;
+            }
+            if (payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+            }
+            logOperationToWorkspaceTerminal('page_generated', payload, 'done', <?= \json_encode((string)__('页面已完成真实 AI 生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+
+            if (window.PbAiWorkspacePreview) {
+                var pageType = String(payload.page_type);
+                var pageLabel = String(payload.page_label || pageTypeLabelMap[pageType] || pageType).trim();
+                var pageId = parseInt(payload.page_id || 0, 10) || 0;
+                var shouldActivate = buildStartupPending || !document.querySelector('.pb-ai-preview-tab.active');
+                window.PbAiWorkspacePreview.upsertPreviewTab(pageType, pageLabel, pageId, shouldActivate);
+                window.PbAiWorkspacePreview.markPageGenerationStatus(pageType, 'done', <?= \json_encode((string)__('已生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                if (shouldActivate) {
+                    window.PbAiWorkspacePreview.switchPreviewByType(pageType);
+                }
+            }
+
+            // 页面生成完成，实时刷新预览
+            var previewFrame = document.getElementById('pb-ai-visual-preview-frame');
+            if (previewFrame && previewFrame.src && !blockRefreshState.active && (buildStartupPending || String(payload.page_type || '') === String(currentPreviewPageType || ''))) {
+                window.setTimeout(function() {
+                    // 刷新 iframe 以显示新生成的页面
+                    previewFrame.src = previewFrame.src;
+                }, 800);
+            }
+
+            // 显示页面生成完成的提示
+            var pageLabel = payload.page_label || payload.page_type;
+            toast('success', <?= \json_encode((string)__('页面已生成：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + pageLabel);
+        });
+
+        source.addEventListener('task_completed', function (event) {
+            var payload = parsePayload(event);
+            if (!payload || typeof payload !== 'object') {
+                return;
+            }
+            if (payload.state) {
+                hydrateWorkspaceFromState(payload.state);
+            }
+            var taskMessage = String(payload.message || <?= \json_encode((string)__('任务已完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            logOperationToWorkspaceTerminal('task_completed', payload, 'done', taskMessage);
+        });
+
+        source.addEventListener('done', function (event) {
+            if (settled) {
+                return;
+            }
+            settled = true;
+            var payload = parsePayload(event);
+            closeOperationSource(source);
+
+            var success = !payload || payload.success !== false;
+            if (!success) {
+                logOperationToWorkspaceTerminal('done_error', payload, 'error', lastServerError || '工作区操作执行失败');
+                toast('error', (payload && payload.message) ? String(payload.message) : lastServerError || <?= \json_encode((string)__('操作执行失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                resetOperationUiOnFailure(operation);
+                // 操作失败，恢复导航按钮
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                return;
+            }
+
+            if (payload && payload.duplicate_stream) {
+                var dupMsg = (payload.message) ? String(payload.message) : (messages.operationDuplicateStream || '');
+                toast('warning', dupMsg);
+                logOperationToWorkspaceTerminal('done', payload, 'warning', dupMsg);
+                if (payload.state) {
+                    hydrateWorkspaceFromState(payload.state);
+                }
+                buildStartupPending = false;
+                if (typeof previewBridge.hideBuildGuard === 'function') {
+                    previewBridge.hideBuildGuard();
+                }
+                if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                    previewBridge.setBuildNavigationGuard(false);
+                }
+                clearBlockStreamingState();
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                return;
+            }
+
+            toast('success', (payload && payload.message) ? String(payload.message) : <?= \json_encode((string)__('操作执行完成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+            logOperationToWorkspaceTerminal('done', payload, 'done', '工作区操作执行完成');
+
+            // 操作完成，恢复导航按钮
+            if (typeof enableNavigationAfterOperation === 'function') {
+                enableNavigationAfterOperation();
+            }
+
+            if (String(operation || '') === 'build') {
+                buildStartupPending = false;
+                if (payload && payload.state) {
+                    hydrateWorkspaceFromState(payload.state);
+                }
+                if (typeof previewBridge.hideBuildGuard === 'function') {
+                    previewBridge.hideBuildGuard();
+                }
+                if (typeof previewBridge.setBuildNavigationGuard === 'function') {
+                    previewBridge.setBuildNavigationGuard(false);
+                }
+                clearBlockStreamingState();
+                if (typeof previewBridge.resetBuildStartUi === 'function') {
+                    previewBridge.resetBuildStartUi();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+                return;
+            }
+            if (
+                blockRefreshState.active
+                && String(operation || '') === 'regenerate_page'
+                && payload
+                && payload.state
+                && payload.state.virtual_pages_by_type
+            ) {
+                if (typeof previewBridge.setVirtualPagesByType === 'function') {
+                    previewBridge.setVirtualPagesByType(payload.state.virtual_pages_by_type);
+                }
+                var pageState = payload.state.virtual_pages_by_type[blockRefreshState.pageType] || null;
+                var nextBlock = pageState && Array.isArray(pageState.blocks)
+                    ? pageState.blocks.find(function (item) { return String(item.block_id || '') === String(blockRefreshState.blockId || ''); })
+                    : null;
+                if (nextBlock) {
+                    if (typeof previewBridge.updateVirtualBlockState === 'function') {
+                        previewBridge.updateVirtualBlockState(blockRefreshState.pageType, nextBlock);
+                    }
+                    var replaced = typeof previewBridge.replaceCurrentBlockHtml === 'function'
+                        ? previewBridge.replaceCurrentBlockHtml(blockRefreshState.pageType, nextBlock)
+                        : false;
+                    if (replaced && typeof previewBridge.bindEmbeddedPreviewFrameBridge === 'function') {
+                        previewBridge.bindEmbeddedPreviewFrameBridge();
+                    }
+                    clearBlockStreamingState();
+                    if (replaced) {
+                        if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                            previewBridge.resumeWorkspaceStream();
+                        }
+                        return;
+                    }
+                }
+            }
+            clearBlockStreamingState();
+            if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                previewBridge.resumeWorkspaceStream();
+            }
+            finishOperation(payload);
+        });
+
+        source.onerror = function () {
+            if (settled) {
+                return;
+            }
+            if (lastServerError) {
+                toast('error', lastServerError);
+                settled = true;
+                closeOperationSource(source);
+                resetOperationUiOnFailure(operation);
+                // 操作错误，恢复导航按钮
+                if (typeof enableNavigationAfterOperation === 'function') {
+                    enableNavigationAfterOperation();
+                }
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                }
+            }
+        };
+
+        return true;
+    }
+
+    window.setTimeout(function () {
+        refreshWorkspaceStateFromServer();
+    }, 0);
+
+    function pickOperationResponsePayload(data) {
+        if (!data || typeof data !== 'object') {
+            return null;
+        }
+        var level1 = (data.data && typeof data.data === 'object') ? data.data : null;
+        var level2 = (level1 && level1.data && typeof level1.data === 'object') ? level1.data : null;
+        if (data.execution_token || data.stream_url || data.operation) {
+            return data;
+        }
+        if (level1 && (level1.execution_token || level1.stream_url || level1.operation)) {
+            return level1;
+        }
+        if (level2 && (level2.execution_token || level2.stream_url || level2.operation)) {
+            return level2;
+        }
+        return data;
+    }
+
+    function startFromResponse(data, fallbackOperation) {
+        if (!data || !data.success) {
+            return false;
+        }
+        var payload = pickOperationResponsePayload(data) || {};
+        var normalized = normalizeOperationStreamStartPayload(payload, fallbackOperation);
+        var executionToken = normalized.executionToken;
+        var operation = normalized.operation;
+        var streamUrl = normalized.streamUrl;
+        if (!executionToken || !streamUrl) {
+            var missing = [];
+            if (!executionToken) {
+                missing.push('execution_token');
+            }
+            if (!streamUrl) {
+                missing.push('stream_url');
+            }
+            toast('error', <?= \json_encode((string)__('操作已创建但缺少 SSE 参数'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + ': ' + missing.join(', '));
+            return false;
+        }
+        return startOperationStream(streamUrl, operation, executionToken, 'startFromResponse');
+    }
+
+    window.PbAiOperationRunner = {
+        startFromResponse: startFromResponse
+    };
+
+    function startPublishFlow(triggerButton) {
+        if (!startPublishUrl) {
+            toast('error', messages.publishStartUnavailable);
+            if (triggerButton) {
+                triggerButton.disabled = false;
+            }
+            return;
+        }
+        if (triggerButton && triggerButton.disabled) {
+            toast('warning', messages.publishRunning);
+            return;
+        }
+        if (triggerButton) {
+            triggerButton.disabled = true;
+        }
+        postForm(startPublishUrl, { public_id: publicId }).then(function (data) {
+            if (!data || !data.success) {
+                if (triggerButton) {
+                    triggerButton.disabled = false;
+                }
+                toast('error', (data && data.message) ? String(data.message) : <?= \json_encode((string)__('启动发布失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                return;
+            }
+            if (!startFromResponse(data, 'publish')) {
+                if (triggerButton) {
+                    triggerButton.disabled = false;
+                }
+                toast('error', messages.operationStreamMissing);
+            }
+        }).catch(function () {
+            if (triggerButton) {
+                triggerButton.disabled = false;
+            }
+            toast('error', <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+        });
+    }
+
+    function checkBeforePublishAndStart(triggerButton) {
+        if (triggerButton && triggerButton.disabled) {
+            toast('warning', messages.publishRunning);
+            return;
+        }
+        if (!publishCheckUrl) {
+            startPublishFlow(triggerButton);
+            return;
+        }
+        if (triggerButton) {
+            triggerButton.disabled = true;
+        }
+        toast('info', messages.publishChecking);
+        postForm(publishCheckUrl, { public_id: publicId }).then(function (checkData) {
+            var payload = checkData && checkData.data && typeof checkData.data === 'object' ? checkData.data : {};
+            var passed = !!(payload && payload.passed);
+            if (!passed) {
+                if (triggerButton) {
+                    triggerButton.disabled = false;
+                }
+                var items = Array.isArray(payload.items) ? payload.items : [];
+                var siteReadyItem = null;
+                var firstFailedItem = null;
+                items.forEach(function (item) {
+                    if (!item || typeof item !== 'object') {
+                        return;
+                    }
+                    if (String(item.key || '') === 'site_ready') {
+                        siteReadyItem = item;
+                    }
+                    if (!firstFailedItem && !item.ok) {
+                        firstFailedItem = item;
+                    }
+                });
+                if (siteReadyItem && !siteReadyItem.ok) {
+                    toast('warning', <?= \json_encode((string)__('域名尚未就绪，请先等待域名流程完成后再确认建站。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                    return;
+                }
+                if (firstFailedItem && firstFailedItem.label) {
+                    toast('warning', <?= \json_encode((string)__('发布前仍有未完成项：'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> + String(firstFailedItem.label));
+                    return;
+                }
+                toast('warning', <?= \json_encode((string)__('发布前检查未通过，请先完成页面与配置。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+                return;
+            }
+            startPublishFlow(triggerButton);
+        }).catch(function () {
+            if (triggerButton) {
+                triggerButton.disabled = false;
+            }
+            toast('error', <?= \json_encode((string)__('网络错误，请稍后重试'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
+        });
+    }
+
+    var publishBtn = document.getElementById('pb-ai-start-publish');
+    if (publishBtn) {
+        publishBtn.addEventListener('click', function () {
+            checkBeforePublishAndStart(publishBtn);
+        });
+    }
+
+    document.querySelectorAll('.pb-ai-start-publish-shortcut').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            checkBeforePublishAndStart(btn);
+        });
+    });
+
+    window.setTimeout(function () {
+        var workspaceApiState = resolveWorkspaceApi();
+        maybePromptWorkspaceContinuation({
+            active_operation: activeOperation,
+            plan_confirmed: typeof workspaceApiState.getPlanConfirmedState === 'function' ? workspaceApiState.getPlanConfirmedState() : false,
+            has_execution_blueprint: typeof workspaceApiState.getHasExecutionBlueprintState === 'function' ? workspaceApiState.getHasExecutionBlueprintState() : false,
+            has_pending_build_tasks: typeof workspaceApiState.getHasPendingBuildTasksState === 'function' ? workspaceApiState.getHasPendingBuildTasksState() : false,
+            scope: {
+                execution_blueprint_confirmed_signature: ''
+            }
+        });
+    }, 300);
+
+    // 禁用会跳走的导航按钮
+    function disableNavigationDuringOperation() {
+        // 禁用返回按钮
+        document.querySelectorAll('.pb-guided-sidebar .btn[href], .pb-ai-back-btn, #pb-guided-back').forEach(function(btn) {
+            if (btn.tagName === 'A' || btn.classList.contains('btn')) {
+                btn.setAttribute('data-disabled-during-operation', 'true');
+                btn.setAttribute('disabled', 'disabled');
+                btn.style.opacity = '0.5';
+                btn.style.pointerEvents = 'none';
+            }
+        });
+
+        // 禁用切换到其他页面的按钮（如 expert/guided 切换）
+        document.querySelectorAll('.pb-ai-workspace-track-btn, .pb-ai-expert-toggle, [data-switch-workspace]').forEach(function(btn) {
+            btn.setAttribute('data-disabled-during-operation', 'true');
+            btn.setAttribute('disabled', 'disabled');
+            btn.style.opacity = '0.5';
+            btn.style.pointerEvents = 'none';
+        });
+
+        // 禁用开始新的构建按钮（但保留当前构建的进度显示）
+        document.querySelectorAll('.pb-ai-run-virtual-theme, .pb-ai-start-build').forEach(function(btn) {
+            if (!btn.classList.contains('pb-ai-run-virtual-theme-running')) {
+                btn.setAttribute('data-disabled-during-operation', 'true');
+                btn.setAttribute('disabled', 'disabled');
+                btn.style.opacity = '0.5';
+                btn.style.pointerEvents = 'none';
+            }
+        });
+    }
+
+    // 恢复导航按钮
+    function enableNavigationAfterOperation() {
+        document.querySelectorAll('[data-disabled-during-operation]').forEach(function(el) {
+            el.removeAttribute('data-disabled-during-operation');
+            el.removeAttribute('disabled');
+            el.style.opacity = '';
+            el.style.pointerEvents = '';
+        });
+    }
+})();
+</script>

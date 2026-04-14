@@ -139,7 +139,7 @@ API响应为空,"API response is empty"
 模型代码已存在，请使用其他代码,"The model code already exists, please use a different code."
 模型复制成功,"Model replication successful"
 "模型复制失败: %{1}","Model replication failed: %{1}"
-原始模型不能删除，只能删除复制的模型,"The original model cannot be deleted; only copied models can be deleted."
+该模型受保护，只有复制模型或自定义模型可以删除,该模型受保护，只有复制模型或自定义模型可以删除
 模型删除成功,"Model deleted successfully"
 "模型删除失败: %{1}","Model deletion failed: %{1}"
 "Missing model id","Missing model id"
@@ -151,8 +151,9 @@ API响应为空,"API response is empty"
 "成功禁用 %{1} 个模型","Successfully disabled %{1} models."
 批量禁用失败：%{1},"Batch disable failed: %{1}"
 请选择要删除的模型,"Please select the model to delete."
-"成功删除 %{1} 个复制模型","Successfully deleted %{1} replication models"
-"跳过 %{1} 个原始模型（原始模型不可删除）","Skip %{1} original models (original models cannot be deleted)"
+"成功删除 %{1} 个模型","成功删除 %{1} 个模型"
+"跳过 %{1} 个受保护模型（仅复制/自定义模型可删除）","跳过 %{1} 个受保护模型（仅复制/自定义模型可删除）"
+所选模型均为受保护模型，仅复制/自定义模型可删除,所选模型均为受保护模型，仅复制/自定义模型可删除
 没有模型被删除,"No model has been deleted."
 批量删除失败：%{1},"Batch deletion failed: %{1}"
 "成功清空模型表，共删除 %{1} 个模型","Successfully cleared the model table, a total of %{1} models deleted."
@@ -597,9 +598,8 @@ AI模型管理,"AI Model Management"
 筛选,Screening
 重置,Reset
 ID,ID
-类型,Type
-输入价格,"Input price"
-输出价格,"Output price"
+模型信息,模型信息
+价格,价格
 自配置状态,"Self-configuring state"
 自配置连通性,"Self-configuring connectivity"
 供应商连通性,"Supplier connectivity"
@@ -608,6 +608,8 @@ ID,ID
 自定义供应商,自定义供应商
 复制,Copy
 原始,Original
+输入,输入
+输出,输出
 已自配置,Self-configured
 未自配置,Unconfigured
 通过,Through
@@ -634,15 +636,16 @@ ID,ID
 连通测试,"Connectivity test"
 自配置连通测试,"Self-configuration connectivity test"
 刷新,Refresh
-原始模型不能删除,"The original model cannot be deleted."
+受保护模型不能删除,受保护模型不能删除
 请先选择要激活的模型,"Please select the model you wish to activate first."
 确定要激活选中的模型吗？,确定要激活选中的模型吗？
 请先选择要禁用的模型,"Please select the model you wish to disable first."
 确定要禁用选中的模型吗？,"Are you sure you want to disable the selected models?"
 请先选择要删除的模型,"Please select the model you wish to delete first."
-确定要删除选中的模型吗？此操作不可恢复！注意：只能删除复制的模型，原始模型无法删除。,确定要删除选中的模型吗？此操作不可恢复！注意：只能删除复制的模型，原始模型无法删除。
+确定要删除选中的模型吗？此操作不可恢复！注意：仅复制模型和自定义模型可删除。,确定要删除选中的模型吗？此操作不可恢复！注意：仅复制模型和自定义模型可删除。
 请先选择要测试的模型,"Please select the model to test first."
 测试失败：,"Test failed:"
+受保护模型不能删除，只能删除复制模型或自定义模型,受保护模型不能删除，只能删除复制模型或自定义模型
 确定要删除模型,"Are you sure you want to delete the model?"
 吗？,?
 删除失败:,删除失败:
@@ -652,6 +655,7 @@ ID,ID
 条件不足,"Insufficient conditions"
 无法激活,"Unable to activate"
 无法激活:,"Unable to activate:"
+类型,Type
 原始模型,"Original model"
 技术参数,"Technical parameters"
 配置参数,"Configuration parameters"
