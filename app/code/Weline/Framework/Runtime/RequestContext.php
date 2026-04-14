@@ -547,9 +547,14 @@ class RequestContext
             $urlParsed = (bool)$context->get('route.url_parsed', $urlParsed);
         }
 
+        // preferContext=true 时不能优先用 input.uri：WLS 下 Url::parser 已把剥前缀后的路径写进
+        // input.server.REQUEST_URI，但 input.uri 可能仍是入口阶段（如 WlsRuntime）写入的旧值，
+        // 若此处优先 input.uri，会把错误 URI 写回 $_SERVER，导致 FPM 正常、WLS 路由 404。
         $uri = (string)(
             $preferContext
-                ? ($context->get('input.uri', '/') ?: ($server['REQUEST_URI'] ?? '/'))
+                ? (($server['REQUEST_URI'] ?? '') !== ''
+                    ? (string)$server['REQUEST_URI']
+                    : ($context->get('input.uri', '/') ?: '/'))
                 : (($server['REQUEST_URI'] ?? $context->get('input.uri', '/')) ?: '/')
         );
         if ($uri === '') {
