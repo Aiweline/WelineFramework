@@ -27,12 +27,13 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         // 在 run_before 阶段，使用轻量级 URL 解析器判断请求类型（不触发事件，不查询数据库）
         $parse = $event->getData('parse');
         $uri = $parse['uri'];
-        $isApiRequest = UrlParser::isApiRequest($_SERVER['ORIGIN_REQUEST_URI'] ?? '');
-        $isBackend = UrlParser::isBackendRequest($_SERVER['ORIGIN_REQUEST_URI'] ?? '');
+        $originRequestUri = (string)\w_env('server.origin_request_uri', '');
+        $isApiRequest = UrlParser::isApiRequest($originRequestUri);
+        $isBackend = UrlParser::isBackendRequest($originRequestUri);
         
         // 如果 area 不是 API，再检查 Accept 头（兼容某些特殊情况）
         if (!$isApiRequest) {
-            $acceptHeader = $_SERVER['HTTP_ACCEPT'] ?? '';
+            $acceptHeader = (string)\w_env('server.http_accept', '');
             $isApiRequest = str_contains($acceptHeader, 'application/json');
         }
         // 仅处理前端非 API 请求

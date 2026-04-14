@@ -216,15 +216,17 @@ class SystemConfig extends \Weline\Framework\Database\Model
 
     protected function loadSingleConfigValue(string $key, string $module, string $area): mixed
     {
-        $configValue = $this->clear()
+        $configRows = $this->clear()
             ->reset()
             ->where([
                 [self::schema_fields_KEY, $key],
                 [self::schema_fields_AREA, $area],
                 [self::schema_fields_MODULE, $module],
             ])
-            ->find()
-            ->fetch();
+            ->select()
+            ->fetchArray();
+
+        $configValue = is_array($configRows) ? ($configRows[0] ?? null) : null;
 
         if (is_array($configValue) && array_key_exists(self::schema_fields_VALUE, $configValue)) {
             return $configValue[self::schema_fields_VALUE];
@@ -258,8 +260,23 @@ class SystemConfig extends \Weline\Framework\Database\Model
 
         $cacheEntry = $this->readCacheEnvelope($this->buildSingleCacheKey($key, $module, $area));
         if ($cacheEntry['hit']) {
-            RequestContext::set($requestCacheKey, $cacheEntry['value']);
-            return $cacheEntry['value'];
+            $cachedValue = $cacheEntry['value'];
+            if ($cachedValue !== null) {
+                RequestContext::set($requestCacheKey, $cachedValue);
+                return $cachedValue;
+            }
+
+            // Guard against stale null cache: a config key may be created by another request/worker later.
+            // Re-check DB once before trusting cached null.
+            $dbValue = $this->loadSingleConfigValue($key, $module, $area);
+            if ($dbValue !== null) {
+                RequestContext::set($requestCacheKey, $dbValue);
+                $this->writeCacheEnvelope($this->buildSingleCacheKey($key, $module, $area), $dbValue);
+                return $dbValue;
+            }
+
+            RequestContext::set($requestCacheKey, null);
+            return null;
         }
 
         $value = $this->loadSingleConfigValue($key, $module, $area);

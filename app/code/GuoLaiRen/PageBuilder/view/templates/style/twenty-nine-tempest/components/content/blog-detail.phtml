@@ -83,7 +83,7 @@ if ($articleContent !== '') {
 }
 
 $hasRail = $showSidebar || ($showShare && !empty($currentPost)) || ($showTags && !empty($tags)) || !empty($jumpLinks);
-$shareUrl = urlencode((string) ($_SERVER['REQUEST_URI'] ?? ''));
+$shareUrl = urlencode(\w_env_request_uri());
 $shareTitle = urlencode((string) ($currentPost['title'] ?? ''));
 ?>
 

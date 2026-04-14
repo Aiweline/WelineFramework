@@ -226,10 +226,10 @@ class ExchangeRateApi implements ExchangeRateApiInterface
                          getenv('deploy') === 'dev' ||
                          (defined('ENV') && ENV === 'dev') ||
                          (isset($_ENV['deploy']) && $_ENV['deploy'] === 'dev') ||
-                         (isset($_SERVER['HTTP_HOST']) && (
-                             strpos($_SERVER['HTTP_HOST'], 'localhost') !== false ||
-                             strpos($_SERVER['HTTP_HOST'], '127.0.0.1') !== false ||
-                             strpos($_SERVER['HTTP_HOST'], '::1') !== false
+                         ((string)\w_env('server.http_host', '') !== '' && (
+                             strpos((string)\w_env('server.http_host', ''), 'localhost') !== false ||
+                             strpos((string)\w_env('server.http_host', ''), '127.0.0.1') !== false ||
+                             strpos((string)\w_env('server.http_host', ''), '::1') !== false
                          ));
                 
                 // 本地开发环境或明确禁用SSL验证时，跳过SSL验证

@@ -6,7 +6,7 @@ if (!$oauthService->isConfigured()) {
     return;
 }
 
-$redirectUrl = (string) ($this->getData('redirect_url') ?? ($_GET['redirect'] ?? $_GET['redirect_url'] ?? ''));
+$redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect', '') ?: \w_env_get('redirect_url', '')));
 $startUrl = w_url('weshop_googleauth/frontend/auth/start', [
     'area' => 'frontend',
     'mode' => 'login',
