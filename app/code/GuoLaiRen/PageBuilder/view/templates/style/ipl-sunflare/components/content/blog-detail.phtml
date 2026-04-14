@@ -59,9 +59,9 @@ $showSharePanel = $showShare;
 $hasSidebarData = $showSidebar && (!empty($blogCategories) || !empty($recentPosts));
 $hasRail = $showTagPanel || $showSharePanel || $hasSidebarData;
 
-$requestUri = (string)($_SERVER['REQUEST_URI'] ?? '');
-$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-$host = (string)($_SERVER['HTTP_HOST'] ?? '');
+$requestUri = \w_env_request_uri();
+$scheme = \w_env_is_https() ? 'https' : 'http';
+$host = \w_env_http_host();
 $currentUrl = $host !== '' ? ($scheme . '://' . $host . $requestUri) : $requestUri;
 $shareUrl = urlencode($currentUrl);
 $shareTitle = urlencode((string)($currentPost['title'] ?? ''));

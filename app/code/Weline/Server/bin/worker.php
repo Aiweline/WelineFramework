@@ -682,7 +682,7 @@ $ipcRole = $isMaintenanceWorker ? \Weline\Server\IPC\ControlMessage::ROLE_MAINTE
 $waitingForAck = false;
 $readySentTime = 0.0;
 $ackRetryCount = 0;
-$maxAckRetries = 3;
+$maxAckRetries = 0;
 $ackTimeout = 10.0;
 
 $ipcClient = null;
@@ -724,7 +724,12 @@ if ($controlPort > 0) {
                     // 收到 Master ACK 确认，启动完成
                     $waitingForAck = false;
                     $ackWorkerId = $msg['worker_id'] ?? 0;
-                    WlsLogger::info_("收到 Master ACK_READY 确认 (worker_id={$ackWorkerId})，启动确认完成");
+                    $dispatcherConfirmed = (bool)($msg['dispatcher_confirmed'] ?? false);
+                    $ackPort = (int)($msg['port'] ?? 0);
+                    WlsLogger::info_(
+                        "收到 Master ACK_READY 确认 (worker_id={$ackWorkerId}, dispatcher_confirmed="
+                        . ($dispatcherConfirmed ? '1' : '0') . ", port={$ackPort})，停止 READY 重报"
+                    );
                     break;
                     
                 case \Weline\Server\IPC\ControlMessage::TYPE_RELOAD:
@@ -892,7 +897,7 @@ if (!isset($ackRetryCount)) {
     $ackRetryCount = 0;
 }
 if (!isset($maxAckRetries)) {
-    $maxAckRetries = 3;
+    $maxAckRetries = 0;
 }
 if (!isset($ackTimeout)) {
     $ackTimeout = 10.0;
@@ -1218,16 +1223,10 @@ while (true) {
         $ackElapsed = \microtime(true) - $readySentTime;
         if ($ackElapsed >= $ackTimeout) {
             $ackRetryCount++;
-            if ($ackRetryCount > $maxAckRetries) {
-                // 超过最大重试次数，放弃等待（但不退出，继续正常工作）
-                $waitingForAck = false;
-                WlsLogger::warning_("ACK 等待超时，已重试 {$maxAckRetries} 次，放弃等待（继续正常运行）");
-            } else {
-                // 重发 ready 消息
-                WlsLogger::warning_("ACK 等待超时（{$ackElapsed}s），第 {$ackRetryCount} 次重发 ready...");
-                $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
-                $readySentTime = \microtime(true);
-            }
+            // 直到收到闭环确认前持续重发 ready（不中断）
+            WlsLogger::warning_("ACK 等待超时（{$ackElapsed}s），第 {$ackRetryCount} 次重发 ready...");
+            $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
+            $readySentTime = \microtime(true);
         }
     }
 
