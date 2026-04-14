@@ -36,7 +36,11 @@ class Config extends BackendController
     public function debugHeaders()
     {
         $headers = [];
-        foreach ($_SERVER as $key => $value) {
+        $serverData = \w_env('server', []);
+        if (!is_array($serverData)) {
+            $serverData = [];
+        }
+        foreach ($serverData as $key => $value) {
             if (strpos($key, 'HTTP_') === 0) {
                 $headerName = str_replace(' ', '-', ucwords(str_replace('_', ' ', strtolower(substr($key, 5)))));
                 $headers[$headerName] = $value;
@@ -49,10 +53,10 @@ class Config extends BackendController
             'X-Requested-With' => $this->request->getHeader('X-Requested-With') ?? '',
             'isAjax' => $this->request->isAjax(),
             'format' => $this->request->getGet('format', ''),
-            'GET' => $_GET,
-            'POST' => $_POST,
-            'REQUEST_METHOD' => $_SERVER['REQUEST_METHOD'] ?? '',
-            'CONTENT_TYPE' => $_SERVER['CONTENT_TYPE'] ?? '',
+            'GET' => \w_env_get(),
+            'POST' => \w_env_post(),
+            'REQUEST_METHOD' => \w_env('server.request_method', ''),
+            'CONTENT_TYPE' => \w_env('server.content_type', ''),
         ];
         
         return $this->fetchJson([
@@ -895,7 +899,7 @@ class Config extends BackendController
                     'User-Agent: WelineFramework-AutoLeadAgent/1.0',
                 ],
             ];
-            $host = $_SERVER['HTTP_HOST'] ?? '';
+            $host = (string)\w_env('server.http_host', '');
             if (stripos($host, 'localhost') !== false || stripos($host, '127.0.0.1') !== false) {
                 $curlOptions[CURLOPT_SSL_VERIFYPEER] = false;
                 $curlOptions[CURLOPT_SSL_VERIFYHOST] = false;
@@ -1198,7 +1202,7 @@ class Config extends BackendController
         
         // 检测环境
         $isWindows = strtoupper(substr(PHP_OS, 0, 3)) === 'WIN';
-        $host = $_SERVER['HTTP_HOST'] ?? '';
+        $host = (string)\w_env('server.http_host', '');
         $isDev = stripos($host, 'localhost') !== false || 
                  stripos($host, '127.0.0.1') !== false ||
                  getenv('APP_ENV') === 'development';

@@ -516,13 +516,13 @@ class Page extends BackendController
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
         $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
+        $aiEnabled = $this->normalizeSwitchValue($aiEnabled);
         $this->assign('ai_enabled', $aiEnabled);
         $this->assign('page_type_prompt_map', PageModel::getPageTypePromptInstructionsMap());
 
         // 读取多语言功能配置
         $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
+        $i18nEnabled = $this->normalizeSwitchValue($i18nEnabled);
         $this->assign('i18n_enabled', $i18nEnabled);
 
         // 如果多语言功能关闭，清空active_locales和selected_locales
@@ -1041,7 +1041,7 @@ class Page extends BackendController
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
         $i18nEnabled = $systemConfig->getConfig('i18n_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
+        $i18nEnabled = $this->normalizeSwitchValue($i18nEnabled);
         $this->assign('i18n_enabled', $i18nEnabled);
 
         // 未翻译语言提示已移除（页面表单内的语言 Tab 已有未翻译标记，无需重复提示）
@@ -1117,7 +1117,7 @@ class Page extends BackendController
         /** @var SystemConfig $systemConfig */
         $systemConfig = ObjectManager::getInstance(SystemConfig::class);
 $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', SystemConfig::area_BACKEND);
-        $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
+        $aiEnabled = $this->normalizeSwitchValue($aiEnabled);
         $this->assign('ai_enabled', $aiEnabled);
         $this->assign('page_type_prompt_map', PageModel::getPageTypePromptInstructionsMap());
 
@@ -3033,10 +3033,10 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     public function uploadAsset()
     {
         try {
-            if (!isset($_FILES['file'])) {
+            $file = \w_env_files('file');
+            if ($file === null || !is_array($file)) {
                 return $this->fetchJson(['success' => false, 'message' => '缺少文件参数']);
             }
-            $file = $_FILES['file'];
             if (!is_array($file) || ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                 return $this->fetchJson(['success' => false, 'message' => '文件上传失败']);
             }
@@ -3177,10 +3177,10 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             if ($handle === '') {
                 throw new \Exception(__('缺少 handle'));
             }
-            if (!isset($_FILES['file']) || $_FILES['file']['error'] !== UPLOAD_ERR_OK) {
+            $file = \w_env_files('file');
+            if ($file === null || !is_array($file) || ($file['error'] ?? UPLOAD_ERR_OK) !== UPLOAD_ERR_OK) {
                 throw new \Exception(__('文件上传失败或未选择文件'));
             }
-            $file = $_FILES['file'];
             $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
             $allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'];
             if (!in_array($ext, $allowed)) {
@@ -3648,9 +3648,9 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
             // 获取上传的文件
             $uploadedFile = $this->request->getFile('config_file');
             
-            // 如果没有获取到，尝试直接从 $_FILES 获取
-            if (!$uploadedFile && isset($_FILES['config_file'])) {
-                $uploadedFile = $_FILES['config_file'];
+            // 如果 Request/FileBag 尚未拿到，回退到统一环境入口
+            if (!$uploadedFile) {
+                $uploadedFile = \w_env_files('config_file');
             }
             
             if ($pageId <= 0 || empty($styleCode)) {
@@ -3665,8 +3665,8 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
                     'success' => false,
                     'message' => __('请选择要导入的Excel文件'),
                     'debug' => [
-                        'has_file' => isset($_FILES['config_file']),
-                        'files_keys' => array_keys($_FILES),
+                        'has_file' => \w_env_files('config_file') !== null,
+                        'files_keys' => array_keys((array)(\w_env_files() ?? [])),
                         'uploaded_file' => $uploadedFile ? 'exists' : 'null'
                     ]
                 ]);
@@ -5315,5 +5315,14 @@ $aiEnabled = $systemConfig->getConfig('ai_enabled', 'GuoLaiRen_PageBuilder', Sys
     private function getAiSiteVisualUrlService(): AiSiteVisualUrlService
     {
         return ObjectManager::getInstance(AiSiteVisualUrlService::class);
+    }
+
+    private function normalizeSwitchValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '0';
+        }
+
+        return ((string)$value === '1' || $value === true || $value === 1) ? '1' : '0';
     }
 }

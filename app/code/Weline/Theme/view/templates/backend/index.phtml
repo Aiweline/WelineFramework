@@ -118,7 +118,7 @@ foreach ($themes as $themeItem) {
                     $moduleName = $theme['module_name'] ?? '';
                     $isActive = ($activeId && $themeId === $activeId);
                     $previewImage = $area === 'backend'
-                        ? ($theme['backend_preview_image'] ?? $theme['preview_image'] ?? '')
+                        ? ($theme['backend_preview_image'] ?? '')
                         : ($theme['frontend_preview_image'] ?? $theme['preview_image'] ?? '');
                     $previewImageSrc = $previewImage ? '/' . ltrim($previewImage, '/') : '';
                     $hasPreview = $previewImageSrc !== '';
@@ -895,8 +895,39 @@ foreach ($themes as $themeItem) {
     const BATCH_GENERATE_URL = '<?= $url->getBackendUrl('theme/backend/index/postGenerateAllPreviews') ?>';
     const batchGenerateModalElement = document.getElementById('batchGenerateModal');
     const singleGenerateModalElement = document.getElementById('singleGenerateModal');
-    const batchGenerateModal = batchGenerateModalElement ? new bootstrap.Modal(batchGenerateModalElement) : null;
-    const singleGenerateModal = singleGenerateModalElement ? new bootstrap.Modal(singleGenerateModalElement) : null;
+
+    function createModalAdapter(element) {
+        if (!element) {
+            return null;
+        }
+
+        if (window.bootstrap && window.bootstrap.Modal) {
+            return new window.bootstrap.Modal(element);
+        }
+
+        return {
+            show: function() {
+                element.classList.add('show');
+                element.style.display = 'block';
+                element.removeAttribute('aria-hidden');
+                element.setAttribute('aria-modal', 'true');
+                document.body.classList.add('modal-open');
+            },
+            hide: function() {
+                element.classList.remove('show');
+                element.style.display = 'none';
+                element.setAttribute('aria-hidden', 'true');
+                element.removeAttribute('aria-modal');
+                document.body.classList.remove('modal-open');
+                document.querySelectorAll('.modal-backdrop').forEach(function(backdrop) {
+                    backdrop.remove();
+                });
+            }
+        };
+    }
+
+    const batchGenerateModal = createModalAdapter(batchGenerateModalElement);
+    const singleGenerateModal = createModalAdapter(singleGenerateModalElement);
 
     function escapeHtml(text) {
         if (!text) {

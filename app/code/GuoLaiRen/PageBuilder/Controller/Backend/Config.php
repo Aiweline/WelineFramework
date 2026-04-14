@@ -40,11 +40,11 @@ class Config extends BackendController
         
         // 获取AI功能开关配置（默认关闭）
         $aiEnabled = $systemConfig->getConfig(self::CONFIG_KEY_AI_ENABLED, self::MODULE, self::AREA);
-        $aiEnabled = $aiEnabled === null ? '0' : $aiEnabled; // 默认不开启
+        $aiEnabled = $this->normalizeSwitchValue($aiEnabled);
 
         // 获取多语言功能开关配置（默认关闭）
         $i18nEnabled = $systemConfig->getConfig(self::CONFIG_KEY_I18N_ENABLED, self::MODULE, self::AREA);
-        $i18nEnabled = $i18nEnabled === null ? '0' : $i18nEnabled; // 默认不开启
+        $i18nEnabled = $this->normalizeSwitchValue($i18nEnabled);
 
         $rawDebugTitle = $systemConfig->getConfig(self::CONFIG_KEY_AI_SITE_AGENT_DEBUG_SITE_TITLE, self::MODULE, self::AREA);
         $debugSiteTitle = $rawDebugTitle === null
@@ -145,5 +145,14 @@ class Config extends BackendController
                 'message' => __('保存失败：%{1}', [$e->getMessage()])
             ]);
         }
+    }
+
+    private function normalizeSwitchValue(mixed $value): string
+    {
+        if ($value === null) {
+            return '0';
+        }
+
+        return ((string)$value === '1' || $value === true || $value === 1) ? '1' : '0';
     }
 }

@@ -196,6 +196,12 @@ final class DeadCodeEliminationPass implements CompilePassInterface
      */
     private function hasSideEffect(TagNode $node): bool
     {
+        // 命名空间标签（如 i18n:language:switcher / w:*）通常由 Taglib 回调生成输出，
+        // 即使自闭合且无显式属性，也不能按“空标签”裁剪。
+        if (str_contains($node->name, ':') || str_starts_with($node->name, 'w:')) {
+            return true;
+        }
+
         return in_array($node->name, self::SIDE_EFFECT_TAGS, true);
     }
 }

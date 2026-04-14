@@ -76,6 +76,9 @@ alwaysApply: false
   - 不要再新增或继续文档化 `theme.json`
 - 用户可见文案用 `__()`、`<lang>`、`@lang`；弹窗/确认用 BackendToast / BackendConfirm
 - CSS 禁止硬编码颜色；JS 保持 IIFE 闭包，避免全局污染
+- 标签创建场景默认内置 CSS/JS：优先写在标签模板的 `<theme:css>` / `<theme:js>` 中，保证开箱即用
+- 标签内置样式必须兼容主题色系：优先使用主题变量（`var(--*)`）或色盘 token，禁止写死品牌色
+- 标签内置脚本/样式必须使用项目自身资源：优先 inline（由主题系统抽取/打包），或引用本地模块静态资源；**禁止外部 CDN/第三方域名引用**
 - 组件或 widget 的 CSS 选择器要有明确作用域前缀，避免 `.card`、`.header` 这种裸类名污染
 - **【硬性】自定义标签（非 HTML）属性禁止 PHP**
   - 范围：`<w:...>`、`<w:module:...>` 等 Taglib / 自定义标签

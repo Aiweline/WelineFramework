@@ -4,7 +4,7 @@
 $this->setData('title', __('用户登录'));
 ?>
 <?php
-$redirectUrl = (string) ($this->getData('redirect_url') ?? ($_GET['redirect_url'] ?? $_GET['redirect'] ?? ''));
+$redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect_url', '') ?: \w_env_get('redirect', '')));
 $googleLoginButton = trim((string) $this->fetch('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', [
     'redirect_url' => $redirectUrl,
 ]));
