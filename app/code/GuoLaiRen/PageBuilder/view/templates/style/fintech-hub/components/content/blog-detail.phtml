@@ -68,11 +68,13 @@ if (!empty($currentPost['tags'])) {
     $tags = array_values(array_filter(array_map('trim', $raw), static fn ($t) => $t !== ''));
 }
 
-$requestUri = (string) ($_SERVER['REQUEST_URI'] ?? '');
+$requestUri = (string) \w_env('request.uri', '');
 $shareSourceUrl = $requestUri;
-if (!empty($_SERVER['HTTP_HOST'])) {
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $shareSourceUrl = $scheme . '://' . $_SERVER['HTTP_HOST'] . $requestUri;
+$httpHost = (string) \w_env('server.http_host', '');
+if ($httpHost !== '') {
+    $httpsFlag = (string) \w_env('server.https', '');
+    $scheme = ($httpsFlag !== '' && $httpsFlag !== 'off') ? 'https' : 'http';
+    $shareSourceUrl = $scheme . '://' . $httpHost . $requestUri;
 }
 $shareUrl = rawurlencode($shareSourceUrl);
 $shareTitle = rawurlencode((string) ($currentPost['title'] ?? ''));

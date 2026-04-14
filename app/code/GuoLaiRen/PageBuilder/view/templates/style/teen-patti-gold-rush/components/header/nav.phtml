@@ -233,8 +233,9 @@ $normalizePath = function($path) {
 };
 
 $requestPath = '/';
-if (!empty($_SERVER['REQUEST_URI'])) {
-    $parsedRequestPath = parse_url((string)$_SERVER['REQUEST_URI'], PHP_URL_PATH);
+$rawRequestUri = (string) \w_env('request.uri', '');
+if ($rawRequestUri !== '') {
+    $parsedRequestPath = parse_url($rawRequestUri, PHP_URL_PATH);
     if (is_string($parsedRequestPath) && $parsedRequestPath !== '') {
         $requestPath = $parsedRequestPath;
     }

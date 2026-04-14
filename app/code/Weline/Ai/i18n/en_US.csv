@@ -280,6 +280,7 @@ AI模块资源扫描完成,AI模块资源扫描完成
 没有满足条件的%{provider}供应商账户（需激活）,"No %{provider} provider account meets the conditions (needs to be activated)"
 没有满足条件的%{provider}供应商账户（需激活、连通成功且余额>0）,"No %{provider} provider account meets the conditions (needs to be activated, connection successful and balance > 0)"
 智能体不存在：%{1},智能体不存在：%{1}
+"上游已取消 AI 流式任务","上游已取消 AI 流式任务"
 "AI 返回格式异常，无法解析","AI 返回格式异常，无法解析"
 流式返回格式异常，无法解析,流式返回格式异常，无法解析
 模型不存在：%{1},"Model does not exist: %{1}"

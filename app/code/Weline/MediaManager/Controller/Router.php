@@ -14,7 +14,7 @@ class Router implements RouterInterface
      */
     public static function process(string &$path, array &$rule): void
     {
-        if (!($_SERVER['WELINE_IS_MEDIA'] ?? false)) {
+        if (!\w_env('is_media', false)) {
             return;
         }
         $pathLower = strtolower(ltrim($path, '/'));

@@ -12,7 +12,7 @@ use Weline\Framework\Event\EventsManager;
 /**@var string $component */
 ?>
 <!DOCTYPE html>
-<html lang="<?= str_replace('_', '-', $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN') ?>">
+<html lang="<?= str_replace('_', '-', \w_env('user.lang', 'zh_Hans_CN')) ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">

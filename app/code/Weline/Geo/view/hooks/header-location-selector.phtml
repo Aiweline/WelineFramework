@@ -14,7 +14,7 @@
 
 // 从cookie或URL参数获取位置信息
 $currentLocation = null;
-$locationFromCookie = $_COOKIE['weline_delivery_location'] ?? null;
+$locationFromCookie = \w_env_cookie('weline_delivery_location');
 if ($locationFromCookie) {
     $currentLocation = json_decode($locationFromCookie, true);
 }

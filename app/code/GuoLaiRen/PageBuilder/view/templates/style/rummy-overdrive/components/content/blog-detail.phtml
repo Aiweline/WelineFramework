@@ -52,7 +52,7 @@ if (!empty($currentPost['tags'])) {
     }));
 }
 
-$shareBaseUrl = (string)($currentPost['url'] ?? ($_SERVER['REQUEST_URI'] ?? ''));
+$shareBaseUrl = (string)($currentPost['url'] ?? \w_env_request_uri());
 $shareUrl = urlencode($shareBaseUrl);
 $shareTitle = urlencode((string)($currentPost['title'] ?? ''));
 $hasCover = $showCover && !empty($currentPost['cover_image']);

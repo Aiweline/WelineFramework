@@ -262,6 +262,8 @@ class Dispatcher
 
     /** @var 'set_pool'|'add_workers'|'probe_blacklisted_workers'|null */
     private ?string $deferredWorkerPoolFiberKind = null;
+    /** @var array{type: 'set_pool'|'add_workers'|'probe_blacklisted_workers', ports?: int[], role?: string}|null */
+    private ?array $deferredWorkerPoolFiberJob = null;
     private bool $spinWaitTickInProgress = false;
     private int $maintenanceTakeoverRetryTicks = 3;
     private float $lastMaintenanceOperationLogAt = 0.0;
@@ -694,6 +696,7 @@ class Dispatcher
             $job = \array_shift($this->deferredWorkerPoolJobs);
             $this->deferredWorkerPoolFiber = $this->createDeferredWorkerPoolFiber($job);
             $this->deferredWorkerPoolFiberKind = $job['type'];
+            $this->deferredWorkerPoolFiberJob = $job;
         }
 
         $fiber = $this->deferredWorkerPoolFiber;
@@ -712,6 +715,7 @@ class Dispatcher
             $this->passthroughCore->setWarmupCooperativeYield(null);
             $this->deferredWorkerPoolFiber = null;
             $this->deferredWorkerPoolFiberKind = null;
+            $this->deferredWorkerPoolFiberJob = null;
             return;
         }
         if ($fiber->isTerminated()) {
@@ -788,8 +792,10 @@ class Dispatcher
     {
         $fiber = $this->deferredWorkerPoolFiber;
         $kind = $this->deferredWorkerPoolFiberKind;
+        $job = $this->deferredWorkerPoolFiberJob;
         $this->deferredWorkerPoolFiber = null;
         $this->deferredWorkerPoolFiberKind = null;
+        $this->deferredWorkerPoolFiberJob = null;
 
         if ($fiber === null) {
             return;
@@ -805,6 +811,7 @@ class Dispatcher
             $result = \is_array($payload) ? $payload : [];
             $acceptedPorts = \is_array($result['accepted'] ?? null) ? $result['accepted'] : [];
             $rejectedPorts = \is_array($result['rejected'] ?? null) ? $result['rejected'] : [];
+            $role = (string)($job['role'] ?? ControlMessage::ROLE_WORKER);
             $currentWorkerPoolSize = $this->passthroughCore->getWorkerCount();
             $this->updateMaintenanceFallbackState(
                 $currentWorkerPoolSize === 0,
@@ -819,6 +826,10 @@ class Dispatcher
                     $items[] = "{$port}: {$reason}";
                 }
                 $this->log('SET_WORKER_POOL 预热失败，拒绝纳入负载池: ' . \implode('; ', $items), 'ERROR');
+            }
+            if ($role === ControlMessage::ROLE_WORKER) {
+                $requestedPorts = \is_array($job['ports'] ?? null) ? $job['ports'] : [];
+                $this->sendWorkerPoolAckForPorts($requestedPorts);
             }
 
             return;
@@ -843,6 +854,8 @@ class Dispatcher
                     'ERROR'
                 );
             }
+            $requestedPorts = \is_array($job['ports'] ?? null) ? $job['ports'] : [];
+            $this->sendWorkerPoolAckForPorts($requestedPorts);
 
             return;
         }
@@ -853,6 +866,32 @@ class Dispatcher
                 $ports = \implode(', ', $recovered);
                 $this->log("Worker 恢复: 端口 {$ports} 已重新加入负载均衡", 'HEALTH');
             }
+        }
+    }
+
+    /**
+     * Dispatcher 侧闭环确认：逐个端口回执当前是否已在业务池中。
+     * 即使端口已存在也会回执，便于 Worker 侧停止重报。
+     *
+     * @param int[] $ports
+     */
+    private function sendWorkerPoolAckForPorts(array $ports): void
+    {
+        if ($this->ipcClient === null || !$this->ipcClient->isConnected()) {
+            return;
+        }
+        $pool = $this->passthroughCore->getWorkerPorts();
+        foreach ($ports as $port) {
+            $p = (int)$port;
+            if ($p <= 0) {
+                continue;
+            }
+            $inPool = \in_array($p, $pool, true);
+            $this->ipcClient->send(ControlMessage::workerPoolAck($p, $inPool, ControlMessage::ROLE_WORKER));
+            $this->log(
+                "Worker 入池回执: port={$p}, in_pool=" . ($inPool ? '1' : '0') . ", dispatcher_port={$this->port}",
+                'DEBUG'
+            );
         }
     }
 

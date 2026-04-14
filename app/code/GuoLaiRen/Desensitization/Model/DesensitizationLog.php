@@ -66,7 +66,7 @@ class DesensitizationLog extends Model
             ->setData(self::schema_fields_METHOD, $method)
             ->setData(self::schema_fields_EXECUTION_TIME, $executionTime)
             ->setData(self::schema_fields_USER_ID, 0)
-            ->setData(self::schema_fields_IP, $_SERVER['REMOTE_ADDR'] ?? '')
+            ->setData(self::schema_fields_IP, (string)\w_env('server.remote_addr', ''))
             ->setData(self::schema_fields_CREATED_AT, date('Y-m-d H:i:s'));
         $this->save();
         return $this;

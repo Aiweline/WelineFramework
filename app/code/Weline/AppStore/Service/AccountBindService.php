@@ -560,6 +560,6 @@ class AccountBindService
      */
     private function getCurrentDomain(): string
     {
-        return $_SERVER['HTTP_HOST'] ?? 'localhost';
+        return (string)\w_env('server.http_host', 'localhost');
     }
 }

@@ -691,7 +691,7 @@ class ModuleInstallerService
      */
     private function getCurrentDomain(): string
     {
-        return $_SERVER['HTTP_HOST'] ?? 'localhost';
+        return (string)\w_env('server.http_host', 'localhost');
     }
 
     /**
@@ -709,8 +709,8 @@ class ModuleInstallerService
         ];
 
         foreach ($headers as $header) {
-            if (!empty($_SERVER[$header])) {
-                $ip = $_SERVER[$header];
+            $ip = (string)\w_env('server.' . strtolower($header), '');
+            if ($ip !== '') {
                 if (strpos($ip, ',') !== false) {
                     $ip = trim(explode(',', $ip)[0]);
                 }
