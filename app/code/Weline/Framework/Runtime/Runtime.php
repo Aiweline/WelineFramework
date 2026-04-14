@@ -21,9 +21,33 @@ namespace Weline\Framework\Runtime;
  * - Runtime::isWls() 检测 WLS 模式
  * - Runtime::isFpm() 检测 FPM 模式
  * - Runtime::isCli() 检测 CLI 模式
+ * - Runtime::createRuntime() 按当前环境返回 WlsRuntime 或 FpmRuntime
  */
 class Runtime
 {
+    /**
+     * 指定 App / 集成层使用的运行时标识（与 RuntimeInterface::MODE_* 一致）
+     *
+     * 例：new \Weline\Framework\App(\Weline\Framework\Runtime\Runtime::FPM)
+     */
+    public const FPM = RuntimeInterface::MODE_FPM;
+
+    public const WLS = RuntimeInterface::MODE_WLS;
+
+    public const CLI = RuntimeInterface::MODE_CLI;
+
+    /**
+     * 按当前进程检测结果构造 RuntimeInterface：WLS 为 WlsRuntime，否则为 FpmRuntime（含 CLI 下走 FpmRuntime 的入口）。
+     */
+    public static function createRuntime(): RuntimeInterface
+    {
+        if (self::isWls()) {
+            return new WlsRuntime();
+        }
+
+        return new FpmRuntime();
+    }
+
     /**
      * 当前运行模式（缓存，避免重复检测）
      */

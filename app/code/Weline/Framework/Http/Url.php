@@ -1571,6 +1571,16 @@ class Url implements UrlInterface
 
     private static function currentServer(): array
     {
+        // WLS 常驻模式下，若当前不在 Fiber 请求上下文，禁止回退 mainContext，
+        // 避免误读上一次请求残留的上下文 server 快照。
+        if (\class_exists(\Weline\Framework\Runtime\Runtime::class, false)
+            && \Weline\Framework\Runtime\Runtime::isPersistent()
+            && \class_exists(\Fiber::class)
+            && \Fiber::getCurrent() === null
+        ) {
+            return \is_array($_SERVER ?? null) ? $_SERVER : [];
+        }
+
         $context = Context::getCurrent();
         $server = $context?->server();
         if (\is_array($server) && $server !== []) {

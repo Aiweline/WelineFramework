@@ -47,7 +47,6 @@ class RouterRunBefore implements ObserverInterface
                 // 传递包含pub目录的完整路径
                 $full_path = '/pub' . $path;
                 $core->StaticFile($full_path, true);
-                exit;
             }
 
             $publishedThemePath = $this->publishThemeOverrideStaticPath((string)($path_original !== false ? $path_original : $path));
@@ -55,7 +54,6 @@ class RouterRunBefore implements ObserverInterface
                 /** @var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
                 $core->StaticFile($publishedThemePath, true);
-                exit;
             }
         }
         
@@ -66,6 +64,7 @@ class RouterRunBefore implements ObserverInterface
             $vendor = $matches[1];
             $module = $matches[2];
             $file = $matches[3];
+
             $base = BP . '/app/code/' . $vendor . '/' . $module;
             $candidates = [
                 $base . '/view/statics/' . $file,
@@ -81,8 +80,8 @@ class RouterRunBefore implements ObserverInterface
                     /**@var Core $core */
                     $core = ObjectManager::getInstance(Core::class);
                     $static_url = '/app/code/' . $vendor . '/' . $module . '/view/statics/' . $file;
+                    // StaticFile() 会直接抛 ResponseTerminateException，Runtime 统一输出文件响应。
                     $core->StaticFile($static_url, true);
-                    exit;
                 }
             }
         }
@@ -95,7 +94,6 @@ class RouterRunBefore implements ObserverInterface
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
                 $core->StaticFile($publishedThemePath, true);
-                exit;
             }
 
             $file = $matches[3];
@@ -115,7 +113,6 @@ class RouterRunBefore implements ObserverInterface
                 // 主题资源路径本身是 /Vendor/Module/view/theme/...，应走 APP_CODE_PATH 解析链路
                 //（is_media=false），否则会按 BP 直拼导致找不到文件并回退为 HTML 响应。
                 $core->StaticFile($requestThemePath, false);
-                exit;
             }
         }
         # 匹配媒介资源
@@ -131,7 +128,6 @@ class RouterRunBefore implements ObserverInterface
                 /**@var Core $core */
                 $core = ObjectManager::getInstance(Core::class);
                 $core->StaticFile( $path, true);
-                exit;
             }
         }
         // 跳过解析 

@@ -11,9 +11,13 @@ use Weline\Framework\Runtime\RequestContext;
  *
  * The old API surface is kept so existing code can be moved gradually without
  * keeping request state in this class anymore.
+ *
+ * 运行时读写不再使用 $_SERVER：get/set 只走 Context / RequestContext；SERVER_MAPPINGS 仅用于
+ * initFromSnapshot() 将「入口快照里的 server 数组」同步到 RequestContext（由 FpmRuntime 等传入一次）。
  */
 class WelineEnv
 {
+    /** @see initFromSnapshot() 入口快照键 ↔ Context input.server 键（非全局 $_SERVER 直读） */
     private const SERVER_MAPPINGS = [
         'area' => 'WELINE_AREA',
         'area_route' => 'WELINE_AREA_ROUTE',
@@ -141,11 +145,6 @@ class WelineEnv
             }
         }
 
-        $serverKey = self::SERVER_MAPPINGS[$key] ?? null;
-        if ($serverKey !== null && \is_array($_SERVER ?? null) && \array_key_exists($serverKey, $_SERVER)) {
-            return $_SERVER[$serverKey];
-        }
-
         return $default;
     }
 
@@ -166,11 +165,6 @@ class WelineEnv
 
         if (\class_exists(RequestContext::class, false)) {
             RequestContext::set('env.' . $key, $value);
-        }
-
-        $serverKey = self::SERVER_MAPPINGS[$key] ?? null;
-        if ($serverKey !== null) {
-            $_SERVER[$serverKey] = $value;
         }
 
         self::getInstance()->recordOverride($key, $value, $reason);
@@ -351,6 +345,7 @@ class WelineEnv
             'post' => $context?->post() ?? [],
             'cookie' => $context?->cookie() ?? [],
             'files' => $context?->file() ?? [],
+            'server' => $context !== null ? (array)$context->get('input.server', []) : [],
         ];
     }
 
@@ -368,7 +363,7 @@ class WelineEnv
             (array)($snapshot['post'] ?? []),
             (array)($snapshot['cookie'] ?? []),
             (array)($snapshot['files'] ?? []),
-            \is_array($_SERVER ?? null) ? $_SERVER : []
+            \is_array($snapshot['server'] ?? null) ? $snapshot['server'] : []
         );
     }
 
