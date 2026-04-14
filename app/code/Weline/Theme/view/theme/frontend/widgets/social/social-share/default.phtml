@@ -44,7 +44,7 @@ $widgetId = 'social-share-' . uniqid();
 
 <div class="widget-social-share style-<?= htmlspecialchars($style) ?> layout-<?= htmlspecialchars($layout) ?>" 
      id="<?= $widgetId ?>"
-     data-url="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? '') ?>"
+     data-url="<?= htmlspecialchars(\w_env_request_uri()) ?>"
      data-title="<?= htmlspecialchars($this->getData('page_title') ?? '') ?>">
     
     <?php if ($title): ?>

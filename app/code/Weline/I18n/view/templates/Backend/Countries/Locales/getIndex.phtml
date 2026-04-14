@@ -3,8 +3,8 @@
 
 $locales = $this->getData('locales') ?? [];
 $pagination = $this->getData('pagination') ?: '';
-$countryCode = (string)($_GET['country_code'] ?? '');
-$search = (string)($_GET['search'] ?? '');
+$countryCode = (string)\w_env_get('country_code', '');
+$search = (string)\w_env_get('search', '');
 
 $readValue = static function ($item, string $key, mixed $default = null): mixed {
     if (is_array($item)) {

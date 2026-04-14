@@ -47,7 +47,7 @@ alwaysApply: false
 | 场景/关键词 | 技能 | 路径 |
 |---|---|---|
 | 主题、phtml、CSS、JS、模板 | theme-development | `dev/ai/skills/theme-development/SKILL.md` |
-| Block、Taglib、Widget、DataTable | frontend-components | `dev/ai/skills/frontend-components/SKILL.md` |
+| Block、Taglib、Widget、DataTable、自定义标签、标签创建、标签技能、内置JS、内置CSS、主题色变量 | frontend-components | `dev/ai/skills/frontend-components/SKILL.md` |
 | 翻译、i18n、`__()` | i18n-internationalization | `dev/ai/skills/i18n-internationalization/SKILL.md` |
 
 ### 扩展/集成

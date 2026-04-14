@@ -56,7 +56,7 @@ if (!empty($currentPost['tags'])) {
     }));
 }
 
-$shareBase = (string) ($currentPost['url'] ?? ($_SERVER['REQUEST_URI'] ?? ''));
+$shareBase = (string) ($currentPost['url'] ?? \w_env('request.uri', ''));
 $shareUrl = urlencode($shareBase);
 $shareTitle = urlencode((string) ($currentPost['title'] ?? ''));
 $hasSidebarRail = $showSidebar && (!empty($blogCategories) || !empty($recentPosts));

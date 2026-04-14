@@ -56,8 +56,8 @@ class SecurityLog extends Model
             $log->setData(self::schema_fields_MESSAGE, $message);
             $log->setData(self::schema_fields_DETAILS, json_encode($details, JSON_UNESCAPED_UNICODE));
             $log->setData(self::schema_fields_USER_ID, $userId);
-            $log->setData(self::schema_fields_IP, $_SERVER['REMOTE_ADDR'] ?? '');
-            $log->setData(self::schema_fields_USER_AGENT, $_SERVER['HTTP_USER_AGENT'] ?? '');
+            $log->setData(self::schema_fields_IP, (string)\w_env('server.remote_addr', ''));
+            $log->setData(self::schema_fields_USER_AGENT, (string)\w_env('server.http_user_agent', ''));
             return $log->save();
         } catch (\Exception $e) {
             return false;

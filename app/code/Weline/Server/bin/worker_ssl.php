@@ -1205,7 +1205,7 @@ $pendingMaintDrainReqId = null; // 维护：先排空本 Worker 存量连接再 
 $waitingForAck = false;
 $readySentTime = 0.0;
 $ackRetryCount = 0;
-$maxAckRetries = 3;
+$maxAckRetries = 0;
 $ackTimeout = 10.0;
 $orphanGuard = new \Weline\Server\IPC\ChildControl\MasterOrphanGuard();
 
@@ -1258,7 +1258,12 @@ if ($controlPort > 0) {
                 case \Weline\Server\IPC\ControlMessage::TYPE_ACK_READY:
                     $waitingForAck = false;
                     $ackWorkerId = $msg['worker_id'] ?? 0;
-                    WlsLogger::info_("收到 Master ACK_READY 确认 (worker_id={$ackWorkerId})，SSL Worker 启动确认");
+                    $dispatcherConfirmed = (bool)($msg['dispatcher_confirmed'] ?? false);
+                    $ackPort = (int)($msg['port'] ?? 0);
+                    WlsLogger::info_(
+                        "收到 Master ACK_READY 确认 (worker_id={$ackWorkerId}, dispatcher_confirmed="
+                        . ($dispatcherConfirmed ? '1' : '0') . ", port={$ackPort})，SSL Worker 停止 READY 重报"
+                    );
                     break;
 
                 case \Weline\Server\IPC\ControlMessage::TYPE_RELOAD:
@@ -1689,14 +1694,9 @@ while (true) {
         $ackElapsed = \microtime(true) - $readySentTime;
         if ($ackElapsed >= $ackTimeout) {
             $ackRetryCount++;
-            if ($ackRetryCount > $maxAckRetries) {
-                $waitingForAck = false;
-                WlsLogger::warning_("ACK 等待超时，已尝试 {$maxAckRetries} 次，放弃等待。你可能需要检查 Orchestrator 是否在线。");
-            } else {
-                WlsLogger::warning_("ACK 等待超时，已过 {$ackElapsed}s，第 {$ackRetryCount} 次重新发送 ready...");
-                $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
-                $readySentTime = \microtime(true);
-            }
+            WlsLogger::warning_("ACK 等待超时，已过 {$ackElapsed}s，第 {$ackRetryCount} 次重新发送 ready...");
+            $ipcClient->sendReady($ipcRole, $workerId, $port, $orchestratorEpoch, $orchestratorLaunchId);
+            $readySentTime = \microtime(true);
         }
     }
     if ($ipcClient && $ipcClient->isConnected() && !$workerLoopStartedSent && !$ipcReceivedShutdown) {
