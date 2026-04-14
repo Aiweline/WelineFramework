@@ -256,6 +256,10 @@
         }
     });
 
-    startWorkspaceStream();
+    // 首次进入工作区时延迟建立 SSE，避免页面刚加载就立即占用连接。
+    var initialConnectDelayMs = 5000;
+    window.setTimeout(function () {
+        startWorkspaceStream();
+    }, initialConnectDelayMs);
 })();
 </script>
