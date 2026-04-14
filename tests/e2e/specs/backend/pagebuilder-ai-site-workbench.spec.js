@@ -144,6 +144,29 @@ function devWorkspaceRootFromThisSpec() {
   return path.resolve(__dirname, '../../../..');
 }
 
+function createPagebuilderSessionViaPhp(initialScope = {}) {
+  const root = devWorkspaceRootFromThisSpec();
+  const phpScope = JSON.stringify(initialScope || {})
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+  const phpCode = `
+require 'app/bootstrap.php';
+$service = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteAgentSessionService::class);
+$scope = json_decode('${phpScope}', true);
+$session = $service->createSession(1, is_array($scope) ? $scope : []);
+echo json_encode([
+  'success' => true,
+  'public_id' => $session->getPublicId(),
+], JSON_UNESCAPED_UNICODE);
+`;
+  const stdout = execFileSync('php', ['-r', phpCode], {
+    cwd: root,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  return JSON.parse(stdout);
+}
+
 /**
  * 将 `*.weline.local` 子域写入本机 hosts，便于 Playwright 真实地址栏访问前台。
  * 设 `PLAYWRIGHT_SKIP_HOSTS_REGISTER=1` 则跳过写入，用例仍走 API+Host 回退断言。
@@ -609,45 +632,33 @@ async function ensurePagebuilderExpertLayout(page) {
  * @param {string} backendRoot
  */
 async function createDirectPagebuilderWorkspace(page, backendRoot) {
-  if (!/^https?:/i.test(String(page.url() || ''))) {
-    const warmUrl = normalizeToCurrentOrigin(
-      page,
-      new URL('/', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
-    );
-    await gotoStable(page, warmUrl);
-  }
-  const indexUrl = buildSameOriginBackendUrl(page, 'pagebuilder/backend/ai-site-agent/index?legacy=1');
-  await gotoStable(page, indexUrl).catch(() => {});
-  const createBtn = page.locator('#pb-ai-site-create');
-  const hasCreateBtn = await createBtn.isVisible({ timeout: 5000 }).catch(() => false);
-  if (hasCreateBtn) {
-    await Promise.all([
-      page.waitForURL(PAGEBUILDER_AI_WORKSPACE_PATH_RE, { timeout: 120000 }),
-      createBtn.click(),
-    ]);
-    await ensurePagebuilderExpertLayout(page);
-    return { createPayload: { success: true, workspace_url: page.url() }, workspaceUrl: page.url() };
-  }
-  const createSessionUrl = buildSameOriginBackendUrl(page, 'pagebuilder/backend/ai-site-agent/post-create-session');
-  const createPayload = await page.evaluate(async ({ url }) => {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      credentials: 'same-origin',
-    });
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch (error) {
-      throw new Error(`pagebuilder create-session: HTTP ${res.status} non-JSON body=${text.slice(0, 400)}`);
-    }
-  }, { url: createSessionUrl });
+  const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing', fake_mode: 1 });
   expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
-  expect(createPayload.workspace_url).toBeTruthy();
-  const workspaceUrl = normalizeToCurrentOrigin(page, String(createPayload.workspace_url));
-  await gotoStable(page, workspaceUrl);
+  expect(String(createPayload.public_id || '').trim()).toBeTruthy();
+  const workspaceRoute = `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(String(createPayload.public_id))}&expert=1`;
+  const candidateUrls = [
+    buildDirectRuntimeBackendUrl(workspaceRoute),
+    buildSameOriginBackendUrl(page, workspaceRoute),
+  ].filter((value, index, list) => value && list.indexOf(value) === index);
+
+  let workspaceUrl = '';
+  let lastError = null;
+  for (const candidateUrl of candidateUrls) {
+    try {
+      await gotoStable(page, candidateUrl);
+      workspaceUrl = candidateUrl;
+      break;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (!workspaceUrl) {
+    throw lastError || new Error(`Unable to open PageBuilder workspace: ${candidateUrls.join(', ')}`);
+  }
+
   await ensurePagebuilderExpertLayout(page);
-  return { createPayload, workspaceUrl };
+  return { createPayload: { ...createPayload, workspace_url: workspaceUrl }, workspaceUrl };
 }
 
 /**
