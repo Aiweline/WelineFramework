@@ -106,8 +106,8 @@ if ($isDev) {
     $modulesBaseUrl = '/static/Weline/Frontend/js/weline-api';
 }
 
-$currentLang = $_SERVER['WELINE_USER_LANG'] ?? 'zh_Hans_CN';
-$currentCurrency = $_SERVER['WELINE_USER_CURRENCY'] ?? 'CNY';
+$currentLang = \w_env('user.lang', 'zh_Hans_CN');
+$currentCurrency = \w_env('user.currency', 'CNY');
 $siteName = $this->getData('site_name') ?? __('Weline Admin');
 $pageTitle = $meta['title'] ?? $this->getData('title') ?? __('Weline Admin 管理面板');
 $pageDescription = $meta['description'] ?? __('Weline Framework - 后台管理系统');

@@ -270,6 +270,7 @@ class Env extends DataObject
     private array $persistentConfig = [];
     private array $runtimeConfig = [];
     private ?bool $runtimeMaintenanceModeOverride = null;
+    private float $runtimeMaintenanceModeOverrideUntil = 0.0;
 
     private array $module_list = [];
     private static array $module_configs = [];
@@ -708,9 +709,16 @@ class Env extends DataObject
         $now = \microtime(true);
 
         if ($this->runtimeMaintenanceModeOverride !== null) {
-            self::$maintenanceCached = $this->runtimeMaintenanceModeOverride;
-            self::$maintenanceLastCheck = $now;
-            return self::$maintenanceCached;
+            if ($this->runtimeMaintenanceModeOverride && $this->runtimeMaintenanceModeOverrideUntil > 0.0 && $now > $this->runtimeMaintenanceModeOverrideUntil) {
+                $this->runtimeMaintenanceModeOverride = null;
+                $this->runtimeMaintenanceModeOverrideUntil = 0.0;
+                $this->runtimeConfig['system']['maintenance'] = false;
+                $this->rebuildEffectiveConfig();
+            } else {
+                self::$maintenanceCached = $this->runtimeMaintenanceModeOverride;
+                self::$maintenanceLastCheck = $now;
+                return self::$maintenanceCached;
+            }
         }
 
         $interval = ($this->config['wls'] ?? [])['maintenance_check_interval']
@@ -768,11 +776,14 @@ class Env extends DataObject
     public function setRuntimeMaintenanceMode(bool $enabled): void
     {
         $this->runtimeMaintenanceModeOverride = $enabled;
+        $now = \microtime(true);
+        // 仅短时间覆盖本进程，避免旧 Worker 在维护关闭后长期返回维护页。
+        $this->runtimeMaintenanceModeOverrideUntil = $enabled ? ($now + 120.0) : 0.0;
         $this->applyRuntimeConfig([
             'system' => ['maintenance' => $enabled],
         ]);
         self::$maintenanceCached = $enabled;
-        self::$maintenanceLastCheck = \microtime(true);
+        self::$maintenanceLastCheck = $now;
     }
     
     /**

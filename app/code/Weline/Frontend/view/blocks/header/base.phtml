@@ -18,12 +18,12 @@ $api_host = $this->request->getUrlBuilder()->getApiUrl('', [], false);
 $theme_path = str_replace('\\', '/', \Weline\Framework\App\Env::getInstance()->getTheme()['path']);
 $env_model_media_base_path_template = $host . (DEV ? '/{module}/view/statics/{path}' : '/static/' . $theme_path . '/{module}/view/statics/{path}');
 $token = \Weline\Framework\Security\Token::create('csrf', 16, 600);
-$area = $_SERVER['WELINE_AREA'] ?? '';
+$area = \w_env_area();
 if($area === 'frontend') {
     $area = '';
 }
-$api_area = $_SERVER['WELINE_API_AREA'] ?? '';
-$api_admin_area = $_SERVER['WELINE_API_ADMIN_AREA'] ?? '';
+$api_area = \Weline\Framework\App\Env::getInstance()->getConfig('api');
+$api_admin_area = \Weline\Framework\App\Env::getInstance()->getConfig('api_admin');
 
 // 仅输出当前请求周期及 Theme 声明 JS 模块中实际用到的翻译
 $i18nWords = \Weline\Framework\Phrase\Parser::getUsedWordsWithTranslations();
@@ -78,8 +78,8 @@ endif;
         env_model: '{{env_model}}',
         env_model_media_base_path_template: '{{env_model_media_base_path_template}}',
         base_host: '{{base_host}}',
-        currency: '<?= $_SERVER['WELINE_USER_CURRENCY'] ?? '' ?>',
-        lang: '<?= $_SERVER['WELINE_USER_LANG'] ?? '' ?>',
+        currency: '<?= \w_env_currency() ?>',
+        lang: '<?= \w_env_lang() ?>',
         api_host: '{{api_host}}',
         base_router: '{{base_router}}',
         i18n: <?= json_encode($i18nWords, JSON_UNESCAPED_UNICODE) ?>,
