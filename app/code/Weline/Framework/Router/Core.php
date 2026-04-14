@@ -441,6 +441,19 @@ class Core
             $url = str_replace($this->area_router, '', $url);
         }
         $url = str_replace('//', '/', trim($url, '/'));
+        // 后台：WELINE_AREA=backend 时 getAreaRouter() 为空，str_replace(area_router) 不会去掉入口 key。
+        // 若 REQUEST_URI 仍含 /{backendPrefix}/...（解析未写回或上下文漂移），此处兜底剥掉首段，避免误匹配到
+        // 「key/pagebuilder/...」而 404。
+        if ($this->is_backend && $url !== '') {
+            $backendPrefix = Env::getAreaRoutePrefix('backend');
+            if (\is_string($backendPrefix) && $backendPrefix !== '') {
+                $segments = \explode('/', $url);
+                if (isset($segments[0]) && \strcasecmp((string)$segments[0], $backendPrefix) === 0) {
+                    \array_shift($segments);
+                    $url = \implode('/', $segments);
+                }
+            }
+        }
         // 后台：路径可能为 currency/language/admin/...，需去掉前两段再与路由表匹配
         if ($this->is_backend && $url !== '') {
             $segments = explode('/', $url);
@@ -846,8 +859,11 @@ class Core
             $fileModificationTime = gmdate('D, d M Y H:i:s', filemtime($filename)) . ' GMT';
             $headers = getallheaders();
             if (isset($headers['If-Modified-Since']) && $headers['If-Modified-Since'] == $fileModificationTime) {
-                // 304 Not Modified 通过异常处理，由 Runtime 层统一发送
-                throw new \Weline\Framework\Http\StaticFileException($filename, '', [], true);
+                $response304 = (new Response(true))
+                    ->setHeaders($this->buildCacheHeaders($fileModificationTime, $filename))
+                    ->setHttpResponseCode(304)
+                    ->setBody('');
+                throw new \Weline\Framework\Http\ResponseTerminateException($response304);
             }
             
             // 构建缓存响应头
@@ -867,28 +883,32 @@ class Core
             // 合并响应头
             $responseHeaders = array_merge($cacheHeaders, [
                 'Content-Type' => $mime_type,
+                'Content-Length' => (string)\filesize($filename),
             ]);
             
-            // 抛出静态文件异常，由 Runtime 层统一处理
-            throw new \Weline\Framework\Http\StaticFileException($filename, $mime_type, $responseHeaders);
+            $fileResponse = (new Response(true))
+                ->setHeaders($responseHeaders)
+                ->setHttpResponseCode(200)
+                ->setBody((string)\file_get_contents($filename));
+            throw new \Weline\Framework\Http\ResponseTerminateException($fileResponse);
         }
         // 文件不存在：后缀为 .css/.js 时返回 404 + 对应 MIME，避免浏览器 MIME 严格检查报错
         $url_path = preg_replace('/\?.*/', '', str_replace('\\', '/', trim($url, '/')));
         $seg = explode('.', $url_path);
         $ext = strtolower($seg[count($seg) - 1] ?? '');
         if ($ext === 'css') {
-            throw new \Weline\Framework\Http\ResponseTerminateException(
-                404,
-                '',
-                ['Content-Type' => 'text/css; charset=utf-8']
-            );
+            $response404Css = (new Response(true))
+                ->setHeader('Content-Type', 'text/css; charset=utf-8')
+                ->setHttpResponseCode(404)
+                ->setBody('');
+            throw new \Weline\Framework\Http\ResponseTerminateException($response404Css);
         }
         if ($ext === 'js' || $ext === 'mjs') {
-            throw new \Weline\Framework\Http\ResponseTerminateException(
-                404,
-                '',
-                ['Content-Type' => 'text/javascript; charset=utf-8']
-            );
+            $response404Js = (new Response(true))
+                ->setHeader('Content-Type', 'text/javascript; charset=utf-8')
+                ->setHttpResponseCode(404)
+                ->setBody('');
+            throw new \Weline\Framework\Http\ResponseTerminateException($response404Js);
         }
         return false;
     }
