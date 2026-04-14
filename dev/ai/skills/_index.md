@@ -35,6 +35,7 @@
 | WLS、Worker、server:start、reload、restart、static、State、Processer | runtime-and-process | `dev/ai/skills/runtime-and-process/SKILL.md` |
 | Session、登录态、认证、SessionFactory、AreaConfig | session-development | `dev/ai/skills/session-development/SKILL.md` |
 | 主题、前端、phtml、CSS、JS、模板、静态标签、暗色适配 | theme-development | `dev/ai/skills/theme-development/SKILL.md` |
+| tpl、view/tpl、编译模板、模板被覆盖、源模板定位、com_ 前缀模板 | template-source-editing | `dev/ai/skills/template-source-editing/SKILL.md` |
 | Block、Taglib、Widget、DataTable、`<w:d-table>` | frontend-components | `dev/ai/skills/frontend-components/SKILL.md` |
 | 翻译、i18n、`__()`、`<lang>`、`@lang`、i18n csv | i18n-internationalization | `dev/ai/skills/i18n-internationalization/SKILL.md` |
 | alert、confirm、prompt、toast、确认弹窗、用户提示 | friendly-notifications | `dev/ai/skills/friendly-notifications/SKILL.md` |
