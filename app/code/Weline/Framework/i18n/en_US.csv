@@ -16,7 +16,6 @@
 "模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器","模块配置文件读取权限被拒绝：%{1}。\n\n可能的原因：\n1. 文件被其他程序（编辑器、杀毒软件等）锁定\n2. Web服务器进程没有读取权限\n3. 文件系统权限设置不正确\n\n解决方案：\n1. 关闭可能锁定该文件的程序\n2. 检查文件权限，确保Web服务器进程有读取权限\n3. 以管理员身份运行Web服务器"
 "exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec","exec() 函数需要解禁: 请到 php.ini 中找到 disable_function 删除 exec"
 系统错误：%{1},系统错误：%{1}
-绯荤粺SERVER缂哄皯key锛歿1},绯荤粺SERVER缂哄皯key锛歿1}
 "MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例","MemcachedAdapter: getAllKeys() 失败，fallback 到 flush() 将清空整个 Memcached 实例"
 "MemcachedAdapter: 按 prefix 清理失败，fallback 到 flush(): %{1}","MemcachedAdapter: 按 prefix 清理失败，fallback 到 flush(): %{1}"
 模块缓存清理中...,模块缓存清理中...

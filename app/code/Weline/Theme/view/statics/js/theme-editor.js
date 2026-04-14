@@ -116,12 +116,28 @@
             url.searchParams.set(key, value);
         });
 
+        // Split editor shell area and preview area to avoid contaminating backend shell.
+        const previewArea = (typeof overrides.preview_area === 'string' && overrides.preview_area)
+            ? overrides.preview_area
+            : (
+                (typeof overrides.editor_area === 'string' && overrides.editor_area)
+                    ? overrides.editor_area
+                    : (state.editorArea || currentUrl.searchParams.get('preview_area') || 'frontend')
+            );
+
         const params = Object.assign({
             theme_id: state.themeId || 0,
             page_type: getCurrentPageType(),
-            editor_area: state.editorArea || 'frontend',
+            editor_area: 'backend',
+            preview_area: previewArea,
             status: state.previewStatus || 'draft',
         }, overrides || {});
+
+        // External callers may still pass editor_area for preview switch.
+        if (Object.prototype.hasOwnProperty.call(params, 'editor_area')) {
+            params.preview_area = params.editor_area;
+            params.editor_area = 'backend';
+        }
 
         Object.entries(params).forEach(([key, value]) => {
             if (value === null || value === undefined || value === '') {
@@ -322,30 +338,37 @@
      * 绑定事件
      */
     function bindEvents() {
-        // 主题选择（跳转时默认前端区域）
+        // 主题选择（仅刷新预览，不整页跳转）
         if (elements.themeSelect) {
             elements.themeSelect.addEventListener('change', function() {
                 const themeId = this.value;
                 if (themeId) {
-                    navigateEditorShell({
-                        theme_id: themeId,
+                    showPreviewLoadingImmediate();
+                    state.themeId = parseInt(themeId, 10) || 0;
+                    syncEditorUrlState({
+                        theme_id: state.themeId,
                         page_type: getCurrentPageType(),
-                        editor_area: 'frontend',
+                        preview_area: state.editorArea || 'frontend',
                     });
+                    loadLayoutPreview();
+                    loadVersions();
                 }
             });
         }
 
-        // 前端/后端区域切换（刷新页面以加载对应布局）
+        // 前端/后端区域切换（仅刷新预览，不整页跳转）
         if (elements.editorAreaSelect) {
             elements.editorAreaSelect.addEventListener('change', function() {
                 const area = this.value;
                 if (state.themeId && area) {
-                    navigateEditorShell({
+                    showPreviewLoadingImmediate();
+                    state.editorArea = area;
+                    syncEditorUrlState({
                         theme_id: state.themeId,
                         page_type: getCurrentPageType(),
-                        editor_area: area,
+                        preview_area: area,
                     });
+                    loadLayoutPreview();
                 }
             });
         }
@@ -355,23 +378,15 @@
             elements.pageTypeSelect.addEventListener('change', function() {
                 const pageType = this.value;
                 if (state.themeId && pageType) {
-                    navigateEditorShell({
+                    showPreviewLoadingImmediate();
+                    state.pageType = pageType;
+                    state.layoutType = pageType; // pageType 和 layoutType 是同一个概念
+                    syncEditorUrlState({
+                        theme_id: state.themeId,
                         page_type: pageType,
                         version_id: null,
                     });
-                    return;
-                    // 更新状态
-                    state.pageType = pageType;
-                    state.layoutType = pageType; // pageType 和 layoutType 是同一个概念
-                    
-                    // 更新 URL（不刷新页面，便于分享链接）
-                    const url = new URL(window.location.href);
-                    url.searchParams.set('page_type', pageType);
-                    window.history.replaceState({}, '', url.toString());
-                    
-                    // AJAX 加载新布局预览 
                     loadLayoutPreview();
-                    
                     showToast(__('已切换到: ') + this.options[this.selectedIndex].text, 'info');
                 }
             });
@@ -668,6 +683,34 @@
 
         // 监听 iframe 消息（预览页面与编辑器通信）
         window.addEventListener('message', handleIframeMessage);
+    }
+
+    function syncEditorUrlState(overrides = {}) {
+        const url = getCurrentWindowUrl();
+        const params = Object.assign({
+            theme_id: state.themeId || 0,
+            page_type: getCurrentPageType(),
+            editor_area: 'backend',
+            preview_area: state.editorArea || 'frontend',
+            status: state.previewStatus || 'draft',
+        }, overrides || {});
+
+        Object.entries(params).forEach(([key, value]) => {
+            if (value === null || value === undefined || value === '') {
+                url.searchParams.delete(key);
+                return;
+            }
+            url.searchParams.set(key, String(value));
+        });
+
+        url.searchParams.set('_t', String(Date.now()));
+        window.history.replaceState({}, '', url.toString());
+    }
+
+    function showPreviewLoadingImmediate() {
+        if (elements.previewLoading) {
+            elements.previewLoading.classList.remove('hidden');
+        }
     }
 
     /**
