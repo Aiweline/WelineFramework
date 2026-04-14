@@ -22,7 +22,7 @@ class LoginCaptchaVerifyObserver extends Observer implements ObserverInterface
         $eventData = $this->getEvent()->getData();
         
         // 检查是否需要验证码
-        $ip = $_SERVER['REMOTE_ADDR'] ?? '';
+        $ip = (string)\w_env('server.remote_addr', '');
         /** @var CaptchaService $captchaService */
         $captchaService = ObjectManager::getInstance(CaptchaService::class);
         

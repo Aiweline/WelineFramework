@@ -192,13 +192,11 @@ async function startPagebuilderBuild(page, backendRoot, scopePatch) {
       bridge.pauseWorkspaceStream();
     }
   }).catch(() => {});
-  const current = new URL(page.url());
-  current.search = '';
-  current.hash = '';
-  current.pathname = current.pathname.replace(/\/workspace$/i, '/post-start-build');
-  const postUrl = normalizeToCurrentOrigin(page, current.toString());
+  const postUrl = buildPagebuilderWorkspacePostUrl(page, 'post-start-build');
   const publicId = new URL(page.url()).searchParams.get('public_id') || '';
   expect(publicId, 'pagebuilder workspace url should carry public_id').toBeTruthy();
+
+  await ensurePagebuilderPlanAndTaskPlanConfirmed(page, scopePatch);
 
   const res = await page.request.post(postUrl, {
     form: {
@@ -223,6 +221,64 @@ async function startPagebuilderBuild(page, backendRoot, scopePatch) {
   expect(payload && (payload.success || resumable), JSON.stringify(payload)).toBeTruthy();
   expect(payload.stream_url).toBeTruthy();
   return resumable ? { ...payload, success: true, resumed_existing: true } : payload;
+}
+
+function buildPagebuilderWorkspacePostUrl(page, action) {
+  const current = new URL(page.url());
+  current.search = '';
+  current.hash = '';
+  current.pathname = current.pathname.replace(/\/workspace$/i, `/${action}`);
+  return normalizeToCurrentOrigin(page, current.toString());
+}
+
+async function postPagebuilderWorkspaceJson(page, action, form) {
+  const postUrl = buildPagebuilderWorkspacePostUrl(page, action);
+  const res = await page.request.post(postUrl, {
+    form,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+  });
+  const text = await res.text();
+  let payload;
+  try {
+    payload = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`pagebuilder ${action}: HTTP ${res.status()} non-JSON body=${text.slice(0, 400)}`);
+  }
+  return { response: res, payload };
+}
+
+async function ensurePagebuilderPlanAndTaskPlanConfirmed(page, scopePatch) {
+  const publicId = new URL(page.url()).searchParams.get('public_id') || '';
+  expect(publicId, 'pagebuilder workspace url should carry public_id').toBeTruthy();
+
+  const phase1Start = await postPagebuilderWorkspaceJson(page, 'post-start-plan', {
+    public_id: publicId,
+    scope_patch: JSON.stringify(scopePatch || {}),
+  });
+  expect(phase1Start.payload && phase1Start.payload.success, JSON.stringify(phase1Start.payload)).toBeTruthy();
+
+  const phase1Confirm = await postPagebuilderWorkspaceJson(page, 'post-confirm-plan', {
+    public_id: publicId,
+  });
+  expect(phase1Confirm.payload && phase1Confirm.payload.success, JSON.stringify(phase1Confirm.payload)).toBeTruthy();
+
+  const phase2Start = await postPagebuilderWorkspaceJson(page, 'post-start-task-plan', {
+    public_id: publicId,
+    scope_patch: JSON.stringify(scopePatch || {}),
+  });
+  expect(phase2Start.payload && phase2Start.payload.success, JSON.stringify(phase2Start.payload)).toBeTruthy();
+
+  const phase2Confirm = await postPagebuilderWorkspaceJson(page, 'post-confirm-task-plan', {
+    public_id: publicId,
+  });
+  expect(phase2Confirm.payload && phase2Confirm.payload.success, JSON.stringify(phase2Confirm.payload)).toBeTruthy();
+
+  return {
+    phase1Start: phase1Start.payload,
+    phase1Confirm: phase1Confirm.payload,
+    phase2Start: phase2Start.payload,
+    phase2Confirm: phase2Confirm.payload,
+  };
 }
 
 async function requestPagebuilderPublish(page) {
@@ -383,6 +439,61 @@ function expectFinishedOrResumedStream(stream, label = 'stream') {
   ).toBeTruthy();
 }
 
+async function observeInitialSseEvents(page, absoluteUrl, expectedEventNames, timeoutMs = 120000) {
+  return page.evaluate(async ({ url, expected, timeout }) => {
+    const targetEvents = Array.isArray(expected) ? expected.map((item) => String(item || '').trim()).filter(Boolean) : [];
+    return await new Promise((resolve) => {
+      const seen = [];
+      const payloads = {};
+      let settled = false;
+      const finish = (result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        try {
+          if (source) {
+            source.close();
+          }
+        } catch (error) {
+          // ignore
+        }
+        clearTimeout(timer);
+        resolve(result);
+      };
+      const source = new EventSource(url, { withCredentials: true });
+      const timer = setTimeout(() => {
+        finish({ ok: false, seen, payloads, reason: 'timeout' });
+      }, timeout);
+      const checkDone = () => {
+        const ok = targetEvents.every((name) => seen.includes(name));
+        if (ok) {
+          finish({ ok: true, seen, payloads });
+        }
+      };
+      const register = (name) => {
+        source.addEventListener(name, (event) => {
+          if (!seen.includes(name)) {
+            seen.push(name);
+          }
+          if (typeof event.data === 'string' && event.data !== '') {
+            try {
+              payloads[name] = JSON.parse(event.data);
+            } catch (error) {
+              payloads[name] = event.data;
+            }
+          }
+          checkDone();
+        });
+      };
+      targetEvents.forEach(register);
+      source.addEventListener('error', () => {
+        finish({ ok: false, seen, payloads, reason: 'error' });
+      });
+    });
+  }, { url: absoluteUrl, expected: expectedEventNames, timeout: timeoutMs });
+}
+
 /**
  * 后端有时返回 target-origin 的绝对链接；在 e2e 代理下需要强制回当前 origin。
  * @param {import('@playwright/test').Page} page
@@ -421,6 +532,25 @@ function normalizeToCurrentOrigin(page, href) {
     return target.toString();
   }
   return new URL(`${target.pathname}${target.search}${target.hash}`, base.toString()).toString();
+}
+
+function buildDirectRuntimeBackendUrl(route) {
+  const runtime = getRuntimeInfo();
+  const targetOrigin = String(runtime.runtime?.target_origin || '').replace(/\/+$/, '');
+  const backendPrefix = String(runtime.paths?.backend_prefix_path || '').replace(/\/+$/, '');
+  const normalizedRoute = String(route || '').replace(/^\/+/, '');
+  if (!targetOrigin || !backendPrefix || !normalizedRoute) {
+    throw new Error(`buildDirectRuntimeBackendUrl missing runtime pieces: origin=${targetOrigin} prefix=${backendPrefix} route=${normalizedRoute}`);
+  }
+  return `${targetOrigin}${backendPrefix}/${normalizedRoute}`;
+}
+
+function buildSameOriginBackendUrl(page, route) {
+  const runtime = getRuntimeInfo();
+  const backendPrefix = String(runtime.paths?.backend_prefix_path || '').replace(/\/+$/, '');
+  const normalizedRoute = String(route || '').replace(/^\/+/, '');
+  const base = new URL(page.url());
+  return new URL(`${backendPrefix}/${normalizedRoute}`, `${base.origin}/`).toString();
 }
 
 /**
@@ -486,10 +616,19 @@ async function createDirectPagebuilderWorkspace(page, backendRoot) {
     );
     await gotoStable(page, warmUrl);
   }
-  const createSessionUrl = normalizeToCurrentOrigin(
-    page,
-    new URL('pagebuilder/backend/ai-site-agent/post-create-session', `${String(backendRoot).replace(/\/+$/, '')}/`).toString()
-  );
+  const indexUrl = buildSameOriginBackendUrl(page, 'pagebuilder/backend/ai-site-agent/index?legacy=1');
+  await gotoStable(page, indexUrl).catch(() => {});
+  const createBtn = page.locator('#pb-ai-site-create');
+  const hasCreateBtn = await createBtn.isVisible({ timeout: 5000 }).catch(() => false);
+  if (hasCreateBtn) {
+    await Promise.all([
+      page.waitForURL(PAGEBUILDER_AI_WORKSPACE_PATH_RE, { timeout: 120000 }),
+      createBtn.click(),
+    ]);
+    await ensurePagebuilderExpertLayout(page);
+    return { createPayload: { success: true, workspace_url: page.url() }, workspaceUrl: page.url() };
+  }
+  const createSessionUrl = buildSameOriginBackendUrl(page, 'pagebuilder/backend/ai-site-agent/post-create-session');
   const createPayload = await page.evaluate(async ({ url }) => {
     const res = await fetch(url, {
       method: 'POST',
@@ -1970,6 +2109,61 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       }));
       expect(String(routeSnapshot.pathname || '')).toMatch(/\/pagebuilder\/backend\/(?:ai-site-agent|aiSiteAgent)\/index$/i);
       expect(String(routeSnapshot.search || '')).toContain('legacy=1');
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-PLAN-005' },
+    'expert: phase-1 plan and phase-2 task-plan gates are confirmed before build starts',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(600000);
+
+      const backendRoot = await loginAsAdmin(page);
+      const brief = 'Smoke phase-1 plan and phase-2 task-plan confirmation before build.';
+      const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
+      await gotoStable(page, workspaceUrl);
+      await ensurePagebuilderExpertLayout(page);
+
+      const suffix = Date.now().toString().slice(-8);
+      const localDomain = buildLocalDomain(`pb-plan-${suffix}`);
+      const scopePatch = {
+        site_title: `E2E PB Plan Gate ${suffix}`,
+        site_tagline: 'phase1 + phase2 gate smoke',
+        target_domain: localDomain,
+        brief_description: brief,
+        user_description: brief,
+        page_types: ['home_page'],
+        fake_mode: 1,
+      };
+
+      await mergePagebuilderScope(page, scopePatch);
+
+      const gateFlow = await ensurePagebuilderPlanAndTaskPlanConfirmed(page, scopePatch);
+      expect(gateFlow.phase1Start.plan && gateFlow.phase1Start.plan.markdown).toBeTruthy();
+      expect(gateFlow.phase2Start.task_plan && gateFlow.phase2Start.task_plan.markdown).toBeTruthy();
+
+      const stateUrl = buildPagebuilderGetStateJsonUrl(page.url());
+      const confirmedState = await waitForPagebuilderStateData(
+        page,
+        stateUrl,
+        (data) => Boolean(data && data.plan_confirmed) && Boolean(data && data.task_plan_confirmed),
+        WORKSPACE_TIMEOUT
+      );
+      expect(Boolean(confirmedState && confirmedState.plan_confirmed)).toBeTruthy();
+      expect(Boolean(confirmedState && confirmedState.task_plan_confirmed)).toBeTruthy();
+      expect(Boolean(confirmedState && confirmedState.has_virtual_theme_plan)).toBeTruthy();
+
+      const buildStart = await startPagebuilderBuild(page, backendRoot, { ...scopePatch });
+      expect(String(buildStart.stream_url || '').trim()).toBeTruthy();
+      const initialStream = await observeInitialSseEvents(
+        page,
+        normalizeToCurrentOrigin(page, String(buildStart.stream_url)),
+        ['start', 'progress'],
+        180000
+      );
+      expect(initialStream && initialStream.ok, JSON.stringify(initialStream)).toBeTruthy();
     }
   );
 });

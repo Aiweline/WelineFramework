@@ -30,6 +30,11 @@ use Weline\Theme\Service\ThemeDirectoryResolver;
 class Partials extends Block
 {
     /**
+     * @var array<string, array>
+     */
+    private static array $partialsMetaCache = [];
+
+    /**
      * 初始化 Block
      */
     public function __init()
@@ -227,16 +232,22 @@ class Partials extends Block
                 $metaIdentify = "partials.{$type}.default";
             }
 
-            $partialsMeta = $this->traceCall(
-                $tracePrefix . '::load_meta',
-                fn() => ThemeData::getFileParams($metaIdentify, $scope)
-            );
-
-            if (empty($partialsMeta)) {
+            $cacheKey = $area . '|' . $type . '|' . $defaultOption . '|' . $scope . '|' . $path;
+            if (array_key_exists($cacheKey, self::$partialsMetaCache)) {
+                $partialsMeta = self::$partialsMetaCache[$cacheKey];
+            } else {
                 $partialsMeta = $this->traceCall(
-                    $tracePrefix . '::parse_meta_file',
-                    fn() => $this->parsePartialsMetaFromFile($path, $area, $type, $defaultOption)
+                    $tracePrefix . '::load_meta',
+                    fn() => ThemeData::getFileParams($metaIdentify, $scope)
                 );
+
+                if (empty($partialsMeta)) {
+                    $partialsMeta = $this->traceCall(
+                        $tracePrefix . '::parse_meta_file',
+                        fn() => $this->parsePartialsMetaFromFile($path, $area, $type, $defaultOption)
+                    );
+                }
+                self::$partialsMetaCache[$cacheKey] = is_array($partialsMeta) ? $partialsMeta : [];
             }
 
             if (empty($partialsMeta)) {

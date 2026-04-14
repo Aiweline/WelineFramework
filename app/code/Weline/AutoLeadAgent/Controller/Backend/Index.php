@@ -944,7 +944,7 @@ class Index extends BackendController
     public function deleteTask(): string
     {
         // 支持 POST 和 DELETE 请求
-        $requestMethod = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+        $requestMethod = strtoupper((string)\w_env('request.method', 'GET'));
         if (!in_array($requestMethod, ['POST', 'DELETE'], true)) {
             return $this->fetchJson([
                 'success' => false,

@@ -47,6 +47,9 @@ final class AiSiteAgentOperationObserverIntegrationTest extends AbstractAiSiteWo
         );
         self::assertTrue((bool)($mergePayload['success'] ?? false), \json_encode($mergePayload, \JSON_UNESCAPED_UNICODE));
 
+        $planFlow = $this->generateAndConfirmPlan($publicId, $scopePatch);
+        self::assertSame(1, (int)($planFlow['confirm_plan']['data']['plan_confirmed'] ?? 0));
+
         $startBuildPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-start-build',
             'POST',

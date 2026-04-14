@@ -83,8 +83,8 @@ endif;
         env_model: '{{env_model}}',
         env_model_media_base_path_template: '{{env_model_media_base_path_template}}',
         api_host: '{{api_host}}',
-        currency: '{{$_SERVER.WELINE_USER_CURRENCY}}',
-        lang: '{{$_SERVER.WELINE_USER_LANG}}',
+        currency: '<?= \w_env_currency() ?>',
+        lang: '<?= \w_env_lang() ?>',
         frontend_api_host: '{{frontend_api_host}}',
         url_host: '{{ url_host }}',
         base_router: '{{base_router}}',
@@ -134,6 +134,8 @@ endif;
 
     window.WelineString = {
         startsWith: (str, prefix, ignoreCase = true) => {
+            str = String(str ?? '');
+            prefix = String(prefix ?? '');
             if (ignoreCase) {
                 str = str.toLowerCase();
                 prefix = prefix.toLowerCase();
@@ -141,6 +143,9 @@ endif;
             return str.lastIndexOf(prefix, 0) === 0;
         },
         replaceStartsWith: (str, prefix, value, ignoreCase = true) => {
+            str = String(str ?? '');
+            prefix = String(prefix ?? '');
+            value = String(value ?? '');
             if (ignoreCase) {
                 str = str.toLowerCase();
                 prefix = prefix.toLowerCase();
@@ -221,7 +226,7 @@ endif;
         if ('website' === type && code) {
             pre_path = code;
         }
-        pre_path = decodeURIComponent(pre_path);
+        pre_path = decodeURIComponent(String(pre_path || ''));
         if (pre_path.endsWith('/')) {
             pre_path = pre_path.slice(0, -1);
         }

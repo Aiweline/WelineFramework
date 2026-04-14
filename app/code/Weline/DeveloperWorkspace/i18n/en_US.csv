@@ -43,6 +43,7 @@
 "沙盒环境已关闭,接下来操作的数据将影响正式线上数据库！","Sandbox environmentHas been closed,NextOperated dataWill affectFormal online database！"
 "沙盒环境已启动! 接下来操作的数据将写入沙盒数据库！","Sandbox environmentHas been started! NextOperated dataWill write toSandbox database！"
 沙盒启动Key设置成功,"Sandbox Start KeySet successful"
+沙盒环境已关闭,沙盒环境已关闭
 加载Debug配置失败：%{1},加载Debug配置失败：%{1}
 无效的请求方法,无效的请求方法
 保存成功,保存成功
@@ -229,16 +230,12 @@ jstree库未加载，请刷新页面重试,"jstree library not loaded, please re
 当前沙盒状态：,"Current Sandbox Status:"
 @if{enabled=>'开启'|'关闭'},@if{enabled=>'Open'|'Close'}
 当前Key：,"Current Key:"
+沙盒Key,"Sandbox Key"
 沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：,沙盒启动Key配置。使用时在请求后面加上sandbox参数。示例：
 开启沙盒,OpenSandbox
 关闭沙盒请在Cookie中删除或者设置：w_sandbox值。示例：,"To close sandbox, please delete or set w_sandbox value in Cookie. Example:"
 关闭沙盒,CloseSandbox
-设置开启沙盒环境的Key,Settings开启沙盒环境的Key
-"设置开启沙盒环境的Key，一旦设置后，前端启用沙盒环境则需要特定的Key,才能启用。","Settings开启沙盒环境的Key，一旦Settings后，前端启用沙盒环境则需要特定的Key,才能启用。"
-沙盒Key,"Sandbox Key"
-沙盒Key验证成功,"Sandbox KeyVerification successful"
 请输入沙盒Key,"Please enterSandbox Key"
-提交,Submit
 Debug配置,Debug配置
 提示,提示
 Debug配置功能正在开发中，敬请期待。,Debug配置功能正在开发中，敬请期待。

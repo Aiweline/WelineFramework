@@ -34,8 +34,8 @@ $widgetId = 'newsletter-popup-' . uniqid();
 
 // 判断是否在编辑器预览模式（widget-preview请求）
 $isEditorPreview = $this->getData('_editor_preview') || 
-                   (isset($_GET['widget_preview']) && $_GET['widget_preview'] === '1') ||
-                   strpos($_SERVER['REQUEST_URI'] ?? '', 'widget-preview') !== false;
+                   ((string)\w_env_get('widget_preview', '') === '1') ||
+                   strpos(\w_env_request_uri(), 'widget-preview') !== false;
 ?>
 
 <div class="widget-newsletter-popup <?= $isEditorPreview ? 'editor-preview-mode' : '' ?>" 

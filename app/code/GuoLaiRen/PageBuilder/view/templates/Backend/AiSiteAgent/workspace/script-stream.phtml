@@ -28,6 +28,9 @@
     var lastActivityTime = Date.now();
     var workspaceStreamPaused = !!window.__pbWorkspaceStreamPaused;
     var workspaceStreamFatal = false; // 402 等不可恢复错误后停止重连
+    var workspaceReconnectTimer = null;
+    var workspaceReconnectDelayMs = 1200;
+    var workspaceReconnectMaxDelayMs = 10000;
     
     // P0可观测性：增强的连接追踪
     var connectionStartTime = null;
@@ -85,11 +88,32 @@
         }
     }
 
-    function startWorkspaceStream() {
+    function clearWorkspaceReconnectTimer() {
+        if (workspaceReconnectTimer) {
+            window.clearTimeout(workspaceReconnectTimer);
+            workspaceReconnectTimer = null;
+        }
+    }
+
+    function scheduleWorkspaceReconnect(reason) {
         workspaceStreamPaused = !!window.__pbWorkspaceStreamPaused;
         if (workspaceStreamPaused || workspaceStreamFatal) {
             return;
         }
+        clearWorkspaceReconnectTimer();
+        workspaceReconnectTimer = window.setTimeout(function () {
+            workspaceReconnectTimer = null;
+            startWorkspaceStream('reconnect:' + String(reason || 'unknown'));
+        }, workspaceReconnectDelayMs);
+        workspaceReconnectDelayMs = Math.min(workspaceReconnectDelayMs * 2, workspaceReconnectMaxDelayMs);
+    }
+
+    function startWorkspaceStream(sourceTag) {
+        workspaceStreamPaused = !!window.__pbWorkspaceStreamPaused;
+        if (workspaceStreamPaused || workspaceStreamFatal) {
+            return;
+        }
+        clearWorkspaceReconnectTimer();
         var nextUrl = buildWorkspaceStreamUrl();
         if (!nextUrl) {
             return;
@@ -107,10 +131,13 @@
         } catch (guardErr) {
             // 继续尝试 start，避免偶发 API 异常导致永不连接
         }
+        connectionStartTime = Date.now();
+        currentConnectionId = 'ws_' + connectionStartTime + '_' + Math.random().toString(36).slice(2, 8);
         terminal.setUrl(nextUrl);
         terminal.start(nextUrl);
     }
     window.__pbStartWorkspaceStream = startWorkspaceStream;
+    window.__pbClearWorkspaceReconnectTimer = clearWorkspaceReconnectTimer;
 
     function formatWorkspaceLog(entry) {
         var payload = entry && entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
@@ -153,6 +180,10 @@
 
     terminal.on('snapshot', function (event) {
         var data = parseSsePayload(event);
+        workspaceReconnectDelayMs = 1200;
+        if (connectionStartTime) {
+            connectionRetryCount = 0;
+        }
         if (Array.isArray(data.events)) {
             data.events.forEach(function (entry) {
                 var eventId = parseInt(entry && entry.event_id ? entry.event_id : 0, 10) || 0;
@@ -226,33 +257,42 @@
             return;
         }
         var message = (data && data.message) ? String(data.message) : '';
+        var httpCode = parseInt((data && (data.http_code || data.code)) || 0, 10) || 0;
         if (message) {
             terminal.log(message, 'error');
-            var httpCode = parseInt(data.http_code || data.code || 0, 10) || 0;
-            var lowerMessage = message.toLowerCase();
-            var fatal402 = httpCode === 402
-                || lowerMessage.indexOf('http 402') >= 0
-                || lowerMessage.indexOf('402') >= 0
-                || lowerMessage.indexOf('insufficient balance') >= 0
-                || lowerMessage.indexOf('余额不足') >= 0
-                || lowerMessage.indexOf('额度不足') >= 0;
-            if (fatal402) {
-                workspaceStreamFatal = true;
-                if (terminal && typeof terminal.stop === 'function') {
-                    terminal.stop({ suppressTransportError: true });
-                }
-                terminal.log('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>', 'error');
-                if (window.BackendToast && typeof window.BackendToast.error === 'function') {
-                    window.BackendToast.error('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>');
-                }
-                return;
+        }
+
+        var lowerMessage = message.toLowerCase();
+        var fatal402 = httpCode === 402
+            || lowerMessage.indexOf('http 402') >= 0
+            || lowerMessage.indexOf('402') >= 0
+            || lowerMessage.indexOf('insufficient balance') >= 0
+            || lowerMessage.indexOf('余额不足') >= 0
+            || lowerMessage.indexOf('额度不足') >= 0;
+        if (fatal402) {
+            workspaceStreamFatal = true;
+            clearWorkspaceReconnectTimer();
+            if (terminal && typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
             }
-            if (message.indexOf('会话不存在') >= 0 || message.indexOf('无访问权限') >= 0 || message.indexOf('参数无效') >= 0) {
-                if (terminal && typeof terminal.stop === 'function') {
-                    terminal.stop({ suppressTransportError: true });
-                }
-                return;
+            terminal.log('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>', 'error');
+            if (window.BackendToast && typeof window.BackendToast.error === 'function') {
+                window.BackendToast.error('<?= __('AI 链接失败（402），已停止重试，请检查账户余额或密钥配置。') ?>');
             }
+            return;
+        }
+
+        if (message.indexOf('会话不存在') >= 0 || message.indexOf('无访问权限') >= 0 || message.indexOf('参数无效') >= 0) {
+            clearWorkspaceReconnectTimer();
+            if (terminal && typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
+            }
+            return;
+        }
+
+        if (!workspaceStreamPaused && !workspaceStreamFatal) {
+            connectionRetryCount += 1;
+            scheduleWorkspaceReconnect('terminal_error');
         }
     });
 

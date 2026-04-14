@@ -55,6 +55,8 @@
      */
     const WelineString = window.WelineString || {
         startsWith: (str, prefix, ignoreCase = true) => {
+            str = String(str ?? '');
+            prefix = String(prefix ?? '');
             if (ignoreCase) {
                 str = str.toLowerCase();
                 prefix = prefix.toLowerCase();
@@ -62,6 +64,9 @@
             return str.lastIndexOf(prefix, 0) === 0;
         },
         replaceStartsWith: (str, prefix, value, ignoreCase = true) => {
+            str = String(str ?? '');
+            prefix = String(prefix ?? '');
+            value = String(value ?? '');
             if (ignoreCase) {
                 str = str.toLowerCase();
                 prefix = prefix.toLowerCase();
@@ -183,7 +188,7 @@
         if ('website' === type && code) {
             prePath = code;
         }
-        prePath = decodeURIComponent(prePath);
+        prePath = decodeURIComponent(String(prePath || ''));
         if (prePath.endsWith('/')) {
             prePath = prePath.slice(0, -1);
         }

@@ -51,7 +51,7 @@ class GoogleRecaptchaV3 implements CaptchaProviderInterface
         $data = [
             'secret' => $secretKey,
             'response' => $code,
-            'remoteip' => $_SERVER['REMOTE_ADDR'] ?? '',
+            'remoteip' => (string)\w_env('server.remote_addr', ''),
         ];
         
         $ch = curl_init($url);

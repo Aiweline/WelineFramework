@@ -6,9 +6,9 @@ $words = (array)($this->getData('words') ?? []);
 $pagination = $this->getData('pagination') ?: '';
 $total = (int)($this->getData('total') ?? 0);
 $translateMode = (string)($this->getData('translate_mode') ?? '');
-$countryCode = (string)($_GET['country_code'] ?? '');
-$localeCode = (string)($_GET['code'] ?? '');
-$search = (string)($_GET['search'] ?? '');
+$countryCode = (string)\w_env_get('country_code', '');
+$localeCode = (string)\w_env_get('code', '');
+$search = (string)\w_env_get('search', '');
 
 $readValue = static function ($item, string $key, mixed $default = null): mixed {
     if (is_array($item)) {

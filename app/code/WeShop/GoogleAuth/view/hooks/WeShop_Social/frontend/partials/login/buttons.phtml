@@ -6,5 +6,5 @@
  */
 /** @var \Weline\Framework\View\Template $this */
 echo $this->fetch('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', [
-    'redirect_url' => (string) ($this->getData('redirect_url') ?? ($_GET['redirect'] ?? $_GET['redirect_url'] ?? '')),
+    'redirect_url' => (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect', '') ?: \w_env_get('redirect_url', ''))),
 ]);

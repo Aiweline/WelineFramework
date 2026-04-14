@@ -72,8 +72,6 @@ WelineFramework,WelineFramework
 在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。,在后台首页标签页内容区域动态追加标签页内容面板，例如像素统计面板、数据分析面板等。
 "Backend login providers","Backend login providers"
 "Inject third-party sign-in providers above the backend login form.","Inject third-party sign-in providers above the backend login form."
-记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
-用户不存在！,"User does not exist!"
 系统消息数据格式错误,"System message data format error"
 "收到无效的系统消息数据。\n\n发送者：%{sender}\n数据类型：%{type}\n数据内容：%{content}\n\n请检查发送系统消息的代码，确保数据格式正确。","Invalid system message data received.\n\nSender: %{sender}\nData Type: %{type}\nData Content: %{content}\n\nPlease check the code that sends system messages to ensure the data format is correct."
 title,title
@@ -85,6 +83,8 @@ content,content
 未知,Unknown
 "SystemNotificationObserver Error: Failed to save error notification - %{error}","SystemNotificationObserver Error: Failed to save error notification - %{error}"
 未知来源,"Unknown source"
+记住登录已过期，请重新登录！,"Remember login has expired, please login again!"
+用户不存在！,"User does not exist!"
 最近访问,"Recently Visited"
 访问最多,"Most Visited"
 "搜索 ...","Search ..."
@@ -108,7 +108,7 @@ content,content
 删除!,Delete!
 知道了,"Got it"
 value,value
-"Weline Admin 管理面板","Weline Admin Management Panel"
+"Weline Admin 绠＄悊闈㈡澘","Weline Admin 绠＄悊闈㈡澘"
 角色归配,"Role Assignment"
 系统,System
 管理员,Administrator
