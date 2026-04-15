@@ -335,6 +335,39 @@ class PassthroughCoreSeedWorkerPoolTest extends TestCase
         self::assertSame(1, $core->getWorkerCount());
     }
 
+    public function testSetWorkerPortsKeepsPreviouslyAcceptedPortWhenRefreshWarmupFailsTransiently(): void
+    {
+        $core = $this->createWarmupStubCore([
+            19982 => true,
+        ]);
+
+        $core->setWorkerPorts([19982]);
+        self::assertSame([19982], $core->getWorkerPorts());
+
+        $failingRefreshCore = $this->createWarmupStubCore([
+            19982 => 'health connect timeout after 2.5s',
+            19983 => true,
+        ]);
+
+        $this->setPrivateProperty($failingRefreshCore, 'workerPorts', [19982]);
+        $this->setPrivateProperty($failingRefreshCore, 'workerCount', 1);
+        $this->setPrivateProperty($failingRefreshCore, 'workerHealth', [
+            19982 => [
+                'failures' => 0,
+                'blacklisted_at' => 0.0,
+                'last_success' => \microtime(true) - 30.0,
+                'total_failures' => 0,
+            ],
+        ]);
+
+        $result = $failingRefreshCore->setWorkerPorts([19982, 19983]);
+
+        self::assertSame([19982, 19983], $result['accepted']);
+        self::assertSame([], $result['rejected']);
+        self::assertSame([19982, 19983], $failingRefreshCore->getWorkerPorts());
+        self::assertSame(2, $failingRefreshCore->getWorkerCount());
+    }
+
     public function testSetWorkerPortsPublishesAcceptedPortsProgressively(): void
     {
         $core = $this->createWarmupStubCore([
