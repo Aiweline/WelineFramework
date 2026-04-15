@@ -103,6 +103,32 @@ class VirtualThemeRequestInterceptorTest extends TestCase
         $this->assertArrayNotHasKey('frontend_theme_id', $setGetCalls);
     }
 
+    public function testWorkspacePreviewWithoutUrlVirtualThemeIdDoesNotUseStoredSessionContext(): void
+    {
+        $request = $this->createMock(Request::class);
+        $session = $this->createMock(\Weline\Framework\Session\Session::class);
+        $virtualTheme = $this->createMock(VirtualTheme::class);
+
+        $request->method('getParam')
+            ->willReturnCallback(static function (string $key, mixed $default = null) {
+                return $key === 'virtual_theme_id' ? 0 : $default;
+            });
+        $request->method('getUrlPath')
+            ->willReturn('/pagebuilder/backend/ai-site-agent/workspace-preview');
+
+        $session->method('getData')
+            ->with(VirtualThemeContextService::SESSION_KEY)
+            ->willReturn(['virtual_theme_id' => 789]);
+        $session->expects($this->never())->method('setData');
+        $virtualTheme->expects($this->never())->method('load');
+        $request->expects($this->never())->method('setGet');
+
+        $contextService = new VirtualThemeContextService($request, $session);
+        $observer = new VirtualThemeRequestInterceptor($request, $contextService, $virtualTheme);
+        $event = $this->createMock(Event::class);
+        $observer->execute($event);
+    }
+
     public function testExecuteWithVirtualThemeIdFromStoredContextOnPageBuilderRoute(): void
     {
         $virtualThemeId = 789;

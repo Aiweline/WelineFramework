@@ -21,6 +21,14 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         $publicId = (string)($createPayload['public_id'] ?? '');
         self::assertNotSame('', $publicId);
 
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        $this->sessionService->mergeScope($session->getId(), 1, [
+            'plan_markdown' => "# Demo plan\n\n- scope item",
+            'plan_confirmed' => 1,
+        ]);
+        self::assertTrue($this->sessionService->setStage($session->getId(), 1, 'visual_edit'));
+
         $this->prepareBackendRequest(
             '/pagebuilder/backend/ai-site-agent/workspace',
             'GET',
@@ -46,11 +54,13 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('var taskPlanSseUrl =', $html);
         self::assertStringContainsString('var hasVirtualThemePlanState =', $html);
         self::assertStringContainsString('var taskPlanConfirmedState =', $html);
-        self::assertStringContainsString('pb-ai-task-plan-generation-modal', $html);
+        self::assertStringContainsString('pb-ai-task-plan-panel-collapse', $html);
+        self::assertStringContainsString('pb-ai-task-plan-accordion', $html);
         self::assertStringContainsString('function isTaskPlanRequiredResponse(data)', $html);
         self::assertStringContainsString('function startTaskPlanGenerationForBuild(triggerBtn, selectedTypes, options)', $html);
         self::assertStringContainsString('function confirmCurrentTaskPlanAndMaybeBuild(triggerBtn, selectedTypes)', $html);
         self::assertStringContainsString('function startTaskPlanModeStream(mode)', $html);
+        self::assertStringContainsString('detect_bootstrap_task_plan', $html);
         self::assertStringContainsString('refine_task_plan', $html);
         self::assertStringContainsString('rebuild_task_plan', $html);
         self::assertStringContainsString('pb-ai-task-plan-sse-terminal', $html);

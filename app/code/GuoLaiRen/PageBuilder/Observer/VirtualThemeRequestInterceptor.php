@@ -57,6 +57,11 @@ class VirtualThemeRequestInterceptor implements ObserverInterface
             return $virtualThemeId;
         }
 
+        // workspace-preview 由 public_id 会话解析虚拟主题；禁止用 session 里其它链路残留的 ID 污染 GET。
+        if ($this->isAiSiteWorkspacePreviewRoute()) {
+            return 0;
+        }
+
         if (!$this->shouldUseStoredContextForCurrentRoute()) {
             $this->virtualThemeContext->clearContext();
             return 0;
@@ -135,6 +140,14 @@ class VirtualThemeRequestInterceptor implements ObserverInterface
         }
 
         return false;
+    }
+
+    private function isAiSiteWorkspacePreviewRoute(): bool
+    {
+        $currentPath = \strtolower(\trim((string)$this->request->getUrlPath()));
+
+        return $currentPath !== ''
+            && \str_contains($currentPath, '/pagebuilder/backend/ai-site-agent/workspace-preview');
     }
 
     private function shouldInjectFrontendRenderState(): bool
