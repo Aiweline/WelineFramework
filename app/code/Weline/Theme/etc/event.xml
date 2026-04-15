@@ -26,6 +26,14 @@
                   shared="true"
                   sort="-7"/>
     </event>
+
+    <event name="Weline_Framework::App::run_after">
+        <observer name="Weline_Theme::clear_scoped_preview_state_after"
+                  instance="Weline\Theme\Observer\ClearScopedPreviewStateAfter"
+                  disabled="false"
+                  shared="true"
+                  sort="900"/>
+    </event>
     
     <!-- 
         模板文件获取事件 - 解析主题文件路径

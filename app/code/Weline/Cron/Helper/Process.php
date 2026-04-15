@@ -13,6 +13,7 @@ declare(strict_types=1);
 namespace Weline\Cron\Helper;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 
 class Process
 {
@@ -234,7 +235,7 @@ class Process
                 return $result;
             }
             if ($i < 2) {
-                usleep(100000);
+                SchedulerSystem::usleep(100000);
             }
         }
         return false;

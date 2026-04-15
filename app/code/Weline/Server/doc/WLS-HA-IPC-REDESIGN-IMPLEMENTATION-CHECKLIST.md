@@ -6,11 +6,11 @@
 ## 第一阶段
 
 - [ ] 引入 `wls-supervisor` 固定控制端点
-- [ ] Linux/macOS 使用 UDS，Windows 使用固定 loopback TCP
+- [x] Linux/macOS 使用 UDS，Windows 使用固定 loopback TCP
 - [ ] CLI 改为连接 supervisor 而不是临时 master control port
-- [ ] Child 侧新增 `hello -> lease_assign -> ready -> ready_ack` 协议骨架
-- [ ] 为 slot 引入 `lease_id`
-- [ ] 所有 child -> control 报文带 `lease_id`
+- [x] Child 侧新增 `hello -> lease_assign -> ready -> ready_ack` 协议骨架
+- [x] 为 slot 引入 `lease_id`
+- [x] 所有 child -> control 报文带 `lease_id`
 
 ## 第二阶段
 
@@ -27,4 +27,3 @@
 - [ ] stale ready / late exited / duplicate register 不再污染槽位状态
 - [ ] Dispatcher worker pool 始终由 versioned snapshot 收敛
 - [ ] log storm 不影响 drain/shutdown/ready 路径
-

@@ -746,7 +746,7 @@ class ServiceOrchestrator
 
         $this->controlServer?->sendTo(
             $operation['clientId'],
-            ControlMessage::commandResult(true, $data, $message)
+            ControlMessage::commandResult(true, $data, $message, (string)($operation['payload']['msg_id'] ?? ''))
         );
     }
 
@@ -770,7 +770,7 @@ class ServiceOrchestrator
 
         $this->controlServer?->sendTo(
             $clientId,
-            ControlMessage::commandResult(true, $data, $message)
+            ControlMessage::commandResult(true, $data, $message, (string)($operation['payload']['msg_id'] ?? ''))
         );
     }
 
@@ -6977,7 +6977,8 @@ class ServiceOrchestrator
                     ControlMessage::ackReady(
                         $workerId,
                         $instance->role === ControlMessage::ROLE_WORKER,
-                        (int)($instance->port ?? 0)
+                        (int)($instance->port ?? 0),
+                        (string)($msg['msg_id'] ?? '')
                     )
                 );
             }
@@ -7013,7 +7014,7 @@ class ServiceOrchestrator
         } else {
             $this->controlServer?->sendTo(
                 $clientId,
-                ControlMessage::ackReady($workerId, false, (int)($instance->port ?? 0))
+                ControlMessage::ackReady($workerId, false, (int)($instance->port ?? 0), (string)($msg['msg_id'] ?? ''))
             );
             $ackReadyAt = \microtime(true);
             $instance->setMeta('ack_ready_at', $ackReadyAt);
@@ -7146,7 +7147,7 @@ class ServiceOrchestrator
         }
         $this->registry->updateInstance($worker);
 
-        $this->controlServer->sendTo($targetClientId, ControlMessage::ackReady($workerId, true, $port));
+        $this->controlServer->sendTo($targetClientId, ControlMessage::ackReady($workerId, true, $port, (string)($msg['msg_id'] ?? '')));
         WlsLogger::info_("[Orchestrator] Worker 入池闭环确认完成: worker#{$worker->instanceId}, port={$port}, dispatcher_client_id={$clientId}");
     }
 
@@ -7902,7 +7903,7 @@ class ServiceOrchestrator
     {
         $action = $msg['action'] ?? '';
         if (!\is_string($action) || $action === '') {
-            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, [], 'Unknown command'));
+            $this->controlServer?->sendTo($clientId, ControlMessage::commandResult(false, [], 'Unknown command', (string)($msg['msg_id'] ?? '')));
 
             return;
         }
@@ -7918,7 +7919,7 @@ class ServiceOrchestrator
                     );
                     $this->controlServer?->sendTo(
                         $clientId,
-                        ControlMessage::commandResult(false, [], 'STOP rejected: missing explicit stop intent')
+                        ControlMessage::commandResult(false, [], 'STOP rejected: missing explicit stop intent', (string)($msg['msg_id'] ?? ''))
                     );
 
                     return;
