@@ -167,9 +167,6 @@
                         <div class="border rounded p-3">
                             <div class="small fw-semibold mb-2"><?= htmlspecialchars((string)__('复制选项'), ENT_QUOTES, 'UTF-8') ?></div>
                             <div class="d-grid gap-2">
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="pb-ai-copy-plan-markdown">
-                                    <i class="mdi mdi-content-copy me-1"></i><?= htmlspecialchars((string)__('复制 Markdown 方案'), ENT_QUOTES, 'UTF-8') ?>
-                                </button>
                                 <button type="button" class="btn btn-outline-secondary btn-sm" id="pb-ai-copy-plan-json">
                                     <i class="mdi mdi-code-json me-1"></i><?= htmlspecialchars((string)__('复制结构化数据 (JSON)'), ENT_QUOTES, 'UTF-8') ?>
                                 </button>
@@ -198,29 +195,11 @@
                     </div>
                 </div>
                 <div class="border rounded">
-                    <ul class="nav nav-tabs" role="tablist">
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="pb-ai-confirmed-plan-md-tab" data-bs-toggle="tab" data-bs-target="#pb-ai-confirmed-plan-md-pane" type="button" role="tab" aria-controls="pb-ai-confirmed-plan-md-pane" aria-selected="true">
-                                <?= htmlspecialchars((string)__('Markdown 原文'), ENT_QUOTES, 'UTF-8') ?>
-                            </button>
-                        </li>
-                        <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="pb-ai-confirmed-plan-preview-tab" data-bs-toggle="tab" data-bs-target="#pb-ai-confirmed-plan-preview-pane" type="button" role="tab" aria-controls="pb-ai-confirmed-plan-preview-pane" aria-selected="false">
-                                <?= htmlspecialchars((string)__('预览'), ENT_QUOTES, 'UTF-8') ?>
-                            </button>
-                        </li>
-                    </ul>
-                    <div class="tab-content">
-                        <div class="tab-pane fade show active" id="pb-ai-confirmed-plan-md-pane" role="tabpanel" aria-labelledby="pb-ai-confirmed-plan-md-tab">
-                            <div id="pb-ai-confirmed-plan-md-content" class="p-3" style="max-height: 500px; overflow-y: auto; background-color: #f8f9fa; font-family: monospace; white-space: pre-wrap; min-height: 200px;">
-                                <?= htmlspecialchars((string)__('加载中...'), ENT_QUOTES, 'UTF-8') ?>
-                            </div>
-                        </div>
-                        <div class="tab-pane fade" id="pb-ai-confirmed-plan-preview-pane" role="tabpanel" aria-labelledby="pb-ai-confirmed-plan-preview-tab">
-                            <div id="pb-ai-confirmed-plan-rendered-content" class="p-3" style="max-height: 500px; overflow-y: auto; min-height: 200px;">
-                                <?= htmlspecialchars((string)__('加载中...'), ENT_QUOTES, 'UTF-8') ?>
-                            </div>
-                        </div>
+                    <div class="p-3 border-bottom bg-light small fw-semibold">
+                        <?= htmlspecialchars((string)__('结构化方案预览'), ENT_QUOTES, 'UTF-8') ?>
+                    </div>
+                    <div id="pb-ai-confirmed-plan-rendered-content" class="p-3" style="max-height: 500px; overflow-y: auto; min-height: 200px;">
+                        <?= htmlspecialchars((string)__('加载中...'), ENT_QUOTES, 'UTF-8') ?>
                     </div>
                 </div>
             </div>
