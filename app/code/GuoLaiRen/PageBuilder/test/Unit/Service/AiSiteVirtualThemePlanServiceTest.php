@@ -163,6 +163,81 @@ final class AiSiteVirtualThemePlanServiceTest extends TestCase
         self::assertStringContainsString('The task plan must make shared -> home -> other page execution explicit and explain why shared tasks block later tasks.', $capturedPrompt);
     }
 
+    public function testBuildTaskPlanArtifactsUsesNonStreamJsonModeWhenNoChunkCallbackIsProvided(): void
+    {
+        $capturedParams = null;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::never())->method('generateStream');
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturnCallback(function (
+                string $prompt,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$capturedParams): string {
+                $capturedParams = $params;
+                return $this->buildTaskPlanResponse();
+            });
+
+        $service = new AiSiteVirtualThemePlanService($aiService);
+        $artifacts = $service->buildTaskPlanArtifacts($this->buildPromptScope(), $this->buildPromptBlueprint());
+
+        self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
+        self::assertIsArray($capturedParams);
+        self::assertSame(120, (int)($capturedParams['timeout'] ?? 0));
+        self::assertSame(['type' => 'json_object'], $capturedParams['response_format'] ?? null);
+    }
+
+    public function testBuildTaskPlanArtifactsStreamEnforcesTimeoutAndFallsBackToJsonGenerateWhenStreamResponseIsInvalid(): void
+    {
+        $capturedStreamParams = null;
+        $capturedGenerateParams = null;
+        $aiService = $this->createMock(AiService::class);
+        $aiService->expects(self::once())
+            ->method('generateStream')
+            ->willReturnCallback(function (
+                string $prompt,
+                callable $callback,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$capturedStreamParams): void {
+                $capturedStreamParams = $params;
+                $callback('not-json');
+            });
+        $aiService->expects(self::once())
+            ->method('generate')
+            ->willReturnCallback(function (
+                string $prompt,
+                $modelCode,
+                string $scenarioCode,
+                $locale,
+                array $params
+            ) use (&$capturedGenerateParams): string {
+                $capturedGenerateParams = $params;
+                return $this->buildTaskPlanResponse();
+            });
+
+        $service = new AiSiteVirtualThemePlanService($aiService);
+        $artifacts = $service->buildTaskPlanArtifactsStream(
+            $this->buildPromptScope(),
+            $this->buildPromptBlueprint(),
+            static function (string $chunk): void {
+            }
+        );
+
+        self::assertSame('ai', (string)($artifacts['generation_source'] ?? ''));
+        self::assertIsArray($capturedStreamParams);
+        self::assertTrue((bool)($capturedStreamParams['enforce_timeout_in_stream'] ?? false));
+        self::assertSame(120, (int)($capturedStreamParams['timeout'] ?? 0));
+        self::assertSame(['type' => 'json_object'], $capturedStreamParams['response_format'] ?? null);
+        self::assertIsArray($capturedGenerateParams);
+        self::assertSame(['type' => 'json_object'], $capturedGenerateParams['response_format'] ?? null);
+    }
+
     public function testRefineDraftTaskPlanAddsChangeScopeReport(): void
     {
         $service = new AiSiteVirtualThemePlanService(

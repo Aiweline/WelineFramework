@@ -60,6 +60,12 @@ final class AiSiteTaskPlanRenderIntegrationTest extends AbstractAiSiteWorkbenchI
         self::assertStringContainsString('function startTaskPlanGenerationForBuild(triggerBtn, selectedTypes, options)', $html);
         self::assertStringContainsString('function confirmCurrentTaskPlanAndMaybeBuild(triggerBtn, selectedTypes)', $html);
         self::assertStringContainsString('function startTaskPlanModeStream(mode)', $html);
+        self::assertStringContainsString("var persistedTaskPlanStructured = (scope.task_plan_structured && typeof scope.task_plan_structured === 'object')", $html);
+        self::assertStringContainsString('if (isNonEmptyObject(payload.structured)) {', $html);
+        self::assertStringContainsString('var draftPlan = isNonEmptyObject(structured) ? structured : (isNonEmptyObject(vt.draft) ? vt.draft : {});', $html);
+        self::assertStringContainsString('function isTaskPlanStructuredRoot(planRoot)', $html);
+        self::assertStringContainsString('function renderTaskPlanStructuredPreviewHtml(planRoot)', $html);
+        self::assertStringContainsString("var pageTasks = planRoot.page_tasks && typeof planRoot.page_tasks === 'object' ? planRoot.page_tasks : {};", $html);
         self::assertStringContainsString('detect_bootstrap_task_plan', $html);
         self::assertStringContainsString('refine_task_plan', $html);
         self::assertStringContainsString('rebuild_task_plan', $html);
