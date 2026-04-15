@@ -1388,9 +1388,7 @@ class ThemeEditor extends BackendController
     public function getCompileLayout()
     {
         $previewContextService = $this->getPreviewContextService();
-        $editorArea = $previewContextService->normalizeArea(
-            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_BACKEND)
-        );
+        $editorArea = $this->resolveRequestedEditorArea(PreviewContextService::AREA_BACKEND);
         $layoutType = (string)$this->request->getParam('layout_type', 'homepage');
         $layoutOption = (string)$this->request->getParam('layout_option', 'default');
         $context = $this->persistEditorContext([
@@ -2014,9 +2012,7 @@ class ThemeEditor extends BackendController
         if ($layoutOption === '') {
             $layoutOption = 'default';
         }
-        $editorArea = $previewContextService->normalizeArea(
-            (string)$this->request->getParam('editor_area', PreviewContextService::AREA_BACKEND)
-        );
+        $editorArea = $this->resolveRequestedEditorArea(PreviewContextService::AREA_BACKEND);
         $context = $this->persistEditorContext([
             'frontend_theme_id' => (int)$this->request->getParam('frontend_theme_id', 0),
             'backend_theme_id' => (int)$this->request->getParam('backend_theme_id', 0),
@@ -3399,9 +3395,45 @@ HTML;
 
     private function persistEditorContext(array $overrides = []): array
     {
+        // Don't let explicit "0" IDs wipe out request-derived theme selection (e.g. theme_id).
+        foreach (['frontend_theme_id', 'backend_theme_id'] as $themeIdKey) {
+            if (\array_key_exists($themeIdKey, $overrides) && (int)$overrides[$themeIdKey] <= 0) {
+                unset($overrides[$themeIdKey]);
+            }
+        }
+
+        $themeId = (int)$this->request->getParam('theme_id', 0);
+        $editorArea = $this->resolveRequestedEditorArea(
+            (string)($overrides['editor_area'] ?? PreviewContextService::AREA_BACKEND)
+        );
+        $overrides['editor_area'] = $editorArea;
+
+        // If caller only passed theme_id (common in editor iframe refresh), map it to selected area.
+        if ($themeId > 0
+            && !isset($overrides['frontend_theme_id'])
+            && !isset($overrides['backend_theme_id'])
+        ) {
+            if ($editorArea === PreviewContextService::AREA_BACKEND) {
+                $overrides['backend_theme_id'] = $themeId;
+            } else {
+                $overrides['frontend_theme_id'] = $themeId;
+            }
+        }
+
         $context = $this->getPreviewContextService()->buildContext($overrides);
         $context = $this->getPreviewContextService()->ensureThemeIds($context, true, true);
         return $this->getPreviewContextService()->persistContext($context);
+    }
+
+    private function resolveRequestedEditorArea(string $default = PreviewContextService::AREA_FRONTEND): string
+    {
+        $previewContextService = $this->getPreviewContextService();
+        $rawEditorArea = (string)$this->request->getParam('editor_area', '');
+        if ($rawEditorArea === '') {
+            $rawEditorArea = (string)$this->request->getParam('preview_area', $default);
+        }
+
+        return $previewContextService->normalizeArea($rawEditorArea, $default);
     }
 
     private function buildFrontendPreviewUrl(array $context, string $pageType): string
