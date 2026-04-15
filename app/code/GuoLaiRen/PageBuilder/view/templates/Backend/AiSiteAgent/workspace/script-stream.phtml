@@ -1,6 +1,7 @@
 <script>
 (function () {
     'use strict';
+    var PB_SSE_CONNECT_DELAY_MS = 5000;
     
     // P0可观测性：初始化增强SSE日志器
     var sseLogger = null;
@@ -17,7 +18,6 @@
     }
     
     var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pagebuilder-workspace-terminal'] : null;
-    var planTerminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-plan-sse-terminal'] : null;
     var publicId = <?= \json_encode(($publicId ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var streamBaseUrl = <?= \json_encode(($streamSseUrl ?? ''), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var streamStageCode = 'plan';
@@ -31,6 +31,7 @@
     var workspaceStreamPaused = !!window.__pbWorkspaceStreamPaused;
     var workspaceStreamFatal = false; // 402 等不可恢复错误后停止重连
     var workspaceReconnectTimer = null;
+    var workspaceStartTimer = null;
     var workspaceReconnectDelayMs = 1200;
     var workspaceReconnectMaxDelayMs = 10000;
     
@@ -59,7 +60,15 @@
         return;
     }
 
+    function getPlanTerminalInstance() {
+        if (!window.WelineSseTerminal || typeof window.WelineSseTerminal !== 'object') {
+            return null;
+        }
+        return window.WelineSseTerminal['pb-ai-plan-sse-terminal'] || null;
+    }
+
     function mirrorToPlanTerminal(message, level, payload) {
+        var planTerminal = getPlanTerminalInstance();
         if (!planTerminal || typeof planTerminal.log !== 'function') {
             return;
         }
@@ -88,17 +97,34 @@
         if (chunk === '') {
             return;
         }
+        // 忽略明显 JSON 噪声分片，避免把 {"markdown": "..."} 原文渲染到预览。
+        if (isJsonNoiseChunk(chunk)) {
+            return;
+        }
         planMarkdownStreamBuffer += chunk;
-        var existing = '';
-        var mdEl = document.getElementById('pb-ai-plan-md-content');
-        if (mdEl && typeof mdEl.textContent === 'string') {
-            existing = String(mdEl.textContent || '');
-        }
+        // 使用累积 buffer 而非从 DOM 读取，保证预览同步
         if (typeof window.updatePlanModalContent === 'function') {
-            window.updatePlanModalContent(existing + chunk);
-        } else if (mdEl) {
-            mdEl.textContent = existing + chunk;
+            window.updatePlanModalContent(planMarkdownStreamBuffer);
+        } else {
+            var mdEl = document.getElementById('pb-ai-plan-md-content');
+            if (mdEl) {
+                mdEl.textContent = planMarkdownStreamBuffer;
+            }
         }
+    }
+
+    function isJsonNoiseChunk(chunk) {
+        var text = String(chunk || '').trim();
+        if (!text) {
+            return false;
+        }
+        if (text.indexOf('"plan_json"') >= 0 || text.indexOf('"markdown"') >= 0) {
+            return true;
+        }
+        if ((text.charAt(0) === '{' || text.charAt(0) === '[') && /"[^"]+"\s*:/.test(text)) {
+            return true;
+        }
+        return false;
     }
 
     function flushPlanTypingBuffer(force) {
@@ -132,6 +158,8 @@
         }
         planTypingBuffer += chunk;
         planTypingChunkCount += 1;
+        // 立即将 chunk 写入终端，保证实时可观测
+        mirrorToPlanTerminal(chunk, 'chunk', { event_type: 'plan_chunk' });
         flushPlanTypingBuffer(false);
     }
 
@@ -177,6 +205,10 @@
             window.clearTimeout(workspaceReconnectTimer);
             workspaceReconnectTimer = null;
         }
+        if (workspaceStartTimer) {
+            window.clearTimeout(workspaceStartTimer);
+            workspaceStartTimer = null;
+        }
     }
 
     function scheduleWorkspaceReconnect(reason) {
@@ -217,11 +249,25 @@
         }
         connectionStartTime = Date.now();
         currentConnectionId = 'ws_' + connectionStartTime + '_' + Math.random().toString(36).slice(2, 8);
+        var source = String(sourceTag || '');
+        var fastStart = /start-plan|start-plan-confirmed|manual|explicit/i.test(source);
+        var connectDelayMs = fastStart ? 80 : PB_SSE_CONNECT_DELAY_MS;
         terminal.setUrl(nextUrl);
-        terminal.start(nextUrl);
+        workspaceStartTimer = window.setTimeout(function () {
+            workspaceStartTimer = null;
+            terminal.start(nextUrl);
+        }, connectDelayMs);
     }
     window.__pbStartWorkspaceStream = startWorkspaceStream;
     window.__pbClearWorkspaceReconnectTimer = clearWorkspaceReconnectTimer;
+    window.__pbEnsureWorkspaceStream = function (sourceTag) {
+        // 用户显式触发阶段一/阶段二开始时，强制解除暂停与fatal锁，确保能够重连。
+        workspaceStreamPaused = false;
+        workspaceStreamFatal = false;
+        window.__pbWorkspaceStreamPaused = false;
+        clearWorkspaceReconnectTimer();
+        startWorkspaceStream(sourceTag || 'ensure');
+    };
 
     function formatWorkspaceLog(entry) {
         var payload = entry && entry.payload && typeof entry.payload === 'object' ? entry.payload : {};
@@ -241,11 +287,12 @@
         var isPlanEvent = operation === 'plan'
             || eventType === 'plan_chunk'
             || eventType === 'plan_generated'
+            || eventType === 'plan_saved'
             || eventType === 'plan_refined'
             || eventType === 'plan_rebuilt';
         if (isPlanEvent) {
-            // 终端以方案正文为主，过滤“开始/进度”类提示文案，避免刷屏。
-            if (eventType === 'operation_started' || eventType === 'operation_progress') {
+            // 终端以方案正文为主；保留开始信号，过滤高频进度提示避免刷屏。
+            if (eventType === 'operation_progress') {
                 return '';
             }
             return message;
@@ -334,6 +381,7 @@
         var isPlanEvent = operation === 'plan'
             || eventType === 'plan_chunk'
             || eventType === 'plan_generated'
+            || eventType === 'plan_saved'
             || eventType === 'plan_refined'
             || eventType === 'plan_rebuilt';
         if (!isPlanEvent) {
@@ -358,7 +406,7 @@
         } else if (eventType === 'operation_completed' || eventType === 'operation_failed') {
             hasActiveOperation = false;
         }
-        if (eventType === 'plan_generated' && window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
+        if ((eventType === 'plan_generated' || eventType === 'plan_saved') && window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
             window.__pbWorkspaceApi.refreshWorkspaceStateFromServer();
         }
     });
@@ -430,7 +478,7 @@
     });
 
     // 首次进入工作区时延迟建立 SSE，避免页面刚加载就立即占用连接。
-    var initialConnectDelayMs = 5000;
+    var initialConnectDelayMs = 0;
     window.setTimeout(function () {
         startWorkspaceStream();
     }, initialConnectDelayMs);

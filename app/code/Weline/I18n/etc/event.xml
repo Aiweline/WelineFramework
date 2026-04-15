@@ -14,9 +14,6 @@
     <event name="Weline_Framework_Register::register_installer">
         <observer name="Weline_I18n::register_installer" instance="Weline\I18n\Observer\Register" disabled="false" shared="true" sort="0"/>
     </event>
-    <event name="Weline_Framework_Router::route_after">
-        <observer name="Weline_I18n::parse_words_register" instance="Weline\I18n\Observer\ParserWordsRegister" disabled="false" shared="true" sort="0"/>
-    </event>
     <event name="Weline_Framework_Module::module_upgrade">
         <observer name="Weline_I18n::i18n_locals_upgrade" instance="Weline\I18n\Observer\I18nLocalsUpgrade" disabled="false" shared="true" sort="0"/>
     </event>

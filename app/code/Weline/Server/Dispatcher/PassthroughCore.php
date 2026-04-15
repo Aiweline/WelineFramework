@@ -2128,6 +2128,19 @@ class PassthroughCore
             $this->warmupYield();
             $warmup = $this->warmupWorkerTrustingMasterReady($port);
             if (!$warmup['success']) {
+                if (\in_array($port, $previousPorts, true) && isset($previousHealth[$port])) {
+                    // 已在当前业务池中的旧端口不应因为一次瞬时探活失败就被踢出池。
+                    // 这类失败常见于 Worker 忙于长请求/SSE、listen 窗口抖动等场景。
+                    $acceptedPorts[] = $port;
+                    $acceptedHealth[$port] = $previousHealth[$port];
+                    unset($rejectedPorts[$port]);
+                    $this->applyWorkerPoolTransition($acceptedPorts, $acceptedHealth);
+                    $this->logWarmup(
+                        'SET_WORKER_POOL 保留旧池端口: ' . $port . '（瞬时探活失败但此前已在池中） error=' . $warmup['error'],
+                        'WARNING'
+                    );
+                    continue;
+                }
                 $rejectedPorts[$port] = $warmup['error'];
                 continue;
             }

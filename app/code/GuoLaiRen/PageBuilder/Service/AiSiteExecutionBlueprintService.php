@@ -5,17 +5,26 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Service;
 
 use GuoLaiRen\PageBuilder\Model\Page;
+use GuoLaiRen\PageBuilder\Service\AI\AiResponseJsonParser;
 use Weline\Ai\Service\AiService;
 use Weline\Framework\Manager\ObjectManager;
 
 final class AiSiteExecutionBlueprintService
 {
     public const VERSION = 1;
+    /** @var array<string, array<string, mixed>|null> */
+    private array $appendInstructionDecisionCache = [];
 
     public function __construct(
         private readonly AiSitePageBlueprintService $pageBlueprintService,
         private readonly ?AiService $aiService = null,
+        private readonly ?AiResponseJsonParser $responseJsonParser = null,
     ) {
+    }
+
+    private function getResponseJsonParser(): AiResponseJsonParser
+    {
+        return $this->responseJsonParser ?? ObjectManager::getInstance(AiResponseJsonParser::class);
     }
 
     /**
@@ -206,9 +215,10 @@ final class AiSiteExecutionBlueprintService
                 ]
             );
 
-            $decoded = \json_decode($fullContent, true);
+            $parser = $this->getResponseJsonParser();
+            $decoded = $parser->extractAndDecode($fullContent);
             if (!\is_array($decoded)) {
-                throw new \RuntimeException('invalid ai json');
+                throw new \RuntimeException('invalid ai json: ' . \substr(\preg_replace('/\s+/', ' ', $fullContent), 0, 200));
             }
 
             $artifacts = $this->mapAiPlanToArtifacts($scope, $websiteProfile, $decoded, $pageTypes, $planLocale, $instruction, $targetScope);
@@ -216,19 +226,11 @@ final class AiSiteExecutionBlueprintService
             $artifacts['ai_fallback'] = 0;
             return $artifacts;
         } catch (\Throwable $throwable) {
-            $allowFallback = (bool)($payload['allow_fallback'] ?? false);
-            if (!$allowFallback) {
-                throw new \RuntimeException(
-                    'AI plan generation failed: ' . $throwable->getMessage(),
-                    (int)$throwable->getCode(),
-                    $throwable
-                );
-            }
-
-            $fallback = $this->buildPlanArtifacts($scope, $websiteProfile, $payload);
-            $fallback['ai_generated'] = 0;
-            $fallback['ai_fallback'] = 1;
-            return $fallback;
+            throw new \RuntimeException(
+                'AI plan generation failed: ' . $throwable->getMessage(),
+                (int)$throwable->getCode(),
+                $throwable
+            );
         }
     }
 
@@ -251,6 +253,7 @@ final class AiSiteExecutionBlueprintService
         $instruction = \trim((string)($payload['instruction'] ?? ''));
         $targetScope = \trim((string)($payload['target_scope'] ?? ''));
         $round = \max(1, (int)($payload['round'] ?? 1));
+        $artifacts = $this->applyRefineAccumulativePolicy($scope, $artifacts, $instruction);
         $report = [
             'mode' => 'refine',
             'round' => $round,
@@ -270,6 +273,146 @@ final class AiSiteExecutionBlueprintService
         $artifacts['change_scope_report'] = $report;
 
         return $artifacts;
+    }
+
+    /**
+     * 微调策略：默认累加（保留历史追加区块），仅当用户明确“删除/移除”时执行删除。
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $artifacts
+     * @return array<string, mixed>
+     */
+    private function applyRefineAccumulativePolicy(array $scope, array $artifacts, string $instruction): array
+    {
+        $currentPlanJson = \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [];
+        if (!\is_array($currentPlanJson['pages'] ?? null)) {
+            return $artifacts;
+        }
+        $existingPlanJson = \is_array($scope['plan_json'] ?? null) ? $scope['plan_json'] : [];
+        if (!\is_array($existingPlanJson['pages'] ?? null)) {
+            return $artifacts;
+        }
+
+        $isDeleteIntent = $this->isDeleteInstruction($instruction);
+        $deleteKeyword = $isDeleteIntent ? $this->extractDeleteKeyword($instruction) : '';
+        $pages = $currentPlanJson['pages'];
+        foreach ($pages as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan) || !\is_array($pagePlan['blocks'] ?? null)) {
+                continue;
+            }
+            $currentBlocks = $pagePlan['blocks'];
+            $existingBlocks = \is_array($existingPlanJson['pages'][$pageType]['blocks'] ?? null)
+                ? $existingPlanJson['pages'][$pageType]['blocks']
+                : [];
+            if ($existingBlocks === []) {
+                continue;
+            }
+            if ($isDeleteIntent) {
+                $currentBlocks = $this->filterBlocksByDeleteInstruction($currentBlocks, $deleteKeyword);
+            } else {
+                $currentBlocks = $this->mergeAccumulativeCustomBlocks($existingBlocks, $currentBlocks);
+            }
+            $pages[$pageType]['blocks'] = \array_values($currentBlocks);
+        }
+        $currentPlanJson['pages'] = $pages;
+        $artifacts['plan_json'] = $currentPlanJson;
+        $planLocale = \trim((string)($scope['plan_locale'] ?? ''));
+        $artifacts['markdown'] = $this->buildMarkdownPlan($currentPlanJson, $planLocale);
+        if (\is_array($artifacts['structured'] ?? null)) {
+            $artifacts['structured']['pages'] = $pages;
+        }
+
+        return $artifacts;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $existingBlocks
+     * @param list<array<string, mixed>> $currentBlocks
+     * @return list<array<string, mixed>>
+     */
+    private function mergeAccumulativeCustomBlocks(array $existingBlocks, array $currentBlocks): array
+    {
+        $knownFingerprints = [];
+        foreach ($currentBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $knownFingerprints[$this->buildBlockFingerprint($block)] = true;
+        }
+        $merged = $currentBlocks;
+        foreach ($existingBlocks as $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            if (\mb_strtolower(\trim((string)($block['block_key'] ?? ''))) !== 'custom') {
+                continue;
+            }
+            $fp = $this->buildBlockFingerprint($block);
+            if (isset($knownFingerprints[$fp])) {
+                continue;
+            }
+            $merged[] = $block;
+            $knownFingerprints[$fp] = true;
+        }
+        \usort($merged, static fn(array $left, array $right): int => ((int)($left['order'] ?? 0)) <=> ((int)($right['order'] ?? 0)));
+        return \array_values($merged);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $blocks
+     * @return list<array<string, mixed>>
+     */
+    private function filterBlocksByDeleteInstruction(array $blocks, string $deleteKeyword): array
+    {
+        if ($deleteKeyword === '') {
+            return $blocks;
+        }
+        $keyword = \mb_strtolower($deleteKeyword);
+        return \array_values(\array_filter($blocks, static function ($block) use ($keyword): bool {
+            if (!\is_array($block)) {
+                return true;
+            }
+            $serialized = \mb_strtolower((string)(\json_encode($block, \JSON_UNESCAPED_UNICODE) ?: ''));
+            return !\str_contains($serialized, $keyword);
+        }));
+    }
+
+    private function isDeleteInstruction(string $instruction): bool
+    {
+        $text = \mb_strtolower(\trim($instruction));
+        if ($text === '') {
+            return false;
+        }
+        return $this->containsAny($text, ['删除', '移除', '去掉', '删掉', 'remove', 'delete']);
+    }
+
+    private function extractDeleteKeyword(string $instruction): string
+    {
+        $text = \trim($instruction);
+        if ($text === '') {
+            return '';
+        }
+        if (\preg_match('/(?:删除|移除|去掉|删掉)\s*(?:一个|一块|一段|个)?\s*([^，。,.]{1,20})/u', $text, $matches)) {
+            return \trim((string)($matches[1] ?? ''));
+        }
+        if (\preg_match('/(?:remove|delete)\s+([a-zA-Z0-9_\-\s]{1,30})/i', $text, $matches)) {
+            return \trim((string)($matches[1] ?? ''));
+        }
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $block
+     */
+    private function buildBlockFingerprint(array $block): string
+    {
+        $blockKey = \mb_strtolower(\trim((string)($block['block_key'] ?? '')));
+        $sectionCode = \mb_strtolower(\trim((string)($block['section_code'] ?? '')));
+        $titleSample = '';
+        if (\is_array($block['field_plan'] ?? null) && isset($block['field_plan'][0]) && \is_array($block['field_plan'][0])) {
+            $titleSample = \mb_strtolower(\trim((string)($block['field_plan'][0]['sample'] ?? '')));
+        }
+        return \md5($blockKey . '|' . $sectionCode . '|' . $titleSample);
     }
 
     /**
@@ -334,38 +477,43 @@ final class AiSiteExecutionBlueprintService
         $pageTypeText = $pageTypes === [] ? '-' : \implode(', ', $pageTypes);
 
         return \implode("\n", [
-            'You are an AI site planning engine for a PageBuilder workspace.',
-            'Return STRICT JSON only. Do not return markdown fence.',
-            'Output object schema:',
+            '你是一个：网站执行蓝图生成器（Structured Web Blueprint Engine）。',
+            '你的任务：根据一句话需求，输出完整网站执行蓝图（第一阶段，Markdown结构化）。',
+            'Return STRICT JSON only. No markdown fence. No prose outside JSON.',
+            'JSON schema:',
             '{',
-            '  "markdown": "string",',
+            '  "markdown":"string",',
             '  "plan_json": {',
-            '    "i18n": {',
-            '      "locale": "string",',
-            '      "labels": {',
-            '        "title": "string",',
-            '        "site": "string",',
-            '        "summary": "string",',
-            '        "site_structure": "string",',
-            '        "shared_global_plan": "string",',
-            '        "page_details": "string"',
-            '      }',
-            '    },',
-            '    "site_positioning": "string",',
-            '    "brand_tone": "string",',
-            '    "color_palette": ["#hex"],',
-            '    "visual_style": "string",',
-            '    "seo_keywords": ["string"],',
-            '    "page_types": ["home_page"],',
-            '    "execution_steps": [{"phase":"string","summary":"string","tasks":["string"]}]',
+            '    "i18n":{"locale":"string","labels":{"title":"string","site":"string","summary":"string","site_structure":"string","shared_global_plan":"string","page_details":"string"}},',
+            '    "site_strategy":{"site_display_name":"string","summary":"string","website_type":"string","core_goal":"string","target_users":"string","conversion_path":"string"},',
+            '    "theme_style":{"name":"string","visual_tone":"string","font_family":"string"},',
+            '    "palette":{"name":"string","primary":"#hex","accent":"#hex","surface":"#hex","text":"#hex"},',
+            '    "navigation_plan":{"header_items":[]},',
+            '    "footer_plan":{"featured":[],"policies":[]},',
+            '    "seo_strategy":{"core_intent":"string","primary_keywords":["string"],"keyword_page_map":[{"keyword":"string","page_type":"string"}],"content_strategy":"string","internal_linking":"string","url_structure":"string"},',
+            '    "page_types":["home_page"],',
+            '    "pages":{"home_page":{"page_goal":"string","primary_keywords":["string"],"secondary_keywords":["string"],"blocks":[{"block_key":"string","goal":"string","keywords":["string"],"content":"string","field_plan":[{"field":"string","sample":"string","reason":"string"}],"execution_script":{"feature_points":["string"],"core_copy":"string","typography":"string","style_tone":"string","background_direction":"string","media_assets":["string"]},"reusable":"yes|no","seo_impact":"high|medium|low"}]}},',
+            '    "execution_steps":[{"step":1,"task_key":"string","task_type":"string","status":"pending"}],',
+            '    "stage2_task_hints":[{"page":"string","block":"string","task_types":["copywriting","ui_design","frontend_dev"]}]',
             '  }',
             '}',
-            'Hard rules:',
+            '强制规则（必须遵守）：',
             '- markdown and all text fields must use locale: ' . $outputLanguage,
-            '- page_types must keep only valid selected page types.',
-            '- Do not include explanations outside JSON.',
-            '- Keep structure practical for direct execution.',
-            'Planning context:',
+            '- 必须使用 Markdown 层级（# / ## / ### / ####）。',
+            '- 不允许解释，不允许写“为什么”。',
+            '- 不允许抽象描述；所有字段必须可执行、可开发、可部署。',
+            '- 每个 Block 必须是可执行施工脚本，且不能出现空字段。',
+            '- page_types 只能使用 selected_page_types。',
+            '- 信息不足时允许补全，但必须标记前缀“[假设]”。',
+            '- 即便是 refine/rebuild/translation，也必须输出完整整案，不得片段。',
+            '严格遵循文档约束（app/code/GuoLaiRen/PageBuilder/doc/建站中台/AI建站中台-计划.md 第一阶段MUST）：',
+            '- 第一阶段只输出方案（plan），禁止任何 build 执行语义或日志语义。',
+            '- 输出必须覆盖全部选中页面类型，不得遗漏页面。',
+            '- 输出必须可拆解为第二阶段任务蓝图；并保持字段契约完整。',
+            '- 输出需确保 Markdown 方案与结构化蓝图一致。',
+            'Markdown 输出模板（必须严格按结构填写，不得缺段）：',
+            $this->buildPageMarkdownTemplate($pageTypes),
+            'Input context:',
             'site_display_name: ' . $siteDisplayName,
             'site_summary: ' . ($siteSummary !== '' ? $siteSummary : '-'),
             'selected_page_types: ' . $pageTypeText,
@@ -374,6 +522,352 @@ final class AiSiteExecutionBlueprintService
             'baseline_plan_json:',
             $baselineText,
         ]);
+    }
+
+    /**
+     * 根据选择的页面类型动态生成 Markdown 模板
+     *
+     * @param list<string> $pageTypes
+     * @return string
+     */
+    private function buildPageMarkdownTemplate(array $pageTypes): string
+    {
+        $lines = [
+            '# Site Blueprint',
+            '## Global',
+            '### 路由结构（URL）',
+            '### Header',
+            '### Footer',
+            '### 全站字体',
+            '### 全站色彩',
+            '### CTA体系',
+            '### SEO结构规则',
+        ];
+
+        // 各页面类型的 Block 模板映射
+        $pageBlockTemplates = [
+            Page::TYPE_HOME => [
+                'label' => 'Home',
+                'blocks' => [
+                    '## Page: Home',
+                    '### 页面信息',
+                    '### 转化节奏',
+                    '### Block: Hero',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: Feature',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: Process',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: CTA',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                ],
+            ],
+            Page::TYPE_ABOUT => [
+                'label' => 'About',
+                'blocks' => [
+                    '## Page: About',
+                    '### 页面信息',
+                    '### Block: Hero',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: Brand',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: Trust',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: CTA',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                ],
+            ],
+            Page::TYPE_CONTACT => [
+                'label' => 'Contact',
+                'blocks' => [
+                    '## Page: Contact',
+                    '### 页面信息',
+                    '### Block: Hero',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: Contact Form',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                    '### Block: CTA',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                ],
+            ],
+            Page::TYPE_PRIVACY_POLICY => [
+                'label' => 'Privacy Policy',
+                'blocks' => [
+                    '## Page: Privacy Policy',
+                    '### 页面信息',
+                    '### Block: Content',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                ],
+            ],
+            Page::TYPE_TERMS_OF_SERVICE => [
+                'label' => 'Terms of Service',
+                'blocks' => [
+                    '## Page: Terms of Service',
+                    '### 页面信息',
+                    '### Block: Content',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                ],
+            ],
+            Page::TYPE_REFUND_POLICY => [
+                'label' => 'Refund Policy',
+                'blocks' => [
+                    '## Page: Refund Policy',
+                    '### 页面信息',
+                    '### Block: Content',
+                    '#### Block ID',
+                    '#### 功能',
+                    '#### 内容',
+                    '#### 内容结构（字段）',
+                    '#### SEO关键词',
+                    '#### SEO结构',
+                    '#### CTA使用',
+                    '#### 字体',
+                    '#### 色彩',
+                    '#### 背景',
+                    '#### 布局',
+                    '#### 动效',
+                    '#### 交互',
+                    '#### 响应式',
+                    '#### 素材',
+                    '#### 图片规范',
+                    '#### 数据埋点',
+                    '#### 可复用性',
+                ],
+            ],
+        ];
+
+        // 根据选择的页面类型生成模板
+        foreach ($pageTypes as $pageType) {
+            if (isset($pageBlockTemplates[$pageType])) {
+                $template = $pageBlockTemplates[$pageType];
+                foreach ($template['blocks'] as $blockLine) {
+                    $lines[] = $blockLine;
+                }
+            }
+        }
+
+        return \implode("\n", $lines);
     }
 
     /**
@@ -433,6 +927,11 @@ final class AiSiteExecutionBlueprintService
             $planLocale,
             $isEn
         );
+        $planBlocks = $this->normalizePlanBlocks(\is_array($planJson['plan_blocks'] ?? null) ? $planJson['plan_blocks'] : []);
+        if ($planBlocks === []) {
+            $planBlocks = $this->buildPlanBlocksFromPlanJson($mergedPlanJson, $planLocale);
+        }
+        $mergedPlanJson['plan_blocks'] = $planBlocks;
         $fallback['plan_json'] = $mergedPlanJson;
         $fallback['structured'] = \array_replace(
             \is_array($fallback['structured'] ?? null) ? $fallback['structured'] : [],
@@ -445,6 +944,7 @@ final class AiSiteExecutionBlueprintService
                 'seo_strategy' => \is_array($mergedPlanJson['seo_strategy'] ?? null) ? $mergedPlanJson['seo_strategy'] : [],
                 'page_types' => $pageTypes,
                 'pages' => \is_array($mergedPlanJson['pages'] ?? null) ? $mergedPlanJson['pages'] : [],
+                'plan_blocks' => $planBlocks,
             ]
         );
 
@@ -772,7 +1272,29 @@ final class AiSiteExecutionBlueprintService
 
         $appendInstruction = $this->resolveAppendBlockInstruction($instruction, $targetScope, $pageType, $blocks);
         if ($appendInstruction !== null) {
-            $blocks[] = $this->buildAppendedBlockPlan($appendInstruction, $pageType, $pageLabel, $pageGoal, $palette, $themeStyle, $locale);
+            $appendBlock = $this->buildAppendedBlockPlan($appendInstruction, $pageType, $pageLabel, $pageGoal, $palette, $themeStyle, $locale);
+            $insertAfter = \trim((string)($appendInstruction['insert_after'] ?? ''));
+            if ($insertAfter !== '') {
+                $inserted = false;
+                foreach ($blocks as $idx => $block) {
+                    if (!\is_array($block)) {
+                        continue;
+                    }
+                    $blockKey = \mb_strtolower(\trim((string)($block['block_key'] ?? '')));
+                    $sectionCode = \mb_strtolower(\trim((string)($block['section_code'] ?? '')));
+                    $componentKind = \mb_strtolower(\trim((string)($block['component_kind'] ?? '')));
+                    if ($blockKey === $insertAfter || $sectionCode === $insertAfter || $componentKind === $insertAfter) {
+                        \array_splice($blocks, $idx + 1, 0, [$appendBlock]);
+                        $inserted = true;
+                        break;
+                    }
+                }
+                if (!$inserted) {
+                    $blocks[] = $appendBlock;
+                }
+            } else {
+                $blocks[] = $appendBlock;
+            }
             \usort($blocks, static fn(array $left, array $right): int => ((int)($left['order'] ?? 0)) <=> ((int)($right['order'] ?? 0)));
         }
 
@@ -818,10 +1340,18 @@ final class AiSiteExecutionBlueprintService
     private function resolveAppendBlockInstruction(string $instruction, string $targetScope, string $pageType, array $blocks): ?array
     {
         $appendType = null;
-        if ($this->shouldAppendPartnerBlock($instruction, $targetScope, $pageType)) {
+        $aiDecision = $this->resolveAppendInstructionByAi($instruction, $targetScope);
+        if ($this->isAiAppendDecisionMatchPage($aiDecision, $pageType)) {
+            $appendType = \trim((string)($aiDecision['append_type'] ?? ''));
+            if (!\in_array($appendType, ['partner', 'about_intro', 'why_choose_us', 'custom'], true)) {
+                $appendType = 'custom';
+            }
+        } elseif ($this->shouldAppendPartnerBlock($instruction, $targetScope, $pageType)) {
             $appendType = 'partner';
         } elseif ($this->shouldAppendAboutBlock($instruction, $targetScope, $pageType)) {
             $appendType = 'about_intro';
+        } elseif ($this->shouldAppendWhyChooseUsBlock($instruction, $targetScope, $pageType)) {
+            $appendType = 'why_choose_us';
         }
         if ($appendType !== null) {
             foreach ($blocks as $block) {
@@ -838,6 +1368,14 @@ final class AiSiteExecutionBlueprintService
                         || \str_contains($sectionCode, 'about')
                         || \str_contains($componentKind, 'about')
                     ))
+                    || ($appendType === 'why_choose_us' && (
+                        \str_contains($blockKey, 'why_choose')
+                        || \str_contains($sectionCode, 'why_choose')
+                        || \str_contains($componentKind, 'why_choose')
+                        || \str_contains($blockKey, 'advantage')
+                        || \str_contains($sectionCode, 'advantage')
+                        || \str_contains($componentKind, 'advantage')
+                    ))
                 ) {
                     return null;
                 }
@@ -845,10 +1383,95 @@ final class AiSiteExecutionBlueprintService
 
             return [
                 'type' => $appendType,
+                'instruction' => $instruction,
+                'insert_after' => $this->containsAny(\mb_strtolower($instruction), ['hero下面', 'hero 下', 'hero后', 'hero 后', 'after hero']) ? 'hero' : '',
             ];
         }
 
         return null;
+    }
+
+    /**
+     * 由 AI 判定微调指令的真实意图，避免把“新增模块”逻辑硬编码在关键词表里。
+     *
+     * @return array<string, mixed>|null
+     */
+    private function resolveAppendInstructionByAi(string $instruction, string $targetScope): ?array
+    {
+        $instruction = \trim($instruction);
+        if ($instruction === '') {
+            return null;
+        }
+        $cacheKey = \md5($instruction . '|' . \trim($targetScope));
+        if (\array_key_exists($cacheKey, $this->appendInstructionDecisionCache)) {
+            return $this->appendInstructionDecisionCache[$cacheKey];
+        }
+
+        $prompt = \implode("\n", [
+            'You are an intent classifier for PageBuilder refine instructions.',
+            'Return STRICT JSON only. Do not output markdown.',
+            'Schema:',
+            '{',
+            '  "action": "append_block|none",',
+            '  "append_type": "about_intro|why_choose_us|partner|custom|none",',
+            '  "target_page_type": "home_page|about_page|contact_page|all|auto",',
+            '  "confidence": 0.0,',
+            '  "reason": "string"',
+            '}',
+            'Rules:',
+            '- If user asks to add/insert/join a section/module/block, action must be append_block.',
+            '- Infer append_type by semantics, not fixed keywords only.',
+            '- If target page is not explicit, use auto.',
+            '- confidence in [0,1].',
+            'Instruction: ' . $instruction,
+            'Target scope: ' . (\trim($targetScope) !== '' ? $targetScope : '-'),
+        ]);
+
+        try {
+            $raw = (string)$this->getAiService()->generate(
+                $prompt,
+                null,
+                'pagebuilder_plan_generation',
+                null,
+                [
+                    'allow_zero_balance_provider' => true,
+                    'temperature' => 0.0,
+                    'max_tokens' => 500,
+                    'timeout' => 60,
+                    'response_format' => ['type' => 'json_object'],
+                ]
+            );
+            $decoded = \json_decode($raw, true);
+            if (!\is_array($decoded)) {
+                $this->appendInstructionDecisionCache[$cacheKey] = null;
+                return null;
+            }
+            $action = \trim((string)($decoded['action'] ?? ''));
+            if ($action !== 'append_block') {
+                $this->appendInstructionDecisionCache[$cacheKey] = null;
+                return null;
+            }
+            $this->appendInstructionDecisionCache[$cacheKey] = $decoded;
+            return $decoded;
+        } catch (\Throwable) {
+            $this->appendInstructionDecisionCache[$cacheKey] = null;
+            return null;
+        }
+    }
+
+    /**
+     * @param array<string, mixed>|null $decision
+     */
+    private function isAiAppendDecisionMatchPage(?array $decision, string $pageType): bool
+    {
+        if (!$decision) {
+            return false;
+        }
+        $targetPageType = \trim((string)($decision['target_page_type'] ?? 'auto'));
+        if ($targetPageType === '' || $targetPageType === 'auto' || $targetPageType === 'all') {
+            return $pageType === Page::TYPE_HOME;
+        }
+        return $targetPageType === $pageType;
     }
 
     /**
@@ -872,6 +1495,9 @@ final class AiSiteExecutionBlueprintService
         }
         if ($appendType === 'about_intro') {
             return $this->buildAboutIntroBlockPlan($pageType, $pageLabel, $palette, $locale);
+        }
+        if ($appendType === 'why_choose_us') {
+            return $this->buildWhyChooseUsBlockPlan($pageType, $pageLabel, $palette, $locale);
         }
 
         return [
@@ -908,14 +1534,14 @@ final class AiSiteExecutionBlueprintService
                 'why' => $this->isEnglishLocale($locale)
                     ? 'Keep appended block concise and conversion-oriented.'
                     : '追加区块保持信息简洁并服务转化目标。',
-                'headline_direction' => $this->isEnglishLocale($locale) ? 'Add one clear value headline.' : '补充一个明确价值标题。',
-                'body_direction' => $this->isEnglishLocale($locale) ? 'Explain added value in short paragraph.' : '用短段落解释新增价值。',
+                'headline_direction' => $this->resolveCustomAppendHeadlineDirection($appendInstruction, $locale),
+                'body_direction' => $this->resolveCustomAppendBodyDirection($appendInstruction, $locale),
                 'cta_direction' => $this->resolveCtaDirection('content', $pageLabel, $locale),
             ],
             'field_plan' => [
                 [
                     'field' => 'title',
-                    'sample' => '',
+                    'sample' => $this->resolveCustomAppendTitleSample($appendInstruction),
                     'reason' => $this->isEnglishLocale($locale)
                         ? 'Title helps users identify appended content purpose quickly.'
                         : '标题用于快速说明新增内容目的。',
@@ -930,6 +1556,49 @@ final class AiSiteExecutionBlueprintService
             ],
             'result_ref' => [],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $appendInstruction
+     */
+    private function resolveCustomAppendTitleSample(array $appendInstruction): string
+    {
+        $instruction = \trim((string)($appendInstruction['instruction'] ?? ''));
+        if ($instruction === '') {
+            return '';
+        }
+        if (\preg_match('/(?:加|新增|添加)(?:一个|一块|一段|个)?\\s*([^，。,.\\s]{2,20}(?:区|模块|板块|区域))/u', $instruction, $matches)) {
+            return \trim((string)($matches[1] ?? ''));
+        }
+        return '';
+    }
+
+    /**
+     * @param array<string, mixed> $appendInstruction
+     */
+    private function resolveCustomAppendHeadlineDirection(array $appendInstruction, string $locale): string
+    {
+        $titleSample = $this->resolveCustomAppendTitleSample($appendInstruction);
+        if ($titleSample !== '') {
+            return $this->isEnglishLocale($locale)
+                ? ('Use "' . $titleSample . '" as section headline.')
+                : ('新增区块标题使用“' . $titleSample . '”。');
+        }
+        return $this->isEnglishLocale($locale) ? 'Add one clear value headline.' : '补充一个明确价值标题。';
+    }
+
+    /**
+     * @param array<string, mixed> $appendInstruction
+     */
+    private function resolveCustomAppendBodyDirection(array $appendInstruction, string $locale): string
+    {
+        $instruction = \trim((string)($appendInstruction['instruction'] ?? ''));
+        if ($instruction !== '') {
+            return $this->isEnglishLocale($locale)
+                ? ('Follow this refine instruction strictly: ' . $this->clipText($instruction, 100))
+                : ('严格按用户微调指令生成该区块：' . $this->clipText($instruction, 100));
+        }
+        return $this->isEnglishLocale($locale) ? 'Explain added value in short paragraph.' : '用短段落解释新增价值。';
     }
 
     private function shouldAppendPartnerBlock(string $instruction, string $targetScope, string $pageType): bool
@@ -966,6 +1635,35 @@ final class AiSiteExecutionBlueprintService
             return true;
         }
 
+        return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '首页') || \str_contains($scope, 'page'));
+    }
+
+    private function shouldAppendWhyChooseUsBlock(string $instruction, string $targetScope, string $pageType): bool
+    {
+        $instructionLower = \mb_strtolower(\trim($instruction));
+        if (!$this->containsAny($instructionLower, [
+            '为什么选择我们',
+            '为什么选我们',
+            '选择我们',
+            '我们的优势',
+            '核心优势',
+            'why choose us',
+            'why us',
+            'our advantages',
+            'key advantages',
+        ])) {
+            return false;
+        }
+        if (!$this->containsAny($instructionLower, ['添加', '新增', '加入', '加一个', 'append', 'add', 'insert'])) {
+            return false;
+        }
+        if ($targetScope === '') {
+            return $pageType === Page::TYPE_HOME;
+        }
+        $scope = \mb_strtolower($targetScope);
+        if (\str_contains($scope, $pageType)) {
+            return true;
+        }
         return $pageType === Page::TYPE_HOME && (\str_contains($scope, 'home') || \str_contains($scope, '首页') || \str_contains($scope, 'page'));
     }
 
@@ -1065,6 +1763,55 @@ final class AiSiteExecutionBlueprintService
     }
 
     /**
+     * @return array<string, mixed>
+     */
+    private function buildWhyChooseUsBlockPlan(string $pageType, string $pageLabel, array $palette, string $locale = ''): array
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        return [
+            'block_key' => 'why_choose_us',
+            'section_code' => 'why_choose_us',
+            'region' => 'content',
+            'component_kind' => 'why_choose_us',
+            'order' => 988,
+            'goal' => $isEn ? 'Add a Why Choose Us section to convert hesitation into trust.' : '补充“为什么选择我们”区块，把用户犹豫转为信任。',
+            'why' => $isEn
+                ? ($pageLabel . ' needs explicit advantages to support conversion decisions.')
+                : ($pageLabel . ' 需要明确优势说明，帮助用户更快做出转化决策。'),
+            'style_brief' => [
+                'visual_tone' => $isEn ? 'Trust-focused, concise, and comparison-friendly.' : '信任导向、简洁、便于对比理解。',
+                'layout_rule' => $isEn ? 'Use 3-4 advantage cards with icons and short statements.' : '采用 3-4 个优势卡片，配图标和短句说明。',
+                'responsive_rule' => $isEn ? 'Stack cards vertically on mobile with clear spacing.' : '移动端优势卡片纵向堆叠并保持清晰间距。',
+            ],
+            'palette_usage' => [
+                'background' => (string)($palette['surface'] ?? '#ffffff'),
+                'accent' => (string)($palette['accent'] ?? '#2563eb'),
+                'text' => (string)($palette['text'] ?? '#0f172a'),
+                'reason' => $isEn ? 'Highlight key advantages with accent color for quick scanning.' : '通过强调色突出核心优势，便于快速扫读。',
+            ],
+            'seo_brief' => [
+                'intent' => $isEn ? 'Trust reasons and competitive differentiation' : '信任理由与差异化优势',
+                'keywords' => $isEn ? ['why choose us', 'advantages', 'trusted service'] : ['为什么选择我们', '核心优势', '值得信赖'],
+                'anchors' => ['#why-choose-us'],
+                'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
+            ],
+            'content_brief' => [
+                'goal' => $isEn ? 'State 3-4 concrete reasons users should choose us.' : '明确给出 3-4 条用户应选择我们的理由。',
+                'why' => $isEn ? 'Concrete reasons improve trust and reduce decision friction.' : '具体理由能增强信任并降低决策阻力。',
+                'headline_direction' => $isEn ? 'Use a direct Why Choose Us headline.' : '标题直接表达“为什么选择我们”。',
+                'body_direction' => $isEn ? 'Each card explains one measurable advantage or guarantee.' : '每个卡片说明一条可感知的优势或保障。',
+                'cta_direction' => $isEn ? 'End with a CTA to contact or start now.' : '结尾用 CTA 引导咨询或立即开始。',
+            ],
+            'field_plan' => [
+                ['field' => 'title', 'sample' => '', 'reason' => $isEn ? 'Clearly name the trust section.' : '明确区块主题名称。'],
+                ['field' => 'advantages', 'sample' => '', 'reason' => $isEn ? 'Advantage list is the core decision content.' : '优势列表是核心决策内容。'],
+                ['field' => 'button_text', 'sample' => '', 'reason' => $isEn ? 'Guide next-step conversion action.' : '承接下一步转化动作。'],
+            ],
+            'result_ref' => [],
+        ];
+    }
+
+    /**
      * @param array<string, mixed> $section
      * @param array<string, mixed> $palette
      * @param array<string, mixed> $themeStyle
@@ -1115,6 +1862,7 @@ final class AiSiteExecutionBlueprintService
                 'anchors' => ['#' . $this->slugify($sectionKey !== '' ? $sectionKey : $sectionCode)],
                 'internal_links' => [$pageType === Page::TYPE_HOME ? '/about' : '/'],
             ],
+            'keywords' => $this->buildBlockKeywords($siteDisplayName, $pageLabel, $template, $sectionName),
             'content_brief' => [
                 'goal' => $pageGoal,
                 'why' => $sectionName . ' 要同时服务信息理解和下一步行动。',
@@ -1122,7 +1870,8 @@ final class AiSiteExecutionBlueprintService
                 'body_direction' => $this->resolveBodyDirection($config, $pageGoal, $locale),
                 'cta_direction' => $this->resolveCtaDirection($template, $pageLabel, $locale),
             ],
-            'field_plan' => $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale),
+            'field_plan' => $this->buildFieldPlan($config, $sectionName, $pageGoal, $template, $locale, $siteDisplayName),
+            'execution_script' => $this->buildBlockExecutionScript($template, $sectionName, $pageGoal, $siteDisplayName, $locale),
             'result_ref' => [],
         ];
     }
@@ -1250,11 +1999,27 @@ final class AiSiteExecutionBlueprintService
                     'block_key' => (string)($block['block_key'] ?? $block['section_code'] ?? 'block'),
                     'content' => $contentParts !== [] ? \implode(' | ', $contentParts) : \trim((string)($block['goal'] ?? '')),
                     'why' => \trim((string)($block['why'] ?? '')),
+                    'keywords' => \array_values(\array_filter(\array_map(
+                        static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                        \is_array($block['keywords'] ?? null)
+                            ? $block['keywords']
+                            : (\is_array($block['seo_brief']['keywords'] ?? null) ? $block['seo_brief']['keywords'] : [])
+                    ), static fn(string $value): bool => $value !== '')),
+                    'field_plan' => \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
+                    'execution_script' => \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [],
                 ];
             }
             $pageBlocks[(string)$pageType] = [
                 'page_goal' => \trim((string)($pagePlan['page_goal'] ?? '')),
                 'why' => \trim((string)($pagePlan['why'] ?? '')),
+                'primary_keywords' => \array_values(\array_filter(\array_map(
+                    static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                    \is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : []
+                ), static fn(string $value): bool => $value !== '')),
+                'secondary_keywords' => \array_values(\array_filter(\array_map(
+                    static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+                    \is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : []
+                ), static fn(string $value): bool => $value !== '')),
                 'blocks' => $blockRows,
             ];
         }
@@ -1269,6 +2034,16 @@ final class AiSiteExecutionBlueprintService
             'seo_strategy' => \is_array($structured['seo_strategy'] ?? null) ? $structured['seo_strategy'] : [],
             'page_types' => \is_array($structured['page_types'] ?? null) ? $structured['page_types'] : [],
             'pages' => $pageBlocks,
+            'plan_blocks' => $this->buildPlanBlocksFromPlanJson([
+                'site_strategy' => \is_array($structured['site_strategy'] ?? null) ? $structured['site_strategy'] : [],
+                'theme_style' => \is_array($structured['theme_style'] ?? null) ? $structured['theme_style'] : [],
+                'palette' => \is_array($structured['palette'] ?? null) ? $structured['palette'] : [],
+                'navigation_plan' => \is_array($structured['navigation_plan'] ?? null) ? $structured['navigation_plan'] : [],
+                'footer_plan' => \is_array($structured['footer_plan'] ?? null) ? $structured['footer_plan'] : [],
+                'seo_strategy' => \is_array($structured['seo_strategy'] ?? null) ? $structured['seo_strategy'] : [],
+                'page_types' => \is_array($structured['page_types'] ?? null) ? $structured['page_types'] : [],
+                'pages' => $pageBlocks,
+            ], (string)($structured['i18n']['locale'] ?? '')),
             'execution_steps' => \is_array($structured['execution_steps'] ?? null) ? $structured['execution_steps'] : [],
         ];
     }
@@ -1294,6 +2069,10 @@ final class AiSiteExecutionBlueprintService
         $footerPlan = \is_array($planJson['footer_plan'] ?? null) ? $planJson['footer_plan'] : [];
         $seoStrategy = \is_array($planJson['seo_strategy'] ?? null) ? $planJson['seo_strategy'] : [];
         $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $planBlocks = $this->normalizePlanBlocks(\is_array($planJson['plan_blocks'] ?? null) ? $planJson['plan_blocks'] : []);
+        if ($planBlocks !== []) {
+            return $this->renderMarkdownFromPlanBlocks($planBlocks, $locale, $site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
+        }
 
         $lines = [];
         $lines[] = '# ' . (string)($labels['title'] ?? ($isEn ? 'Stage 1 Execution Plan (Full Blueprint)' : '阶段一执行蓝图（完整规划）'));
@@ -1301,9 +2080,7 @@ final class AiSiteExecutionBlueprintService
         $lines[] = '- ' . (string)($labels['site'] ?? ($isEn ? 'Site' : '站点')) . ($isEn ? ': ' : '：') . ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点'));
         $lines[] = '- ' . (string)($labels['summary'] ?? ($isEn ? 'Summary' : '摘要')) . ($isEn ? ': ' : '：') . ($summary !== '' ? $summary : ($isEn ? 'Pending details' : '待补充'));
         $lines[] = ($isEn ? '- Theme Style: ' : '- 主题风格：') . ($themeName !== '' ? $themeName : 'Plan-Driven Hybrid');
-        $lines[] = ($isEn ? '- Theme Decision Reason: ' : '- 风格决策理由：') . '*' . \trim((string)($planJson['theme_style']['reason'] ?? '')) . '*';
         $lines[] = ($isEn ? '- Palette: ' : '- 色盘：') . ($paletteName !== '' ? $paletteName : 'Ocean Slate');
-        $lines[] = ($isEn ? '- Palette Decision Reason: ' : '- 色盘决策理由：') . '*' . \trim((string)($planJson['palette']['reason'] ?? '')) . '*';
         $lines[] = ($isEn ? '- Page Count: ' : '- 页面数量：') . (string)\count($pageTypes);
         $lines[] = '';
         $lines[] = '## ' . (string)($labels['site_structure'] ?? ($isEn ? 'Site Structure' : '全站结构'));
@@ -1331,7 +2108,14 @@ final class AiSiteExecutionBlueprintService
 
             $lines[] = '### ' . $pageType;
             $lines[] = ($isEn ? '- Page Goal: ' : '- 页面目标：') . \trim((string)($pagePlan['page_goal'] ?? ''));
-            $lines[] = ($isEn ? '- Page Reason: ' : '- 页面原因：') . '*' . \trim((string)($pagePlan['why'] ?? '')) . '*';
+            $lines[] = ($isEn ? '- Primary Keywords: ' : '- 主关键词：') . $this->buildKeywordSummary(
+                \is_array($pagePlan['primary_keywords'] ?? null) ? $pagePlan['primary_keywords'] : [],
+                $locale
+            );
+            $lines[] = ($isEn ? '- Secondary Keywords: ' : '- 补充关键词：') . $this->buildKeywordSummary(
+                \is_array($pagePlan['secondary_keywords'] ?? null) ? $pagePlan['secondary_keywords'] : [],
+                $locale
+            );
             $lines[] = ($isEn ? '- Block Count: ' : '- 区块数量：') . (string)\count(\is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : []);
             $lines[] = '';
 
@@ -1341,12 +2125,193 @@ final class AiSiteExecutionBlueprintService
                 }
                 $blockOrder = $index + 1;
                 $lines[] = ($isEn ? '#### Block ' : '#### 区块 ') . $blockOrder . ($isEn ? ': ' : '：') . (string)($block['block_key'] ?? 'block');
-                $lines[] = ($isEn ? '- Block Content: ' : '- 区块内容：') . \trim((string)($block['content'] ?? ''));
-                $lines[] = ($isEn ? '- Block Reason: ' : '- 区块原因：') . '*' . \trim((string)($block['why'] ?? '')) . '*';
+                $lines[] = ($isEn ? '- Block Direction (Stage 1 Blueprint): ' : '- 区块方向（阶段一蓝图）：') . \trim((string)($block['content'] ?? ''));
+                $lines[] = ($isEn ? '- Content Keywords: ' : '- 内容关键词：') . $this->buildKeywordSummary(
+                    \is_array($block['keywords'] ?? null) ? $block['keywords'] : [],
+                    $locale
+                );
+                $lines[] = ($isEn ? '- Field Content Samples: ' : '- 字段内容示例：') . $this->buildFieldSampleSummary(
+                    \is_array($block['field_plan'] ?? null) ? $block['field_plan'] : [],
+                    $locale
+                );
+                $script = \is_array($block['execution_script'] ?? null) ? $block['execution_script'] : [];
+                $featurePoints = \is_array($script['feature_points'] ?? null) ? $script['feature_points'] : [];
+                if ($featurePoints !== []) {
+                    $lines[] = ($isEn ? '- 功能：' : '- 功能：');
+                    foreach ($featurePoints as $point) {
+                        $pointText = \is_scalar($point) ? \trim((string)$point) : '';
+                        if ($pointText !== '') {
+                            $lines[] = '  - ' . $pointText;
+                        }
+                    }
+                }
+                $coreCopy = \trim((string)($script['core_copy'] ?? ''));
+                if ($coreCopy !== '') {
+                    $lines[] = ($isEn ? '- 内容：' : '- 内容：') . $coreCopy;
+                }
+                $typography = \trim((string)($script['typography'] ?? ''));
+                if ($typography !== '') {
+                    $lines[] = ($isEn ? '- 字体：' : '- 字体：') . $typography;
+                }
+                $styleTone = \trim((string)($script['style_tone'] ?? ''));
+                if ($styleTone !== '') {
+                    $lines[] = ($isEn ? '- 格调：' : '- 格调：') . $styleTone;
+                }
+                $backgroundDirection = \trim((string)($script['background_direction'] ?? ''));
+                if ($backgroundDirection !== '') {
+                    $lines[] = ($isEn ? '- 背景：' : '- 背景：') . $backgroundDirection;
+                }
+                $mediaAssets = \is_array($script['media_assets'] ?? null) ? $script['media_assets'] : [];
+                if ($mediaAssets !== []) {
+                    $lines[] = ($isEn ? '- 素材：' : '- 素材：');
+                    foreach ($mediaAssets as $asset) {
+                        $assetText = \is_scalar($asset) ? \trim((string)$asset) : '';
+                        if ($assetText !== '') {
+                            $lines[] = '  - ' . $assetText;
+                        }
+                    }
+                }
                 $lines[] = '';
             }
         }
 
+        return \implode("\n", $lines);
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rawBlocks
+     * @return list<array<string, mixed>>
+     */
+    private function normalizePlanBlocks(array $rawBlocks): array
+    {
+        $blocks = [];
+        foreach ($rawBlocks as $index => $block) {
+            if (!\is_array($block)) {
+                continue;
+            }
+            $blockId = \trim((string)($block['block_id'] ?? ''));
+            $region = \trim((string)($block['region'] ?? 'body'));
+            $type = \trim((string)($block['type'] ?? 'section'));
+            $title = \trim((string)($block['title'] ?? ''));
+            $content = \trim((string)($block['content'] ?? ''));
+            $items = \is_array($block['items'] ?? null) ? $block['items'] : [];
+            if ($blockId === '') {
+                $blockId = 'plan_block_' . ($index + 1);
+            }
+            if ($title === '' && $content === '' && $items === []) {
+                continue;
+            }
+            $blocks[] = [
+                'block_id' => $blockId,
+                'region' => $region !== '' ? $region : 'body',
+                'type' => $type !== '' ? $type : 'section',
+                'title' => $title !== '' ? $title : ('Block ' . ($index + 1)),
+                'content' => $content,
+                'items' => $items,
+            ];
+        }
+        return $blocks;
+    }
+
+    /**
+     * @param array<string, mixed> $planJson
+     * @return list<array<string, mixed>>
+     */
+    private function buildPlanBlocksFromPlanJson(array $planJson, string $locale = ''): array
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        $site = \trim((string)($planJson['site_strategy']['site_display_name'] ?? ''));
+        $summary = \trim((string)($planJson['site_strategy']['summary'] ?? ''));
+        $pages = \is_array($planJson['pages'] ?? null) ? $planJson['pages'] : [];
+        $headerItems = \is_array($planJson['navigation_plan']['header_items'] ?? null) ? $planJson['navigation_plan']['header_items'] : [];
+        $footerPolicies = \is_array($planJson['footer_plan']['policies'] ?? null) ? $planJson['footer_plan']['policies'] : [];
+        $contentItems = [];
+        foreach ($pages as $pageType => $pagePlan) {
+            if (!\is_array($pagePlan)) {
+                continue;
+            }
+            $contentItems[] = [
+                'title' => (string)$pageType,
+                'goal' => (string)($pagePlan['page_goal'] ?? ''),
+                'blocks' => \is_array($pagePlan['blocks'] ?? null) ? $pagePlan['blocks'] : [],
+            ];
+        }
+        return [
+            [
+                'block_id' => 'plan_header_001',
+                'region' => 'header',
+                'type' => 'title',
+                'title' => $isEn ? 'Site Blueprint Header' : '方案头部',
+                'content' => ($site !== '' ? $site : ($isEn ? 'Untitled site' : '未命名站点')) . ' - ' . ($summary !== '' ? $summary : ($isEn ? 'Blueprint overview' : '方案概述')),
+                'items' => [],
+            ],
+            [
+                'block_id' => 'plan_background_001',
+                'region' => 'body',
+                'type' => 'background',
+                'title' => $isEn ? 'Planning Background' : '规划背景',
+                'content' => $summary !== '' ? $summary : ($isEn ? 'Use selected page types and conversion goals as baseline.' : '以当前页面类型与转化目标作为规划基线。'),
+                'items' => [
+                    'header_navigation' => $headerItems,
+                    'footer_policies' => $footerPolicies,
+                ],
+            ],
+            [
+                'block_id' => 'plan_catalog_001',
+                'region' => 'catalog',
+                'type' => 'content_catalog',
+                'title' => $isEn ? 'Page Block Catalog' : '页面区块目录',
+                'content' => $isEn ? 'Extractable block catalog for stage-2 task planning.' : '用于第二阶段任务提取的区块目录。',
+                'items' => $contentItems,
+            ],
+            [
+                'block_id' => 'plan_footer_001',
+                'region' => 'footer',
+                'type' => 'summary',
+                'title' => $isEn ? 'Blueprint Tail' : '方案尾部',
+                'content' => $isEn ? 'This blueprint is ready for stage-2 task extraction and execution.' : '该蓝图可直接进入第二阶段任务提取与执行。',
+                'items' => [],
+            ],
+        ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $planBlocks
+     */
+    private function renderMarkdownFromPlanBlocks(array $planBlocks, string $locale = '', string $siteName = ''): string
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        $lines = [];
+        $lines[] = '# Site Blueprint';
+        $lines[] = '';
+        $lines[] = '- ' . ($isEn ? 'Site: ' : '站点：') . ($siteName !== '' ? $siteName : ($isEn ? 'Untitled site' : '未命名站点'));
+        $lines[] = '';
+        foreach ($planBlocks as $block) {
+            $title = \trim((string)($block['title'] ?? ''));
+            $blockId = \trim((string)($block['block_id'] ?? ''));
+            $type = \trim((string)($block['type'] ?? 'section'));
+            $region = \trim((string)($block['region'] ?? 'body'));
+            $content = \trim((string)($block['content'] ?? ''));
+            $lines[] = '## ' . ($title !== '' ? $title : ($isEn ? 'Block' : '区块'));
+            $lines[] = '- Block ID: ' . ($blockId !== '' ? $blockId : '-');
+            $lines[] = '- Region: ' . ($region !== '' ? $region : 'body');
+            $lines[] = '- Type: ' . ($type !== '' ? $type : 'section');
+            if ($content !== '') {
+                $lines[] = '- Content: ' . $content;
+            }
+            $items = \is_array($block['items'] ?? null) ? $block['items'] : [];
+            if ($items !== []) {
+                $lines[] = '### Items';
+                foreach ($items as $key => $item) {
+                    if (\is_string($key) && $key !== '') {
+                        $lines[] = '- ' . $key . ': ' . (\is_scalar($item) ? (string)$item : (\json_encode($item, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: ''));
+                    } else {
+                        $lines[] = '- ' . (\is_scalar($item) ? (string)$item : (\json_encode($item, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR) ?: ''));
+                    }
+                }
+            }
+            $lines[] = '';
+        }
         return \implode("\n", $lines);
     }
 
@@ -1373,6 +2338,49 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $parts !== [] ? \implode($isEn ? ', ' : '、', $parts) : ($isEn ? 'none' : '无');
+    }
+
+    /**
+     * @param list<string> $keywords
+     */
+    private function buildKeywordSummary(array $keywords, string $locale = ''): string
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        $normalized = \array_values(\array_filter(\array_map(
+            static fn($value): string => \is_scalar($value) ? \trim((string)$value) : '',
+            $keywords
+        ), static fn(string $value): bool => $value !== ''));
+        if ($normalized === []) {
+            return $isEn ? 'none' : '无';
+        }
+        return \implode($isEn ? ', ' : '、', \array_slice($normalized, 0, 8));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $fieldPlan
+     */
+    private function buildFieldSampleSummary(array $fieldPlan, string $locale = ''): string
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        $parts = [];
+        foreach ($fieldPlan as $item) {
+            if (!\is_array($item)) {
+                continue;
+            }
+            $field = \trim((string)($item['field'] ?? ''));
+            if ($field === '') {
+                continue;
+            }
+            $sample = \trim((string)($item['sample'] ?? ''));
+            if ($sample === '') {
+                continue;
+            }
+            $parts[] = $field . '=>' . $sample;
+            if (\count($parts) >= 5) {
+                break;
+            }
+        }
+        return $parts !== [] ? \implode($isEn ? '; ' : '；', $parts) : ($isEn ? 'pending field samples' : '待补充字段示例');
     }
 
     private function resolvePageGoal(string $pageType, string $pageLabel, string $locale = ''): string
@@ -1514,7 +2522,7 @@ final class AiSiteExecutionBlueprintService
         }
         return $this->isEnglishLocale($locale)
             ? ('Use headline to express "' . $sectionName . '" value under "' . $pageLabel . '".')
-            : ('标题围绕“' . $pageLabel . '”中的“' . $sectionName . '”说明核心价值。');
+            : ('标题围绕“' . $pageLabel . '”中的“' . $sectionName . '”说明核心价值（阶段一仅给蓝图方向，具体文案在方向确认后由第二阶段生成）。');
     }
 
     /**
@@ -1526,7 +2534,7 @@ final class AiSiteExecutionBlueprintService
         if ($description !== '') {
             return $this->isEnglishLocale($locale)
                 ? ('Use concise readable paragraphs and explain: ' . $this->clipText($description, 40))
-                : ('正文保持可读短段落，重点解释：' . $this->clipText($description, 40));
+                : ('正文保持可读短段落，重点解释：' . $this->clipText($description, 40) . '（阶段一仅给蓝图方向，具体文案在方向确认后由第二阶段生成）。');
         }
         return $this->isEnglishLocale($locale)
             ? ('Structure body content by page goal: ' . $pageGoal)
@@ -1538,7 +2546,7 @@ final class AiSiteExecutionBlueprintService
         if ($template === 'cta' || $template === 'hero') {
             return $this->isEnglishLocale($locale)
                 ? 'Keep CTA to one primary action: Contact / Start Now / Learn More.'
-                : 'CTA 保持单一动作，优先“立即咨询/立即开始/了解更多”之一。';
+                : 'CTA 保持单一动作，优先“立即咨询/立即开始/了解更多”之一（阶段一仅给蓝图方向，具体文案在方向确认后由第二阶段生成）。';
         }
         return $this->isEnglishLocale($locale)
             ? ($pageLabel . ' should use secondary CTA to support, not compete with, primary CTA.')
@@ -1549,16 +2557,20 @@ final class AiSiteExecutionBlueprintService
      * @param array<string, mixed> $config
      * @return list<array<string, mixed>>
      */
-    private function buildFieldPlan(array $config, string $sectionName, string $pageGoal, string $template, string $locale = ''): array
+    private function buildFieldPlan(array $config, string $sectionName, string $pageGoal, string $template, string $locale = '', string $siteDisplayName = ''): array
     {
         $fields = [];
         foreach (['title', 'subtitle', 'description', 'button_text', 'button_link', 'image'] as $field) {
             if (!\array_key_exists($field, $config)) {
                 continue;
             }
+            $sample = \trim((string)($config[$field] ?? ''));
+            if ($sample === '') {
+                $sample = $this->resolveFieldSample($field, $template, $sectionName, $pageGoal, $siteDisplayName, $locale);
+            }
             $fields[] = [
                 'field' => $field,
-                'sample' => (string)($config[$field] ?? ''),
+                'sample' => $sample,
                 'reason' => $this->isEnglishLocale($locale)
                     ? ($sectionName . ' needs this field to support goal "' . $pageGoal . '".')
                     : ($sectionName . ' 需要该字段支撑“' . $pageGoal . '”目标。'),
@@ -1568,7 +2580,7 @@ final class AiSiteExecutionBlueprintService
         if ($fields === []) {
             $fields[] = [
                 'field' => 'description',
-                'sample' => '',
+                'sample' => $this->resolveFieldSample('description', $template, $sectionName, $pageGoal, $siteDisplayName, $locale),
                 'reason' => $this->isEnglishLocale($locale)
                     ? 'Keep description field by default for readability and SEO text coverage.'
                     : '默认至少保留描述字段，保证内容可读与 SEO 文本承载。',
@@ -1576,7 +2588,7 @@ final class AiSiteExecutionBlueprintService
             if ($template === 'hero' || $template === 'cta') {
                 $fields[] = [
                     'field' => 'button_text',
-                    'sample' => '',
+                    'sample' => $this->resolveFieldSample('button_text', $template, $sectionName, $pageGoal, $siteDisplayName, $locale),
                     'reason' => $this->isEnglishLocale($locale)
                         ? 'Hero/CTA blocks should expose an actionable entry by default.'
                         : '首屏/CTA 模块默认需要可执行入口。',
@@ -1585,6 +2597,71 @@ final class AiSiteExecutionBlueprintService
         }
 
         return $fields;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildBlockExecutionScript(string $template, string $sectionName, string $pageGoal, string $siteDisplayName, string $locale = ''): array
+    {
+        $siteName = $siteDisplayName !== '' ? $siteDisplayName : ($this->isEnglishLocale($locale) ? 'your brand' : '你的站点');
+        if ($template === 'hero') {
+            return [
+                'feature_points' => $this->isEnglishLocale($locale)
+                    ? ['Primary CTA button for APK download', 'Secondary CTA button for rules and policy', 'Hero carousel with 2-3 slides']
+                    : ['设置两个大按钮：一个「查看游戏规则与政策」，一个「下载 APK」', '首屏保留主副 CTA 的清晰层级', '使用 2-3 张轮播图承接欢迎与规则说明'],
+                'core_copy' => $this->isEnglishLocale($locale)
+                    ? ('Welcome to ' . $siteName . ', everything starts from downloading the APK.')
+                    : ('欢迎来到 ' . $siteName . ' 的棋牌世界，这里有你想要的一切，一切从下载 APK 开始。'),
+                'typography' => $this->isEnglishLocale($locale) ? 'Prefer Songti-style serif for CN headings; body with readable sans-serif.' : '标题可用宋体风格，正文使用高可读无衬线字体。',
+                'style_tone' => $this->isEnglishLocale($locale) ? 'Curry-inspired premium look: yellow + gold with luxury accents.' : '咖喱味高级调性：主色偏黄色与金色，突出奢华感。',
+                'background_direction' => $this->isEnglishLocale($locale) ? 'Use high-contrast wealthy-jackpot themed background image.' : '背景建议使用“大满贯富豪”氛围图，强化冲击力。',
+                'media_assets' => $this->isEnglishLocale($locale) ? ['Slide 1: Welcome visual', 'Slide 2: Rules and policy visual', 'Optional Slide 3: APK benefits visual'] : ['轮播图 1：欢迎氛围图', '轮播图 2：游戏规则说明图', '轮播图 3（可选）：APK 下载收益图'],
+            ];
+        }
+
+        return [
+            'feature_points' => $this->isEnglishLocale($locale)
+                ? ['Keep one clear user action per block', 'Ensure text hierarchy supports quick scan']
+                : ['每个区块只承载一个核心动作', '信息层级清晰，3 秒内可扫读'],
+            'core_copy' => $this->isEnglishLocale($locale)
+                ? ('This section supports: ' . $pageGoal)
+                : ('本区块围绕以下目标展开：' . $pageGoal),
+            'typography' => $this->isEnglishLocale($locale) ? 'Heading medium-bold, body regular for readability.' : '标题中粗体，正文常规字重，优先保证可读性。',
+            'style_tone' => $this->isEnglishLocale($locale) ? 'Consistent with site palette and trust-building tone.' : '沿用全站色盘，保持可信且有转化导向的语气。',
+            'background_direction' => $this->isEnglishLocale($locale) ? 'Use low-noise background to avoid distracting CTA.' : '背景尽量低干扰，避免与 CTA 竞争注意力。',
+            'media_assets' => $this->isEnglishLocale($locale) ? ['One supporting visual for this block intent'] : ['建议至少 1 张与区块意图一致的配图'],
+        ];
+    }
+
+    private function resolveFieldSample(string $field, string $template, string $sectionName, string $pageGoal, string $siteDisplayName, string $locale = ''): string
+    {
+        $siteName = $siteDisplayName !== '' ? $siteDisplayName : ($this->isEnglishLocale($locale) ? 'your brand' : '本站');
+        if ($field === 'button_text') {
+            return $template === 'hero'
+                ? ($this->isEnglishLocale($locale) ? 'Download APK Now' : '立即下载 APK')
+                : ($this->isEnglishLocale($locale) ? 'Learn More' : '了解更多');
+        }
+        if ($field === 'button_link') {
+            return $template === 'hero' ? '/download-apk' : '/rules-policy';
+        }
+        if ($field === 'title') {
+            return $template === 'hero'
+                ? ($this->isEnglishLocale($locale) ? ('Welcome to ' . $siteName) : ('欢迎来到 ' . $siteName . ''))
+                : ($this->isEnglishLocale($locale) ? $sectionName : ($sectionName !== '' ? $sectionName : '核心内容'));
+        }
+        if ($field === 'description') {
+            return $this->isEnglishLocale($locale)
+                ? ('This section delivers: ' . $pageGoal)
+                : ('该区块用于实现：' . $pageGoal);
+        }
+        if ($field === 'subtitle') {
+            return $this->isEnglishLocale($locale) ? 'Rules, trust, and quick action' : '规则透明、体验清晰、立即行动';
+        }
+        if ($field === 'image') {
+            return $template === 'hero' ? 'hero-jackpot-bg.jpg' : 'block-supporting-visual.jpg';
+        }
+        return '';
     }
 
     /**
@@ -1642,5 +2719,143 @@ final class AiSiteExecutionBlueprintService
         }
 
         return \str_starts_with($locale, 'en');
+    }
+
+    /**
+     * T5: 方案 Markdown 章节完整性校验器
+     * 验证生成的方案 Markdown 是否包含所有必须章节
+     *
+     * @param string $markdown 方案 Markdown 文本
+     * @param string $locale 方案语言
+     * @return array{valid: bool, missing_sections: list<string>, warnings: list<string>}
+     */
+    public function validateMarkdownSections(string $markdown, string $locale = ''): array
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        $markdown = \trim($markdown);
+        $missingSections = [];
+        $warnings = [];
+
+        // 必须包含的章节（双语对照）
+        $requiredSections = [
+            'style_overview' => [
+                'zh' => ['风格总览', '主题风格', '风格总览'],
+                'en' => ['Style Overview', 'Theme Style', 'style overview'],
+            ],
+            'palette' => [
+                'zh' => ['颜色色系', '色系', '调色板', '调色盘', '色彩'],
+                'en' => ['Color Palette', 'Palette', 'color palette', '色系'],
+            ],
+            'header' => [
+                'zh' => ['Header 设计', '头部设计', '页头设计'],
+                'en' => ['Header Design', 'header design'],
+            ],
+            'footer' => [
+                'zh' => ['Footer 设计', '底部设计', '页脚设计'],
+                'en' => ['Footer Design', 'footer design'],
+            ],
+            'page_types_overview' => [
+                'zh' => ['页面类型设计', '页面设计总览', '全站结构'],
+                'en' => ['Page Type Design', 'Page Design Overview', 'Site Structure'],
+            ],
+            'page_block_details' => [
+                'zh' => ['页面与区块执行细化', '分页面块级设计', '区块设计'],
+                'en' => ['Page And Block Execution Details', 'Block Details'],
+            ],
+            'execution_order' => [
+                'zh' => ['执行顺序', '任务蓝图摘要', '执行顺序与任务蓝图'],
+                'en' => ['Execution Order', 'task blueprint'],
+            ],
+        ];
+
+        // 检查每个必须章节
+        foreach ($requiredSections as $sectionKey => $sectionLabels) {
+            $labels = $isEn ? $sectionLabels['en'] : $sectionLabels['zh'];
+            $found = false;
+            foreach ($labels as $label) {
+                if (\mb_stripos($markdown, $label) !== false) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                $missingSections[] = $sectionKey;
+            }
+        }
+
+        // 额外警告检查
+        if (\mb_stripos($markdown, '为什么这样设计') === false
+            && \mb_stripos($markdown, 'why') === false
+            && \mb_stripos($markdown, 'reason') === false
+        ) {
+            $warnings[] = $isEn
+                ? 'Warning: Design rationale (why) not found in plan.'
+                : '警告：方案中未找到设计理由（为什么这样设计）。';
+        }
+
+        // 检查是否包含页面覆盖清单
+        if (\mb_stripos($markdown, '页面覆盖清单') === false
+            && \mb_stripos($markdown, 'Page Coverage') === false
+            && \mb_stripos($markdown, 'Selected Pages') === false
+        ) {
+            $warnings[] = $isEn
+                ? 'Warning: Page coverage checklist not found.'
+                : '警告：未找到页面覆盖清单。';
+        }
+
+        return [
+            'valid' => $missingSections === [],
+            'missing_sections' => $missingSections,
+            'warnings' => $warnings,
+        ];
+    }
+
+    /**
+     * 检查方案 Markdown 是否包含指定页面类型的规划
+     *
+     * @param string $markdown 方案 Markdown
+     * @param list<string> $selectedPageTypes 用户选择的页面类型
+     * @param string $locale 方案语言
+     * @return array{valid: bool, missing_pages: list<string>, extra_pages: list<string>}
+     */
+    public function validatePageCoverage(string $markdown, array $selectedPageTypes, string $locale = ''): array
+    {
+        $isEn = $this->isEnglishLocale($locale);
+        $markdownLower = \mb_strtolower($markdown);
+        $missingPages = [];
+        $extraPages = [];
+
+        // 常见页面类型关键词映射
+        $pageTypeKeywords = [
+            'home_page' => ['首页', 'home page', 'homepage'],
+            'about_page' => ['关于页面', 'about', '关于我们'],
+            'contact_page' => ['联系页面', 'contact', '联系我们'],
+            'product_page' => ['产品页面', 'product', '产品列表'],
+            'blog_page' => ['博客页面', 'blog', '博客'],
+            'service_page' => ['服务页面', 'service', '服务'],
+            'privacy_page' => ['隐私政策', 'privacy'],
+            'terms_page' => ['服务条款', 'terms'],
+        ];
+
+        // 检查每个已选页面是否有规划
+        foreach ($selectedPageTypes as $pageType) {
+            $keywords = $pageTypeKeywords[$pageType] ?? [$pageType, \str_replace('_', ' ', $pageType)];
+            $found = false;
+            foreach ($keywords as $keyword) {
+                if (\mb_stripos($markdownLower, \mb_strtolower($keyword)) !== false) {
+                    $found = true;
+                    break;
+                }
+            }
+            if (!$found) {
+                $missingPages[] = $pageType;
+            }
+        }
+
+        return [
+            'valid' => $missingPages === [],
+            'missing_pages' => $missingPages,
+            'extra_pages' => $extraPages,
+        ];
     }
 }
