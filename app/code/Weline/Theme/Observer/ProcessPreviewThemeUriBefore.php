@@ -11,6 +11,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Controller\Router as ThemeRouter;
 use Weline\Theme\Service\PreviewContextService;
+use Weline\Theme\Service\PreviewRequestInspector;
 use Weline\Theme\Service\PreviewTokenService;
 
 class ProcessPreviewThemeUriBefore implements ObserverInterface
@@ -67,7 +68,10 @@ class ProcessPreviewThemeUriBefore implements ObserverInterface
                 if ($previewToken !== '') {
                     /** @var PreviewTokenService $previewTokenService */
                     $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
-                    if ($previewTokenService->validateToken($previewToken)) {
+                    /** @var PreviewRequestInspector $previewRequestInspector */
+                    $previewRequestInspector = ObjectManager::getInstance(PreviewRequestInspector::class);
+                    if (!$previewRequestInspector->shouldKeepPreviewStateOnlyForCurrentRequest()
+                        && $previewTokenService->validateToken($previewToken)) {
                         $previewTokenService->setPreviewCookie($previewToken);
                     }
                 }
