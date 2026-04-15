@@ -247,9 +247,20 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = $this->resolveStreamTimeout($params, $config);
 
-        $requestData = [
+        // 非 SSE 的流式调用也要取消总执行时间限制，避免 generateStreamFull 在长推理时被 PHP 截断。
+        $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
+        if ($shouldRestoreExecutionTimeLimit) {
+            if ($timeout > 0) {
+                @set_time_limit($timeout + 10);
+            } else {
+                @set_time_limit(0);
+            }
+        }
+
+        try {
+            $requestData = [
             'model' => $config['model'] ?? $model->getModelCode(),
             'messages' => $messages,
             'temperature' => (float)($params['temperature'] ?? $config['temperature'] ?? 0.7),
@@ -294,7 +305,7 @@ class OpenAiProvider implements ProviderInterface
         $finishReason = '';
         $modelName = '';
 
-        $ch = $this->initCurl($apiUrl, $apiKey, $requestData, $proxyInfo, $timeout);
+        $ch = $this->initCurl($apiUrl, $apiKey, $requestData, $proxyInfo, $timeout, true);
 
         $rawResponseBuffer = '';
         $hasValidChunk = false;
@@ -481,7 +492,12 @@ class OpenAiProvider implements ProviderInterface
             ];
         }
 
-        return $result;
+            return $result;
+        } finally {
+            if ($shouldRestoreExecutionTimeLimit) {
+                @set_time_limit(0);
+            }
+        }
     }
 
     /**
@@ -518,8 +534,7 @@ class OpenAiProvider implements ProviderInterface
         }
 
         $messages = $this->buildMessages($prompt, $params);
-        // 超时优先级：params.timeout > config.timeout > 默认180秒；0 表示不限制
-        $timeout = isset($params['timeout']) ? (int)$params['timeout'] : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        $timeout = $this->resolveStreamTimeout($params, $config);
         
         // 设置执行时间限制（SSE 模式下跳过，由 SseWriter 统一管理为无限制）
         $shouldRestoreExecutionTimeLimit = !SseContext::isSseEnabled();
@@ -845,7 +860,7 @@ class OpenAiProvider implements ProviderInterface
         $maxExecutionTime = $isSseMode ? 0 : (int)ini_get('max_execution_time');
         $timeLimit = $maxExecutionTime > 0 ? $maxExecutionTime : null;
         
-        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout);
+        $ch = $this->initCurl($url, $apiKey, $data, $proxyInfo, $timeout, true);
         
         // 在执行前检查剩余时间，如果时间不足，提前抛出错误
         if ($timeLimit !== null && $timeLimit > 0) {
@@ -1020,7 +1035,14 @@ class OpenAiProvider implements ProviderInterface
      * @param array $proxyInfo
      * @return \CurlHandle|false
      */
-    private function initCurl(string $url, string $apiKey, array $data, array $proxyInfo, int $timeout): \CurlHandle|false
+    private function initCurl(
+        string $url,
+        string $apiKey,
+        array $data,
+        array $proxyInfo,
+        int $timeout,
+        bool $isStream = false
+    ): \CurlHandle|false
     {
         $ch = curl_init($url);
         
@@ -1031,18 +1053,8 @@ class OpenAiProvider implements ProviderInterface
             'Content-Type: application/json',
             'Authorization: Bearer ' . $apiKey,
         ]);
-        // 根据模型配置设置超时（秒）；0 表示不限制
-        $timeout = max(0, (int)$timeout);
-        curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
-        // 连接超时单独设置，防止长时间卡在连接阶段（不超过60秒）
-        if ($timeout > 0) {
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, min($timeout, 60));
-        } else {
-            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 60);
-            // 当 timeout=0 时设置低速保护：如果 120 秒内传输速率低于 1 字节/秒，则中止
-            // 防止 AI API 完全停止响应导致连接永久挂起
-            curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-            curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
+        foreach ($this->buildCurlTimeoutOptions($timeout, $isStream) as $option => $value) {
+            curl_setopt($ch, $option, $value);
         }
         
         // SSL配置：在Windows本地开发环境中，可能需要跳过SSL验证
@@ -1069,6 +1081,49 @@ class OpenAiProvider implements ProviderInterface
         }
 
         return $ch;
+    }
+
+    private function resolveStreamTimeout(array $params, array $config): int
+    {
+        if (!empty($params['enforce_timeout_in_stream'])) {
+            return isset($params['timeout'])
+                ? (int)$params['timeout']
+                : (isset($config['timeout']) ? (int)$config['timeout'] : 180);
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function buildCurlTimeoutOptions(int $timeout, bool $isStream = false): array
+    {
+        $timeout = max(0, (int)$timeout);
+
+        if ($isStream) {
+            return [
+                CURLOPT_TIMEOUT => 0,
+                CURLOPT_CONNECTTIMEOUT => 60,
+                // 流式长连接在推理阶段可能长时间不出 chunk，不能用低速保护把它误判成挂死。
+                CURLOPT_LOW_SPEED_LIMIT => 0,
+                CURLOPT_LOW_SPEED_TIME => 0,
+            ];
+        }
+
+        $options = [
+            CURLOPT_TIMEOUT => $timeout,
+        ];
+
+        if ($timeout > 0) {
+            $options[CURLOPT_CONNECTTIMEOUT] = min($timeout, 60);
+        } else {
+            $options[CURLOPT_CONNECTTIMEOUT] = 60;
+            $options[CURLOPT_LOW_SPEED_LIMIT] = 1;
+            $options[CURLOPT_LOW_SPEED_TIME] = 120;
+        }
+
+        return $options;
     }
 
     /**
