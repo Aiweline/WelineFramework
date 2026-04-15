@@ -38,13 +38,6 @@ return [
             'rate_limit' => 100, // 每分钟请求限制
         ],
         
-        // 流式输出配置
-        'stream' => [
-            'enabled' => true, // 默认启用流式输出
-            'chunk_size' => 1024, // 每次发送的数据块大小
-            'flush_interval' => 100, // 刷新间隔（毫秒）
-        ],
-        
         // 缓存配置
         'cache' => [
             'model_list_ttl' => 3600, // 模型列表缓存时间（秒）

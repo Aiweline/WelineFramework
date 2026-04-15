@@ -26,6 +26,30 @@ final class AiSiteVirtualThemePlanService
      */
     public function buildTaskPlanArtifacts(array $scope, array $buildBlueprint): array
     {
+        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, null);
+    }
+
+    /**
+     * 以流式方式生成第二阶段任务方案。
+     *
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $buildBlueprint
+     * @param callable|null $chunkCallback function(string $chunk): void
+     * @return array{markdown:string,structured:array<string, mixed>,virtual_theme_plan:array<string, mixed>,generation_source:string}
+     */
+    public function buildTaskPlanArtifactsStream(array $scope, array $buildBlueprint, ?callable $chunkCallback = null): array
+    {
+        return $this->buildTaskPlanArtifactsInternal($scope, $buildBlueprint, $chunkCallback);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $buildBlueprint
+     * @param callable|null $chunkCallback
+     * @return array{markdown:string,structured:array<string, mixed>,virtual_theme_plan:array<string, mixed>,generation_source:string}
+     */
+    private function buildTaskPlanArtifactsInternal(array $scope, array $buildBlueprint, ?callable $chunkCallback): array
+    {
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
         $planStructured = \is_array($scope['plan_json'] ?? null)
             ? $scope['plan_json']
@@ -133,21 +157,7 @@ final class AiSiteVirtualThemePlanService
         $virtualThemePlan = $structured;
         $virtualThemePlan['signature'] = \sha1((string)\json_encode($structured, \JSON_UNESCAPED_UNICODE | \JSON_PARTIAL_OUTPUT_ON_ERROR));
 
-        $forceDeterministicBaseline = (int)($scope['fake_mode'] ?? 0) === 1;
-        if ($forceDeterministicBaseline) {
-            $fallbackStructured = $this->buildDeterministicTaskPlanStructured($structured);
-            $fallbackStructured = $this->ensureTaskDirectoryHierarchy($fallbackStructured);
-            $fallbackVirtualThemePlan = $fallbackStructured;
-            $fallbackVirtualThemePlan['signature'] = $this->buildSignature($fallbackStructured);
-            return [
-                'markdown' => $this->buildMarkdown($pageTypes, $sharedTasks, $pageTasks, $fallbackStructured),
-                'structured' => $fallbackStructured,
-                'virtual_theme_plan' => $fallbackVirtualThemePlan,
-                'generation_source' => 'deterministic_fallback',
-            ];
-        }
-
-        $aiTaskPlan = $this->buildTaskPlanArtifactsByAi($scope, $buildBlueprint, $structured, $virtualThemePlan);
+        $aiTaskPlan = $this->buildTaskPlanArtifactsByAi($scope, $buildBlueprint, $structured, $virtualThemePlan, $chunkCallback);
         $markdown = \trim((string)($aiTaskPlan['markdown'] ?? ''));
         $aiVirtualThemePlan = \is_array($aiTaskPlan['virtual_theme_plan'] ?? null) ? $aiTaskPlan['virtual_theme_plan'] : [];
         if ($markdown === '' || $aiVirtualThemePlan === []) {
@@ -454,6 +464,16 @@ final class AiSiteVirtualThemePlanService
             ];
             $task['task_script'] = [
                 'scene' => (string)($task['task_key'] ?? 'shared'),
+                'story_goal' => (string)($task['label'] ?? $task['task_key'] ?? 'shared task') . ' 需要作为一次独立的 SSE 对话一次性生成。',
+                'content_fill_rule' => '共享任务只生成一次，必须输出可复用的全站组件定义，不拆分成多个重复 task。',
+                'stage3_directive' => '按该共享任务脚本直接生成组件，确保 header/footer 只出现一次且可被全站复用。',
+                'field_content_requirements' => [
+                    [
+                        'field' => 'title',
+                        'sample' => (string)($task['label'] ?? $task['task_key'] ?? 'shared task'),
+                        'reason' => '提供共享组件的标题或识别名称。',
+                    ],
+                ],
             ];
             $sharedTasks[$idx] = $task;
         }
@@ -584,8 +604,7 @@ final class AiSiteVirtualThemePlanService
             throw new \RuntimeException('AI task plan generation failed: AiService unavailable.');
         }
 
-        $baselineScope = \array_replace($scope, ['fake_mode' => 1]);
-        $baselineArtifacts = $this->buildTaskPlanArtifacts($baselineScope, $buildBlueprint);
+        $baselineArtifacts = $this->buildTaskPlanArtifacts(\array_replace($scope, ['fake_mode' => 1]), $buildBlueprint);
         $baselineStructured = \is_array($baselineArtifacts['structured'] ?? null) ? $baselineArtifacts['structured'] : [];
         $baselineVirtualThemePlan = \is_array($baselineArtifacts['virtual_theme_plan'] ?? null) ? $baselineArtifacts['virtual_theme_plan'] : [];
         if ($mode === 'refine_task_plan' && $draftPlan !== []) {
@@ -653,7 +672,8 @@ final class AiSiteVirtualThemePlanService
         array $scope,
         array $buildBlueprint,
         array $structured,
-        array $virtualThemePlan
+        array $virtualThemePlan,
+        ?callable $chunkCallback = null
     ): array {
         $ai = $this->getAiService();
         if ($ai === null) {
@@ -661,8 +681,16 @@ final class AiSiteVirtualThemePlanService
         }
         $prompt = $this->buildTaskPlanGenerationPrompt($scope, $buildBlueprint, $structured, $virtualThemePlan);
         try {
-            $raw = (string)$ai->generate(
+            $raw = '';
+            $streamCallback = static function (string $chunk) use (&$raw, $chunkCallback): void {
+                $raw .= $chunk;
+                if ($chunkCallback !== null) {
+                    $chunkCallback($chunk);
+                }
+            };
+            $ai->generateStream(
                 $prompt,
+                $streamCallback,
                 null,
                 'pagebuilder_task_plan_generation',
                 null,
@@ -671,7 +699,6 @@ final class AiSiteVirtualThemePlanService
                     'temperature' => 0.2,
                     'max_tokens' => 6000,
                     'timeout' => 120,
-                    'response_format' => ['type' => 'json_object'],
                 ]
             );
             $decoded = \json_decode($raw, true);
@@ -798,7 +825,10 @@ final class AiSiteVirtualThemePlanService
 
         $lines = [
             'You are an AI planner for PageBuilder stage-2 execution detail plan.',
-            'Return STRICT JSON only, no markdown fence.',
+            'Return STRICT JSON only.',
+            'Do not wrap the response in markdown fences.',
+            'Do not output explanations, comments, or any text outside JSON.',
+            'The JSON root object must contain exactly these keys: markdown, virtual_theme_plan.',
             'Output schema:',
             '{',
             '  "markdown": "string",',
@@ -818,6 +848,8 @@ final class AiSiteVirtualThemePlanService
             'Hard rules:',
             '- Must use confirmed stage-1 plan as the source of truth.',
             '- Output detailed actionable stage-2 execution plan.',
+            '- 每个 task 都必须代表一次独立的 SSE 对话，且只输出一个组件或一个明确页面片段的生成任务。',
+            '- header 与 footer 是全站共享组件，只允许生成一次；其余页面内容按 page_tasks 中的规划逐页生成。',
             '- Fill each task as a self-contained script: plan_context + implementation_contract + task_script + field_content_requirements.',
             '- Every task must include enough content details so stage-3 can generate components directly without extra planning.',
             '- DO NOT echo user instruction text as generic policy filler.',
