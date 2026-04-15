@@ -34,7 +34,6 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Framework\Runtime\RequestContext;
-use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
 use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService as WebsitesDomainPurchaseWorkbenchService;
@@ -803,21 +802,10 @@ SCRIPT;
         $sse->sendEvent('start', ['message' => 'Test SSE connection started']);
         $sse->sendEvent('test', ['timestamp' => time(), 'message' => 'This is a test event']);
 
-        // 短轮询：只轮询 3 次（3 秒）
-        $maxPolls = 3;
-        $pollInterval = 1000;  // 1 秒
-
-        for ($i = 0; $i < $maxPolls; $i++) {
-            if (!$sse->isAlive()) {
-                break;
-            }
-
-            $sse->sendEvent('poll', ['count' => $i + 1, 'timestamp' => time()]);
-
-            if ($i < $maxPolls - 1) {
-                SchedulerSystem::yieldDelay($pollInterval);
-            }
-        }
+        // 非阻塞示例：只发送一组立即可用事件，不做轮询等待。
+        $sse->sendEvent('poll', ['count' => 1, 'timestamp' => time()]);
+        $sse->sendEvent('poll', ['count' => 2, 'timestamp' => time()]);
+        $sse->sendEvent('poll', ['count' => 3, 'timestamp' => time()]);
 
         $sse->complete(['success' => true, 'message' => 'Test complete, please reconnect']);
     }
@@ -1150,13 +1138,12 @@ SCRIPT;
 
     private function handlePlanSse(): void
     {
-        @\set_time_limit(0);
         @\ignore_user_abort(true);
 
+        $adminId = (int)$this->getLoginUserId();
+        $this->releasePhpSessionLockForSse();
         $sse = new SseWriter();
         $sse->start();
-
-        $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $promptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
         if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine', 'rebuild'], true)) {
@@ -1374,12 +1361,12 @@ SCRIPT;
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        if (!$this->hasPhaseOnePlanAvailable($scope)) {
-            return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先生成阶段一方案，再生成第二阶段任务方案'), ['public_id', 'plan_confirmed']);
+        if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
+            return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先确认阶段一方案，再生成第二阶段任务方案'), ['public_id', 'plan_confirmed']);
         }
         $executionBlueprint = \is_array($scope['execution_blueprint'] ?? null) ? $scope['execution_blueprint'] : [];
         if ($executionBlueprint === []) {
-            return $this->jsonError('EXECUTION_BLUEPRINT_REQUIRED', (string)__('缺少已确认执行蓝图，请重新生成并确认方案'), ['public_id', 'execution_blueprint']);
+            return $this->jsonError('EXECUTION_BLUEPRINT_REQUIRED', (string)__('缺少已确认执行蓝图，请重新生成并确认阶段一方案'), ['public_id', 'execution_blueprint']);
         }
 
         $scope = $this->buildTaskService->ensureTaskScope(
@@ -1389,18 +1376,11 @@ SCRIPT;
         );
         $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
         $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts($scope, $buildBlueprint);
-        $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
-        if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
-            return $this->jsonError(
-                'TASK_PLAN_AI_GENERATION_REQUIRED',
-                (string)__('第二阶段任务方案生成失败：未获取到 AI 生成结果，请检查 AI 服务配置后重试'),
-                ['public_id']
-            );
-        }
         $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
         $markdown = (string)($artifacts['markdown'] ?? '');
         $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
 
+        $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
         $scopePatch = [
             'build_blueprint' => $buildBlueprint,
             'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
@@ -1414,6 +1394,12 @@ SCRIPT;
                 'plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
             ],
             'task_plan_structured' => $structured,
+            'task_plan_directory_tree' => $taskPlanDirectoryTree,
+            'task_plan_summary' => [
+                'signature' => (string)($virtualThemePlan['signature'] ?? ''),
+                'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
+                'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
+            ],
             'task_plan_confirmed' => 0,
         ];
 
@@ -1464,6 +1450,9 @@ SCRIPT;
         if ($draftTaskPlan === []) {
             return $this->jsonError('TASK_PLAN_NOT_READY', (string)__('尚未生成第二阶段任务方案，请先生成后再确认'), ['public_id']);
         }
+        if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
+            return $this->jsonError('PLAN_REQUIRED_BEFORE_TASK_PLAN_CONFIRM', (string)__('请先确认阶段一方案，再确认第二阶段任务方案'), ['public_id', 'plan_confirmed']);
+        }
 
         $scopePatch = [
             'virtual_theme_plan' => [
@@ -1505,13 +1494,12 @@ SCRIPT;
 
     private function handleTaskPlanSse(): void
     {
-        @\set_time_limit(0);
         @\ignore_user_abort(true);
 
+        $adminId = (int)$this->getLoginUserId();
+        $this->releasePhpSessionLockForSse();
         $sse = new SseWriter();
         $sse->start();
-
-        $adminId = (int)$this->getLoginUserId();
         $publicId = \trim((string)$this->getRequestBodyValue('public_id', ''));
         $promptMode = \trim((string)$this->getRequestBodyValue('prompt_mode', ''));
         if ($adminId <= 0 || $publicId === '' || !\in_array($promptMode, ['refine_task_plan', 'rebuild_task_plan', 'detect_bootstrap_task_plan'], true)) {
@@ -1528,8 +1516,8 @@ SCRIPT;
         }
 
         $scope = $this->scopeCompatibilityService->normalizeScope($session->getScopeArray());
-        if (!$this->hasPhaseOnePlanAvailable($scope)) {
-            $this->sendSseContractError($sse, 'PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先生成阶段一方案，再继续调整第二阶段任务方案'), ['public_id', 'plan_confirmed'], 409);
+        if ((int)($scope['plan_confirmed'] ?? 0) !== 1) {
+            $this->sendSseContractError($sse, 'PLAN_REQUIRED_BEFORE_TASK_PLAN', (string)__('请先确认阶段一方案，再继续调整第二阶段任务方案'), ['public_id', 'plan_confirmed'], 409);
             $sse->complete(['success' => false]);
             return;
         }
@@ -1583,16 +1571,28 @@ SCRIPT;
 
         try {
             $draftPlan = \is_array($scope['virtual_theme_plan']['draft'] ?? null) ? $scope['virtual_theme_plan']['draft'] : [];
+            $streamBuffer = '';
+            $chunkCallback = static function (string $chunk) use (&$streamBuffer, $sse, $promptMode): void {
+                $streamBuffer .= $chunk;
+                if (\trim($chunk) === '') {
+                    return;
+                }
+                $sse->sendEvent('chunk', [
+                    'content' => $chunk,
+                    'chunk' => $chunk,
+                    'prompt_mode' => $promptMode,
+                ]);
+            };
             $result = $promptMode === 'rebuild_task_plan'
                 ? $this->virtualThemePlanService->rebuildDraftTaskPlan($scope, $buildBlueprint, [
                     'instruction' => $instruction,
                     'round' => $round,
-                ])
+                ], $chunkCallback)
                 : $this->virtualThemePlanService->refineDraftTaskPlan($scope, $buildBlueprint, $draftPlan, [
                     'instruction' => $instruction,
                     'target_scope' => $targetScope,
                     'round' => $round,
-                ]);
+                ], $chunkCallback);
 
             $markdown = (string)($result['markdown'] ?? '');
             $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
@@ -1601,6 +1601,7 @@ SCRIPT;
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
                 throw new \RuntimeException((string)__('第二阶段任务方案生成失败：当前结果不是 AI 生成，请检查 AI 服务后重试'));
             }
+            $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
             $scopePatch = [
                 'virtual_theme_plan' => [
                     'draft' => $virtualThemePlan,
@@ -1616,6 +1617,13 @@ SCRIPT;
                     'last_round' => $round,
                 ],
                 'task_plan_structured' => $structured,
+                'task_plan_directory_tree' => $taskPlanDirectoryTree,
+                'task_plan_summary' => [
+                    'signature' => (string)($virtualThemePlan['signature'] ?? ''),
+                    'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
+                    'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
+                    'prompt_mode' => $promptMode,
+                ],
                 'task_plan_confirmed' => 0,
             ];
             if ($promptMode === 'rebuild_task_plan') {
@@ -1646,21 +1654,10 @@ SCRIPT;
             );
 
             $sse->sendEvent('progress', [
-                'message' => (string)__('正在输出更新后的任务方案'),
+                'message' => (string)__('第二阶段任务方案已生成并持续输出中'),
                 'prompt_mode' => $promptMode,
-                'progress_percent' => 80,
+                'progress_percent' => 90,
             ]);
-            foreach ($this->chunkStringForSse($markdown, 220) as $chunk) {
-                $sse->sendEvent('chunk', [
-                    'content' => $chunk,
-                    'chunk' => $chunk,
-                    'prompt_mode' => $promptMode,
-                ]);
-                if (!$sse->isAlive()) {
-                    break;
-                }
-                SchedulerSystem::yieldDelay(5);
-            }
 
             $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
             $sse->complete([
@@ -1724,6 +1721,11 @@ SCRIPT;
                 'prompt_mode' => $promptMode,
                 'progress_percent' => 28,
             ]);
+            $sse->sendEvent('progress', [
+                'message' => (string)__('正在调用 AI 生成任务方案，生成期间请保持连接'),
+                'prompt_mode' => $promptMode,
+                'progress_percent' => 34,
+            ]);
 
             $scope = $this->buildTaskService->ensureTaskScope(
                 $scope,
@@ -1731,7 +1733,22 @@ SCRIPT;
                 (string)($scope['workspace_track'] ?? '')
             );
             $buildBlueprint = \is_array($scope['build_blueprint'] ?? null) ? $scope['build_blueprint'] : [];
-            $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts($scope, $buildBlueprint);
+            $streamBuffer = '';
+            $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifactsStream(
+                $scope,
+                $buildBlueprint,
+                function (string $chunk) use (&$streamBuffer, $sse, $promptMode): void {
+                    $streamBuffer .= $chunk;
+                    if (\trim($chunk) === '') {
+                        return;
+                    }
+                    $sse->sendEvent('chunk', [
+                        'content' => $chunk,
+                        'chunk' => $chunk,
+                        'prompt_mode' => $promptMode,
+                    ]);
+                }
+            );
             $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
                 throw new \RuntimeException((string)__('第二阶段任务方案生成失败：未获取到 AI 生成结果，请检查 AI 服务配置后重试'));
@@ -1740,6 +1757,7 @@ SCRIPT;
             $markdown = (string)($artifacts['markdown'] ?? '');
             $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
 
+            $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
             $scopePatch = [
                 'build_blueprint' => $buildBlueprint,
                 'build_tasks' => \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [],
@@ -1753,6 +1771,13 @@ SCRIPT;
                     'plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
                 ],
                 'task_plan_structured' => $structured,
+                'task_plan_directory_tree' => $taskPlanDirectoryTree,
+                'task_plan_summary' => [
+                    'signature' => (string)($virtualThemePlan['signature'] ?? ''),
+                    'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
+                    'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
+                    'source' => 'task_plan_sse',
+                ],
                 'task_plan_confirmed' => 0,
             ];
             $this->sessionService->mergeScope($session->getId(), $adminId, $scopePatch);
@@ -1773,28 +1798,11 @@ SCRIPT;
                 ]
             );
 
-            $sse->sendEvent('info', [
-                'phase' => 'virtual_theme_plan_generated',
-                'message' => (string)__('第二阶段任务方案已持久化'),
-                'prompt_mode' => $promptMode,
-                'task_plan_signature' => (string)($virtualThemePlan['signature'] ?? ''),
-            ]);
             $sse->sendEvent('progress', [
-                'message' => (string)__('正在输出任务方案 Markdown'),
+                'message' => (string)__('第二阶段任务方案已生成并持续输出中'),
                 'prompt_mode' => $promptMode,
-                'progress_percent' => 78,
+                'progress_percent' => 90,
             ]);
-            foreach ($this->chunkStringForSse($markdown, 220) as $chunk) {
-                $sse->sendEvent('chunk', [
-                    'content' => $chunk,
-                    'chunk' => $chunk,
-                    'prompt_mode' => $promptMode,
-                ]);
-                if (!$sse->isAlive()) {
-                    break;
-                }
-                SchedulerSystem::yieldDelay(5);
-            }
 
             $fresh = $this->sessionService->loadById($session->getId(), $adminId) ?? $session;
             $state = $this->buildWorkspaceEventStatePayload($this->buildWorkspaceState($fresh, $adminId, 80, true));
@@ -1973,7 +1981,6 @@ SCRIPT;
 
     private function handleBlockRegenerateSse(bool $refine): void
     {
-        @\set_time_limit(0);
         @\ignore_user_abort(true);
         $this->releasePhpSessionLockForSse();
 
@@ -2401,7 +2408,13 @@ SCRIPT;
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
         if (empty($state['can_publish'])) {
             if ((int)($state['site_ready'] ?? 1) !== 1) {
-                return $this->fetchJson(['success' => false, 'message' => __('域名尚未就绪，请先等待域名流程完成后再确认建站发布。')]);
+                return $this->fetchJson(['success' => false, 'message' => __('域名尚未就绪，请先完成域名流程后再发布。')]);
+            }
+            if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
+                return $this->fetchJson(['success' => false, 'message' => __('请先确认阶段一方案，再进入发布流程。')]);
+            }
+            if ((int)($state['task_plan_confirmed'] ?? 0) !== 1) {
+                return $this->fetchJson(['success' => false, 'message' => __('请先确认第二阶段任务方案，再进入发布流程。')]);
             }
             return $this->fetchJson(['success' => false, 'message' => __('当前工作区尚未准备好发布，请先完成页面生成与编辑。')]);
         }
@@ -2619,6 +2632,12 @@ SCRIPT;
 
         $state = $this->buildWorkspaceState($session, $adminId, 40, true);
         $scope = $state['scope'];
+        if ((int)($state['plan_confirmed'] ?? 0) !== 1) {
+            return $this->fetchJson(['success' => false, 'message' => __('请先确认阶段一方案，再检查发布条件。')]);
+        }
+        if ((int)($state['task_plan_confirmed'] ?? 0) !== 1) {
+            return $this->fetchJson(['success' => false, 'message' => __('请先确认第二阶段任务方案，再检查发布条件。')]);
+        }
         $virtualPages = \is_array($state['virtual_pages_by_type']) ? $state['virtual_pages_by_type'] : [];
         $pageTypes = $this->scopeCompatibilityService->resolveScopedPageTypes($scope);
         $track = $this->scopeCompatibilityService->normalizeWorkspaceTrack((string)($scope['workspace_track'] ?? ''));
@@ -4304,11 +4323,8 @@ SCRIPT;
      */
     private function hasPhaseOnePlanAvailable(array $scope): bool
     {
-        return (\is_array($scope['plan_json'] ?? null) && $scope['plan_json'] !== [])
-            || \trim((string)($scope['plan_markdown'] ?? '')) !== ''
-            || (\is_array($scope['execution_blueprint_draft'] ?? null) && $scope['execution_blueprint_draft'] !== [])
-            || (\is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== [])
-            || ((int)($scope['plan_confirmed'] ?? 0) === 1);
+        return (int)($scope['plan_confirmed'] ?? 0) === 1
+            || (\is_array($scope['execution_blueprint'] ?? null) && $scope['execution_blueprint'] !== []);
     }
 
     /**
