@@ -2505,6 +2505,88 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertSame('18080,18081', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
     }
 
+    public function testWorkerPoolAckRejectedTriggersPoolResyncSelfHealing(): void
+    {
+        $mockControl = new class extends MasterControlServer {
+            /** @var list<array{clientId:int, message:string}> */
+            public array $sent = [];
+
+            public function sendTo(int $clientId, string $message): bool
+            {
+                $this->sent[] = ['clientId' => $clientId, 'message' => $message];
+
+                return true;
+            }
+
+            public function poll(int $timeoutSec = 0, int $timeoutUsec = 100000): int
+            {
+                return 0;
+            }
+        };
+
+        $orchestrator = new ServiceOrchestrator();
+        $registry = $orchestrator->getRegistry();
+        $context = $this->createWorkerInfraContext();
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'controlServer', $mockControl);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'maintenanceMode', false);
+        $this->writePrivate($orchestrator, 'lastDispatcherWorkerPoolSignature', '18080');
+
+        $registry->addInstance(new ServiceInstance(
+            role: ControlMessage::ROLE_DISPATCHER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'dispatcher-pool-ack-rejected',
+            port: $context->mainPort,
+            state: ServiceInstance::STATE_READY,
+            ipcClientId: 201,
+        ));
+
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-pool-ack-rejected',
+            port: 18080,
+            state: ServiceInstance::STATE_READY,
+            startedAt: \microtime(true) - 1.0,
+            ipcClientId: 301,
+        );
+        $registry->addInstance($worker);
+
+        $this->invokePrivateWithArgs($orchestrator, 'handleWorkerPoolAck', [[
+            'role' => ControlMessage::ROLE_WORKER,
+            'port' => 18080,
+            'in_pool' => false,
+        ], 201]);
+
+        self::assertSame('', $this->readPrivate($orchestrator, 'lastDispatcherWorkerPoolSignature'));
+        self::assertGreaterThan(
+            0,
+            (int) ($registry->getInstance(ControlMessage::ROLE_WORKER, 1)?->getMeta('dispatcher_pool_reject_count') ?? 0)
+        );
+
+        $this->drainOrchestratorMainLoopTasks($orchestrator);
+
+        $poolMessages = [];
+        foreach ($mockControl->sent as $entry) {
+            $decoded = \json_decode(\rtrim($entry['message'], "\n"), true);
+            if (!\is_array($decoded)) {
+                continue;
+            }
+            if (($decoded['type'] ?? '') === ControlMessage::TYPE_SET_WORKER_POOL
+                && ($decoded['role'] ?? ControlMessage::ROLE_WORKER) === ControlMessage::ROLE_WORKER) {
+                $poolMessages[] = $decoded;
+            }
+        }
+
+        self::assertNotSame([], $poolMessages);
+        $lastPoolMessage = $poolMessages[\array_key_last($poolMessages)];
+        self::assertSame([18080], $lastPoolMessage['ports'] ?? []);
+    }
+
     private function createWorkerInfraContext(): ServiceContext
     {
         return new ServiceContext(
