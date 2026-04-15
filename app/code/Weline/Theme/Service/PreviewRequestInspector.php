@@ -53,6 +53,29 @@ final class PreviewRequestInspector
         return $this->request->getParam('editor_mode', '') === '1';
     }
 
+    public function shouldKeepPreviewStateOnlyForCurrentRequest(?string $path = null): bool
+    {
+        $path = $this->normalizePath($path);
+
+        if ($this->request->getParam('editor_mode', '') === '1') {
+            return true;
+        }
+
+        if ($this->request->getParam('visual_editor', '') === '1') {
+            return true;
+        }
+
+        $shell = \trim((string)$this->request->getParam('shell', ''));
+        if (\in_array($shell, [PreviewContextService::SHELL_THEME_EDITOR, PreviewContextService::SHELL_PAGEBUILDER], true)) {
+            return true;
+        }
+
+        return \str_starts_with($path, '/theme/backend/theme-editor/layout-preview')
+            || \str_starts_with($path, '/theme/backend/theme-editor/compile-layout')
+            || \str_starts_with($path, '/pagebuilder/backend/preview/')
+            || \str_starts_with($path, '/pagebuilder/backend/ai-site-agent/workspace-preview');
+    }
+
     public function isPreviewStaticPath(?string $path = null): bool
     {
         $path = $this->normalizePath($path);
@@ -89,6 +112,10 @@ final class PreviewRequestInspector
 
     public function shouldAllowPreviewTokenCookie(): bool
     {
+        if ($this->shouldKeepPreviewStateOnlyForCurrentRequest()) {
+            return false;
+        }
+
         // Do not auto-apply preview token cookie on theme-editor shell routes.
         // Editor entry URLs should stay deterministic and must not be polluted
         // by stale preview sessions unless token is explicitly passed in URL/header.
