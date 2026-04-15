@@ -34,6 +34,7 @@ use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Server\Log\WlsLogger;
 use Weline\Websites\Model\AiSiteBuilderSession as WebsitesAiSiteBuilderSession;
 use Weline\Websites\Service\AiWorkbench\DomainPurchaseWorkbenchService as WebsitesDomainPurchaseWorkbenchService;
@@ -1598,7 +1599,7 @@ SCRIPT;
             $structured = \is_array($result['structured'] ?? null) ? $result['structured'] : [];
             $virtualThemePlan = \is_array($result['virtual_theme_plan'] ?? null) ? $result['virtual_theme_plan'] : [];
             $taskPlanGenerationSource = (string)($result['generation_source'] ?? '');
-            if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
+            if ($this->shouldRejectTaskPlanGenerationSource($scope, $taskPlanGenerationSource)) {
                 throw new \RuntimeException((string)__('第二阶段任务方案生成失败：当前结果不是 AI 生成，请检查 AI 服务后重试'));
             }
             $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
@@ -1751,11 +1752,54 @@ SCRIPT;
             );
             $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
             if ((int)($scope['fake_mode'] ?? 0) !== 1 && $taskPlanGenerationSource !== 'ai') {
-                throw new \RuntimeException((string)__('第二阶段任务方案生成失败：未获取到 AI 生成结果，请检查 AI 服务配置后重试'));
+                throw new \RuntimeException('Task plan generation failed: AI result unavailable.');
             }
             $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
             $markdown = (string)($artifacts['markdown'] ?? '');
             $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
+            /*
+            $deterministicFallbackAllowed = false;
+            try {
+                $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts(
+                    $scope,
+                    $buildBlueprint
+                                'message' => (string)__('AI 正在持续生成任务方案，请保持连接'),
+                );
+            } catch (\Throwable $streamThrowable) {
+                // 流式阶段失败时回退到 deterministic 方案，保证 SSE 能给出稳定可确认草案。
+                $sse->sendEvent('progress', [
+                    'message' => (string)__('AI 流式任务方案生成失败，正在回退为稳定草案'),
+                    'prompt_mode' => $promptMode,
+                    'progress_percent' => 46,
+                ]);
+                $fallbackScope = \array_replace($scope, ['fake_mode' => 1]);
+                $artifacts = $this->virtualThemePlanService->buildTaskPlanArtifacts(
+                    $fallbackScope,
+                    $buildBlueprint /*
+                
+                $deterministicFallbackAllowed = true;
+            }
+            $taskPlanGenerationSource = (string)($artifacts['generation_source'] ?? '');
+            if ($this->shouldRejectTaskPlanGenerationSource($scope, $taskPlanGenerationSource, $deterministicFallbackAllowed)) {
+                throw new \RuntimeException((string)__('第二阶段任务方案生成失败：未获取到 AI 生成结果，请检查 AI 服务配置后重试'));
+            }
+            */
+            $virtualThemePlan = \is_array($artifacts['virtual_theme_plan'] ?? null) ? $artifacts['virtual_theme_plan'] : [];
+            $markdown = (string)($artifacts['markdown'] ?? '');
+            $structured = \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [];
+
+            if ($markdown !== '') {
+                foreach ($this->chunkStringForSse($markdown, 220) as $chunk) {
+                    if (\trim($chunk) === '') {
+                        continue;
+                    }
+                    $sse->sendEvent('chunk', [
+                        'content' => $chunk,
+                        'chunk' => $chunk,
+                        'prompt_mode' => $promptMode,
+                    ]);
+                }
+            }
 
             $taskPlanDirectoryTree = \is_array($structured['task_directory_tree'] ?? null) ? $structured['task_directory_tree'] : [];
             $scopePatch = [
@@ -1777,6 +1821,7 @@ SCRIPT;
                     'shared_task_count' => \count(\is_array($structured['shared_tasks'] ?? null) ? $structured['shared_tasks'] : []),
                     'page_task_count' => \array_sum(\array_map(static fn($items): int => \is_array($items) ? \count($items) : 0, \is_array($structured['page_tasks'] ?? null) ? $structured['page_tasks'] : [])),
                     'source' => 'task_plan_sse',
+                    'generation_source' => $taskPlanGenerationSource,
                 ],
                 'task_plan_confirmed' => 0,
             ];
@@ -2200,7 +2245,7 @@ SCRIPT;
             $adminId,
             AiSiteAgentSession::STAGE_VISUAL_EDIT,
             'block_regenerate',
-            __('姝ｅ湪重建区块：%{page}', ['page' => $pageLabel]),
+            __('正在重建区块：%{page}', ['page' => $pageLabel]),
             35,
             $pageType
         );
@@ -3983,6 +4028,21 @@ SCRIPT;
         return $chunks;
     }
 
+    /**
+     * @param array<string, mixed> $scope
+     */
+    private function shouldRejectTaskPlanGenerationSource(
+        array $scope,
+        string $generationSource,
+        bool $deterministicFallbackAllowed = false
+    ): bool {
+        if ((int)($scope['fake_mode'] ?? 0) === 1 || $generationSource === 'ai') {
+            return false;
+        }
+
+        return !($deterministicFallbackAllowed && \in_array($generationSource, ['deterministic', 'fallback'], true));
+    }
+
     private function registerAiChunkForwarder(
         SseWriter $sse,
         AiSiteAgentSession $session,
@@ -5113,20 +5173,20 @@ SCRIPT;
             if (\is_array($sharedComponents['header'] ?? null)) {
                 $scope['shared_components']['header'] = $sharedComponents['header'];
                 $scope = $this->buildTaskService->markTaskDone($scope, 'shared:header', ['region' => 'header']);
-                $sse->sendEvent('task_completed', [
+                $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                     'task_key' => 'shared:header',
                     'task_type' => 'shared_component',
                     'message' => (string)__('共享任务已完成：Header'),
-                ]);
+                ]));
             }
             if (\is_array($sharedComponents['footer'] ?? null)) {
                 $scope['shared_components']['footer'] = $sharedComponents['footer'];
                 $scope = $this->buildTaskService->markTaskDone($scope, 'shared:footer', ['region' => 'footer']);
-                $sse->sendEvent('task_completed', [
+                $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                     'task_key' => 'shared:footer',
                     'task_type' => 'shared_component',
                     'message' => (string)__('共享任务已完成：Footer'),
-                ]);
+                ]));
             }
             $this->appendWorkspaceEvent(
                 $session->getId(),
@@ -5237,11 +5297,11 @@ SCRIPT;
                     ],
                 ]
             );
-            $sse->sendEvent('task_completed', [
+            $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                 'task_key' => 'page:' . $pageType,
                 'task_type' => 'page_group',
                 'message' => (string)__('页面任务已完成：%{page}', ['page' => $pageLabel]),
-            ]);
+            ]));
         }
 
         $now = $lastGeneratedAt;
@@ -5281,7 +5341,7 @@ SCRIPT;
 
         $currentStep++;
         $progressPercent = (int)(($currentStep / $totalSteps) * 100);
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('姝ｅ湪鍑嗗缃戠珯璧勬枡'), $progressPercent);
+        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('正在准备网站资料'), $progressPercent);
         $draftWebsite = $this->draftWebsiteService->ensureDraftWebsite($scope, $scope['website_profile']);
         $scope['draft_website_id'] = (int)$draftWebsite['website_id'];
         $scope['website_id'] = (int)$draftWebsite['website_id'];
@@ -5313,7 +5373,7 @@ SCRIPT;
                     $adminId,
                     AiSiteAgentSession::STAGE_VISUAL_EDIT,
                     'build',
-                    $region === 'header' ? __('姝ｅ湪鐢熸垚鍏变韩 Header') : __('姝ｅ湪鐢熸垚鍏变韩 Footer'),
+                    $region === 'header' ? __('正在生成共享 Header') : __('正在生成共享 Footer'),
                     $progressPercent
                 );
                 $component = $pageComponentGenerationService->generateSharedComponent($region, $scope['website_profile'], $scope);
@@ -5324,8 +5384,8 @@ SCRIPT;
                 $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
 
                 $message = $region === 'header'
-                    ? (string)__('鍏变韩浠诲姟宸插畬鎴愶細Header')
-                    : (string)__('鍏变韩浠诲姟宸插畬鎴愶細Footer');
+                    ? (string)__('共享任务已完成：Header')
+                    : (string)__('共享任务已完成：Footer');
                 $this->appendWorkspaceEvent(
                     $session->getId(),
                     $adminId,
@@ -5338,12 +5398,12 @@ SCRIPT;
                 $sharedState = $this->buildWorkspaceEventStatePayload(
                     $this->buildWorkspaceState($freshShared, $adminId, 80, true)
                 );
-                $sse->sendEvent('task_completed', [
+                $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                     'task_key' => $taskKey,
                     'task_type' => $taskType,
                     'message' => $message,
                     'state' => $sharedState,
-                ]);
+                ]));
                 continue;
             }
 
@@ -5368,7 +5428,7 @@ SCRIPT;
                 $adminId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 'build',
-                __('姝ｅ湪鐢熸垚 HTML 鍖哄潡锛?{page}', ['page' => $pageLabel]),
+                __('正在生成 HTML 区块：{page}', ['page' => $pageLabel]),
                 $progressPercent,
                 $pageType
             );
@@ -5423,14 +5483,15 @@ SCRIPT;
                 $adminId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 'page_generated',
-                (string)__('椤甸潰宸茬敓鎴愶細%{page}', ['page' => $pageLabel]),
+                (string)__('页面已生成：%{page}', ['page' => $pageLabel]),
                 [
                     'operation' => 'build',
                     'page_type' => $pageType,
                     'details' => ['section_code' => $sectionCode],
                 ]
             );
-            $sse->sendEvent('page_generated', [
+            $sse->sendEvent('page_generated', $this->enrichTaskEventPayload($scope, [
+                'task_key' => $taskKey,
                 'page_type' => $pageType,
                 'page_label' => $pageLabel,
                 'page_id' => $pageId,
@@ -5438,13 +5499,13 @@ SCRIPT;
                 'progress_percent' => $progressPercent,
                 'section_code' => $sectionCode,
                 'state' => $state,
-            ]);
-            $sse->sendEvent('task_completed', [
+            ]));
+            $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                 'task_key' => $taskKey,
                 'task_type' => $taskType,
-                'message' => (string)__('鍖哄潡浠诲姟宸插畬鎴愶細%{page}', ['page' => $pageLabel]),
+                'message' => (string)__('区块任务已完成：%{page}', ['page' => $pageLabel]),
                 'state' => $state,
-            ]);
+            ]));
         }
 
         $now = \date('Y-m-d H:i:s');
@@ -5456,19 +5517,6 @@ SCRIPT;
             'task_summary' => $this->buildTaskService->summarize($scope),
         ];
         $scope['workspace_status'] = AiSiteScopeCompatibilityService::WORKSPACE_STATUS_CAN_PUBLISH;
-        /*
-        $scope['active_operation'] = \array_replace(\is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [], ['status' => 'done', 'updated_at' => $now, 'message' => (string)__('HTML 鍖哄潡宸茬敓鎴?)]);
-
-        $this->sessionService->replaceScope($session->getId(), $adminId, $scope);
-        $this->sessionService->bindWebsite($session->getId(), $adminId, (int)$draftWebsite['website_id']);
-        $this->sessionService->bindVirtualTheme($session->getId(), $adminId, 0);
-        $this->sessionService->setStage($session->getId(), $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT);
-        $this->sessionService->setPublishStatus($session->getId(), $adminId, AiSiteAgentSession::PUBLISH_STATUS_DRAFT);
-
-        $this->sendOperationProgress($sse, $session, $adminId, AiSiteAgentSession::STAGE_VISUAL_EDIT, 'build', __('HTML 鍖哄潡宸插氨缁紝鍙瑙堟垨鍙戝竷'), 100);
-
-        return ['message' => (string)__('HTML 鍖哄潡鏋勫缓瀹屾垚'), 'draft_website_id' => (int)$draftWebsite['website_id'], 'virtual_theme_id' => 0, 'page_types' => $pageTypes];
-        */
         $scope['active_operation'] = \array_replace(
             \is_array($scope['active_operation'] ?? null) ? $scope['active_operation'] : [],
             ['status' => 'done', 'updated_at' => $now, 'message' => (string)__('HTML blocks generated')]
@@ -5888,12 +5936,12 @@ SCRIPT;
                     ],
                 ]
             );
-            $sse->sendEvent('task_completed', [
+            $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                 'task_key' => 'shared:' . $region,
                 'task_type' => 'shared_component',
                 'message' => $message,
                 'state' => $state,
-            ]);
+            ]));
         }
 
         // 步骤 3-N: 逐个生成每个页面类型
@@ -5988,7 +6036,8 @@ SCRIPT;
             }
 
             // 发送页面生成完成事件
-            $sse->sendEvent('page_generated', [
+            $sse->sendEvent('page_generated', $this->enrichTaskEventPayload($scope, [
+                'task_key' => 'page:' . $pageType,
                 'page_type' => $pageType,
                 'page_label' => $pageLabel,
                 'page_id' => $pageId,
@@ -5996,7 +6045,7 @@ SCRIPT;
                 'progress_percent' => $progressPercent,
                 'section_count' => \count(\is_array($blueprint['sections'] ?? null) ? $blueprint['sections'] : []),
                 'state' => $state,
-            ]);
+            ]));
             $this->appendWorkspaceEvent(
                 $session->getId(),
                 $adminId,
@@ -6012,12 +6061,12 @@ SCRIPT;
                     ],
                 ]
             );
-            $sse->sendEvent('task_completed', [
+            $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                 'task_key' => 'page:' . $pageType,
                 'task_type' => 'page_group',
                 'message' => (string)__('页面任务已完成：%{page}', ['page' => $pageLabel]),
                 'state' => $state,
-            ]);
+            ]));
         }
 
         // 最终步骤：完成构建
@@ -6463,12 +6512,12 @@ SCRIPT;
                 $sharedState = $this->buildWorkspaceEventStatePayload(
                     $this->buildWorkspaceState($freshShared, $adminId, 80, true)
                 );
-                $sse->sendEvent('task_completed', [
+                $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                     'task_key' => $taskKey,
                     'task_type' => $taskType,
                     'message' => $message,
                     'state' => $sharedState,
-                ]);
+                ]));
                 continue;
             }
 
@@ -6565,14 +6614,15 @@ SCRIPT;
                 $adminId,
                 AiSiteAgentSession::STAGE_VISUAL_EDIT,
                 'page_generated',
-                (string)__('椤甸潰宸茬敓鎴愶細%{page}', ['page' => $pageLabel]),
+                (string)__('页面已生成：%{page}', ['page' => $pageLabel]),
                 [
                     'operation' => 'build',
                     'page_type' => $pageType,
                     'details' => ['section_code' => $sectionCode, 'virtual_theme_id' => (int)$scope['virtual_theme_id']],
                 ]
             );
-            $sse->sendEvent('page_generated', [
+            $sse->sendEvent('page_generated', $this->enrichTaskEventPayload($scope, [
+                'task_key' => $taskKey,
                 'page_type' => $pageType,
                 'page_label' => $pageLabel,
                 'page_id' => $pageId,
@@ -6580,13 +6630,13 @@ SCRIPT;
                 'progress_percent' => $progressPercent,
                 'section_code' => $sectionCode,
                 'state' => $state,
-            ]);
-            $sse->sendEvent('task_completed', [
+            ]));
+            $sse->sendEvent('task_completed', $this->enrichTaskEventPayload($scope, [
                 'task_key' => $taskKey,
                 'task_type' => $taskType,
                 'message' => (string)__('Theme section task complete: %{page}', ['page' => $pageLabel]),
                 'state' => $state,
-            ]);
+            ]));
         }
 
         $now = \date('Y-m-d H:i:s');
@@ -6883,6 +6933,54 @@ SCRIPT;
             $publishStatus
         );
         $this->appendWorkspaceEvent($session->getId(), $adminId, $stageCode, 'operation_progress', $message, $payload);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function enrichTaskEventPayload(array $scope, array $payload): array
+    {
+        $taskKey = \trim((string)($payload['task_key'] ?? ''));
+        if ($taskKey === '') {
+            return $payload;
+        }
+        $runtime = $this->resolveTaskRuntimeContextForEvent($scope, $taskKey);
+        if ($runtime === []) {
+            return $payload;
+        }
+        return \array_replace($payload, [
+            'task_session_id' => (string)($runtime['task_session_id'] ?? ''),
+            'task_runtime_context' => $runtime,
+            'task_sse_channel' => 'task-sse:' . $taskKey,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $scope
+     * @return array<string, mixed>
+     */
+    private function resolveTaskRuntimeContextForEvent(array $scope, string $taskKey): array
+    {
+        $definition = $this->buildTaskService->getTaskDefinition($scope, $taskKey);
+        $runtime = \is_array($definition['runtime_context'] ?? null) ? $definition['runtime_context'] : [];
+        if ($runtime !== []) {
+            return $runtime;
+        }
+        $stateMap = \is_array($scope['build_tasks'] ?? null) ? $scope['build_tasks'] : [];
+        $state = \is_array($stateMap[$taskKey] ?? null) ? $stateMap[$taskKey] : [];
+        $runtime = \is_array($state['runtime_context'] ?? null) ? $state['runtime_context'] : [];
+        if ($runtime !== []) {
+            return $runtime;
+        }
+        $sessionScope = \trim((string)($scope['public_id'] ?? $scope['session_id'] ?? ''));
+        return [
+            'session_id' => $sessionScope,
+            'task_key' => $taskKey,
+            'task_session_id' => $sessionScope !== '' ? \sha1($sessionScope . ':' . $taskKey) : '',
+            'stream_session_key' => $sessionScope !== '' ? ($sessionScope . ':' . $taskKey) : $taskKey,
+        ];
     }
 
     /**
