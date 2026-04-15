@@ -1,6 +1,7 @@
 ﻿<script>
 (function () {
     'use strict';
+    var PB_SSE_CONNECT_DELAY_MS = 5000;
 
     var isGuidedUi = <?= $guidedUi ? 'true' : 'false' ?>;
     var publicId = <?= \json_encode($publicId, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
@@ -96,6 +97,14 @@
         }
         return function () {};
     }
+
+    function normalizePlanSseUrl(url) {
+        var normalized = String(url || '').trim();
+        if (normalized === '') {
+            return normalized;
+        }
+        return normalized.replace('/post-plan-sse', '/plan-sse');
+    }
     // 防止在函数尚未赋值前被其它脚本直接调用导致 ReferenceError
     if (typeof window.updateTaskSummaryFromState !== 'function') {
         window.updateTaskSummaryFromState = function () {};
@@ -106,18 +115,49 @@
         if (!workspaceState || typeof workspaceState !== 'object') {
             return;
         }
+        // 供预览内链接重写器与历史确认方案只读预览复用
+        if (workspaceState.pagebuilder_pages_by_type && typeof workspaceState.pagebuilder_pages_by_type === 'object') {
+            window.__pbWorkspacePagesByType = workspaceState.pagebuilder_pages_by_type;
+        }
+        var scope = workspaceState.scope && typeof workspaceState.scope === 'object' ? workspaceState.scope : {};
+        window.__pbWorkspaceConfirmedPlan = {
+            markdown: String(workspaceState.confirmed_plan_markdown || scope.plan_markdown || ''),
+            confirmed_at: String(workspaceState.plan_confirmed_at || scope.plan_confirmed_at || ''),
+            signature: String(workspaceState.confirmed_plan_signature || scope.execution_blueprint_confirmed_signature || ''),
+            plan_locale: String((scope.plan_locale || (scope.website_profile && scope.website_profile.plan_locale) || '')),
+        };
+        var vtPlan = scope.virtual_theme_plan && typeof scope.virtual_theme_plan === 'object' ? scope.virtual_theme_plan : {};
+        window.__pbWorkspaceConfirmedTaskPlan = {
+            markdown: String(vtPlan.confirmed_markdown || ''),
+            confirmed_markdown: String(vtPlan.confirmed_markdown || ''),
+            confirmed_at: String(workspaceState.task_plan_confirmed_at || vtPlan.confirmed_at || ''),
+            signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
+            task_plan_signature: String(vtPlan.confirmed_signature || vtPlan.plan_signature || ''),
+            plan_locale: String((scope.plan_locale || (scope.website_profile && scope.website_profile.plan_locale) || '')),
+            structured: vtPlan.confirmed && typeof vtPlan.confirmed === 'object' ? vtPlan.confirmed : {},
+        };
         syncGuidedProfileDefaultsFromWorkspaceState(workspaceState);
         if (workspaceState.plan && typeof workspaceState.plan === 'object') {
             currentPlanPayload = workspaceState.plan;
             if (typeof updatePlanModalContent === 'function') {
                 updatePlanModalContent(String((workspaceState.plan.markdown || '')));
             }
+        } else {
+            var fallbackPlanMarkdown = String(scope.plan_markdown || '').trim();
+            if (fallbackPlanMarkdown !== '') {
+                currentPlanPayload = Object.assign({}, currentPlanPayload || {}, {
+                    markdown: fallbackPlanMarkdown
+                });
+                if (typeof updatePlanModalContent === 'function') {
+                    updatePlanModalContent(fallbackPlanMarkdown);
+                }
+            }
         }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'plan_confirmed')) {
             planConfirmedState = !!workspaceState.plan_confirmed;
         }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'plan_sse_url')) {
-            planSseUrl = String(workspaceState.plan_sse_url || '');
+            planSseUrl = normalizePlanSseUrl(workspaceState.plan_sse_url || '');
         }
         if (Object.prototype.hasOwnProperty.call(workspaceState, 'has_virtual_theme_plan')) {
             hasVirtualThemePlanState = !!workspaceState.has_virtual_theme_plan;
@@ -169,10 +209,18 @@
     workspaceApi.getHasPendingBuildTasksState = function () {
         return !!hasPendingBuildTasksState;
     };
+    // 暴露方案渲染函数给 stream/runtime 脚本，确保 SSE chunk 到达时 Markdown 与预览同步刷新
+    workspaceApi.updatePlanModalContent = function (markdown) {
+        return updatePlanModalContent(markdown);
+    };
     window.__pbWorkspaceApi = workspaceApi;
     // 向后兼容旧调用入口
     window.hydrateWorkspaceFromState = function (workspaceState) {
         return window.__pbWorkspaceApi.hydrateWorkspaceFromState(workspaceState);
+    };
+    // 兼容历史直接调用 window.updatePlanModalContent 的逻辑（如 script-stream）
+    window.updatePlanModalContent = function (markdown) {
+        return updatePlanModalContent(markdown);
     };
     
     function mergeVirtualPagesByTypeState(pages) {
@@ -201,6 +249,7 @@
         siteTitleRequired: <?= \json_encode((string)__('请先填写网站名称，再开始生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         domainRequiredForBuild: <?= \json_encode((string)__('请先填写目标域名，再确认生成。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planStartUnavailable: <?= \json_encode((string)__('当前无法生成阶段一方案，请刷新页面后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        planSaving: <?= \json_encode((string)__('正在保存方案配置，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planGenerating: <?= \json_encode((string)__('正在生成阶段一方案，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planRegeneratingByPageTypes: <?= \json_encode((string)__('页面类型已变更，正在重建阶段一方案，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planRegeneratingByLocale: <?= \json_encode((string)__('方案语言已变更，正在重建阶段一方案，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -214,14 +263,18 @@
         planModeRebuild: <?= \json_encode((string)__('重建方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planModeReady: <?= \json_encode((string)__('可在此继续微调或重建阶段一方案。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planModeUnavailable: <?= \json_encode((string)__('当前环境尚未提供阶段一方案流式接口，请先使用基础生成与确认流程。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        planModeRequiresDraft: <?= \json_encode((string)__('请先生成阶段一方案，再进行微调或重建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planModeRunning: <?= \json_encode((string)__('正在执行阶段一方案流式处理，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         planModeDone: <?= \json_encode((string)__('阶段一方案已更新，请确认后再进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        planFriendlyInvalidAiJson: <?= \json_encode((string)__('AI 返回内容格式异常，阶段一方案暂未生成成功。请点击“重新生成阶段一方案”再试一次。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanStartUnavailable: <?= \json_encode((string)__('当前无法生成阶段二任务计划，请稍后重试。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanGenerating: <?= \json_encode((string)__('正在生成阶段二任务计划，请稍候…'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanGenerated: <?= \json_encode((string)__('阶段二任务计划已生成，请确认后再进入构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanConfirmRequired: <?= \json_encode((string)__('请先确认阶段二任务计划，再开始执行构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanConfirmSaved: <?= \json_encode((string)__('阶段二任务计划已保存。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanConfirmStartBuildQuestion: <?= \json_encode((string)__('阶段二任务计划已保存，是否立即开始构建？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        immediateGenerate: <?= \json_encode((string)__('立即生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
+        laterGenerate: <?= \json_encode((string)__('稍后生成'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanDeferred: <?= \json_encode((string)__('已保留阶段二任务计划，你可以稍后开始构建。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanRequiredByBuild: <?= \json_encode((string)__('构建前需要先确认阶段二任务计划。'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
         taskPlanModeRefine: <?= \json_encode((string)__('微调任务方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>,
@@ -407,7 +460,7 @@
     }
 
     function updateGuidedSteps(nextStage) {
-        var orderedStages = ['virtual_theme', 'visual_edit', 'publish'];
+        var orderedStages = ['plan', 'visual_edit', 'publish'];
         var activeIndex = orderedStages.indexOf(nextStage);
         if (activeIndex < 0) {
             activeIndex = 0;
@@ -419,13 +472,36 @@
     }
 
     function switchWorkspaceStage(nextStage) {
-        currentWorkspaceStage = String(nextStage || 'virtual_theme');
+        currentWorkspaceStage = String(nextStage || 'plan');
         document.querySelectorAll('[data-stage-panel]').forEach(function (panel) {
             var stage = String(panel.getAttribute('data-stage-panel') || '');
             panel.classList.toggle('d-none', stage !== currentWorkspaceStage);
         });
         updateStageButtons(currentWorkspaceStage);
         updateGuidedSteps(currentWorkspaceStage);
+    }
+
+    function persistWorkspaceStage(nextStage, options) {
+        var targetStage = String(nextStage || 'plan');
+        var opts = options && typeof options === 'object' ? options : {};
+        switchWorkspaceStage(targetStage);
+        if (!setStageUrl || !publicId) {
+            return Promise.resolve(null);
+        }
+        return postForm(setStageUrl, {
+            public_id: publicId,
+            stage: targetStage
+        }).then(function (data) {
+            if (data && data.success && data.data && typeof data.data === 'object') {
+                hydrateWorkspaceFromState(data.data);
+            }
+            return data;
+        }).catch(function (error) {
+            if (!opts.silent) {
+                console.warn('persistWorkspaceStage failed:', error);
+            }
+            return null;
+        });
     }
 
     function getVisualPreviewHost() {
@@ -799,6 +875,7 @@
     var recommendationListEl = document.getElementById('pb-ai-recommended-domain-list');
     var domainPurchaseState = <?= \json_encode($domainPurchaseState, \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
     var domainPurchaseSource = null;
+    var domainPurchaseSourceStartTimer = null;
 
     function getRegistrarSelection() {
         var hidden = document.getElementById('pb-ai-registrar-account_value');
@@ -901,6 +978,10 @@
     }
 
     function closeDomainPurchaseSource() {
+        if (domainPurchaseSourceStartTimer) {
+            window.clearTimeout(domainPurchaseSourceStartTimer);
+            domainPurchaseSourceStartTimer = null;
+        }
         if (!domainPurchaseSource) {
             return;
         }
@@ -920,55 +1001,63 @@
             var requestUrl = new URL(domainPurchaseSseBaseUrl, window.location.origin);
             requestUrl.searchParams.set('public_id', linkedPublicId);
             requestUrl.searchParams.set('execution_token', executionToken);
-            domainPurchaseSource = new EventSource(requestUrl.toString());
         } catch (error) {
             toast('error', <?= \json_encode((string)__('域名进度事件流创建失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
             return false;
         }
-
-        domainPurchaseSource.addEventListener('start', function (event) {
-            var payload = parsePayload(event);
-            if (payload && payload.message) {
-                syncDomainPurchaseCard({ status: 'running', message: payload.message });
-            }
-        });
-        domainPurchaseSource.addEventListener('progress', function (event) {
-            var payload = parsePayload(event);
-            if (payload && payload.state && typeof payload.state === 'object') {
-                syncDomainPurchaseCard(payload.state);
-                if (payload.state && payload.state.domain) {
-                    setAllTargetDomainInputs(String(payload.state.domain || ''));
-                }
-            } else if (payload && payload.message) {
-                syncDomainPurchaseCard({ status: 'running', message: payload.message });
-            }
-        });
-        domainPurchaseSource.addEventListener('error', function (event) {
-            var payload = parsePayload(event);
-            if (payload && payload.message) {
-                syncDomainPurchaseCard({ status: 'failed', message: payload.message });
+        domainPurchaseSourceStartTimer = window.setTimeout(function () {
+            domainPurchaseSourceStartTimer = null;
+            try {
+                domainPurchaseSource = new EventSource(requestUrl.toString());
+            } catch (error) {
+                toast('error', <?= \json_encode((string)__('域名进度事件流创建失败'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>);
                 return;
             }
-            var currentStatus = String((domainPurchaseState && domainPurchaseState.status) || 'idle');
-            if (currentStatus === 'queued' || currentStatus === 'running') {
-                syncDomainPurchaseCard({
-                    status: currentStatus,
-                    message: <?= \json_encode((string)__('连接重试中，域名任务可能仍在后台执行...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
-                });
-            }
-        });
-        domainPurchaseSource.addEventListener('done', function (event) {
-            var payload = parsePayload(event);
-            if (payload && payload.state && typeof payload.state === 'object') {
-                syncDomainPurchaseCard(payload.state);
-            } else if (payload && payload.message) {
-                syncDomainPurchaseCard({
-                    status: payload.success === false ? 'failed' : 'completed',
-                    message: payload.message
-                });
-            }
-            closeDomainPurchaseSource();
-        });
+
+            domainPurchaseSource.addEventListener('start', function (event) {
+                var payload = parsePayload(event);
+                if (payload && payload.message) {
+                    syncDomainPurchaseCard({ status: 'running', message: payload.message });
+                }
+            });
+            domainPurchaseSource.addEventListener('progress', function (event) {
+                var payload = parsePayload(event);
+                if (payload && payload.state && typeof payload.state === 'object') {
+                    syncDomainPurchaseCard(payload.state);
+                    if (payload.state && payload.state.domain) {
+                        setAllTargetDomainInputs(String(payload.state.domain || ''));
+                    }
+                } else if (payload && payload.message) {
+                    syncDomainPurchaseCard({ status: 'running', message: payload.message });
+                }
+            });
+            domainPurchaseSource.addEventListener('error', function (event) {
+                var payload = parsePayload(event);
+                if (payload && payload.message) {
+                    syncDomainPurchaseCard({ status: 'failed', message: payload.message });
+                    return;
+                }
+                var currentStatus = String((domainPurchaseState && domainPurchaseState.status) || 'idle');
+                if (currentStatus === 'queued' || currentStatus === 'running') {
+                    syncDomainPurchaseCard({
+                        status: currentStatus,
+                        message: <?= \json_encode((string)__('连接重试中，域名任务可能仍在后台执行...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+                    });
+                }
+            });
+            domainPurchaseSource.addEventListener('done', function (event) {
+                var payload = parsePayload(event);
+                if (payload && payload.state && typeof payload.state === 'object') {
+                    syncDomainPurchaseCard(payload.state);
+                } else if (payload && payload.message) {
+                    syncDomainPurchaseCard({
+                        status: payload.success === false ? 'failed' : 'completed',
+                        message: payload.message
+                    });
+                }
+                closeDomainPurchaseSource();
+            });
+        }, PB_SSE_CONNECT_DELAY_MS);
 
         return true;
     }
@@ -1192,6 +1281,109 @@
             startDomainPurchaseFromWorkbench();
         });
     }
+
+    // T36: 查看历史确认方案弹窗
+    function showConfirmedPlanModal(planType) {
+        var modalEl = document.getElementById('pb-ai-confirmed-plan-view-modal');
+        if (!modalEl) {
+            return;
+        }
+        var planTypeBadge = document.getElementById('pb-ai-confirmed-plan-type-badge');
+        var planMdContent = document.getElementById('pb-ai-confirmed-plan-md-content');
+        var planRenderedContent = document.getElementById('pb-ai-confirmed-plan-rendered-content');
+        var planConfirmedAt = document.getElementById('pb-ai-confirmed-plan-confirmed-at');
+        var planSignature = document.getElementById('pb-ai-confirmed-plan-signature');
+        var planLocale = document.getElementById('pb-ai-confirmed-plan-locale');
+
+        var planData = null;
+        var markdown = '';
+        var confirmedAt = '';
+        var signature = '';
+        var locale = '';
+        var typeLabel = '';
+
+        if (planType === 'stage1') {
+            typeLabel = '<?= __('阶段一方案') ?>';
+            planData = window.__pbWorkspaceConfirmedPlan || {};
+            markdown = planData.markdown || planData.markdown_content || '';
+            confirmedAt = planData.confirmed_at || '';
+            signature = planData.signature || planData.execution_blueprint_signature || '';
+            locale = planData.plan_locale || '';
+        } else if (planType === 'stage2') {
+            typeLabel = '<?= __('阶段二任务方案') ?>';
+            planData = window.__pbWorkspaceConfirmedTaskPlan || {};
+            markdown = planData.markdown || planData.confirmed_markdown || '';
+            confirmedAt = planData.confirmed_at || planData.task_plan_confirmed_at || '';
+            signature = planData.signature || planData.task_plan_signature || '';
+            locale = planData.plan_locale || '';
+        }
+
+        if (planTypeBadge) planTypeBadge.textContent = typeLabel;
+        if (planMdContent) planMdContent.textContent = markdown || '<?= __('暂无内容') ?>';
+        if (planRenderedContent) {
+            // 简单的 Markdown 渲染（实际项目中应使用 marked.js 等库）
+            planRenderedContent.innerHTML = '<div class="text-muted"><?= __('预览渲染需要前端 Markdown 库支持') ?></div>';
+        }
+        if (planConfirmedAt) planConfirmedAt.textContent = confirmedAt || '-';
+        if (planSignature) planSignature.textContent = signature || '-';
+        if (planLocale) planLocale.textContent = locale || '-';
+
+        // 存储当前数据供复制使用
+        window.__pbCurrentConfirmedPlanData = planData;
+
+        // 显示 Modal
+        var modal = window.bootstrap && window.bootstrap.Modal ? new window.bootstrap.Modal(modalEl) : null;
+        if (modal) {
+            modal.show();
+        } else if (typeof $ !== 'undefined' && $.fn.modal) {
+            $(modalEl).modal('show');
+        }
+    }
+
+    // T36: 复制确认方案 Markdown
+    function copyConfirmedPlanMarkdown() {
+        var data = window.__pbCurrentConfirmedPlanData || {};
+        var markdown = data.markdown || data.markdown_content || '';
+        if (!markdown) {
+            toast('warning', '<?= __('没有可复制的内容') ?>');
+            return;
+        }
+        navigator.clipboard.writeText(markdown).then(function () {
+            toast('success', '<?= __('Markdown 方案已复制到剪贴板') ?>');
+        }).catch(function () {
+            toast('error', '<?= __('复制失败，请手动复制') ?>');
+        });
+    }
+
+    // T36: 复制确认方案 JSON
+    function copyConfirmedPlanJson() {
+        var data = window.__pbCurrentConfirmedPlanData || {};
+        var json = JSON.stringify(data, null, 2);
+        if (!json || json === '{}') {
+            toast('warning', '<?= __('没有可复制的内容') ?>');
+            return;
+        }
+        navigator.clipboard.writeText(json).then(function () {
+            toast('success', '<?= __('结构化数据已复制到剪贴板') ?>');
+        }).catch(function () {
+            toast('error', '<?= __('复制失败，请手动复制') ?>');
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // 绑定查看历史方案按钮
+        document.querySelectorAll('.pb-ai-view-confirmed-plan').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var planType = btn.getAttribute('data-plan-type') || 'stage1';
+                showConfirmedPlanModal(planType);
+            });
+        });
+        // 绑定复制按钮
+        var copyMdBtn = document.getElementById('pb-ai-copy-plan-markdown');
+        if (copyMdBtn) copyMdBtn.addEventListener('click', copyConfirmedPlanMarkdown);
+        var copyJsonBtn = document.getElementById('pb-ai-copy-plan-json');
+        if (copyJsonBtn) copyJsonBtn.addEventListener('click', copyConfirmedPlanJson);
+    });
 
     function normalizePageTypesUserCustomizedFlag(raw) {
         if (raw === true || raw === 1 || raw === '1') {
@@ -1721,6 +1913,159 @@
             var sep = s.indexOf('?') >= 0 ? '&' : '?';
             frame.setAttribute('src', s + sep + '_pb_pv=' + encodeURIComponent(String(Date.now())));
         }
+        // T31: 设置 iframe 加载完成后重写内部链接
+        frame.onload = function () {
+            applyPreviewLinkRewrite(frame);
+        };
+    }
+
+    /**
+     * T31: 预览内链接重写器
+     * 拦截 iframe 内的内部页面类型链接，重写到可视化编辑上下文
+     * 外部链接保持原语义不变
+     */
+    function applyPreviewLinkRewrite(frame) {
+        if (!frame || !frame.contentWindow || !frame.contentDocument) {
+            return;
+        }
+        try {
+            var doc = frame.contentDocument;
+            if (!doc) {
+                return;
+            }
+            var currentBaseUrl = frame.getAttribute('src') || '';
+            var currentHost = '';
+            try {
+                var currentUrlObj = new URL(currentBaseUrl, window.location.href);
+                currentHost = currentUrlObj.origin;
+            } catch (e) {
+                currentHost = '';
+            }
+            var links = doc.querySelectorAll('a[href]');
+            links.forEach(function (link) {
+                var href = link.getAttribute('href');
+                if (!href) {
+                    return;
+                }
+                // 跳过空锚点、JavaScript 协议
+                if (href.trim() === '' || href.trim().startsWith('#') || href.trim().startsWith('javascript:')) {
+                    return;
+                }
+                var fullHref = href;
+                try {
+                    var linkUrl = new URL(href, currentBaseUrl);
+                    fullHref = linkUrl.href;
+                } catch (e) {
+                    // 相对路径，保持原值
+                }
+                // 检查是否是外部链接（不同域名）
+                if (currentHost !== '' && !fullHref.startsWith(currentHost)) {
+                    // 外部链接：标记为新窗口打开，保持原语义
+                    link.setAttribute('target', '_blank');
+                    link.setAttribute('rel', 'noopener noreferrer');
+                    return;
+                }
+                // 内部链接：解析页面类型并重写为可视化编辑上下文
+                var internalPath = fullHref.replace(currentHost, '');
+                // 提取路径中的页面类型标识（如 /about/, /contact/, /products/）
+                var pageType = detectPageTypeFromPath(internalPath);
+                if (pageType && typeof rewriteInternalLinkToVisualEdit === 'function') {
+                    var rewrittenUrl = rewriteInternalLinkToVisualEdit(pageType, fullHref);
+                    if (rewrittenUrl) {
+                        link.setAttribute('href', rewrittenUrl);
+                        link.removeAttribute('target');
+                    }
+                }
+            });
+        } catch (e) {
+            // 跨域访问或 iframe 未完全加载时静默忽略
+        }
+    }
+
+    /**
+     * T31: 从 URL 路径检测页面类型
+     * @param {string} path URL 路径
+     * @returns {string|null} 页面类型标识符
+     */
+    function detectPageTypeFromPath(path) {
+        if (!path) {
+            return null;
+        }
+        // 规范化路径
+        path = path.split('?')[0].split('#')[0].replace(/\/+$/, '').toLowerCase();
+        // 常见页面类型路径映射
+        var pageTypePatterns = {
+            'home_page': ['', '/', '/index', '/index.html', '/home'],
+            'about_page': ['/about', '/about-us', '/aboutus', '/guanyu'],
+            'contact_page': ['/contact', '/contact-us', '/contactus', '/lianxi'],
+            'product_page': ['/products', '/product', '/products.html', '/chanpin'],
+            'service_page': ['/services', '/service', '/services.html', '/fuwu'],
+            'blog_page': ['/blog', '/news', '/blogs', '/xinwen'],
+            'privacy_page': ['/privacy', '/privacy-policy', '/yinsizhengce'],
+            'terms_page': ['/terms', '/terms-of-service', '/fuwutiaokuan'],
+        };
+        for (var pageType in pageTypePatterns) {
+            if (!pageTypePatterns.hasOwnProperty(pageType)) {
+                continue;
+            }
+            var patterns = pageTypePatterns[pageType];
+            for (var i = 0; i < patterns.length; i++) {
+                if (path === patterns[i] || path.endsWith(patterns[i] + '/')) {
+                    return pageType;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * T31: 将内部页面类型链接重写为可视化编辑上下文
+     * @param {string} pageType 页面类型标识符
+     * @param {string} originalUrl 原始链接
+     * @returns {string|null} 重写后的 URL
+     */
+    function rewriteInternalLinkToVisualEdit(pageType, originalUrl) {
+        // 优先使用当前页面的 page_id 进行编辑
+        var pageId = getPageIdByType(pageType);
+        if (pageId && visualEditBaseUrl) {
+            try {
+                var editUrl = new URL(visualEditBaseUrl, window.location.href);
+                editUrl.searchParams.set('page_id', String(pageId));
+                editUrl.searchParams.set('_pb_ref', encodeURIComponent(originalUrl));
+                return editUrl.toString();
+            } catch (e) {
+                // Fallback
+            }
+        }
+        // 如果没有 page_id，尝试使用页面类型参数
+        if (visualEditBaseUrl) {
+            try {
+                var typeUrl = new URL(visualEditBaseUrl, window.location.href);
+                typeUrl.searchParams.set('page_type', pageType);
+                typeUrl.searchParams.set('_pb_ref', encodeURIComponent(originalUrl));
+                return typeUrl.toString();
+            } catch (e) {
+                // Fallback to original
+            }
+        }
+        // 无法重写时返回原始链接
+        return originalUrl;
+    }
+
+    /**
+     * T31: 根据页面类型获取 page_id
+     * @param {string} pageType 页面类型标识符
+     * @returns {number|string|null} page_id
+     */
+    function getPageIdByType(pageType) {
+        if (!pageType || !window.__pbWorkspacePagesByType) {
+            return null;
+        }
+        var pageData = window.__pbWorkspacePagesByType[pageType];
+        if (pageData && pageData.page_id) {
+            return parseInt(pageData.page_id, 10) || null;
+        }
+        return null;
     }
 
     function syncPreviewMetaFromState(workspaceState) {
@@ -2364,7 +2709,7 @@
 
         window.setTimeout(function () {
             terminal.start(url, { method: 'POST', body: formData });
-        }, 100);
+        }, PB_SSE_CONNECT_DELAY_MS);
 
         return true;
     }
@@ -3312,9 +3657,13 @@
     var currentPlanPayload = null;
     var currentPlanTriggerButton = null;
     var currentPlanMode = 'refine';
+    var rebuildPlanDefaultPrompt = '<?= \json_encode((string)__('我要重新生成方案，需要更卓越的建站方案'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>';
     var planSseHandlersBound = false;
     var planSseRunning = false;
+    var planModeLastSuccessNotifyFingerprint = '';
+    var planModeLastSuccessNotifyAt = 0;
     var planStartRequestPending = false;
+    var planEmptyPromptPending = false;
     var allowPlanModalClose = false;
     var currentTaskPlanPayload = null;
     var currentTaskPlanMode = 'refine_task_plan';
@@ -3395,7 +3744,7 @@
     }
 
     function updatePlanModalContent(markdown) {
-        var markdownText = String(markdown || '').trim();
+        var markdownText = normalizePlanMarkdownText(markdown);
         var mdContent = document.getElementById('pb-ai-plan-md-content');
         var previewContent = document.getElementById('pb-ai-plan-rendered-content');
         if (mdContent) {
@@ -3404,6 +3753,25 @@
         if (previewContent) {
             previewContent.innerHTML = renderPlanPreviewHtml(markdownText || messages.planGenerating);
         }
+    }
+
+    function normalizePlanMarkdownText(raw) {
+        var text = String(raw || '').trim();
+        if (!text) {
+            return '';
+        }
+        // 防止把 AI JSON 原文直接渲染到预览：优先提取 markdown 字段。
+        if ((text.charAt(0) === '{' || text.charAt(0) === '[') && text.indexOf('"markdown"') >= 0) {
+            try {
+                var parsed = JSON.parse(text);
+                if (parsed && typeof parsed === 'object' && typeof parsed.markdown === 'string') {
+                    return String(parsed.markdown || '').trim();
+                }
+            } catch (e) {
+                // ignore
+            }
+        }
+        return text;
     }
 
     function setPlanModalProgress(message, percent, enableConfirm) {
@@ -3419,6 +3787,27 @@
         if (confirmBtn) {
             confirmBtn.disabled = !enableConfirm;
         }
+    }
+
+    function normalizePlanFailureMessage(rawMessage) {
+        var text = String(rawMessage || '').trim();
+        if (text === '') {
+            return String(messages.networkError || '');
+        }
+        if (/invalid\s+ai\s+json/i.test(text)) {
+            return String(messages.planFriendlyInvalidAiJson || text);
+        }
+        return text;
+    }
+
+    function setPlanRetryButtonVisible(visible) {
+        var retryBtn = document.getElementById('pb-ai-plan-retry-generate');
+        if (!retryBtn) {
+            return;
+        }
+        var shouldShow = !!visible;
+        retryBtn.classList.toggle('d-none', !shouldShow);
+        retryBtn.disabled = !shouldShow || planStartRequestPending || planSseRunning;
     }
 
     function hidePlanGenerationModal(options) {
@@ -3469,22 +3858,45 @@
     }
 
     function hasPlanDraft() {
-        return !!(
-            currentPlanPayload
-            && typeof currentPlanPayload === 'object'
-            && String(currentPlanPayload.markdown || '').trim() !== ''
-        );
+        var payloadMarkdown = currentPlanPayload && typeof currentPlanPayload === 'object'
+            ? String(currentPlanPayload.markdown || '').trim()
+            : '';
+        if (payloadMarkdown !== '') {
+            return true;
+        }
+        if (currentPlanPayload && typeof currentPlanPayload === 'object') {
+            var payloadJson = currentPlanPayload.json && typeof currentPlanPayload.json === 'object'
+                ? currentPlanPayload.json
+                : {};
+            if (Object.keys(payloadJson).length > 0) {
+                return true;
+            }
+        }
+        var mdContent = document.getElementById('pb-ai-plan-md-content');
+        var renderedMarkdown = mdContent ? String(mdContent.textContent || '').trim() : '';
+        if (renderedMarkdown === '') {
+            return false;
+        }
+        return renderedMarkdown !== String(messages.planGenerating || '').trim();
     }
 
     function setPlanMode(mode) {
         currentPlanMode = String(mode || 'refine') === 'rebuild' ? 'rebuild' : 'refine';
         var refineBtn = document.getElementById('pb-ai-plan-mode-refine');
         var rebuildBtn = document.getElementById('pb-ai-plan-mode-rebuild');
+        var promptInput = document.getElementById('pb-ai-plan-mode-prompt');
         if (refineBtn) {
             refineBtn.classList.toggle('active', currentPlanMode === 'refine');
         }
         if (rebuildBtn) {
             rebuildBtn.classList.toggle('active', currentPlanMode === 'rebuild');
+        }
+        if (currentPlanMode === 'rebuild' && promptInput && String(promptInput.value || '').trim() === '') {
+            promptInput.value = String(rebuildPlanDefaultPrompt || '');
+        }
+        var runBtn = document.getElementById('pb-ai-plan-run-mode');
+        if (runBtn && !planSseRunning) {
+            runBtn.disabled = !hasPlanDraft();
         }
     }
 
@@ -3493,6 +3905,27 @@
         if (statusEl) {
             statusEl.textContent = String(message || '');
         }
+    }
+
+    function setPlanModeRunButtonLoading(loading) {
+        var runBtn = document.getElementById('pb-ai-plan-run-mode');
+        if (!runBtn) {
+            return;
+        }
+        if (loading) {
+            if (!runBtn.dataset.originalText) {
+                runBtn.dataset.originalText = String(runBtn.textContent || '');
+            }
+            runBtn.disabled = true;
+            runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            return;
+        }
+        runBtn.disabled = false;
+        runBtn.textContent = String(
+            runBtn.dataset.originalText
+            || runBtn.textContent
+            || <?= \json_encode((string)__('开始当前模式'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        );
     }
 
     function bindPlanModeSwitchers() {
@@ -3507,7 +3940,11 @@
                     return;
                 }
                 setPlanMode(mode);
-                setPlanModeStatus(String(planSseUrl || '').trim() ? messages.planModeReady : messages.planModeUnavailable);
+                setPlanModeStatus(
+                    !hasPlanDraft()
+                        ? messages.planModeRequiresDraft
+                        : (String(planSseUrl || '').trim() ? messages.planModeReady : messages.planModeUnavailable)
+                );
             });
         });
 
@@ -3537,6 +3974,55 @@
         return {};
     }
 
+    function resolvePlanTerminalErrorMessage(event, payload) {
+        var parsed = payload && typeof payload === 'object' ? payload : {};
+        var message = String((parsed && parsed.message) || '');
+        if (message !== '') {
+            return message;
+        }
+        if (event && typeof event.data === 'string' && String(event.data).trim() !== '') {
+            return String(event.data);
+        }
+        return messages.networkError || '';
+    }
+
+    function shouldNotifyPlanModeSuccess(payload) {
+        var now = Date.now();
+        var fingerprint = [
+            String((payload && payload.message) || ''),
+            String((payload && payload.prompt_mode) || ''),
+            String((payload && payload.plan_locale) || '')
+        ].join('|');
+        if (
+            planModeLastSuccessNotifyFingerprint === fingerprint
+            && (now - planModeLastSuccessNotifyAt) < 5000
+        ) {
+            return false;
+        }
+        planModeLastSuccessNotifyFingerprint = fingerprint;
+        planModeLastSuccessNotifyAt = now;
+        return true;
+    }
+
+    function extractPlanMarkdownFromPayload(payload) {
+        if (!payload || typeof payload !== 'object') {
+            return '';
+        }
+        if (payload.plan && typeof payload.plan === 'object') {
+            var fromPlan = String(payload.plan.markdown || '');
+            if (fromPlan.trim() !== '') {
+                return fromPlan;
+            }
+        }
+        if (payload.state && typeof payload.state === 'object' && payload.state.plan && typeof payload.state.plan === 'object') {
+            var fromState = String(payload.state.plan.markdown || '');
+            if (fromState.trim() !== '') {
+                return fromState;
+            }
+        }
+        return String(payload.markdown || payload.updated_markdown || '');
+    }
+
     function bindPlanSseTerminalHandlers() {
         var terminal = window.WelineSseTerminal ? window.WelineSseTerminal['pb-ai-plan-sse-terminal'] : null;
         if (!terminal) {
@@ -3553,6 +4039,7 @@
         }
         terminal.on('start', function () {
             planSseRunning = true;
+            setPlanModeRunButtonLoading(true);
             setPlanModeStatus(messages.planModeRunning);
             setPlanModalProgress(messages.planModeRunning, 40, false);
             if (typeof terminal.log === 'function') {
@@ -3563,11 +4050,13 @@
         terminal.on('progress', function (event) {
             var payload = parsePlanTerminalPayload(event);
             if (payload && payload.message) {
-                setPlanModeStatus(String(payload.message));
-                setPlanModalProgress(String(payload.message), parseInt(String(payload.progress_percent || 60), 10) || 60, false);
-                if (typeof terminal.log === 'function') {
+                var progressMsg = String(payload.message);
+                var isAiHintOnly = /AI\s*正在生成阶段一方案内容/.test(progressMsg);
+                setPlanModeStatus(progressMsg);
+                setPlanModalProgress(progressMsg, parseInt(String(payload.progress_percent || 60), 10) || 60, false);
+                if (!isAiHintOnly && typeof terminal.log === 'function') {
                     markPlanTerminalConnected();
-                    terminal.log(String(payload.message), 'progress', payload);
+                    terminal.log(progressMsg, 'progress', payload);
                 }
             }
         });
@@ -3585,31 +4074,81 @@
         });
         terminal.on('done', function (event) {
             planSseRunning = false;
+            setPlanModeRunButtonLoading(false);
             var payload = parsePlanTerminalPayload(event);
             var nextPlan = (payload && payload.plan && typeof payload.plan === 'object') ? payload.plan : null;
+            var payloadMarkdown = extractPlanMarkdownFromPayload(payload);
             if (nextPlan) {
                 currentPlanPayload = nextPlan;
                 updatePlanModalContent(String(nextPlan.markdown || ''));
+            } else if (String(payloadMarkdown || '').trim() !== '') {
+                currentPlanPayload = Object.assign({}, currentPlanPayload || {}, { markdown: String(payloadMarkdown) });
+                updatePlanModalContent(String(payloadMarkdown));
             }
             if (payload && payload.state && typeof payload.state === 'object') {
                 hydrateWorkspaceFromState(payload.state);
+            } else if (!nextPlan && String(payloadMarkdown || '').trim() === '' && window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
+                // 兜底：done 未携带 plan/state 时，主动刷新一次工作区状态，确保预览与 markdown 同步到最新方案
+                window.__pbWorkspaceApi.refreshWorkspaceStateFromServer();
+                window.setTimeout(function () {
+                    var latestMarkdown = String((currentPlanPayload && currentPlanPayload.markdown) || '').trim();
+                    if (latestMarkdown !== '') {
+                        updatePlanModalContent(latestMarkdown);
+                        setPlanModalProgress(messages.planModeDone, 100, true);
+                    }
+                }, 800);
             }
             setPlanModeStatus(messages.planModeDone);
             setPlanModalProgress(messages.planModeDone, 100, hasPlanDraft());
+            setPlanRetryButtonVisible(hasPlanDraft());
             if (typeof terminal.log === 'function') {
                 markPlanTerminalConnected();
                 terminal.log((payload && payload.message) ? String(payload.message) : messages.planModeDone, 'done', payload || {});
             }
+            if (shouldNotifyPlanModeSuccess(payload)) {
+                if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+                    window.BackendConfirm.show(
+                        (payload && payload.message) ? String(payload.message) : messages.planModeDone,
+                        { title: <?= \json_encode((string)__('阶段一方案已更新'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?> }
+                    );
+                } else if (window.BackendToast && typeof window.BackendToast.success === 'function') {
+                    window.BackendToast.success((payload && payload.message) ? String(payload.message) : messages.planModeDone);
+                }
+            }
+            if (typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
+            }
         });
         terminal.on('error', function (event) {
             planSseRunning = false;
+            setPlanModeRunButtonLoading(false);
             var payload = parsePlanTerminalPayload(event);
-            var message = String((payload && payload.message) || messages.networkError || '');
+            var message = resolvePlanTerminalErrorMessage(event, payload);
             setPlanModeStatus(message);
             setPlanModalProgress(message, 100, hasPlanDraft());
+            setPlanRetryButtonVisible(hasPlanDraft());
             if (typeof terminal.log === 'function') {
                 markPlanTerminalConnected();
                 terminal.log(message, 'error', payload || {});
+            }
+            if (typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
+            }
+        });
+        terminal.on('failed', function (event) {
+            planSseRunning = false;
+            setPlanModeRunButtonLoading(false);
+            var payload = parsePlanTerminalPayload(event);
+            var message = resolvePlanTerminalErrorMessage(event, payload);
+            setPlanModeStatus(message);
+            setPlanModalProgress(message, 100, hasPlanDraft());
+            setPlanRetryButtonVisible(hasPlanDraft());
+            if (typeof terminal.log === 'function') {
+                markPlanTerminalConnected();
+                terminal.log(message, 'error', payload || {});
+            }
+            if (typeof terminal.stop === 'function') {
+                terminal.stop({ suppressTransportError: true });
             }
         });
         planSseHandlersBound = true;
@@ -3617,7 +4156,13 @@
     }
 
     function startPlanModeStream(mode) {
-        var streamUrl = String(planSseUrl || '').trim();
+        var streamUrl = normalizePlanSseUrl(planSseUrl || '');
+        if (!hasPlanDraft()) {
+            setPlanModeStatus(messages.planModeRequiresDraft);
+            setPlanModalProgress(messages.planModeRequiresDraft, 100, false);
+            toast('warning', messages.planModeRequiresDraft);
+            return false;
+        }
         if (!streamUrl) {
             setPlanModeStatus(messages.planModeUnavailable);
             toast('warning', messages.planModeUnavailable);
@@ -3649,9 +4194,7 @@
         if (terminal.clear) {
             terminal.clear();
         }
-        if (runBtn) {
-            runBtn.disabled = true;
-        }
+        setPlanModeRunButtonLoading(true);
         planSseRunning = true;
         setPlanModeStatus(messages.planModeRunning);
         setPlanModalProgress(messages.planModeRunning, 40, false);
@@ -3660,14 +4203,11 @@
                 terminal.start(streamUrl, { method: 'POST', body: formData });
             } catch (error) {
                 planSseRunning = false;
+                setPlanModeRunButtonLoading(false);
                 setPlanModeStatus((error && error.message) ? String(error.message) : messages.networkError);
                 setPlanModalProgress(messages.networkError, 100, hasPlanDraft());
-            } finally {
-                if (runBtn) {
-                    runBtn.disabled = false;
-                }
             }
-        }, 80);
+        }, PB_SSE_CONNECT_DELAY_MS);
         return true;
     }
 
@@ -3725,6 +4265,27 @@
         if (statusEl) {
             statusEl.textContent = String(message || '');
         }
+    }
+
+    function setTaskPlanModeRunButtonLoading(loading) {
+        var runBtn = document.getElementById('pb-ai-task-plan-run-mode');
+        if (!runBtn) {
+            return;
+        }
+        if (loading) {
+            if (!runBtn.dataset.originalText) {
+                runBtn.dataset.originalText = String(runBtn.textContent || '');
+            }
+            runBtn.disabled = true;
+            runBtn.textContent = <?= \json_encode((string)__('处理中...'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            return;
+        }
+        runBtn.disabled = false;
+        runBtn.textContent = String(
+            runBtn.dataset.originalText
+            || runBtn.textContent
+            || <?= \json_encode((string)__('执行当前模式'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>
+        );
     }
 
     function hasTaskPlanDraft() {
@@ -3825,11 +4386,13 @@
         }
         terminal.on('start', function () {
             taskPlanSseRunning = true;
+            setTaskPlanModeRunButtonLoading(true);
             setTaskPlanModeStatus(messages.taskPlanModeRunning);
             setTaskPlanModalProgress(messages.taskPlanModeRunning, 45, false);
         });
         terminal.on('done', function (event) {
             taskPlanSseRunning = false;
+            setTaskPlanModeRunButtonLoading(false);
             var payload = parseTaskPlanTerminalPayload(event);
             if (payload && payload.state && typeof payload.state === 'object') {
                 hydrateWorkspaceFromState(payload.state);
@@ -3847,6 +4410,7 @@
         });
         terminal.on('error', function (event) {
             taskPlanSseRunning = false;
+            setTaskPlanModeRunButtonLoading(false);
             var payload = parseTaskPlanTerminalPayload(event);
             var message = String((payload && payload.message) || messages.networkError || '');
             setTaskPlanModeStatus(message);
@@ -3893,9 +4457,7 @@
         if (terminal.clear) {
             terminal.clear();
         }
-        if (runBtn) {
-            runBtn.disabled = true;
-        }
+        setTaskPlanModeRunButtonLoading(true);
         taskPlanSseRunning = true;
         setTaskPlanModeStatus(messages.taskPlanModeRunning);
         setTaskPlanModalProgress(messages.taskPlanModeRunning, 40, false);
@@ -3904,15 +4466,12 @@
                 terminal.start(streamUrl, { method: 'POST', body: formData });
             } catch (error) {
                 taskPlanSseRunning = false;
+                setTaskPlanModeRunButtonLoading(false);
                 setTaskPlanModeStatus((error && error.message) ? String(error.message) : messages.networkError);
                 setTaskPlanModalProgress(messages.networkError, 100, hasTaskPlanDraft());
                 setTaskPlanMode(currentTaskPlanMode);
-            } finally {
-                if (runBtn) {
-                    runBtn.disabled = taskPlanSseRunning || !String(taskPlanSseUrl || '').trim();
-                }
             }
-        }, 80);
+        }, PB_SSE_CONNECT_DELAY_MS);
         return true;
     }
 
@@ -4057,31 +4616,96 @@
             }
         }
 
+        // 无方案草稿时，先弹出确认框询问用户是否立即生成
+        // planEmptyPromptPending 用于避免 confirmCurrentPlanAndMaybeBuild 等调用时的重复弹框
+        if (!hasPlanDraft() && !planEmptyPromptPending) {
+            planEmptyPromptPending = true;
+            var emptyTitleText = <?= \json_encode((string)__('方案为空'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            var emptyConfirmText = <?= \json_encode((string)__('当前方案为空，是否立即生成方案？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+                window.BackendConfirm.show(emptyConfirmText, { title: emptyTitleText }).then(function (confirmed) {
+                    planEmptyPromptPending = false;
+                    if (!confirmed) {
+                        planStartRequestPending = false;
+                        return;
+                    }
+                    // 用户确认后，继续执行方案生成流程
+                    proceedToShowPlanModalAndRequestStart(previousPlanMarkdown);
+                }).catch(function () {
+                    planEmptyPromptPending = false;
+                    planStartRequestPending = false;
+                });
+                return;
+            }
+            toast('warning', emptyConfirmText);
+            planEmptyPromptPending = false;
+            planStartRequestPending = false;
+            return;
+        }
+        // 已弹过确认框（planEmptyPromptPending=true）或已有方案草稿，直接进入流程
+        planEmptyPromptPending = false;
+        proceedToShowPlanModalAndRequestStart(previousPlanMarkdown);
+    }
+
+    function proceedToShowPlanModalAndRequestStart(previousPlanMarkdown) {
         bindPlanModalViewSwitchers();
         bindPlanModeSwitchers();
         setPlanMode(currentPlanMode);
-        setPlanModeStatus(String(planSseUrl || '').trim() ? messages.planModeReady : messages.planModeUnavailable);
+        setPlanModeStatus(
+            !hasPlanDraft()
+                ? messages.planModeRequiresDraft
+                : (String(planSseUrl || '').trim() ? messages.planModeReady : messages.planModeUnavailable)
+        );
         updatePlanModalContent(previousPlanMarkdown !== '' ? previousPlanMarkdown : messages.planGenerating);
         setPlanViewMode('pb-ai-plan-preview-content');
-        setPlanModalProgress(messages.saveSuccess, 20, false);
+        setPlanModeStatus(messages.planSaving);
+        setPlanModalProgress(messages.planSaving, 20, false);
+        setPlanRetryButtonVisible(false);
 
         var planModalRef = getPlanModalInstance();
         if (planModalRef.instance) {
             planModalRef.instance.show();
         }
 
+        function triggerWorkspacePlanStream(startReason) {
+            var reason = String(startReason || 'start-plan');
+            var maxAttempts = 20;
+            var attempt = 0;
+            function tryStart() {
+                var ensureFn = (typeof window.__pbEnsureWorkspaceStream === 'function') ? window.__pbEnsureWorkspaceStream : null;
+                var startFn = (typeof window.__pbStartWorkspaceStream === 'function') ? window.__pbStartWorkspaceStream : null;
+                if (ensureFn || startFn) {
+                    if (ensureFn) {
+                        ensureFn(reason);
+                        return;
+                    }
+                    startFn(reason);
+                    return;
+                }
+                if (attempt >= maxAttempts) {
+                    return;
+                }
+                attempt += 1;
+                window.setTimeout(tryStart, 150);
+            }
+            window.setTimeout(tryStart, 80);
+        }
+
         function requestStartPlan(confirmRegenerate) {
             return postForm(startPlanUrl, {
                 public_id: publicId,
                 scope_patch: JSON.stringify(buildVirtualThemePatch(currentPlanSelection)),
+                manual_start: '1',
                 confirm_regenerate: confirmRegenerate ? '1' : '0'
             });
         }
         planStartRequestPending = true;
         requestStartPlan(false).then(function (data) {
             if (!data || !data.success) {
-                setPlanModalProgress((data && data.message) ? String(data.message) : messages.networkError, 100, false);
-                toast('error', (data && data.message) ? String(data.message) : messages.networkError);
+                var startErrorMessage = normalizePlanFailureMessage((data && data.message) ? String(data.message) : messages.networkError);
+                setPlanModalProgress(startErrorMessage, 100, false);
+                setPlanRetryButtonVisible(true);
+                toast('error', startErrorMessage);
                 planStartRequestPending = false;
                 return;
             }
@@ -4104,24 +4728,28 @@
                         }
                         requestStartPlan(true).then(function (confirmData) {
                             if (!confirmData || !confirmData.success) {
-                                setPlanModalProgress((confirmData && confirmData.message) ? String(confirmData.message) : messages.networkError, 100, false);
-                                toast('error', (confirmData && confirmData.message) ? String(confirmData.message) : messages.networkError);
+                                var confirmStartErrorMessage = normalizePlanFailureMessage((confirmData && confirmData.message) ? String(confirmData.message) : messages.networkError);
+                                setPlanModalProgress(confirmStartErrorMessage, 100, false);
+                                setPlanRetryButtonVisible(true);
+                                toast('error', confirmStartErrorMessage);
                                 planStartRequestPending = false;
                                 return;
                             }
                             if (confirmData.data && typeof confirmData.data === 'object') {
                                 hydrateWorkspaceFromState(confirmData.data);
                             }
-                            if (confirmData.start_sse === true && typeof window.__pbStartWorkspaceStream === 'function') {
-                                window.__pbStartWorkspaceStream('start-plan-confirmed');
+                            if (confirmData.start_sse === true) {
+                                triggerWorkspacePlanStream('start-plan-confirmed');
                             }
                             var confirmNextMessage = (confirmData && confirmData.message) ? String(confirmData.message) : messages.planGenerating;
                             setPlanModalProgress(confirmNextMessage, 35, false);
+                            setPlanRetryButtonVisible(false);
                             toast('success', confirmNextMessage);
                             planStartRequestPending = false;
                         }).catch(function (error) {
-                            var confirmErrMsg = (error && error.message) ? String(error.message) : messages.networkError;
+                            var confirmErrMsg = normalizePlanFailureMessage((error && error.message) ? String(error.message) : messages.networkError);
                             setPlanModalProgress(confirmErrMsg, 100, false);
+                            setPlanRetryButtonVisible(true);
                             toast('error', confirmErrMsg);
                             planStartRequestPending = false;
                         });
@@ -4129,20 +4757,47 @@
                 }
                 return;
             }
-            if (data.start_sse === false) {
+            var reuseRunningPlan = String((data && data.operation) || '') === 'plan'
+                && /已在执行中/.test(String((data && data.message) || ''));
+            if (reuseRunningPlan) {
+                triggerWorkspacePlanStream('reuse-running-plan');
+            }
+            if (data.start_sse === false && !reuseRunningPlan) {
+                if (!hasPlanDraft()) {
+                    setPlanModalProgress(messages.planModeRequiresDraft, 100, false);
+                    setPlanRetryButtonVisible(true);
+                    promptGeneratePlanWhenEmpty();
+                    planStartRequestPending = false;
+                    return;
+                }
                 var keepMessage = (data && data.message) ? String(data.message) : messages.planGenerated;
                 setPlanModalProgress(keepMessage, 100, hasPlanDraft());
+                setPlanRetryButtonVisible(false);
                 toast('success', keepMessage);
                 planStartRequestPending = false;
                 return;
             }
-            if (data.start_sse === true && typeof window.__pbStartWorkspaceStream === 'function') {
-                window.__pbStartWorkspaceStream('start-plan');
+            if (data.start_sse === true) {
+                triggerWorkspacePlanStream('start-plan');
             }
-            var reuseRunningPlan = String((data && data.operation) || '') === 'plan'
-                && /已在执行中/.test(String((data && data.message) || ''));
             if (reuseRunningPlan && window.__pbWorkspaceApi && typeof window.__pbWorkspaceApi.refreshWorkspaceStateFromServer === 'function') {
-                window.__pbWorkspaceApi.refreshWorkspaceStateFromServer();
+                if (typeof previewBridge.resumeWorkspaceStream === 'function') {
+                    previewBridge.resumeWorkspaceStream();
+                } else {
+                    window.__pbWorkspaceStreamPaused = false;
+                    if (typeof window.__pbStartWorkspaceStream === 'function') {
+                        window.__pbStartWorkspaceStream('reuse-running-plan-force');
+                    }
+                }
+                window.__pbWorkspaceApi.refreshWorkspaceStateFromServer().then(function (stateData) {
+                    if (!stateData || !stateData.plan || typeof stateData.plan !== 'object') {
+                        return;
+                    }
+                    var refreshedMarkdown = String((stateData.plan.markdown || ''));
+                    if (refreshedMarkdown.trim() !== '') {
+                        updatePlanModalContent(refreshedMarkdown);
+                    }
+                });
             }
             var serverDecisionMessage = '';
             if (data && data.plan_rebuild_required) {
@@ -4156,11 +4811,13 @@
             }
             var nextMessage = serverDecisionMessage || ((data && data.message) ? String(data.message) : messages.planGenerating);
             setPlanModalProgress(nextMessage, 35, false);
+            setPlanRetryButtonVisible(false);
             toast('success', nextMessage);
             planStartRequestPending = false;
         }).catch(function (error) {
-            var message = (error && error.message) ? String(error.message) : messages.networkError;
+            var message = normalizePlanFailureMessage((error && error.message) ? String(error.message) : messages.networkError);
             setPlanModalProgress(message, 100, false);
+            setPlanRetryButtonVisible(true);
             toast('error', message);
             planStartRequestPending = false;
         });
@@ -4199,19 +4856,25 @@
             taskPlanConfirmedState = true;
             hideTaskPlanGenerationModal();
             toast('success', messages.taskPlanConfirmSaved);
+            // T26: 方案已保存，询问用户是否立即生成（默认不自动开跑）
             if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                return window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion, {
-                    title: messages.resumePromptTitle
+                window.BackendConfirm.show(messages.taskPlanConfirmStartBuildQuestion, {
+                    title: messages.taskPlanConfirmSaved,
+                    confirmText: messages.immediateGenerate,
+                    cancelText: messages.laterGenerate
                 }).then(function (confirmed) {
                     if (confirmed) {
                         startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });
-                        return true;
+                    } else {
+                        toast('info', messages.taskPlanDeferred);
                     }
+                }).catch(function () {
                     toast('info', messages.taskPlanDeferred);
-                    return false;
                 });
+            } else {
+                // Fallback: 不自动开跑，提示用户稍后手动开始
+                toast('info', messages.taskPlanDeferred);
             }
-            startConfirmedBuild(triggerBtn || currentPlanTriggerButton, selectedTypes || currentPlanSelection, { allowTaskPlanRetry: false });
             return true;
         }).catch(function (error) {
             if (confirmBtn) {
@@ -4246,6 +4909,21 @@
             toast('error', messages.planStartUnavailable);
             return;
         }
+        if (!hasPlanDraft()) {
+            var titleText = <?= \json_encode((string)__('方案为空'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            var confirmText = <?= \json_encode((string)__('当前方案为空，是否立即生成方案？'), \JSON_UNESCAPED_UNICODE | \JSON_THROW_ON_ERROR) ?>;
+            if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
+                window.BackendConfirm.show(confirmText, { title: titleText }).then(function (confirmed) {
+                    if (!confirmed) {
+                        return;
+                    }
+                    startPlanGenerationForSelection(currentPlanTriggerButton || null, selectedPageTypes());
+                });
+            } else {
+                toast('warning', confirmText);
+            }
+            return;
+        }
         var confirmBtn = document.getElementById('pb-ai-confirm-plan');
         if (confirmBtn) {
             confirmBtn.disabled = true;
@@ -4265,19 +4943,7 @@
             }
             hidePlanGenerationModal();
             toast('success', messages.planConfirmSaved);
-            if (window.BackendConfirm && typeof window.BackendConfirm.show === 'function') {
-                window.BackendConfirm.show(messages.planConfirmStartBuildQuestion, {
-                    title: messages.resumePromptTitle
-                }).then(function (confirmed) {
-                    if (confirmed) {
-                        ensureTaskPlanConfirmedBeforeBuild(currentPlanTriggerButton, currentPlanSelection);
-                        return;
-                    }
-                    toast('info', messages.planDeferred);
-                });
-                return;
-            }
-            ensureTaskPlanConfirmedBeforeBuild(currentPlanTriggerButton, currentPlanSelection);
+            persistWorkspaceStage('visual_edit', { silent: true });
         }).catch(function (error) {
             if (confirmBtn) {
                 confirmBtn.disabled = false;
@@ -4352,6 +5018,21 @@
         confirmPlanBtn.dataset.pbBound = '1';
         confirmPlanBtn.addEventListener('click', function () {
             confirmCurrentPlanAndMaybeBuild();
+        });
+    }
+
+    var retryPlanBtn = document.getElementById('pb-ai-plan-retry-generate');
+    if (retryPlanBtn && retryPlanBtn.dataset.pbBound !== '1') {
+        retryPlanBtn.dataset.pbBound = '1';
+        retryPlanBtn.addEventListener('click', function () {
+            if (planStartRequestPending || planSseRunning) {
+                return;
+            }
+            var selectedTypes = Array.isArray(currentPlanSelection) && currentPlanSelection.length > 0
+                ? currentPlanSelection.slice()
+                : selectedPageTypes();
+            selectedTypes = ensureRequiredPageTypeSelected(selectedTypes);
+            startPlanGenerationForSelection(currentPlanTriggerButton || this, selectedTypes);
         });
     }
 

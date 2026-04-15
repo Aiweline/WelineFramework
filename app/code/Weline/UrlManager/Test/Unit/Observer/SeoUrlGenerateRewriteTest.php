@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\UrlManager\Test\Unit\Observer;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Event\Event;
 use Weline\UrlManager\Model\UrlRewrite;
@@ -12,6 +13,18 @@ use Weline\UrlManager\Observer\SeoUrlGenerateRewrite;
 
 class SeoUrlGenerateRewriteTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        RequestContext::init();
+    }
+
+    protected function tearDown(): void
+    {
+        RequestContext::cleanup();
+        parent::tearDown();
+    }
+
     public function testFindRewriteOrdersByLatestRewriteIdDesc(): void
     {
         $urlRewrite = new class extends UrlRewrite {
@@ -195,5 +208,51 @@ class SeoUrlGenerateRewriteTest extends TestCase
         $result = $method->invoke($observer, 1, 'theme/frontend/theme-preview/gateway', 'theme/frontend/theme-preview/content');
 
         self::assertFalse($result);
+    }
+
+    public function testResolveCurrentSiteRewriteContextUsesFastPathForSameSiteUrl(): void
+    {
+        RequestContext::websiteId(7);
+        RequestContext::locale('zh_Hans_CN');
+        RequestContext::currency('CNY');
+        RequestContext::set('input.host', 'p11005ce4.weline.local');
+        RequestContext::setWelineWebsiteUrl('https://p11005ce4.weline.local');
+
+        $observer = new SeoUrlGenerateRewrite(new class extends UrlRewrite {
+            public function __construct()
+            {
+            }
+        });
+
+        $method = new \ReflectionMethod(SeoUrlGenerateRewrite::class, 'resolveCurrentSiteRewriteContext');
+        $method->setAccessible(true);
+        $result = $method->invoke($observer, 'https://p11005ce4.weline.local/CNY/zh_Hans_CN/demo/path');
+
+        self::assertSame([
+            'website_id' => 7,
+            'uri' => 'CNY/zh_Hans_CN/demo/path',
+            'real_uri' => 'demo/path',
+        ], $result);
+    }
+
+    public function testResolveCurrentSiteRewriteContextSkipsForeignHost(): void
+    {
+        RequestContext::websiteId(7);
+        RequestContext::locale('zh_Hans_CN');
+        RequestContext::currency('CNY');
+        RequestContext::set('input.host', 'p11005ce4.weline.local');
+        RequestContext::setWelineWebsiteUrl('https://p11005ce4.weline.local');
+
+        $observer = new SeoUrlGenerateRewrite(new class extends UrlRewrite {
+            public function __construct()
+            {
+            }
+        });
+
+        $method = new \ReflectionMethod(SeoUrlGenerateRewrite::class, 'resolveCurrentSiteRewriteContext');
+        $method->setAccessible(true);
+        $result = $method->invoke($observer, 'https://example.com/CNY/zh_Hans_CN/demo/path');
+
+        self::assertNull($result);
     }
 }

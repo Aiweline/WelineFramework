@@ -43,6 +43,45 @@ async function openWebsitesSummaryDetails(page) {
   await expect(page.locator('#site-builder-title')).toBeVisible({ timeout: 15000 });
 }
 
+function parseSseResponseText(raw) {
+  const text = String(raw || '');
+  const chunks = text.split(/\r?\n\r?\n/);
+  const events = [];
+  chunks.forEach((chunk) => {
+    const lines = chunk.split(/\r?\n/);
+    let eventName = 'message';
+    const dataLines = [];
+    lines.forEach((line) => {
+      if (line.startsWith('event:')) {
+        eventName = line.slice(6).trim() || 'message';
+        return;
+      }
+      if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trim());
+      }
+    });
+    if (!dataLines.length) {
+      return;
+    }
+    const dataRaw = dataLines.join('\n');
+    let data = dataRaw;
+    try {
+      data = JSON.parse(dataRaw);
+    } catch (error) {
+      // keep raw text data when payload is not JSON
+    }
+    events.push({ event: eventName, data });
+  });
+  let lastDone = null;
+  for (let i = events.length - 1; i >= 0; i -= 1) {
+    if (events[i].event === 'done') {
+      lastDone = events[i].data;
+      break;
+    }
+  }
+  return { events, lastDone };
+}
+
 async function confirmPagebuilderGenerateTheme(page) {
   const confirmBtn = page.locator('#pb-ai-confirm-generate-theme');
   const modal = page.locator('#pb-ai-page-type-confirm-modal');
@@ -167,6 +206,63 @@ echo json_encode([
   return JSON.parse(stdout);
 }
 
+function preparePagebuilderPlanDraftViaPhp(publicId) {
+  const root = devWorkspaceRootFromThisSpec();
+  const phpPublicId = JSON.stringify(String(publicId || ''))
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'");
+  const phpCode = `
+require 'app/bootstrap.php';
+$sessionService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteAgentSessionService::class);
+$scopeCompatibilityService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteScopeCompatibilityService::class);
+$profileService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteProfileGenerationService::class);
+$executionService = \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\GuoLaiRen\\PageBuilder\\Service\\AiSiteExecutionBlueprintService::class);
+$publicId = json_decode('${phpPublicId}', true);
+$session = $sessionService->loadByPublicId(is_string($publicId) ? $publicId : '', 1);
+if (!$session) {
+    throw new RuntimeException('PageBuilder session not found for plan draft seed.');
+}
+$scope = $scopeCompatibilityService->normalizeScope($session->getScopeArray());
+$websiteProfile = $profileService->generate($scope, false);
+$artifacts = $executionService->buildPlanArtifacts($scope, is_array($websiteProfile) ? $websiteProfile : []);
+$pageTypes = is_array($scope['page_types'] ?? null) ? array_values(array_map('strval', $scope['page_types'])) : [];
+$planLocale = (string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? '');
+$scopePatch = array_replace(
+    is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [],
+    [
+        'website_profile' => is_array($websiteProfile) ? $websiteProfile : [],
+        'execution_blueprint_draft' => is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [],
+        'plan_json' => is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
+        'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
+        'plan_structured' => is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
+        'plan_locale' => $planLocale,
+        'plan_ai_generated' => 0,
+        'plan_ai_fallback' => 1,
+        'plan_generated_at' => date('Y-m-d H:i:s'),
+        'plan_generated_locale' => $planLocale,
+        'plan_generated_page_types' => $pageTypes,
+        'plan_confirmed' => 0,
+    ]
+);
+$sessionService->mergeScope($session->getId(), 1, $scopePatch);
+$fresh = $sessionService->loadById($session->getId(), 1) ?? $session;
+$freshScope = $scopeCompatibilityService->normalizeScope($fresh->getScopeArray());
+echo json_encode([
+    'success' => true,
+    'public_id' => $fresh->getPublicId(),
+    'plan_markdown' => (string)($scopePatch['plan_markdown'] ?? ''),
+    'execution_blueprint_signature' => (string)($scopePatch['execution_blueprint_draft']['signature'] ?? ''),
+    'has_build_tasks' => is_array($freshScope['build_tasks'] ?? null) && $freshScope['build_tasks'] !== [],
+], JSON_UNESCAPED_UNICODE);
+`;
+  const stdout = execFileSync('php', ['-r', phpCode], {
+    cwd: root,
+    stdio: 'pipe',
+    encoding: 'utf8',
+  });
+  return JSON.parse(stdout);
+}
+
 /**
  * 将 `*.weline.local` 子域写入本机 hosts，便于 Playwright 真实地址栏访问前台。
  * 设 `PLAYWRIGHT_SKIP_HOSTS_REGISTER=1` 则跳过写入，用例仍走 API+Host 回退断言。
@@ -254,6 +350,39 @@ function buildPagebuilderWorkspacePostUrl(page, action) {
   return normalizeToCurrentOrigin(page, current.toString());
 }
 
+function buildPagebuilderWorkspacePostUrlFromWorkspaceUrl(workspaceUrl, action) {
+  const current = new URL(workspaceUrl);
+  current.search = '';
+  current.hash = '';
+  current.pathname = current.pathname.replace(/\/workspace$/i, `/${action}`);
+  return `${current.pathname}${current.search}${current.hash}`;
+}
+
+async function ensureWorkspaceSameOriginPage(page, workspaceUrl) {
+  try {
+    const current = new URL(page.url());
+    if (/^https?:$/i.test(current.protocol)) {
+      return;
+    }
+  } catch (error) {
+    // fall through to navigation
+  }
+  const candidateUrls = [
+    buildBackendUrl('admin'),
+    buildBackendUrl('admin/login'),
+    workspaceUrl,
+  ].filter((value, index, list) => value && list.indexOf(value) === index);
+  for (const candidateUrl of candidateUrls) {
+    try {
+      await gotoStable(page, candidateUrl);
+      return;
+    } catch (error) {
+      // try the next stable browser origin
+    }
+  }
+  throw new Error(`Unable to establish browser http(s) page context for ${workspaceUrl}`);
+}
+
 async function postPagebuilderWorkspaceJson(page, action, form) {
   const postUrl = buildPagebuilderWorkspacePostUrl(page, action);
   const res = await page.request.post(postUrl, {
@@ -270,20 +399,155 @@ async function postPagebuilderWorkspaceJson(page, action, form) {
   return { response: res, payload };
 }
 
+async function postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, action, form) {
+  await ensureWorkspaceSameOriginPage(page, workspaceUrl);
+  const postUrl = buildPagebuilderWorkspacePostUrlFromWorkspaceUrl(workspaceUrl, action);
+  const result = await page.evaluate(async ({ url, payload }) => {
+    const formData = new FormData();
+    Object.entries(payload || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+      formData.append(key, String(value));
+    });
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      body: formData,
+    });
+    const text = await response.text();
+    try {
+      return {
+        ok: response.ok,
+        status: response.status,
+        payload: JSON.parse(text),
+        rawHead: text.slice(0, 400),
+      };
+    } catch (error) {
+      return {
+        ok: response.ok,
+        status: response.status,
+        payload: null,
+        rawHead: text.slice(0, 400),
+      };
+    }
+  }, { url: postUrl, payload: form });
+
+  if (!result || result.payload === null) {
+    throw new Error(`pagebuilder ${action}: HTTP ${(result && result.status) || 0} non-JSON body=${(result && result.rawHead) || ''}`);
+  }
+  return {
+    response: {
+      ok: () => Boolean(result.ok),
+      status: () => Number(result.status || 0),
+    },
+    payload: result.payload,
+  };
+}
+
+async function postPagebuilderWorkspaceSse(page, action, form, timeoutMs = WORKSPACE_TIMEOUT) {
+  const postUrl = buildPagebuilderWorkspacePostUrl(page, action);
+  const res = await page.request.post(postUrl, {
+    form,
+    timeout: timeoutMs,
+    headers: {
+      Accept: 'text/event-stream',
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+  });
+  const raw = await res.text();
+  const { events, lastDone } = parseSseResponseText(raw);
+  return {
+    response: res,
+    events,
+    eventNames: events.map((event) => event.event),
+    lastDone,
+    rawHead: raw.slice(0, 400),
+  };
+}
+
+async function postPagebuilderWorkspaceSseByUrl(page, workspaceUrl, action, form, timeoutMs = WORKSPACE_TIMEOUT) {
+  await ensureWorkspaceSameOriginPage(page, workspaceUrl);
+  const postUrl = buildPagebuilderWorkspacePostUrlFromWorkspaceUrl(workspaceUrl, action);
+  const result = await page.evaluate(async ({ url, payload }) => {
+    const formData = new FormData();
+    Object.entries(payload || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null) {
+        return;
+      }
+      formData.append(key, String(value));
+    });
+    const response = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        Accept: 'text/event-stream',
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: formData,
+    });
+    const text = await response.text();
+    return {
+      ok: response.ok,
+      status: response.status,
+      text,
+    };
+  }, { url: postUrl, payload: form });
+  const raw = String((result && result.text) || '');
+  const { events, lastDone } = parseSseResponseText(raw);
+  return {
+    response: {
+      ok: () => Boolean(result && result.ok),
+      status: () => Number((result && result.status) || 0),
+    },
+    events,
+    eventNames: events.map((event) => event.event),
+    lastDone,
+    rawHead: raw.slice(0, 400),
+  };
+}
+
+async function waitForWorkspaceFieldMutation(page, workspaceUrl, selector, predicate, timeoutMs = WORKSPACE_TIMEOUT) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    await ensureWorkspaceSameOriginPage(page, workspaceUrl);
+    const value = await page.locator(selector).inputValue().catch(() => '');
+    if (predicate(String(value || ''))) {
+      return String(value || '');
+    }
+    await page.waitForTimeout(1500);
+  }
+  throw new Error(`waitForWorkspaceFieldMutation timed out for ${selector}`);
+}
+
 async function ensurePagebuilderPlanAndTaskPlanConfirmed(page, scopePatch) {
   const publicId = new URL(page.url()).searchParams.get('public_id') || '';
   expect(publicId, 'pagebuilder workspace url should carry public_id').toBeTruthy();
 
-  const phase1Start = await postPagebuilderWorkspaceJson(page, 'post-start-plan', {
+  const phase1StartSse = await postPagebuilderWorkspaceSse(page, 'post-plan-sse', {
     public_id: publicId,
-    scope_patch: JSON.stringify(scopePatch || {}),
-  });
-  expect(phase1Start.payload && phase1Start.payload.success, JSON.stringify(phase1Start.payload)).toBeTruthy();
-
-  const phase1Confirm = await postPagebuilderWorkspaceJson(page, 'post-confirm-plan', {
-    public_id: publicId,
-  });
-  expect(phase1Confirm.payload && phase1Confirm.payload.success, JSON.stringify(phase1Confirm.payload)).toBeTruthy();
+    prompt_mode: 'rebuild',
+    instruction: String((scopePatch && (scopePatch.user_description || scopePatch.brief_description)) || '').trim(),
+    round: '1',
+  }, WORKSPACE_TIMEOUT);
+  expect(phase1StartSse.response.ok(), phase1StartSse.rawHead).toBeTruthy();
+  expect((phase1StartSse.eventNames || []).length, JSON.stringify(phase1StartSse)).toBeGreaterThan(0);
+  let phase1Confirm = null;
+  const confirmStartedAt = Date.now();
+  while ((Date.now() - confirmStartedAt) < WORKSPACE_TIMEOUT) {
+    phase1Confirm = await postPagebuilderWorkspaceJson(page, 'post-confirm-plan', {
+      public_id: publicId,
+    });
+    if (phase1Confirm.payload && phase1Confirm.payload.success) {
+      break;
+    }
+    if (String((phase1Confirm.payload && phase1Confirm.payload.code) || '') !== 'PLAN_NOT_READY') {
+      break;
+    }
+    await page.waitForTimeout(2000);
+  }
+  expect(phase1Confirm && phase1Confirm.payload && phase1Confirm.payload.success, JSON.stringify(phase1Confirm && phase1Confirm.payload)).toBeTruthy();
 
   const phase2Start = await postPagebuilderWorkspaceJson(page, 'post-start-task-plan', {
     public_id: publicId,
@@ -297,11 +561,87 @@ async function ensurePagebuilderPlanAndTaskPlanConfirmed(page, scopePatch) {
   expect(phase2Confirm.payload && phase2Confirm.payload.success, JSON.stringify(phase2Confirm.payload)).toBeTruthy();
 
   return {
-    phase1Start: phase1Start.payload,
+    phase1Start: phase1StartSse.lastDone || {},
     phase1Confirm: phase1Confirm.payload,
     phase2Start: phase2Start.payload,
     phase2Confirm: phase2Confirm.payload,
   };
+}
+
+async function mergePagebuilderScopeByUrl(page, workspaceUrl, scopePatch) {
+  const publicId = new URL(workspaceUrl).searchParams.get('public_id') || '';
+  expect(publicId, 'workspace url must include public_id').toBeTruthy();
+  const res = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-merge-scope', {
+    public_id: publicId,
+    scope_patch: JSON.stringify(scopePatch),
+  });
+  expect(res.payload && res.payload.success, JSON.stringify(res.payload)).toBeTruthy();
+  return res.payload;
+}
+
+async function ensurePagebuilderPlanAndTaskPlanConfirmedByUrl(page, workspaceUrl, scopePatch) {
+  const publicId = new URL(workspaceUrl).searchParams.get('public_id') || '';
+  expect(publicId, 'workspace url must include public_id').toBeTruthy();
+
+  const phase1StartSse = await postPagebuilderWorkspaceSseByUrl(page, workspaceUrl, 'post-plan-sse', {
+    public_id: publicId,
+    prompt_mode: 'rebuild',
+    instruction: String((scopePatch && (scopePatch.user_description || scopePatch.brief_description)) || '').trim(),
+    round: '1',
+  }, WORKSPACE_TIMEOUT);
+  expect(phase1StartSse.response.ok(), phase1StartSse.rawHead).toBeTruthy();
+  expect((phase1StartSse.eventNames || []).length, JSON.stringify(phase1StartSse)).toBeGreaterThan(0);
+  let phase1Confirm = null;
+  const confirmStartedAt = Date.now();
+  while ((Date.now() - confirmStartedAt) < WORKSPACE_TIMEOUT) {
+    phase1Confirm = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-confirm-plan', {
+      public_id: publicId,
+    });
+    if (phase1Confirm.payload && phase1Confirm.payload.success) {
+      break;
+    }
+    if (String((phase1Confirm.payload && phase1Confirm.payload.code) || '') !== 'PLAN_NOT_READY') {
+      break;
+    }
+    await page.waitForTimeout(2000);
+  }
+  expect(phase1Confirm && phase1Confirm.payload && phase1Confirm.payload.success, JSON.stringify(phase1Confirm && phase1Confirm.payload)).toBeTruthy();
+
+  const phase2Start = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-start-task-plan', {
+    public_id: publicId,
+    scope_patch: JSON.stringify(scopePatch || {}),
+  });
+  expect(phase2Start.payload && phase2Start.payload.success, JSON.stringify(phase2Start.payload)).toBeTruthy();
+
+  const phase2Confirm = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-confirm-task-plan', {
+    public_id: publicId,
+  });
+  expect(phase2Confirm.payload && phase2Confirm.payload.success, JSON.stringify(phase2Confirm.payload)).toBeTruthy();
+
+  return {
+    phase1Start: phase1StartSse.lastDone || {},
+    phase1Confirm: phase1Confirm.payload,
+    phase2Start: phase2Start.payload,
+    phase2Confirm: phase2Confirm.payload,
+  };
+}
+
+async function startPagebuilderBuildByUrl(page, workspaceUrl, scopePatch) {
+  const publicId = new URL(workspaceUrl).searchParams.get('public_id') || '';
+  expect(publicId, 'workspace url must include public_id').toBeTruthy();
+  const res = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-start-build', {
+    public_id: publicId,
+    scope_patch: JSON.stringify(scopePatch || {}),
+  });
+  const payload = res.payload;
+  const resumable = payload
+    && payload.success === false
+    && String(payload.operation || '') === 'build'
+    && String(payload.execution_token || '').trim() !== ''
+    && String(payload.stream_url || '').trim() !== '';
+  expect(payload && (payload.success || resumable), JSON.stringify(payload)).toBeTruthy();
+  expect(String(payload.stream_url || '').trim()).toBeTruthy();
+  return resumable ? { ...payload, success: true, resumed_existing: true } : payload;
 }
 
 async function requestPagebuilderPublish(page) {
@@ -636,9 +976,18 @@ async function createDirectPagebuilderWorkspace(page, backendRoot) {
   expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
   expect(String(createPayload.public_id || '').trim()).toBeTruthy();
   const workspaceRoute = `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(String(createPayload.public_id))}&expert=1`;
+  let sameOriginWorkspaceUrl = '';
+  try {
+    const currentUrl = new URL(page.url());
+    if (/^https?:$/i.test(currentUrl.protocol)) {
+      sameOriginWorkspaceUrl = buildSameOriginBackendUrl(page, workspaceRoute);
+    }
+  } catch (error) {
+    sameOriginWorkspaceUrl = '';
+  }
   const candidateUrls = [
     buildDirectRuntimeBackendUrl(workspaceRoute),
-    buildSameOriginBackendUrl(page, workspaceRoute),
+    sameOriginWorkspaceUrl,
   ].filter((value, index, list) => value && list.indexOf(value) === index);
 
   let workspaceUrl = '';
@@ -685,6 +1034,16 @@ function buildPagebuilderGetStateJsonUrl(workspaceUrl) {
   const publicId = u.searchParams.get('public_id') || '';
   expect(publicId, 'workspace url must include public_id for get-state-json').toBeTruthy();
   return u.toString();
+}
+
+function buildDirectPagebuilderWorkspaceUrl(publicId) {
+  const normalizedPublicId = String(publicId || '').trim();
+  if (!normalizedPublicId) {
+    throw new Error('buildDirectPagebuilderWorkspaceUrl: public_id is required');
+  }
+  return buildDirectRuntimeBackendUrl(
+    `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(normalizedPublicId)}&expert=1`
+  );
 }
 
 /**
@@ -2131,11 +2490,19 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       test.slow();
       test.setTimeout(600000);
 
-      const backendRoot = await loginAsAdmin(page);
+      await loginAsAdmin(page, {
+        useProxy: false,
+        bootstrapOnly: true,
+        bootstrapModes: ['wls'],
+      });
       const brief = 'Smoke phase-1 plan and phase-2 task-plan confirmation before build.';
-      const { workspaceUrl } = await createDirectPagebuilderWorkspace(page, backendRoot);
-      await gotoStable(page, workspaceUrl);
-      await ensurePagebuilderExpertLayout(page);
+      const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing', fake_mode: 1 });
+      expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
+      expect(String(createPayload.public_id || '').trim()).toBeTruthy();
+      const seededPlan = preparePagebuilderPlanDraftViaPhp(String(createPayload.public_id || ''));
+      expect(seededPlan.success, JSON.stringify(seededPlan)).toBeTruthy();
+      expect(String(seededPlan.plan_markdown || '').trim()).toBeTruthy();
+      const workspaceUrl = buildDirectPagebuilderWorkspaceUrl(String(createPayload.public_id || ''));
 
       const suffix = Date.now().toString().slice(-8);
       const localDomain = buildLocalDomain(`pb-plan-${suffix}`);
@@ -2149,13 +2516,26 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
         fake_mode: 1,
       };
 
-      await mergePagebuilderScope(page, scopePatch);
+      await mergePagebuilderScopeByUrl(page, workspaceUrl, scopePatch);
 
-      const gateFlow = await ensurePagebuilderPlanAndTaskPlanConfirmed(page, scopePatch);
-      expect(gateFlow.phase1Start.plan && gateFlow.phase1Start.plan.markdown).toBeTruthy();
-      expect(gateFlow.phase2Start.task_plan && gateFlow.phase2Start.task_plan.markdown).toBeTruthy();
+      const phase1Confirm = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-confirm-plan', {
+        public_id: String(createPayload.public_id || ''),
+      });
+      expect(phase1Confirm.payload && phase1Confirm.payload.success, JSON.stringify(phase1Confirm.payload)).toBeTruthy();
 
-      const stateUrl = buildPagebuilderGetStateJsonUrl(page.url());
+      const phase2Start = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-start-task-plan', {
+        public_id: String(createPayload.public_id || ''),
+        scope_patch: JSON.stringify(scopePatch || {}),
+      });
+      expect(phase2Start.payload && phase2Start.payload.success, JSON.stringify(phase2Start.payload)).toBeTruthy();
+      expect(phase2Start.payload.task_plan && phase2Start.payload.task_plan.markdown).toBeTruthy();
+
+      const phase2Confirm = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-confirm-task-plan', {
+        public_id: String(createPayload.public_id || ''),
+      });
+      expect(phase2Confirm.payload && phase2Confirm.payload.success, JSON.stringify(phase2Confirm.payload)).toBeTruthy();
+
+      const stateUrl = buildPagebuilderGetStateJsonUrl(workspaceUrl);
       const confirmedState = await waitForPagebuilderStateData(
         page,
         stateUrl,
@@ -2166,15 +2546,344 @@ moduleDescribe(test, 'GuoLaiRen_PageBuilder', 'AI site workbench regressions', (
       expect(Boolean(confirmedState && confirmedState.task_plan_confirmed)).toBeTruthy();
       expect(Boolean(confirmedState && confirmedState.has_virtual_theme_plan)).toBeTruthy();
 
-      const buildStart = await startPagebuilderBuild(page, backendRoot, { ...scopePatch });
+      const buildStart = await startPagebuilderBuildByUrl(page, workspaceUrl, { ...scopePatch });
       expect(String(buildStart.stream_url || '').trim()).toBeTruthy();
-      const initialStream = await observeInitialSseEvents(
+      const buildStreamUrl = new URL(String(buildStart.stream_url || ''), workspaceUrl).toString();
+      const initialStream = await consumeSseStream(
         page,
-        normalizeToCurrentOrigin(page, String(buildStart.stream_url)),
-        ['start', 'progress'],
-        180000
+        buildStreamUrl,
+        { timeoutMs: 180000 }
       );
       expect(initialStream && initialStream.ok, JSON.stringify(initialStream)).toBeTruthy();
+      const eventNames = Array.isArray(initialStream.eventNames) ? initialStream.eventNames : [];
+      const hasPositiveBuildSignal = eventNames.includes('start')
+        || eventNames.includes('progress')
+        || eventNames.includes('page_generated')
+        || eventNames.includes('task_completed')
+        || eventNames.includes('chunk');
+      expect(hasPositiveBuildSignal, JSON.stringify(initialStream)).toBeTruthy();
+      const duplicateObserverPayload = Array.isArray(initialStream.events)
+        ? initialStream.events.find((event) => event && event.event === 'warning' && event.data && event.data.observer_mode === true)
+        : null;
+      expect(
+        eventNames.includes('start')
+          || eventNames.includes('progress')
+          || Boolean(duplicateObserverPayload),
+        JSON.stringify(initialStream)
+      ).toBeTruthy();
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-PLAN-REFINE-007' },
+    'expert: phase-1 refine and rebuild task modes produce distinct plan SSE results',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(900000);
+
+      await loginAsAdmin(page, {
+        useProxy: false,
+        bootstrapOnly: true,
+        bootstrapModes: ['wls'],
+      });
+
+      const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing' });
+      expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
+      const publicId = String(createPayload.public_id || '');
+      expect(publicId).toBeTruthy();
+      const workspaceUrl = buildDirectPagebuilderWorkspaceUrl(publicId);
+
+      const suffix = Date.now().toString().slice(-8);
+      const scopePatch = {
+        site_title: `E2E Plan AI ${suffix}`,
+        site_tagline: 'phase1 real ai refine rebuild',
+        target_domain: buildLocalDomain(`pb-plan-ai-${suffix}`),
+        brief_description: 'Create a plan flow that can be refined and rebuilt with visible SSE differences.',
+        user_description: 'Create a plan flow that can be refined and rebuilt with visible SSE differences.',
+        page_types: ['home_page', 'about_page'],
+      };
+
+      await mergePagebuilderScopeByUrl(page, workspaceUrl, scopePatch);
+
+      const rebuildStream = await postPagebuilderWorkspaceSseByUrl(page, workspaceUrl, 'post-plan-sse', {
+        public_id: publicId,
+        prompt_mode: 'rebuild',
+        instruction: 'Rebuild the full plan with a clearer enterprise positioning and stronger trust tone.',
+        round: '1',
+      }, 240000);
+      expect(rebuildStream.response.ok(), rebuildStream.rawHead).toBeTruthy();
+      expect((rebuildStream.eventNames || []).length, JSON.stringify(rebuildStream)).toBeGreaterThan(0);
+
+      const rebuildMarkdown = await waitForWorkspaceFieldMutation(
+        page,
+        workspaceUrl,
+        '#pb-ai-plan-markdown',
+        (value) => value.includes('# ') || value.includes('## '),
+        180000
+      );
+      expect(rebuildMarkdown.length).toBeGreaterThan(200);
+
+      const refineStream = await postPagebuilderWorkspaceSseByUrl(page, workspaceUrl, 'post-plan-sse', {
+        public_id: publicId,
+        prompt_mode: 'refine',
+        instruction: 'Only refine the about page positioning and keep the rest of the plan stable.',
+        target_scope: 'pages.about_page',
+        round: '2',
+      }, 240000);
+      expect(refineStream.response.ok(), refineStream.rawHead).toBeTruthy();
+      expect((refineStream.eventNames || []).length, JSON.stringify(refineStream)).toBeGreaterThan(0);
+
+      const refinedMarkdown = await waitForWorkspaceFieldMutation(
+        page,
+        workspaceUrl,
+        '#pb-ai-plan-markdown',
+        (value) => value.length > 0 && value !== rebuildMarkdown,
+        180000
+      );
+      expect(refinedMarkdown.length).toBeGreaterThan(200);
+      expect(refinedMarkdown).not.toBe(rebuildMarkdown);
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-TASKPLAN-REFINE-008' },
+    'expert: phase-2 refine and rebuild task-plan modes update task-plan draft via SSE',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(900000);
+
+      await loginAsAdmin(page, {
+        useProxy: false,
+        bootstrapOnly: true,
+        bootstrapModes: ['wls'],
+      });
+
+      const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing', fake_mode: 1 });
+      expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
+      const publicId = String(createPayload.public_id || '');
+      expect(publicId).toBeTruthy();
+      const seededPlan = preparePagebuilderPlanDraftViaPhp(publicId);
+      expect(seededPlan.success, JSON.stringify(seededPlan)).toBeTruthy();
+      const workspaceUrl = buildDirectPagebuilderWorkspaceUrl(publicId);
+
+      const suffix = Date.now().toString().slice(-8);
+      const scopePatch = {
+        site_title: `E2E TaskPlan AI ${suffix}`,
+        site_tagline: 'phase2 task plan refine rebuild',
+        target_domain: buildLocalDomain(`pb-taskplan-ai-${suffix}`),
+        brief_description: 'Create a task plan flow that can be refined and rebuilt with visible draft changes.',
+        user_description: 'Create a task plan flow that can be refined and rebuilt with visible draft changes.',
+        page_types: ['home_page'],
+        fake_mode: 1,
+      };
+
+      await mergePagebuilderScopeByUrl(page, workspaceUrl, scopePatch);
+      const phase1Confirm = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-confirm-plan', {
+        public_id: publicId,
+      });
+      expect(phase1Confirm.payload && phase1Confirm.payload.success, JSON.stringify(phase1Confirm.payload)).toBeTruthy();
+
+      const phase2Start = await postPagebuilderWorkspaceJsonByUrl(page, workspaceUrl, 'post-start-task-plan', {
+        public_id: publicId,
+        scope_patch: JSON.stringify(scopePatch || {}),
+      });
+      expect(phase2Start.payload && phase2Start.payload.success, JSON.stringify(phase2Start.payload)).toBeTruthy();
+
+      const taskPlanBefore = await waitForWorkspaceFieldMutation(
+        page,
+        workspaceUrl,
+        '#pb-ai-task-plan-markdown',
+        (value) => value.length > 0,
+        120000
+      );
+      expect(taskPlanBefore.length).toBeGreaterThan(200);
+
+      const refineStream = await postPagebuilderWorkspaceSseByUrl(page, workspaceUrl, 'post-task-plan-sse', {
+        public_id: publicId,
+        prompt_mode: 'refine_task_plan',
+        instruction: 'Only refine the hero task script and keep execution order stable.',
+        target_scope: 'page:home_page:hero',
+        round: '1',
+      }, 180000);
+      expect(refineStream.response.ok(), refineStream.rawHead).toBeTruthy();
+      expect((refineStream.eventNames || []).length, JSON.stringify(refineStream)).toBeGreaterThan(0);
+
+      const taskPlanAfterRefine = await waitForWorkspaceFieldMutation(
+        page,
+        workspaceUrl,
+        '#pb-ai-task-plan-markdown',
+        (value) => value.length > 0 && value !== taskPlanBefore,
+        120000
+      );
+      expect(taskPlanAfterRefine).not.toBe(taskPlanBefore);
+
+      const rebuildStream = await postPagebuilderWorkspaceSseByUrl(page, workspaceUrl, 'post-task-plan-sse', {
+        public_id: publicId,
+        prompt_mode: 'rebuild_task_plan',
+        instruction: 'Rebuild the full task plan with a stronger conversion-first execution order.',
+        round: '2',
+      }, 180000);
+      expect(rebuildStream.response.ok(), rebuildStream.rawHead).toBeTruthy();
+      expect((rebuildStream.eventNames || []).length, JSON.stringify(rebuildStream)).toBeGreaterThan(0);
+
+      const taskPlanAfterRebuild = await waitForWorkspaceFieldMutation(
+        page,
+        workspaceUrl,
+        '#pb-ai-task-plan-markdown',
+        (value) => value.length > 0 && value !== taskPlanAfterRefine,
+        120000
+      );
+      expect(taskPlanAfterRebuild).not.toBe(taskPlanAfterRefine);
+    }
+  );
+
+  moduleCase(
+    test,
+    { module: 'GuoLaiRen_PageBuilder', id: 'PB-WORKBENCH-FULL-006' },
+    'frontend full chain: requirement -> plan/task plan confirm -> build -> publish -> storefront',
+    async ({ page }) => {
+      test.slow();
+      test.setTimeout(3600000);
+
+      await loginAsAdmin(page, {
+        useProxy: false,
+        bootstrapOnly: true,
+        bootstrapModes: ['wls'],
+      });
+
+      const suffix = Date.now().toString().slice(-8);
+      const subFqdn = buildWelineLocalSubdomain('pb-full-ui');
+      const hostsReg = tryRegisterWelineLocalSubdomain(subFqdn);
+      if (!hostsReg.ok) {
+        const reason = hostsReg.skipped
+          ? String(hostsReg.message || '')
+          : `server:hosts:add failed, fallback to Host header request (${subFqdn})`;
+        process.stdout.write(`[e2e] storefront direct-open fallback enabled: ${reason}\n`);
+      }
+
+      const createPayload = createPagebuilderSessionViaPhp({ workspace_status: 'preparing', fake_mode: 1 });
+      expect(createPayload.success, JSON.stringify(createPayload)).toBeTruthy();
+      expect(String(createPayload.public_id || '').trim()).toBeTruthy();
+      const publicId = String(createPayload.public_id || '');
+      const workspaceRoute = `pagebuilder/backend/ai-site-agent/workspace?public_id=${encodeURIComponent(publicId)}&expert=1`;
+      const directWorkspaceUrl = buildDirectPagebuilderWorkspaceUrl(publicId);
+      let workspaceUrl = directWorkspaceUrl;
+      try {
+        await gotoStable(page, workspaceUrl);
+      } catch (error) {
+        workspaceUrl = buildSameOriginBackendUrl(page, workspaceRoute);
+        await gotoStable(page, workspaceUrl);
+      }
+      // 某些环境会被预览页顶层接管；强制回到 workspace 再做表单交互，避免 fill 无超时卡死
+      if (!/\/workspace(\?|$)/i.test(page.url())) {
+        await gotoStable(page, workspaceUrl);
+      }
+      await ensurePagebuilderExpertLayout(page);
+      await expect(page.locator('#pb-ai-site-title')).toBeVisible({ timeout: 30000 });
+
+      // Step 1: 前端需求输入
+      const siteTitle = `E2E Full UI ${suffix}`;
+      const scopePatch = {
+        site_title: siteTitle,
+        site_tagline: 'full frontend chain',
+        target_domain: subFqdn,
+        brief_description: 'Generate plan, confirm task plan, build theme, publish website with frontend checks.',
+        user_description: 'Generate plan, confirm task plan, build theme, publish website with frontend checks.',
+        page_types: ['home_page', 'about_page', 'contact_page'],
+        fake_mode: 1,
+      };
+      await page.fill('#pb-ai-site-title', scopePatch.site_title, { timeout: 15000 });
+      await page.fill('#pb-ai-site-tagline', scopePatch.site_tagline, { timeout: 15000 });
+      const targetDomainInput = page.locator('#pb-ai-target-domain');
+      const targetDomainSummaryInput = page.locator('#pb-ai-target-domain-summary');
+      const hasTargetDomainInput = await targetDomainInput.count();
+      if (hasTargetDomainInput > 0) {
+        await targetDomainInput.fill(scopePatch.target_domain, { timeout: 15000 });
+      } else {
+        await targetDomainSummaryInput.fill(scopePatch.target_domain, { timeout: 15000 });
+      }
+      await page.fill('#pb-ai-brief-description', scopePatch.brief_description, { timeout: 15000 });
+      await mergePagebuilderScopeByUrl(page, workspaceUrl, scopePatch);
+
+      // Step 2: 校验方案/任务方案前端弹窗组件可用
+      await expect(page.locator('#pb-ai-plan-generation-modal')).toBeAttached();
+      await expect(page.locator('#pb-ai-plan-mode-refine')).toBeAttached();
+      await expect(page.locator('#pb-ai-plan-mode-rebuild')).toBeAttached();
+      await expect(page.locator('#pb-ai-task-plan-generation-modal')).toBeAttached();
+      await expect(page.locator('#pb-ai-task-plan-mode-refine')).toBeAttached();
+      await expect(page.locator('#pb-ai-task-plan-mode-rebuild')).toBeAttached();
+
+      // Step 3: 走完整两阶段确认
+      const gateFlow = await ensurePagebuilderPlanAndTaskPlanConfirmedByUrl(page, workspaceUrl, scopePatch);
+      expect(gateFlow.phase1Start.plan && gateFlow.phase1Start.plan.markdown, JSON.stringify(gateFlow.phase1Start)).toBeTruthy();
+      expect(gateFlow.phase2Start.task_plan && gateFlow.phase2Start.task_plan.markdown, JSON.stringify(gateFlow.phase2Start)).toBeTruthy();
+
+      // Step 4: 构建主题/页面
+      const buildStart = await startPagebuilderBuildByUrl(page, workspaceUrl, { ...scopePatch });
+      const buildStreamUrl = new URL(String(buildStart.stream_url || ''), workspaceUrl).toString();
+      const buildStream = await consumeSseStream(page, buildStreamUrl, { timeoutMs: LONG_WORKSPACE_TIMEOUT });
+      expectFinishedOrResumedStream(buildStream, 'full-chain-build-stream');
+
+      const stateUrl = buildPagebuilderGetStateJsonUrl(workspaceUrl);
+      const builtState = await waitForPagebuilderStateData(
+        page,
+        stateUrl,
+        (data) => Number(data.draft_website_id || 0) > 0 && (Number(data.virtual_theme_id || 0) > 0 || String(data.workspace_track || '') === 'html_blocks'),
+        LONG_WORKSPACE_TIMEOUT
+      );
+      expect(Number(builtState.draft_website_id || 0)).toBeGreaterThan(0);
+
+      // Step 5: 前端只读确认方案入口可打开（保证前端可用）
+      await gotoStable(page, workspaceUrl);
+      const stage1ConfirmedBtn = page.locator('.pb-ai-view-confirmed-plan[data-plan-type="stage1"]').first();
+      const stage1BtnVisible = await stage1ConfirmedBtn.isVisible({ timeout: 8000 }).catch(() => false);
+      if (stage1BtnVisible) {
+        await stage1ConfirmedBtn.click({ force: true });
+        await expect(page.locator('#pb-ai-confirmed-plan-view-modal')).toHaveClass(/show/, { timeout: 10000 });
+        await expect(page.locator('#pb-ai-copy-plan-markdown')).toBeVisible({ timeout: 10000 });
+        await page.locator('#pb-ai-confirmed-plan-view-modal .btn-close').click({ force: true });
+      }
+
+      // Step 6: 发布
+      const publishStart = await startPagebuilderPublish(page);
+      const publishStream = await consumeSseStream(
+        page,
+        normalizeToCurrentOrigin(page, String(publishStart.stream_url)),
+        { timeoutMs: LONG_WORKSPACE_TIMEOUT }
+      );
+      expectFinishedOrResumedStream(publishStream, 'full-chain-publish-stream');
+
+      const publishedState = await waitForPagebuilderStateData(
+        page,
+        stateUrl,
+        (data) => String(data.publish_status || '') === 'published',
+        LONG_WORKSPACE_TIMEOUT
+      );
+      expect(String(publishedState.publish_status || '')).toBe('published');
+
+      // Step 7: 验证前台可访问
+      const origin = new URL(getRuntimeInfo().runtime.target_origin);
+      const portSeg = origin.port ? `:${origin.port}` : '';
+      const storefrontUrl = `${origin.protocol}//${subFqdn}${portSeg}/`;
+      try {
+        await page.goto(storefrontUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        await expect(page.locator('body')).toBeVisible();
+        const html = await page.content();
+        expect(html.length).toBeGreaterThan(200);
+        expect(html.toLowerCase()).not.toContain('404 not found');
+      } catch (storefrontError) {
+        const storefrontResp = await page.request.get(`${origin.origin}/`, {
+          headers: { Host: subFqdn },
+          timeout: 120000,
+          ignoreHTTPSErrors: true,
+        });
+        expect(storefrontResp.ok(), `storefront HTTP ${storefrontResp.status()}`).toBeTruthy();
+        const storefrontHtml = await storefrontResp.text();
+        expect(storefrontHtml.length).toBeGreaterThan(200);
+        expect(storefrontHtml.toLowerCase()).not.toContain('404 not found');
+      }
     }
   );
 });

@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace GuoLaiRen\PageBuilder\Test\Integration;
 
 use GuoLaiRen\PageBuilder\Controller\Backend\AiSiteAgent;
+use GuoLaiRen\PageBuilder\Service\AiSiteExecutionBlueprintService;
 use GuoLaiRen\PageBuilder\Service\AiSiteAgentSessionService;
+use GuoLaiRen\PageBuilder\Service\AiSiteProfileGenerationService;
+use GuoLaiRen\PageBuilder\Service\AiSiteScopeCompatibilityService;
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
@@ -84,8 +87,43 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
             ]
         );
         self::assertTrue((bool)($startPlanPayload['success'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
-        self::assertIsArray($startPlanPayload['plan'] ?? null);
-        self::assertNotSame('', (string)($startPlanPayload['plan']['markdown'] ?? ''));
+        self::assertTrue((bool)($startPlanPayload['start_sse'] ?? false), \json_encode($startPlanPayload, \JSON_UNESCAPED_UNICODE));
+
+        $session = $this->sessionService->loadByPublicId($publicId, 1);
+        self::assertNotNull($session);
+        /** @var AiSiteScopeCompatibilityService $scopeCompatibilityService */
+        $scopeCompatibilityService = ObjectManager::getInstance(AiSiteScopeCompatibilityService::class);
+        /** @var AiSiteProfileGenerationService $profileService */
+        $profileService = ObjectManager::getInstance(AiSiteProfileGenerationService::class);
+        /** @var AiSiteExecutionBlueprintService $executionBlueprintService */
+        $executionBlueprintService = ObjectManager::getInstance(AiSiteExecutionBlueprintService::class);
+        $scope = $scopeCompatibilityService->normalizeScope($session->getScopeArray());
+        $websiteProfile = $profileService->generate($scope, false);
+        $artifacts = $executionBlueprintService->buildPlanArtifacts($scope, \is_array($websiteProfile) ? $websiteProfile : []);
+        $this->sessionService->mergeScope($session->getId(), 1, \array_replace(
+            \is_array($artifacts['derived_scope_patch'] ?? null) ? $artifacts['derived_scope_patch'] : [],
+            [
+                'website_profile' => \is_array($websiteProfile) ? $websiteProfile : [],
+                'execution_blueprint_draft' => \is_array($artifacts['execution_blueprint'] ?? null) ? $artifacts['execution_blueprint'] : [],
+                'plan_json' => \is_array($artifacts['plan_json'] ?? null) ? $artifacts['plan_json'] : [],
+                'plan_markdown' => (string)($artifacts['markdown'] ?? ''),
+                'plan_structured' => \is_array($artifacts['structured'] ?? null) ? $artifacts['structured'] : [],
+                'plan_locale' => (string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''),
+                'plan_ai_generated' => 0,
+                'plan_ai_fallback' => 1,
+                'plan_generated_at' => \date('Y-m-d H:i:s'),
+                'plan_generated_locale' => (string)($scope['plan_locale'] ?? $scope['default_locale'] ?? $scope['default_language'] ?? ''),
+                'plan_generated_page_types' => \is_array($scope['page_types'] ?? null) ? \array_values(\array_map('strval', $scope['page_types'])) : [],
+                'plan_confirmed' => 0,
+                'workspace_status' => 'can_publish',
+                'active_operation' => [
+                    'operation' => 'plan',
+                    'status' => 'done',
+                    'message' => '阶段一方案已准备完成',
+                    'updated_at' => \date('Y-m-d H:i:s'),
+                ],
+            ]
+        ));
 
         $confirmPlanPayload = $this->invokeJsonAction(
             '/pagebuilder/backend/ai-site-agent/post-confirm-plan',
@@ -101,6 +139,43 @@ abstract class AbstractAiSiteWorkbenchIntegrationHarness extends TestCore
         return [
             'start_plan' => $startPlanPayload,
             'confirm_plan' => $confirmPlanPayload,
+        ];
+    }
+
+    /**
+     * @param array<string, scalar|array> $scopePatch
+     * @return array{start_task_plan:array<string,mixed>, confirm_task_plan:array<string,mixed>}
+     */
+    protected function generateAndConfirmTaskPlan(string $publicId, array $scopePatch): array
+    {
+        $startTaskPlanPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-start-task-plan',
+            'POST',
+            'postStartTaskPlan',
+            [],
+            [
+                'public_id' => $publicId,
+                'scope_patch' => $scopePatch,
+            ]
+        );
+        self::assertTrue((bool)($startTaskPlanPayload['success'] ?? false), \json_encode($startTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
+        self::assertIsArray($startTaskPlanPayload['task_plan'] ?? null);
+        self::assertNotSame('', (string)($startTaskPlanPayload['task_plan']['markdown'] ?? ''));
+
+        $confirmTaskPlanPayload = $this->invokeJsonAction(
+            '/pagebuilder/backend/ai-site-agent/post-confirm-task-plan',
+            'POST',
+            'postConfirmTaskPlan',
+            [],
+            [
+                'public_id' => $publicId,
+            ]
+        );
+        self::assertTrue((bool)($confirmTaskPlanPayload['success'] ?? false), \json_encode($confirmTaskPlanPayload, \JSON_UNESCAPED_UNICODE));
+
+        return [
+            'start_task_plan' => $startTaskPlanPayload,
+            'confirm_task_plan' => $confirmTaskPlanPayload,
         ];
     }
 

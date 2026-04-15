@@ -27,7 +27,7 @@ class AiSiteAgentSession extends Model
     public const STAGE_BRIEF = 'brief';
     public const STAGE_DOMAIN = 'domain';
     public const STAGE_DOMAIN_WAIT = 'domain_wait';
-    public const STAGE_VIRTUAL_THEME = 'virtual_theme';
+    public const STAGE_PLAN = 'plan';
     public const STAGE_PAGE_TYPES = 'page_types';
     public const STAGE_CONTENT = 'content';
     public const STAGE_VISUAL_EDIT = 'visual_edit';
