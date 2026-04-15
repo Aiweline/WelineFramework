@@ -229,8 +229,7 @@ class AiService
      */
     public static function isStreamEnabled(): bool
     {
-        $config = \Weline\Framework\App\Env::getInstance()->getModuleConfig('Weline_Ai');
-        return $config['stream']['enabled'] ?? true; // 默认启用
+        return true;
     }
 
     /**
@@ -240,8 +239,7 @@ class AiService
      */
     public static function getStreamConfig(): array
     {
-        $config = \Weline\Framework\App\Env::getInstance()->getModuleConfig('Weline_Ai');
-        return $config['stream'] ?? [
+        return [
             'enabled' => true,
             'chunk_size' => 1024,
             'flush_interval' => 100,
@@ -369,6 +367,8 @@ class AiService
     /**
      * 流式生成文本内容（实例方法）
      * 
+     * 注意：此方法必须立即进入流式发送路径，不允许先同步等待完整结果再返回。
+     * 
      * @param string $prompt 提示词
      * @param callable $callback 回调函数
      * @param string|null $modelCode 指定模型代码
@@ -387,7 +387,63 @@ class AiService
         ?string $locale = null,
         array $params = []
     ): void {
-        // 1. 模型选择
+        $model = $this->selectModel($modelCode, $scenarioCode);
+        if (!$model) {
+            $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
+            throw new ModelSelectionException($reason);
+        }
+
+        $configResolver = ObjectManager::getInstance(ConfigResolver::class);
+        $userConfig = \is_array($params['user_config'] ?? null) ? $params['user_config'] : [];
+        $userId = isset($params['user_id']) ? (int)$params['user_id'] : null;
+        $isBackend = (bool)($params['is_backend'] ?? false);
+        $isTestMode = false;
+        if (\array_key_exists('test_mode', $params)) {
+            $isTestMode = \in_array($params['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
+        } elseif (isset($userConfig['test_mode'])) {
+            $isTestMode = \in_array($userConfig['test_mode'], [true, 1, '1', 'true', 'TRUE'], true);
+        }
+        if ($isTestMode) {
+            $userConfig['test_mode'] = true;
+        } elseif (isset($userConfig['test_mode'])) {
+            unset($userConfig['test_mode']);
+        }
+
+        $params['resolved_config'] = $configResolver->resolveConfig(
+            $model->getModelCode(),
+            $userConfig,
+            $userId,
+            $isBackend
+        );
+
+        $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
+
+        if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
+            throw new Exception("不支持的语言: {$locale}");
+        }
+
+        $this->callModelApiStream($model, $adaptedPrompt, $callback, $scenarioCode, $locale, $params);
+    }
+
+    /**
+     * 流式生成文本内容，并返回最终结构化结果。
+     *
+     * @param string $prompt
+     * @param callable $callback function(string $eventType, array $data): mixed
+     * @param string|null $modelCode
+     * @param string|null $scenarioCode
+     * @param string|null $locale
+     * @param array $params
+     * @return array<string, mixed>
+     */
+    public function generateStreamResult(
+        string $prompt,
+        callable $callback,
+        ?string $modelCode = null,
+        ?string $scenarioCode = null,
+        ?string $locale = null,
+        array $params = []
+    ): array {
         $model = $this->selectModel($modelCode, $scenarioCode);
         if (!$model) {
             $reason = $this->getModelSelectionFailureReason($modelCode, $scenarioCode);
@@ -417,16 +473,12 @@ class AiService
         );
         $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
 
-        // 2. 场景适配器处理
-        $adaptedPrompt = $this->applyScenarioAdapter($prompt, $scenarioCode, $params);
-
-        // 3. 语言验证
         if ($locale && !$this->i18nIntegration->isLocaleSupported($locale)) {
             throw new Exception("不支持的语言: {$locale}");
         }
 
-        // 4. 流式调用AI模型API
         $this->callModelApiStream($model, $adaptedPrompt, $callback, $scenarioCode, $locale, $params);
+        return ['success' => true, 'mode' => 'stream'];
     }
 
     /**
